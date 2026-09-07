@@ -85,25 +85,32 @@ def rewrite_input(items):
             rewritten.append(item)
     return rewritten
 
+def _block_text(content):
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return ' '.join(b.get('text', '') for b in content
+            if isinstance(b, dict) and isinstance(b.get('text'), str))
+    return str(content) if content else ''
+
 def _item_text(item):
     if not isinstance(item, dict):
         return ''
     kind = item.get('type')
     if kind == 'message':
         role = item.get('role', 'user')
-        content = item.get('content')
-        if isinstance(content, str):
-            text = content
-        elif isinstance(content, list):
-            text = ' '.join(b.get('text', '') for b in content
-                if isinstance(b, dict) and isinstance(b.get('text'), str))
-        else:
-            text = ''
-        return f'{role}: {text}'.strip()
+        return f'{role}: {_block_text(item.get("content", ""))}'.strip()
     if kind in ('function_call', 'custom_tool_call'):
         return 'assistant tool call: ' + str(item.get('arguments', item.get('input', '')))[:2000]
     if kind in ('function_call_output', 'custom_tool_call_output'):
-        return 'tool result: ' + str(item.get('output', ''))[:2000]
+        for key in ('output', 'result', 'content', 'text', 'data'):
+            if item.get(key):
+                return 'tool result: ' + _block_text(item[key])[:2000]
+        return ''
+    if kind == 'reasoning':
+        if 'encrypted_content' in item:
+            return ''  # Provider-owned blob; never forward opaque content.
+        return 'reasoning: ' + _block_text(item.get('summary', ''))[:2000]
     if is_compaction_item(item):
         return compaction_text(item)
     return ''

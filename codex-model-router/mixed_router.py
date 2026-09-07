@@ -48,7 +48,8 @@ def route(model, path, headers, openai_models, key):
 COMPACT_PROMPT = ('You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary '
     'for another LLM that will resume the task. Include: current progress and key decisions, '
     'important context/constraints/preferences, what remains with clear next steps, and any '
-    'critical data or tool results needed to continue. Be concise and structured.')
+    'critical data or tool results needed to continue. Quote exact values, codes, names and '
+    'tool results verbatim so the next model can repeat them exactly. Be concise and structured.')
 
 def describe_input(items):
     """Bounded input shape for logs: item-type counts plus key names, never values."""
