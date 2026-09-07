@@ -9,26 +9,14 @@ import time
 import traceback
 from compression import zstd
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
-from .runtime import MAX_BODY, VERSION, log_event
+from .credentials import Credentials
+from .runtime import MAX_BODY, ROUTER_HOME, VERSION, log_event
 from . import providers
 from .providers import NATIVE_SERVICE_PATHS, PreparationError
 
 
 class InvalidSize(ValueError):
     """Request body rejected on size grounds; maps to 413."""
-
-
-class Credentials:
-    """OpenRouter key lookup; read per request so rotation needs no restart."""
-    def __init__(self, state):
-        self.state = state
-
-    def openrouter_key(self):
-        auth = json.loads(Path(self.state['opencode_auth']).read_text())['openrouter']
-        if auth['type'] != 'api':
-            raise ValueError('OpenCode credential is not an API key')
-        return auth['key']
 
 
 class Router(ThreadingHTTPServer):
@@ -39,7 +27,7 @@ class Router(ThreadingHTTPServer):
         self.state = state
         self.lock = threading.Lock()
         self.inflight = 0
-        self.credentials = Credentials(state)
+        self.credentials = Credentials(state, ROUTER_HOME)
 
 class Handler(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
@@ -118,7 +106,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.error(413, str(exc))
         except PreparationError as exc:
             return self.error(409, str(exc))
-        except (ValueError, KeyError, OSError, TypeError, AttributeError, zstd.ZstdError):
+        except (ValueError, KeyError, LookupError, OSError, TypeError, AttributeError, zstd.ZstdError):
             return self.error(400, 'Invalid model, payload, or local authentication configuration')
         metrics = {'provider': prepared.provider,
                    'model': model, 'path': path, 'request_bytes': size,

@@ -1,4 +1,3 @@
-import re
 import unittest
 from pathlib import Path
 
@@ -6,6 +5,7 @@ FILES = [
          'codex_router/router.py',
          'codex_router/providers.py',
          'codex_router/registry.py',
+         'codex_router/credentials.py',
          'codex_router/tool_adapter.py',
          'codex_router/capabilities.py',
          'codex_router/compaction.py',
@@ -28,6 +28,20 @@ class PackagingTests(unittest.TestCase):
         for name in FILES:
             self.assertIn(name, sh, name)
             self.assertIn(name, ps1, name)
+
+    def test_file_list_covers_the_runtime_import_closure(self):
+        # A fresh copy-install following FILES must start: every package
+        # module plus the data files read at import must be listed.
+        root = Path(__file__).resolve().parents[1]
+        covered = set(FILES)
+        for path in sorted((root / 'codex_router').glob('*.py')):
+            self.assertIn('codex_router/%s' % path.name, covered,
+                          'runtime module missing from deploy list')
+        for dep in ('codex_router/models.json',
+                    'codex_router/openrouter_base_instructions.txt'):
+            self.assertIn(dep, covered, dep)
+        for tool in ('tools/probe_codex_runtime.py', 'tools/disable.py'):
+            self.assertIn(tool, covered, tool)
 
     def test_version_is_pinned(self):
         version = (Path(__file__).resolve().parents[1] / 'packaging' / 'VERSION').read_text().strip()
