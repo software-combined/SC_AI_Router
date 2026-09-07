@@ -1,57 +1,47 @@
 # SC_Codex_openRouter_adapter Agent Instructions
 
-## Boundaries
+## 1. Purpose
 
-- `codex-model-router/` owns the adapter: router, tool protocol adapter,
-  capabilities single-source, transparent compaction, catalogue writers,
-  probes, tests, and packaging stubs.
-- The live runtime directory (`~/.codex/mixed-model-router/`) owns private
-  state: bearer tokens, activation receipts, backups, logs, and the generated
-  catalogue. Never commit those here. Never print them.
-- OpenAI requests keep ChatGPT subscription authentication. Only the six
-  configured OpenRouter models use the federated OpenRouter key, read at
-  request time. Subscription headers never accompany OpenRouter requests.
+Local loopback router that keeps ChatGPT subscription traffic on OpenAI and
+routes approved OpenRouter models with a separate key. Runtime Python 3.14+,
+stdlib only, no third-party dependencies, no network calls in tests.
 
-## Git Worktree Discipline
+## 2. Worktree discipline
 
-- The primary checkout is read-only for agent sessions: never run `git reset`,
-  `git stash`, `git pull`, branch switches, or edits here. One writable,
-  uniquely named worktree per session (`git worktree add`); remove it when the
-  work is merged. Rationale: a concurrent session once hard-reset a shared
-  `main` checkout; do not repeat that here.
-- At most one owned writable worktree per agent session, reused for every
-  follow-up and phase, cleaned up as work integrates.
-- Preserve unrelated dirty/untracked work. Never revert another session's
-  changes or delete another session's worktree.
+One writable worktree per agent session; never edit the primary checkout.
+Never run `git reset --hard` or `git checkout --` without explicit approval.
+Record worktree ownership (path, branch, owning task, integration target) and
+reuse the same worktree for follow-ups. Clean up after verified integration.
 
-## Source Limits
+## 3. Source limits
 
-Production modules target 250 physical lines, hard cap 400. Entrypoints
-400/700, tests 300/500, governance and config 500/1000. A stricter local
-rule always wins. Generated files, fixtures, and vendored code do not count.
-Keep each staged commit within 800 meaningful changed lines, targeting fewer
-than 500 for complex logic.
+Modules 250 lines soft / 400 hard, entrypoints and tools 400/700, tests
+300/500. Checked by `python3.14 tools/check_source_limits.py`. Keep the
+router and provider modules small; a third provider is a new class, never a
+new branch in the request path.
 
-## Verification And Review
+## 4. Security
 
-- Run the module tests before every commit: from `codex-model-router/`,
-  `python3 -m unittest` over the `test_*.py` files with
-  `PYTHONDONTWRITEBYTECODE=1`.
-- Before committing, run the installed `pre-commit-review` skill: one
-  simplification pass, secret scan, and three read-only review lanes on the
-  exact staged tree. Never fabricate receipts or substitute models to pass
-  the hook. Reviewer model and effort follow the owner routing table in
-  `~/.codex/AGENTS.md` (currently Muse at xhigh for this repo's lanes).
-- Commit subjects use `<type>: <short summary>` with type `feat`, `fix`,
-  `refactor`, `test`, `chore`, or `docs`. Do not bypass Git hooks with
-  `--no-verify` unless Cyril explicitly approves.
+Never commit state, activation receipts, catalogues, logs, keys or bearer
+tokens. Never log request or tool content. Loopback only; the path token is
+per-install. Subscription headers never accompany OpenRouter requests.
 
-## Safety And Deployment
+## 5. Verification before commit
 
-- Default production work to read-only. Never commit secrets, API keys,
-  tokens, or credential exports.
-- Runtime changes deploy only with a current backup of the live directory, an
-  idle service boundary (no in-flight requests), and a readback proving
-  exactly the intended delta landed. Never restart the router while requests
-  are active unless Cyril explicitly approves.
-- No staff-wide rollout without explicit release authority.
+Run `python3.14 -m unittest discover -s tests -t .`,
+`python3.14 -m compileall -q codex_router tools tests`, and
+`python3.14 tools/check_source_limits.py`, then the shared
+`pre-commit-review` skill. Commit subjects use `<type>: <short summary>`
+with type `feat`, `fix`, `refactor`, `test`, `chore` or `docs`.
+
+## 6. Release rule
+
+Every user-visible change updates `CHANGELOG.md` and `packaging/VERSION`
+(semver). Releases are cut by tag `v<VERSION>` and the release workflow.
+
+## 7. Compatibility rule
+
+After any Codex desktop upgrade, run the paid probe from
+`tools/probe_codex_runtime.py` on one OpenRouter model and one OpenAI model
+before publishing a release. Record the Codex version in
+`docs/compatibility.md`.
