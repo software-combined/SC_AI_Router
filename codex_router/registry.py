@@ -9,7 +9,9 @@ from pathlib import Path
 
 FIELDS = ('slug', 'provider', 'display_name', 'vendor', 'reasoning',
           'default_reasoning', 'modalities', 'excluded_efforts',
-          'schema_mode', 'max_tools', 'context_window', 'priority')
+          'schema_mode', 'max_tools', 'context_window', 'priority',
+          'max_output_tokens', 'reasoning_summary', 'apply_patch',
+          'experimental_tools', 'web_search', 'tier')
 
 
 @dataclass(frozen=True)
@@ -26,6 +28,12 @@ class Model:
     max_tools: int | None = None  # provider ceiling on exposed tools
     context_window: int = 0
     priority: int = 100
+    max_output_tokens: int = 32768   # live-refreshed output ceiling
+    reasoning_summary: str = 'none'  # 'none' | 'auto' (probe-gated)
+    apply_patch: str = 'none'        # 'none' | 'freeform' (probe-gated)
+    experimental_tools: tuple = ()   # probe-gated tool names
+    web_search: bool = True          # False downgrades search to text-only
+    tier: str = 'verified'           # 'verified' | 'preview'
 
 
 def load(text):
@@ -50,13 +58,31 @@ def load(text):
             raise SystemExit(f'models.json {row["slug"]}: bad schema_mode')
         if row['default_reasoning'] not in row['reasoning']:
             raise SystemExit(f'models.json {row["slug"]}: default not in reasoning')
+        if row['reasoning_summary'] not in ('none', 'auto'):
+            raise SystemExit(f'models.json {row["slug"]}: bad reasoning_summary')
+        if row['apply_patch'] not in ('none', 'freeform'):
+            raise SystemExit(f'models.json {row["slug"]}: bad apply_patch')
+        if (not isinstance(row['max_output_tokens'], int)
+                or isinstance(row['max_output_tokens'], bool)
+                or row['max_output_tokens'] <= 0):
+            raise SystemExit(f'models.json {row["slug"]}: bad max_output_tokens')
+        if not isinstance(row['web_search'], bool):
+            raise SystemExit(f'models.json {row["slug"]}: bad web_search')
+        if (not isinstance(row['experimental_tools'], list)
+                or any(not isinstance(name, str) for name in row['experimental_tools'])):
+            raise SystemExit(f'models.json {row["slug"]}: bad experimental_tools')
+        if row['tier'] not in ('verified', 'preview'):
+            raise SystemExit(f'models.json {row["slug"]}: bad tier')
         models.append(Model(
             slug=row['slug'], provider=row['provider'], display_name=row['display_name'],
             vendor=row['vendor'], reasoning=tuple(row['reasoning']),
             default_reasoning=row['default_reasoning'], modalities=tuple(row['modalities']),
             excluded_efforts=frozenset(row['excluded_efforts']), schema_mode=row['schema_mode'],
             max_tools=row['max_tools'], context_window=row['context_window'],
-            priority=row['priority']))
+            priority=row['priority'], max_output_tokens=row['max_output_tokens'],
+            reasoning_summary=row['reasoning_summary'], apply_patch=row['apply_patch'],
+            experimental_tools=tuple(row['experimental_tools']),
+            web_search=row['web_search'], tier=row['tier']))
     return tuple(models)
 
 

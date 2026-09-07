@@ -2,11 +2,12 @@ import json
 import unittest
 from codex_router.capabilities import CANONICAL_ORDER
 from codex_router.catalogue import OPENROUTER_TEMPLATE, openrouter_entry
-from codex_router.registry import FIELDS, MODELS, by_slug, load, openrouter_slugs
+from codex_router.registry import FIELDS, MODELS, Model, by_slug, load, openrouter_slugs
 
 CATALOGUE_FIELDS = set(OPENROUTER_TEMPLATE) | {'slug', 'display_name', 'description',
     'default_reasoning_level', 'supported_reasoning_levels', 'priority',
-    'context_window', 'max_context_window', 'input_modalities', 'base_instructions'}
+    'context_window', 'max_context_window', 'input_modalities', 'base_instructions',
+    'supports_reasoning_summary_parameter'}
 
 class RegistryTests(unittest.TestCase):
     def test_slugs_unique(self):
@@ -36,12 +37,42 @@ class RegistryTests(unittest.TestCase):
 
     def test_bad_row_shape_is_refused(self):
         good = dict(zip(FIELDS, ['x/y', 'openrouter', 'X', 'V',
-            ['low'], 'low', ['text'], [], 'native', None, 1, 100]))
+            ['low'], 'low', ['text'], [], 'native', None, 1, 100,
+            32768, 'none', 'none', [], True, 'verified']))
         for bad in ({k: v for k, v in good.items() if k != 'vendor'},
+                    {k: v for k, v in good.items() if k != 'web_search'},
                     {**good, 'provider': 'other'},
-                    {**good, 'default_reasoning': 'max'}):
-            with self.assertRaises(SystemExit):
-                load(json.dumps([bad]))
+                    {**good, 'default_reasoning': 'max'},
+                    {**good, 'reasoning_summary': 'sometimes'},
+                    {**good, 'apply_patch': 'diff'},
+                    {**good, 'max_output_tokens': 0},
+                    {**good, 'max_output_tokens': 'many'},
+                    {**good, 'web_search': 'yes'},
+                    {**good, 'experimental_tools': ['ok', 7]}):
+            with self.subTest(bad=bad):
+                with self.assertRaises(SystemExit):
+                    load(json.dumps([bad]))
+
+    def test_tier_required_and_validated(self):
+        for model in MODELS:
+            self.assertIn(model.tier, ('verified', 'preview'), model.slug)
+        good = dict(zip(FIELDS, ['x/y', 'openrouter', 'X', 'V',
+            ['low'], 'low', ['text'], [], 'native', None, 1, 100,
+            32768, 'none', 'none', [], True, 'verified']))
+        for bad in ({k: v for k, v in good.items() if k != 'tier'},
+                    {**good, 'tier': 'beta'}):
+            with self.subTest(bad=bad):
+                with self.assertRaises(SystemExit):
+                    load(json.dumps([bad]))
+
+    def test_capability_flags_default_conservative(self):
+        model = Model(slug='x/y', provider='openrouter', display_name='X',
+                      vendor='V', reasoning=('low',), default_reasoning='low')
+        self.assertEqual(model.max_output_tokens, 32768)
+        self.assertEqual(model.reasoning_summary, 'none')
+        self.assertEqual(model.apply_patch, 'none')
+        self.assertEqual(model.experimental_tools, ())
+        self.assertTrue(model.web_search)
 
     def test_merge_preserves_replaces_appends_without_dupes(self):
         from codex_router.catalogue import merge

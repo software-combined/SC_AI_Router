@@ -5,18 +5,31 @@ import logging.handlers
 import os
 from datetime import datetime, timezone
 from pathlib import Path
+from .credentials import Credentials
 
 ROUTER_HOME = Path(os.environ.get('ROUTER_HOME', Path.home() / '.codex' / 'mixed-model-router'))
 STATE = ROUTER_HOME / 'mixed-router-state.json'
-REQUIRED_STATE = {'port': int, 'token': str, 'openai_models': list, 'opencode_auth': str}
+REQUIRED_STATE = {'port': int, 'token': str, 'openai_models': list}
 MAX_BODY = 16 * 1024 * 1024
 
 LOG = logging.getLogger('codex_router')
 
-try:
-    VERSION = (Path(__file__).resolve().parents[1] / 'packaging' / 'VERSION').read_text().strip()
-except OSError:
-    VERSION = 'unknown'
+def _release_version():
+    # Installed releases report the full build version from the bundle
+    # manifest so /health matches what the updater installed; source
+    # checkouts fall back to MAJOR.MINOR from packaging/VERSION.
+    root = Path(__file__).resolve().parents[1]
+    try:
+        return json.loads((root / 'MANIFEST.json').read_text())['version']
+    except (OSError, ValueError, KeyError):
+        pass
+    try:
+        return (root / 'packaging' / 'VERSION').read_text().strip()
+    except OSError:
+        return 'unknown'
+
+
+VERSION = _release_version()
 
 
 def load_state(path=STATE):
@@ -30,8 +43,14 @@ def load_state(path=STATE):
     missing = [k for k, t in REQUIRED_STATE.items() if not isinstance(state.get(k), t)]
     if missing:
         raise SystemExit('Router state file is missing or mistyped keys: ' + ', '.join(missing))
-    if not Path(state['opencode_auth']).exists():
-        raise SystemExit('OpenRouter credential file not found at the configured opencode_auth path')
+    if 'opencode_auth' in state and not isinstance(state['opencode_auth'], str):
+        raise SystemExit('Router state file is missing or mistyped keys: opencode_auth')
+    if 'openai_mode' in state and state['openai_mode'] not in ('subscription', 'none'):
+        raise SystemExit('openai_mode must be subscription or none')
+    try:
+        Credentials(state, ROUTER_HOME).check()
+    except (LookupError, PermissionError, ValueError, OSError) as exc:
+        raise SystemExit(f'OpenRouter credential problem: {exc}')
     return state
 
 
@@ -41,7 +60,7 @@ def configure_logging(home=ROUTER_HOME):
                                                    maxBytes=5 * 1024 * 1024, backupCount=3)
     handler.setFormatter(logging.Formatter('%(message)s'))
     LOG.addHandler(handler)
-    LOG.setLevel(logging.INFO)
+    LOG.setLevel(logging.DEBUG if os.environ.get('ROUTER_DEBUG') else logging.INFO)
 
 
 def log_event(event, **fields):

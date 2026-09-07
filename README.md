@@ -1,52 +1,98 @@
-# SC_Codex_openRouter_adapter
+# Codex model router
 
-Local Codex model router: ChatGPT subscription plus OpenRouter models in one
-picker. Run with `python3.14 -m codex_router`. See `docs/` for operator and
-compatibility notes; `plans/` holds the hardening roadmap. Full staff
-documentation lands with the installer release.
+A small program on your Mac that lets the Codex picker offer both your
+ChatGPT subscription models and approved OpenRouter models. The two
+logins stay separate: subscription traffic keeps using ChatGPT sign-in,
+and OpenRouter traffic uses an API key that never leaves your machine.
 
-## Operation
+## Requirements
 
-`ROUTER_HOME` (default `~/.codex/mixed-model-router`) holds
-`mixed-router-state.json`, `activation.json`, and `logs/router.jsonl` (5 MB,
-three rotations). The code may live anywhere. Startup refuses to serve if the
-state file is missing or mistyped and prints which keys are wrong.
+macOS with the Codex app, Python 3 (the installer finds or asks for a
+3.14 interpreter to run the router itself), and an OpenRouter API key
+for OpenRouter models.
 
-## Adding a model
+## Install
 
-Add one row to `codex_router/models.json`, then run
-`python3.14 -m codex_router.catalogue --check <catalogue>` (or the Plan 039
-dynamic path), restart the router, and probe the new model once at low
-effort. Reviewers should reject slug literals anywhere outside the registry.
-
-## Request routing and safety
-
-OpenAI routes keep the ChatGPT subscription authentication. Only OpenRouter
-routes attach the federated OpenRouter key, sent as a fresh `Bearer` header
-built per request; subscription headers never accompany OpenRouter requests.
-
-Reasoning effort is validated before anything is sent: requesting an effort a
-model does not support fails loudly with `409` naming the model and its
-allowed efforts, never silently downgrades. Mid-thread model switches carry
-the old effort over, so change effort before switching models.
-
-Compaction is transparent: a plain-language summary with exact values quoted
-verbatim, plus retained recent messages. Empty summaries are rejected with
-`409`. Request URLs and upstream credentials never enter access logs, and no
-payload text enters the event log.
-
-## Verify
+Build a versioned bundle and install it:
 
 ```sh
-python3.14 -m unittest discover -s tests -t .
-python3.14 -m compileall -q codex_router tools tests
-python3.14 tools/check_source_limits.py
+python3 packaging/release.py --out dist
+python3 packaging/install.py --feed file://$PWD/dist/latest.json
 ```
+
+The installer asks for nothing interactively. It verifies the bundle,
+self-tests it, writes the service, and inserts the Codex config block.
+If no key is configured it creates an empty key file and tells you to
+paste the key in, then re-run. Restart Codex afterwards.
+
+## Updating
+
+Releases install themselves within about fifteen minutes while the
+router is idle. The router finishes in-flight requests, then swaps to
+the new release. To update now, re-run the installer with
+`--check-update`. Machines on the `beta` channel follow pre-releases.
+
+## Choosing a model
+
+Start a fresh task when switching providers. Reasoning levels differ
+per model; unavailable levels are hidden. Models labelled Preview in
+the picker are not yet verified: they work, but report anything odd.
+
+## Costs
+
+OpenAI models use the ChatGPT subscription. OpenRouter models bill the
+API key per request. There is no local spend cap; watch usage in the
+OpenRouter dashboard.
 
 ## Troubleshooting
 
-| Symptom | Likely cause | Fix |
-| --- | --- | --- |
-| `409` naming a fresh task | Opaque history the model cannot read | Start a fresh task |
-| `400` on every OpenRouter request | Missing or mistyped state keys, or payload shape | Check the router log event, then state keys |
-| Chat shows first sentence as title | Title generation call failed | Retry in a fresh task |
+Logs live under `logs/` beside the state directory. Check health at
+`http://127.0.0.1:<port>/<token>/health` with the port and token from
+`mixed-router-state.json` (do not share that URL). A 400 means the
+model, payload, or local key configuration is invalid. A 409 means the
+provider cannot serve the request, for example an unsupported reasoning effort after switching models (the message names the allowed efforts). A 503 with `Retry-After` means the
+router is draining for an update; retry. If the router stays down,
+reinstall the previous release at an idle moment.
+
+## Uninstall
+
+Run the installer with `--uninstall`. It removes the config block and
+the services and leaves the state directory, including the key file and
+bearer token, in place for you to delete.
+
+## Security
+
+The router listens on loopback only. Each install generates its own
+token, the key file is owner-only, and logs carry request metadata,
+never keys or tokens. Subscription headers never accompany OpenRouter requests; the key travels only as a per-request `Bearer` header.
+
+## Links
+
+Operator guide: `docs/operations.md`. Compatibility matrix:
+`docs/compatibility.md`. Adding a model: `docs/adding-a-model.md`.
+
+## Runtime files
+
+A manual install copies ONLY these files beside the private state
+directory at an idle boundary:
+`codex_router/router.py`,
+`codex_router/providers.py`,
+`codex_router/registry.py`,
+`codex_router/credentials.py`,
+`codex_router/tool_adapter.py`,
+`codex_router/capabilities.py`,
+`codex_router/compaction.py`,
+`codex_router/runtime.py`,
+`codex_router/catalogue.py`,
+`codex_router/local_services.py`,
+`codex_router/live_refresh.py`,
+`codex_router/models.py`,
+`codex_router/apply_catalogue.py`,
+`codex_router/activation.py`,
+`codex_router/__init__.py`,
+`codex_router/__main__.py`,
+`codex_router/models.json`,
+`codex_router/openrouter_base_instructions.txt`,
+`tools/probe_codex_runtime.py`,
+`tools/disable.py`. Never copy state, activation, catalogue, backup, or log
+files.

@@ -41,6 +41,9 @@ OPENROUTER_TEMPLATE = {
     'multi_agent_reasoning_effort': None,
 }
 
+PREVIEW_PRIORITY_OFFSET = 100000  # preview entries sort after every verified model
+
+
 BASE_INSTRUCTIONS = (Path(__file__).with_name('openrouter_base_instructions.txt')).read_text()
 
 
@@ -52,18 +55,27 @@ def catalog_name(model):
 def openrouter_entry(model):
     return {**OPENROUTER_TEMPLATE,
             'slug': model.slug,
-            'display_name': model.display_name,
-            'description': ('OpenRouter billing. Choose before starting a fresh task. '
-                            'OpenRouter: ' + catalog_name(model)),
+            'display_name': (model.display_name + ' · Preview'
+                             if model.tier == 'preview' else model.display_name),
+            'description': (('Preview, not yet verified with Codex. '
+                             if model.tier == 'preview' else '')
+                            + 'OpenRouter billing. Choose before starting a fresh task. '
+                            + 'OpenRouter: ' + catalog_name(model)),
             'default_reasoning_level': model.default_reasoning,
             'supported_reasoning_levels': [
                 {'effort': level, 'description': describe(level)} for level in model.reasoning],
-            'priority': model.priority,
+            'priority': (model.priority + PREVIEW_PRIORITY_OFFSET
+                           if model.tier == 'preview' else model.priority),
             'context_window': model.context_window,
             'max_context_window': model.context_window,
-            'input_modalities': list(model.modalities),
             'base_instructions': BASE_INSTRUCTIONS,
-            **catalogue_patch(model.slug)}
+            **catalogue_patch(model.slug),
+            'input_modalities': list(model.modalities),
+            'default_reasoning_summary': model.reasoning_summary,
+            'supports_reasoning_summary_parameter': model.reasoning_summary == 'auto',
+            'apply_patch_tool_type': 'freeform' if model.apply_patch == 'freeform' else None,
+            'experimental_supported_tools': list(model.experimental_tools),
+            'web_search_tool_type': 'text_and_image' if model.web_search else 'text'}
 
 
 def merge(catalog):
