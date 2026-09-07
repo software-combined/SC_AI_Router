@@ -119,6 +119,12 @@ class _FakeResp:
         self._buf = io.BytesIO(json.dumps(payload).encode())
     def read(self, *a):
         return self._buf.read(*a)
+    def read1(self, *a):
+        return self._buf.read(*a)
+    def getheaders(self):
+        return [('Content-Type', 'application/json')]
+    def getheader(self, name, default=None):
+        return 'application/json' if name.lower() == 'content-type' else default
 
 def _fake_conn_class(status, payload, seen=None):
     class FakeConn:
@@ -262,6 +268,117 @@ class SummarizerParsingTests(unittest.TestCase):
         self._fake_conn(200, {'output': []})
         with self.assertRaisesRegex(ValueError, 'empty'):
             mixed_router.summarize_for_compact('z-ai/glm-5.3', 'key', [])
+
+
+def _passthrough_conn(status, payload, seen=None, read_error=None):
+    class FakeConn:
+        def __init__(self, *a, **k):
+            pass
+        def request(self, method, path, body=None, headers=None):
+            if seen is not None:
+                seen['body'] = body
+        def getresponse(self):
+            resp = _FakeResp(status, payload)
+            if read_error is not None:
+                def boom(*a):
+                    raise read_error
+                resp.read1 = boom
+            return resp
+        def close(self):
+            pass
+    return FakeConn
+
+class PassthroughObservabilityTests(unittest.TestCase):
+    def _server(self):
+        self._started = _start_server({'port': 0, 'token': 'test-token', 'request_cap': 1000,
+            'openai_models': ['gpt-5.6-sol'], 'opencode_auth': '/nonexistent'})
+        self.addCleanup(self._started.shutdown)
+
+    def _post(self, payload):
+        conn = http.client.HTTPConnection('127.0.0.1', self._started.server_port, timeout=10)
+        conn.request('POST', '/test-token/responses', body=json.dumps(payload),
+                     headers={'Content-Type': 'application/json',
+                              'Authorization': 'Bearer subscription-secret'})
+        return conn.getresponse()
+
+    def _events(self, printed, event):
+        return [json.loads(line) for line in printed
+                if line.startswith('{') and json.loads(line).get('event') == event]
+
+    def test_upstream_400_is_relayed_and_logged_with_status(self):
+        seen = {}
+        upstream = {'error': {'message': 'Invalid Responses API request'}}
+        with mock.patch.object(mixed_router.http.client, 'HTTPSConnection',
+                               _passthrough_conn(400, upstream, seen)):
+            self._server()
+            printed = []
+            with mock.patch('builtins.print',
+                            lambda *a, **k: printed.append(' '.join(map(str, a)))):
+                response = self._post({'model': 'gpt-5.6-sol', 'input': [
+                    {'type': 'message', 'role': 'user', 'content': 'hi'}]})
+                self.assertEqual(response.status, 400)
+                body = json.loads(response.read())
+        self.assertEqual(body['error']['message'], 'Invalid Responses API request')
+        completed = self._events(printed, 'request_completed')
+        self.assertEqual(len(completed), 1)
+        self.assertEqual(completed[0]['status'], 400)
+
+    def test_client_disconnect_still_records_upstream_status(self):
+        upstream = {'error': {'message': 'Invalid Responses API request'}}
+        with mock.patch.object(mixed_router.http.client, 'HTTPSConnection',
+                               _passthrough_conn(400, upstream,
+                                                 read_error=BrokenPipeError(32, 'Broken pipe'))):
+            self._server()
+            printed = []
+            with mock.patch('builtins.print',
+                            lambda *a, **k: printed.append(' '.join(map(str, a)))):
+                response = self._post({'model': 'gpt-5.6-sol', 'input': [
+                    {'type': 'message', 'role': 'user', 'content': 'hi'}]})
+                self.assertEqual(response.status, 400)
+                try:
+                    response.read()
+                except Exception:
+                    pass
+        errors = self._events(printed, 'transport_error')
+        self.assertTrue(any(e.get('status') == 400 for e in errors),
+                        'upstream status must survive a client disconnect: %r' % (printed,))
+
+    def test_started_log_describes_input_shape_without_text(self):
+        secret = 'top-secret-phrase-xyz'
+        payload = {'model': 'gpt-5.6-sol', 'input': [
+            {'type': 'message', 'role': 'user', 'content': secret},
+            {'type': 'forwarded_task_message', 'origin': 'another task'},
+            'stray']}
+        seen = {}
+        with mock.patch.object(mixed_router.http.client, 'HTTPSConnection',
+                               _passthrough_conn(200, {'id': 'resp-1'}, seen)):
+            self._server()
+            printed = []
+            with mock.patch('builtins.print',
+                            lambda *a, **k: printed.append(' '.join(map(str, a)))):
+                response = self._post(payload)
+                self.assertEqual(response.status, 200)
+                response.read()
+        started = self._events(printed, 'request_started')
+        self.assertEqual(len(started), 1)
+        self.assertEqual(started[0]['item_kinds'].get('forwarded_task_message'), 1)
+        self.assertEqual(started[0]['item_kinds'].get('message'), 1)
+        self.assertNotIn(secret, '\n'.join(printed))
+        self.assertEqual(json.loads(seen['body'].decode()), payload)
+
+    def test_error_response_survives_client_disconnect(self):
+        handler = mixed_router.Handler.__new__(mixed_router.Handler)
+        handler._headers_buffer = []
+        handler.request_version = 'HTTP/1.1'
+        class _Gone:
+            def write(self, data):
+                raise BrokenPipeError(32, 'Broken pipe')
+            def flush(self):
+                pass
+        handler.wfile = _Gone()
+        handler.send_response = lambda *a: None
+        handler.send_header = lambda *a: None
+        handler.error(502, 'Upstream request failed')
 
 if __name__ == '__main__':
     unittest.main()

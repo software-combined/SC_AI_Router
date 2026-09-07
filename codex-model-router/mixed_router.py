@@ -50,6 +50,16 @@ COMPACT_PROMPT = ('You are performing a CONTEXT CHECKPOINT COMPACTION. Create a 
     'important context/constraints/preferences, what remains with clear next steps, and any '
     'critical data or tool results needed to continue. Be concise and structured.')
 
+def describe_input(items):
+    """Bounded input shape for logs: item-type counts plus key names, never values."""
+    kinds, shapes = {}, {}
+    for item in items if isinstance(items, list) else []:
+        kind = item.get('type') if isinstance(item, dict) else type(item).__name__
+        kinds[kind] = kinds.get(kind, 0) + 1
+        if isinstance(item, dict) and kind not in shapes and len(shapes) < 32:
+            shapes[kind] = sorted(item.keys())[:16]
+    return kinds, shapes
+
 def summarize_for_compact(model, key, payload_items):
     transcript = comp.transcript_for_summary(payload_items)
     prompt = COMPACT_PROMPT + '\n\nConversation:\n' + transcript
@@ -86,12 +96,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def error(self, status, message):
         body = json.dumps({'error': {'message': message, 'type': 'router_error'}}).encode()
-        self.send_response(status)
-        self.send_header('Content-Type', 'application/json')
-        self.send_header('Content-Length', str(len(body)))
-        self.send_header('Connection', 'close')
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.send_response(status)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(body)))
+            self.send_header('Connection', 'close')
+            self.end_headers()
+            self.wfile.write(body)
+        except OSError:
+            pass  # Client already disconnected; the event log keeps the record.
         self.close_connection = True
 
     def authorized_path(self):
@@ -138,6 +151,7 @@ class Handler(BaseHTTPRequestHandler):
             model = payload.get('model')
             if not isinstance(model, str) and path not in NATIVE_SERVICE_PATHS:
                 return self.error(400, 'Missing model')
+            item_kinds, item_keys = describe_input(payload.get('input'))
             key = ''
             custom_tools = set()
             if model in OPENROUTER_MODELS and path not in NATIVE_SERVICE_PATHS:
@@ -159,10 +173,16 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     # Request-cap above already covers this branch; summarizer is billable.
                     items = payload.get('input', [])
+                    kinds, keys = describe_input(items)
+                    print(json.dumps({'event': 'compact_started', 'model': model,
+                                      'input_items': sum(kinds.values()),
+                                      'item_kinds': kinds, 'item_keys': keys}), flush=True)
                     users = comp.extract_user_messages(items)
                     if not users:
                         raise ValueError('No user messages to compact')
                     summary = summarize_for_compact(model, key, items)
+                    print(json.dumps({'event': 'compact_summarized', 'model': model,
+                                      'summary_chars': len(summary)}), flush=True)
                     out = comp.build_compact_v1_output(users, summary)
                 except ValueError as exc:
                     return self.error(409, str(exc))
@@ -185,11 +205,14 @@ class Handler(BaseHTTPRequestHandler):
             return self.error(400, 'Invalid model, payload, or local authentication configuration')
         conn = http.client.HTTPSConnection(host, timeout=120)
         sent = False
+        response = None
         _reasoning = payload.get('reasoning')
         metrics = {'provider': 'openai-subscription' if host == 'chatgpt.com' else 'openrouter',
                    'model': model, 'path': path, 'request_bytes': size,
                    'reasoning_effort': _reasoning.get('effort') if isinstance(_reasoning, dict) else None,
                    'tool_definitions': len(payload.get('tools', [])),
+                   'input_items': sum(item_kinds.values()),
+                   'item_kinds': item_kinds, 'item_keys': item_keys,
                    'local_prepare_ms': round((time.monotonic() - started) * 1000, 1)}
         print(json.dumps({**metrics, 'event': 'request_started'}), flush=True)
         try:
@@ -224,6 +247,7 @@ class Handler(BaseHTTPRequestHandler):
                               'total_ms': round((time.monotonic() - started) * 1000, 1)}), flush=True)
         except (OSError, http.client.HTTPException, ValueError, KeyError) as exc:
             print(json.dumps({**metrics, 'event': 'transport_error',
+                              'status': response.status if response is not None else None,
                               'error_type': type(exc).__name__,
                               'error_category': exc.msg if isinstance(exc, json.JSONDecodeError) else type(exc).__name__,
                               'total_ms': round((time.monotonic() - started) * 1000, 1)}), flush=True)
