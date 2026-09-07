@@ -223,7 +223,7 @@ repository's `plans/` and continue there. Paths inside the plans use
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
 | 034 | Own product repository, package layout, governance, CI | P1 | M | none (two operator decisions) | DONE |
-| 035 | Startup self-check, `ROUTER_HOME`, timestamped rotating logs, `/health` version and inflight | P1 | S | none | TODO |
+| 035 | Startup self-check, `ROUTER_HOME`, timestamped rotating logs, `/health` version and inflight | P1 | S | none | DONE |
 | 036 | Handler characterisation tests (ten end-to-end tests, fake upstream) | P1 | S | 035 | TODO |
 | 038 | Single model registry, quirks as data, generated OpenRouter catalogue entries | P1 | M | 036 | TODO |
 | 037 | Provider interface and thin relay handler | P2 | M | 036, 038, 035 | TODO |
