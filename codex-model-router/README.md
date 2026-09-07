@@ -41,6 +41,13 @@ the macOS LaunchAgent `com.local.codex-mixed-model-router`. A changed settings
 block requires manual reconciliation. Never restore an old complete config over
 newer settings.
 
+Switching models mid-thread carries the old thread effort over. Contributor
+rejects `max`, so a Kimi-at-max thread switching to Contributor is rejected
+with an explicit message instead of an opaque upstream error; lower the
+effort to `xhigh` or below before switching. Kimi-at-max to regular Muse
+Spark is unaffected. Unsupported efforts always fail loudly, never silently
+downgrade.
+
 The request cap and output-token cap are not spending budgets. HTTP streaming is
 supported. Compaction uses a transparent summary envelope with visible
 fallback for opaque native history; empty summaries are rejected.

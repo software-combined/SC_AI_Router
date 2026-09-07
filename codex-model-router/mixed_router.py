@@ -9,7 +9,7 @@ from compression import zstd
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from tool_adapter import prepare_tools, stream_events, ToolEvents
-from capabilities import OPENROUTER_HOST, OPENROUTER_MODELS
+from capabilities import OPENROUTER_HOST, OPENROUTER_MODELS, check_effort
 import compaction as comp
 
 HOP_HEADERS = {'host', 'connection', 'content-length', 'transfer-encoding',
@@ -24,6 +24,9 @@ def prepare_openrouter(payload, path):
     if path not in ('/responses', '/responses/compact'):
         raise ValueError('OpenRouter supports trial responses only')
     payload['input'] = comp.rewrite_input(payload.get('input', []))
+    reasoning = payload.get('reasoning')
+    check_effort(payload.get('model'),
+                 reasoning.get('effort') if isinstance(reasoning, dict) else None)
     payload.pop('service_tier', None)
     payload['max_output_tokens'] = min(payload.get('max_output_tokens') or 32768, 32768)
     return json.dumps(payload).encode()
@@ -182,8 +185,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.error(400, 'Invalid model, payload, or local authentication configuration')
         conn = http.client.HTTPSConnection(host, timeout=120)
         sent = False
+        _reasoning = payload.get('reasoning')
         metrics = {'provider': 'openai-subscription' if host == 'chatgpt.com' else 'openrouter',
                    'model': model, 'path': path, 'request_bytes': size,
+                   'reasoning_effort': _reasoning.get('effort') if isinstance(_reasoning, dict) else None,
                    'tool_definitions': len(payload.get('tools', [])),
                    'local_prepare_ms': round((time.monotonic() - started) * 1000, 1)}
         print(json.dumps({**metrics, 'event': 'request_started'}), flush=True)

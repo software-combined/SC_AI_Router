@@ -65,6 +65,30 @@ class RoutingTests(unittest.TestCase):
         self.assertNotIn('service_tier', data)
         self.assertEqual(data['max_output_tokens'], 32768)
 
+    def test_contributor_rejects_max_effort_with_actionable_message(self):
+        with self.assertRaisesRegex(ValueError, "does not support reasoning effort 'max'"):
+            prepare_openrouter({'model': 'meta/muse-spark-1.3-contributor', 'input': [],
+                                'reasoning': {'effort': 'max'}}, '/responses')
+
+    def test_contributor_accepts_low_and_high_effort(self):
+        for effort in ('low', 'high', 'xhigh'):
+            data = json.loads(prepare_openrouter(
+                {'model': 'meta/muse-spark-1.3-contributor', 'input': [],
+                 'reasoning': {'effort': effort}}, '/responses'))
+            self.assertEqual(data['reasoning'], {'effort': effort})
+
+    def test_kimi_and_muse_still_accept_max_effort(self):
+        for model in ('moonshotai/kimi-k3', 'meta/muse-spark-1.3'):
+            data = json.loads(prepare_openrouter(
+                {'model': model, 'input': [], 'reasoning': {'effort': 'max'}}, '/responses'))
+            self.assertEqual(data['reasoning'], {'effort': 'max'})
+
+    def test_missing_or_malformed_reasoning_passes_through(self):
+        for payload in ({'input': []}, {'input': [], 'reasoning': None},
+                        {'input': [], 'reasoning': 'max'}):
+            data = json.loads(prepare_openrouter(dict(payload), '/responses'))
+            self.assertIn('input', data)
+
 def _test_state(auth_path):
     return {'port': 0, 'token': 'test-token', 'request_cap': 1000,
             'openai_models': [], 'opencode_auth': auth_path}

@@ -57,6 +57,24 @@ def checked_level_entries(slug, advertised, default):
         raise ValueError('Unsupported reasoning levels for ' + slug)
     return [{'effort': level, 'description': describe(level)} for level in kept]
 
+def check_effort(slug, effort):
+    """Fail closed when a routed model is asked for an unsupported effort.
+
+    Mid-thread model switches carry the old thread effort over, so a
+    Kimi-at-max thread switching to Contributor must be rejected with a
+    clear message instead of an opaque upstream 400. Unknown shapes pass
+    through untouched; only a known-bad combination raises.
+    """
+    if effort is None or slug not in OPENROUTER_MODELS:
+        return
+    levels = REASONING_LEVELS[slug]
+    if effort not in levels:
+        raise ValueError(
+            slug + ' does not support reasoning effort ' + repr(effort)
+            + '; use one of ' + ', '.join(levels)
+            + ' (change effort before switching models).')
+
+
 def catalogue_patch(slug):
     if slug not in OPENROUTER_MODELS or slug not in REASONING_LEVELS:
         raise KeyError('Unknown OpenRouter model: ' + slug)
