@@ -4,8 +4,8 @@ Canonical source for Cyril's local compatibility adaptor. The installed copy is
 `~/.codex/mixed-model-router/`; it remains the runtime and private-state directory.
 This source import is not a company deployment package. Python 3.14+ is required.
 
-OpenAI requests retain the user's ChatGPT subscription authentication. The six
-configured OpenRouter models use the existing OpenCode API credential, read at
+OpenAI requests retain the user's ChatGPT subscription authentication. The configured
+OpenRouter models use the existing OpenCode API credential, read at
 request time. OpenAI account headers and cookies never accompany OpenRouter
 requests. The service binds to loopback and requires the local bearer path token.
 
