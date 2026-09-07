@@ -227,7 +227,7 @@ repository's `plans/` and continue there. Paths inside the plans use
 | 036 | Handler characterisation tests (ten end-to-end tests, fake upstream) | P1 | S | 035 | DONE |
 | 038 | Single model registry, quirks as data, generated OpenRouter catalogue entries | P1 | M | 036 | DONE |
 | 037 | Provider interface and thin relay handler | P2 | M | 036, 038, 035 | DONE |
-| 040 | Ordered credential lookup (env, key file, OpenCode fallback), startup fail-closed | P1 | S | 035 (037 either order) | TODO |
+| 040 | Ordered credential lookup (env, key file, OpenCode fallback), startup fail-closed | P1 | S | 035 (037 either order) | DONE |
 | 043 | No-subscription mode: spike three Codex login shapes, `openai_mode`, local native services | P1 | M | 037, 038 | TODO |
 | 039 | Live merged catalogue served by the router, retire the snapshot file | P2 | M | 038, 037, 035, 043 (fallback rules) | TODO |
 | 041 | Versioned release bundle, stdlib installer, health check and rollback, update agent | P1 | L | 034, 035, 040 (039 optional) | TODO |
