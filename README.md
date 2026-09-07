@@ -46,6 +46,7 @@ configuration, and restart Codex and check
 `codex_router/catalogue.py`,
 `codex_router/local_services.py`,
 `codex_router/live_refresh.py`,
+`codex_router/models.py`,
 `codex_router/apply_catalogue.py`,
 `codex_router/activation.py`,
 `codex_router/__init__.py`,
@@ -120,7 +121,8 @@ for no-subscription machines.
 
 ## Adding a model
 
-Add one row to `codex_router/models.json`, then run
+Run `models add` (see `docs/adding-a-model.md`), or add one row to
+`codex_router/models.json` by hand, then run
 `python3.14 -m codex_router.catalogue --check <catalogue>` (or the Plan 039
 dynamic path), restart the router, and probe the new model once at low
 effort. Reviewers should reject slug literals anywhere outside the registry.
