@@ -1,4 +1,5 @@
 """Plan 041 installer tests. install.py imports cleanly as a module."""
+import contextlib
 import hashlib
 import io
 import json
@@ -153,13 +154,16 @@ class InstallTests(unittest.TestCase):
             def fake_fetch(url):
                 return json.dumps(latest).encode() if url.endswith('.json') else blob
 
-            saved_run, saved_test, saved_health = (
-                install_mod.run, install_mod.self_test, install_mod.health)
+            saved_run, saved_test, saved_health, saved_wait = (
+                install_mod.run, install_mod.self_test, install_mod.health,
+                install_mod.wait_version)
             self.addCleanup(setattr, install_mod, 'run', saved_run)
             self.addCleanup(setattr, install_mod, 'self_test', saved_test)
             self.addCleanup(setattr, install_mod, 'health', saved_health)
+            self.addCleanup(setattr, install_mod, 'wait_version', saved_wait)
             install_mod.self_test = lambda *args: None
             install_mod.health = lambda state, timeout=20: None
+            install_mod.wait_version = lambda *args, **kwargs: None
             calls = []
 
             def fake_run(cmd, **kwargs):
@@ -174,7 +178,7 @@ class InstallTests(unittest.TestCase):
                     install_mod.do_install(args, _fetch=fake_fetch, _run=fake_run)
             self.assertEqual(ctx.exception.code, 1)
             self.assertEqual(os.readlink(home / 'current'), str(prev))
-            self.assertTrue(any('bootstrap' in cmd for cmd in calls))
+            self.assertTrue(any('kill' in cmd for cmd in calls))
 
 
     def test_replace_config_block_truncates_shorter_replacement(self):
@@ -262,7 +266,6 @@ class InstallTests(unittest.TestCase):
 
 
     def test_recheck_reports_up_to_date_after_install(self):
-        import contextlib
         import importlib.util
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
@@ -312,10 +315,184 @@ class InstallTests(unittest.TestCase):
             with mock.patch.dict(os.environ, env):
                 buf = io.StringIO()
                 with contextlib.redirect_stdout(buf):
-                    rc = install_mod.do_check_update(args, _fetch=fake_fetch)
+                    rc = install_mod.do_check_update(
+                        args, _fetch=fake_fetch, _sleep=lambda s: None)
             self.assertEqual(rc, 0)
             self.assertIn('up to date', buf.getvalue())
             self.assertEqual(sum(1 for cmd in calls if 'bootstrap' in cmd), n_bootstraps)
+
+
+    def test_check_update_uses_etag_and_treats_304_as_current(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            home.mkdir()
+            (home / 'update-etag').write_text('old-etag\n')
+            seen = []
+
+            def fake_read(feed, etag):
+                seen.append((feed, etag))
+                return 304, b'', 'old-etag'
+
+            def boom(url):
+                raise AssertionError('tarball must not download on 304')
+
+            args = install_mod.build_parser().parse_args(
+                ['--feed', 'file:///latest.json', '--home', str(home)])
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                rc = install_mod.do_check_update(
+                    args, _fetch=boom, _read_feed=fake_read, _sleep=lambda s: None)
+            self.assertEqual(rc, 0)
+            self.assertIn('up to date', buf.getvalue())
+            self.assertEqual(seen, [('file:///latest.json', 'old-etag')])
+            self.assertEqual((home / 'update-etag').read_text(), 'old-etag\n')
+
+    def test_channel_beta_resolves_prerelease_feed(self):
+        api = [{'prerelease': False, 'assets': []},
+               {'prerelease': True, 'assets':
+                [{'name': 'other.txt', 'browser_download_url': 'https://x/other'},
+                 {'name': 'latest-beta.json',
+                  'browser_download_url': 'https://x/latest-beta.json'}]}]
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            home.mkdir()
+            self.assertTrue(home.exists())
+            self.assertEqual(install_mod.channel_feed(home), install_mod.FEED_URL)
+            (home / 'channel').write_text('beta\n')
+            got = install_mod.channel_feed(
+                home, _fetch=lambda url: json.dumps(api).encode())
+            self.assertEqual(got, 'https://x/latest-beta.json')
+            with self.assertRaises(SystemExit):
+                install_mod.channel_feed(
+                    home, _fetch=lambda url: json.dumps([]).encode())
+
+    def test_jitter_bounded(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            home.mkdir()
+            sleeps = []
+            args = install_mod.build_parser().parse_args(
+                ['--feed', 'file:///latest.json', '--home', str(home)])
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                install_mod.do_check_update(
+                    args,
+                    _read_feed=lambda feed, etag: (304, b'', None),
+                    _sleep=sleeps.append)
+            self.assertEqual(len(sleeps), 1)
+            self.assertGreaterEqual(sleeps[0], 0)
+            self.assertLessEqual(sleeps[0], 120)
+
+    def test_update_plist_checks_every_fifteen_minutes(self):
+        content = install_mod.render_update_plist('/opt/homebrew/bin/python3.14', Path('/tmp/hm'))
+        self.assertEqual(content['StartInterval'], 900)
+        self.assertTrue(content['RunAtLoad'])
+        self.assertNotIn('StartCalendarInterval', content)
+
+    def test_upgrade_restart_uses_kill_term(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            prev = home / 'releases' / '0.2.0'
+            (prev / 'packaging').mkdir(parents=True)
+            (prev / 'packaging' / 'VERSION').write_text('0.2.0\n')
+            home.mkdir(parents=True, exist_ok=True)
+            os.symlink(str(prev), home / 'current')
+            manifest = {'version': '9.9.9', 'files':
+                        {'packaging/VERSION': hashlib.sha256(b'9.9.9\n').hexdigest()}}
+            blob = _tarball(files=[('MANIFEST.json', json.dumps(manifest)),
+                                   ('packaging/VERSION', '9.9.9\n')])
+            latest = {'version': '9.9.9', 'url': 'file:///bundle.tar.gz',
+                      'sha256': None, 'min_python': '3.14'}
+
+            def fake_fetch(url):
+                return json.dumps(latest).encode() if url.endswith('.json') else blob
+
+            saved_run, saved_test, saved_health = (
+                install_mod.run, install_mod.self_test, install_mod.health)
+            self.addCleanup(setattr, install_mod, 'run', saved_run)
+            self.addCleanup(setattr, install_mod, 'self_test', saved_test)
+            self.addCleanup(setattr, install_mod, 'health', saved_health)
+            install_mod.self_test = lambda *args: None
+            install_mod.health = lambda state, timeout=20: {'status': 'ok', 'version': '9.9.9'}
+            calls = []
+
+            def fake_run(cmd, **kwargs):
+                calls.append(list(cmd))
+                return _ok_run(cmd, **kwargs)
+
+            args = install_mod.build_parser().parse_args(
+                ['--feed', 'file:///latest.json', '--home', str(home)])
+            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}
+            with mock.patch.dict(os.environ, env):
+                self.assertEqual(
+                    install_mod.do_install(args, _fetch=fake_fetch, _run=fake_run), 0)
+            kills = [cmd for cmd in calls if cmd[:3] == ['launchctl', 'kill', 'TERM']]
+            self.assertTrue(kills, 'upgrade must TERM the running router')
+            bootstraps = [cmd for cmd in calls if 'bootstrap' in cmd]
+            self.assertFalse(bootstraps, 'upgrade must not bootstrap over a live service')
+            agents = Path(tmp) / 'fakehome' / 'Library' / 'LaunchAgents'
+            self.assertTrue((agents / (install_mod.LABEL + '.plist')).exists())
+
+
+    def test_deferred_check_keeps_old_etag(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            home.mkdir()
+            (home / 'update-etag').write_text('etag-A\n')
+            (home / 'mixed-router-state.json').write_text(
+                json.dumps({'port': 1, 'token': 'x'}))
+            latest = {'version': '9.9.9', 'url': 'file:///bundle.tar.gz',
+                      'sha256': None, 'min_python': '3.14'}
+
+            def fake_read(feed, etag):
+                self.assertEqual(etag, 'etag-A')
+                return 200, json.dumps(latest).encode(), 'etag-B'
+
+            def boom(url):
+                raise AssertionError('tarball must not download when deferred')
+
+            saved_idle = install_mod.wait_idle
+            self.addCleanup(setattr, install_mod, 'wait_idle', saved_idle)
+            install_mod.wait_idle = lambda *args, **kwargs: False
+            args = install_mod.build_parser().parse_args(
+                ['--feed', 'file:///latest.json', '--home', str(home)])
+            buf = io.StringIO()
+            import contextlib
+            with contextlib.redirect_stdout(buf):
+                rc = install_mod.do_check_update(
+                    args, _fetch=boom, _read_feed=fake_read, _sleep=lambda s: None)
+            self.assertEqual(rc, 0)
+            self.assertIn('deferred', buf.getvalue())
+            self.assertEqual((home / 'update-etag').read_text(), 'etag-A\n')
+
+    def test_up_to_date_check_stores_new_etag(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            rel = home / 'releases' / '9.9.9'
+            (rel / 'packaging').mkdir(parents=True)
+            (rel / 'packaging' / 'VERSION').write_text('9.9.9\n')
+            home.mkdir(parents=True, exist_ok=True)
+            os.symlink(str(rel), home / 'current')
+            latest = {'version': '9.9.9', 'url': 'file:///bundle.tar.gz',
+                      'sha256': None, 'min_python': '3.14'}
+
+            def fake_read(feed, etag):
+                self.assertIsNone(etag)
+                return 200, json.dumps(latest).encode(), 'etag-B'
+
+            def boom(url):
+                raise AssertionError('tarball must not download when current')
+
+            args = install_mod.build_parser().parse_args(
+                ['--feed', 'file:///latest.json', '--home', str(home)])
+            buf = io.StringIO()
+            import contextlib
+            with contextlib.redirect_stdout(buf):
+                rc = install_mod.do_check_update(
+                    args, _fetch=boom, _read_feed=fake_read, _sleep=lambda s: None)
+            self.assertEqual(rc, 0)
+            self.assertIn('up to date', buf.getvalue())
+            self.assertEqual((home / 'update-etag').read_text(), 'etag-B\n')
 
 
 if __name__ == '__main__':

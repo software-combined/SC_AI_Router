@@ -6,6 +6,7 @@ import io
 import json
 import os
 import plistlib
+import random
 import secrets
 import shutil
 import socket
@@ -14,13 +15,14 @@ import sys
 import tarfile
 import tempfile
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
 LABEL = 'com.local.codex-mixed-model-router'
 UPDATE_LABEL = LABEL + '.update'
 FEED_URL = 'https://github.com/software-combined/SC_Codex_openRouter_adapter/releases/latest/download/latest.json'
-BETA_FEED_URL = 'https://github.com/software-combined/SC_Codex_openRouter_adapter/releases/download/v999-beta/latest-beta.json'
+BETA_API_URL = 'https://api.github.com/repos/software-combined/SC_Codex_openRouter_adapter/releases?per_page=5'
 MIN_PYTHON = (3, 14)
 
 
@@ -160,8 +162,8 @@ def render_plist(python, home):
 def render_update_plist(python, home):
     return {'Label': UPDATE_LABEL,
             'ProgramArguments': [python, str(home / 'current' / 'packaging' / 'install.py'), '--check-update'],
-            'RunAtLoad': False,
-            'StartCalendarInterval': {'Hour': 10, 'Minute': 0},
+            'RunAtLoad': True,
+            'StartInterval': 900,
             'StandardOutPath': str(home / 'logs' / 'update.log'),
             'StandardErrorPath': str(home / 'logs' / 'update.log')}
 
@@ -184,6 +186,18 @@ def health(state, timeout=20):
                     return body
         except (OSError, ValueError):
             time.sleep(0.5)
+    return None
+
+
+def wait_version(state, version, timeout=150, fetch_health=None):
+    """True once /health reports the given version."""
+    get = fetch_health or (lambda s: health(s, timeout=5))
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        body = get(state)
+        if body and body.get('version') == version:
+            return body
+        time.sleep(1)
     return None
 
 
@@ -256,10 +270,34 @@ def wait_idle(state, timeout=600, fetch_health=None):
     return False
 
 
-def channel_feed(home):
+def fetch_feed(url, etag, _fetch=fetch):
+    """Read a feed document, revalidating with a saved ETag. Returns (status, body, etag)."""
+    if url.startswith('file://'):
+        return 200, _fetch(url), etag
+    req = urllib.request.Request(url, headers={'If-None-Match': etag} if etag else {})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as response:
+            return response.status, response.read(), response.headers.get('ETag', etag)
+    except urllib.error.HTTPError as exc:
+        if exc.code == 304:
+            return 304, b'', etag
+        raise
+
+
+def resolve_beta_feed(_fetch=fetch):
+    payload = json.loads(_fetch(BETA_API_URL).decode())
+    for entry in payload:
+        if entry.get('prerelease'):
+            for asset in entry.get('assets', []):
+                if asset.get('name') == 'latest-beta.json':
+                    return asset['browser_download_url']
+    raise SystemExit('no beta release found')
+
+
+def channel_feed(home, _fetch=fetch):
     channel = (home / 'channel').read_text().strip() if (home / 'channel').exists() else 'stable'
     if channel == 'beta':
-        return BETA_FEED_URL
+        return resolve_beta_feed(_fetch)
     return FEED_URL
 
 
@@ -312,9 +350,12 @@ def do_install(args, _fetch=fetch, _run=None):
     agents = Path.home() / 'Library' / 'LaunchAgents'
     write_plist(agents / (LABEL + '.plist'), render_plist(python, home))
     write_plist(agents / (UPDATE_LABEL + '.plist'), render_update_plist(python, home))
-    restart_service(home, os.getuid())
-    got = health(state)
-    if not got or got.get('version') != latest['version']:
+    uid = os.getuid()
+    if previous is None:
+        restart_service(home, uid)
+    else:
+        run(['launchctl', 'kill', 'TERM', f'gui/{uid}/{LABEL}'], capture_output=True)
+    if not wait_version(state, latest['version']):
         if previous:
             swap_current(home, Path(previous))
             restart_service(home, os.getuid())
@@ -360,11 +401,22 @@ def do_install(args, _fetch=fetch, _run=None):
     return 0
 
 
-def do_check_update(args, _fetch=fetch):
+def do_check_update(args, _fetch=fetch, _read_feed=None, _sleep=None):
+    read_feed = _read_feed or (lambda url, etag: fetch_feed(url, etag, _fetch))
+    sleep = _sleep or time.sleep
     home = Path(args.home).expanduser()
     feed = args.feed or channel_feed(home)
-    latest = json.loads(_fetch(feed).decode())
+    sleep(random.uniform(0, 120))
+    etag_path = home / 'update-etag'
+    etag = etag_path.read_text().strip() if etag_path.exists() else None
+    status, body, etag = read_feed(feed, etag)
+    if status == 304:
+        print(f"up to date {current_version(home)}")
+        return 0
+    latest = json.loads(body.decode())
     if not newer(latest['version'], current_version(home)):
+        if etag:
+            etag_path.write_text(etag + '\n')
         print(f"up to date {current_version(home)}")
         return 0
     state = json.loads((home / 'mixed-router-state.json').read_text())
@@ -389,6 +441,8 @@ def do_check_update(args, _fetch=fetch):
     with open(home / 'logs' / 'update.log', 'a') as stream:
         stream.write(json.dumps({'at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
                                  'version': latest['version']}) + '\n')
+    if etag:
+        etag_path.write_text(etag + '\n')
     print(f"installed {latest['version']}")
     return 0
 
