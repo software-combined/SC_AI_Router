@@ -7,7 +7,9 @@ import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
+from unittest import mock
 from codex_router.runtime import LOG, load_state
+from tests.fakes import FakeUpstream, install_fake
 from tests.test_mixed_router import _start_auth_server
 
 
@@ -86,6 +88,49 @@ class LoggingAndHealthTests(unittest.TestCase):
         self.assertEqual(len(rejected), 1)
         self.assertEqual(rejected[0]['path'], '/secret-path')
         self.assertNotIn('test-token', open(log_name).read())
+
+    def test_provider_selected_logged_only_with_debug_flag(self):
+        install_fake(self, lambda: FakeUpstream(200, b'{"output": []}', []))
+        for flag, expected in (({}, 0), ({'ROUTER_DEBUG': '1'}, 1)):
+            with self.subTest(flag=flag):
+                log_name, handler = _capture_log(self)
+                server = self._server()
+                with mock.patch.dict(os.environ, flag):
+                    if 'ROUTER_DEBUG' not in flag:
+                        os.environ.pop('ROUTER_DEBUG', None)
+                    conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
+                    conn.request('POST', '/test-token/responses',
+                                 body=json.dumps({'model': 'z-ai/glm-5.3', 'input': []}),
+                                 headers={'Content-Type': 'application/json'})
+                    self.assertEqual(conn.getresponse().status, 200)
+                handler.flush()
+                lines = [json.loads(line) for line in open(log_name) if line.strip()]
+                selected = [e for e in lines if e.get('event') == 'provider_selected']
+                self.assertEqual(len(selected), expected)
+                for event in selected:
+                    self.assertEqual(event['provider'], 'openrouter')
+                    self.assertNotIn('Authorization', json.dumps(event))
+
+    def test_transport_error_carries_traceback(self):
+        def boom(*a, **k):
+            raise OSError('reset by peer')
+        install_fake(self, boom)
+        log_name, handler = _capture_log(self)
+        server = self._server()
+        conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
+        conn.request('POST', '/test-token/responses',
+                     body=json.dumps({'model': 'z-ai/glm-5.3', 'input': []}),
+                     headers={'Content-Type': 'application/json',
+                              'Authorization': 'Bearer subscription-secret'})
+        self.assertEqual(conn.getresponse().status, 502)
+        handler.flush()
+        text = open(log_name).read()
+        lines = [json.loads(line) for line in text.splitlines() if line.strip()]
+        errors = [e for e in lines if e.get('event') == 'transport_error']
+        self.assertEqual(len(errors), 1)
+        self.assertIn('OSError', errors[0]['traceback'])
+        self.assertNotIn('Bearer', text)
+        self.assertNotIn('test-key', text)
 
     def test_health_reports_version_and_inflight(self):
         server = self._server()

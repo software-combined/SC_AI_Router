@@ -41,7 +41,7 @@ def configure_logging(home=ROUTER_HOME):
                                                    maxBytes=5 * 1024 * 1024, backupCount=3)
     handler.setFormatter(logging.Formatter('%(message)s'))
     LOG.addHandler(handler)
-    LOG.setLevel(logging.INFO)
+    LOG.setLevel(logging.DEBUG if os.environ.get('ROUTER_DEBUG') else logging.INFO)
 
 
 def log_event(event, **fields):
