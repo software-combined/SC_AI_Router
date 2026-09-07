@@ -50,6 +50,40 @@ def _ok_run(cmd, **kwargs):
     return SimpleNamespace(returncode=0, stdout='', stderr='')
 
 
+def _craft_bundle(version):
+    """Crafted install bundle + feed doc (bytes only, no release build)."""
+    marker = (version + '\n').encode()
+    manifest = {'version': version, 'files':
+                {'packaging/VERSION': hashlib.sha256(marker).hexdigest()}}
+    blob = _tarball(files=[('MANIFEST.json', json.dumps(manifest)),
+                           ('packaging/VERSION', marker)])
+    latest = {'version': version, 'url': 'file:///bundle.tar.gz',
+              'sha256': None, 'min_python': '3.14'}
+    return blob, latest
+
+
+def _static_fetch(latest, blob):
+    def fake_fetch(url):
+        return json.dumps(latest).encode() if url.endswith('.json') else blob
+    return fake_fetch
+
+
+def _patch_attrs(test, **overrides):
+    for name, value in overrides.items():
+        test.addCleanup(setattr, install_mod, name, getattr(install_mod, name))
+        setattr(install_mod, name, value)
+
+
+def _run_install(test, tmp, home, fake_fetch, fake_run):
+    args = install_mod.build_parser().parse_args(
+        ['--feed', 'file:///latest.json', '--home', str(home)])
+    env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}
+    with mock.patch.dict(os.environ, env):
+        test.assertEqual(
+            install_mod.do_install(args, _fetch=fake_fetch, _run=fake_run), 0)
+    return args, env
+
+
 class InstallTests(unittest.TestCase):
     def test_checksum_mismatch_is_rejected(self):
         with self.assertRaises(SystemExit):
@@ -82,7 +116,8 @@ class InstallTests(unittest.TestCase):
         self.assertFalse(install_mod.newer('0.3.0', '0.4.0'))
 
     def test_render_plist_contains_label_home_and_python(self):
-        content = install_mod.render_plist('/opt/homebrew/bin/python3.14', Path('/tmp/hm'))
+        content = install_mod.render_plist(
+            '/opt/homebrew/bin/python3.14', Path('/tmp/hm'), {'port': 18749})
         self.assertEqual(content['Label'], 'com.local.codex-mixed-model-router')
         self.assertEqual(content['ProgramArguments'],
                          ['/opt/homebrew/bin/python3.14', '-m', 'codex_router'])
@@ -90,6 +125,11 @@ class InstallTests(unittest.TestCase):
         self.assertEqual(content['EnvironmentVariables'], {'ROUTER_HOME': '/tmp/hm'})
         self.assertTrue(content['KeepAlive'] and content['RunAtLoad'])
         self.assertNotIn('token', json.dumps(content))
+        listeners = content['Sockets']['Listeners']
+        self.assertEqual(listeners['SockNodeName'], '127.0.0.1')
+        self.assertEqual(listeners['SockServiceName'], '18749')
+        self.assertEqual(listeners['SockFamily'], 'IPv4')
+        self.assertEqual(listeners['SockType'], 'stream')
 
     def test_swap_current_is_atomic_and_rollback_restores_previous(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -144,31 +184,19 @@ class InstallTests(unittest.TestCase):
             (prev / 'packaging' / 'VERSION').write_text('0.2.0\n')
             home.mkdir(parents=True, exist_ok=True)
             os.symlink(str(prev), home / 'current')
-            manifest = {'version': '9.9.9', 'files':
-                        {'packaging/VERSION': hashlib.sha256(b'9.9.9\n').hexdigest()}}
-            blob = _tarball(files=[('MANIFEST.json', json.dumps(manifest)),
-                                   ('packaging/VERSION', '9.9.9\n')])
-            latest = {'version': '9.9.9', 'url': 'file:///bundle.tar.gz',
-                      'sha256': None, 'min_python': '3.14'}
+            blob, latest = _craft_bundle('9.9.9')
+            fake_fetch = _static_fetch(latest, blob)
 
-            def fake_fetch(url):
-                return json.dumps(latest).encode() if url.endswith('.json') else blob
-
-            saved_run, saved_test, saved_health, saved_wait = (
-                install_mod.run, install_mod.self_test, install_mod.health,
-                install_mod.wait_version)
-            self.addCleanup(setattr, install_mod, 'run', saved_run)
-            self.addCleanup(setattr, install_mod, 'self_test', saved_test)
-            self.addCleanup(setattr, install_mod, 'health', saved_health)
-            self.addCleanup(setattr, install_mod, 'wait_version', saved_wait)
-            install_mod.self_test = lambda *args: None
-            install_mod.health = lambda state, timeout=20: None
-            install_mod.wait_version = lambda *args, **kwargs: None
             calls = []
 
             def fake_run(cmd, **kwargs):
                 calls.append(cmd)
                 return _ok_run(cmd, **kwargs)
+
+            _patch_attrs(self, run=fake_run,
+                         self_test=lambda *args: None,
+                         health=lambda state, timeout=20: None,
+                         wait_version=lambda *args, **kwargs: None)
 
             args = install_mod.build_parser().parse_args(
                 ['--feed', 'file:///latest.json', '--home', str(home)])
@@ -238,8 +266,7 @@ class InstallTests(unittest.TestCase):
             latest = {'version': version, 'url': 'file:///bundle.tar.gz',
                       'sha256': hashlib.sha256(blob).hexdigest(), 'min_python': '3.14'}
 
-            def fake_fetch(url):
-                return json.dumps(latest).encode() if url.endswith('.json') else blob
+            fake_fetch = _static_fetch(latest, blob)
 
             agents = Path(tmp) / 'fakehome' / 'Library' / 'LaunchAgents'
             plist = agents / 'com.local.codex-mixed-model-router.plist'
@@ -249,16 +276,8 @@ class InstallTests(unittest.TestCase):
                 order.append((list(cmd), plist.exists()))
                 return _ok_run(cmd, **kwargs)
 
-            saved_run, saved_health = install_mod.run, install_mod.health
-            self.addCleanup(setattr, install_mod, 'run', saved_run)
-            self.addCleanup(setattr, install_mod, 'health', saved_health)
-            install_mod.health = lambda state, timeout=20: {'status': 'ok', 'version': version}
-            args = install_mod.build_parser().parse_args(
-                ['--feed', 'file:///latest.json', '--home', str(home)])
-            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}
-            with mock.patch.dict(os.environ, env):
-                self.assertEqual(
-                    install_mod.do_install(args, _fetch=fake_fetch, _run=fake_run), 0)
+            _patch_attrs(self, health=lambda state, timeout=20: {'status': 'ok', 'version': version})
+            _run_install(self, tmp, home, fake_fetch, fake_run)
             bootstraps = [saw for cmd, saw in order if 'bootstrap' in cmd]
             self.assertTrue(bootstraps, 'service was never restarted')
             self.assertTrue(all(bootstraps), 'restart ran before plists were written')
@@ -284,32 +303,20 @@ class InstallTests(unittest.TestCase):
             latest = {'version': version, 'url': 'file:///bundle.tar.gz',
                       'sha256': hashlib.sha256(blob).hexdigest(), 'min_python': '3.14'}
 
-            def fake_fetch(url):
-                return json.dumps(latest).encode() if url.endswith('.json') else blob
-
-            saved_run, saved_health, saved_idle = (
-                install_mod.run, install_mod.health, install_mod.wait_idle)
-            self.addCleanup(setattr, install_mod, 'run', saved_run)
-            self.addCleanup(setattr, install_mod, 'health', saved_health)
-            self.addCleanup(setattr, install_mod, 'wait_idle', saved_idle)
-            install_mod.health = lambda state, timeout=20: {'status': 'ok', 'version': version}
+            fake_fetch = _static_fetch(latest, blob)
 
             def no_idle(*args, **kwargs):
                 raise AssertionError('wait_idle must not run for a current install')
 
-            install_mod.wait_idle = no_idle
+            _patch_attrs(self, health=lambda state, timeout=20: {'status': 'ok', 'version': version},
+                         wait_idle=no_idle)
             calls = []
 
             def fake_run(cmd, **kwargs):
                 calls.append(list(cmd))
                 return _ok_run(cmd, **kwargs)
 
-            args = install_mod.build_parser().parse_args(
-                ['--feed', 'file:///latest.json', '--home', str(home)])
-            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}
-            with mock.patch.dict(os.environ, env):
-                self.assertEqual(
-                    install_mod.do_install(args, _fetch=fake_fetch, _run=fake_run), 0)
+            args, env = _run_install(self, tmp, home, fake_fetch, fake_run)
             self.assertEqual(install_mod.current_version(home), version)
             n_bootstraps = sum(1 for cmd in calls if 'bootstrap' in cmd)
             with mock.patch.dict(os.environ, env):
@@ -397,35 +404,19 @@ class InstallTests(unittest.TestCase):
             (prev / 'packaging' / 'VERSION').write_text('0.2.0\n')
             home.mkdir(parents=True, exist_ok=True)
             os.symlink(str(prev), home / 'current')
-            manifest = {'version': '9.9.9', 'files':
-                        {'packaging/VERSION': hashlib.sha256(b'9.9.9\n').hexdigest()}}
-            blob = _tarball(files=[('MANIFEST.json', json.dumps(manifest)),
-                                   ('packaging/VERSION', '9.9.9\n')])
-            latest = {'version': '9.9.9', 'url': 'file:///bundle.tar.gz',
-                      'sha256': None, 'min_python': '3.14'}
+            blob, latest = _craft_bundle('9.9.9')
+            fake_fetch = _static_fetch(latest, blob)
 
-            def fake_fetch(url):
-                return json.dumps(latest).encode() if url.endswith('.json') else blob
-
-            saved_run, saved_test, saved_health = (
-                install_mod.run, install_mod.self_test, install_mod.health)
-            self.addCleanup(setattr, install_mod, 'run', saved_run)
-            self.addCleanup(setattr, install_mod, 'self_test', saved_test)
-            self.addCleanup(setattr, install_mod, 'health', saved_health)
-            install_mod.self_test = lambda *args: None
-            install_mod.health = lambda state, timeout=20: {'status': 'ok', 'version': '9.9.9'}
             calls = []
 
             def fake_run(cmd, **kwargs):
                 calls.append(list(cmd))
                 return _ok_run(cmd, **kwargs)
 
-            args = install_mod.build_parser().parse_args(
-                ['--feed', 'file:///latest.json', '--home', str(home)])
-            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}
-            with mock.patch.dict(os.environ, env):
-                self.assertEqual(
-                    install_mod.do_install(args, _fetch=fake_fetch, _run=fake_run), 0)
+            _patch_attrs(self, run=fake_run,
+                         self_test=lambda *args: None,
+                         health=lambda state, timeout=20: {'status': 'ok', 'version': '9.9.9'})
+            _run_install(self, tmp, home, fake_fetch, fake_run)
             kills = [cmd for cmd in calls if cmd[:3] == ['launchctl', 'kill', 'TERM']]
             self.assertTrue(kills, 'upgrade must TERM the running router')
             bootstraps = [cmd for cmd in calls if 'bootstrap' in cmd]
@@ -457,7 +448,6 @@ class InstallTests(unittest.TestCase):
             args = install_mod.build_parser().parse_args(
                 ['--feed', 'file:///latest.json', '--home', str(home)])
             buf = io.StringIO()
-            import contextlib
             with contextlib.redirect_stdout(buf):
                 rc = install_mod.do_check_update(
                     args, _fetch=boom, _read_feed=fake_read, _sleep=lambda s: None)
@@ -486,7 +476,6 @@ class InstallTests(unittest.TestCase):
             args = install_mod.build_parser().parse_args(
                 ['--feed', 'file:///latest.json', '--home', str(home)])
             buf = io.StringIO()
-            import contextlib
             with contextlib.redirect_stdout(buf):
                 rc = install_mod.do_check_update(
                     args, _fetch=boom, _read_feed=fake_read, _sleep=lambda s: None)
