@@ -23,7 +23,8 @@ python3 packaging/install.py --feed file://$PWD/dist/latest.json
 ```
 
 The installer verifies the bundle, self-tests it, swaps the release with
-rollback on a failed health check, writes the daily update check, and
+rollback on a failed health check, writes the fifteen-minute update
+check, and
 inserts the Codex config block. `packaging/install.sh` (macOS) and
 `packaging/install.ps1` (Windows) are thin wrappers around
 `packaging/install.py`. Re-run the installer with `--check-update` to
@@ -46,6 +47,7 @@ configuration, and restart Codex and check
 `codex_router/local_services.py`,
 `codex_router/update_reasoning_catalog.py`,
 `codex_router/apply_catalogue.py`,
+`codex_router/activation.py`,
 `codex_router/__init__.py`,
 `codex_router/__main__.py`,
 `codex_router/models.json`,
@@ -91,6 +93,16 @@ command line or write it into the service definition.
 `mixed-router-state.json`, `activation.json`, and `logs/router.jsonl` (5 MB,
 three rotations). The code may live anywhere. Startup refuses to serve if the
 state file is missing or mistyped and prints which keys are wrong.
+
+## Updating
+
+Releases ship automatically: merging to `main` publishes a release and every
+router picks it up within about fifteen minutes. The router finishes
+in-flight requests (up to two minutes), then swaps to the new release with
+no action needed. Machines on the `beta` channel update from pre-releases
+first so a bad release is caught before the fleet follows. To pin one
+machine to a version, re-run the installer with `--version X`; `--uninstall`
+removes the agents.
 
 ## Without a ChatGPT subscription
 

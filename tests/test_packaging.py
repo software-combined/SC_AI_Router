@@ -18,6 +18,7 @@ FILES = [
          'codex_router/local_services.py',
          'codex_router/update_reasoning_catalog.py',
          'codex_router/apply_catalogue.py',
+         'codex_router/activation.py',
          'codex_router/__init__.py',
          'codex_router/__main__.py',
          'codex_router/models.json',

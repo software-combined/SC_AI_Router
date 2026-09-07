@@ -4,6 +4,7 @@ import http.client
 import json
 import io
 import os
+import socket
 import threading
 import time
 import traceback
@@ -21,13 +22,34 @@ class InvalidSize(ValueError):
 
 class Router(ThreadingHTTPServer):
     daemon_threads = True
+    drain_deadline_s = 120
 
-    def __init__(self, state):
-        super().__init__(('127.0.0.1', state['port']), Handler)
+    def __init__(self, state, fileno=None):
+        if fileno is None:
+            self.allow_reuse_port = True
+            super().__init__(('127.0.0.1', state['port']), Handler)
+        else:
+            super().__init__(('127.0.0.1', state['port']), Handler,
+                             bind_and_activate=False)
+            self.socket.close()
+            self.socket = socket.fromfd(fileno, socket.AF_INET, socket.SOCK_STREAM)
+            self.server_activate()
         self.state = state
         self.lock = threading.Lock()
         self.inflight = 0
+        self.draining = False
         self.credentials = Credentials(state, ROUTER_HOME)
+
+    def drain_and_exit(self):
+        self.draining = True
+        log_event('draining', inflight=self.inflight)
+        self.shutdown()
+        deadline = time.monotonic() + self.drain_deadline_s
+        while self.inflight > 0 and time.monotonic() < deadline:
+            time.sleep(0.5)
+        forced = self.inflight > 0
+        log_event('exit', inflight=self.inflight, forced=forced)
+        os._exit(0)
 
 class Handler(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
@@ -73,17 +95,34 @@ class Handler(BaseHTTPRequestHandler):
             return self.error(403, 'Forbidden')
         if path == '/health':
             return self.send_json(200, {'status': 'ok', 'version': VERSION,
-                                        'inflight': self.server.inflight})
+                                        'inflight': self.server.inflight,
+                                        'draining': self.server.draining})
+        if self.server.draining:
+            return self.drain_reject()
         if self.headers.get('Upgrade', '').lower() == 'websocket':
             # Codex explicitly handles 426 by switching this session to HTTP/SSE.
             return self.error(426, 'Use HTTP streaming for this local trial')
         return self.error(404, 'Unsupported route')
+
+    def drain_reject(self):
+        body = json.dumps({'error': {'message': 'Server draining',
+                                     'type': 'router_error'}}).encode()
+        self.send_response(503)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(body)))
+        self.send_header('Retry-After', '2')
+        self.send_header('Connection', 'close')
+        self.end_headers()
+        self.wfile.write(body)
+        self.close_connection = True
 
     def do_POST(self):
         started = time.monotonic()
         path, via_path = self.authorized_path()
         if path is None:
             return self.error(403, 'Forbidden')
+        if self.server.draining:
+            return self.drain_reject()
         if path not in NATIVE_SERVICE_PATHS | {'/responses', '/responses/compact'}:
             return self.error(404, 'Unsupported route')
         self.connection.settimeout(120)

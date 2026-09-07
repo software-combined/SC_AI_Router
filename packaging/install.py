@@ -149,9 +149,13 @@ def swap_current(home, release_dir):
     return previous
 
 
-def render_plist(python, home):
+def render_plist(python, home, state):
     return {'Label': LABEL,
             'ProgramArguments': [python, '-m', 'codex_router'],
+            'Sockets': {'Listeners': {'SockNodeName': '127.0.0.1',
+                                      'SockServiceName': str(state['port']),
+                                      'SockFamily': 'IPv4',
+                                      'SockType': 'stream'}},
             'WorkingDirectory': str(home / 'current'),
             'EnvironmentVariables': {'ROUTER_HOME': str(home)},
             'KeepAlive': True, 'RunAtLoad': True, 'ThrottleInterval': 10, 'Umask': 63,
@@ -348,7 +352,7 @@ def do_install(args, _fetch=fetch, _run=None):
     ensure_credentials(home, state)
     previous = install_bundle(home, latest['version'], tarball, manifest_doc, python)
     agents = Path.home() / 'Library' / 'LaunchAgents'
-    write_plist(agents / (LABEL + '.plist'), render_plist(python, home))
+    write_plist(agents / (LABEL + '.plist'), render_plist(python, home, state))
     write_plist(agents / (UPDATE_LABEL + '.plist'), render_update_plist(python, home))
     uid = os.getuid()
     if previous is None:
