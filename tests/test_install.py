@@ -4,6 +4,7 @@ import io
 import json
 import os
 import stat
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -206,6 +207,13 @@ class InstallTests(unittest.TestCase):
             with tarfile.open(tarball, mode='r') as tar:
                 tar.extractall(extract, filter='data')
             install_mod.self_test(sys.executable, extract)
+            with tarfile.open(tarball, mode='r') as tar:
+                want = json.loads(tar.extractfile('MANIFEST.json').read())['version']
+            proc = subprocess.run(
+                [sys.executable, '-c', 'from codex_router.runtime import VERSION; print(VERSION)'],
+                cwd=str(extract), capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertEqual(proc.stdout.strip(), want)
 
     def test_fresh_install_writes_plists_before_first_restart(self):
         import importlib.util
@@ -251,6 +259,63 @@ class InstallTests(unittest.TestCase):
             self.assertTrue(bootstraps, 'service was never restarted')
             self.assertTrue(all(bootstraps), 'restart ran before plists were written')
             self.assertEqual(os.readlink(home / 'current'), str(home / 'releases' / version))
+
+
+    def test_recheck_reports_up_to_date_after_install(self):
+        import contextlib
+        import importlib.util
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            feeddir = Path(tmp) / 'feed'
+            feeddir.mkdir()
+            spec = importlib.util.spec_from_file_location(
+                'router_release', _ROOT / 'packaging' / 'release.py')
+            release_mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(release_mod)
+            release_mod.main(['--out', str(feeddir)])
+            tarball = next(iter(feeddir.glob('*.tar.gz')))
+            blob = tarball.read_bytes()
+            with tarfile.open(tarball, mode='r') as tar:
+                manifest = json.loads(tar.extractfile('MANIFEST.json').read())
+            version = manifest['version']
+            latest = {'version': version, 'url': 'file:///bundle.tar.gz',
+                      'sha256': hashlib.sha256(blob).hexdigest(), 'min_python': '3.14'}
+
+            def fake_fetch(url):
+                return json.dumps(latest).encode() if url.endswith('.json') else blob
+
+            saved_run, saved_health, saved_idle = (
+                install_mod.run, install_mod.health, install_mod.wait_idle)
+            self.addCleanup(setattr, install_mod, 'run', saved_run)
+            self.addCleanup(setattr, install_mod, 'health', saved_health)
+            self.addCleanup(setattr, install_mod, 'wait_idle', saved_idle)
+            install_mod.health = lambda state, timeout=20: {'status': 'ok', 'version': version}
+
+            def no_idle(*args, **kwargs):
+                raise AssertionError('wait_idle must not run for a current install')
+
+            install_mod.wait_idle = no_idle
+            calls = []
+
+            def fake_run(cmd, **kwargs):
+                calls.append(list(cmd))
+                return _ok_run(cmd, **kwargs)
+
+            args = install_mod.build_parser().parse_args(
+                ['--feed', 'file:///latest.json', '--home', str(home)])
+            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}
+            with mock.patch.dict(os.environ, env):
+                self.assertEqual(
+                    install_mod.do_install(args, _fetch=fake_fetch, _run=fake_run), 0)
+            self.assertEqual(install_mod.current_version(home), version)
+            n_bootstraps = sum(1 for cmd in calls if 'bootstrap' in cmd)
+            with mock.patch.dict(os.environ, env):
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    rc = install_mod.do_check_update(args, _fetch=fake_fetch)
+            self.assertEqual(rc, 0)
+            self.assertIn('up to date', buf.getvalue())
+            self.assertEqual(sum(1 for cmd in calls if 'bootstrap' in cmd), n_bootstraps)
 
 
 if __name__ == '__main__':
