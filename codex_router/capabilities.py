@@ -4,17 +4,22 @@ Native OpenAI entries keep their catalogue values (multi-agent v2,
 encrypted history, code_mode_only). OpenRouter entries use the proven
 trial values: plaintext V1 subagents, no forced-compaction hash, Node
 REPL offered, and image input only where live metadata advertises it.
-GLM 5.3 is text-only per live metadata. Contributor rejects max despite
+GLM 5.3 and the DeepSeek v4 pair are text-only per live metadata. Contributor rejects max despite
 advertising it; Grok has no max/minimal. Defaults stay low.
 """
 OPENROUTER_MODELS = frozenset({
     'meta/muse-spark-1.3', 'meta/muse-spark-1.3-contributor',
     'z-ai/glm-5.3-flash', 'z-ai/glm-5.3', 'moonshotai/kimi-k3',
-    '~x-ai/grok-latest',
+    '~x-ai/grok-latest', 'deepseek/deepseek-v4-pro',
+    'deepseek/deepseek-v4-flash', 'qwen/qwen3.8-max-0902',
+    '~google/gemini-flash-latest', '~google/gemini-pro-latest',
+    'openai/gpt-6-astra', 'openai/gpt-5.6-sol', 'openai/gpt-5.6-luna',
+    'openai/gpt-5.6-terra', '~anthropic/claude-sonnet-latest',
 })
 # ponytail: fixed map, live recheck via update_reasoning_catalog.py
-# GLM 5.3 is the only text-only model per live metadata.
-IMAGE_INPUT_MODELS = OPENROUTER_MODELS - {'z-ai/glm-5.3'}
+TEXT_ONLY_MODELS = frozenset({'z-ai/glm-5.3', 'deepseek/deepseek-v4-pro',
+                              'deepseek/deepseek-v4-flash'})
+IMAGE_INPUT_MODELS = OPENROUTER_MODELS - TEXT_ONLY_MODELS
 # Live-advertised efforts proven UNSUPPORTED and excluded from catalogues.
 EXCLUDED_EFFORTS = {
     'meta/muse-spark-1.3-contributor': {'max'},
@@ -29,6 +34,16 @@ REASONING_LEVELS = {
     'z-ai/glm-5.3': ['low', 'high', 'max'],
     'moonshotai/kimi-k3': ['low', 'high', 'max'],
     '~x-ai/grok-latest': ['low', 'medium', 'high', 'xhigh'],
+    'deepseek/deepseek-v4-pro': ['high', 'xhigh'],
+    'deepseek/deepseek-v4-flash': ['high', 'xhigh'],
+    'qwen/qwen3.8-max-0902': ['minimal', 'low', 'medium', 'high', 'xhigh'],
+    '~google/gemini-flash-latest': ['low', 'medium', 'high'],
+    '~google/gemini-pro-latest': ['low', 'medium', 'high'],
+    'openai/gpt-6-astra': ['low', 'medium', 'high', 'xhigh', 'max'],
+    'openai/gpt-5.6-sol': ['low', 'medium', 'high', 'xhigh', 'max'],
+    'openai/gpt-5.6-luna': ['low', 'medium', 'high', 'xhigh', 'max'],
+    'openai/gpt-5.6-terra': ['low', 'medium', 'high', 'xhigh', 'max'],
+    '~anthropic/claude-sonnet-latest': ['low', 'medium', 'high', 'xhigh', 'max'],
 }
 MULTI_AGENT_VERSION = 'v1'
 NODE_REPL_DISABLED = False

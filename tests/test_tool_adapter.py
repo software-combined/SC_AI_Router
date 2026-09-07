@@ -1,7 +1,7 @@
 import io
 import json
 import unittest
-from tool_adapter import prepare_tools, stream_events, ToolEvents, has_recursive_refs, SEARCH_NAME, integer_json
+from codex_router.tool_adapter import prepare_tools, stream_events, ToolEvents, has_recursive_refs, SEARCH_NAME, integer_json
 
 class ToolAdapterTests(unittest.TestCase):
     def test_integral_provider_numbers_do_not_break_native_integer_arguments(self):

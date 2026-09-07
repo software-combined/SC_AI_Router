@@ -8,9 +8,9 @@ import time
 from compression import zstd
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from tool_adapter import prepare_tools, stream_events, ToolEvents
-from capabilities import OPENROUTER_HOST, OPENROUTER_MODELS
-import compaction as comp
+from .tool_adapter import prepare_tools, stream_events, ToolEvents
+from .capabilities import OPENROUTER_HOST, OPENROUTER_MODELS
+from . import compaction as comp
 
 HOP_HEADERS = {'host', 'connection', 'content-length', 'transfer-encoding',
                'upgrade', 'keep-alive', 'proxy-authorization', 'proxy-authenticate', 'te', 'trailer'}
@@ -45,7 +45,8 @@ def route(model, path, headers, openai_models, key):
 COMPACT_PROMPT = ('You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary '
     'for another LLM that will resume the task. Include: current progress and key decisions, '
     'important context/constraints/preferences, what remains with clear next steps, and any '
-    'critical data or tool results needed to continue. Be concise and structured.')
+    'critical data or tool results needed to continue. Quote exact values, codes, names and '
+    'tool results verbatim so the next model can repeat them exactly. Be concise and structured.')
 
 def summarize_for_compact(model, key, payload_items):
     transcript = comp.transcript_for_summary(payload_items)
@@ -156,10 +157,22 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     # Request-cap above already covers this branch; summarizer is billable.
                     items = payload.get('input', [])
+                    kinds, shapes = {}, {}
+                    for _item in items if isinstance(items, list) else []:
+                        kind = _item.get('type') if isinstance(_item, dict) else '?'
+                        kinds[kind] = kinds.get(kind, 0) + 1
+                        if isinstance(_item, dict):
+                            shapes.setdefault(kind, set()).update(_item.keys())
+                    print(json.dumps({'event': 'compact_started', 'model': model,
+                                      'input_items': len(items) if isinstance(items, list) else -1,
+                                      'item_kinds': kinds,
+                                      'item_keys': {k: sorted(v) for k, v in shapes.items()}}), flush=True)
                     users = comp.extract_user_messages(items)
                     if not users:
                         raise ValueError('No user messages to compact')
                     summary = summarize_for_compact(model, key, items)
+                    print(json.dumps({'event': 'compact_summarized', 'model': model,
+                                      'summary_chars': len(summary)}), flush=True)
                     out = comp.build_compact_v1_output(users, summary)
                 except ValueError as exc:
                     return self.error(409, str(exc))
@@ -227,7 +240,3 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             conn.close()
             self.close_connection = True
-
-if __name__ == '__main__':
-    state = json.loads(STATE.read_text())
-    Router(state).serve_forever()

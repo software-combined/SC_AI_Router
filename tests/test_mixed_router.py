@@ -1,13 +1,13 @@
 import http.client
 import io
 import json
-import mixed_router
+from codex_router import router as mixed_router
 import os
 import tempfile
 import threading
 import unittest
 from unittest import mock
-from mixed_router import Router, route, prepare_openrouter
+from codex_router.router import Router, route, prepare_openrouter
 
 class RoutingTests(unittest.TestCase):
     def test_subscription_credentials_stay_on_openai(self):
@@ -145,7 +145,6 @@ class CompactBranchTests(unittest.TestCase):
             self.assertEqual(response.status, 200)
 
     def test_missing_key_still_enforces_default_cap(self):
-        import mixed_router
         with mock.patch.object(mixed_router, 'summarize_for_compact', lambda *a: 'summary'):
             self._server()
             del self._started.state['request_cap']

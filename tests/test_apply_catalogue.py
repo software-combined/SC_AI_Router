@@ -1,9 +1,9 @@
 from pathlib import Path
 import tempfile
 import unittest
-from update_reasoning_catalog import refresh
-from apply_catalogue import apply, write_guarded
-from capabilities import OPENROUTER_MODELS
+from codex_router.update_reasoning_catalog import refresh
+from codex_router.apply_catalogue import apply, write_guarded
+from codex_router.capabilities import OPENROUTER_MODELS
 
 def catalog():
     return {'models': [{'slug': slug, 'default_reasoning_level': 'low',

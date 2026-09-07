@@ -6,8 +6,8 @@ import json
 import sys
 import urllib.request
 from pathlib import Path
-from apply_catalogue import write_guarded
-from capabilities import advertised_or_pinned, checked_level_entries
+from .apply_catalogue import write_guarded
+from .capabilities import advertised_or_pinned, checked_level_entries
 
 def refresh(catalog, models):
     for model in catalog['models']:
