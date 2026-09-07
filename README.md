@@ -2,8 +2,8 @@
 
 Local Codex model router: ChatGPT subscription plus OpenRouter models in one
 picker. Run with `python3.14 -m codex_router`. See `docs/` for operator and
-compatibility notes; `plans/` holds the hardening roadmap. Full staff
-documentation lands with the installer release.
+compatibility notes; `plans/` holds the hardening roadmap. Staff installs go
+through the installer (see Setup).
 
 ## Setup
 
@@ -15,7 +15,21 @@ from the repo root:
 python3.14 -m unittest discover -s tests -t .
 ```
 
-Every setup then follows the same three steps: copy ONLY the runtime files
+Preferred: build a versioned bundle and install it:
+
+```sh
+python3 packaging/release.py --out dist
+python3 packaging/install.py --feed file://$PWD/dist/latest.json
+```
+
+The installer verifies the bundle, self-tests it, swaps the release with
+rollback on a failed health check, writes the daily update check, and
+inserts the Codex config block. `packaging/install.sh` (macOS) and
+`packaging/install.ps1` (Windows) are thin wrappers around
+`packaging/install.py`. Re-run the installer with `--check-update` to
+update, or `--uninstall` to remove the agents.
+
+Legacy manual setup follows the same three steps: copy ONLY the runtime files
 beside the private state directory, add the config block to the Codex
 configuration, and restart Codex and check
 `http://127.0.0.1:<port>/<token>/health` (port and token from
@@ -42,7 +56,7 @@ files.
 
 ### macOS
 
-`packaging/install.sh` runs the suite and prints the copy step. The router
+`packaging/install.sh` runs the installer. The router
 runs as the LaunchAgent `com.local.codex-mixed-model-router`
 (`python3.14 -m codex_router` with `ROUTER_HOME` set, working directory the
 release). State lives in `~/.codex/mixed-model-router`. Machines installed
@@ -51,15 +65,14 @@ they are reinstalled.
 
 ### Windows
 
-`packaging/install.ps1` runs the suite and prints the copy step. Supply the
-key through the OpenCode credential file today. Until the scheduled-task
-service from the installer release exists, start the router by hand
+`packaging/install.ps1` runs the installer. Supply the
+key through the OpenCode credential file today. Until the scheduled-task service exists, start the router by hand
 (`python -m codex_router` with `ROUTER_HOME` set). Unverified on a named
 test machine.
 
 ### Linux
 
-No packaging script ships yet; follow the three steps above by hand and run
+The installer service step is macOS-only for now; on Linux follow the three steps above by hand and run
 the router under your process supervisor (a systemd user unit that restarts
 on failure and keeps logs is the recommended shape). The Linux path is
 unverified: report issues with the distro and Python build.
@@ -90,8 +103,8 @@ reviewer (set `approvals_reviewer = "user"`), and server-side thread titles
 
 Sign in per the custom-provider shape: point Codex at the router with a
 provider block carrying the router bearer (verified against the app server;
-desktop-app sign-in options unverified). Install with the same steps above;
-`--openai-mode none` installer support arrives with the installer release.
+desktop-app sign-in options unverified). Install with the steps above, passing `--openai-mode none` to the installer
+for no-subscription machines.
 
 ## Adding a model
 
