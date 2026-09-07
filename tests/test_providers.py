@@ -1,18 +1,19 @@
 import unittest
+from types import SimpleNamespace
 from codex_router import providers
 
 
-class _StubCredentials:
-    def __init__(self, key='router-secret'):
-        self.key = key
-
-    def openrouter_key(self):
-        return self.key
+def _stub_credentials(key='router-secret'):
+    return SimpleNamespace(openrouter_key=lambda: key)
 
 class SelectTests(unittest.TestCase):
     def test_select_prefers_native_paths_regardless_of_model(self):
         provider = providers.select('z-ai/glm-5.3', '/alpha/search', [])
         self.assertIsInstance(provider, providers.SubscriptionProvider)
+
+    def test_none_mode_names_subscription_for_openai_models(self):
+        with self.assertRaisesRegex(ValueError, 'without a ChatGPT subscription'):
+            providers.select('gpt-6-astra', '/responses', ['gpt-6-astra'], 'none')
 
     def test_select_rejects_unknown_model(self):
         with self.assertRaisesRegex(ValueError, 'not in the configured catalog'):
@@ -23,7 +24,7 @@ class SelectTests(unittest.TestCase):
         prepared = provider.prepare('z-ai/glm-5.3', '/responses',
             {'model': 'z-ai/glm-5.3', 'input': []}, b'raw',
             {'Authorization': 'Bearer subscription-secret', 'Cookie': 'c=1',
-             'ChatGPT-Account-ID': 'acct'}, _StubCredentials())
+             'ChatGPT-Account-ID': 'acct'}, _stub_credentials())
         self.assertEqual(prepared.headers,
                          {'Authorization': 'Bearer router-secret',
                           'Content-Type': 'application/json'})

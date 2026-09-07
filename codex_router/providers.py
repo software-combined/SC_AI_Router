@@ -1,7 +1,7 @@
 """Provider adapters. Each owns model membership, request preparation, upstream target and response adaptation."""
 import http.client
 import json
-from . import compaction as comp
+from . import compaction as comp, local_services
 from .capabilities import OPENROUTER_HOST
 from .registry import by_slug
 from .runtime import log_event
@@ -24,11 +24,18 @@ class Prepared:
         self.body, self.tool_names, self.provider = body, tool_names, provider
 
 
+def _passthrough(response):
+    while chunk := response.read1(65536):
+        yield chunk
+
+
 class SubscriptionProvider:
     name = 'openai-subscription'
     host = 'chatgpt.com'
 
-    def owns(self, model, path, openai_models):
+    def owns(self, model, path, openai_models, openai_mode='subscription'):
+        if openai_mode == 'none':
+            return False
         if path in NATIVE_SERVICE_PATHS:
             return True
         entry = by_slug(model) if isinstance(model, str) else None
@@ -43,15 +50,14 @@ class SubscriptionProvider:
         return Prepared(self.host, '/backend-api/codex' + path, fwd, raw_body, set(), self.name)
 
     def adapt(self, response, tool_names):
-        while chunk := response.read1(65536):
-            yield chunk
+        yield from _passthrough(response)
 
 
 class OpenRouterProvider:
     name = 'openrouter'
     host = OPENROUTER_HOST
 
-    def owns(self, model, path, openai_models):
+    def owns(self, model, path, openai_models, openai_mode='subscription'):
         entry = by_slug(model) if isinstance(model, str) else None
         return entry is not None and entry.provider == 'openrouter' and path not in NATIVE_SERVICE_PATHS
 
@@ -80,8 +86,7 @@ class OpenRouterProvider:
                 result['output'] = [adapter.item(item) for item in result.get('output', [])]
                 yield json.dumps(result).encode()
         else:
-            while chunk := response.read1(65536):
-                yield chunk
+            yield from _passthrough(response)
 
     def compact(self, model, payload, key):
         try:
@@ -124,11 +129,28 @@ class OpenRouterProvider:
             conn.close()
 
 
-PROVIDERS = (OpenRouterProvider(), SubscriptionProvider())
+class LocalServicesProvider:
+    name = 'local-services'
+    host = None
+
+    def owns(self, model, path, openai_models, openai_mode='subscription'):
+        return openai_mode == 'none' and path in NATIVE_SERVICE_PATHS
+
+    def prepare(self, model, path, payload, raw_body, headers, credentials):
+        local_services.answer(path)
+        raise AssertionError('unreachable')
+
+    def adapt(self, response, tool_names):
+        raise AssertionError('unreachable')
 
 
-def select(model, path, openai_models=()):
+PROVIDERS = (OpenRouterProvider(), SubscriptionProvider(), LocalServicesProvider())
+
+
+def select(model, path, openai_models=(), openai_mode='subscription'):
     for provider in PROVIDERS:
-        if provider.owns(model, path, openai_models):
+        if provider.owns(model, path, openai_models, openai_mode):
             return provider
+    if openai_mode == 'none' and isinstance(model, str) and model in (openai_models or []):
+        raise ValueError('Model is not available without a ChatGPT subscription')
     raise ValueError('Model is not in the configured catalog')
