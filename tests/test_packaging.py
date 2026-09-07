@@ -17,6 +17,7 @@ FILES = [
          'codex_router/catalogue.py',
          'codex_router/local_services.py',
          'codex_router/live_refresh.py',
+         'codex_router/models.py',
          'codex_router/apply_catalogue.py',
          'codex_router/activation.py',
          'codex_router/__init__.py',
