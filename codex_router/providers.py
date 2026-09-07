@@ -2,7 +2,7 @@
 import http.client
 import json
 from . import compaction as comp, local_services
-from .capabilities import OPENROUTER_HOST
+from .capabilities import OPENROUTER_HOST, check_effort
 from .registry import by_slug
 from .runtime import log_event
 from .tool_adapter import prepare_tools, stream_events, ToolEvents
@@ -69,6 +69,12 @@ class OpenRouterProvider:
         except ValueError as exc:
             raise PreparationError(str(exc))
         payload['input'] = comp.rewrite_input(payload.get('input', []))
+        reasoning = payload.get('reasoning')
+        try:
+            check_effort(model,
+                         reasoning.get('effort') if isinstance(reasoning, dict) else None)
+        except ValueError as exc:
+            raise PreparationError(str(exc))
         payload.pop('service_tier', None)
         entry = by_slug(model) if isinstance(model, str) else model
         if entry is None:

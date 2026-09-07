@@ -74,7 +74,10 @@ class Handler(BaseHTTPRequestHandler):
             suffix = raw[len(prefix):] if prefix != '/' and raw.startswith(prefix) else '<unrouted>'
             log_event('request_rejected', status=status, reason=message,
                       path=suffix.split('?')[0][:200])
-        self.send_json(status, {'error': {'message': message, 'type': 'router_error'}})
+        try:
+            self.send_json(status, {'error': {'message': message, 'type': 'router_error'}})
+        except OSError:
+            pass  # Client already disconnected; the event log keeps the record.
 
     def authorized_path(self):
         if self.headers.get('Origin'):
@@ -159,8 +162,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.error(409, str(exc))
         except (ValueError, KeyError, LookupError, OSError, TypeError, AttributeError, zstd.ZstdError):
             return self.error(400, 'Invalid model, payload, or local authentication configuration')
+        _reasoning = payload.get('reasoning')
         metrics = {'provider': prepared.provider,
                    'model': model, 'path': path, 'request_bytes': size,
+                   'reasoning_effort': _reasoning.get('effort') if isinstance(_reasoning, dict) else None,
                    'tool_definitions': len(payload.get('tools', [])),
                    'local_prepare_ms': round((time.monotonic() - started) * 1000, 1)}
         log_event('request_started', **metrics)
@@ -186,6 +191,7 @@ class Handler(BaseHTTPRequestHandler):
     def relay(self, provider, prepared, metrics, started):
         conn = http.client.HTTPSConnection(prepared.host, timeout=120)
         sent = False
+        response = None
         try:
             conn.request('POST', prepared.path, body=prepared.body, headers=prepared.headers)
             response = conn.getresponse()
@@ -214,7 +220,9 @@ class Handler(BaseHTTPRequestHandler):
             log_event('request_completed', **metrics, status=response.status,
                         total_ms=round((time.monotonic() - started) * 1000, 1))
         except (OSError, http.client.HTTPException, ValueError, KeyError) as exc:
-            log_event('transport_error', **metrics, error_type=type(exc).__name__,
+            log_event('transport_error',
+                        status=response.status if response is not None else None,
+                        **metrics, error_type=type(exc).__name__,
                         error_category=exc.msg if isinstance(exc, json.JSONDecodeError) else type(exc).__name__,
                         traceback=traceback.format_exc(limit=3)[-4000:],
                         total_ms=round((time.monotonic() - started) * 1000, 1))
