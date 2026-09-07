@@ -11,7 +11,7 @@ FIELDS = ('slug', 'provider', 'display_name', 'vendor', 'reasoning',
           'default_reasoning', 'modalities', 'excluded_efforts',
           'schema_mode', 'max_tools', 'context_window', 'priority',
           'max_output_tokens', 'reasoning_summary', 'apply_patch',
-          'experimental_tools', 'web_search')
+          'experimental_tools', 'web_search', 'tier')
 
 
 @dataclass(frozen=True)
@@ -33,6 +33,7 @@ class Model:
     apply_patch: str = 'none'        # 'none' | 'freeform' (probe-gated)
     experimental_tools: tuple = ()   # probe-gated tool names
     web_search: bool = True          # False downgrades search to text-only
+    tier: str = 'verified'           # 'verified' | 'preview'
 
 
 def load(text):
@@ -70,6 +71,8 @@ def load(text):
         if (not isinstance(row['experimental_tools'], list)
                 or any(not isinstance(name, str) for name in row['experimental_tools'])):
             raise SystemExit(f'models.json {row["slug"]}: bad experimental_tools')
+        if row['tier'] not in ('verified', 'preview'):
+            raise SystemExit(f'models.json {row["slug"]}: bad tier')
         models.append(Model(
             slug=row['slug'], provider=row['provider'], display_name=row['display_name'],
             vendor=row['vendor'], reasoning=tuple(row['reasoning']),
@@ -79,7 +82,7 @@ def load(text):
             priority=row['priority'], max_output_tokens=row['max_output_tokens'],
             reasoning_summary=row['reasoning_summary'], apply_patch=row['apply_patch'],
             experimental_tools=tuple(row['experimental_tools']),
-            web_search=row['web_search']))
+            web_search=row['web_search'], tier=row['tier']))
     return tuple(models)
 
 
