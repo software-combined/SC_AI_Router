@@ -1,3 +1,4 @@
+import json
 import unittest
 from types import SimpleNamespace
 from codex_router import providers
@@ -42,6 +43,25 @@ class SelectTests(unittest.TestCase):
         provider = providers.select('gpt-6-astra', '/responses', ['gpt-6-astra'])
         with self.assertRaisesRegex(PermissionError, 'subscription authentication'):
             provider.prepare('gpt-6-astra', '/responses', {}, b'', {}, None)
+
+class OutputCapTests(unittest.TestCase):
+    def test_output_cap_follows_registry(self):
+        provider = providers.OpenRouterProvider()
+        fake = SimpleNamespace(max_output_tokens=1000)
+        payload = {'model': 'fake/model', 'input': [], 'max_output_tokens': 5000}
+        prepared = provider.prepare(fake, '/responses', payload, b'raw', {}, _stub_credentials())
+        self.assertEqual(json.loads(prepared.body)['max_output_tokens'], 1000)
+        payload = {'model': 'fake/model', 'input': []}
+        prepared = provider.prepare(fake, '/responses', payload, b'raw', {}, _stub_credentials())
+        self.assertEqual(json.loads(prepared.body)['max_output_tokens'], 1000)
+
+    def test_unknown_model_is_rejected(self):
+        provider = providers.OpenRouterProvider()
+        with self.assertRaises(providers.PreparationError):
+            provider.prepare('unknown/model', '/responses',
+                             {'model': 'unknown/model', 'input': []},
+                             b'raw', {}, _stub_credentials())
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -15,13 +15,19 @@
     "default_reasoning": "low",
     "modalities": [
       "text",
-      "image"
+      "image",
+      "audio"
     ],
     "excluded_efforts": [],
     "schema_mode": "json_text",
     "max_tools": null,
     "context_window": 1048576,
-    "priority": 100
+    "priority": 100,
+    "max_output_tokens": 943718,
+    "reasoning_summary": "none",
+    "apply_patch": "none",
+    "experimental_tools": [],
+    "web_search": true
   },
   {
     "slug": "meta/muse-spark-1.3-contributor",
@@ -38,7 +44,8 @@
     "default_reasoning": "low",
     "modalities": [
       "text",
-      "image"
+      "image",
+      "audio"
     ],
     "excluded_efforts": [
       "max"
@@ -46,7 +53,12 @@
     "schema_mode": "json_text",
     "max_tools": null,
     "context_window": 1048576,
-    "priority": 101
+    "priority": 101,
+    "max_output_tokens": 943718,
+    "reasoning_summary": "none",
+    "apply_patch": "none",
+    "experimental_tools": [],
+    "web_search": true
   },
   {
     "slug": "z-ai/glm-5.3-flash",
@@ -67,7 +79,12 @@
     "schema_mode": "native",
     "max_tools": null,
     "context_window": 1310720,
-    "priority": 102
+    "priority": 102,
+    "max_output_tokens": 131072,
+    "reasoning_summary": "none",
+    "apply_patch": "none",
+    "experimental_tools": [],
+    "web_search": true
   },
   {
     "slug": "z-ai/glm-5.3",
@@ -87,7 +104,12 @@
     "schema_mode": "native",
     "max_tools": null,
     "context_window": 1310720,
-    "priority": 103
+    "priority": 103,
+    "max_output_tokens": 943718,
+    "reasoning_summary": "none",
+    "apply_patch": "none",
+    "experimental_tools": [],
+    "web_search": true
   },
   {
     "slug": "moonshotai/kimi-k3",
@@ -108,7 +130,12 @@
     "schema_mode": "native",
     "max_tools": null,
     "context_window": 1048576,
-    "priority": 104
+    "priority": 104,
+    "max_output_tokens": 943718,
+    "reasoning_summary": "none",
+    "apply_patch": "none",
+    "experimental_tools": [],
+    "web_search": true
   },
   {
     "slug": "~x-ai/grok-latest",
@@ -130,7 +157,12 @@
     "schema_mode": "native",
     "max_tools": 350,
     "context_window": 500000,
-    "priority": 105
+    "priority": 105,
+    "max_output_tokens": 450000,
+    "reasoning_summary": "none",
+    "apply_patch": "none",
+    "experimental_tools": [],
+    "web_search": true
   },
   {
     "slug": "deepseek/deepseek-v4-pro",
@@ -149,7 +181,12 @@
     "schema_mode": "native",
     "max_tools": null,
     "context_window": 1048576,
-    "priority": 106
+    "priority": 106,
+    "max_output_tokens": 384000,
+    "reasoning_summary": "none",
+    "apply_patch": "none",
+    "experimental_tools": [],
+    "web_search": true
   },
   {
     "slug": "deepseek/deepseek-v4-flash",
@@ -168,7 +205,12 @@
     "schema_mode": "native",
     "max_tools": null,
     "context_window": 1048576,
-    "priority": 107
+    "priority": 107,
+    "max_output_tokens": 384000,
+    "reasoning_summary": "none",
+    "apply_patch": "none",
+    "experimental_tools": [],
+    "web_search": true
   },
   {
     "slug": "qwen/qwen3.8-max-0902",
@@ -191,7 +233,12 @@
     "schema_mode": "native",
     "max_tools": null,
     "context_window": 1000000,
-    "priority": 108
+    "priority": 108,
+    "max_output_tokens": 131072,
+    "reasoning_summary": "none",
+    "apply_patch": "none",
+    "experimental_tools": [],
+    "web_search": true
   },
   {
     "slug": "~google/gemini-flash-latest",
@@ -206,13 +253,19 @@
     "default_reasoning": "low",
     "modalities": [
       "text",
-      "image"
+      "image",
+      "audio"
     ],
     "excluded_efforts": [],
     "schema_mode": "native",
     "max_tools": null,
     "context_window": 1048576,
-    "priority": 109
+    "priority": 109,
+    "max_output_tokens": 65536,
+    "reasoning_summary": "none",
+    "apply_patch": "none",
+    "experimental_tools": [],
+    "web_search": true
   },
   {
     "slug": "~google/gemini-pro-latest",
@@ -227,13 +280,19 @@
     "default_reasoning": "low",
     "modalities": [
       "text",
-      "image"
+      "image",
+      "audio"
     ],
     "excluded_efforts": [],
     "schema_mode": "native",
     "max_tools": null,
     "context_window": 1048576,
-    "priority": 110
+    "priority": 110,
+    "max_output_tokens": 65536,
+    "reasoning_summary": "none",
+    "apply_patch": "none",
+    "experimental_tools": [],
+    "web_search": true
   },
   {
     "slug": "openai/gpt-6-astra",
@@ -256,7 +315,12 @@
     "schema_mode": "native",
     "max_tools": null,
     "context_window": 1050000,
-    "priority": 111
+    "priority": 111,
+    "max_output_tokens": 128000,
+    "reasoning_summary": "none",
+    "apply_patch": "none",
+    "experimental_tools": [],
+    "web_search": true
   },
   {
     "slug": "openai/gpt-5.6-sol",
@@ -279,7 +343,12 @@
     "schema_mode": "native",
     "max_tools": null,
     "context_window": 1050000,
-    "priority": 112
+    "priority": 112,
+    "max_output_tokens": 128000,
+    "reasoning_summary": "none",
+    "apply_patch": "none",
+    "experimental_tools": [],
+    "web_search": true
   },
   {
     "slug": "openai/gpt-5.6-luna",
@@ -302,7 +371,12 @@
     "schema_mode": "native",
     "max_tools": null,
     "context_window": 1050000,
-    "priority": 113
+    "priority": 113,
+    "max_output_tokens": 128000,
+    "reasoning_summary": "none",
+    "apply_patch": "none",
+    "experimental_tools": [],
+    "web_search": true
   },
   {
     "slug": "openai/gpt-5.6-terra",
@@ -325,7 +399,12 @@
     "schema_mode": "native",
     "max_tools": null,
     "context_window": 1050000,
-    "priority": 114
+    "priority": 114,
+    "max_output_tokens": 128000,
+    "reasoning_summary": "none",
+    "apply_patch": "none",
+    "experimental_tools": [],
+    "web_search": true
   },
   {
     "slug": "~anthropic/claude-sonnet-latest",
@@ -348,6 +427,11 @@
     "schema_mode": "native",
     "max_tools": null,
     "context_window": 1000000,
-    "priority": 115
+    "priority": 115,
+    "max_output_tokens": 128000,
+    "reasoning_summary": "none",
+    "apply_patch": "none",
+    "experimental_tools": [],
+    "web_search": true
   }
 ]

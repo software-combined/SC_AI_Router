@@ -70,7 +70,11 @@ class OpenRouterProvider:
             raise PreparationError(str(exc))
         payload['input'] = comp.rewrite_input(payload.get('input', []))
         payload.pop('service_tier', None)
-        payload['max_output_tokens'] = min(payload.get('max_output_tokens') or 32768, 32768)
+        entry = by_slug(model) if isinstance(model, str) else model
+        if entry is None:
+            raise PreparationError(f'unknown model: {model}')
+        limit = entry.max_output_tokens
+        payload['max_output_tokens'] = min(payload.get('max_output_tokens') or limit, limit)
         return Prepared(self.host, '/api/v1/responses',
                         {'Authorization': 'Bearer ' + credentials.openrouter_key(),
                          'Content-Type': 'application/json'},

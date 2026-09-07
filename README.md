@@ -45,7 +45,7 @@ configuration, and restart Codex and check
 `codex_router/runtime.py`,
 `codex_router/catalogue.py`,
 `codex_router/local_services.py`,
-`codex_router/update_reasoning_catalog.py`,
+`codex_router/live_refresh.py`,
 `codex_router/apply_catalogue.py`,
 `codex_router/activation.py`,
 `codex_router/__init__.py`,
