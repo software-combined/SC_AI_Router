@@ -449,5 +449,63 @@
     "experimental_tools": [],
     "web_search": true,
     "tier": "verified"
+  },
+  {
+    "slug": "anthropic/claude-opus-5",
+    "provider": "openrouter",
+    "display_name": "Claude Opus 5 \u00b7 OpenRouter",
+    "vendor": "",
+    "reasoning": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default_reasoning": "low",
+    "modalities": [
+      "text",
+      "image"
+    ],
+    "excluded_efforts": [],
+    "schema_mode": "native",
+    "max_tools": null,
+    "context_window": 1000000,
+    "priority": 116,
+    "max_output_tokens": 128000,
+    "reasoning_summary": "none",
+    "apply_patch": "none",
+    "experimental_tools": [],
+    "web_search": true,
+    "tier": "preview"
+  },
+  {
+    "slug": "anthropic/claude-fable-5.1",
+    "provider": "openrouter",
+    "display_name": "Claude Fable 5.1 \u00b7 OpenRouter",
+    "vendor": "Anthropic",
+    "reasoning": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default_reasoning": "low",
+    "modalities": [
+      "text",
+      "image"
+    ],
+    "excluded_efforts": [],
+    "schema_mode": "native",
+    "max_tools": null,
+    "context_window": 1000000,
+    "priority": 117,
+    "max_output_tokens": 128000,
+    "reasoning_summary": "none",
+    "apply_patch": "none",
+    "experimental_tools": [],
+    "web_search": true,
+    "tier": "preview"
   }
 ]
