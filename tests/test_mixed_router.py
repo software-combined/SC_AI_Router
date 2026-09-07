@@ -67,6 +67,33 @@ class RoutingTests(unittest.TestCase):
         self.assertEqual(data['max_output_tokens'],
                          by_slug('z-ai/glm-5.3').max_output_tokens)
 
+    def test_contributor_rejects_max_effort_with_actionable_message(self):
+        with self.assertRaisesRegex(ValueError, "does not support reasoning effort 'max'"):
+            _prepared('meta/muse-spark-1.3-contributor', '/responses',
+                      {'model': 'meta/muse-spark-1.3-contributor', 'input': [],
+                       'reasoning': {'effort': 'max'}})
+
+    def test_contributor_accepts_low_and_high_effort(self):
+        for effort in ('low', 'high', 'xhigh'):
+            prepared = _prepared('meta/muse-spark-1.3-contributor', '/responses',
+                                 {'model': 'meta/muse-spark-1.3-contributor', 'input': [],
+                                  'reasoning': {'effort': effort}})
+            self.assertEqual(json.loads(prepared.body)['reasoning'], {'effort': effort})
+
+    def test_kimi_and_muse_still_accept_max_effort(self):
+        for model in ('moonshotai/kimi-k3', 'meta/muse-spark-1.3'):
+            prepared = _prepared(model, '/responses',
+                                 {'model': model, 'input': [],
+                                  'reasoning': {'effort': 'max'}})
+            self.assertEqual(json.loads(prepared.body)['reasoning'], {'effort': 'max'})
+
+    def test_missing_or_malformed_reasoning_passes_through(self):
+        for payload in ({'input': []}, {'input': [], 'reasoning': None},
+                        {'input': [], 'reasoning': 'max'}):
+            prepared = _prepared('z-ai/glm-5.3', '/responses',
+                                 dict(payload, model='z-ai/glm-5.3'))
+            self.assertIn('input', json.loads(prepared.body))
+
 def _test_state(auth_path):
     return {'port': 0, 'token': 'test-token',
             'openai_models': [], 'opencode_auth': auth_path}

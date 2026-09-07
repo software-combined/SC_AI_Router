@@ -20,6 +20,8 @@ class CapabilityTests(unittest.TestCase):
         self.assertNotIn('max', reasoning_levels('meta/muse-spark-1.3-contributor'))
         self.assertIn('max', reasoning_levels('meta/muse-spark-1.3'))
         self.assertEqual(reasoning_levels('~x-ai/grok-latest'), ['low', 'medium', 'high', 'xhigh'])
+        self.assertEqual(reasoning_levels('deepseek/deepseek-v4-pro'), ['high', 'xhigh'])
+        self.assertEqual(reasoning_levels('deepseek/deepseek-v4-flash'), ['high', 'xhigh'])
 
     def test_trial_values_proven_for_subagents_and_switching(self):
         patch = catalogue_patch('z-ai/glm-5.3')

@@ -50,7 +50,7 @@ Logs live under `logs/` beside the state directory. Check health at
 `http://127.0.0.1:<port>/<token>/health` with the port and token from
 `mixed-router-state.json` (do not share that URL). A 400 means the
 model, payload, or local key configuration is invalid. A 409 means the
-provider cannot serve the request. A 503 with `Retry-After` means the
+provider cannot serve the request, for example an unsupported reasoning effort after switching models (the message names the allowed efforts). A 503 with `Retry-After` means the
 router is draining for an update; retry. If the router stays down,
 reinstall the previous release at an idle moment.
 
@@ -64,7 +64,7 @@ bearer token, in place for you to delete.
 
 The router listens on loopback only. Each install generates its own
 token, the key file is owner-only, and logs carry request metadata,
-never keys or tokens.
+never keys or tokens. Subscription headers never accompany OpenRouter requests; the key travels only as a per-request `Bearer` header.
 
 ## Links
 
