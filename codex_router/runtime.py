@@ -14,10 +14,22 @@ MAX_BODY = 16 * 1024 * 1024
 
 LOG = logging.getLogger('codex_router')
 
-try:
-    VERSION = (Path(__file__).resolve().parents[1] / 'packaging' / 'VERSION').read_text().strip()
-except OSError:
-    VERSION = 'unknown'
+def _release_version():
+    # Installed releases report the full build version from the bundle
+    # manifest so /health matches what the updater installed; source
+    # checkouts fall back to MAJOR.MINOR from packaging/VERSION.
+    root = Path(__file__).resolve().parents[1]
+    try:
+        return json.loads((root / 'MANIFEST.json').read_text())['version']
+    except (OSError, ValueError, KeyError):
+        pass
+    try:
+        return (root / 'packaging' / 'VERSION').read_text().strip()
+    except OSError:
+        return 'unknown'
+
+
+VERSION = _release_version()
 
 
 def load_state(path=STATE):

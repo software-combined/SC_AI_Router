@@ -2,7 +2,7 @@ name: Release
 
 on:
   push:
-    tags: ['v*']
+    branches: [main, beta]
 
 permissions:
   contents: read
@@ -24,14 +24,19 @@ jobs:
         with:
           python-version: "3.14"
       - run: python -m unittest discover -s tests -t .
-      - run: python packaging/release.py --out dist
+      - name: Build bundle
+        run: |
+          CHANNEL="$( [ "$GITHUB_REF_NAME" = main ] && echo stable || echo beta )"
+          python packaging/release.py --out dist --build "$GITHUB_RUN_NUMBER" --sha "$GITHUB_SHA" --channel "$CHANNEL"
+          echo "CHANNEL=$CHANNEL" >> "$GITHUB_ENV"
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if [[ "$GITHUB_REF_NAME" == *-beta* ]]; then
-            cp dist/latest.json dist/latest-beta.json
-            gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/latest.json dist/latest-beta.json --generate-notes --prerelease
+          VERSION=$(python -c "import json;print(json.load(open('dist/latest.json'))['version'])")
+          if [ "$CHANNEL" = stable ]; then
+            gh release create "v$VERSION" dist/*.tar.gz dist/latest.json --generate-notes --latest
           else
-            gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/latest.json --generate-notes
+            cp dist/latest.json dist/latest-beta.json
+            gh release create "v$VERSION-beta" dist/*.tar.gz dist/latest-beta.json --prerelease --generate-notes
           fi

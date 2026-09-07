@@ -1,4 +1,4 @@
-"""Build a deterministic release bundle. Usage: python3 packaging/release.py --out dist [--url-base URL]"""
+"""Build a deterministic release bundle. Usage: python3 packaging/release.py --out dist [--build N] [--sha SHA] [--channel NAME] [--url-base URL]"""
 import argparse
 import gzip
 import hashlib
@@ -25,20 +25,31 @@ def bundle_files(root):
 def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument('--out', required=True)
+    parser.add_argument('--build', type=int, default=0)
+    parser.add_argument('--sha', default='')
+    parser.add_argument('--channel', default='stable')
     parser.add_argument('--url-base')
     args = parser.parse_args(argv)
     root = Path(__file__).resolve().parents[1]
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
-    version = (root / 'packaging' / 'VERSION').read_text().strip()
+    base_version = (root / 'packaging' / 'VERSION').read_text().strip()
+    if args.build < 0:
+        raise SystemExit('--build must be >= 0')
+    version = f'{base_version}.{args.build}'
     names = bundle_files(root)
-    manifest_files = {name: hashlib.sha256((root / name).read_bytes()).hexdigest() for name in names}
+    # Stamp the composed version into the bundled marker so installed
+    # releases report what the updater compares (current_version, /health).
+    payloads = {name: (version + '\n').encode() if name == 'packaging/VERSION'
+                else (root / name).read_bytes() for name in names}
+    manifest_files = {name: hashlib.sha256(data).hexdigest() for name, data in payloads.items()}
     manifest = {'version': version, 'files': manifest_files,
-                'codex_tested': 'unknown', 'min_python': MIN_PYTHON}
+                'codex_tested': 'unknown', 'min_python': MIN_PYTHON,
+                'git_sha': args.sha, 'channel': args.channel}
     tar_buffer = io.BytesIO()
     with tarfile.open(fileobj=tar_buffer, mode='w', format=tarfile.PAX_FORMAT) as tar:
         for name in names + ['MANIFEST.json']:
-            data = (json.dumps(manifest, indent=2) + '\n').encode() if name == 'MANIFEST.json' else (root / name).read_bytes()
+            data = (json.dumps(manifest, indent=2) + '\n').encode() if name == 'MANIFEST.json' else payloads[name]
             info = tarfile.TarInfo(name)
             info.size = len(data)
             info.mtime = 0
@@ -49,7 +60,8 @@ def main(argv=None):
     tarball = gzip.compress(tar_buffer.getvalue(), mtime=0)
     tarball_name = f'codex-model-router-{version}.tar.gz'
     (out_dir / tarball_name).write_bytes(tarball)
-    base = args.url_base or f'https://github.com/{REPO}/releases/download/v{version}'
+    tag = f'v{version}' if args.channel == 'stable' else f'v{version}-beta'
+    base = args.url_base or f'https://github.com/{REPO}/releases/download/{tag}'
     latest = {'version': version, 'url': f'{base}/{tarball_name}',
               'sha256': hashlib.sha256(tarball).hexdigest(), 'min_python': MIN_PYTHON,
               'published': datetime.now(timezone.utc).isoformat(timespec='seconds')}

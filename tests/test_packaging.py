@@ -1,6 +1,7 @@
 import importlib.util
 import shutil
 import tarfile
+import json
 import unittest
 from pathlib import Path
 
@@ -67,9 +68,52 @@ class PackagingTests(unittest.TestCase):
             self.assertIn(name, names, name)
         self.assertIn('MANIFEST.json', names)
 
-    def test_version_is_pinned(self):
+    def test_version_is_major_minor(self):
         version = (Path(__file__).resolve().parents[1] / 'packaging' / 'VERSION').read_text().strip()
-        self.assertRegex(version, r'^\d+\.\d+\.\d+$')
+        self.assertRegex(version, r'^\d+\.\d+$')
+
+    def test_build_composes_full_version_and_manifest(self):
+        import importlib.util
+        root = Path(__file__).resolve().parents[1]
+        base = (root / 'packaging' / 'VERSION').read_text().strip()
+        spec = importlib.util.spec_from_file_location(
+            'router_release', root / 'packaging' / 'release.py')
+        release_mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(release_mod)
+        out = root / 'dist-test-build'
+        self.addCleanup(shutil.rmtree, str(out), True)
+        release_mod.main(['--out', str(out), '--build', '57',
+                          '--sha', 'abc123', '--channel', 'beta'])
+        tarball = next(out.glob('*.tar.gz'))
+        self.assertEqual(tarball.name, f'codex-model-router-{base}.57.tar.gz')
+        with tarfile.open(tarball, mode='r') as tar:
+            manifest = json.loads(tar.extractfile('MANIFEST.json').read())
+        self.assertEqual(manifest['version'], f'{base}.57')
+        self.assertEqual(manifest['git_sha'], 'abc123')
+        self.assertEqual(manifest['channel'], 'beta')
+        with tarfile.open(tarball, mode='r') as tar:
+            marker = tar.extractfile('packaging/VERSION').read().decode()
+            self.assertEqual(marker, f'{base}.57\n')
+        latest = json.loads((out / 'latest.json').read_text())
+        self.assertTrue(
+            latest['url'].endswith(f'/v{base}.57-beta/codex-model-router-{base}.57.tar.gz'),
+            latest['url'])
+
+    def test_default_channel_builds_stable_url(self):
+        import importlib.util
+        root = Path(__file__).resolve().parents[1]
+        base = (root / 'packaging' / 'VERSION').read_text().strip()
+        spec = importlib.util.spec_from_file_location(
+            'router_release', root / 'packaging' / 'release.py')
+        release_mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(release_mod)
+        out = root / 'dist-test-stable'
+        self.addCleanup(shutil.rmtree, str(out), True)
+        release_mod.main(['--out', str(out)])
+        latest = json.loads((out / 'latest.json').read_text())
+        self.assertTrue(
+            latest['url'].endswith(f'/v{base}.0/codex-model-router-{base}.0.tar.gz'),
+            latest['url'])
 
 if __name__ == '__main__':
     unittest.main()
