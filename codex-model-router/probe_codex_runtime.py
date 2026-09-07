@@ -1,0 +1,175 @@
+import json
+import queue
+import re
+import subprocess
+import sys
+import threading
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent
+cfg = {'model_provider': 'openai', 'model_reasoning_effort': 'low'}
+if '--capture-tools' in sys.argv:
+    cfg['openai_base_url'] = sys.argv[sys.argv.index('--capture-tools') + 1]
+if '--catalog' in sys.argv:
+    cfg['model_catalog_json'] = sys.argv[sys.argv.index('--catalog') + 1]
+if '--router-state' in sys.argv:
+    state = json.loads(Path(sys.argv[sys.argv.index('--router-state') + 1]).read_text())
+    cfg['openai_base_url'] = f"http://127.0.0.1:{state['port']}/{state['token']}/backend-api/codex"
+cfg.update(project_doc_max_bytes=0, developer_instructions='Synthetic protocol test only.',
+           web_search='disabled', approval_policy='never', sandbox_mode='read-only')
+cfg['features'] = {k: False for k in ['apps', 'shell_tool', 'collab', 'multi_agent', 'code_mode']}
+if '--capture-tools' in sys.argv:
+    cfg['features'] = {'memories': False}  # Capture native schemas; the local sink never calls a model.
+args = ['/Applications/ChatGPT.app/Contents/Resources/codex', 'app-server', '--stdio']
+
+def flatten(d, prefix=''):
+    for k, v in d.items():
+        path = prefix + k
+        if isinstance(v, dict):
+            flatten(v, path + '.')
+        else:
+            args.extend(['-c', path + '=' + json.dumps(v)])
+
+flatten(cfg)
+args.extend(['-c', 'mcp_servers={}'])
+p = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                     stderr=subprocess.PIPE, text=True, cwd=ROOT)
+events = queue.Queue()
+def drain_stderr():
+    for _ in p.stderr:
+        pass  # Drain diagnostics without logging potentially secret-bearing URLs.
+
+threading.Thread(target=drain_stderr, daemon=True).start()
+
+def read():
+    for line in p.stdout:
+        try:
+            events.put(json.loads(line))
+        except ValueError:
+            pass
+    events.put({'eof': True})
+
+threading.Thread(target=read, daemon=True).start()
+deadline = time.monotonic() + (180 if '--capture-tools' in sys.argv else 90)
+seq = 0
+calls = 0
+marker = 'CODEX_OPENROUTER_OK_719'
+trace = []
+
+def send(value):
+    p.stdin.write(json.dumps(value) + '\n')
+    p.stdin.flush()
+
+def next_event():
+    event = events.get(timeout=max(0.01, deadline - time.monotonic()))
+    if '--capture-tools' in sys.argv and event.get('method'):
+        print(json.dumps({'runtime_event': event['method'], 'request': 'id' in event}), flush=True)
+        if event['method'] == 'error':
+            print(re.sub(r'https?://[^\s"<>]+', '[URL]', json.dumps(event.get('params')))[:1800], flush=True)
+    if 'eof' in event:
+        raise RuntimeError('App server exited')
+    return event
+
+def rpc(method, params):
+    global seq
+    seq += 1
+    send({'id': seq, 'method': method, 'params': params})
+    while True:
+        event = next_event()
+        if event.get('id') == seq and 'method' not in event:
+            if 'error' in event:
+                raise RuntimeError(str(event['error']))
+            return event['result']
+
+try:
+    rpc('initialize', {'clientInfo': {'name': 'openrouter_probe', 'version': '1.0'},
+                       'capabilities': {'experimentalApi': True}})
+    send({'method': 'initialized', 'params': {}})
+    models = rpc('model/list', {'includeHidden': False})
+    print(json.dumps({'catalog': [m['model'] for m in models['data']]}), flush=True)
+    model = sys.argv[1]
+    input_schema = {'type': 'object', 'properties': {'value': {'type': 'string'}},
+                    'required': ['value'], 'additionalProperties': False}
+    if '--recursive' in sys.argv:
+        input_schema['properties']['tree'] = {'$ref': '#/$defs/Node'}
+        input_schema['$defs'] = {'Node': {'type': 'object', 'properties': {
+            'name': {'type': 'string'}, 'children': {'type': 'array', 'items': {'$ref': '#/$defs/Node'}}}}}
+    dynamic = {'type': 'function', 'name': 'echo_probe', 'deferLoading': '--deferred' in sys.argv,
+               'description': 'Looks up and returns a synthetic test result for the supplied probe name.', 'inputSchema': input_schema}
+    dynamic_tools = [{'type': 'namespace', 'name': 'probe', 'description': 'Synthetic lookup tools.', 'tools': [dynamic]}] if '--deferred' in sys.argv else [dynamic]
+    if '--large-catalog' in sys.argv:
+        assert '--deferred' in sys.argv
+        dynamic_tools[0]['tools'].extend({'type': 'function', 'name': f'unrelated_{i}',
+            'deferLoading': True, 'description': 'Unused synthetic tool.', 'inputSchema': {'type': 'object', 'properties': {}}}
+            for i in range(500))
+    t = rpc('thread/start', {'model': model, 'modelProvider': cfg['model_provider'], 'cwd': str(ROOT),
+        'ephemeral': True, 'approvalPolicy': 'never', 'sandbox': 'read-only',
+        'baseInstructions': 'This is a synthetic protocol test. ' + ('Use tool_search to discover probe.echo_probe, then call it once. ' if '--deferred' in sys.argv else 'Only call echo_probe once. ') + 'Do not use unrelated tools or read any files.',
+        'developerInstructions': ('Discover probe.echo_probe using tool_search, then call the discovered function' if '--deferred' in sys.argv else 'Call echo_probe') + ' with the user supplied value, then return the tool result exactly.',
+        'dynamicTools': dynamic_tools})
+    thread = t['thread']['id']
+    print(json.dumps({'runtime_provider': t.get('modelProvider'), 'runtime_model': t.get('model')}), flush=True)
+    rpc('turn/start', {'threadId': thread, 'input': [{'type': 'text', 'text': ('First discover echo_probe with tool_search. ' if '--deferred' in sys.argv else '') + 'Call echo_probe with value "probe". Reply with its returned result only. You cannot know the result without calling the tool.',
+                                                   'text_elements': []}], 'effort': sys.argv[sys.argv.index('--effort') + 1] if '--effort' in sys.argv else 'low'})
+    answer = ''
+    while True:
+        event = next_event()
+        method = event.get('method', '')
+        params = event.get('params', {})
+        if method == 'item/tool/call':
+            assert calls == 0 and params['tool'] == 'echo_probe', 'Unexpected tool or repeated call'
+            assert params['arguments'] == {'value': 'probe'}, 'Unexpected arguments'
+            calls += 1
+            send({'id': event['id'], 'result': {'success': True,
+                 'contentItems': [{'type': 'inputText', 'text': marker}]}})
+        elif method == 'item/completed':
+            item = params.get('item', {})
+            trace.append(item.get('type'))
+            if item.get('type') == 'agentMessage':
+                answer = item.get('text', '')
+            elif item.get('type') in ('commandExecution', 'fileChange', 'mcpToolCall', 'webSearch'):
+                raise RuntimeError('Unexpected builtin tool')
+        elif method == 'turn/completed':
+            turn = params['turn']
+            assert turn['status'] == 'completed', str(turn.get('error'))
+            assert calls == 1 and answer.strip() == marker, f'Tool calls={calls}; synthetic final={answer[:1200]!r}'
+            print(json.dumps({'model': model, 'desktop_runtime_tool_round_trip': 'passed', 'items': trace}), flush=True)
+            break
+        elif method == 'error':
+            print(re.sub(r'https?://[^\s"<>]+', '[URL]', json.dumps(params.get('error')))[:1600], flush=True)
+            raise RuntimeError(str(params.get('error', {}).get('codexErrorInfo', 'Provider error')))
+    if '--switch' in sys.argv:
+        target = 'z-ai/glm-5.3-flash'
+        rpc('turn/start', {'threadId': thread, 'model': target, 'effort': 'low',
+            'input': [{'type': 'text', 'text': 'Without calling any tools, repeat the exact result returned by echo_probe in the previous turn.', 'text_elements': []}]})
+        answer = ''
+        while True:
+            event = next_event()
+            if event.get('method') == 'item/completed' and event['params']['item'].get('type') == 'agentMessage':
+                answer = event['params']['item'].get('text', '')
+            if event.get('method') == 'turn/completed':
+                turn = event['params']['turn']
+                assert turn['status'] == 'completed', str(turn.get('error'))
+                assert marker in answer, 'Cross-provider history result: ' + repr(answer)
+                print(json.dumps({'switch_to': target, 'history_preserved': True}), flush=True)
+                break
+            if event.get('method') == 'error':
+                raise RuntimeError(str(event['params']))
+    if '--compact' in sys.argv:
+        rpc('thread/compact/start', {'threadId': thread})
+        while True:
+            event = next_event()
+            if event.get('method') == 'turn/completed':
+                turn = event['params']['turn']
+                print(json.dumps({'compaction_status': turn['status'], 'error': turn.get('error')}), flush=True)
+                break
+            if event.get('method') == 'error':
+                print(json.dumps({'compaction_error': event['params'].get('error')}), flush=True)
+                break
+finally:
+    p.terminate()
+    try:
+        p.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        p.kill()
