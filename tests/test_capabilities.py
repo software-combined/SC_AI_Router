@@ -1,10 +1,12 @@
 import unittest
 from codex_router.capabilities import (OPENROUTER_MODELS, REASONING_LEVELS, catalogue_patch,
     describe, input_modalities, live_levels, reasoning_levels)
+from codex_router.registry import MODELS
 
 class CapabilityTests(unittest.TestCase):
-    def test_single_source_covers_all_sixteen_models(self):
-        self.assertEqual(len(OPENROUTER_MODELS), 16)
+    def test_single_source_covers_registry_models(self):
+        self.assertEqual(OPENROUTER_MODELS,
+                         {m.slug for m in MODELS if m.provider == 'openrouter'})
 
     def test_text_only_set_matches_live_metadata(self):
         for slug in ('z-ai/glm-5.3', 'deepseek/deepseek-v4-pro',

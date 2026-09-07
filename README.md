@@ -11,3 +11,10 @@ documentation lands with the installer release.
 `mixed-router-state.json`, `activation.json`, and `logs/router.jsonl` (5 MB,
 three rotations). The code may live anywhere. Startup refuses to serve if the
 state file is missing or mistyped and prints which keys are wrong.
+
+## Adding a model
+
+Add one row to `codex_router/models.json`, then run
+`python3.14 -m codex_router.catalogue --check <catalogue>` (or the Plan 039
+dynamic path), restart the router, and probe the new model once at low
+effort. Reviewers should reject slug literals anywhere outside the registry.
