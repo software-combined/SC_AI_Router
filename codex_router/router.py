@@ -11,7 +11,7 @@ from compression import zstd
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from .credentials import Credentials
 from .runtime import MAX_BODY, ROUTER_HOME, VERSION, log_event
-from . import providers
+from . import local_services, providers
 from .providers import NATIVE_SERVICE_PATHS, PreparationError
 
 
@@ -55,15 +55,20 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json(status, {'error': {'message': message, 'type': 'router_error'}})
 
     def authorized_path(self):
+        if self.headers.get('Origin'):
+            return None, False
         prefix = '/' + self.server.state['token']
         candidate, sep, _ = self.path[1:].partition('/')
-        if self.headers.get('Origin') or not sep or not hmac.compare_digest(candidate, self.server.state['token']):
-            return None
-        path = self.path[len(prefix):]
-        return path.removeprefix('/backend-api/codex')
+        if sep and hmac.compare_digest(candidate, self.server.state['token']):
+            return self.path[len(prefix):].removeprefix('/backend-api/codex'), True
+        header = self.headers.get('Authorization', '')
+        if header.startswith('Bearer ') and hmac.compare_digest(
+                header[len('Bearer '):], self.server.state['token']):
+            return self.path.removeprefix('/backend-api/codex'), False
+        return None, False
 
     def do_GET(self):
-        path = self.authorized_path()
+        path, _ = self.authorized_path()
         if path is None:
             return self.error(403, 'Forbidden')
         if path == '/health':
@@ -76,7 +81,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         started = time.monotonic()
-        path = self.authorized_path()
+        path, via_path = self.authorized_path()
         if path is None:
             return self.error(403, 'Forbidden')
         if path not in NATIVE_SERVICE_PATHS | {'/responses', '/responses/compact'}:
@@ -87,7 +92,16 @@ class Handler(BaseHTTPRequestHandler):
             model = payload.get('model')
             if not isinstance(model, str) and path not in NATIVE_SERVICE_PATHS:
                 return self.error(400, 'Missing model')
-            provider = providers.select(model, path, self.server.state.get('openai_models', []))
+            mode = self.server.state.get('openai_mode', 'subscription')
+            provider = providers.select(
+                model, path, self.server.state.get('openai_models', []), mode)
+            if provider.name == 'openai-subscription' and not via_path:
+                return self.error(401, 'Bearer auth is for no-subscription mode only')
+            try:
+                prepared = provider.prepare(model, path, payload, raw,
+                                            dict(self.headers), self.server.credentials)
+            except local_services.LocalAnswer as exc:
+                return self.error(exc.status, exc.message)
             if os.environ.get('ROUTER_DEBUG'):
                 log_event('provider_selected', provider=provider.name, model=model, path=path)
             if path == '/responses/compact' and provider.name == 'openrouter':
@@ -98,8 +112,6 @@ class Handler(BaseHTTPRequestHandler):
                     return self.error(409, str(exc))
                 except (OSError, http.client.HTTPException):
                     return self.error(502, 'Compaction summarizer unavailable')
-            prepared = provider.prepare(model, path, payload, raw,
-                                        dict(self.headers), self.server.credentials)
         except PermissionError as exc:
             return self.error(401, str(exc))
         except InvalidSize as exc:
@@ -138,6 +150,15 @@ class Handler(BaseHTTPRequestHandler):
         try:
             conn.request('POST', prepared.path, body=prepared.body, headers=prepared.headers)
             response = conn.getresponse()
+            if (prepared.provider == 'openai-subscription' and metrics['path'] in NATIVE_SERVICE_PATHS
+                    and response.status in (401, 403)):
+                response.read()
+                log_event('native_upstream_rejected', path=metrics['path'],
+                          upstream_status=response.status)
+                try:
+                    local_services.answer(metrics['path'])
+                except local_services.LocalAnswer as exc:
+                    return self.error(exc.status, exc.message)
             metrics['upstream_headers_ms'] = round((time.monotonic() - started) * 1000, 1)
             self.send_response(response.status)
             for k, v in response.getheaders():

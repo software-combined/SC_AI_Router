@@ -29,6 +29,7 @@ configuration, and restart Codex and check
 `codex_router/compaction.py`,
 `codex_router/runtime.py`,
 `codex_router/catalogue.py`,
+`codex_router/local_services.py`,
 `codex_router/update_reasoning_catalog.py`,
 `codex_router/apply_catalogue.py`,
 `codex_router/__init__.py`,
@@ -77,6 +78,20 @@ command line or write it into the service definition.
 `mixed-router-state.json`, `activation.json`, and `logs/router.jsonl` (5 MB,
 three rotations). The code may live anywhere. Startup refuses to serve if the
 state file is missing or mistyped and prints which keys are wrong.
+
+## Without a ChatGPT subscription
+
+Set `openai_mode` to `none` in `mixed-router-state.json` and restart the
+router. What works: OpenRouter models, tools, compaction, and web search
+where the model supports it. What does not: OpenAI models (requests fail
+with `Model is not available without a ChatGPT subscription`), the approvals
+reviewer (set `approvals_reviewer = "user"`), and server-side thread titles
+(native service calls answer 404 until recorded shapes exist).
+
+Sign in per the custom-provider shape: point Codex at the router with a
+provider block carrying the router bearer (verified against the app server;
+desktop-app sign-in options unverified). Install with the same steps above;
+`--openai-mode none` installer support arrives with the installer release.
 
 ## Adding a model
 
