@@ -1,6 +1,6 @@
 import unittest
 import base64
-from compaction import (PREFIX, TRANSCRIPT_BUDGET, build_compact_v1_output,
+from codex_router.compaction import (PREFIX, TRANSCRIPT_BUDGET, build_compact_v1_output,
     compaction_text, decode_summary, extract_user_messages, rewrite_input,
     transcript_for_summary, OPAQUE_NOTE)
 
@@ -64,6 +64,35 @@ class TranscriptBoundaryTests(unittest.TestCase):
         self.assertIn('B-fresh', text)
         self.assertNotIn('A', text)
         self.assertLessEqual(len(text), TRANSCRIPT_BUDGET)
+
+
+class ReasoningAndShapeTests(unittest.TestCase):
+    def test_reasoning_plaintext_kept_encrypted_dropped(self):
+        text = transcript_for_summary([
+            {'type': 'reasoning', 'summary': [{'type': 'text', 'text': 'chose X'}]},
+            {'type': 'reasoning', 'encrypted_content': 'opaque', 'summary': [{'type': 'text', 'text': 'leak'}]},
+        ])
+        self.assertIn('chose X', text)
+        self.assertNotIn('leak', text)
+        self.assertNotIn('opaque', text)
+
+    def test_alternate_result_keys_extracted(self):
+        for key in ('output', 'result', 'content', 'text', 'data'):
+            with self.subTest(key=key):
+                text = transcript_for_summary([
+                    {'type': 'function_call_output', 'call_id': 'c', key: 'CODE-9'}])
+                self.assertIn('CODE-9', text)
+
+    def test_list_shaped_tool_output_extracted(self):
+        text = transcript_for_summary([
+            {'type': 'function_call_output', 'call_id': 'c',
+             'output': [{'type': 'text', 'text': 'result CODE-1'}]},
+        ])
+        self.assertIn('result CODE-1', text)
+
+    def test_prompt_demands_verbatim_values(self):
+        from codex_router.compaction import COMPACT_PROMPT
+        self.assertIn('verbatim', COMPACT_PROMPT)
 
 if __name__ == '__main__':
     unittest.main()

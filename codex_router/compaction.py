@@ -6,6 +6,11 @@ routed replay; V1 returns retained user messages plus one summary
 message. Opaque native blobs stay visible as a note, never silently
 dropped. Incomplete or failed summaries are rejected fail-closed.
 """
+COMPACT_PROMPT = ('You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary '
+    'for another LLM that will resume the task. Include: current progress and key decisions, '
+    'important context/constraints/preferences, what remains with clear next steps, and any '
+    'critical data or tool results needed to continue. Quote exact values, codes, names and '
+    'tool results verbatim so the next model can repeat them exactly. Be concise and structured.')
 import base64
 PREFIX = 'ocx1:'
 SUMMARY_PREFIX = ('Another language model started to solve this problem and '
@@ -85,25 +90,32 @@ def rewrite_input(items):
             rewritten.append(item)
     return rewritten
 
+def _block_text(content):
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return ' '.join(b.get('text', '') for b in content
+            if isinstance(b, dict) and isinstance(b.get('text'), str))
+    return str(content) if content else ''
+
 def _item_text(item):
     if not isinstance(item, dict):
         return ''
     kind = item.get('type')
     if kind == 'message':
         role = item.get('role', 'user')
-        content = item.get('content')
-        if isinstance(content, str):
-            text = content
-        elif isinstance(content, list):
-            text = ' '.join(b.get('text', '') for b in content
-                if isinstance(b, dict) and isinstance(b.get('text'), str))
-        else:
-            text = ''
-        return f'{role}: {text}'.strip()
+        return f'{role}: {_block_text(item.get("content", ""))}'.strip()
     if kind in ('function_call', 'custom_tool_call'):
         return 'assistant tool call: ' + str(item.get('arguments', item.get('input', '')))[:2000]
     if kind in ('function_call_output', 'custom_tool_call_output'):
-        return 'tool result: ' + str(item.get('output', ''))[:2000]
+        for key in ('output', 'result', 'content', 'text', 'data'):
+            if item.get(key):
+                return 'tool result: ' + _block_text(item[key])[:2000]
+        return ''
+    if kind == 'reasoning':
+        if 'encrypted_content' in item:
+            return ''  # Provider-owned blob; never forward opaque content.
+        return 'reasoning: ' + _block_text(item.get('summary', ''))[:2000]
     if is_compaction_item(item):
         return compaction_text(item)
     return ''

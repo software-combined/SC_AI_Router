@@ -9,3 +9,5 @@ compatibility-release.json
 before-*/
 *.bak
 *.tmp
+dist/
+.DS_Store

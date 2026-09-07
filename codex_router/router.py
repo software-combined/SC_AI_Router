@@ -8,16 +8,13 @@ import time
 from compression import zstd
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from tool_adapter import prepare_tools, stream_events, ToolEvents
-from capabilities import OPENROUTER_HOST, OPENROUTER_MODELS, check_effort
-import compaction as comp
+from .runtime import MAX_BODY, VERSION, log_event
+from .tool_adapter import prepare_tools, stream_events, ToolEvents
+from .capabilities import OPENROUTER_HOST, OPENROUTER_MODELS, check_effort
+from . import compaction as comp
 
 HOP_HEADERS = {'host', 'connection', 'content-length', 'transfer-encoding',
                'upgrade', 'keep-alive', 'proxy-authorization', 'proxy-authenticate', 'te', 'trailer'}
-STATE = Path(__file__).with_name('mixed-router-state.json')
-MAX_BODY = 16 * 1024 * 1024
-# Fallback when a state file predates the cap key; explicit key wins when present.
-DEFAULT_REQUEST_CAP = 1000
 NATIVE_SERVICE_PATHS = {'/alpha/search', '/alpha/notes/v2/thread_hint', '/guardian', '/guardian-classifier'}
 
 def prepare_openrouter(payload, path):
@@ -45,14 +42,9 @@ def route(model, path, headers, openai_models, key):
                 {k: v for k, v in headers.items() if k.lower() not in HOP_HEADERS})
     raise ValueError('Model is not in the configured catalog')
 
-COMPACT_PROMPT = ('You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary '
-    'for another LLM that will resume the task. Include: current progress and key decisions, '
-    'important context/constraints/preferences, what remains with clear next steps, and any '
-    'critical data or tool results needed to continue. Be concise and structured.')
-
 def summarize_for_compact(model, key, payload_items):
     transcript = comp.transcript_for_summary(payload_items)
-    prompt = COMPACT_PROMPT + '\n\nConversation:\n' + transcript
+    prompt = comp.COMPACT_PROMPT + '\n\nConversation:\n' + transcript
     req = json.dumps({'model': model, 'input': [comp.user_message_item(prompt)],
         'max_output_tokens': 2000}).encode()
     conn = http.client.HTTPSConnection(OPENROUTER_HOST, timeout=120)
@@ -76,7 +68,7 @@ class Router(ThreadingHTTPServer):
         super().__init__(('127.0.0.1', state['port']), Handler)
         self.state = state
         self.lock = threading.Lock()
-        self.requests = 0
+        self.inflight = 0
 
 class Handler(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
@@ -84,8 +76,8 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass  # Request URLs and upstream credentials must never enter access logs.
 
-    def error(self, status, message):
-        body = json.dumps({'error': {'message': message, 'type': 'router_error'}}).encode()
+    def send_json(self, status, obj):
+        body = json.dumps(obj).encode()
         self.send_response(status)
         self.send_header('Content-Type', 'application/json')
         self.send_header('Content-Length', str(len(body)))
@@ -93,6 +85,18 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
         self.close_connection = True
+
+    def error(self, status, message):
+        if 400 <= status <= 599:
+            prefix = '/' + self.server.state.get('token', '')
+            raw = self.path
+            suffix = raw[len(prefix):] if prefix != '/' and raw.startswith(prefix) else '<unrouted>'
+            log_event('request_rejected', status=status, reason=message,
+                      path=suffix.split('?')[0][:200])
+        try:
+            self.send_json(status, {'error': {'message': message, 'type': 'router_error'}})
+        except OSError:
+            pass  # Client already disconnected; the event log keeps the record.
 
     def authorized_path(self):
         prefix = '/' + self.server.state['token']
@@ -107,7 +111,8 @@ class Handler(BaseHTTPRequestHandler):
         if path is None:
             return self.error(403, 'Forbidden')
         if path == '/health':
-            return self.error(200, 'Router ready')
+            return self.send_json(200, {'status': 'ok', 'version': VERSION,
+                                        'inflight': self.server.inflight})
         if self.headers.get('Upgrade', '').lower() == 'websocket':
             # Codex explicitly handles 426 by switching this session to HTTP/SSE.
             return self.error(426, 'Use HTTP streaming for this local trial')
@@ -146,37 +151,34 @@ class Handler(BaseHTTPRequestHandler):
                     body = prepare_openrouter(payload, path)
                 except ValueError as exc:
                     return self.error(409, str(exc))
-                with self.server.lock:
-                    cap = self.server.state.get('request_cap', DEFAULT_REQUEST_CAP)
-                    if self.server.requests >= cap:
-                        return self.error(429, 'OpenRouter trial request cap reached; restart the local router to reset it.')
-                    self.server.requests += 1
                 auth = json.loads(Path(self.server.state['opencode_auth']).read_text())['openrouter']
                 if auth['type'] != 'api':
                     raise ValueError('OpenCode credential is not an API key')
                 key = auth['key']
             if model in OPENROUTER_MODELS and path == '/responses/compact':
                 try:
-                    # Request-cap above already covers this branch; summarizer is billable.
                     items = payload.get('input', [])
+                    kinds, shapes = {}, {}
+                    for _item in items if isinstance(items, list) else []:
+                        kind = _item.get('type') if isinstance(_item, dict) else '?'
+                        kinds[kind] = kinds.get(kind, 0) + 1
+                        if isinstance(_item, dict):
+                            shapes.setdefault(kind, set()).update(_item.keys())
+                    log_event('compact_started', model=model,
+                                input_items=len(items) if isinstance(items, list) else -1,
+                                item_kinds=kinds,
+                                item_keys={k: sorted(v) for k, v in shapes.items()})
                     users = comp.extract_user_messages(items)
                     if not users:
                         raise ValueError('No user messages to compact')
                     summary = summarize_for_compact(model, key, items)
+                    log_event('compact_summarized', model=model, summary_chars=len(summary))
                     out = comp.build_compact_v1_output(users, summary)
                 except ValueError as exc:
                     return self.error(409, str(exc))
                 except (OSError, http.client.HTTPException):
                     return self.error(502, 'Compaction summarizer unavailable')
-                body = json.dumps({'output': out}).encode()
-                self.send_response(200)
-                self.send_header('Content-Type', 'application/json')
-                self.send_header('Content-Length', str(len(body)))
-                self.send_header('Connection', 'close')
-                self.end_headers()
-                self.wfile.write(body)
-                self.close_connection = True
-                return
+                return self.send_json(200, {'output': out})
             host, upstream_path, headers = route(model, path, dict(self.headers),
                                                 self.server.state['openai_models'], key)
             if host == 'chatgpt.com' and not self.headers.get('Authorization', '').startswith('Bearer '):
@@ -185,13 +187,16 @@ class Handler(BaseHTTPRequestHandler):
             return self.error(400, 'Invalid model, payload, or local authentication configuration')
         conn = http.client.HTTPSConnection(host, timeout=120)
         sent = False
+        response = None
         _reasoning = payload.get('reasoning')
         metrics = {'provider': 'openai-subscription' if host == 'chatgpt.com' else 'openrouter',
                    'model': model, 'path': path, 'request_bytes': size,
                    'reasoning_effort': _reasoning.get('effort') if isinstance(_reasoning, dict) else None,
                    'tool_definitions': len(payload.get('tools', [])),
                    'local_prepare_ms': round((time.monotonic() - started) * 1000, 1)}
-        print(json.dumps({**metrics, 'event': 'request_started'}), flush=True)
+        log_event('request_started', **metrics)
+        with self.server.lock:
+            self.server.inflight += 1
         try:
             conn.request('POST', upstream_path, body=body, headers=headers)
             response = conn.getresponse()
@@ -220,19 +225,18 @@ class Handler(BaseHTTPRequestHandler):
                     metrics['first_chunk_ms'] = round((time.monotonic() - started) * 1000, 1)
                 self.wfile.write(chunk)
                 self.wfile.flush()
-            print(json.dumps({**metrics, 'event': 'request_completed', 'status': response.status,
-                              'total_ms': round((time.monotonic() - started) * 1000, 1)}), flush=True)
+            log_event('request_completed', **metrics, status=response.status,
+                        total_ms=round((time.monotonic() - started) * 1000, 1))
         except (OSError, http.client.HTTPException, ValueError, KeyError) as exc:
-            print(json.dumps({**metrics, 'event': 'transport_error',
-                              'error_type': type(exc).__name__,
-                              'error_category': exc.msg if isinstance(exc, json.JSONDecodeError) else type(exc).__name__,
-                              'total_ms': round((time.monotonic() - started) * 1000, 1)}), flush=True)
+            log_event('transport_error',
+                        status=response.status if response is not None else None,
+                        **metrics, error_type=type(exc).__name__,
+                        error_category=exc.msg if isinstance(exc, json.JSONDecodeError) else type(exc).__name__,
+                        total_ms=round((time.monotonic() - started) * 1000, 1))
             if not sent:
                 self.error(502, 'Upstream request failed')
         finally:
+            with self.server.lock:
+                self.server.inflight -= 1
             conn.close()
             self.close_connection = True
-
-if __name__ == '__main__':
-    state = json.loads(STATE.read_text())
-    Router(state).serve_forever()
