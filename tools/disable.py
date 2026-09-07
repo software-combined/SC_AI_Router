@@ -4,7 +4,7 @@ import os
 import subprocess
 from pathlib import Path
 
-root = Path(__file__).resolve().parent
+root = Path(os.environ.get('ROUTER_HOME', Path.home() / '.codex' / 'mixed-model-router'))
 receipt = json.loads((root / 'activation.json').read_text())
 config = Path(receipt['config_path'])
 before = config.read_text()

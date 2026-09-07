@@ -3,7 +3,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from capabilities import (OPENROUTER_MODELS, advertised_or_pinned, catalogue_patch, checked_level_entries)
+from .capabilities import (OPENROUTER_MODELS, advertised_or_pinned, catalogue_patch, checked_level_entries)
 
 
 def apply(catalog, live):

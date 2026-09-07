@@ -1,14 +1,17 @@
 import unittest
-from capabilities import (OPENROUTER_MODELS, REASONING_LEVELS, catalogue_patch,
+from codex_router.capabilities import (OPENROUTER_MODELS, REASONING_LEVELS, catalogue_patch,
     describe, input_modalities, live_levels, reasoning_levels)
 
 class CapabilityTests(unittest.TestCase):
-    def test_single_source_covers_all_six_models(self):
-        self.assertEqual(len(OPENROUTER_MODELS), 6)
+    def test_single_source_covers_all_sixteen_models(self):
+        self.assertEqual(len(OPENROUTER_MODELS), 16)
 
-    def test_glm_full_is_text_only_others_allow_image(self):
-        self.assertEqual(input_modalities('z-ai/glm-5.3'), ['text'])
-        for slug in OPENROUTER_MODELS - {'z-ai/glm-5.3'}:
+    def test_text_only_set_matches_live_metadata(self):
+        for slug in ('z-ai/glm-5.3', 'deepseek/deepseek-v4-pro',
+                     'deepseek/deepseek-v4-flash'):
+            self.assertEqual(input_modalities(slug), ['text'])
+        for slug in OPENROUTER_MODELS - {'z-ai/glm-5.3', 'deepseek/deepseek-v4-pro',
+                                         'deepseek/deepseek-v4-flash'}:
             self.assertIn('image', input_modalities(slug))
 
     def test_reasoning_matches_live_acceptance(self):

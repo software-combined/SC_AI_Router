@@ -1,2 +1,0 @@
-Canonical source: codex-model-router (this repository; migrated from SC_Infrastructure domains/ai-platform/codex-model-router)
-Runtime: local loopback router + merged catalogue
