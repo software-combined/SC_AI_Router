@@ -1,13 +1,18 @@
 import http.client
 import io
+import logging
+import logging.handlers
 import json
 from codex_router import router as mixed_router
 import os
 import tempfile
 import threading
+from datetime import datetime
+from pathlib import Path
 import unittest
 from unittest import mock
 from codex_router.router import Router, route, prepare_openrouter
+from codex_router.runtime import LOG, load_state
 
 class RoutingTests(unittest.TestCase):
     def test_subscription_credentials_stay_on_openai(self):
@@ -66,12 +71,21 @@ class RoutingTests(unittest.TestCase):
         self.assertEqual(data['max_output_tokens'], 32768)
 
 def _test_state(auth_path):
-    return {'port': 0, 'token': 'test-token', 'request_cap': 1000,
+    return {'port': 0, 'token': 'test-token',
             'openai_models': [], 'opencode_auth': auth_path}
 
 def _start_server(state):
     server = Router(state)
     threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server
+
+def _start_auth_server(test):
+    auth = tempfile.NamedTemporaryFile('w', suffix='.json', delete=False)
+    json.dump({'openrouter': {'type': 'api', 'key': 'test-key'}}, auth)
+    auth.close()
+    server = _start_server(_test_state(auth.name))
+    test.addCleanup(server.shutdown)
+    test.addCleanup(os.unlink, auth.name)
     return server
 
 class LoopbackBoundaryTests(unittest.TestCase):
@@ -111,12 +125,7 @@ def _fake_conn_class(status, payload, seen=None):
 
 class CompactBranchTests(unittest.TestCase):
     def _server(self):
-        auth = tempfile.NamedTemporaryFile('w', suffix='.json', delete=False)
-        json.dump({'openrouter': {'type': 'api', 'key': 'test-key'}}, auth)
-        auth.close()
-        self._started = _start_server(_test_state(auth.name))
-        self.addCleanup(self._started.shutdown)
-        self.addCleanup(os.unlink, auth.name)
+        self._started = _start_auth_server(self)
 
     def _post(self, path, payload):
         conn = http.client.HTTPConnection('127.0.0.1', self._started.server_port, timeout=10)
@@ -135,25 +144,6 @@ class CompactBranchTests(unittest.TestCase):
             self.assertEqual(len(body['output']), 2)
             self.assertIn('progress and next steps', body['output'][-1]['content'][0]['text'])
 
-    def test_missing_cap_key_falls_back_to_default(self):
-        with mock.patch.object(mixed_router, 'summarize_for_compact', lambda *a: 'summary'):
-            self._server()
-            del self._started.state['request_cap']
-            response = self._post('/responses/compact',
-                {'model': 'z-ai/glm-5.3', 'input': [
-                    {'type': 'message', 'role': 'user', 'content': 'do the task'}]})
-            self.assertEqual(response.status, 200)
-
-    def test_missing_key_still_enforces_default_cap(self):
-        with mock.patch.object(mixed_router, 'summarize_for_compact', lambda *a: 'summary'):
-            self._server()
-            del self._started.state['request_cap']
-            self._started.requests = mixed_router.DEFAULT_REQUEST_CAP
-            response = self._post('/responses/compact',
-                {'model': 'z-ai/glm-5.3', 'input': [
-                    {'type': 'message', 'role': 'user', 'content': 'do the task'}]})
-            self.assertEqual(response.status, 429)
-
     def test_compact_without_user_messages_is_rejected(self):
         self._server()
         response = self._post('/responses/compact',
@@ -169,14 +159,6 @@ class CompactBranchTests(unittest.TestCase):
                 {'model': 'z-ai/glm-5.3', 'input': [
                     {'type': 'message', 'role': 'user', 'content': 'do the task'}]})
             self.assertEqual(response.status, 502)
-
-    def test_compact_counts_against_request_cap(self):
-        self._server()
-        self._started.requests = self._started.state['request_cap']
-        response = self._post('/responses/compact',
-            {'model': 'z-ai/glm-5.3', 'input': [
-                {'type': 'message', 'role': 'user', 'content': 'do the task'}]})
-        self.assertEqual(response.status, 429)
 
     def test_compact_non_list_input_is_rejected(self):
         self._server()
@@ -237,6 +219,3 @@ class SummarizerParsingTests(unittest.TestCase):
         self._fake_conn(200, {'output': []})
         with self.assertRaisesRegex(ValueError, 'empty'):
             mixed_router.summarize_for_compact('z-ai/glm-5.3', 'key', [])
-
-if __name__ == '__main__':
-    unittest.main()

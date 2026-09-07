@@ -6,6 +6,11 @@ routed replay; V1 returns retained user messages plus one summary
 message. Opaque native blobs stay visible as a note, never silently
 dropped. Incomplete or failed summaries are rejected fail-closed.
 """
+COMPACT_PROMPT = ('You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary '
+    'for another LLM that will resume the task. Include: current progress and key decisions, '
+    'important context/constraints/preferences, what remains with clear next steps, and any '
+    'critical data or tool results needed to continue. Quote exact values, codes, names and '
+    'tool results verbatim so the next model can repeat them exactly. Be concise and structured.')
 import base64
 PREFIX = 'ocx1:'
 SUMMARY_PREFIX = ('Another language model started to solve this problem and '
