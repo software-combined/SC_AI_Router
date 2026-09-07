@@ -91,7 +91,7 @@ class ReasoningAndShapeTests(unittest.TestCase):
         self.assertIn('result CODE-1', text)
 
     def test_prompt_demands_verbatim_values(self):
-        from codex_router.router import COMPACT_PROMPT
+        from codex_router.compaction import COMPACT_PROMPT
         self.assertIn('verbatim', COMPACT_PROMPT)
 
 if __name__ == '__main__':

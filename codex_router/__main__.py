@@ -1,6 +1,6 @@
 """Run the router: python3.14 -m codex_router"""
-import json
-from .router import STATE, Router
+from .router import Router
+from .runtime import configure_logging, load_state
 
-state = json.loads(STATE.read_text())
-Router(state).serve_forever()
+configure_logging()
+Router(load_state()).serve_forever()
