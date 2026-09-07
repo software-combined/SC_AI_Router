@@ -5,10 +5,11 @@ import logging.handlers
 import os
 from datetime import datetime, timezone
 from pathlib import Path
+from .credentials import Credentials
 
 ROUTER_HOME = Path(os.environ.get('ROUTER_HOME', Path.home() / '.codex' / 'mixed-model-router'))
 STATE = ROUTER_HOME / 'mixed-router-state.json'
-REQUIRED_STATE = {'port': int, 'token': str, 'openai_models': list, 'opencode_auth': str}
+REQUIRED_STATE = {'port': int, 'token': str, 'openai_models': list}
 MAX_BODY = 16 * 1024 * 1024
 
 LOG = logging.getLogger('codex_router')
@@ -30,8 +31,12 @@ def load_state(path=STATE):
     missing = [k for k, t in REQUIRED_STATE.items() if not isinstance(state.get(k), t)]
     if missing:
         raise SystemExit('Router state file is missing or mistyped keys: ' + ', '.join(missing))
-    if not Path(state['opencode_auth']).exists():
-        raise SystemExit('OpenRouter credential file not found at the configured opencode_auth path')
+    if 'opencode_auth' in state and not isinstance(state['opencode_auth'], str):
+        raise SystemExit('Router state file is missing or mistyped keys: opencode_auth')
+    try:
+        Credentials(state, ROUTER_HOME).check()
+    except (LookupError, PermissionError, ValueError, OSError) as exc:
+        raise SystemExit(f'OpenRouter credential problem: {exc}')
     return state
 
 

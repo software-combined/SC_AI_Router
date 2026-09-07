@@ -23,6 +23,7 @@ configuration, and restart Codex and check
 `codex_router/router.py`,
 `codex_router/providers.py`,
 `codex_router/registry.py`,
+`codex_router/credentials.py`,
 `codex_router/tool_adapter.py`,
 `codex_router/capabilities.py`,
 `codex_router/compaction.py`,
@@ -61,6 +62,14 @@ No packaging script ships yet; follow the three steps above by hand and run
 the router under your process supervisor (a systemd user unit that restarts
 on failure and keeps logs is the recommended shape). The Linux path is
 unverified: report issues with the distro and Python build.
+
+## Credentials
+
+The router reads the OpenRouter key per request, in this order: the
+`OPENROUTER_API_KEY` environment variable, an `openrouter.key` file beside
+the state directory (owner-only, mode 600), then the OpenCode credential
+file. Replace the file to rotate with no restart. Never pass the key on a
+command line or write it into the service definition.
 
 ## Operation
 

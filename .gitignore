@@ -11,3 +11,4 @@ before-*/
 *.tmp
 dist/
 .DS_Store
+openrouter.key

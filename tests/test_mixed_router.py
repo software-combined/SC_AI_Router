@@ -123,10 +123,7 @@ class CompactBranchTests(unittest.TestCase):
         self._started = _start_auth_server(self)
 
     def _post(self, path, payload):
-        conn = http.client.HTTPConnection('127.0.0.1', self._started.server_port, timeout=10)
-        conn.request('POST', '/test-token' + path, body=json.dumps(payload),
-                     headers={'Content-Type': 'application/json'})
-        return conn.getresponse()
+        return self._post_to(self._started, path, payload)
 
     def _post_to(self, server, path, payload):
         conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
@@ -149,28 +146,27 @@ class CompactBranchTests(unittest.TestCase):
         cases = {
             'non-api': {'openrouter': {'type': 'other', 'key': 'k'}},
             'corrupt': 'not-json{{{',
+            'empty-object': {},
+            'api-without-key': {'openrouter': {'type': 'api'}},
+            'null-entry': {'openrouter': None},
+            'missing': None,
         }
         for name, content in cases.items():
             with self.subTest(name=name):
-                auth = tempfile.NamedTemporaryFile('w', suffix='.json', delete=False)
-                auth.write(content if isinstance(content, str) else json.dumps(content))
-                auth.close()
-                self.addCleanup(os.unlink, auth.name)
-                state = _test_state(auth.name)
+                if content is None:
+                    state = _test_state('/nonexistent-auth.json')
+                else:
+                    auth = tempfile.NamedTemporaryFile('w', suffix='.json', delete=False)
+                    auth.write(content if isinstance(content, str) else json.dumps(content))
+                    auth.close()
+                    self.addCleanup(os.unlink, auth.name)
+                    state = _test_state(auth.name)
                 server = _start_server(state)
                 self.addCleanup(server.shutdown)
                 response = self._post_to(server, '/responses/compact',
                     {'model': 'z-ai/glm-5.3', 'input': [
                         {'type': 'message', 'role': 'user', 'content': 'do the task'}]})
                 self.assertEqual(response.status, 400)
-        with self.subTest(name='missing'):
-            state = _test_state('/nonexistent-auth.json')
-            server = _start_server(state)
-            self.addCleanup(server.shutdown)
-            response = self._post_to(server, '/responses/compact',
-                {'model': 'z-ai/glm-5.3', 'input': [
-                    {'type': 'message', 'role': 'user', 'content': 'do the task'}]})
-            self.assertEqual(response.status, 400)
 
     def test_compact_without_user_messages_is_rejected(self):
         self._server()
