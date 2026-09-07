@@ -1,3 +1,6 @@
+import importlib.util
+import shutil
+import tarfile
 import unittest
 from pathlib import Path
 
@@ -23,12 +26,11 @@ FILES = [
          ]
 
 class PackagingTests(unittest.TestCase):
-    def test_both_installers_name_the_same_runtime_files(self):
+    def test_wrappers_call_install_py(self):
         root = Path(__file__).resolve().parents[1] / 'packaging'
         sh, ps1 = (root / 'install.sh').read_text(), (root / 'install.ps1').read_text()
-        for name in FILES:
-            self.assertIn(name, sh, name)
-            self.assertIn(name, ps1, name)
+        self.assertIn('install.py', sh)
+        self.assertIn('install.py', ps1)
 
     def test_file_list_covers_the_runtime_import_closure(self):
         # A fresh copy-install following FILES must start: every package
@@ -48,6 +50,22 @@ class PackagingTests(unittest.TestCase):
         readme = (Path(__file__).resolve().parents[1] / 'README.md').read_text()
         listed = set(re.findall(r'`((?:codex_router|tools)/[^`]+)`', readme))
         self.assertEqual(listed, set(FILES))
+
+    def test_release_bundle_contains_deploy_list(self):
+        root = Path(__file__).resolve().parents[1]
+        spec = importlib.util.spec_from_file_location(
+            'router_release', root / 'packaging' / 'release.py')
+        release_mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(release_mod)
+        out = root / 'dist-test-packaging'
+        self.addCleanup(shutil.rmtree, str(out), True)
+        release_mod.main(['--out', str(out)])
+        tarball = next(out.glob('*.tar.gz'))
+        with tarfile.open(tarball, mode='r') as tar:
+            names = set(tar.getnames())
+        for name in FILES:
+            self.assertIn(name, names, name)
+        self.assertIn('MANIFEST.json', names)
 
     def test_version_is_pinned(self):
         version = (Path(__file__).resolve().parents[1] / 'packaging' / 'VERSION').read_text().strip()
