@@ -7,7 +7,12 @@ import json
 import hashlib
 import re
 from copy import deepcopy
+from .registry import by_slug
 SEARCH_NAME = 'codex_client_tool_search'
+
+def _quirk(payload, name):
+    entry = by_slug(payload.get('model', ''))
+    return getattr(entry, name, None) if entry else None
 
 def integer_json(text):
     # Meta emits e.g. 8.0 for integer arguments. Rust's integer deserializers
@@ -79,7 +84,7 @@ def prepare_tools(payload):
             tool.update(type='function', parameters={'type': 'object',
                 'properties': {'input': {'type': 'string', 'description': 'The complete raw tool input.'}},
                 'required': ['input'], 'additionalProperties': False}, strict=True)
-        elif payload.get('model', '').startswith('meta/muse-') and has_recursive_refs(tool.get('parameters', {})):
+        elif _quirk(payload, 'schema_mode') == 'json_text' and has_recursive_refs(tool.get('parameters', {})):
             names[(namespace, tool['name'])] = 'json_text'
             schema = tool['parameters']
             tool['description'] = tool.get('description', '') + '\nPass arguments_json as a JSON object encoded in a string, following this schema: ' + json.dumps(schema)
@@ -101,8 +106,9 @@ def prepare_tools(payload):
         tool.pop('defer_loading', None)
         flattened.append(tool)
     payload['tools'] = flattened
-    if payload.get('model') == '~x-ai/grok-latest' and len(flattened) > 350:
-        raise ValueError('Grok supports at most 350 exposed tools. Restart Codex and start a fresh task to load the deferred tool catalog.')
+    ceiling = _quirk(payload, 'max_tools')
+    if ceiling and len(flattened) > ceiling:
+        raise ValueError(f'{payload.get("model")} supports at most {ceiling} exposed tools. Restart Codex and start a fresh task to load the deferred tool catalog.')
     for item in payload.get('input', []) if isinstance(payload.get('input'), list) else []:
         if item.get('type') == 'tool_search_call':
             item.pop('execution', None)
