@@ -1,12 +1,5 @@
 # SC_Codex_openRouter_adapter Agent Instructions
 
-Canonical source for Cyril's local Codex mixed-model adapter: a loopback
-router plus merged catalogue that serves the configured OpenRouter models
-alongside OpenAI subscription models in the Codex desktop app. Migrated from
-`SC_Infrastructure` (`domains/ai-platform/codex-model-router`, commits
-`4c8e98e3`, `d1386bc0`, `749a6b8d`); this repository is authoritative from
-the migration commit onward.
-
 ## Boundaries
 
 - `codex-model-router/` owns the adapter: router, tool protocol adapter,
