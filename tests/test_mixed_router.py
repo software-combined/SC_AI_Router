@@ -7,6 +7,7 @@ import threading
 import unittest
 from unittest import mock
 from codex_router import providers
+from codex_router.registry import by_slug
 from codex_router.router import Router
 
 class _StubCredentials:
@@ -63,7 +64,8 @@ class RoutingTests(unittest.TestCase):
         data = json.loads(prepared.body)
         self.assertEqual(data['input'], items)
         self.assertNotIn('service_tier', data)
-        self.assertEqual(data['max_output_tokens'], 32768)
+        self.assertEqual(data['max_output_tokens'],
+                         by_slug('z-ai/glm-5.3').max_output_tokens)
 
 def _test_state(auth_path):
     return {'port': 0, 'token': 'test-token',

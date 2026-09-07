@@ -10,6 +10,7 @@ import pathlib
 import tempfile
 import unittest
 from compression import zstd
+from codex_router.registry import by_slug
 from tests.fakes import FakeUpstream, install_fake
 from tests.test_mixed_router import _start_server, _test_state
 
@@ -50,10 +51,11 @@ class HandlerCharacterisationTests(unittest.TestCase):
     def test_openrouter_request_reaches_openrouter_with_router_key_only(self):
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{"output": []}', []))
         server = self._server()
+        cap = by_slug('z-ai/glm-5.3').max_output_tokens
         response = _post(server.server_port, '/test-token/responses',
             {'model': 'z-ai/glm-5.3',
              'input': [{'type': 'message', 'role': 'user', 'content': 'hi'}],
-             'service_tier': 'priority', 'max_output_tokens': 99999},
+             'service_tier': 'priority', 'max_output_tokens': cap + 1000},
             {'Authorization': 'Bearer subscription-secret', 'Cookie': 'c=1'})
         self.assertEqual(response.status, 200)
         self.assertEqual(len(recorded), 1)
@@ -64,7 +66,7 @@ class HandlerCharacterisationTests(unittest.TestCase):
                                    'Content-Type': 'application/json'})
         sent = json.loads(body)
         self.assertNotIn('service_tier', sent)
-        self.assertEqual(sent['max_output_tokens'], 32768)
+        self.assertEqual(sent['max_output_tokens'], cap)
         self.assertNotIn('subscription-secret', json.dumps(headers) + body.decode())
 
     def test_openai_request_forwards_subscription_bearer_and_strips_hop_headers(self):

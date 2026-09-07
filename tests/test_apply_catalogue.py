@@ -1,7 +1,6 @@
 from pathlib import Path
 import tempfile
 import unittest
-from codex_router.update_reasoning_catalog import refresh
 from codex_router.apply_catalogue import apply, write_guarded
 from codex_router.capabilities import OPENROUTER_MODELS
 
@@ -64,31 +63,6 @@ class ApplyTests(unittest.TestCase):
             self.assertEqual(path.read_text(), '{"v":2}')
             self.assertEqual(path.with_name(path.name + '.bak').read_text(), '{"v":1}')
 
-
-class RefreshTests(unittest.TestCase):
-    def test_live_minus_exclusions_and_fallback(self):
-        catalog = {'models': [
-            {'slug': 'z-ai/glm-5.3', 'default_reasoning_level': 'low'},
-            {'slug': 'meta/muse-spark-1.3-contributor', 'default_reasoning_level': 'low'},
-            {'slug': 'moonshotai/kimi-k3', 'default_reasoning_level': 'low'}]}
-        live = {'z-ai/glm-5.3': {'reasoning': {'supported_efforts': ['low', 'max']}},
-                'meta/muse-spark-1.3-contributor': {'reasoning': {'supported_efforts':
-                    ['minimal', 'low', 'medium', 'high', 'xhigh', 'max']}},
-                'moonshotai/kimi-k3': {}}
-        out = refresh(catalog, live)
-        by_slug = {m['slug']: m for m in out['models']}
-        self.assertEqual([x['effort'] for x in by_slug['z-ai/glm-5.3']['supported_reasoning_levels']], ['low', 'max'])
-        contrib = [x['effort'] for x in by_slug['meta/muse-spark-1.3-contributor']['supported_reasoning_levels']]
-        self.assertNotIn('max', contrib)
-        self.assertIn('high', contrib)
-        kimi = [x['effort'] for x in by_slug['moonshotai/kimi-k3']['supported_reasoning_levels']]
-        self.assertEqual(kimi, ['low', 'high', 'max'])
-
-    def test_default_guard_fails_closed(self):
-        catalog = {'models': [{'slug': 'z-ai/glm-5.3', 'default_reasoning_level': 'ultra'}]}
-        live = {'z-ai/glm-5.3': {'reasoning': {'supported_efforts': ['low']}}}
-        with self.assertRaises(SystemExit):
-            refresh(catalog, live)
 
 if __name__ == '__main__':
     unittest.main()

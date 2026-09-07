@@ -61,9 +61,14 @@ def openrouter_entry(model):
             'priority': model.priority,
             'context_window': model.context_window,
             'max_context_window': model.context_window,
-            'input_modalities': list(model.modalities),
             'base_instructions': BASE_INSTRUCTIONS,
-            **catalogue_patch(model.slug)}
+            **catalogue_patch(model.slug),
+            'input_modalities': list(model.modalities),
+            'default_reasoning_summary': model.reasoning_summary,
+            'supports_reasoning_summary_parameter': model.reasoning_summary == 'auto',
+            'apply_patch_tool_type': 'freeform' if model.apply_patch == 'freeform' else None,
+            'experimental_supported_tools': list(model.experimental_tools),
+            'web_search_tool_type': 'text_and_image' if model.web_search else 'text'}
 
 
 def merge(catalog):
