@@ -3,8 +3,10 @@ import hmac
 import http.client
 import json
 import io
+import os
 import threading
 import time
+import traceback
 from compression import zstd
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -98,6 +100,8 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(model, str) and path not in NATIVE_SERVICE_PATHS:
                 return self.error(400, 'Missing model')
             provider = providers.select(model, path, self.server.state.get('openai_models', []))
+            if os.environ.get('ROUTER_DEBUG'):
+                log_event('provider_selected', provider=provider.name, model=model, path=path)
             if path == '/responses/compact' and provider.name == 'openrouter':
                 key = self.server.credentials.openrouter_key()
                 try:
@@ -164,6 +168,7 @@ class Handler(BaseHTTPRequestHandler):
         except (OSError, http.client.HTTPException, ValueError, KeyError) as exc:
             log_event('transport_error', **metrics, error_type=type(exc).__name__,
                         error_category=exc.msg if isinstance(exc, json.JSONDecodeError) else type(exc).__name__,
+                        traceback=traceback.format_exc(limit=3)[-4000:],
                         total_ms=round((time.monotonic() - started) * 1000, 1))
             if not sent:
                 self.error(502, 'Upstream request failed')

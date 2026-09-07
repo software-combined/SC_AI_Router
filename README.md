@@ -15,15 +15,27 @@ from the repo root:
 python3.14 -m unittest discover -s tests -t .
 ```
 
-Every setup then follows the same three steps: copy ONLY the eight runtime
-files beside the private state directory, add the config block to the Codex
+Every setup then follows the same three steps: copy ONLY the runtime files
+beside the private state directory, add the config block to the Codex
 configuration, and restart Codex and check
 `http://127.0.0.1:<port>/<token>/health` (port and token from
-`mixed-router-state.json`) for `{"status": "ok", ...}`. The eight
-files are `codex_router/router.py`, `codex_router/tool_adapter.py`,
-`codex_router/capabilities.py`, `codex_router/compaction.py`,
-`tools/probe_codex_runtime.py`, `codex_router/update_reasoning_catalog.py`,
-`codex_router/apply_catalogue.py`, and `tools/disable.py`. Never copy state, activation, catalogue, backup, or log
+`mixed-router-state.json`) for `{"status": "ok", ...}`. The runtime files are
+`codex_router/router.py`,
+`codex_router/providers.py`,
+`codex_router/registry.py`,
+`codex_router/tool_adapter.py`,
+`codex_router/capabilities.py`,
+`codex_router/compaction.py`,
+`codex_router/runtime.py`,
+`codex_router/catalogue.py`,
+`codex_router/update_reasoning_catalog.py`,
+`codex_router/apply_catalogue.py`,
+`codex_router/__init__.py`,
+`codex_router/__main__.py`,
+`codex_router/models.json`,
+`codex_router/openrouter_base_instructions.txt`,
+`tools/probe_codex_runtime.py`,
+`tools/disable.py`. Never copy state, activation, catalogue, backup, or log
 files.
 
 ### macOS
