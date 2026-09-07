@@ -41,6 +41,9 @@ OPENROUTER_TEMPLATE = {
     'multi_agent_reasoning_effort': None,
 }
 
+PREVIEW_PRIORITY_OFFSET = 100000  # preview entries sort after every verified model
+
+
 BASE_INSTRUCTIONS = (Path(__file__).with_name('openrouter_base_instructions.txt')).read_text()
 
 
@@ -52,13 +55,17 @@ def catalog_name(model):
 def openrouter_entry(model):
     return {**OPENROUTER_TEMPLATE,
             'slug': model.slug,
-            'display_name': model.display_name,
-            'description': ('OpenRouter billing. Choose before starting a fresh task. '
-                            'OpenRouter: ' + catalog_name(model)),
+            'display_name': (model.display_name + ' · Preview'
+                             if model.tier == 'preview' else model.display_name),
+            'description': (('Preview, not yet verified with Codex. '
+                             if model.tier == 'preview' else '')
+                            + 'OpenRouter billing. Choose before starting a fresh task. '
+                            + 'OpenRouter: ' + catalog_name(model)),
             'default_reasoning_level': model.default_reasoning,
             'supported_reasoning_levels': [
                 {'effort': level, 'description': describe(level)} for level in model.reasoning],
-            'priority': model.priority,
+            'priority': (model.priority + PREVIEW_PRIORITY_OFFSET
+                           if model.tier == 'preview' else model.priority),
             'context_window': model.context_window,
             'max_context_window': model.context_window,
             'base_instructions': BASE_INSTRUCTIONS,

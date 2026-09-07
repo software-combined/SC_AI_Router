@@ -38,7 +38,7 @@ class RegistryTests(unittest.TestCase):
     def test_bad_row_shape_is_refused(self):
         good = dict(zip(FIELDS, ['x/y', 'openrouter', 'X', 'V',
             ['low'], 'low', ['text'], [], 'native', None, 1, 100,
-            32768, 'none', 'none', [], True]))
+            32768, 'none', 'none', [], True, 'verified']))
         for bad in ({k: v for k, v in good.items() if k != 'vendor'},
                     {k: v for k, v in good.items() if k != 'web_search'},
                     {**good, 'provider': 'other'},
@@ -49,6 +49,18 @@ class RegistryTests(unittest.TestCase):
                     {**good, 'max_output_tokens': 'many'},
                     {**good, 'web_search': 'yes'},
                     {**good, 'experimental_tools': ['ok', 7]}):
+            with self.subTest(bad=bad):
+                with self.assertRaises(SystemExit):
+                    load(json.dumps([bad]))
+
+    def test_tier_required_and_validated(self):
+        for model in MODELS:
+            self.assertIn(model.tier, ('verified', 'preview'), model.slug)
+        good = dict(zip(FIELDS, ['x/y', 'openrouter', 'X', 'V',
+            ['low'], 'low', ['text'], [], 'native', None, 1, 100,
+            32768, 'none', 'none', [], True, 'verified']))
+        for bad in ({k: v for k, v in good.items() if k != 'tier'},
+                    {**good, 'tier': 'beta'}):
             with self.subTest(bad=bad):
                 with self.assertRaises(SystemExit):
                     load(json.dumps([bad]))

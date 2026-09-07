@@ -27,6 +27,22 @@ class CatalogueFlagTests(unittest.TestCase):
         self.assertEqual(entry['experimental_supported_tools'], [])
         self.assertEqual(entry['web_search_tool_type'], 'text_and_image')
 
+    def test_preview_entry_is_labelled(self):
+        from codex_router.catalogue import openrouter_entry
+        from codex_router.registry import MODELS, by_slug
+        preview = replace(by_slug('z-ai/glm-5.3-flash'), tier='preview')
+        entry = openrouter_entry(preview)
+        self.assertTrue(entry['display_name'].endswith(' · Preview'))
+        self.assertTrue(entry['description'].startswith(
+            'Preview, not yet verified with Codex. '))
+        verified_top = max(openrouter_entry(m)['priority']
+                           for m in MODELS if m.tier == 'verified')
+        self.assertGreater(entry['priority'], verified_top)
+        plain = openrouter_entry(by_slug('z-ai/glm-5.3-flash'))
+        self.assertFalse(plain['display_name'].endswith('Preview'))
+        self.assertEqual(entry['slug'], plain['slug'])
+        self.assertEqual(entry['context_window'], plain['context_window'])
+
 
 if __name__ == '__main__':
     unittest.main()
