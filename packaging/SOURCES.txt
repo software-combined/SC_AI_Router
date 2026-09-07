@@ -1,2 +1,2 @@
-Canonical source: domains/ai-platform/codex-model-router
-Runtime: local loopback router + merged catalogue
+Canonical source: software-combined/SC_Codex_openRouter_adapter
+Deployed state: ~/.codex/mixed-model-router (ROUTER_HOME)

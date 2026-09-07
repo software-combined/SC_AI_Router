@@ -6,9 +6,11 @@ are the contract: Plan 037 must keep them green without editing them.
 import http.client
 import json
 import os
+import pathlib
 import tempfile
 import unittest
 from compression import zstd
+from codex_router.registry import by_slug
 from tests.fakes import FakeUpstream, install_fake
 from tests.test_mixed_router import _start_server, _test_state
 
@@ -36,13 +38,24 @@ class HandlerCharacterisationTests(unittest.TestCase):
         self.addCleanup(server.shutdown)
         return server
 
+    def _state_base(self):
+        return {'port': 0, 'token': 'test-token', 'openai_models': []}
+
+    def _state_file(self, state):
+        f = tempfile.NamedTemporaryFile('w', suffix='.json', delete=False)
+        json.dump(state, f)
+        f.close()
+        self.addCleanup(os.unlink, f.name)
+        return pathlib.Path(f.name)
+
     def test_openrouter_request_reaches_openrouter_with_router_key_only(self):
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{"output": []}', []))
         server = self._server()
+        cap = by_slug('z-ai/glm-5.3').max_output_tokens
         response = _post(server.server_port, '/test-token/responses',
             {'model': 'z-ai/glm-5.3',
              'input': [{'type': 'message', 'role': 'user', 'content': 'hi'}],
-             'service_tier': 'priority', 'max_output_tokens': 99999},
+             'service_tier': 'priority', 'max_output_tokens': cap + 1000},
             {'Authorization': 'Bearer subscription-secret', 'Cookie': 'c=1'})
         self.assertEqual(response.status, 200)
         self.assertEqual(len(recorded), 1)
@@ -53,7 +66,7 @@ class HandlerCharacterisationTests(unittest.TestCase):
                                    'Content-Type': 'application/json'})
         sent = json.loads(body)
         self.assertNotIn('service_tier', sent)
-        self.assertEqual(sent['max_output_tokens'], 32768)
+        self.assertEqual(sent['max_output_tokens'], cap)
         self.assertNotIn('subscription-secret', json.dumps(headers) + body.decode())
 
     def test_openai_request_forwards_subscription_bearer_and_strips_hop_headers(self):
@@ -150,6 +163,97 @@ class HandlerCharacterisationTests(unittest.TestCase):
         self.assertEqual(len(done), 1)
         self.assertEqual(done[0]['item']['type'], 'custom_tool_call')
         self.assertEqual(done[0]['item']['input'], 'code')
+
+    def test_openai_mode_validation(self):
+        from codex_router.runtime import load_state
+        good = dict(self._state_base(), openai_mode='none', opencode_auth=_auth_file(self))
+        self.assertEqual(load_state(self._state_file(good))['openai_mode'], 'none')
+        bad = dict(self._state_base(), openai_mode='sometimes')
+        with self.assertRaises(SystemExit) as ctx:
+            load_state(self._state_file(bad))
+        self.assertIn('openai_mode must be subscription or none', str(ctx.exception))
+
+    def test_none_mode_rejects_openai_models_without_upstream_call(self):
+        recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
+        server = self._server(openai_models=['gpt-6-astra'], openai_mode='none')
+        response = _post(server.server_port, '/test-token/responses',
+                         {'model': 'gpt-6-astra', 'input': []})
+        self.assertEqual(response.status, 400)
+        self.assertEqual(recorded, [])
+
+    def test_none_mode_answers_native_paths_locally(self):
+        recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
+        server = self._server(openai_models=['gpt-6-astra'], openai_mode='none')
+        response = _post(server.server_port, '/test-token/alpha/search',
+                         {'model': 'gpt-6-astra'})
+        self.assertEqual(response.status, 404)
+        self.assertEqual(recorded, [])
+
+    def test_bearer_token_authorises_when_path_token_absent(self):
+        server = self._server()
+        conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
+        conn.request('GET', '/health', headers={'Authorization': 'Bearer test-token'})
+        self.assertEqual(conn.getresponse().status, 200)
+
+    def test_bearer_authed_subscription_request_never_reaches_upstream(self):
+        recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
+        server = self._server(openai_models=['gpt-6-astra'])
+        conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
+        conn.request('POST', '/responses',
+                     body=json.dumps({'model': 'gpt-6-astra', 'input': []}),
+                     headers={'Content-Type': 'application/json',
+                              'Authorization': 'Bearer test-token'})
+        self.assertEqual(conn.getresponse().status, 401)
+        self.assertEqual(recorded, [])
+
+    def test_bearer_with_wrong_token_is_403(self):
+        server = self._server()
+        conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
+        conn.request('GET', '/health', headers={'Authorization': 'Bearer wrong-token'})
+        self.assertEqual(conn.getresponse().status, 403)
+
+    def test_native_upstream_401_falls_back_to_local_answer(self):
+        recorded = install_fake(self, lambda: FakeUpstream(401, b'{"error": "expired"}', []))
+        server = self._server(openai_models=['gpt-6-astra'])
+        response = _post(server.server_port, '/test-token/alpha/search',
+                         {'model': 'gpt-6-astra'},
+                         {'Authorization': 'Bearer subscription-secret'})
+        self.assertEqual(response.status, 404)
+        self.assertEqual(len(recorded), 1)
+
+    def test_non_native_upstream_401_passes_through(self):
+        install_fake(self, lambda: FakeUpstream(401, b'{"error": "expired"}', []))
+        server = self._server(openai_models=['gpt-6-astra'])
+        response = _post(server.server_port, '/test-token/responses',
+                         {'model': 'gpt-6-astra', 'input': []},
+                         {'Authorization': 'Bearer subscription-secret'})
+        self.assertEqual(response.status, 401)
+        self.assertEqual(response.read(), b'{"error": "expired"}')
+
+    def test_origin_with_valid_bearer_is_403(self):
+        server = self._server()
+        conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
+        conn.request('GET', '/health', headers={'Authorization': 'Bearer test-token',
+                                                'Origin': 'https://x.example'})
+        self.assertEqual(conn.getresponse().status, 403)
+
+    def test_bearer_with_wrong_prefixed_path_is_404(self):
+        server = self._server()
+        conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
+        conn.request('GET', '/wrong/health', headers={'Authorization': 'Bearer test-token'})
+        self.assertEqual(conn.getresponse().status, 404)
+
+    def test_header_authed_rejection_logs_unrouted_without_token(self):
+        server = self._server()
+        with self.assertLogs('codex_router', level='INFO') as logs:
+            conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
+            conn.request('GET', '/nope', headers={'Authorization': 'Bearer test-token'})
+            self.assertEqual(conn.getresponse().status, 404)
+        events = [json.loads(record.getMessage()) for record in logs.records]
+        rejected = [e for e in events if e.get('event') == 'request_rejected']
+        self.assertEqual(len(rejected), 1)
+        self.assertEqual(rejected[0]['path'], '<unrouted>')
+        self.assertNotIn('test-token', ''.join(record.getMessage() for record in logs.records))
 
     def test_health_json(self):
         server = self._server()

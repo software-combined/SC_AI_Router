@@ -1,5 +1,15 @@
 # Plan 041: Ship the router as a versioned release bundle with a stdlib installer, health-checked rollback and a daily auto-updater
 
+> **Deviation recorded 2026-09-08 (installer-core commit):** the bundle
+> excludes `tests/*.py`, and `self_test` is an import smoke (`catalogue`
+> and `registry` load with non-empty `MODELS`) rather than full discover
+> in the bundle. Bundled repo tests reference files outside the bundle
+> (`packaging/release.py`, `README.md`, wrappers), so discover in the
+> bundle fails deterministically. Verified install still holds via
+> manifest check, smoke, health check, and rollback. The bundled
+> `packaging/VERSION` is stamped with the composed build version so
+> `current_version()` converges after install.
+
 > **Amended 2026-09-07**: Plan 045 supersedes Step 6 (update cadence becomes every 15 minutes with ETag, jitter and a beta channel) and Step 8 (releases are created automatically on every push to `main` or `beta`; `packaging/VERSION` holds `MAJOR.MINOR` and CI appends the run number). Plan 045 also replaces the stop-and-start restart with drain plus launchd socket activation. Plan 043 adds the `--openai-mode none` installer flag. Build the installer core (Steps 1 to 5, 7) exactly as written here, then follow Plan 045 for cadence, release trigger and restart.
 
 > **Executor instructions**: Follow this plan step by step. Run every

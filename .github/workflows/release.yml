@@ -1,0 +1,42 @@
+name: Release
+
+on:
+  push:
+    branches: [main, beta]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.14"
+      - run: python -m unittest discover -s tests -t .
+      - name: Build bundle
+        run: |
+          CHANNEL="$( [ "$GITHUB_REF_NAME" = main ] && echo stable || echo beta )"
+          python packaging/release.py --out dist --build "$GITHUB_RUN_NUMBER" --sha "$GITHUB_SHA" --channel "$CHANNEL"
+          echo "CHANNEL=$CHANNEL" >> "$GITHUB_ENV"
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(python -c "import json;print(json.load(open('dist/latest.json'))['version'])")
+          if [ "$CHANNEL" = stable ]; then
+            gh release create "v$VERSION" dist/*.tar.gz dist/latest.json --generate-notes --latest
+          else
+            cp dist/latest.json dist/latest-beta.json
+            gh release create "v$VERSION-beta" dist/*.tar.gz dist/latest-beta.json --prerelease --generate-notes
+          fi

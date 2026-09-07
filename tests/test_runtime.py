@@ -3,11 +3,14 @@ import json
 import logging
 import logging.handlers
 import os
+import shutil
 import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
+from unittest import mock
 from codex_router.runtime import LOG, load_state
+from tests.fakes import FakeUpstream, install_fake
 from tests.test_mixed_router import _start_auth_server
 
 
@@ -33,27 +36,91 @@ class LoadStateTests(unittest.TestCase):
         self.addCleanup(os.unlink, f.name)
         return f.name
 
+    def _auth(self, payload):
+        auth = tempfile.NamedTemporaryFile('w', suffix='.json', delete=False)
+        auth.write(payload if isinstance(payload, str) else json.dumps(payload))
+        auth.close()
+        self.addCleanup(os.unlink, auth.name)
+        return auth.name
+
     def test_load_state_reports_missing_keys(self):
         path = self._write({'port': 1})
         with self.assertRaises(SystemExit) as ctx:
             load_state(Path(path))
-        for key in ('token', 'openai_models', 'opencode_auth'):
+        for key in ('token', 'openai_models'):
             self.assertIn(key, str(ctx.exception))
 
-    def test_load_state_rejects_missing_credential_file(self):
-        path = self._write({'port': 0, 'token': 't', 'openai_models': [],
-                            'opencode_auth': '/nonexistent-auth.json'})
-        with self.assertRaises(SystemExit) as ctx:
-            load_state(Path(path))
-        self.assertIn('credential file', str(ctx.exception))
+    def test_load_state_rejects_unusable_credential_file(self):
+        for name, payload in (
+                ('missing', None),
+                ('non-api', {'openrouter': {'type': 'other', 'key': 'k'}}),
+                ('corrupt', 'not-json{{{'),
+                ('empty-object', {}),
+                ('api-without-key', {'openrouter': {'type': 'api'}}),
+                ('null-entry', {'openrouter': None})):
+            with self.subTest(name=name):
+                auth = '/nonexistent-auth.json' if payload is None else self._auth(payload)
+                path = self._write({'port': 0, 'token': 't', 'openai_models': [],
+                                    'opencode_auth': auth})
+                with self.assertRaises(SystemExit) as ctx:
+                    load_state(Path(path))
+                self.assertIn('OpenRouter credential problem', str(ctx.exception))
 
     def test_load_state_accepts_valid_file(self):
-        auth = tempfile.NamedTemporaryFile('w', suffix='.json', delete=False)
-        auth.close()
-        self.addCleanup(os.unlink, auth.name)
+        auth = self._auth({'openrouter': {'type': 'api', 'key': 'k'}})
         path = self._write({'port': 0, 'token': 't', 'openai_models': [],
-                            'opencode_auth': auth.name})
+                            'opencode_auth': auth})
         self.assertEqual(load_state(Path(path))['token'], 't')
+
+    def test_load_state_without_opencode_auth_needs_env_or_key_file(self):
+        path = self._write({'port': 0, 'token': 't', 'openai_models': []})
+        with mock.patch.dict(os.environ):
+            os.environ.pop('OPENROUTER_API_KEY', None)
+            home = Path(tempfile.mkdtemp())
+            self.addCleanup(shutil.rmtree, str(home), True)
+            with mock.patch('codex_router.runtime.ROUTER_HOME', home):
+                with self.assertRaises(SystemExit) as ctx:
+                    load_state(Path(path))
+                self.assertIn('OpenRouter credential problem', str(ctx.exception))
+
+
+class CredentialRequestMappingTests(unittest.TestCase):
+    def _server_without_opencode(self):
+        from tests.test_mixed_router import _start_server, _test_state
+        state = _test_state('/nonexistent-auth.json')
+        del state['opencode_auth']
+        server = _start_server(state)
+        self.addCleanup(server.shutdown)
+        return server
+
+    def _post(self, server, payload):
+        conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
+        conn.request('POST', '/test-token/responses', body=json.dumps(payload),
+                     headers={'Content-Type': 'application/json'})
+        return conn.getresponse()
+
+    def test_empty_key_file_maps_to_400(self):
+        home = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, str(home), True)
+        (home / 'openrouter.key').write_text('\n')
+        os.chmod(home / 'openrouter.key', 0o600)
+        with mock.patch.dict(os.environ):
+            os.environ.pop('OPENROUTER_API_KEY', None)
+            with mock.patch('codex_router.router.ROUTER_HOME', home):
+                server = self._server_without_opencode()
+                response = self._post(server, {'model': 'z-ai/glm-5.3', 'input': []})
+                self.assertEqual(response.status, 400)
+
+    def test_nothing_configured_maps_to_400(self):
+        home = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, str(home), True)
+        with mock.patch.dict(os.environ):
+            os.environ.pop('OPENROUTER_API_KEY', None)
+            with mock.patch('codex_router.router.ROUTER_HOME', home):
+                server = self._server_without_opencode()
+                response = self._post(server, {'model': 'z-ai/glm-5.3', 'input': []})
+                self.assertEqual(response.status, 400)
+
 
 class LoggingAndHealthTests(unittest.TestCase):
     def _server(self):
@@ -86,6 +153,49 @@ class LoggingAndHealthTests(unittest.TestCase):
         self.assertEqual(len(rejected), 1)
         self.assertEqual(rejected[0]['path'], '/secret-path')
         self.assertNotIn('test-token', open(log_name).read())
+
+    def test_provider_selected_logged_only_with_debug_flag(self):
+        install_fake(self, lambda: FakeUpstream(200, b'{"output": []}', []))
+        for flag, expected in (({}, 0), ({'ROUTER_DEBUG': '1'}, 1)):
+            with self.subTest(flag=flag):
+                log_name, handler = _capture_log(self)
+                server = self._server()
+                with mock.patch.dict(os.environ, flag):
+                    if 'ROUTER_DEBUG' not in flag:
+                        os.environ.pop('ROUTER_DEBUG', None)
+                    conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
+                    conn.request('POST', '/test-token/responses',
+                                 body=json.dumps({'model': 'z-ai/glm-5.3', 'input': []}),
+                                 headers={'Content-Type': 'application/json'})
+                    self.assertEqual(conn.getresponse().status, 200)
+                handler.flush()
+                lines = [json.loads(line) for line in open(log_name) if line.strip()]
+                selected = [e for e in lines if e.get('event') == 'provider_selected']
+                self.assertEqual(len(selected), expected)
+                for event in selected:
+                    self.assertEqual(event['provider'], 'openrouter')
+                    self.assertNotIn('Authorization', json.dumps(event))
+
+    def test_transport_error_carries_traceback(self):
+        def boom(*a, **k):
+            raise OSError('reset by peer')
+        install_fake(self, boom)
+        log_name, handler = _capture_log(self)
+        server = self._server()
+        conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
+        conn.request('POST', '/test-token/responses',
+                     body=json.dumps({'model': 'z-ai/glm-5.3', 'input': []}),
+                     headers={'Content-Type': 'application/json',
+                              'Authorization': 'Bearer subscription-secret'})
+        self.assertEqual(conn.getresponse().status, 502)
+        handler.flush()
+        text = open(log_name).read()
+        lines = [json.loads(line) for line in text.splitlines() if line.strip()]
+        errors = [e for e in lines if e.get('event') == 'transport_error']
+        self.assertEqual(len(errors), 1)
+        self.assertIn('OSError', errors[0]['traceback'])
+        self.assertNotIn('Bearer', text)
+        self.assertNotIn('test-key', text)
 
     def test_health_reports_version_and_inflight(self):
         server = self._server()
