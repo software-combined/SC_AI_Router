@@ -54,10 +54,15 @@ def find_python(explicit=None):
     # Candidates are argv prefixes; the probe asks each for its own
     # sys.executable and only that absolute path is ever returned. A bare
     # discovery token must never reach a plist: launchd has no Homebrew PATH.
+    # Order is portable-first: bare token, then POSIX standards, then
+    # platform shims, then this interpreter last (it may be older than 3.14).
     candidates = [[explicit]] if explicit else []
-    candidates += [['python3.14'], ['/opt/homebrew/bin/python3.14'], ['/opt/homebrew/bin/python3'],
-                   ['/usr/local/bin/python3.14'], [shutil.which('python3')],
+    candidates += [['python3.14'], ['/usr/bin/python3.14'], ['/usr/local/bin/python3.14'],
+                   ['/opt/homebrew/bin/python3.14'], ['/opt/homebrew/bin/python3'],
+                   [shutil.which('python3')],
                    [sys.executable]]
+    if sys.platform == 'win32':
+        candidates.append(['py', '-V:3.14'])
     for candidate in candidates:
         if not candidate[0]:
             continue
