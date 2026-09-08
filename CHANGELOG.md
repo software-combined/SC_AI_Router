@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.5 (unreleased)
 
 - Remove feed signature enforcement: the installer accepts unsigned
   feeds again, trusting version, URL, checksum and serial plus the
