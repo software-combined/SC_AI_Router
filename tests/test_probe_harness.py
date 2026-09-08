@@ -46,6 +46,9 @@ while True:
     elif method == 'model/list':
         send({'id': mid, 'result': {'data': [{'model': 'fake-model'}]}})
     elif method == 'thread/start':
+        rec = os.environ.get('FAKE_RECORD')
+        if rec:
+            open(rec, 'a').write('provider=' + str(params.get('modelProvider')) + '\\n')
         send({'id': mid, 'result': {'thread': {'id': 't1'},
                                     'modelProvider': 'openai', 'model': 'm'}})
     elif method == 'turn/start':
@@ -120,6 +123,14 @@ class ProbeHarnessTests(unittest.TestCase):
         proc = self._run('fake-model')
         self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
         self.assertIn('"desktop_runtime_tool_round_trip": "passed"', proc.stdout)
+
+    def test_provider_flag_reaches_thread_start(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rec = str(Path(tmp) / 'record.jsonl')
+            proc = self._run('fake-model', '--provider', 'scg_router', FAKE_RECORD=rec)
+            self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
+            self.assertIn('"desktop_runtime_tool_round_trip": "passed"', proc.stdout)
+            self.assertIn('provider=scg_router', Path(rec).read_text().splitlines())
 
     def test_compact_failure_fails_verification(self):
         proc = self._run('fake-model', '--compact', FAKE_COMPACT='fail')

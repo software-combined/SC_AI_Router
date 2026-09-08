@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.11 (none-mode probe flag and plan reconciliation)
+
+Source changes on `codex/isolated-install-state`, not yet deployed (live
+router still runs the pre-restructure prototype; see Plan 047 section 2):
+
+- `tools/probe_codex_runtime.py` accepts `--provider <id>` so the offline
+  acceptance harness can drive the tool round trip on a custom provider
+  (e.g. `scg_router`) instead of only the ChatGPT-subscription path. The
+  scripted fake-binary suite covers the flag with no network or billing.
+- `plans/README.md` now tracks 047 (in progress, landed-vs-open scope
+  stated) and 048 (design complete, implementation TODO) alongside 034-046,
+  and the 043 row reflects the path-token none-mode config.
+
 ## 0.4.10 (setup key claim and none-mode auth)
 
 Source fixes on `codex/isolated-install-state`, not yet deployed (live

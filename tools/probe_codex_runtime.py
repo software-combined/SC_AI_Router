@@ -24,6 +24,10 @@ if '--catalog' in sys.argv:
 if '--router-state' in sys.argv:
     state = json.loads(Path(sys.argv[sys.argv.index('--router-state') + 1]).read_text())
     cfg['openai_base_url'] = f"http://127.0.0.1:{state['port']}/{state['token']}/backend-api/codex"
+if '--provider' in sys.argv:
+    # No-subscription acceptance: drive thread/start on a custom provider
+    # (e.g. scg_router) instead of the default ChatGPT-subscription one.
+    cfg['model_provider'] = sys.argv[sys.argv.index('--provider') + 1]
 cfg.update(project_doc_max_bytes=0, developer_instructions='Synthetic protocol test only.',
            web_search='disabled', approval_policy='never', sandbox_mode='read-only')
 cfg['features'] = {k: False for k in ['apps', 'shell_tool', 'collab', 'multi_agent', 'code_mode']}
