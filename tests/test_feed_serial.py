@@ -68,17 +68,34 @@ class FeedSerialTests(unittest.TestCase):
                                        _run=_ok_run)
 
     def test_version_pin_bypasses_serial_gate(self):
+        # --version restores an installed release without consulting the feed
+        # or its serial: the old path unpacked the feed document as a bundle.
         with tempfile.TemporaryDirectory() as tmp:
             home = _home_with_serial(tmp)
-            blob, latest = _craft_bundle('0.4.2.1')
-            _patch_attrs(self, health=lambda state, timeout=20: {
-                'status': 'ok', 'version': latest['version']})
             env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}
+            for version, serial in (('0.4.2.0', 10), ('0.4.2.1', 11)):
+                blob, latest = _craft_bundle(version)
+                latest = {**latest, 'serial': serial}
+                _patch_attrs(self, health=lambda state, timeout=20, version=version: {
+                    'status': 'ok', 'version': version})
+                with mock.patch.dict(os.environ, env):
+                    self.assertEqual(
+                        install_mod.do_install(
+                            _install_args(home), _fetch=_static_fetch(latest, blob),
+                            _run=_ok_run), 0)
+            serial_before = (home / 'feed-serial').read_text()
+            _patch_attrs(self, wait_version=lambda *args, **kwargs: True)
+
+            def boom(url):
+                raise AssertionError('rollback must not fetch anything')
+
             with mock.patch.dict(os.environ, env):
                 self.assertEqual(
-                    install_mod.do_install(_install_args(home, '--version', latest['version']),
-                                           _fetch=lambda url: blob, _run=_ok_run), 0)
-            self.assertEqual((home / 'feed-serial').read_text(), '9\n')
+                    install_mod.do_install(_install_args(home, '--version', '0.4.2.0'),
+                                           _fetch=boom, _run=_ok_run), 0)
+            self.assertEqual(os.readlink(home / 'current'),
+                             str(home / 'releases' / '0.4.2.0'))
+            self.assertEqual((home / 'feed-serial').read_text(), serial_before)
 
     def test_check_update_refuses_stale_feed_before_download(self):
         with tempfile.TemporaryDirectory() as tmp:

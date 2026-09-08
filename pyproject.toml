@@ -1,5 +1,5 @@
 [project]
 name = "codex-model-router"
-version = "0.4.3"
+version = "0.4.4"
 requires-python = ">=3.14"
 dependencies = []
