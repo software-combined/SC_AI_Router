@@ -52,6 +52,19 @@ if '--apply-patch' in sys.argv:
             _ap_path = Path(tempfile.mkdtemp(prefix='ap-catalog-')) / 'apply-patch-catalog.json'
             _ap_path.write_text(json.dumps({'models': [_ap_entry]}))
             cfg['model_catalog_json'] = str(_ap_path)
+if '--experimental-tools' in sys.argv and '--catalog' not in sys.argv:
+    # Plan 044 Step 3: temporary catalogue advertising the clock tool.
+    # Built from the registry entry so other fields stay put.
+    sys.path.insert(0, str(ROOT.parent))
+    from codex_router import catalogue, registry
+    if len(sys.argv) > 1 and not sys.argv[1].startswith('-'):
+        _xt_model = registry.by_slug(sys.argv[1])
+        _xt_entry = catalogue.openrouter_entry(_xt_model) if _xt_model else None
+        if _xt_entry is not None:
+            _xt_entry['experimental_supported_tools'] = ['clock']
+            _xt_path = Path(tempfile.mkdtemp(prefix='xt-catalog-')) / 'exp-tools-catalog.json'
+            _xt_path.write_text(json.dumps({'models': [_xt_entry]}))
+            cfg['model_catalog_json'] = str(_xt_path)
 if '--capture-tools' in sys.argv:
     cfg['openai_base_url'] = sys.argv[sys.argv.index('--capture-tools') + 1]
 if '--catalog' in sys.argv:
@@ -64,7 +77,8 @@ if '--provider' in sys.argv:
     # (e.g. scg_router) instead of the default ChatGPT-subscription one.
     cfg['model_provider'] = sys.argv[sys.argv.index('--provider') + 1]
 cfg.update(project_doc_max_bytes=0, developer_instructions='Synthetic protocol test only.',
-           web_search='disabled', approval_policy='never',
+           web_search='enabled' if '--web-search' in sys.argv else 'disabled',
+           approval_policy='never',
            sandbox_mode='workspace-write' if '--apply-patch' in sys.argv else 'read-only')
 cfg['features'] = {k: False for k in ['apps', 'shell_tool', 'collab', 'multi_agent', 'code_mode']}
 if '--capture-tools' in sys.argv:
@@ -262,6 +276,53 @@ try:
                 print(json.dumps({'expected_error_matched': True}), flush=True)
                 sys.exit(0)
             raise RuntimeError(str(params.get('error', {}).get('codexErrorInfo', 'Provider error')))
+    if '--experimental-tools' in sys.argv:
+        # Plan 044 Step 3: pass when a tool item named clock completes.
+        rpc('turn/start', {'threadId': thread, 'effort': _flag_value('--effort') or 'low',
+            'input': [{'type': 'text', 'text': 'Use the clock tool and reply with the hour only.',
+                       'text_elements': []}]})
+        clocked = False
+        seen = []
+        while True:
+            event = next_event()
+            if event.get('method') == 'item/completed':
+                item = event['params']['item']
+                seen.append(item.get('type'))
+                # Pass on a completed item naming the clock tool. The saw=
+                # diagnostic below records live item types; widen only on evidence.
+                if item.get('tool') == 'clock':
+                    clocked = True
+            if event.get('method') == 'turn/completed':
+                turn = event['params']['turn']
+                assert turn['status'] == 'completed', str(turn.get('error'))
+                print(json.dumps({'model': model, 'capability': 'experimental_tools',
+                                  'result': 'passed' if clocked else 'failed',
+                                  'detail': 'clock tool completed' if clocked else
+                                  'no clock tool item; saw=%s' % ','.join(sorted(set(map(str, seen))))}), flush=True)
+                break
+            if event.get('method') == 'error':
+                raise RuntimeError(str(event['params']))
+    if '--web-search' in sys.argv:
+        # Plan 044 Step 3: pass when a webSearch item completes and the turn
+        # completes. The date itself is never asserted.
+        rpc('turn/start', {'threadId': thread, 'effort': _flag_value('--effort') or 'low',
+            'input': [{'type': 'text', 'text': "What is today's date according to a web search? Reply with the date only.",
+                       'text_elements': []}]})
+        searched = False
+        while True:
+            event = next_event()
+            if event.get('method') == 'item/completed':
+                if event['params']['item'].get('type') == 'webSearch':
+                    searched = True
+            if event.get('method') == 'turn/completed':
+                turn = event['params']['turn']
+                assert turn['status'] == 'completed', str(turn.get('error'))
+                print(json.dumps({'model': model, 'capability': 'web_search',
+                                  'result': 'passed' if searched else 'failed',
+                                  'detail': 'webSearch item completed' if searched else 'no webSearch item'}), flush=True)
+                break
+            if event.get('method') == 'error':
+                raise RuntimeError(str(event['params']))
     if '--apply-patch' in sys.argv:
         rpc('turn/start', {'threadId': thread, 'effort': _flag_value('--effort') or 'low',
             'input': [{'type': 'text', 'text': 'Change alpha to beta in note.txt using apply_patch and stop.',
