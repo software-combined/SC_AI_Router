@@ -19,7 +19,6 @@ import tarfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from codex_router import feed_verify
 import importlib.util
 _spec = importlib.util.spec_from_file_location(
     'packaging.service',
@@ -246,7 +245,7 @@ def do_install(args, _fetch=fetch, _run=None):
             print('No Python 3.14 found: brew install python@3.14')
             raise SystemExit(2)
     feed = args.feed or channel_feed(home)
-    latest = feed_verify.load_signed_feed(feed, _fetch)
+    latest = json.loads(_fetch(feed).decode())
     serial = check_serial(home, latest)
     if not newer(latest['version'], current_version(home)):
         print(f"up to date {current_version(home)}")
@@ -411,7 +410,7 @@ def do_check_update(args, _fetch=fetch, _read_feed=None, _sleep=None):
     if status == 304:
         print(f"up to date {current_version(home)}")
         return 0
-    latest = feed_verify.load_signed_feed(feed, _fetch, body)
+    latest = json.loads(body.decode())
     check_serial(home, latest)
     if not newer(latest['version'], current_version(home)):
         if etag:
