@@ -1,4 +1,6 @@
+import base64
 import json
+import os
 import queue
 import re
 import subprocess
@@ -7,7 +9,13 @@ import threading
 import time
 from pathlib import Path
 
+try:
+    from tools.probe_media import red_png, silent_wav
+except ImportError:  # run as a script: the sibling module is on sys.path
+    from probe_media import red_png, silent_wav
+
 ROOT = Path(__file__).resolve().parent
+CODEX_BIN = os.environ.get('CODEX_BIN', '/Applications/ChatGPT.app/Contents/Resources/codex')
 cfg = {'model_provider': 'openai', 'model_reasoning_effort': 'low'}
 if '--capture-tools' in sys.argv:
     cfg['openai_base_url'] = sys.argv[sys.argv.index('--capture-tools') + 1]
@@ -21,7 +29,7 @@ cfg.update(project_doc_max_bytes=0, developer_instructions='Synthetic protocol t
 cfg['features'] = {k: False for k in ['apps', 'shell_tool', 'collab', 'multi_agent', 'code_mode']}
 if '--capture-tools' in sys.argv:
     cfg['features'] = {'memories': False}  # Capture native schemas; the local sink never calls a model.
-args = ['/Applications/ChatGPT.app/Contents/Resources/codex', 'app-server', '--stdio']
+args = [CODEX_BIN, 'app-server', '--stdio']
 
 def flatten(d, prefix=''):
     for k, v in d.items():
@@ -82,6 +90,61 @@ def rpc(method, params):
                 raise RuntimeError(str(event['error']))
             return event['result']
 
+def _flag_value(name):
+    return sys.argv[sys.argv.index(name) + 1] if name in sys.argv else None
+
+def switch_target():
+    return _flag_value('--switch-to') or 'z-ai/glm-5.3-flash'
+
+def model_modalities(model):
+    try:
+        rows = json.loads((ROOT.parent / 'codex_router' / 'models.json').read_text())
+    except (OSError, ValueError):
+        return []
+    return next((row.get('modalities', []) for row in rows if row.get('slug') == model), [])
+
+def media_items():
+    """Attached synthetic media for --image/--audio; sizes are the evidence."""
+    items = []
+    if '--image' in sys.argv:
+        items.append({'type': 'image',
+                      'image_url': 'data:image/png;base64,' + base64.b64encode(red_png()).decode()})
+    if '--audio' in sys.argv:
+        items.append({'type': 'audio',
+                      'audio_url': 'data:audio/wav;base64,' + base64.b64encode(silent_wav()).decode()})
+    return items
+
+def run_switch_leg(thread, target):
+    rpc('turn/start', {'threadId': thread, 'model': target, 'effort': 'low',
+        'input': [{'type': 'text', 'text': 'Without calling any tools, repeat the exact result returned by echo_probe in the previous turn.', 'text_elements': []}]})
+    answer = ''
+    while True:
+        event = next_event()
+        if event.get('method') == 'item/completed' and event['params']['item'].get('type') == 'agentMessage':
+            answer = event['params']['item'].get('text', '')
+        if event.get('method') == 'turn/completed':
+            turn = event['params']['turn']
+            assert turn['status'] == 'completed', str(turn.get('error'))
+            assert marker in answer, 'Cross-provider history result: ' + repr(answer)
+            print(json.dumps({'switch_to': target, 'history_preserved': True}), flush=True)
+            break
+        if event.get('method') == 'error':
+            raise RuntimeError(str(event['params']))
+
+def run_compact(thread):
+    """Compact once; any failure raises so verification fails with it."""
+    rpc('thread/compact/start', {'threadId': thread})
+    while True:
+        event = next_event()
+        if event.get('method') == 'turn/completed':
+            turn = event['params']['turn']
+            if turn['status'] != 'completed':
+                raise RuntimeError('Compaction failed: ' + str(turn.get('error')))
+            print(json.dumps({'compaction_status': turn['status']}), flush=True)
+            return
+        if event.get('method') == 'error':
+            raise RuntimeError('Compaction error: ' + str(event['params'].get('error')))
+
 try:
     rpc('initialize', {'clientInfo': {'name': 'openrouter_probe', 'version': '1.0'},
                        'capabilities': {'experimentalApi': True}})
@@ -110,8 +173,9 @@ try:
         'dynamicTools': dynamic_tools})
     thread = t['thread']['id']
     print(json.dumps({'runtime_provider': t.get('modelProvider'), 'runtime_model': t.get('model')}), flush=True)
-    rpc('turn/start', {'threadId': thread, 'input': [{'type': 'text', 'text': ('First discover echo_probe with tool_search. ' if '--deferred' in sys.argv else '') + 'Call echo_probe with value "probe". Reply with its returned result only. You cannot know the result without calling the tool.',
-                                                   'text_elements': []}], 'effort': sys.argv[sys.argv.index('--effort') + 1] if '--effort' in sys.argv else 'low'})
+    attached = media_items()
+    rpc('turn/start', {'threadId': thread, 'input': attached + [{'type': 'text', 'text': ('First discover echo_probe with tool_search. ' if '--deferred' in sys.argv else '') + 'Call echo_probe with value "probe". Reply with its returned result only. You cannot know the result without calling the tool.',
+                                                   'text_elements': []}], 'effort': _flag_value('--effort') or 'low'})
     answer = ''
     while True:
         event = next_event()
@@ -138,35 +202,41 @@ try:
             break
         elif method == 'error':
             print(re.sub(r'https?://[^\s"<>]+', '[URL]', json.dumps(params.get('error')))[:1600], flush=True)
+            want = _flag_value('--expect-error')
+            if want and want.lower() in json.dumps(params.get('error')).lower():
+                print(json.dumps({'expected_error_matched': True}), flush=True)
+                sys.exit(0)
             raise RuntimeError(str(params.get('error', {}).get('codexErrorInfo', 'Provider error')))
-    if '--switch' in sys.argv:
-        target = 'z-ai/glm-5.3-flash'
-        rpc('turn/start', {'threadId': thread, 'model': target, 'effort': 'low',
-            'input': [{'type': 'text', 'text': 'Without calling any tools, repeat the exact result returned by echo_probe in the previous turn.', 'text_elements': []}]})
-        answer = ''
-        while True:
-            event = next_event()
-            if event.get('method') == 'item/completed' and event['params']['item'].get('type') == 'agentMessage':
-                answer = event['params']['item'].get('text', '')
-            if event.get('method') == 'turn/completed':
-                turn = event['params']['turn']
-                assert turn['status'] == 'completed', str(turn.get('error'))
-                assert marker in answer, 'Cross-provider history result: ' + repr(answer)
-                print(json.dumps({'switch_to': target, 'history_preserved': True}), flush=True)
-                break
-            if event.get('method') == 'error':
-                raise RuntimeError(str(event['params']))
-    if '--compact' in sys.argv:
-        rpc('thread/compact/start', {'threadId': thread})
-        while True:
-            event = next_event()
-            if event.get('method') == 'turn/completed':
-                turn = event['params']['turn']
-                print(json.dumps({'compaction_status': turn['status'], 'error': turn.get('error')}), flush=True)
-                break
-            if event.get('method') == 'error':
-                print(json.dumps({'compaction_error': event['params'].get('error')}), flush=True)
-                break
+    if attached:
+        capable = 'image' in model_modalities(model)
+        print(json.dumps({'media_attached': {'image_bytes': len(red_png()) if '--image' in sys.argv else 0,
+                                             'audio_bytes': len(silent_wav()) if '--audio' in sys.argv else 0,
+                                             'image_capable': capable}}), flush=True)
+        if '--image' in sys.argv and capable:
+            rpc('turn/start', {'threadId': thread, 'effort': 'low',
+                'input': [{'type': 'text', 'text': 'What solid color is the image attached earlier? Reply with the color only.', 'text_elements': []}]})
+            answer = ''
+            while True:
+                event = next_event()
+                if event.get('method') == 'item/completed' and event['params']['item'].get('type') == 'agentMessage':
+                    answer = event['params']['item'].get('text', '')
+                if event.get('method') == 'turn/completed':
+                    turn = event['params']['turn']
+                    assert turn['status'] == 'completed', str(turn.get('error'))
+                    assert 'red' in answer.lower(), 'Media evidence lost: ' + repr(answer)
+                    print(json.dumps({'media_color_seen': True}), flush=True)
+                    break
+                if event.get('method') == 'error':
+                    raise RuntimeError(str(event['params']))
+    compact_then_switch = '--compact-then-switch' in sys.argv
+    if '--switch' in sys.argv and not compact_then_switch:
+        run_switch_leg(thread, switch_target())
+    if '--compact' in sys.argv or compact_then_switch:
+        run_compact(thread)
+        if '--compact-twice' in sys.argv:
+            run_compact(thread)
+    if compact_then_switch:
+        run_switch_leg(thread, switch_target())
 finally:
     p.terminate()
     try:

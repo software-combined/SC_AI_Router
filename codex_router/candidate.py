@@ -65,16 +65,37 @@ class IsolatedRouter:
         if merged.returncode != 0:
             self.close()
             raise SystemExit('isolated probe could not merge its catalogue')
+        self.state, self.catalog = state, catalog
+        return self._spawn()
+
+    def _spawn(self):
         self.process = subprocess.Popen(
             [sys.executable, '-m', 'codex_router'],
             env={**os.environ, 'ROUTER_HOME': str(self.home)}, cwd=str(ROOT),
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        self.state, self.catalog = state, catalog
         if not self._wait_healthy():
             self.close()
             raise SystemExit('isolated router failed to start; see '
                              f'{self.home / "logs" / "router.jsonl"}')
         return self
+
+    def restart(self):
+        """Stop and boot again on the same home, port, token and catalogue.
+
+        Acceptance uses this between compactions: schemas and state must
+        survive a router restart, not just a compacted thread.
+        """
+        self._stop_child()
+        return self._spawn()
+
+    def _stop_child(self):
+        if self.process is not None:
+            self.process.terminate()
+            try:
+                self.process.wait(timeout=20)
+            except subprocess.SubprocessError:
+                self.process.kill()
+            self.process = None
 
     def _wait_healthy(self):
         url = f"http://127.0.0.1:{self.state['port']}/{self.state['token']}/health"
@@ -90,13 +111,7 @@ class IsolatedRouter:
         return False
 
     def close(self):
-        if self.process is not None:
-            self.process.terminate()
-            try:
-                self.process.wait(timeout=20)
-            except subprocess.SubprocessError:
-                self.process.kill()
-            self.process = None
+        self._stop_child()
         self.tmp.cleanup()
 
 

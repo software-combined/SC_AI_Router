@@ -105,6 +105,38 @@ class VerifySequenceTests(unittest.TestCase):
         self.assertIsNone(scope.process)
         self.assertFalse(Path(tmpdir).exists())
 
+    def test_restart_keeps_home_port_token(self):
+        scope = candidate.IsolatedRouter()
+        home = Path(scope.tmp.name)
+        terminated = []
+
+        class FakeProc:
+            def terminate(self):
+                terminated.append(True)
+            def wait(self, timeout=None):
+                return 0
+
+        scope.process = FakeProc()
+        scope.state = {'port': 5, 'token': 't'}
+        scope.catalog = home / 'candidate-catalogue.json'
+        spawned = []
+        try:
+            with mock.patch.dict(os.environ, {'OPENROUTER_API_KEY': 'test-key'}), \
+                    mock.patch.object(candidate.subprocess, 'Popen',
+                                      side_effect=lambda *a, **k: spawned.append(k) or FakeProc()), \
+                    mock.patch.object(candidate.IsolatedRouter, '_wait_healthy',
+                                      return_value=True):
+                scope.restart()
+                self.assertTrue(home.exists())
+                self.assertEqual(scope.state, {'port': 5, 'token': 't'})
+                self.assertEqual(scope.catalog, home / 'candidate-catalogue.json')
+        finally:
+            scope.process = None
+            scope.close()
+        self.assertEqual(terminated, [True])
+        self.assertEqual(len(spawned), 1)
+        self.assertEqual(spawned[0]['env']['ROUTER_HOME'], str(home))
+
     def test_boot_without_credential_fails_before_billing(self):
         with mock.patch.dict(os.environ, {'OPENROUTER_API_KEY': ''}):
             scope = candidate.IsolatedRouter()
