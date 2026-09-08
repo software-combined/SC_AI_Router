@@ -31,7 +31,7 @@ jobs:
             v*) CHANNEL=stable ;;
             *) echo "release must run from a v* tag, got $GITHUB_REF_NAME"; exit 1 ;;
           esac
-          TAG_VERSION="${GITHUB_REF_NAME#-v}"; TAG_VERSION="${TAG_VERSION%-beta}"
+          TAG_VERSION="${GITHUB_REF_NAME#v}"; TAG_VERSION="${TAG_VERSION%-beta}"
           BASE_VERSION="$(cat packaging/VERSION)"
           if [ "$TAG_VERSION" != "$BASE_VERSION" ]; then
             echo "tag $GITHUB_REF_NAME != packaging/VERSION $BASE_VERSION"; exit 1
