@@ -5,6 +5,7 @@ import queue
 import re
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -17,6 +18,24 @@ except ImportError:  # run as a script: the sibling module is on sys.path
 ROOT = Path(__file__).resolve().parent
 CODEX_BIN = os.environ.get('CODEX_BIN', '/Applications/ChatGPT.app/Contents/Resources/codex')
 cfg = {'model_provider': 'openai', 'model_reasoning_effort': 'low'}
+if '--reasoning-summary' in sys.argv:
+    # Plan 044 Step 3: ask the client for reasoning summaries on this thread.
+    cfg['model_reasoning_summary'] = 'auto'
+    if '--catalog' not in sys.argv:
+        # Temporary catalogue flipping the target entry to auto summaries.
+        # The leg requires default_reasoning_summary auto with parameter
+        # support; built from the registry entry so other fields stay put.
+        sys.path.insert(0, str(ROOT.parent))
+        from codex_router import catalogue, registry
+        if len(sys.argv) > 1 and not sys.argv[1].startswith('-'):
+            _rs_model = registry.by_slug(sys.argv[1])
+            _rs_entry = catalogue.openrouter_entry(_rs_model) if _rs_model else None
+            if _rs_entry is not None:
+                _rs_entry['default_reasoning_summary'] = 'auto'
+                _rs_entry['supports_reasoning_summary_parameter'] = True
+                _rs_path = Path(tempfile.mkdtemp(prefix='rs-catalog-')) / 'reasoning-summary-catalog.json'
+                _rs_path.write_text(json.dumps({'models': [_rs_entry]}))
+                cfg['model_catalog_json'] = str(_rs_path)
 if '--capture-tools' in sys.argv:
     cfg['openai_base_url'] = sys.argv[sys.argv.index('--capture-tools') + 1]
 if '--catalog' in sys.argv:
@@ -151,6 +170,7 @@ def run_compact(thread):
         if event.get('method') == 'error':
             raise RuntimeError('Compaction error: ' + str(event['params'].get('error')))
 
+
 try:
     rpc('initialize', {'clientInfo': {'name': 'openrouter_probe', 'version': '1.0'},
                        'capabilities': {'experimentalApi': True}})
@@ -183,6 +203,7 @@ try:
     rpc('turn/start', {'threadId': thread, 'input': attached + [{'type': 'text', 'text': ('First discover echo_probe with tool_search. ' if '--deferred' in sys.argv else '') + 'Call echo_probe with value "probe". Reply with its returned result only. You cannot know the result without calling the tool.',
                                                    'text_elements': []}], 'effort': _flag_value('--effort') or 'low'})
     answer = ''
+    summary_seen = []
     while True:
         event = next_event()
         method = event.get('method', '')
@@ -198,6 +219,12 @@ try:
             trace.append(item.get('type'))
             if item.get('type') == 'agentMessage':
                 answer = item.get('text', '')
+            elif item.get('type') == 'reasoning' and '--reasoning-summary' in sys.argv:
+                # Plan 044 Step 3: pass on non-empty streamed summary text.
+                for entry in item.get('summary', []) or []:
+                    if isinstance(entry, dict) and (entry.get('text') or '').strip():
+                        summary_seen.append(entry['text'].strip()[:120])
+                        break
             elif item.get('type') in ('commandExecution', 'fileChange', 'mcpToolCall', 'webSearch'):
                 raise RuntimeError('Unexpected builtin tool')
         elif method == 'turn/completed':
@@ -205,6 +232,10 @@ try:
             assert turn['status'] == 'completed', str(turn.get('error'))
             assert calls == 1 and answer.strip() == marker, f'Tool calls={calls}; synthetic final={answer[:1200]!r}'
             print(json.dumps({'model': model, 'desktop_runtime_tool_round_trip': 'passed', 'items': trace}), flush=True)
+            if '--reasoning-summary' in sys.argv:
+                print(json.dumps({'model': model, 'capability': 'reasoning_summary',
+                                  'result': 'passed' if summary_seen else 'failed',
+                                  'detail': 'summary text observed' if summary_seen else 'no reasoning summary streamed'}), flush=True)
             break
         elif method == 'error':
             print(re.sub(r'https?://[^\s"<>]+', '[URL]', json.dumps(params.get('error')))[:1600], flush=True)
