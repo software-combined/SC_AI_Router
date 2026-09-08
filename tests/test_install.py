@@ -15,8 +15,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from tests.fakes import sign_body as _sign_body
-from tests.fakes import signed_fetch as _static_fetch
+from codex_router import feed_verify
+from tests.fakes import static_fetch as _static_fetch
 
 _ROOT = Path(__file__).resolve().parents[1]
 
@@ -67,7 +67,8 @@ def _tarball(files=(), links=()):
 
 def _ok_run(cmd, **kwargs):
     if '-c' in cmd:
-        return SimpleNamespace(returncode=0, stdout='3 14', stderr='')
+        return SimpleNamespace(returncode=0, stdout='3 14\n/opt/homebrew/bin/python3.14\n',
+                               stderr='')
     return SimpleNamespace(returncode=0, stdout='', stderr='')
 
 
@@ -84,7 +85,7 @@ def _craft_bundle(version):
 
 
 _SEAMS = ('run', 'health', 'wait_idle', 'wait_version', 'self_test',
-           'write_catalogue', 'fetch_feed', 'feed_serial')
+           'write_catalogue', 'fetch_feed', 'feed_serial', 'main_plist_exe')
 # webbrowser patches module-global stdlib handle via setattr on install_mod;
 # call sites use `webbrowser.open` so plain setattr suffices (no _svc mirror).
 
@@ -372,10 +373,10 @@ class InstallTests(unittest.TestCase):
             self.assertEqual(install_mod.channel_feed(home),
                              'https://github.com/beta/latest.json')
             self.assertEqual(
-                install_mod.feed_verify.beta_feed_url('file:///stable/latest.json'),
+                feed_verify.beta_feed_url('file:///stable/latest.json'),
                 'file:///beta/latest.json')
             with self.assertRaises(SystemExit):
-                install_mod.feed_verify.beta_feed_url('not-a-url')
+                feed_verify.beta_feed_url('not-a-url')
 
     def test_jitter_bounded(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -445,8 +446,6 @@ class InstallTests(unittest.TestCase):
                 return 200, json.dumps(latest).encode(), 'etag-B'
 
             def boom(url):
-                if url.endswith('.sig'):
-                    return _sign_body(json.dumps(latest).encode())
                 raise AssertionError('tarball must not download when deferred')
 
             saved_idle = install_mod._svc.wait_idle
@@ -481,8 +480,6 @@ class InstallTests(unittest.TestCase):
                 return 200, json.dumps(latest).encode(), 'etag-B'
 
             def boom(url):
-                if url.endswith('.sig'):
-                    return _sign_body(json.dumps(latest).encode())
                 raise AssertionError('tarball must not download when current')
 
             args = install_mod.build_parser().parse_args(

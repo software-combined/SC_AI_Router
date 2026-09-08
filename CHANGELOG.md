@@ -1,7 +1,29 @@
 # Changelog
 
-## Unreleased
+## 0.6.6 (unreleased)
 
+- Fix launchd spawning nothing after update: the installer persisted
+  find_python's bare discovery token (`python3.14`) into the plist,
+  which launchd cannot resolve (no Homebrew PATH). It now persists the
+  probed absolute `sys.executable`, both plist renderers fail closed on
+  non-absolute interpreters, and upgrades detect a legacy bare-python
+  plist and reload the main agent (updater untouched) to heal it.
+
+## 0.6.5 (unreleased)
+
+- Remove feed signature enforcement: the installer accepts unsigned
+  feeds again, trusting version, URL, checksum and serial plus the
+  feed/manifest/marker identity check. The Ed25519 module and its
+  `--gen-key`/`--sign` tooling stay in the tree as a documented
+  opt-in for later. Owner decision: ceremony overhead outweighed
+  the publisher-authentication benefit on this channel.
+- Fix Claude POSTs with a query string (`/v1/messages?beta=true`)
+  being rejected: `do_POST` now strips `?...` for route matching,
+  mirroring `do_GET`, so query-bearing inference calls route like
+  the bare path.
+- Fix tag-gated releases never matching: the workflow stripped
+  `-v` instead of `v`, so every tag would have failed the
+  version check. Tags now compare correctly.
 - Harden updates against live traffic: installs defer when the router
   is busy instead of killing in-flight requests, rollback restores the
   old pointer with `TERM` (never `bootout`, which stranded machines
@@ -42,13 +64,7 @@
   Headers now forward unchanged; missing or expired subscription
   credentials surface as the upstream response instead.
 
-- Installer verifies signed release feeds: detached Ed25519 signature
-  (`latest.json.sig`, pure-stdlib RFC 8032 in `codex_router/feed_verify.py`)
-  over the exact feed bytes before trusting version, URL, checksum or
-  serial; unsigned feeds refused. `packaging/release.py` gains `--gen-key`
-  (owner-only seed file) and `--sign`; the compiled-in release key stays
-  empty until the owner key ceremony, so installs fail closed with a clear
-  message. Beta channel resolves to `beta/latest.json` on the same origin
+- Beta channel resolves to `beta/latest.json` on the same origin
   instead of calling the GitHub releases API.
 - First-run key window claims the installer's empty key placeholder, and
   none-mode Codex config authenticates through the per-install path token.
