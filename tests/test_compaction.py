@@ -65,6 +65,23 @@ class TranscriptBoundaryTests(unittest.TestCase):
         self.assertNotIn('A', text)
         self.assertLessEqual(len(text), TRANSCRIPT_BUDGET)
 
+    def test_over_budget_middle_item_does_not_punch_hole_for_oldest(self):
+        oldest = {'type': 'message', 'role': 'user', 'content': 'ancient-marker'}
+        middle = {'type': 'message', 'role': 'user', 'content': 'M' * TRANSCRIPT_BUDGET}
+        newest = {'type': 'message', 'role': 'user', 'content': 'fresh-marker'}
+        text = transcript_for_summary([oldest, middle, newest])
+        self.assertIn('fresh-marker', text)
+        self.assertNotIn('ancient-marker', text)
+        self.assertLessEqual(len(text), TRANSCRIPT_BUDGET)
+
+    def test_tool_call_line_names_the_tool(self):
+        text = transcript_for_summary([
+            {'type': 'function_call', 'name': 'send_message', 'arguments': '{"text":"hi"}'},
+            {'type': 'custom_tool_call', 'namespace': 'slack', 'name': 'post', 'input': 'hi'},
+        ])
+        self.assertIn('send_message', text)
+        self.assertIn('slack.post', text)
+
 
 class ReasoningAndShapeTests(unittest.TestCase):
     def test_reasoning_plaintext_kept_encrypted_dropped(self):
