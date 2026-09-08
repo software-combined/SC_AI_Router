@@ -64,7 +64,8 @@ if '--provider' in sys.argv:
     # (e.g. scg_router) instead of the default ChatGPT-subscription one.
     cfg['model_provider'] = sys.argv[sys.argv.index('--provider') + 1]
 cfg.update(project_doc_max_bytes=0, developer_instructions='Synthetic protocol test only.',
-           web_search='disabled', approval_policy='never',
+           web_search='enabled' if '--web-search' in sys.argv else 'disabled',
+           approval_policy='never',
            sandbox_mode='workspace-write' if '--apply-patch' in sys.argv else 'read-only')
 cfg['features'] = {k: False for k in ['apps', 'shell_tool', 'collab', 'multi_agent', 'code_mode']}
 if '--capture-tools' in sys.argv:
@@ -262,6 +263,27 @@ try:
                 print(json.dumps({'expected_error_matched': True}), flush=True)
                 sys.exit(0)
             raise RuntimeError(str(params.get('error', {}).get('codexErrorInfo', 'Provider error')))
+    if '--web-search' in sys.argv:
+        # Plan 044 Step 3: pass when a webSearch item completes and the turn
+        # completes. The date itself is never asserted.
+        rpc('turn/start', {'threadId': thread, 'effort': _flag_value('--effort') or 'low',
+            'input': [{'type': 'text', 'text': "What is today's date according to a web search? Reply with the date only.",
+                       'text_elements': []}]})
+        searched = False
+        while True:
+            event = next_event()
+            if event.get('method') == 'item/completed':
+                if event['params']['item'].get('type') == 'webSearch':
+                    searched = True
+            if event.get('method') == 'turn/completed':
+                turn = event['params']['turn']
+                assert turn['status'] == 'completed', str(turn.get('error'))
+                print(json.dumps({'model': model, 'capability': 'web_search',
+                                  'result': 'passed' if searched else 'failed',
+                                  'detail': 'webSearch item completed' if searched else 'no webSearch item'}), flush=True)
+                break
+            if event.get('method') == 'error':
+                raise RuntimeError(str(event['params']))
     if '--apply-patch' in sys.argv:
         rpc('turn/start', {'threadId': thread, 'effort': _flag_value('--effort') or 'low',
             'input': [{'type': 'text', 'text': 'Change alpha to beta in note.txt using apply_patch and stop.',
