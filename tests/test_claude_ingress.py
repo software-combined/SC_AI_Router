@@ -31,10 +31,17 @@ class ClaudeIngressTests(unittest.TestCase):
         return server
 
     def test_openrouter_slug_reaches_openrouter_with_key_only_and_identical_body(self):
+        # Listing visibility never gates routing: the hidden Anthropic alias
+        # takes the same byte-identical OpenRouter path as a visible slug.
+        for slug in ('z-ai/glm-5.3-flash', '~anthropic/claude-sonnet-latest'):
+            with self.subTest(slug=slug):
+                self._check_openrouter_split(slug)
+
+    def _check_openrouter_split(self, slug):
         recorded = install_fake(self, lambda: FakeUpstream(
             200, b'{"id":"msg_1","type":"message","content":[]}', []))
         server = self._server()
-        payload = _messages()
+        payload = _messages(slug)
         raw = json.dumps(payload)
         conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
         conn.request('POST', '/test-token/v1/messages', body=raw,

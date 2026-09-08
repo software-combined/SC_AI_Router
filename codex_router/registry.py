@@ -96,3 +96,24 @@ def by_slug(slug):
 
 def openrouter_slugs():
     return frozenset(m.slug for m in MODELS if m.provider == 'openrouter')
+
+
+def visible_for(model, client):
+    """Picker visibility for one registry row; routing never consults this.
+
+    Codex hides OpenRouter-billed GPT rows, Claude hides OpenRouter-billed
+    Anthropic rows; subscription rows are never hidden. Tilde aliases
+    normalize before the prefix check. Unknown clients fail closed.
+    """
+    try:
+        hidden = {'codex': 'openai/', 'claude': 'anthropic/'}[client]
+    except KeyError:
+        raise ValueError(f'unknown client: {client}') from None
+    if model.provider != 'openrouter':
+        return True
+    return not model.slug.removeprefix('~').startswith(hidden)
+
+
+def models_for(client):
+    """Registry rows visible in the given client's picker."""
+    return tuple(m for m in MODELS if visible_for(m, client))
