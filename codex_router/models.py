@@ -36,6 +36,9 @@ def derive_row(slug, live, rows):
     top = live.get('top_provider') or {}
     advertised = (live.get('reasoning') or {}).get('supported_efforts') or []
     reasoning = [lv for lv in CANONICAL_ORDER if lv in advertised]
+    if not advertised and (live.get('reasoning') is None
+                           or live['reasoning'].get('mandatory') is False):
+        reasoning = ['none']
     if not reasoning:
         raise SystemExit(f'live metadata for {slug} advertises no reasoning levels')
     default = 'low' if 'low' in reasoning else reasoning[0]

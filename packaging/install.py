@@ -7,6 +7,7 @@ import json
 import os
 import plistlib
 import random
+import runpy
 import secrets
 import time
 import webbrowser
@@ -511,6 +512,9 @@ def do_install(args, _fetch=fetch, _run=None):
                  + '# END local mixed model picker\n')
     receipt_path = home / 'activation.json'
     previous_receipt = json.loads(receipt_path.read_text()) if receipt_path.exists() else {}
+    guidance = runpy.run_path(str(home / 'current' / 'tools' / 'global_instructions.py'))
+    rules_path, rules_before, rules_after, rules_receipt = guidance['prepare'](
+        config_path.parent, previous_receipt.get('global_instructions'))
     stamp = time.strftime('%Y%m%d-%H%M%S', time.gmtime())
     (home / f'config-before-{stamp}.toml').write_bytes(
         (config_path.read_text() if config_path.exists() else '').encode())
@@ -519,7 +523,9 @@ def do_install(args, _fetch=fetch, _run=None):
     except OSError:
         pass
     before = replace_config_block(config_path, block, previous_receipt.get('inserted_block'))
+    guidance['write'](rules_path, rules_before, rules_after)
     receipt_path.write_text(json.dumps({'config_path': str(config_path), 'inserted_block': block,
+                                        'global_instructions': rules_receipt,
                                         'openai_mode': mode,
                                         'previous_sha256': hashlib.sha256(before.encode()).hexdigest()},
                                        indent=2) + '\n')

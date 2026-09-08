@@ -42,6 +42,7 @@ OPENROUTER_TEMPLATE = {
 }
 
 PREVIEW_PRIORITY_OFFSET = 100000  # preview entries sort after every verified model
+RETIRED_SLUGS = {'anthropic/claude-opus-5', 'anthropic/claude-fable-5.1'}
 
 
 BASE_INSTRUCTIONS = (Path(__file__).with_name('openrouter_base_instructions.txt')).read_text()
@@ -81,14 +82,16 @@ def openrouter_entry(model):
 
 
 def merge(catalog, roster=()):
-    """Merge registry OpenRouter entries; keep every existing entry in place.
+    """Merge registry OpenRouter entries, dropping explicitly retired picker rows.
 
     Roster slugs (the subscription side from runtime state) absent from the
     catalogue are appended as stubs so a fresh file still lists the approved
     picker; existing rich entries are never rewritten. Plan 039's live
     /models remains the proper replacement for this fallback.
     """
-    models = catalog.get('models', [])
+    active = {m.slug for m in MODELS}
+    models = [m for m in catalog.get('models', [])
+              if m['slug'] not in RETIRED_SLUGS or m['slug'] in active]
     entries = {m['slug']: m for m in models}
     for model in MODELS:
         if model.provider == 'openrouter':

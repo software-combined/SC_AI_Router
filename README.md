@@ -97,5 +97,6 @@ directory at an idle boundary:
 `codex_router/models.json`,
 `codex_router/openrouter_base_instructions.txt`,
 `tools/probe_codex_runtime.py`,
+`tools/global_instructions.py`,
 `tools/disable.py`. Never copy state, activation, catalogue, backup, or log
 files.

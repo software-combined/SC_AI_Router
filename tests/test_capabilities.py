@@ -10,10 +10,13 @@ class CapabilityTests(unittest.TestCase):
 
     def test_text_only_set_matches_live_metadata(self):
         for slug in ('z-ai/glm-5.3', 'deepseek/deepseek-v4-pro',
-                     'deepseek/deepseek-v4-flash'):
+                     'deepseek/deepseek-v4-flash', 'deepseek/deepseek-v4-pro-0813',
+                     'deepseek/deepseek-v4-flash-0731'):
             self.assertEqual(input_modalities(slug), ['text'])
         for slug in OPENROUTER_MODELS - {'z-ai/glm-5.3', 'deepseek/deepseek-v4-pro',
-                                         'deepseek/deepseek-v4-flash'}:
+                                         'deepseek/deepseek-v4-flash',
+                                         'deepseek/deepseek-v4-pro-0813',
+                                         'deepseek/deepseek-v4-flash-0731'}:
             self.assertIn('image', input_modalities(slug))
 
     def test_reasoning_matches_live_acceptance(self):

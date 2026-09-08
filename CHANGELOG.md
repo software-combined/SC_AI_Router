@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.5.0
+
+- Offer only the four Claude Latest aliases: Opus, Fable, Sonnet, and Haiku.
+  Remove the previously pinned Opus 5 and Fable 5.1 picker entries on upgrade.
+- Add DeepSeek V4 Pro 0813, V4 Flash 0731, and V4 Flash Vision Exp with
+  current reasoning levels, input modalities, and token limits. Retain
+  the original 0423 identities for existing tasks.
+- Models without advertised effort controls can onboard with reasoning
+  disabled; mandatory or unknown reasoning capabilities still fail closed.
+- Newly added models remain Preview until paid Codex runtime probes pass.
+- Install one global subagent-discovery rules block in Codex's active
+  global AGENTS file, preserving existing instructions. Updates replace
+  only the owned block; uninstall removes it. Rules are not repeated in
+  the model catalogue and do not override permissions or delegation bans.
+
 ## 0.4.8 (first-run key window)
 
 First-run setup and plan reconciliation from the audit brief, committed on
