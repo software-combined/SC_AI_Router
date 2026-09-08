@@ -8,6 +8,7 @@ must persist the probed sys.executable and fail closed otherwise.
 import contextlib
 import io
 import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -160,6 +161,28 @@ class LegacyReloadTests(unittest.TestCase):
                              'failed reload must retry bootstrap for the old release')
             self.assertFalse([c for c in calls if 'update' in c[-1]],
                              'updater must never be touched by reload rollback')
+
+
+class PortableOrderTests(unittest.TestCase):
+    """find_python prefers portable interpreters over platform shims."""
+
+    def test_sys_executable_last_resort(self):
+        seen = []
+
+        def fake_run(cmd, **kwargs):
+            seen.append(cmd[0] if len(cmd) == 2 else tuple(cmd[:2]))
+            if cmd[0] == sys.executable:
+                return SimpleNamespace(
+                    returncode=0, stdout='3 14\n/opt/homebrew/bin/python3.14\n', stderr='')
+            return SimpleNamespace(returncode=1, stdout='', stderr='')
+
+        with mock.patch.object(svc, 'run', fake_run):
+            with mock.patch.object(sys, 'platform', 'darwin'):
+                got = svc.find_python()
+        self.assertEqual(got, '/opt/homebrew/bin/python3.14')
+        # sys.executable probed only after portable candidates failed.
+        self.assertEqual(seen[-1][0], sys.executable)
+        self.assertIn(('python3.14', '-c'), seen)
 
 
 if __name__ == '__main__':
