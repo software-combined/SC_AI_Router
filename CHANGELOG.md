@@ -25,6 +25,8 @@ the pre-restructure prototype; see Plan 047 section 2):
 - Upstream `openai-model` header is pinned to the requested slug so a
   rerouted model never triggers a mismatch warning; `/health` keeps
   reporting which model actually served.
+- Release feed carries a monotonic `serial`; the installer refuses feeds
+  older than the last accepted one and records it in `feed-serial`.
 
 ## 0.4.0 (Plan 041)
 
