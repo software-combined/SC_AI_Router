@@ -143,8 +143,9 @@ def prepare_tools(payload):
     return names
 
 class ToolEvents:
-    def __init__(self, names):
+    def __init__(self, names, notes=None):
         self.names = names
+        self.notes = notes
         self.item_ids = set()
 
     def item(self, item, started=False):
@@ -192,10 +193,12 @@ class ToolEvents:
         if isinstance(event.get('response'), dict):
             response = event['response']
             response['output'] = [self.item(item) for item in response.get('output', [])]
+            if kind == 'response.completed' and self.notes is not None and isinstance(response.get('model'), str):
+                self.notes['served_model'] = response['model']
         return event
 
-def stream_events(response, names):
-    adapter = ToolEvents(names)
+def stream_events(response, names, notes=None):
+    adapter = ToolEvents(names, notes)
     block = []
     for line in response:
         if line not in (b'\n', b'\r\n'):

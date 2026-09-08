@@ -55,6 +55,16 @@ class ToolAdapterTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'must be a string'):
             list(stream_events(io.BytesIO(wire), {(None, 'exec'): 'custom'}))
 
+    def test_completed_event_records_served_model(self):
+        notes = {}
+        adapter = ToolEvents({}, notes)
+        event = adapter.event({'type': 'response.completed',
+                               'response': {'model': 'x-ai/grok-4.6', 'output': []}})
+        self.assertEqual(notes, {'served_model': 'x-ai/grok-4.6'})
+        self.assertEqual(event['response']['model'], 'x-ai/grok-4.6')
+        adapter.event({'type': 'response.completed', 'response': {'output': []}})
+        self.assertEqual(notes, {'served_model': 'x-ai/grok-4.6'})
+
     def test_discovery_remains_client_executed_with_history_preserved(self):
         payload = {'tools': [{'type': 'tool_search', 'execution': 'client', 'parameters': {'type': 'object'}}],
             'input': [{'type': 'tool_search_call', 'call_id': 's1', 'execution': 'client', 'arguments': {'query': 'echo'}},

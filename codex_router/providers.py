@@ -49,7 +49,7 @@ class SubscriptionProvider:
         fwd = {k: v for k, v in headers.items() if k.lower() not in HOP_HEADERS}
         return Prepared(self.host, '/backend-api/codex' + path, fwd, raw_body, set(), self.name)
 
-    def adapt(self, response, tool_names):
+    def adapt(self, response, tool_names, notes=None):
         yield from _passthrough(response)
 
 
@@ -86,12 +86,14 @@ class OpenRouterProvider:
                          'Content-Type': 'application/json'},
                         json.dumps(payload).encode(), tool_names, self.name)
 
-    def adapt(self, response, tool_names):
+    def adapt(self, response, tool_names, notes=None):
         if tool_names and response.status == 200:
             if 'text/event-stream' in response.getheader('Content-Type', ''):
-                yield from stream_events(response, tool_names)
+                yield from stream_events(response, tool_names, notes)
             else:
                 result = json.load(response)
+                if notes is not None and isinstance(result.get('model'), str):
+                    notes['served_model'] = result['model']
                 adapter = ToolEvents(tool_names)
                 result['output'] = [adapter.item(item) for item in result.get('output', [])]
                 yield json.dumps(result).encode()
