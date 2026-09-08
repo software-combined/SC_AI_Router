@@ -51,13 +51,26 @@ class SelectTests(unittest.TestCase):
 class OutputCapTests(unittest.TestCase):
     def test_output_cap_follows_registry(self):
         provider = providers.OpenRouterProvider()
-        fake = SimpleNamespace(max_output_tokens=1000)
+        fake = SimpleNamespace(max_output_tokens=1000, context_window=100000)
         payload = {'model': 'fake/model', 'input': [], 'max_output_tokens': 5000}
         prepared = provider.prepare(fake, '/responses', payload, b'raw', {}, _stub_credentials())
         self.assertEqual(json.loads(prepared.body)['max_output_tokens'], 1000)
         payload = {'model': 'fake/model', 'input': []}
         prepared = provider.prepare(fake, '/responses', payload, b'raw', {}, _stub_credentials())
         self.assertEqual(json.loads(prepared.body)['max_output_tokens'], 1000)
+
+    def test_output_cap_leaves_room_for_input(self):
+        # Regression: a 943718 reservation on a 1048576 window leaves ~105k
+        # for input, so a ~105k-input request blows the context. The router
+        # must reserve at most half the window for output.
+        from codex_router.registry import by_slug
+        provider = providers.OpenRouterProvider()
+        entry = by_slug('meta/muse-spark-1.3-contributor')
+        payload = {'model': 'meta/muse-spark-1.3-contributor', 'input': []}
+        prepared = provider.prepare(entry, '/responses', payload, b'raw', {},
+                                    _stub_credentials())
+        sent = json.loads(prepared.body)['max_output_tokens']
+        self.assertLessEqual(sent, entry.context_window // 2)
 
     def test_unknown_model_is_rejected(self):
         provider = providers.OpenRouterProvider()

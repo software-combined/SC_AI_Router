@@ -120,6 +120,9 @@ class OpenRouterProvider:
         if entry is None:
             raise PreparationError(f'unknown model: {model}')
         limit = entry.max_output_tokens
+        window = getattr(entry, 'context_window', 0) or 0
+        if window:  # reservation counts against context; keep half for input
+            limit = min(limit, window // 2)
         payload['max_output_tokens'] = min(payload.get('max_output_tokens') or limit, limit)
         return Prepared(self.host, '/api/v1/responses',
                         {'Authorization': 'Bearer ' + credentials.openrouter_key(),
