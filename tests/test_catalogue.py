@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from dataclasses import replace
 from pathlib import Path
-from codex_router.catalogue import catalog_name, check, merge, openrouter_entry
+from codex_router.catalogue import catalog_name, check, merge, openrouter_entry, subscription_stub
 from codex_router.registry import MODELS, by_slug, models_for
 
 
@@ -245,7 +245,8 @@ class CatalogueRosterTests(unittest.TestCase):
                 self.assertIn(model.slug, by_slug)
 
     def test_merge_never_rewrites_existing_roster_entries(self):
-        rich = {'slug': 'gpt-6-astra', 'display_name': 'GPT-6-Astra'}
+        rich = {**subscription_stub('gpt-6-astra'), 'display_name': 'Custom label',
+                'context_window': 1000000, 'model_messages': {'instructions_template': 'Native'}}
         merged = merge({'models': [dict(rich)]}, roster=('gpt-6-astra', 'gpt-5.6-luna'))
         by_slug = {m['slug']: m for m in merged['models']}
         self.assertEqual(by_slug['gpt-6-astra'], rich)

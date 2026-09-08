@@ -143,7 +143,8 @@ def merge(catalog, roster=(), client='codex'):
     drops a pre-existing hidden row instead of preserving it. Roster
     slugs (the subscription side from runtime state) absent from the
     catalogue are appended as stubs so a fresh file still lists the
-    approved picker; other existing rich entries are never rewritten.
+    approved picker. Existing rows gain missing schema defaults while
+    retaining their model-specific values, repairing older bare stubs.
     The future Claude listing reuses models_for('claude') to omit
     OpenRouter-billed Anthropic rows. Plan 039's live /models remains
     the proper replacement for this fallback. Routing never consults
@@ -156,7 +157,7 @@ def merge(catalog, roster=(), client='codex'):
     models = [m for m in catalog.get('models', [])
               if (m['slug'] not in RETIRED_SLUGS or m['slug'] in active)
               and m['slug'] not in hidden]
-    entries = {m['slug']: m for m in models}
+    entries = {m['slug']: {**subscription_stub(m['slug']), **m} for m in models}
     for model in visible:
         entries[model.slug] = openrouter_entry(model)
     order = [m['slug'] for m in models]
@@ -192,6 +193,11 @@ def _same(old, new, key):
 def check(path, client='codex'):
     catalog = json.loads(Path(path).read_text())
     existing = {m['slug']: m for m in catalog.get('models', [])}
+    for slug, row in existing.items():
+        missing = subscription_stub(slug).keys() - row.keys()
+        if missing:
+            print(f'{slug}: missing schema fields: {", ".join(sorted(missing))}')
+            return False
     identical, total = 0, 0
     for model in (m for m in MODELS
                   if m.provider == 'openrouter' and not visible_for(m, client)):

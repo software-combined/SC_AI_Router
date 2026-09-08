@@ -36,11 +36,41 @@ UPDATE_LABEL = LABEL + '.update'
 FEED_URL = 'https://github.com/software-combined/SC_OpenRouter_adapter/releases/latest/download/latest.json'
 MIN_PYTHON = (3, 14)
 
+RELEASES_PREFIX = 'https://github.com/software-combined/SC_OpenRouter_adapter/releases/'
+
+
+def github_asset(url):
+    if not url.startswith(RELEASES_PREFIX):
+        return None
+    parts = url[len(RELEASES_PREFIX):].split('/')
+    if len(parts) != 3 or not ((parts[0] == 'latest' and parts[1] == 'download')
+                               or parts[0] == 'download'):
+        raise SystemExit('unsupported router GitHub release URL')
+    tag = None if parts[0] == 'latest' else parts[1]
+    asset = parts[2]
+    if not asset or any(c in asset for c in '?*[]'):
+        raise SystemExit('invalid router release asset name')
+    gh = shutil.which('gh') or next((p for p in (
+        '/opt/homebrew/bin/gh', '/usr/local/bin/gh', '/usr/bin/gh') if Path(p).is_file()), None)
+    if gh is None:
+        raise SystemExit('Private router updates require GitHub CLI (gh), signed in as this user.')
+    cmd = [gh, 'release', 'download', '--repo', 'software-combined/SC_OpenRouter_adapter',
+           '--pattern', asset, '--output', '-']
+    if tag is not None:
+        cmd += ['--', tag]
+    result = run(cmd, capture_output=True, timeout=120)
+    if result.returncode:
+        raise SystemExit('Cannot read private router release; check gh auth status and repository access.')
+    return result.stdout
+
 
 def fetch(url):
     """Single network entry point; tests inject a fake."""
     if url.startswith('file://'):
         return Path(url[len('file://'):]).read_bytes()
+    asset = github_asset(url)
+    if asset is not None:
+        return asset
     with urllib.request.urlopen(url, timeout=30) as response:
         return response.read()
 
@@ -51,24 +81,42 @@ def run(cmd, **kwargs):
 
 
 def find_python(explicit=None):
-    candidates = [explicit] if explicit else []
-    candidates += ['python3.14', '/opt/homebrew/bin/python3.14', '/opt/homebrew/bin/python3',
-                   '/usr/local/bin/python3.14', shutil.which('python3')]
+    # Candidates are argv prefixes; the probe asks each for its own
+    # sys.executable and only that absolute path is ever returned. A bare
+    # discovery token must never reach a plist: launchd has no Homebrew PATH.
+    # Order is portable-first: bare token, then POSIX standards, then
+    # platform shims, then this interpreter last (it may be older than 3.14).
+    candidates = [[explicit]] if explicit else []
+    candidates += [['python3.14'], ['/usr/bin/python3.14'], ['/usr/local/bin/python3.14'],
+                   ['/opt/homebrew/bin/python3.14'], ['/opt/homebrew/bin/python3'],
+                   [shutil.which('python3')],
+                   [sys.executable]]
+    if sys.platform == 'win32':
+        candidates.append(['py', '-V:3.14'])
     for candidate in candidates:
-        if not candidate:
+        if not candidate[0]:
             continue
         try:
-            out = run([candidate, '-c', 'import sys,compression.zstd;print(sys.version_info[0],sys.version_info[1])'],
+            out = run(candidate + ['-c', 'import sys,compression.zstd;print(sys.version_info[0],sys.version_info[1]);print(sys.executable)'],
                       capture_output=True, text=True, timeout=30)
         except (OSError, subprocess.SubprocessError):
             continue
         if out.returncode == 0:
             try:
-                if tuple(int(x) for x in out.stdout.split()) >= MIN_PYTHON:
-                    return candidate
+                version, exe, *_ = out.stdout.splitlines()
+                if tuple(int(x) for x in version.split()) >= MIN_PYTHON and exe.strip():
+                    return exe.strip()
             except ValueError:
                 continue
     return None
+
+
+def _require_absolute(python):
+    # launchd never sees a shell PATH: persist the validated interpreter
+    # identity, never a discovery token.
+    if not python or not os.path.isabs(python):
+        raise SystemExit(f'refusing non-absolute interpreter: {python!r}')
+    return python
 
 
 def safe_extract(tarball, dest):
@@ -121,6 +169,7 @@ def swap_current(home, release_dir):
 
 
 def render_plist(python, home, state):
+    python = _require_absolute(python)
     return {'Label': LABEL,
             'ProgramArguments': [python, str(home / 'router_launch.py')],
             'Sockets': {'Listeners': {'SockNodeName': '127.0.0.1',
@@ -140,6 +189,7 @@ def render_plist(python, home, state):
 
 
 def render_update_plist(python, home):
+    python = _require_absolute(python)
     base = current_release_dir(home) or home / 'current'
     installer = base / 'packaging' / 'install.py'
     args = [python, str(installer), '--check-update', '--home', str(home)]
@@ -207,7 +257,7 @@ def wait_idle(state, timeout=600, fetch_health=None):
 
 def fetch_feed(url, etag, _fetch=fetch):
     """Read a feed document, revalidating with a saved ETag. Returns (status, body, etag)."""
-    if url.startswith('file://'):
+    if url.startswith('file://') or url.startswith(RELEASES_PREFIX):
         return 200, _fetch(url), etag
     req = urllib.request.Request(url, headers={'If-None-Match': etag} if etag else {})
     try:
@@ -229,6 +279,31 @@ def restart_service(uid):
     if loaded.returncode != 0:
         run(['launchctl', 'bootstrap', f'gui/{uid}', str(agents / (UPDATE_LABEL + '.plist'))],
             check=True)
+
+
+def main_plist_exe(agents=None):
+    """Installed main plist's ProgramArguments[0], or None when unreadable."""
+    try:
+        doc = plistlib.loads(((agents or Path.home() / 'Library' / 'LaunchAgents')
+                              / (LABEL + '.plist')).read_bytes())
+        return doc['ProgramArguments'][0]
+    except (OSError, ValueError, KeyError, IndexError, TypeError):
+        return None
+
+
+def reload_main_service(uid):
+    """bootout+bootstrap the main agent only (legacy bare-python repair).
+
+    Rewriting a loaded plist does not update launchd's in-memory copy;
+    only a reload picks up the absolute interpreter. The updater is never
+    touched here. Raises SystemExit when the agent fails to load again.
+    """
+    agents = Path.home() / 'Library' / 'LaunchAgents'
+    run(['launchctl', 'bootout', f'gui/{uid}/{LABEL}'], capture_output=True)
+    loaded = run(['launchctl', 'bootstrap', f'gui/{uid}', str(agents / (LABEL + '.plist'))],
+                 capture_output=True)
+    if loaded.returncode != 0:
+        raise SystemExit(f'bootstrap failed for {LABEL}')
 
 
 def install_launcher(home, release_dir):

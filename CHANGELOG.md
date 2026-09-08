@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.6.7 (unreleased)
+
+- Repair existing bare or incomplete subscription catalogue rows on merge,
+  preserving their model-specific metadata. Catalogue checks now reject
+  rows missing schema fields instead of accepting an unusable picker.
+- Add Linux systemd user service installation, updates, rollback and uninstall.
+  Migrate legacy symlink installations to the stable launcher, replace old
+  checkout/local-feed timers, and serialize installation operations. The
+  service grants the router's drain time and restarts on exit.
+- Leave busy installations untouched, restore the previous catalogue on a
+  failed upgrade, and retain the updater's ETag when a child installer defers.
+- Download this private repository's release assets through the user's
+  authenticated GitHub CLI, including scheduled checks.
+
+## 0.6.6
+
+- Fix launchd spawning nothing after update: the installer persisted
+  find_python's bare discovery token (`python3.14`) into the plist,
+  which launchd cannot resolve (no Homebrew PATH). It now persists the
+  probed absolute `sys.executable`, both plist renderers fail closed on
+  non-absolute interpreters, and upgrades detect a legacy bare-python
+  plist and reload the main agent (updater untouched) to heal it.
+
 ## 0.6.5 (unreleased)
 
 - Remove feed signature enforcement: the installer accepts unsigned
