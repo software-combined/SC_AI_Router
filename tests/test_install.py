@@ -15,6 +15,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.fakes import sign_body as _sign_body
+from tests.fakes import signed_fetch as _static_fetch
+
 _ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -60,12 +63,6 @@ def _craft_bundle(version):
     latest = {'version': version, 'url': 'file:///bundle.tar.gz',
               'sha256': None, 'min_python': '3.14'}
     return blob, latest
-
-
-def _static_fetch(latest, blob):
-    def fake_fetch(url):
-        return json.dumps(latest).encode() if url.endswith('.json') else blob
-    return fake_fetch
 
 
 def _patch_attrs(test, **overrides):
@@ -120,8 +117,8 @@ class InstallTests(unittest.TestCase):
             '/opt/homebrew/bin/python3.14', Path('/tmp/hm'), {'port': 18749})
         self.assertEqual(content['Label'], 'com.local.codex-mixed-model-router')
         self.assertEqual(content['ProgramArguments'],
-                         ['/opt/homebrew/bin/python3.14', '-m', 'codex_router'])
-        self.assertEqual(content['WorkingDirectory'], '/tmp/hm/current')
+                         ['/opt/homebrew/bin/python3.14', '/tmp/hm/router_launch.py'])
+        self.assertNotIn('WorkingDirectory', content)
         self.assertEqual(content['EnvironmentVariables'], {'ROUTER_HOME': '/tmp/hm'})
         self.assertTrue(content['KeepAlive'] and content['RunAtLoad'])
         self.assertNotIn('token', json.dumps(content))
@@ -138,11 +135,12 @@ class InstallTests(unittest.TestCase):
             first.mkdir(parents=True)
             second.mkdir(parents=True)
             self.assertIsNone(install_mod.swap_current(home, first))
-            self.assertEqual(os.readlink(home / 'current'), str(first))
+            self.assertEqual((home / 'current').read_text(), '0.2.0\n')
+            self.assertFalse((home / 'current').is_symlink())
             previous = install_mod.swap_current(home, second)
-            self.assertEqual(previous, str(first))
-            install_mod.swap_current(home, Path(previous))
-            self.assertEqual(os.readlink(home / 'current'), str(first))
+            self.assertEqual(previous, '0.2.0')
+            install_mod.swap_current(home, home / 'releases' / previous)
+            self.assertEqual((home / 'current').read_text(), '0.2.0\n')
 
     def test_replace_config_block_preserves_unrelated_lines_and_refuses_double_markers(self):
         block = ('# BEGIN local mixed model picker\nopenai_base_url = "http://x"\n'
@@ -172,7 +170,7 @@ class InstallTests(unittest.TestCase):
                       'sha256': None, 'min_python': '3.14'}
             args = install_mod.build_parser().parse_args(
                 ['--feed', 'file:///latest.json', '--home', str(home), '--dry-run'])
-            rc = install_mod.do_install(args, _fetch=lambda url: json.dumps(latest).encode())
+            rc = install_mod.do_install(args, _fetch=_static_fetch(latest, b''))
             self.assertEqual(rc, 0)
             self.assertFalse(home.exists())
 
@@ -205,7 +203,7 @@ class InstallTests(unittest.TestCase):
                 with self.assertRaises(SystemExit) as ctx:
                     install_mod.do_install(args, _fetch=fake_fetch, _run=fake_run)
             self.assertEqual(ctx.exception.code, 1)
-            self.assertEqual(os.readlink(home / 'current'), str(prev))
+            self.assertEqual((home / 'current').read_text(), '0.2.0\n')
             self.assertTrue(any('kill' in cmd for cmd in calls))
 
 
@@ -281,7 +279,7 @@ class InstallTests(unittest.TestCase):
             bootstraps = [saw for cmd, saw in order if 'bootstrap' in cmd]
             self.assertTrue(bootstraps, 'service was never restarted')
             self.assertTrue(all(bootstraps), 'restart ran before plists were written')
-            self.assertEqual(os.readlink(home / 'current'), str(home / 'releases' / version))
+            self.assertEqual((home / 'current').read_text(), version + '\n')
 
 
     def test_recheck_reports_up_to_date_after_install(self):
@@ -354,24 +352,19 @@ class InstallTests(unittest.TestCase):
             self.assertEqual(seen, [('file:///latest.json', 'old-etag')])
             self.assertEqual((home / 'update-etag').read_text(), 'old-etag\n')
 
-    def test_channel_beta_resolves_prerelease_feed(self):
-        api = [{'prerelease': False, 'assets': []},
-               {'prerelease': True, 'assets':
-                [{'name': 'other.txt', 'browser_download_url': 'https://x/other'},
-                 {'name': 'latest-beta.json',
-                  'browser_download_url': 'https://x/latest-beta.json'}]}]
+    def test_channel_beta_uses_origin_without_api_call(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             home.mkdir()
-            self.assertTrue(home.exists())
             self.assertEqual(install_mod.channel_feed(home), install_mod.FEED_URL)
             (home / 'channel').write_text('beta\n')
-            got = install_mod.channel_feed(
-                home, _fetch=lambda url: json.dumps(api).encode())
-            self.assertEqual(got, 'https://x/latest-beta.json')
+            self.assertEqual(install_mod.channel_feed(home),
+                             'https://github.com/beta/latest.json')
+            self.assertEqual(
+                install_mod.feed_verify.beta_feed_url('file:///stable/latest.json'),
+                'file:///beta/latest.json')
             with self.assertRaises(SystemExit):
-                install_mod.channel_feed(
-                    home, _fetch=lambda url: json.dumps([]).encode())
+                install_mod.feed_verify.beta_feed_url('not-a-url')
 
     def test_jitter_bounded(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -440,6 +433,8 @@ class InstallTests(unittest.TestCase):
                 return 200, json.dumps(latest).encode(), 'etag-B'
 
             def boom(url):
+                if url.endswith('.sig'):
+                    return _sign_body(json.dumps(latest).encode())
                 raise AssertionError('tarball must not download when deferred')
 
             saved_idle = install_mod.wait_idle
@@ -471,6 +466,8 @@ class InstallTests(unittest.TestCase):
                 return 200, json.dumps(latest).encode(), 'etag-B'
 
             def boom(url):
+                if url.endswith('.sig'):
+                    return _sign_body(json.dumps(latest).encode())
                 raise AssertionError('tarball must not download when current')
 
             args = install_mod.build_parser().parse_args(

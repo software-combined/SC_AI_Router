@@ -5,7 +5,9 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
-from tests.test_install import _craft_bundle, _ok_run, _patch_attrs, _static_fetch, install_mod
+from tests.fakes import sign_body as _sign_body
+from tests.fakes import signed_fetch as _static_fetch
+from tests.test_install import _craft_bundle, _ok_run, _patch_attrs, install_mod
 from tests.test_release import _release_mod
 
 
@@ -93,8 +95,7 @@ class FeedSerialTests(unittest.TestCase):
                 self.assertEqual(
                     install_mod.do_install(_install_args(home, '--version', '0.4.2.0'),
                                            _fetch=boom, _run=_ok_run), 0)
-            self.assertEqual(os.readlink(home / 'current'),
-                             str(home / 'releases' / '0.4.2.0'))
+            self.assertEqual((home / 'current').read_text(), '0.4.2.0\n')
             self.assertEqual((home / 'feed-serial').read_text(), serial_before)
 
     def test_check_update_refuses_stale_feed_before_download(self):
@@ -105,13 +106,20 @@ class FeedSerialTests(unittest.TestCase):
             fetched = []
             args = install_mod.build_parser().parse_args(
                 ['--check-update', '--feed', 'file:///latest.json', '--home', str(home)])
-            with self.assertRaises(SystemExit):
+            stale_body = json.dumps(stale).encode()
+
+            def fake_fetch(url):
+                fetched.append(url)
+                return _sign_body(stale_body) if url.endswith('.sig') else blob
+
+            with self.assertRaises(SystemExit) as ctx:
                 install_mod.do_check_update(
                     args,
-                    _fetch=lambda url: fetched.append(url) or blob,
-                    _read_feed=lambda url, etag: (200, json.dumps(stale).encode(), None),
+                    _fetch=fake_fetch,
+                    _read_feed=lambda url, etag: (200, stale_body, None),
                     _sleep=lambda s: None)
-            self.assertEqual(fetched, [])
+            self.assertIn('stale feed serial', str(ctx.exception.code))
+            self.assertEqual(fetched, ['file:///latest.json.sig'])
 
 
 if __name__ == '__main__':
