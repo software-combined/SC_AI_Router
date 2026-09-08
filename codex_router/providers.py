@@ -2,7 +2,7 @@
 import http.client
 import json
 from . import compaction as comp, local_services
-from .capabilities import OPENROUTER_HOST, check_effort
+from .capabilities import CANONICAL_ORDER, OPENROUTER_HOST, REASONING_LEVELS, check_effort
 from .registry import by_slug
 from .runtime import log_event
 from .tool_adapter import prepare_tools, stream_events, ToolEvents
@@ -123,8 +123,13 @@ class OpenRouterProvider:
     def summarize(self, model, key, payload_items):
         transcript = comp.transcript_for_summary(payload_items)
         prompt = comp.COMPACT_PROMPT + '\n\nConversation:\n' + transcript
-        req = json.dumps({'model': model, 'input': [comp.user_message_item(prompt)],
-            'max_output_tokens': 2000}).encode()
+        body = {'model': model, 'input': [comp.user_message_item(prompt)],
+                'max_output_tokens': 4000}
+        levels = REASONING_LEVELS.get(model)
+        if levels:
+            # Never let default high effort burn the whole budget on reasoning.
+            body['reasoning'] = {'effort': min(levels, key=CANONICAL_ORDER.index)}
+        req = json.dumps(body).encode()
         conn = http.client.HTTPSConnection(OPENROUTER_HOST, timeout=120)
         try:
             conn.request('POST', '/api/v1/responses', body=req,

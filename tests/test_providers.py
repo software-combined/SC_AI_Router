@@ -1,6 +1,7 @@
 import json
 import unittest
 from types import SimpleNamespace
+from unittest import mock
 from codex_router import providers
 
 
@@ -61,6 +62,39 @@ class OutputCapTests(unittest.TestCase):
             provider.prepare('unknown/model', '/responses',
                              {'model': 'unknown/model', 'input': []},
                              b'raw', {}, _stub_credentials())
+
+
+class SummarizerTests(unittest.TestCase):
+    def _summarize(self, model, seen):
+        class FakeConn:
+            def __init__(self, *a, **k):
+                pass
+            def request(self, method, path, body=None, headers=None):
+                seen.update(json.loads(body))
+            def getresponse(self):
+                payload = {'output': [{'type': 'message', 'content': [
+                    {'type': 'output_text', 'text': 's'}]}]}
+                return SimpleNamespace(status=200, read=lambda: json.dumps(payload).encode())
+            def close(self):
+                pass
+        with mock.patch.object(providers.http.client, 'HTTPSConnection', FakeConn):
+            return providers.OpenRouterProvider().summarize(model, 'key', [])
+
+    def test_summarizer_pins_lowest_supported_effort(self):
+        for model, effort in (('deepseek/deepseek-v4-flash', 'high'),
+                              ('z-ai/glm-5.3', 'low')):
+            with self.subTest(model=model):
+                seen = {}
+                self.assertEqual(self._summarize(model, seen), 's')
+                self.assertEqual(seen['reasoning'], {'effort': effort})
+
+    def test_summarizer_raises_output_cap_and_omits_effort_when_unknown(self):
+        seen = {}
+        self._summarize('z-ai/glm-5.3', seen)
+        self.assertEqual(seen['max_output_tokens'], 4000)
+        seen = {}
+        self._summarize('unknown-model-xyz', seen)
+        self.assertNotIn('reasoning', seen)
 
 
 if __name__ == '__main__':
