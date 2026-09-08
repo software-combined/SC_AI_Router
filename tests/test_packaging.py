@@ -28,6 +28,7 @@ FILES = [
          'codex_router/models.json',
          'codex_router/openrouter_base_instructions.txt',
          'tools/probe_codex_runtime.py',
+         'tools/global_instructions.py',
          'tools/disable.py',
          ]
 

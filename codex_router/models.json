@@ -451,10 +451,10 @@
     "tier": "verified"
   },
   {
-    "slug": "anthropic/claude-opus-5",
+    "slug": "~anthropic/claude-fable-latest",
     "provider": "openrouter",
-    "display_name": "Claude Opus 5 \u00b7 OpenRouter",
-    "vendor": "",
+    "display_name": "Claude Fable Latest \u00b7 OpenRouter",
+    "vendor": "Anthropic",
     "reasoning": [
       "low",
       "medium",
@@ -480,9 +480,34 @@
     "tier": "preview"
   },
   {
-    "slug": "anthropic/claude-fable-5.1",
+    "slug": "~anthropic/claude-haiku-latest",
     "provider": "openrouter",
-    "display_name": "Claude Fable 5.1 \u00b7 OpenRouter",
+    "display_name": "Anthropic Claude Haiku Latest \u00b7 OpenRouter",
+    "vendor": "Anthropic",
+    "reasoning": [
+      "none"
+    ],
+    "default_reasoning": "none",
+    "modalities": [
+      "text",
+      "image"
+    ],
+    "excluded_efforts": [],
+    "schema_mode": "native",
+    "max_tools": null,
+    "context_window": 200000,
+    "priority": 117,
+    "max_output_tokens": 64000,
+    "reasoning_summary": "none",
+    "apply_patch": "none",
+    "experimental_tools": [],
+    "web_search": true,
+    "tier": "preview"
+  },
+  {
+    "slug": "~anthropic/claude-opus-latest",
+    "provider": "openrouter",
+    "display_name": "Claude Opus Latest \u00b7 OpenRouter",
     "vendor": "Anthropic",
     "reasoning": [
       "low",
@@ -500,12 +525,91 @@
     "schema_mode": "native",
     "max_tools": null,
     "context_window": 1000000,
-    "priority": 117,
+    "priority": 118,
     "max_output_tokens": 128000,
     "reasoning_summary": "none",
     "apply_patch": "none",
     "experimental_tools": [],
     "web_search": true,
+    "tier": "preview"
+  },
+  {
+    "slug": "deepseek/deepseek-v4-pro-0813",
+    "provider": "openrouter",
+    "display_name": "DeepSeek V4 Pro 0813 \u00b7 OpenRouter",
+    "vendor": "DeepSeek",
+    "reasoning": [
+      "low",
+      "high",
+      "max"
+    ],
+    "default_reasoning": "low",
+    "modalities": [
+      "text"
+    ],
+    "excluded_efforts": [],
+    "schema_mode": "native",
+    "max_tools": null,
+    "context_window": 1048576,
+    "priority": 119,
+    "max_output_tokens": 384000,
+    "reasoning_summary": "none",
+    "apply_patch": "none",
+    "experimental_tools": [],
+    "web_search": false,
+    "tier": "preview"
+  },
+  {
+    "slug": "deepseek/deepseek-v4-flash-0731",
+    "provider": "openrouter",
+    "display_name": "DeepSeek V4 Flash 0731 \u00b7 OpenRouter",
+    "vendor": "DeepSeek",
+    "reasoning": [
+      "low",
+      "high",
+      "max"
+    ],
+    "default_reasoning": "low",
+    "modalities": [
+      "text"
+    ],
+    "excluded_efforts": [],
+    "schema_mode": "native",
+    "max_tools": null,
+    "context_window": 1310720,
+    "priority": 120,
+    "max_output_tokens": 131072,
+    "reasoning_summary": "none",
+    "apply_patch": "none",
+    "experimental_tools": [],
+    "web_search": false,
+    "tier": "preview"
+  },
+  {
+    "slug": "deepseek/deepseek-v4-flash-vision-exp",
+    "provider": "openrouter",
+    "display_name": "DeepSeek V4 Flash Vision Exp \u00b7 OpenRouter",
+    "vendor": "DeepSeek",
+    "reasoning": [
+      "low",
+      "high",
+      "max"
+    ],
+    "default_reasoning": "low",
+    "modalities": [
+      "text",
+      "image"
+    ],
+    "excluded_efforts": [],
+    "schema_mode": "native",
+    "max_tools": null,
+    "context_window": 1048576,
+    "priority": 121,
+    "max_output_tokens": 384000,
+    "reasoning_summary": "none",
+    "apply_patch": "none",
+    "experimental_tools": [],
+    "web_search": false,
     "tier": "preview"
   }
 ]

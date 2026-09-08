@@ -4,7 +4,14 @@ Never opens a network connection. Patch target is
 http.client.HTTPSConnection as used by codex_router.router.
 """
 import http.client
+from pathlib import Path
 from unittest import mock
+
+
+def install_payloads(version):
+    rules = Path(__file__).resolve().parents[1] / 'tools' / 'global_instructions.py'
+    return {'packaging/VERSION': (version + '\n').encode(),
+            'tools/global_instructions.py': rules.read_bytes()}
 
 
 class FakeUpstream:
