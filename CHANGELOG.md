@@ -30,6 +30,9 @@ the pre-restructure prototype; see Plan 047 section 2):
 - OpenRouter picker entries carry the shared prompt in
   `model_messages.instructions_template` instead of the legacy
   `base_instructions` field.
+- Fresh installs write the subscription-side model roster into runtime
+  state (previously missing, so the router refused to start); existing
+  state missing the roster is backfilled, never overwritten.
 
 ## 0.4.0 (Plan 041)
 
