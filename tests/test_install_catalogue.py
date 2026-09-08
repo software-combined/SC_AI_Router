@@ -35,7 +35,7 @@ def _release_bundle(tmp):
     version = manifest['version']
     latest = {'version': version, 'url': 'file:///bundle.tar.gz',
               'sha256': hashlib.sha256(blob).hexdigest(), 'min_python': '3.14'}
-    return version, _static_fetch(latest, blob)
+    return version, _static_fetch(latest, blob), blob, manifest
 
 
 def _is_catalogue(cmd):
@@ -64,8 +64,9 @@ def _args(home, *extra_args):
 
 def _setup(test, tmp):
     home = Path(tmp) / 'home'
-    version, fake_fetch = _release_bundle(tmp)
-    _patch_attrs(test, health=lambda state, timeout=20: {'status': 'ok', 'version': version})
+    version, fake_fetch, _blob, _manifest = _release_bundle(tmp)
+    _patch_attrs(test, health=lambda state, timeout=20: {'status': 'ok', 'version': version},
+                 wait_idle=lambda *args, **kwargs: True)
     return home, version, fake_fetch
 
 
@@ -81,7 +82,7 @@ class InstallCatalogueTests(unittest.TestCase):
     def test_default_install_writes_static_catalog_line(self):
         # The router serves no /models, so the file pointer is the default.
         with tempfile.TemporaryDirectory() as tmp:
-            home, _, fake_fetch = _setup(self, tmp)
+            home, _, fake_fetch = _setup(self, tmp)[:3]
             config = _install(self, tmp, home, fake_fetch, _recording_run([]))
             block = config.read_text()
             self.assertIn('# BEGIN local mixed model picker', block)
@@ -89,14 +90,14 @@ class InstallCatalogueTests(unittest.TestCase):
 
     def test_static_catalogue_flag_kept_as_noop(self):
         with tempfile.TemporaryDirectory() as tmp:
-            home, _, fake_fetch = _setup(self, tmp)
+            home, _, fake_fetch = _setup(self, tmp)[:3]
             config = _install(self, tmp, home, fake_fetch,
                               _recording_run([]), '--static-catalogue')
             self.assertIn(f'model_catalog_json = "{home}/mixed-models.json"', config.read_text())
 
     def test_install_generates_working_picker_catalogue(self):
         with tempfile.TemporaryDirectory() as tmp:
-            home, _, fake_fetch = _setup(self, tmp)
+            home, _, fake_fetch = _setup(self, tmp)[:3]
             calls = []
             _install(self, tmp, home, fake_fetch, _recording_run(calls))
             self.assertTrue(any(_is_catalogue(cmd) and '--merge' in cmd for cmd in calls))
@@ -112,7 +113,7 @@ class InstallCatalogueTests(unittest.TestCase):
 
     def test_install_catalogue_contains_subscription_roster(self):
         with tempfile.TemporaryDirectory() as tmp:
-            home, _, fake_fetch = _setup(self, tmp)
+            home, _, fake_fetch = _setup(self, tmp)[:3]
             _install(self, tmp, home, fake_fetch, _recording_run([]))
             catalog = json.loads((home / 'mixed-models.json').read_text())
             slugs = {m['slug'] for m in catalog['models']}
@@ -121,7 +122,7 @@ class InstallCatalogueTests(unittest.TestCase):
 
     def test_catalogue_merge_failure_aborts_install(self):
         with tempfile.TemporaryDirectory() as tmp:
-            home, version, fake_fetch = _setup(self, tmp)
+            home, version, fake_fetch = _setup(self, tmp)[:3]
             with mock.patch.dict(os.environ, _env(tmp)):
                 with self.assertRaisesRegex(SystemExit, 'catalogue merge failed'):
                     install_mod.do_install(_args(home), _fetch=fake_fetch,

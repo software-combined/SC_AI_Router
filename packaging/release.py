@@ -23,7 +23,8 @@ def bundle_files(root):
         + sorted(str(p.relative_to(root)) for p in (root / 'codex_router').glob('*.txt'))
         + sorted(str(p.relative_to(root)) for p in (root / 'codex_router').glob('*.json'))
         + sorted(str(p.relative_to(root)) for p in (root / 'tools').glob('*.py'))
-        + ['packaging/VERSION', 'packaging/install.py', 'packaging/router_launch.py']
+        + ['packaging/VERSION', 'packaging/install.py', 'packaging/router_launch.py',
+           'packaging/service.py']
     )
 
 
