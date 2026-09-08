@@ -43,6 +43,9 @@ def _install_mod():
     spec = importlib.util.spec_from_file_location('router_install', _ROOT / 'packaging' / 'install.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    # This existing rig exercises launchd on every host. Linux lifecycle
+    # tests explicitly select linux and use the same installer seams.
+    module.PLATFORM = 'darwin'
     return module
 
 

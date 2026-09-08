@@ -6,9 +6,9 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 from .setup import setup_pending
-from .credentials import Credentials
+from .credentials import Credentials, default_home
 
-ROUTER_HOME = Path(os.environ.get('ROUTER_HOME', Path.home() / '.codex' / 'mixed-model-router'))
+ROUTER_HOME = default_home()
 STATE = ROUTER_HOME / 'mixed-router-state.json'
 REQUIRED_STATE = {'port': int, 'token': str, 'openai_models': list}
 MAX_BODY = 16 * 1024 * 1024

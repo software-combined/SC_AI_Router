@@ -4,6 +4,7 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 from codex_router.credentials import Credentials, ENV_VAR
 
 needs_posix = unittest.skipIf(os.name == 'nt', 'POSIX permission bits only')
@@ -73,6 +74,13 @@ class CredentialLookupTests(unittest.TestCase):
     def test_check_probes_without_returning_value(self):
         self._key_file('k-file\n')
         self.assertTrue(self.creds().check())
+
+    def test_default_home_follows_env_at_call_time(self):
+        import codex_router.credentials as cred_mod
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.dict(os.environ, {'ROUTER_HOME': tmp}):
+                self.assertEqual(cred_mod.default_home(), Path(tmp))
+            self.assertNotEqual(cred_mod.default_home(), Path(tmp))
 
 
 if __name__ == '__main__':

@@ -20,7 +20,8 @@ class ModelRosterTests(unittest.TestCase):
                            {'slug': 'anthropic/claude-fable-5.1'},
                            {'slug': 'gpt-6-astra'}]}
         entries = {m['slug']: m for m in merge(base)['models']}
-        self.assertEqual(entries['gpt-6-astra'], {'slug': 'gpt-6-astra'})
+        self.assertEqual(entries['gpt-6-astra']['slug'], 'gpt-6-astra')
+        self.assertEqual(entries['gpt-6-astra']['display_name'], 'GPT-6-Astra')
         self.assertEqual({s for s in entries if 'claude-' in s}, set(slugs))
         for slug in slugs:
             with self.subTest(slug=slug):

@@ -11,6 +11,7 @@ import urllib.request
 from pathlib import Path
 from unittest import mock
 from codex_router import setup
+from codex_router.credentials import Credentials
 from codex_router.runtime import load_state
 from tests.test_mixed_router import _start_server
 
@@ -169,10 +170,7 @@ class SetupHandlerTests(unittest.TestCase):
         state.update(over)
         import json as _json
         (home / 'mixed-router-state.json').write_text(_json.dumps(state))
-        patcher = mock.patch('codex_router.router.ROUTER_HOME', home)
-        patcher.start()
-        self.addCleanup(patcher.stop)
-        server = _start_server(state)
+        server = _start_server(state, credentials=Credentials(state, home, env={}))
         self.addCleanup(server.shutdown)
         return server
 
@@ -243,8 +241,8 @@ class SetupHandlerTests(unittest.TestCase):
         listener.bind(('127.0.0.1', 0))
         listener.listen(5)
         port = listener.getsockname()[1]
-        with mock.patch('codex_router.router.ROUTER_HOME', home):
-            server = Router(dict(state), fileno=listener.fileno())
+        server = Router(dict(state), fileno=listener.fileno(),
+                        credentials=Credentials(dict(state), home, env={}))
         self.addCleanup(server.server_close)
         thread = _threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()

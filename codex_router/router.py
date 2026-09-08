@@ -24,7 +24,7 @@ class Router(ThreadingHTTPServer):
     daemon_threads = True
     drain_deadline_s = 120
 
-    def __init__(self, state, fileno=None):
+    def __init__(self, state, fileno=None, credentials=None):
         if fileno is None:
             self.allow_reuse_port = True
             super().__init__(('127.0.0.1', state['port']), Handler)
@@ -39,7 +39,7 @@ class Router(ThreadingHTTPServer):
         self.inflight = 0
         self.draining = False
         self.served_models = {}
-        self.credentials = Credentials(state, ROUTER_HOME)
+        self.credentials = credentials if credentials is not None else Credentials(state, ROUTER_HOME)
 
     def drain_and_exit(self):
         self.draining = True

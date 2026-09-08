@@ -37,21 +37,26 @@ health check.
 
 ## Safe update, restart, reinstall
 
-Updates never interrupt live traffic. The scheduled updater defers when
+The scheduled updater defers when
 `inflight > 0` and retries on its next pass; a direct install does the
 same instead of TERMing a busy router. Activation swaps the `current`
 pointer, then sends one `TERM`: launchd `KeepAlive` restarts the router
 on the held socket into the new release. Never `bootout` a live
 service: that unloads the definition and strands the machine with no
 router. On failed health the installer restores the old pointer and
-TERMs again; the old release comes back on the same socket.
+TERMs again; the old release comes back on the same socket. Linux uses
+systemd user service restart with a 150-second stop timeout; the launcher
+opens the same loopback port after the old process drains. It does not use
+launchd socket activation. Failed upgrades restore the prior catalogue too.
 
 Releases are installed only when feed version, manifest version and the
 bundled `packaging/VERSION` marker all agree; any mismatch aborts
 before any file, pointer or launchd change. `--feed` selects one run's
 source and is never pinned, so a local test feed cannot freeze future
-updates. Local feed experiments must use an isolated
-`--home /tmp/router-test-<name>` and never touch the live home.
+updates. Run local feed experiments in a disposable OS user session or VM,
+with its own service manager and Codex configuration. A different `--home`
+alone does not isolate the fixed user service names or client configuration;
+see [Linux upgrade and verification](linux-upgrade.md).
 
 ## Layout of the state directory
 

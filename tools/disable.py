@@ -2,6 +2,7 @@
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 from global_instructions import restore
 
@@ -22,5 +23,9 @@ if config.read_text() != before:
     temp.unlink()
     raise SystemExit('Codex settings changed concurrently; retry the restore.')
 os.replace(temp, config)
-subprocess.run(['launchctl', 'bootout', f'gui/{os.getuid()}/com.local.codex-mixed-model-router'], check=True)
+if os.environ.get('ROUTER_RESTORE_ONLY') != '1':
+    command = (['systemctl', '--user', 'stop', 'codex-mixed-model-router.service']
+               if sys.platform == 'linux' else
+               ['launchctl', 'bootout', f'gui/{os.getuid()}/com.local.codex-mixed-model-router'])
+    subprocess.run(command, check=True)
 print('OpenAI direct routing restored. Restart Codex to reload the original picker.')
