@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.4.4 (installer lifecycle slice)
+
+Lifecycle fixes from the audit brief, committed on
+`codex/isolated-install-state`, not yet deployed (live router still runs
+the pre-restructure prototype; see Plan 047 section 2):
+
+- The pre-replacement Codex config is now backed up before the marked
+  block is rewritten; previously the file was truncated first, so a crash
+  between the two steps lost the backup.
+- Uninstall runs the restore script with the installed home, checks that
+  the restore actually happened, and aborts without stopping services
+  when it did not. A failed restore used to be ignored while the agents
+  were booted out anyway.
+- `--version` rolls back to a previously installed release directory and
+  health-checks it (restoring the prior pointer on failure) instead of
+  trying to unpack the JSON feed document as a bundle. Only installed
+  releases can be restored; the feed carries the latest bundle only.
+- A failed first install removes the `current` pointer it created, so a
+  retry reinstalls instead of reporting a never-served version as
+  up to date.
+
 ## 0.4.3 (isolated-install slice)
 
 Clean-install and configuration fixes from the audit brief, committed on

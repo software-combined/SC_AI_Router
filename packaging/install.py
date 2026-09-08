@@ -359,10 +359,50 @@ def check_serial(home, latest):
     return serial
 
 
+def do_rollback(args):
+    """Point current at a previously installed release and verify it serves.
+
+    Only releases still present under home/releases can be restored; the feed
+    carries the latest bundle only, so there is nothing to download a
+    rollback from. The feed serial is never touched.
+    """
+    home = Path(args.home).expanduser()
+    if args.dry_run:
+        print(f'would roll back to {args.version} under {home}')
+        return 0
+    target = home / 'releases' / args.version
+    if not target.is_dir() or not (target / 'packaging' / 'VERSION').exists():
+        raise SystemExit(f'version {args.version} is not installed under {home}')
+    current = current_version(home)
+    if current == args.version:
+        print(f'up to date {current}')
+        return 0
+    try:
+        state = json.loads((home / 'mixed-router-state.json').read_text())
+    except (OSError, ValueError):
+        raise SystemExit(f'router state is missing or unreadable under {home}')
+    previous = swap_current(home, target)
+    run(['launchctl', 'kill', 'TERM', f'gui/{os.getuid()}/{LABEL}'], capture_output=True)
+    if not wait_version(state, args.version):
+        if previous is not None:
+            swap_current(home, Path(previous))
+            print(f'rollback to {args.version} failed health check; restored {previous}')
+        else:
+            if (home / 'current').is_symlink():
+                (home / 'current').unlink()
+            print(f'rollback to {args.version} failed health check; no previous release')
+        run(['launchctl', 'kill', 'TERM', f'gui/{os.getuid()}/{LABEL}'], capture_output=True)
+        raise SystemExit(1)
+    print(f'rolled back to {args.version}; health ok; restart Codex to load the router')
+    return 0
+
+
 def do_install(args, _fetch=fetch, _run=None):
     global run
     if _run is not None:
         run = _run
+    if args.version:
+        return do_rollback(args)
     home = Path(args.home).expanduser()
     python = find_python(args.python)
     if python is None:
@@ -373,15 +413,9 @@ def do_install(args, _fetch=fetch, _run=None):
             print('No Python 3.14 found: brew install python@3.14')
             raise SystemExit(2)
     feed = args.feed or channel_feed(home)
-    if args.version:
-        # Explicit operator pin (e.g. rollback): version comparison and the
-        # replay gate are both skipped, and no serial is recorded.
-        latest = {'version': args.version, 'url': feed, 'sha256': None, 'min_python': '3.14'}
-        serial = 0
-    else:
-        latest = json.loads(_fetch(feed).decode())
-        serial = check_serial(home, latest)
-    if not args.version and not newer(latest['version'], current_version(home)):
+    latest = json.loads(_fetch(feed).decode())
+    serial = check_serial(home, latest)
+    if not newer(latest['version'], current_version(home)):
         print(f"up to date {current_version(home)}")
         return 0
     if args.dry_run:
@@ -428,6 +462,12 @@ def do_install(args, _fetch=fetch, _run=None):
             restart_service(home, os.getuid())
             print(f'rolled back to {previous}: new version failed health check')
         else:
+            failed = home / 'releases' / latest['version']
+            try:
+                if (home / 'current').is_symlink() and (home / 'current').readlink() == failed:
+                    (home / 'current').unlink()
+            except OSError:
+                pass
             run(['launchctl', 'bootout', f'gui/{os.getuid()}/{LABEL}'], capture_output=True)
             print('new version failed health check; see logs/launchd.log')
         raise SystemExit(1)
@@ -451,13 +491,14 @@ def do_install(args, _fetch=fetch, _run=None):
                  + '# END local mixed model picker\n')
     receipt_path = home / 'activation.json'
     previous_receipt = json.loads(receipt_path.read_text()) if receipt_path.exists() else {}
-    before = replace_config_block(config_path, block, previous_receipt.get('inserted_block'))
     stamp = time.strftime('%Y%m%d-%H%M%S', time.gmtime())
-    (home / f'config-before-{stamp}.toml').write_bytes(before.encode())
+    (home / f'config-before-{stamp}.toml').write_bytes(
+        (config_path.read_text() if config_path.exists() else '').encode())
     try:
         os.chmod(home / f'config-before-{stamp}.toml', 0o600)
     except OSError:
         pass
+    before = replace_config_block(config_path, block, previous_receipt.get('inserted_block'))
     receipt_path.write_text(json.dumps({'config_path': str(config_path), 'inserted_block': block,
                                         'openai_mode': mode,
                                         'previous_sha256': hashlib.sha256(before.encode()).hexdigest()},
@@ -469,8 +510,7 @@ def do_install(args, _fetch=fetch, _run=None):
     for stale in home.glob('releases/*'):
         if stale.name not in (latest['version'], Path(previous).name if previous else ''):
             shutil.rmtree(stale, ignore_errors=True)
-    if not args.version:
-        (home / 'feed-serial').write_text(str(serial) + '\n')
+    (home / 'feed-serial').write_text(str(serial) + '\n')
     print(f"installed {latest['version']}; health ok; restart Codex to load the router")
     return 0
 
@@ -532,7 +572,14 @@ def do_uninstall(args):
     if current.is_symlink():
         disable = current / 'tools' / 'disable.py'
         if disable.exists():
-            run([sys.executable, str(disable)], check=False)
+            result = run([sys.executable, str(disable)], capture_output=True, text=True,
+                         env={**os.environ, 'ROUTER_HOME': str(home)})
+            out = result.stdout or ''
+            print(out[-2000:])
+            if 'OpenAI direct routing restored' not in out:
+                print((result.stderr or '')[-2000:])
+                raise SystemExit('configuration restore failed; '
+                                 'services left running for manual review')
     run(['launchctl', 'bootout', f'gui/{os.getuid()}/{LABEL}'], capture_output=True)
     run(['launchctl', 'bootout', f'gui/{os.getuid()}/{UPDATE_LABEL}'], capture_output=True)
     agents = Path.home() / 'Library' / 'LaunchAgents'
