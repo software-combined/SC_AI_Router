@@ -6,5 +6,5 @@
   "tests/test_install_config.py": 337,
   "tests/test_install_lifecycle.py": 369,
   "tests/test_install_catalogue.py": 134,
-  "tests/test_probe_harness.py": 319
+  "tests/test_probe_harness.py": 347
 }
