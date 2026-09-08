@@ -69,6 +69,13 @@ while True:
                   'params': {'item': {'type': 'agentMessage',
                                       'text': os.environ.get('FAKE_COLOR', 'red')}}})
             send({'method': 'turn/completed', 'params': {'turn': {'status': 'completed'}}})
+        elif 'clock tool' in blob and os.environ.get('FAKE_EXP_TOOLS'):
+            if os.environ['FAKE_EXP_TOOLS'] == 'clocked':
+                send({'method': 'item/completed',
+                      'params': {'item': {'type': 'mcpToolCall', 'tool': 'clock'}}})
+            send({'method': 'item/completed',
+                  'params': {'item': {'type': 'agentMessage', 'text': 'seven'}}})
+            send({'method': 'turn/completed', 'params': {'turn': {'status': 'completed'}}})
         elif 'web search' in blob and os.environ.get('FAKE_WEB_SEARCH'):
             if os.environ['FAKE_WEB_SEARCH'] == 'searched':
                 send({'method': 'item/completed',
@@ -152,6 +159,12 @@ class ProbeHarnessTests(unittest.TestCase):
         return subprocess.run([sys.executable, str(PROBE), *args],
                               capture_output=True, text=True, timeout=60,
                               cwd=str(ROOT), env=full)
+
+    def _catalog_entry(self, flags):
+        """Parse the temp catalog from -c flags; return its first entry."""
+        catalog = next(f.split('=', 1)[1] for f in flags
+                       if f.startswith('model_catalog_json='))
+        return json.loads(Path(json.loads(catalog)).read_text())['models'][0]
 
     def _run_recorded(self, *args, **env):
         """Run the probe with FAKE_RECORD; return (proc, -c flags, record lines)."""
@@ -243,9 +256,7 @@ class ProbeHarnessTests(unittest.TestCase):
         auto = [f for f in flags if f.startswith('model_reasoning_summary=')]
         self.assertEqual(len(auto), 1, flags)
         self.assertIn('auto', auto[0])
-        catalog = next(f.split('=', 1)[1] for f in flags
-                       if f.startswith('model_catalog_json='))
-        entry = json.loads(Path(json.loads(catalog)).read_text())['models'][0]
+        entry = self._catalog_entry(flags)
         self.assertEqual(entry['slug'], 'z-ai/glm-5.3-flash')
         self.assertEqual(entry['default_reasoning_summary'], 'auto')
         self.assertTrue(entry['supports_reasoning_summary_parameter'])
@@ -266,9 +277,7 @@ class ProbeHarnessTests(unittest.TestCase):
         # The leg's core contract: workspace-write + freeform catalog reach -c flags.
         self.assertEqual([f for f in flags if f.startswith('sandbox_mode=')],
                          ['sandbox_mode="workspace-write"'], flags)
-        catalog = next(f.split('=', 1)[1] for f in flags
-                       if f.startswith('model_catalog_json='))
-        entry = json.loads(Path(json.loads(catalog)).read_text())['models'][0]
+        entry = self._catalog_entry(flags)
         self.assertEqual(entry['slug'], 'z-ai/glm-5.3-flash')
         self.assertEqual(entry['apply_patch_tool_type'], 'freeform')
         # The thread runs workspace-write rooted at the scratch dir.
@@ -304,6 +313,25 @@ class ProbeHarnessTests(unittest.TestCase):
         proc = self._run('z-ai/glm-5.3-flash', '--web-search', FAKE_WEB_SEARCH='skipped')
         self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
         self.assertIn('"capability": "web_search"', proc.stdout)
+        self.assertIn('"result": "failed"', proc.stdout)
+
+    def test_experimental_tools_passes_on_clock_item(self):
+        proc, flags, _ = self._run_recorded('z-ai/glm-5.3-flash', '--experimental-tools',
+                                            FAKE_EXP_TOOLS='clocked')
+        self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
+        self.assertIn('"capability": "experimental_tools"', proc.stdout)
+        self.assertIn('"result": "passed"', proc.stdout)
+        # Answer content itself never reaches stdout.
+        self.assertNotIn('seven', proc.stdout)
+        # The leg's core contract: the temp catalog advertises the clock tool.
+        entry = self._catalog_entry(flags)
+        self.assertEqual(entry['slug'], 'z-ai/glm-5.3-flash')
+        self.assertEqual(entry['experimental_supported_tools'], ['clock'])
+
+    def test_experimental_tools_fails_without_clock_item(self):
+        proc = self._run('z-ai/glm-5.3-flash', '--experimental-tools', FAKE_EXP_TOOLS='skipped')
+        self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
+        self.assertIn('"capability": "experimental_tools"', proc.stdout)
         self.assertIn('"result": "failed"', proc.stdout)
 
     def test_audio_attaches_and_completes(self):
