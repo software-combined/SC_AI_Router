@@ -20,12 +20,31 @@ Set only the base URL. Never set `ANTHROPIC_API_KEY` or
 and break subscription passthrough. Unset the variable to return to
 direct routing.
 
+To list the router models in the picker (CLI `/model`, app model
+picker), also set:
+
+```sh
+export CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=true
+```
+
+Claude Code 2.1.x fetches `GET <base>/v1/models` on startup and caches
+it at `~/.claude/cache/gateway-models.json`; entries whose `id`
+contains `claude` or `anthropic` appear as `From gateway` options.
+Restart Claude Code after changing the base URL so it refetches.
+`ANTHROPIC_AUTH_TOKEN` must stay unset for the fetch: when it is set
+the CLI sends it as the listing credential, and the router answers the
+listing from its local registry without needing any credential.
+
 ## Choosing a model
 
-Set `ANTHROPIC_MODEL` to an OpenRouter registry slug for OpenRouter
-billing, or leave the default Claude model for subscription billing.
-There is no Claude equivalent of the Codex model catalogue; reasoning
-is governed by each call's `max_tokens` and `thinking` fields, which
+Set `ANTHROPIC_MODEL` to a listing id for OpenRouter billing, or leave
+the default Claude model for subscription billing. Listing ids mirror
+the Codex registry: `claude/<vendor>/<name>` aliases (for example
+`claude/z-ai/glm-5.3-flash`) plus the bare `anthropic/...` Claude
+aliases, which already pass the client filter. The router strips the
+alias back to the registry slug before routing, so billing follows the
+registry row. A registry slug also routes directly. Reasoning is
+governed by each call's `max_tokens` and `thinking` fields, which
 travel untouched. Start a fresh session when switching providers.
 
 ## Behaviour and limits
@@ -33,7 +52,9 @@ travel untouched. Start a fresh session when switching providers.
 - OpenRouter-bound bodies are forwarded byte-identical to OpenRouter's
   Anthropic-compatible endpoint, so thinking blocks, `tool_use` IDs and
   `cache_control` keep full fidelity. `count_tokens` follows the same
-  split. There is no `/v1/models` listing; unknown paths answer 404.
+  split. `GET /v1/models` answers `{data: [{id, display_name}]}` from
+  the local registry without touching the network; unknown paths answer
+  404.
 - Subscription requests forward the client's `Authorization` or
   `x-api-key` plus version and beta headers, minus hop headers. The
   router key never accompanies them. In `none` mode the passthrough is

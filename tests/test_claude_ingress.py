@@ -11,6 +11,8 @@ import unittest
 from tests.fakes import FakeUpstream, install_fake
 from tests.test_handler import _auth_file, _post
 from tests.test_mixed_router import _start_server, _test_state
+from codex_router import claude as claude_mod
+from codex_router.registry import MODELS
 
 
 def _messages(model='z-ai/glm-5.3-flash'):
@@ -20,6 +22,12 @@ def _messages(model='z-ai/glm-5.3-flash'):
                            'content': [{'type': 'text', 'text': 'hi'}]}],
             'tools': [{'name': 'get_time',
                        'input_schema': {'type': 'object'}}]}
+
+
+def _get(port, target):
+    conn = http.client.HTTPConnection('127.0.0.1', port, timeout=10)
+    conn.request('GET', target)
+    return conn.getresponse()
 
 
 class ClaudeIngressTests(unittest.TestCase):
@@ -128,6 +136,86 @@ class ClaudeIngressTests(unittest.TestCase):
                              {'Authorization': 'Bearer subscription-secret'})
         self.assertEqual(bad_response.status, 400)
         self.assertEqual(len(recorded), 1)
+
+    def test_models_listing_lists_every_openrouter_row_once(self):
+        server = self._server()
+        response = _get(server.server_port, '/test-token/v1/models')
+        self.assertEqual(response.status, 200)
+        body = json.loads(response.read())
+        ids = [row['id'] for row in body['data']]
+        self.assertEqual(len(ids), len(set(ids)))
+        want = {claude_mod.claude_alias(m.slug) for m in MODELS
+                if m.provider == 'openrouter'}
+        self.assertEqual(set(ids), want)
+        for row in body['data']:
+            self.assertEqual(set(row), {'id', 'display_name'})
+        listed = {row['id']: row['display_name'] for row in body['data']}
+        self.assertEqual(
+            listed['claude/z-ai/glm-5.3-flash'], 'GLM 5.3 Flash \u00b7 OpenRouter')
+        self.assertIn('anthropic/claude-sonnet-latest', listed)
+
+    def test_models_listing_ignores_discovery_query_string(self):
+        # Claude fetches <base>/v1/models?limit=1000; the query must not 404.
+        server = self._server()
+        response = _get(server.server_port, '/test-token/v1/models?limit=1000')
+        self.assertEqual(response.status, 200)
+        self.assertIn('data', json.loads(response.read()))
+
+    def test_models_listing_requires_router_token(self):
+        server = self._server()
+        self.assertEqual(_get(server.server_port, '/v1/models').status, 403)
+
+    def test_models_listing_needs_no_openrouter_key(self):
+        # Discovery is metadata, not billable: a keyless router still lists.
+        server = _start_server(_test_state('/nonexistent'))
+        self.addCleanup(server.shutdown)
+        self.assertEqual(_get(server.server_port, '/test-token/v1/models').status, 200)
+
+    def test_discovery_alias_routes_to_openrouter_with_registry_slug(self):
+        recorded = install_fake(self, lambda: FakeUpstream(
+            200, b'{"id":"msg_3","type":"message","content":[]}', []))
+        server = self._server()
+        for alias, slug in (('claude/z-ai/glm-5.3-flash', 'z-ai/glm-5.3-flash'),
+                            ('anthropic/claude-sonnet-latest',
+                             '~anthropic/claude-sonnet-latest')):
+            with self.subTest(alias=alias):
+                recorded.clear()
+                response = _post(server.server_port, '/test-token/v1/messages',
+                                 _messages(alias),
+                                 {'Authorization': 'Bearer test-key-bearer'})
+                self.assertEqual(response.status, 200)
+                host, _, path, body, _ = recorded[0]
+                self.assertEqual((host, path), ('openrouter.ai', '/api/v1/messages'))
+                self.assertEqual(json.loads(body)['model'], slug)
+
+    def test_direct_slug_still_routes_byte_identical(self):
+        recorded = install_fake(self, lambda: FakeUpstream(
+            200, b'{"id":"msg_4","type":"message","content":[]}', []))
+        server = self._server()
+        payload = _messages('z-ai/glm-5.3-flash')
+        raw = json.dumps(payload)
+        conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
+        conn.request('POST', '/test-token/v1/messages', body=raw,
+                     headers={'Content-Type': 'application/json'})
+        self.assertEqual(conn.getresponse().status, 200)
+        self.assertEqual(recorded[0][3].decode(), raw)
+
+    def test_post_to_models_listing_is_404(self):
+        server = self._server()
+        response = _post(server.server_port, '/test-token/v1/models',
+                         _messages(), {'Authorization': 'Bearer test-key-bearer'})
+        self.assertEqual(response.status, 404)
+
+    def test_unknown_claude_prefixed_id_passes_through_to_subscription(self):
+        recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
+        server = self._server()
+        response = _post(server.server_port, '/test-token/v1/messages',
+                         _messages('claude/bogus'),
+                         {'Authorization': 'Bearer subscription-secret'})
+        self.assertEqual(response.status, 200)
+        host, _, _, body, _ = recorded[0]
+        self.assertEqual(host, 'api.anthropic.com')
+        self.assertEqual(json.loads(body)['model'], 'claude/bogus')
 
     def test_missing_model_is_400_and_never_reaches_upstream(self):
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
