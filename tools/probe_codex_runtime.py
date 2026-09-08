@@ -36,6 +36,22 @@ if '--reasoning-summary' in sys.argv:
                 _rs_path = Path(tempfile.mkdtemp(prefix='rs-catalog-')) / 'reasoning-summary-catalog.json'
                 _rs_path.write_text(json.dumps({'models': [_rs_entry]}))
                 cfg['model_catalog_json'] = str(_rs_path)
+if '--apply-patch' in sys.argv:
+    # Plan 044 Step 3: freeform apply_patch on a scratch dir. The temp
+    # catalogue flips the target entry to freeform; the thread runs with
+    # workspace-write sandbox rooted at a temp cwd holding note.txt.
+    sys.path.insert(0, str(ROOT.parent))
+    from codex_router import catalogue, registry
+    _ap_dir = Path(tempfile.mkdtemp(prefix='ap-probe-'))
+    (_ap_dir / 'note.txt').write_text('alpha\n')
+    if '--catalog' not in sys.argv and len(sys.argv) > 1 and not sys.argv[1].startswith('-'):
+        _ap_model = registry.by_slug(sys.argv[1])
+        _ap_entry = catalogue.openrouter_entry(_ap_model) if _ap_model else None
+        if _ap_entry is not None:
+            _ap_entry['apply_patch_tool_type'] = 'freeform'
+            _ap_path = Path(tempfile.mkdtemp(prefix='ap-catalog-')) / 'apply-patch-catalog.json'
+            _ap_path.write_text(json.dumps({'models': [_ap_entry]}))
+            cfg['model_catalog_json'] = str(_ap_path)
 if '--capture-tools' in sys.argv:
     cfg['openai_base_url'] = sys.argv[sys.argv.index('--capture-tools') + 1]
 if '--catalog' in sys.argv:
@@ -48,7 +64,8 @@ if '--provider' in sys.argv:
     # (e.g. scg_router) instead of the default ChatGPT-subscription one.
     cfg['model_provider'] = sys.argv[sys.argv.index('--provider') + 1]
 cfg.update(project_doc_max_bytes=0, developer_instructions='Synthetic protocol test only.',
-           web_search='disabled', approval_policy='never', sandbox_mode='read-only')
+           web_search='disabled', approval_policy='never',
+           sandbox_mode='workspace-write' if '--apply-patch' in sys.argv else 'read-only')
 cfg['features'] = {k: False for k in ['apps', 'shell_tool', 'collab', 'multi_agent', 'code_mode']}
 if '--capture-tools' in sys.argv:
     cfg['features'] = {'memories': False}  # Capture native schemas; the local sink never calls a model.
@@ -192,9 +209,10 @@ try:
         dynamic_tools[0]['tools'].extend({'type': 'function', 'name': f'unrelated_{i}',
             'deferLoading': True, 'description': 'Unused synthetic tool.', 'inputSchema': {'type': 'object', 'properties': {}}}
             for i in range(500))
-    t = rpc('thread/start', {'model': model, 'modelProvider': cfg['model_provider'], 'cwd': str(ROOT),
-        'ephemeral': True, 'approvalPolicy': 'never', 'sandbox': 'read-only',
-        'baseInstructions': 'This is a synthetic protocol test. ' + ('Use tool_search to discover probe.echo_probe, then call it once. ' if '--deferred' in sys.argv else 'Only call echo_probe once. ') + 'Do not use unrelated tools or read any files.',
+    t = rpc('thread/start', {'model': model, 'modelProvider': cfg['model_provider'], 'cwd': str(_ap_dir if '--apply-patch' in sys.argv else ROOT),
+        'ephemeral': True, 'approvalPolicy': 'never',
+        'sandbox': 'workspace-write' if '--apply-patch' in sys.argv else 'read-only',
+        'baseInstructions': 'This is a synthetic protocol test. ' + ('Use tool_search to discover probe.echo_probe, then call it once. ' if '--deferred' in sys.argv else 'Only call echo_probe once. ') + 'Do not use unrelated tools or read any files.' + (' After this, you will be asked to edit note.txt with apply_patch.' if '--apply-patch' in sys.argv else ''),
         'developerInstructions': ('Discover probe.echo_probe using tool_search, then call the discovered function' if '--deferred' in sys.argv else 'Call echo_probe') + ' with the user supplied value, then return the tool result exactly.',
         'dynamicTools': dynamic_tools})
     thread = t['thread']['id']
@@ -244,6 +262,30 @@ try:
                 print(json.dumps({'expected_error_matched': True}), flush=True)
                 sys.exit(0)
             raise RuntimeError(str(params.get('error', {}).get('codexErrorInfo', 'Provider error')))
+    if '--apply-patch' in sys.argv:
+        rpc('turn/start', {'threadId': thread, 'effort': _flag_value('--effort') or 'low',
+            'input': [{'type': 'text', 'text': 'Change alpha to beta in note.txt using apply_patch and stop.',
+                       'text_elements': []}]})
+        changes = 0
+        while True:
+            event = next_event()
+            if event.get('method') == 'item/completed':
+                if event['params']['item'].get('type') == 'fileChange':
+                    changes += 1
+            if event.get('method') == 'turn/completed':
+                turn = event['params']['turn']
+                assert turn['status'] == 'completed', str(turn.get('error'))
+                try:
+                    content = (_ap_dir / 'note.txt').read_text().strip()
+                except OSError:
+                    content = ''
+                passed = changes == 1 and content == 'beta'
+                print(json.dumps({'model': model, 'capability': 'apply_patch',
+                                  'result': 'passed' if passed else 'failed',
+                                  'detail': f'fileChange items={changes}; note.txt={content!r}'}), flush=True)
+                break
+            if event.get('method') == 'error':
+                raise RuntimeError(str(event['params']))
     if attached:
         capable = 'image' in model_modalities(model)
         print(json.dumps({'media_attached': {'image_bytes': len(red_png()) if '--image' in sys.argv else 0,
