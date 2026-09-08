@@ -104,10 +104,22 @@ def current_version(home):
     return marker.read_text().strip() if marker.exists() else '0.0.0'
 
 
+# Subscription-side roster for the combined picker: bare slugs that route on
+# the ChatGPT subscription. Matches the live picker and state file; the
+# OpenRouter-side roster lives in codex_router/models.json instead.
+DEFAULT_OPENAI_MODELS = ['gpt-6-astra', 'gpt-reserve', 'gpt-5.6-sol',
+                         'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5',
+                         'gpt-5.4-mini', 'gpt-5.3-codex-spark', 'codex-auto-review']
+
+
 def ensure_state(home):
     path = home / 'mixed-router-state.json'
     if path.exists():
-        return json.loads(path.read_text())
+        state = json.loads(path.read_text())
+        if not isinstance(state.get('openai_models'), list):
+            state['openai_models'] = list(DEFAULT_OPENAI_MODELS)
+            path.write_text(json.dumps(state, indent=2) + '\n')
+        return state
     port = 18749
     probe = socket.socket()
     try:
@@ -117,7 +129,8 @@ def ensure_state(home):
         port = probe.getsockname()[1]
     finally:
         probe.close()
-    state = {'port': port, 'token': secrets.token_urlsafe(32)}
+    state = {'port': port, 'token': secrets.token_urlsafe(32),
+             'openai_models': list(DEFAULT_OPENAI_MODELS)}
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, 'w') as stream:
         stream.write(json.dumps(state, indent=2) + '\n')
