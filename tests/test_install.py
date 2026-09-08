@@ -55,12 +55,11 @@ def _ok_run(cmd, **kwargs):
 
 def _craft_bundle(version):
     """Crafted install bundle + feed doc (bytes only, no release build)."""
-    marker = (version + '\n').encode()
+    from tests.fakes import install_payloads
+    files = install_payloads(version)
     manifest = {'version': version, 'files':
-                {'packaging/VERSION': hashlib.sha256(marker).hexdigest()}}
-    blob = _tarball(files=[('MANIFEST.json', json.dumps(manifest)),
-                           ('packaging/VERSION', marker),
-                           ('packaging/router_launch.py', '# launcher\n')])
+                {name: hashlib.sha256(data).hexdigest() for name, data in files.items()}}
+    blob = _tarball(files=[('MANIFEST.json', json.dumps(manifest)), *files.items()])
     latest = {'version': version, 'url': 'file:///bundle.tar.gz',
               'sha256': None, 'min_python': '3.14'}
     return blob, latest

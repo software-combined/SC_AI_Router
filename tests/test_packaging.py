@@ -8,6 +8,7 @@ from pathlib import Path
 FILES = [
          'codex_router/router.py',
          'codex_router/providers.py',
+         'codex_router/claude.py',
          'codex_router/registry.py',
          'codex_router/credentials.py',
          'codex_router/tool_adapter.py',
@@ -29,6 +30,7 @@ FILES = [
          'codex_router/models.json',
          'codex_router/openrouter_base_instructions.txt',
          'tools/probe_codex_runtime.py',
+         'tools/global_instructions.py',
          'tools/disable.py',
          ]
 
@@ -73,6 +75,7 @@ class PackagingTests(unittest.TestCase):
         for name in FILES:
             self.assertIn(name, names, name)
         self.assertIn('MANIFEST.json', names)
+        self.assertIn('packaging/router_launch.py', names)
 
     def test_version_is_semver(self):
         version = (Path(__file__).resolve().parents[1] / 'packaging' / 'VERSION').read_text().strip()

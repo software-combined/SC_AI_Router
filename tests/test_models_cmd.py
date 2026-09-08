@@ -71,6 +71,23 @@ class DeriveTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             derive_row('plain/model', live, [])
 
+    def test_models_without_effort_control_use_none(self):
+        for metadata in (None, {'mandatory': False}):
+            with self.subTest(reasoning=metadata):
+                live = dict(LIVE['plain/model'], reasoning=metadata)
+                row = derive_row('plain/model', live, [])
+                self.assertEqual(row['reasoning'], ['none'])
+                self.assertEqual(row['default_reasoning'], 'none')
+                self.assertEqual(row['tier'], 'preview')
+
+    def test_mandatory_or_unknown_efforts_are_not_disabled(self):
+        for metadata in ({'mandatory': True},
+                         {'mandatory': False, 'supported_efforts': ['future']}):
+            with self.subTest(reasoning=metadata):
+                live = dict(LIVE['plain/model'], reasoning=metadata)
+                with self.assertRaises(SystemExit):
+                    derive_row('plain/model', live, [])
+
 
 class AddTests(unittest.TestCase):
     def test_unknown_slug_refused(self):

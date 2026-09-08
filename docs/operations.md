@@ -6,6 +6,15 @@ Merge to `main`. The release workflow builds the bundle, runs the suite,
 and publishes a `vMAJOR.MINOR.BUILD` release with `latest.json`. Every
 router on the stable channel installs it within about fifteen minutes.
 
+## Global subagent guidance
+
+The installer adds one managed subagent-discovery block to the active global
+Codex `AGENTS.md` (or non-empty `AGENTS.override.md`) beside `config.toml`.
+It preserves existing content and symlinks; updates replace only that block,
+and uninstall removes it. If its text or active file changed, installation
+stops for review. Start a fresh Codex task to load the rule. It applies across
+models without duplicating text in the catalogue and grants no new permission.
+
 ## How to test first
 
 Push to `beta`. The workflow publishes a `vMAJOR.MINOR.BUILD-beta`

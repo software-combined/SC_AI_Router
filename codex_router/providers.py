@@ -80,8 +80,8 @@ class SubscriptionProvider:
         return isinstance(model, str) and model in openai_models
 
     def prepare(self, model, path, payload, raw_body, headers, credentials):
-        if not headers.get('Authorization', '').startswith('Bearer '):
-            raise PermissionError('Codex subscription authentication required')
+        # The URL path token is the loopback auth; Codex >=0.153.4 omits the
+        # subscription Authorization header, so forward client headers unchanged.
         fwd = {k: v for k, v in headers.items() if k.lower() not in HOP_HEADERS}
         return Prepared(self.host, '/backend-api/codex' + path, fwd, raw_body, set(), self.name)
 
@@ -120,6 +120,9 @@ class OpenRouterProvider:
         if entry is None:
             raise PreparationError(f'unknown model: {model}')
         limit = entry.max_output_tokens
+        window = getattr(entry, 'context_window', 0) or 0
+        if window:  # reservation counts against context; keep half for input
+            limit = min(limit, window // 2)
         payload['max_output_tokens'] = min(payload.get('max_output_tokens') or limit, limit)
         return Prepared(self.host, '/api/v1/responses',
                         {'Authorization': 'Bearer ' + credentials.openrouter_key(),
