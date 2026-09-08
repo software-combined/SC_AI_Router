@@ -20,10 +20,12 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from codex_router import feed_verify
+
 LABEL = 'com.local.codex-mixed-model-router'
 UPDATE_LABEL = LABEL + '.update'
 FEED_URL = 'https://github.com/software-combined/SC_Codex_openRouter_adapter/releases/latest/download/latest.json'
-BETA_API_URL = 'https://api.github.com/repos/software-combined/SC_Codex_openRouter_adapter/releases?per_page=5'
 MIN_PYTHON = (3, 14)
 
 
@@ -375,17 +377,7 @@ def fetch_feed(url, etag, _fetch=fetch):
         raise
 
 
-def resolve_beta_feed(_fetch=fetch):
-    payload = json.loads(_fetch(BETA_API_URL).decode())
-    for entry in payload:
-        if entry.get('prerelease'):
-            for asset in entry.get('assets', []):
-                if asset.get('name') == 'latest-beta.json':
-                    return asset['browser_download_url']
-    raise SystemExit('no beta release found')
-
-
-def channel_feed(home, _fetch=fetch):
+def channel_feed(home):
     # An explicit --feed at install time is pinned in home/'feed' and wins
     # over the channel file, so scheduled updates keep following it. Delete
     # the file to return to channel resolution.
@@ -393,7 +385,7 @@ def channel_feed(home, _fetch=fetch):
         return (home / 'feed').read_text().strip()
     channel = (home / 'channel').read_text().strip() if (home / 'channel').exists() else 'stable'
     if channel == 'beta':
-        return resolve_beta_feed(_fetch)
+        return feed_verify.beta_feed_url(FEED_URL)
     return FEED_URL
 
 
@@ -471,7 +463,7 @@ def do_install(args, _fetch=fetch, _run=None):
             print('No Python 3.14 found: brew install python@3.14')
             raise SystemExit(2)
     feed = args.feed or channel_feed(home)
-    latest = json.loads(_fetch(feed).decode())
+    latest = feed_verify.load_signed_feed(feed, _fetch)
     serial = check_serial(home, latest)
     if not newer(latest['version'], current_version(home)):
         print(f"up to date {current_version(home)}")
@@ -601,7 +593,7 @@ def do_check_update(args, _fetch=fetch, _read_feed=None, _sleep=None):
     if status == 304:
         print(f"up to date {current_version(home)}")
         return 0
-    latest = json.loads(body.decode())
+    latest = feed_verify.load_signed_feed(feed, _fetch, body)
     check_serial(home, latest)
     if not newer(latest['version'], current_version(home)):
         if etag:

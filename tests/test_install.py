@@ -15,6 +15,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.fakes import sign_body as _sign_body
+from tests.fakes import signed_fetch as _static_fetch
+
 _ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -61,12 +64,6 @@ def _craft_bundle(version):
     latest = {'version': version, 'url': 'file:///bundle.tar.gz',
               'sha256': None, 'min_python': '3.14'}
     return blob, latest
-
-
-def _static_fetch(latest, blob):
-    def fake_fetch(url):
-        return json.dumps(latest).encode() if url.endswith('.json') else blob
-    return fake_fetch
 
 
 def _patch_attrs(test, **overrides):
@@ -174,7 +171,7 @@ class InstallTests(unittest.TestCase):
                       'sha256': None, 'min_python': '3.14'}
             args = install_mod.build_parser().parse_args(
                 ['--feed', 'file:///latest.json', '--home', str(home), '--dry-run'])
-            rc = install_mod.do_install(args, _fetch=lambda url: json.dumps(latest).encode())
+            rc = install_mod.do_install(args, _fetch=_static_fetch(latest, b''))
             self.assertEqual(rc, 0)
             self.assertFalse(home.exists())
 
@@ -356,24 +353,19 @@ class InstallTests(unittest.TestCase):
             self.assertEqual(seen, [('file:///latest.json', 'old-etag')])
             self.assertEqual((home / 'update-etag').read_text(), 'old-etag\n')
 
-    def test_channel_beta_resolves_prerelease_feed(self):
-        api = [{'prerelease': False, 'assets': []},
-               {'prerelease': True, 'assets':
-                [{'name': 'other.txt', 'browser_download_url': 'https://x/other'},
-                 {'name': 'latest-beta.json',
-                  'browser_download_url': 'https://x/latest-beta.json'}]}]
+    def test_channel_beta_uses_origin_without_api_call(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             home.mkdir()
-            self.assertTrue(home.exists())
             self.assertEqual(install_mod.channel_feed(home), install_mod.FEED_URL)
             (home / 'channel').write_text('beta\n')
-            got = install_mod.channel_feed(
-                home, _fetch=lambda url: json.dumps(api).encode())
-            self.assertEqual(got, 'https://x/latest-beta.json')
+            self.assertEqual(install_mod.channel_feed(home),
+                             'https://github.com/beta/latest.json')
+            self.assertEqual(
+                install_mod.feed_verify.beta_feed_url('file:///stable/latest.json'),
+                'file:///beta/latest.json')
             with self.assertRaises(SystemExit):
-                install_mod.channel_feed(
-                    home, _fetch=lambda url: json.dumps([]).encode())
+                install_mod.feed_verify.beta_feed_url('not-a-url')
 
     def test_jitter_bounded(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -442,6 +434,8 @@ class InstallTests(unittest.TestCase):
                 return 200, json.dumps(latest).encode(), 'etag-B'
 
             def boom(url):
+                if url.endswith('.sig'):
+                    return _sign_body(json.dumps(latest).encode())
                 raise AssertionError('tarball must not download when deferred')
 
             saved_idle = install_mod.wait_idle
@@ -473,6 +467,8 @@ class InstallTests(unittest.TestCase):
                 return 200, json.dumps(latest).encode(), 'etag-B'
 
             def boom(url):
+                if url.endswith('.sig'):
+                    return _sign_body(json.dumps(latest).encode())
                 raise AssertionError('tarball must not download when current')
 
             args = install_mod.build_parser().parse_args(

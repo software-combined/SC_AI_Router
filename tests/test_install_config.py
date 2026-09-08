@@ -237,11 +237,7 @@ class InstallConfigTests(unittest.TestCase):
             self.assertEqual(install_mod.channel_feed(home), install_mod.FEED_URL)
             (home / 'channel').write_text('beta\n')
             (home / 'feed').write_text('file:///pinned.json\n')
-
-            def boom(url):
-                raise AssertionError('pinned feed must not touch the network')
-
-            self.assertEqual(install_mod.channel_feed(home, _fetch=boom),
+            self.assertEqual(install_mod.channel_feed(home),
                              'file:///pinned.json')
 
     def test_check_update_reinvoke_does_not_pin_channel_feed(self):
