@@ -33,6 +33,8 @@ def read():
         sys.exit(0)
     return json.loads(line)
 turns = 0
+if os.environ.get('FAKE_RECORD'):
+    open(os.environ['FAKE_RECORD'], 'a').write('argv=' + json.dumps(sys.argv) + '\\n')
 while True:
     msg = read()
     mid, method = msg.get('id'), msg.get('method')
@@ -78,6 +80,14 @@ while True:
             send({'method': 'item/tool/call', 'id': 'ev1',
                   'params': {'tool': 'echo_probe', 'arguments': {'value': 'probe'}}})
             read()  # tool result
+            if os.environ.get('FAKE_REASONING_SUMMARY') == 'summary':
+                send({'method': 'item/completed',
+                      'params': {'item': {'type': 'reasoning',
+                                          'summary': [{'type': 'summary_text',
+                                                       'text': 'synthetic summary'}]}}})
+            elif os.environ.get('FAKE_REASONING_SUMMARY') == 'empty':
+                send({'method': 'item/completed',
+                      'params': {'item': {'type': 'reasoning', 'summary': []}}})
             send({'method': 'item/completed',
                   'params': {'item': {'type': 'agentMessage', 'text': MARKER}}})
             send({'method': 'turn/completed', 'params': {'turn': {'status': 'completed'}}})
@@ -190,6 +200,37 @@ class ProbeHarnessTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
         self.assertIn('"image_capable": false', proc.stdout)
         self.assertNotIn('media_color_seen', proc.stdout)
+
+    def test_reasoning_summary_passes_on_summary_text(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rec = str(Path(tmp) / 'record.jsonl')
+            proc = self._run('z-ai/glm-5.3-flash', '--reasoning-summary',
+                             FAKE_RECORD=rec, FAKE_REASONING_SUMMARY='summary')
+            self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
+            self.assertIn('"capability": "reasoning_summary"', proc.stdout)
+            self.assertIn('"result": "passed"', proc.stdout)
+            # Streamed summary content itself never reaches stdout.
+            self.assertNotIn('synthetic summary', proc.stdout)
+            # The leg's core contract: auto summary + temp catalog reach -c flags.
+            recorded = Path(rec).read_text().splitlines()
+            argv = json.loads(next(l for l in recorded if l.startswith('argv='))[5:])
+            flags = [a for i, a in enumerate(argv) if argv[i - 1] == '-c']
+            auto = [f for f in flags if f.startswith('model_reasoning_summary=')]
+            self.assertEqual(len(auto), 1, flags)
+            self.assertIn('auto', auto[0])
+            catalog = next(f.split('=', 1)[1] for f in flags
+                           if f.startswith('model_catalog_json='))
+            entry = json.loads(Path(json.loads(catalog)).read_text())['models'][0]
+            self.assertEqual(entry['slug'], 'z-ai/glm-5.3-flash')
+            self.assertEqual(entry['default_reasoning_summary'], 'auto')
+            self.assertTrue(entry['supports_reasoning_summary_parameter'])
+
+    def test_reasoning_summary_fails_without_summary_text(self):
+        proc = self._run('z-ai/glm-5.3-flash', '--reasoning-summary',
+                         FAKE_REASONING_SUMMARY='empty')
+        self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
+        self.assertIn('"capability": "reasoning_summary"', proc.stdout)
+        self.assertIn('"result": "failed"', proc.stdout)
 
     def test_audio_attaches_and_completes(self):
         with tempfile.TemporaryDirectory() as tmp:
