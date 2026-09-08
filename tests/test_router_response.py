@@ -1,0 +1,37 @@
+"""Router response correctness: error mapping and upstream header policy."""
+import unittest
+from tests.fakes import FakeUpstream, install_fake
+from tests.test_handler import _auth_file, _post
+from tests.test_mixed_router import _start_server, _test_state
+
+
+class RouterResponseTests(unittest.TestCase):
+    def _server(self, **state_overrides):
+        state = _test_state(_auth_file(self))
+        state.update(state_overrides)
+        server = _start_server(state)
+        self.addCleanup(server.shutdown)
+        return server
+
+    def test_internal_bug_is_500_not_400(self):
+        recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
+        server = self._server()
+        response = _post(server.server_port, '/test-token/responses',
+                         {'model': 'z-ai/glm-5.3', 'input': [], 'tools': 'not-a-list'})
+        self.assertEqual(response.status, 500)
+        self.assertEqual(recorded, [])
+
+    def test_openai_model_header_is_pinned_to_requested_model(self):
+        install_fake(self, lambda: FakeUpstream(200, b'{"output": []}', [
+            ('Content-Type', 'application/json'), ('openai-model', 'x-ai/grok-4.6')]))
+        server = self._server()
+        response = _post(server.server_port, '/test-token/responses',
+            {'model': '~x-ai/grok-latest', 'input': [],
+             'tools': [{'type': 'custom', 'name': 'exec'}]})
+        self.assertEqual(response.status, 200)
+        response.read()
+        self.assertEqual(response.getheader('openai-model'), '~x-ai/grok-latest')
+
+
+if __name__ == '__main__':
+    unittest.main()

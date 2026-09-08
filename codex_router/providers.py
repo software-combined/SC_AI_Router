@@ -1,6 +1,7 @@
 """Provider adapters. Each owns model membership, request preparation, upstream target and response adaptation."""
 import http.client
 import json
+import traceback
 from . import compaction as comp, local_services
 from .capabilities import CANONICAL_ORDER, OPENROUTER_HOST, REASONING_LEVELS, check_effort, input_modalities
 from .registry import by_slug
@@ -10,6 +11,40 @@ from .tool_adapter import prepare_tools, remember_discovered, stream_events, Too
 HOP_HEADERS = {'host', 'connection', 'content-length', 'transfer-encoding',
                'upgrade', 'keep-alive', 'proxy-authorization', 'proxy-authenticate', 'te', 'trailer'}
 NATIVE_SERVICE_PATHS = {'/alpha/search', '/alpha/notes/v2/thread_hint', '/guardian', '/guardian-classifier'}
+
+
+def upstream_retry_after(response, prepared, metrics):
+    """Consume an upstream 429 and return its Retry-After; None otherwise.
+
+    Codex treats a bare 429 as turn-fatal, so the caller must answer 503.
+    """
+    if response.status != 429:
+        return None
+    response.read()
+    log_event('upstream_rate_limited', provider=prepared.provider, path=metrics['path'])
+    return response.getheader('Retry-After', '2')
+
+
+def client_error(exc):
+    """Map request failures to (status, message); bugs 500 with traceback, never 400."""
+    if isinstance(exc, (AttributeError, TypeError)):
+        log_event('request_failed', traceback=traceback.format_exc(limit=3)[-4000:])
+        return 500, 'Internal router error'
+    return 400, 'Invalid model, payload, or local authentication configuration'
+
+
+def relay_headers(response, send_header, model):
+    """Forward upstream headers, pinning openai-model to the requested slug.
+
+    Codex warns on any mismatch with the configured slug, so the upstream
+    model name never goes out on that header; /health reports the real one.
+    """
+    for key, value in response.getheaders():
+        if key.lower() in HOP_HEADERS or key.lower() in ('set-cookie', 'openai-model'):
+            continue
+        send_header(key, value)
+    if isinstance(model, str):
+        send_header('openai-model', model)
 
 
 class PreparationError(ValueError):
