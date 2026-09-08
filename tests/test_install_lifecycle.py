@@ -30,12 +30,12 @@ def _no_fetch(url):
 
 
 def _uninstall_home(tmp):
-    """Staged home with one installed release, symlinked current, and plists."""
+    """Staged home with one installed release, pointer current, and plists."""
     home = Path(tmp) / 'home'
     rel = home / 'releases' / '1.0.0'
     (rel / 'tools').mkdir(parents=True)
     (rel / 'tools' / 'disable.py').write_text('# stub\n')
-    os.symlink(str(rel), home / 'current')
+    (home / 'current').write_text('1.0.0\n')
     agents = Path(tmp) / 'fakehome' / 'Library' / 'LaunchAgents'
     agents.mkdir(parents=True)
     return home, agents
@@ -66,6 +66,50 @@ def _run_install(test, tmp, home, version, *extra_args, feed='file:///latest.jso
 
 
 class InstallLifecycleTests(unittest.TestCase):
+    def test_current_pointer_reports_version_and_survives_garbage(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            home.mkdir()
+            self.assertEqual(install_mod.current_version(home), '0.0.0')
+            self.assertIsNone(install_mod.current_release_dir(home))
+            (home / 'current').write_text('  \n')
+            self.assertEqual(install_mod.current_version(home), '0.0.0')
+            self.assertIsNone(install_mod.current_release_dir(home))
+            rel = home / 'releases' / '1.2.3'
+            (rel / 'packaging').mkdir(parents=True)
+            self.assertIsNone(install_mod.swap_current(home, rel))
+            self.assertEqual(install_mod.current_version(home), '1.2.3')
+            self.assertEqual(install_mod.current_release_dir(home), rel)
+
+    def test_absolute_pointer_resolves_inside_releases(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            (home / 'releases' / 'passwd').mkdir(parents=True)
+            (home / 'current').write_text('/etc/passwd\n')
+            self.assertEqual(install_mod.current_release_dir(home),
+                             home / 'releases' / 'passwd')
+            self.assertEqual(install_mod.current_version(home), 'passwd')
+
+    def test_binary_garbage_pointer_reads_as_no_install(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            home.mkdir()
+            (home / 'current').write_bytes(b'\x00\xff\xfe\x01')
+            self.assertEqual(install_mod.current_version(home), '0.0.0')
+            self.assertIsNone(install_mod.current_release_dir(home))
+
+    def test_swap_current_migrates_legacy_symlink(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            prev = home / 'releases' / '0.2.0'
+            (prev / 'packaging').mkdir(parents=True)
+            (prev / 'packaging' / 'VERSION').write_text('0.2.0\n')
+            os.symlink(str(prev), home / 'current')
+            self.assertEqual(install_mod.current_version(home), '0.2.0')
+            install_mod.swap_current(home, home / 'releases' / '0.3.0')
+            self.assertFalse((home / 'current').is_symlink())
+            self.assertEqual((home / 'current').read_text(), '0.3.0\n')
+
     def test_config_backup_holds_pre_replacement_content(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
@@ -142,7 +186,7 @@ class InstallLifecycleTests(unittest.TestCase):
                 with contextlib.redirect_stdout(buf):
                     self.assertEqual(install_mod.do_install(args, _fetch=_no_fetch), 0)
             self.assertIn('rolled back to 1.0.0', buf.getvalue())
-            self.assertEqual(os.readlink(home / 'current'), str(home / 'releases' / '1.0.0'))
+            self.assertEqual((home / 'current').read_text(), '1.0.0\n')
             self.assertTrue(any(cmd[:3] == ['launchctl', 'kill', 'TERM'] for cmd in calls))
             self.assertEqual((home / 'feed-serial').read_text(), serial_before)
 
@@ -167,7 +211,7 @@ class InstallLifecycleTests(unittest.TestCase):
             with mock.patch.dict(os.environ, {'OPENROUTER_API_KEY': 'k'}):
                 with self.assertRaises(SystemExit):
                     install_mod.do_install(args, _fetch=_no_fetch)
-            self.assertEqual(os.readlink(home / 'current'), str(home / 'releases' / '1.0.1'))
+            self.assertEqual((home / 'current').read_text(), '1.0.1\n')
 
     def test_failed_first_install_retries_instead_of_up_to_date(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -184,7 +228,7 @@ class InstallLifecycleTests(unittest.TestCase):
             with mock.patch.dict(os.environ, env):
                 with self.assertRaises(SystemExit):
                     install_mod.do_install(args, _fetch=fake_fetch)
-            self.assertFalse((home / 'current').is_symlink())
+            self.assertFalse((home / 'current').exists())
             _patch_attrs(self, wait_version=lambda *args, **kwargs: True)
             with mock.patch.dict(os.environ, env):
                 buf = io.StringIO()
@@ -192,8 +236,7 @@ class InstallLifecycleTests(unittest.TestCase):
                     rc = install_mod.do_install(args, _fetch=fake_fetch)
             self.assertEqual(rc, 0)
             self.assertIn('installed 1.0.0', buf.getvalue())
-            self.assertEqual(os.readlink(home / 'current'),
-                             str(home / 'releases' / '1.0.0'))
+            self.assertEqual((home / 'current').read_text(), '1.0.0\n')
 
 
 if __name__ == '__main__':

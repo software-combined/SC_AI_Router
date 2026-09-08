@@ -134,6 +134,17 @@ class InstallConfigTests(unittest.TestCase):
             self.assertNotIn('--feed', doc['ProgramArguments'])
             self.assertFalse((home / 'feed').exists())
 
+    def test_update_plist_points_at_resolved_release(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            _install(self, tmp, home, '1.0.0', feed=None)
+            agents = Path(tmp) / 'fakehome' / 'Library' / 'LaunchAgents'
+            doc = plistlib.loads(
+                (agents / (install_mod.UPDATE_LABEL + '.plist')).read_bytes())
+            argv = doc['ProgramArguments']
+            self.assertEqual(argv[argv.index('--home') + 1], str(home))
+            self.assertEqual(argv[1], str(home / 'releases' / '1.0.0' / 'packaging' / 'install.py'))
+
     def test_fresh_install_bootstraps_updater_after_plists(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'

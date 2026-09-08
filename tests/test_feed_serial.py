@@ -93,8 +93,7 @@ class FeedSerialTests(unittest.TestCase):
                 self.assertEqual(
                     install_mod.do_install(_install_args(home, '--version', '0.4.2.0'),
                                            _fetch=boom, _run=_ok_run), 0)
-            self.assertEqual(os.readlink(home / 'current'),
-                             str(home / 'releases' / '0.4.2.0'))
+            self.assertEqual((home / 'current').read_text(), '0.4.2.0\n')
             self.assertEqual((home / 'feed-serial').read_text(), serial_before)
 
     def test_check_update_refuses_stale_feed_before_download(self):

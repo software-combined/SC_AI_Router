@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.4.9 (service lifecycle slice)
+
+Deployment prerequisites from the audit brief (Plan 047 E, unblocked
+parts), committed on `codex/isolated-install-state`, not yet deployed
+(live router still runs the pre-restructure prototype; see Plan 047
+section 2):
+
+- `POST /<token>/shutdown` drains and exits the router behind the path
+  token. Every supervisor relaunches an exited service, so this replaces
+  the macOS-only `launchctl kill` restart primitive on Windows and Linux.
+- The service runs `router_launch.py` from the router home instead of
+  `python -m codex_router` with a working directory: the pointer resolves
+  the active release at exec time, so restarts follow updates with no plist
+  rewrite and no symlink. Dropping `WorkingDirectory` alone would have left
+  fresh installs unbootable (nothing on `sys.path`); the installed launcher
+  booting keyless through `/health` is now covered end to end.
+- `current` is a pointer file holding the release name instead of a
+  symlink, which needs elevation on Windows. Reads resolve legacy
+  symlinks transparently, so existing installs migrate on their next
+  update; stale pointers read as no install. The LaunchAgent drops
+  `WorkingDirectory` (the router never depended on it) so one plist stays
+  valid across releases, and the updater agent points at the resolved
+  release installer.
+- `codex_router/router.py` stands at 262 lines against the 250 soft
+  limit, pinned in the source-limits baseline: the loopback boundary
+  module now serves setup, V2 compaction, and shutdown dispatch, each
+  isolated in its own module behind a few dispatch lines.
+- Still ahead on this axis: splitting the installer into a package
+  before the Windows service backend lands.
+
 ## 0.4.8 (first-run key window)
 
 First-run setup and plan reconciliation from the audit brief, committed on

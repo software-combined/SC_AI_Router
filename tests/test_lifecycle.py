@@ -1,15 +1,25 @@
 """Drain, socket activation, and graceful-restart behavior (Plan 045)."""
 import http.client
 import json
+import os
+import shutil
 import socket
+import subprocess
+import sys
+import tempfile
 import threading
 import time
 import unittest
+import urllib.request
+from pathlib import Path
 from unittest import mock
 
 from codex_router import activation
 import codex_router.__main__ as router_main
 from codex_router.router import Router
+
+
+_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _server(test, **overrides):
@@ -34,6 +44,102 @@ def _post(port, path, payload):
     conn.request('POST', path, body=json.dumps(payload),
                  headers={'Content-Type': 'application/json'})
     return conn.getresponse()
+
+
+class ShutdownEndpointTests(unittest.TestCase):
+    def test_post_shutdown_drains_and_reports(self):
+        server = _server(self)
+        with mock.patch.object(Router, 'drain_and_exit') as drain:
+            response = _post(server.server_port, '/test-token/shutdown', {})
+            body = json.loads(response.read())
+        self.assertEqual(response.status, 200)
+        self.assertEqual(body, {'status': 'draining'})
+        drain.assert_called_once_with()
+
+    def test_get_shutdown_is_unsupported(self):
+        server = _server(self)
+        self.assertEqual(_get(server.server_port, '/test-token/shutdown').status, 404)
+
+    def test_shutdown_needs_path_token(self):
+        server = _server(self)
+        with mock.patch.object(Router, 'drain_and_exit') as drain:
+            response = _post(server.server_port, '/wrong-token/shutdown', {})
+            response.read()
+        self.assertEqual(response.status, 403)
+        drain.assert_not_called()
+
+
+class LauncherBootTests(unittest.TestCase):
+    def test_installed_launcher_boots_keyless_and_serves(self):
+        # Production boots `python <home>/router_launch.py` with no cwd help:
+        # the pointer must resolve the release or nothing serves. Keyless boot
+        # via a fresh setup nonce keeps this offline (no key, no billing).
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            release = home / 'releases' / '9.9.9'
+            shutil.copytree(_ROOT / 'codex_router', release / 'codex_router',
+                            ignore=shutil.ignore_patterns('__pycache__'))
+            (home / 'current').write_text('9.9.9\n')
+            shutil.copy(_ROOT / 'packaging' / 'router_launch.py',
+                        home / 'router_launch.py')
+            probe = socket.socket()
+            probe.bind(('127.0.0.1', 0))
+            port = probe.getsockname()[1]
+            probe.close()
+            token = 'launch-proof-token'
+            (home / 'mixed-router-state.json').write_text(json.dumps({
+                'port': port, 'token': token, 'openai_models': [],
+                'setup': {'nonce': 'n' * 16,
+                          'expires': int(time.time()) + 900}}))
+            proc = subprocess.Popen(
+                [sys.executable, str(home / 'router_launch.py')],
+                env={**os.environ, 'ROUTER_HOME': str(home)},
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            try:
+                base = f'http://127.0.0.1:{port}/{token}'
+                deadline = time.monotonic() + 30
+                while time.monotonic() < deadline:
+                    try:
+                        with urllib.request.urlopen(base + '/health', timeout=2) as r:
+                            if r.status == 200 and json.load(r).get('status') == 'ok':
+                                break
+                    except OSError:
+                        time.sleep(0.2)
+                else:
+                    self.fail('installed launcher never served /health')
+                with urllib.request.urlopen(base + '/setup/' + 'n' * 16,
+                                            timeout=5) as r:
+                    self.assertEqual(r.status, 200)
+            finally:
+                proc.terminate()
+                proc.wait(timeout=20)
+
+    def test_launcher_refuses_garbage_pointer(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            home.mkdir()
+            (home / 'current').write_bytes(b'\x00\xff\xfe\x01')
+            shutil.copy(_ROOT / 'packaging' / 'router_launch.py',
+                        home / 'router_launch.py')
+            proc = subprocess.run(
+                [sys.executable, str(home / 'router_launch.py')],
+                capture_output=True, text=True, timeout=30,
+                env={**os.environ, 'ROUTER_HOME': str(home)})
+            self.assertNotEqual(proc.returncode, 0)
+            self.assertIn('pointer', proc.stderr)
+
+    def test_launcher_refuses_missing_pointer(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            home.mkdir()
+            shutil.copy(_ROOT / 'packaging' / 'router_launch.py',
+                        home / 'router_launch.py')
+            proc = subprocess.run(
+                [sys.executable, str(home / 'router_launch.py')],
+                capture_output=True, text=True, timeout=30,
+                env={**os.environ, 'ROUTER_HOME': str(home)})
+            self.assertNotEqual(proc.returncode, 0)
+            self.assertIn('pointer', proc.stderr)
 
 
 class DrainTests(unittest.TestCase):
