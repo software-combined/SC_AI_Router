@@ -39,10 +39,64 @@ OPENROUTER_TEMPLATE = {
     'tool_mode': None,
     'multi_agent_version': 'v1',
     'multi_agent_reasoning_effort': None,
+    # Codex >=0.153.4 catalogue schema: every row must carry these or chat
+    # creation fails with 'missing field' (2026-09-08, Codex 26.901.51231).
+    # Defaults mirror the client's own embedded model catalogue.
+    'available_in_plans': ['business', 'edu', 'edu_plus', 'edu_pro', 'education',
+                           'enterprise', 'enterprise_cbp_automation',
+                           'enterprise_cbp_trial', 'enterprise_cbp_usage_based',
+                           'finserv', 'free', 'free_workspace', 'go', 'hc', 'k12',
+                           'plus', 'pro', 'prolite', 'quorum', 'sci',
+                           'self_serve_business_prolite',
+                           'self_serve_business_usage_based', 'team'],
+    'prefer_websockets': True,
+    'minimal_client_version': '0.153.0',
+    'supports_parallel_tool_calls': True,
+    'supports_reasoning_summaries': True,
+    'default_service_tier': None,
+    'model_specialty': None,
+    'auto_compact_token_limit': None,
+    'auto_review_model_override': None,
 }
 
 PREVIEW_PRIORITY_OFFSET = 100000  # preview entries sort after every verified model
 RETIRED_SLUGS = {'anthropic/claude-opus-5', 'anthropic/claude-fable-5.1'}
+
+# Picker labels for the subscription side, matching the live Codex picker.
+# Codex >=0.153.4 requires every catalogue row to carry display_name and the
+# full schema, so roster rows can no longer seed as bare {'slug': ...} stubs.
+SUBSCRIPTION_DISPLAY_NAMES = {
+    'gpt-6-astra': 'GPT-6-Astra',
+    'gpt-reserve': 'GPT-Reserve',
+    'gpt-5.6-sol': 'GPT-5.6-Sol',
+    'gpt-5.6-terra': 'GPT-5.6-Terra',
+    'gpt-5.6-luna': 'GPT-5.6-Luna',
+    'gpt-5.5': 'GPT-5.5',
+    'gpt-5.4-mini': 'GPT-5.4-Mini',
+    'gpt-5.3-codex-spark': 'GPT-5.3-Codex-Spark',
+    'codex-auto-review': 'Codex Auto Review',
+}
+
+
+def subscription_stub(slug):
+    """Full-schema placeholder row for a subscription-side picker slug.
+
+    Routing ignores these fields (the subscription provider owns the slug),
+    but the Codex catalogue parser requires the complete schema.
+    """
+    name = SUBSCRIPTION_DISPLAY_NAMES.get(slug, slug)
+    return {**OPENROUTER_TEMPLATE,
+            'slug': slug,
+            'display_name': name,
+            'description': 'ChatGPT subscription billing.',
+            'default_reasoning_level': 'medium',
+            'supported_reasoning_levels': [{'effort': 'medium', 'description': 'Balanced.'}],
+            'supports_reasoning_summary_parameter': False,
+            'context_window': 272000,
+            'max_context_window': 272000,
+            'input_modalities': ['text', 'image'],
+            'priority': 1,
+            'model_messages': {'instructions_template': BASE_INSTRUCTIONS}}
 
 
 BASE_INSTRUCTIONS = (Path(__file__).with_name('openrouter_base_instructions.txt')).read_text()
@@ -89,7 +143,8 @@ def merge(catalog, roster=(), client='codex'):
     drops a pre-existing hidden row instead of preserving it. Roster
     slugs (the subscription side from runtime state) absent from the
     catalogue are appended as stubs so a fresh file still lists the
-    approved picker; other existing rich entries are never rewritten.
+    approved picker. Existing rows gain missing schema defaults while
+    retaining their model-specific values, repairing older bare stubs.
     The future Claude listing reuses models_for('claude') to omit
     OpenRouter-billed Anthropic rows. Plan 039's live /models remains
     the proper replacement for this fallback. Routing never consults
@@ -102,14 +157,14 @@ def merge(catalog, roster=(), client='codex'):
     models = [m for m in catalog.get('models', [])
               if (m['slug'] not in RETIRED_SLUGS or m['slug'] in active)
               and m['slug'] not in hidden]
-    entries = {m['slug']: m for m in models}
+    entries = {m['slug']: {**subscription_stub(m['slug']), **m} for m in models}
     for model in visible:
         entries[model.slug] = openrouter_entry(model)
     order = [m['slug'] for m in models]
     seen = set(order)
     for slug in roster:
         if slug not in entries:
-            entries[slug] = {'slug': slug}
+            entries[slug] = subscription_stub(slug)
             order.append(slug)
     order += [m.slug for m in visible if m.slug not in seen]
     catalog['models'] = [entries[slug] for slug in order]
@@ -138,6 +193,11 @@ def _same(old, new, key):
 def check(path, client='codex'):
     catalog = json.loads(Path(path).read_text())
     existing = {m['slug']: m for m in catalog.get('models', [])}
+    for slug, row in existing.items():
+        missing = subscription_stub(slug).keys() - row.keys()
+        if missing:
+            print(f'{slug}: missing schema fields: {", ".join(sorted(missing))}')
+            return False
     identical, total = 0, 0
     for model in (m for m in MODELS
                   if m.provider == 'openrouter' and not visible_for(m, client)):

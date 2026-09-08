@@ -2,11 +2,14 @@ import http.client
 import io
 import json
 import os
+import pathlib
 import tempfile
 import threading
+import time
 import unittest
 from unittest import mock
 from codex_router import providers
+from codex_router.credentials import Credentials
 from codex_router.registry import by_slug
 from codex_router.router import Router
 
@@ -98,8 +101,18 @@ def _test_state(auth_path):
     return {'port': 0, 'token': 'test-token',
             'openai_models': [], 'opencode_auth': auth_path}
 
-def _start_server(state):
-    server = Router(state)
+# Broken-credential tests need the real lookup against a home whose key-file
+# leg always misses (this path never exists on any OS), so only the state's
+# opencode_auth contract is exercised.
+_ISOLATED_CREDENTIAL_HOME = pathlib.Path('/nonexistent-codex-router-home')
+
+
+def _start_server(state, credentials=None):
+    # Isolate tests from the machine's installed router: without an explicit
+    # credential object the real openrouter.key would win the ordered lookup
+    # and every contract test would see the operator's live key.
+    server = Router(state, credentials=(credentials if credentials is not None
+                                        else _StubCredentials('test-key')))
     threading.Thread(target=server.serve_forever, daemon=True).start()
     return server
 
@@ -131,20 +144,16 @@ class _FakeResp:
     def __init__(self, status, payload):
         self.status = status
         self._buf = io.BytesIO(json.dumps(payload).encode())
-    def read(self, *a):
-        return self._buf.read(*a)
+    def read(self, *a): return self._buf.read(*a)
 
 def _fake_conn_class(status, payload, seen=None):
     class FakeConn:
-        def __init__(self, *a, **k):
-            pass
+        def __init__(self, *a, **k): pass
         def request(self, method, path, body=None, headers=None):
             if seen is not None and body is not None:
                 seen['body'] = json.loads(body)
-        def getresponse(self):
-            return _FakeResp(status, payload)
-        def close(self):
-            pass
+        def getresponse(self): return _FakeResp(status, payload)
+        def close(self): pass
     return FakeConn
 
 class CompactBranchTests(unittest.TestCase):
@@ -160,6 +169,11 @@ class CompactBranchTests(unittest.TestCase):
                      headers={'Content-Type': 'application/json'})
         return conn.getresponse()
 
+    def _await_quiet(self, server, timeout=10):
+        deadline = time.monotonic() + timeout
+        while server.inflight and time.monotonic() < deadline:
+            time.sleep(0.01)
+        self.assertEqual(server.inflight, 0)
     def test_compact_returns_v1_output(self):
         with mock.patch.object(providers.OpenRouterProvider, 'summarize', lambda *a: 'progress and next steps'):
             self._server()
@@ -170,6 +184,7 @@ class CompactBranchTests(unittest.TestCase):
             body = json.loads(response.read())
             self.assertEqual(len(body['output']), 2)
             self.assertIn('progress and next steps', body['output'][-1]['content'][0]['text'])
+            self._await_quiet(self._started)
 
     def test_compact_with_broken_credentials_is_400(self):
         cases = {
@@ -190,7 +205,9 @@ class CompactBranchTests(unittest.TestCase):
                     auth.close()
                     self.addCleanup(os.unlink, auth.name)
                     state = _test_state(auth.name)
-                server = _start_server(state)
+                # The point of the test: real broken credentials, not the stub.
+                server = _start_server(state, credentials=Credentials(
+                    state, _ISOLATED_CREDENTIAL_HOME, env={}))
                 self.addCleanup(server.shutdown)
                 response = self._post_to(server, '/responses/compact',
                     {'model': 'z-ai/glm-5.3', 'input': [
@@ -212,6 +229,7 @@ class CompactBranchTests(unittest.TestCase):
                 {'model': 'z-ai/glm-5.3', 'input': [
                     {'type': 'message', 'role': 'user', 'content': 'do the task'}]})
             self.assertEqual(response.status, 502)
+            self._await_quiet(self._started)  # no slot may leak on failure
 
     def test_compact_non_list_input_is_rejected(self):
         self._server()
@@ -249,21 +267,27 @@ class CompactBranchTests(unittest.TestCase):
             self.assertIn('progress', out['output'][-1]['content'][0]['text'])
 
     def test_compact_holds_inflight_slot(self):
-        entered, release = threading.Event(), threading.Event()
+        entered, release, responded = threading.Event(), threading.Event(), threading.Event()
         def slow(*a):
             entered.set()
             return 'progress' if release.wait(timeout=10) else 'stalled'
         job = {'model': 'z-ai/glm-5.3', 'input': [
             {'type': 'message', 'role': 'user', 'content': 'x'}]}
+        def post():
+            self._post('/responses/compact', job)
+            responded.set()
         with mock.patch.object(providers.OpenRouterProvider, 'summarize', slow):
             self._server()
-            worker = threading.Thread(target=lambda: self._post('/responses/compact', job))
+            worker = threading.Thread(target=post)
             worker.start()
             self.assertTrue(entered.wait(timeout=10))
             self.assertEqual(self._started.inflight, 1)
             release.set()
+            # The slot releases after the response bytes leave the socket: the
+            # worker may observe the reply before the handler reaps the slot.
             worker.join(timeout=10)
-            self.assertEqual(self._started.inflight, 0)
+            self.assertTrue(responded.wait(timeout=10))
+            self._await_quiet(self._started)
 
 class SummarizerParsingTests(unittest.TestCase):
     def _fake_conn(self, status, payload):

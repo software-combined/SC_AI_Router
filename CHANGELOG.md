@@ -1,6 +1,20 @@
 # Changelog
 
-## 0.6.6 (unreleased)
+## 0.6.7 (unreleased)
+
+- Repair existing bare or incomplete subscription catalogue rows on merge,
+  preserving their model-specific metadata. Catalogue checks now reject
+  rows missing schema fields instead of accepting an unusable picker.
+- Add Linux systemd user service installation, updates, rollback and uninstall.
+  Migrate legacy symlink installations to the stable launcher, replace old
+  checkout/local-feed timers, and serialize installation operations. The
+  service grants the router's drain time and restarts on exit.
+- Leave busy installations untouched, restore the previous catalogue on a
+  failed upgrade, and retain the updater's ETag when a child installer defers.
+- Download this private repository's release assets through the user's
+  authenticated GitHub CLI, including scheduled checks.
+
+## 0.6.6
 
 - Fix launchd spawning nothing after update: the installer persisted
   find_python's bare discovery token (`python3.14`) into the plist,
@@ -24,6 +38,25 @@
 - Fix tag-gated releases never matching: the workflow stripped
   `-v` instead of `v`, so every tag would have failed the
   version check. Tags now compare correctly.
+- Fix the Codex picker catalogue for Codex >=0.153.4 (desktop
+  26.901.51231): every catalogue row now carries the full required schema
+  (`display_name`, `available_in_plans`, `prefer_websockets`,
+  `minimal_client_version`, `supports_parallel_tool_calls`,
+  `supports_reasoning_summaries`, `default_service_tier`, `model_specialty`,
+  `auto_compact_token_limit`, `auto_review_model_override`). Subscription
+  roster rows seed as full-schema `subscription_stub()` entries with the
+  live picker labels instead of bare `{'slug': ...}` stubs, which made chat
+  creation fail with `missing field 'display_name'`. Defaults mirror the
+  client's own embedded model catalogue.
+- Test credential isolation: handler/compact/setup tests inject credentials
+  instead of reading the machine's router home, so the suite stays green on
+  machines where the router is installed (the real `openrouter.key`
+  previously won the ordered lookup and turned 15 contract tests red).
+  `Router` and `Credentials` accept optional injected credentials/home, and
+  `default_home()` resolves `ROUTER_HOME` at call time. Also fixes the flaky
+  `test_compact_holds_inflight_slot` (slot releases after response bytes
+  leave the socket) and documents Linux `systemd` units plus the Arch
+  `codex-desktop-git` pre-req in the README.
 - Harden updates against live traffic: installs defer when the router
   is busy instead of killing in-flight requests, rollback restores the
   old pointer with `TERM` (never `bootout`, which stranded machines

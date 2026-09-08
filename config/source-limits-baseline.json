@@ -1,10 +1,12 @@
 {
-  "packaging/install.py": 532,
-  "tests/test_install.py": 497,
+  "packaging/install.py": 590,
+  "tests/test_install.py": 500,
   "codex_router/router.py": 269,
-  "packaging/service.py": 350,
+  "packaging/service.py": 385,
   "tests/test_install_config.py": 337,
   "tests/test_install_lifecycle.py": 369,
-  "tests/test_install_catalogue.py": 134,
-  "tests/test_interpreter_resolution.py": 166
+  "tests/test_install_catalogue.py": 137,
+  "tests/test_mixed_router.py": 323,
+  "tests/test_interpreter_resolution.py": 189,
+  "tests/test_probe_harness.py": 347
 }

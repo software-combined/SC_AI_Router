@@ -86,7 +86,8 @@ class RegistryTests(unittest.TestCase):
         out = merge(catalog)
         slugs = [m['slug'] for m in out['models']]
         self.assertEqual(slugs[0], 'gpt-6-astra')
-        self.assertEqual(out['models'][0], native)
+        self.assertEqual({key: out['models'][0][key] for key in native}, native)
+        self.assertTrue(CATALOGUE_FIELDS <= out['models'][0].keys())
         kimi = out['models'][slugs.index('moonshotai/kimi-k3')]
         self.assertEqual(kimi['display_name'], 'Kimi K3 · OpenRouter')
         self.assertEqual(kimi['priority'], 104)
