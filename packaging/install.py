@@ -1,46 +1,62 @@
 #!/usr/bin/env python3
-"""Install and update the Codex model router. Runs on Python 3.9+; finds 3.14 for the router itself."""
+"""Install the Codex model router. Runs on Python 3.9+; finds 3.14 for the router itself.
+
+Shared launchd/plist/feed helpers live in packaging/service.py. This
+module owns first install, explicit upgrade, rollback and uninstall only.
+"""
 import argparse
 import hashlib
 import io
 import json
 import os
-import plistlib
-import random
 import runpy
 import secrets
 import time
 import webbrowser
 import shutil
-import socket
-import subprocess
 import sys
 import tarfile
-import tempfile
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from codex_router import feed_verify
-
-LABEL = 'com.local.codex-mixed-model-router'
-UPDATE_LABEL = LABEL + '.update'
-FEED_URL = 'https://github.com/software-combined/SC_OpenRouter_adapter/releases/latest/download/latest.json'
-MIN_PYTHON = (3, 14)
-
-
-def fetch(url):
-    """Single network entry point; tests inject a fake."""
-    if url.startswith('file://'):
-        return Path(url[len('file://'):]).read_bytes()
-    with urllib.request.urlopen(url, timeout=30) as response:
-        return response.read()
-
-
-def run(cmd, **kwargs):
-    """Single subprocess entry point; tests inject a fake."""
-    return subprocess.run(cmd, **kwargs)
+import importlib.util
+_spec = importlib.util.spec_from_file_location(
+    'packaging.service',
+    Path(__file__).resolve().parent / 'service.py')
+_svc = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_svc)
+# Re-exported for tests (installed bundles have no packaging/ package).
+# _patch_attrs(test, run/health/wait_*/...) patches install_mod attrs; the
+# call sites below read them via _svc so swaps take effect. Immutable values
+# copy directly.
+FEED_URL = _svc.FEED_URL
+MIN_PYTHON = _svc.MIN_PYTHON
+LABEL = _svc.LABEL
+UPDATE_LABEL = _svc.UPDATE_LABEL
+DEFAULT_OPENAI_MODELS = _svc.DEFAULT_OPENAI_MODELS
+channel_feed = _svc.channel_feed
+check_serial = _svc.check_serial
+ensure_state = _svc.ensure_state
+_write_state = _svc._write_state
+fetch = _svc.fetch
+fetch_feed = _svc.fetch_feed
+feed_serial = _svc.feed_serial
+find_python = _svc.find_python
+install_launcher = _svc.install_launcher
+render_plist = _svc.render_plist
+render_update_plist = _svc.render_update_plist
+restart_service = _svc.restart_service
+safe_extract = _svc.safe_extract
+swap_current = _svc.swap_current
+current_release_dir = _svc.current_release_dir
+current_version = _svc.current_version
+write_plist = _svc.write_plist
+# Patchable seams: tests override these on install_mod via _patch_attrs.
+run = _svc.run
+health = _svc.health
+wait_idle = _svc.wait_idle
+wait_version = _svc.wait_version
 
 
 def verify_sha256(data, want):
@@ -54,38 +70,6 @@ def newer(a, b):
     return tuple(int(x) for x in a.split('.')) > tuple(int(x) for x in b.split('.'))
 
 
-def find_python(explicit=None):
-    candidates = [explicit] if explicit else []
-    candidates += ['python3.14', '/opt/homebrew/bin/python3.14', '/opt/homebrew/bin/python3',
-                   '/usr/local/bin/python3.14', shutil.which('python3')]
-    for candidate in candidates:
-        if not candidate:
-            continue
-        try:
-            out = run([candidate, '-c', 'import sys,compression.zstd;print(sys.version_info[0],sys.version_info[1])'],
-                      capture_output=True, text=True, timeout=30)
-        except (OSError, subprocess.SubprocessError):
-            continue
-        if out.returncode == 0:
-            try:
-                if tuple(int(x) for x in out.stdout.split()) >= MIN_PYTHON:
-                    return candidate
-            except ValueError:
-                continue
-    return None
-
-
-def safe_extract(tarball, dest):
-    dest = Path(dest)
-    with tarfile.open(fileobj=io.BytesIO(tarball), mode='r') as tar:
-        for member in tar.getmembers():
-            if member.name.startswith('/') or '..' in Path(member.name).parts:
-                raise SystemExit('bundle has unsafe path: ' + member.name)
-            if member.issym() or member.islnk() or not (member.isfile() or member.isdir()):
-                raise SystemExit('bundle has non-file member: ' + member.name)
-        tar.extractall(dest, filter='data')
-
-
 def check_manifest(release_dir, manifest):
     for name, want in manifest['files'].items():
         got = hashlib.sha256((release_dir / name).read_bytes()).hexdigest()
@@ -93,37 +77,31 @@ def check_manifest(release_dir, manifest):
             raise SystemExit('bundle manifest mismatch: ' + name)
 
 
+def check_identity(version, manifest_doc, release_dir):
+    """Fail closed when feed, manifest and bundled marker disagree.
+
+    The updater waits on the feed version and /health reports the manifest
+    version, so any mismatch strands the install in a failed-health loop.
+    """
+    manifest_version = manifest_doc.get('version')
+    try:
+        marker = (release_dir / 'packaging' / 'VERSION').read_text().strip()
+    except OSError:
+        marker = None
+    if manifest_version != version or marker != version:
+        raise SystemExit(
+            f'release identity mismatch: feed={version} '
+            f'manifest={manifest_version} marker={marker}')
+
+
 def self_test(python, release_dir):
     # Bundle smoke: the runtime import closure must load from the extraction.
     # Full discover cannot run here: repo tests reference files outside the bundle.
     result = run([python, '-c',
-                  'from codex_router import catalogue, registry; assert registry.MODELS'],
-                 cwd=str(release_dir), capture_output=True, text=True, timeout=120)
+                       'from codex_router import catalogue, registry; assert registry.MODELS'],
+                      cwd=str(release_dir), capture_output=True, text=True, timeout=120)
     if result.returncode != 0:
         raise SystemExit('bundle self-test failed')
-
-
-def current_release_dir(home):
-    """Resolved release dir from the pointer file (or a legacy symlink)."""
-    current = home / 'current'
-    try:
-        if current.is_symlink():
-            target = Path(os.readlink(current))
-        elif current.is_file():
-            # Basename rule matches the launcher: pointer content never
-            # escapes the releases dir, even if hand-edited.
-            name = current.read_text().strip().split('/')[-1]
-            target = home / 'releases' / name if name else None
-        else:
-            return None
-    except (OSError, ValueError):
-        return None
-    return target if target is not None and target.is_dir() else None
-
-
-def current_version(home):
-    release = current_release_dir(home)
-    return release.name if release is not None else '0.0.0'
 
 
 def _clear_current(home):
@@ -133,52 +111,6 @@ def _clear_current(home):
             current.unlink()
     except OSError:
         pass
-
-
-def _clear_tmp(tmp):
-    if tmp.is_symlink() or tmp.is_file():
-        tmp.unlink()
-    elif tmp.exists():
-        shutil.rmtree(tmp)
-
-
-# Subscription-side roster for the combined picker: bare slugs that route on
-# the ChatGPT subscription. Matches the live picker and state file; the
-# OpenRouter-side roster lives in codex_router/models.json instead.
-DEFAULT_OPENAI_MODELS = ['gpt-6-astra', 'gpt-reserve', 'gpt-5.6-sol',
-                         'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5',
-                         'gpt-5.4-mini', 'gpt-5.3-codex-spark', 'codex-auto-review']
-
-
-def ensure_state(home):
-    path = home / 'mixed-router-state.json'
-    if path.exists():
-        state = json.loads(path.read_text())
-        if not isinstance(state.get('openai_models'), list):
-            state['openai_models'] = list(DEFAULT_OPENAI_MODELS)
-            path.write_text(json.dumps(state, indent=2) + '\n')
-        return state
-    port = 18749
-    probe = socket.socket()
-    try:
-        probe.bind(('127.0.0.1', port))
-    except OSError:
-        probe.bind(('127.0.0.1', 0))
-        port = probe.getsockname()[1]
-    finally:
-        probe.close()
-    state = {'port': port, 'token': secrets.token_urlsafe(32),
-             'openai_models': list(DEFAULT_OPENAI_MODELS)}
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, 'w') as stream:
-        stream.write(json.dumps(state, indent=2) + '\n')
-    return state
-
-
-def _write_state(home, state):
-    fd = os.open(home / 'mixed-router-state.json', os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, 'w') as stream:
-        stream.write(json.dumps(state, indent=2) + '\n')
 
 
 def ensure_credentials(home, state, env=None):
@@ -196,101 +128,6 @@ def ensure_credentials(home, state, env=None):
     raise SystemExit(3)
 
 
-def swap_current(home, release_dir):
-    """Atomically point current at release_dir; returns the previous version."""
-    resolved = current_release_dir(home)
-    previous = resolved.name if resolved is not None else None
-    tmp = home / 'current.tmp'
-    _clear_tmp(tmp)
-    # Pointer file, not a symlink: Windows needs elevation for symlinks.
-    tmp.write_text(release_dir.name + '\n')
-    os.replace(tmp, home / 'current')
-    return previous
-
-
-def render_plist(python, home, state):
-    return {'Label': LABEL,
-            'ProgramArguments': [python, str(home / 'router_launch.py')],
-            'Sockets': {'Listeners': {'SockNodeName': '127.0.0.1',
-                                      'SockServiceName': str(state['port']),
-                                      'SockFamily': 'IPv4',
-                                      'SockType': 'stream'}},
-            # No WorkingDirectory: the router resolves everything from
-            # ROUTER_HOME and its own file location, so the plist stays valid
-            # across releases and a plain TERM restarts into the new pointer.
-            'EnvironmentVariables': {'ROUTER_HOME': str(home)},
-            'KeepAlive': True, 'RunAtLoad': True, 'ThrottleInterval': 10, 'Umask': 63,
-            'StandardOutPath': str(home / 'logs' / 'launchd.log'),
-            'StandardErrorPath': str(home / 'logs' / 'launchd.log')}
-
-
-def render_update_plist(python, home, feed=None):
-    base = current_release_dir(home) or home / 'current'
-    installer = base / 'packaging' / 'install.py'
-    args = [python, str(installer), '--check-update', '--home', str(home)]
-    if feed:
-        args += ['--feed', feed]
-    return {'Label': UPDATE_LABEL,
-            'ProgramArguments': args,
-            'RunAtLoad': True,
-            'StartInterval': 900,
-            'StandardOutPath': str(home / 'logs' / 'update.log'),
-            'StandardErrorPath': str(home / 'logs' / 'update.log')}
-
-
-def write_plist(path, content):
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, 'wb') as stream:
-        plistlib.dump(content, stream)
-
-
-def health(state, timeout=20):
-    url = f"http://127.0.0.1:{state['port']}/{state['token']}/health"
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        try:
-            with urllib.request.urlopen(url, timeout=2) as response:
-                body = json.loads(response.read())
-                if response.status == 200 and body.get('status') == 'ok':
-                    return body
-        except (OSError, ValueError):
-            time.sleep(0.5)
-    return None
-
-
-def wait_version(state, version, timeout=150, fetch_health=None):
-    """True once /health reports the given version."""
-    get = fetch_health or (lambda s: health(s, timeout=5))
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        body = get(state)
-        if body and body.get('version') == version:
-            return body
-        time.sleep(1)
-    return None
-
-
-def restart_service(home, uid):
-    run(['launchctl', 'bootout', f'gui/{uid}/{LABEL}'], capture_output=True)
-    run(['launchctl', 'bootout', f'gui/{uid}/{UPDATE_LABEL}'], capture_output=True)
-    agents = Path.home() / 'Library' / 'LaunchAgents'
-    run(['launchctl', 'bootstrap', f'gui/{uid}', str(agents / (LABEL + '.plist'))], check=True)
-    run(['launchctl', 'bootstrap', f'gui/{uid}', str(agents / (UPDATE_LABEL + '.plist'))], check=True)
-
-
-def install_launcher(home, release_dir):
-    """Copy the stable entry point beside the state directory, atomically."""
-    try:
-        blob = (release_dir / 'packaging' / 'router_launch.py').read_bytes()
-    except OSError:
-        raise SystemExit('bundle has no launcher')
-    tmp = home / 'router_launch.tmp'
-    _clear_tmp(tmp)
-    tmp.write_bytes(blob)
-    os.replace(tmp, home / 'router_launch.py')
-
-
 def install_bundle(home, version, tarball, manifest_doc, python):
     releases = home / 'releases'
     releases.mkdir(parents=True, exist_ok=True)
@@ -301,6 +138,7 @@ def install_bundle(home, version, tarball, manifest_doc, python):
     safe_extract(tarball, partial)
     try:
         check_manifest(partial, manifest_doc)
+        check_identity(version, manifest_doc, partial)
         self_test(python, partial)
         write_catalogue(home, partial, python)
     except (SystemExit, OSError):
@@ -318,7 +156,7 @@ def install_bundle(home, version, tarball, manifest_doc, python):
 def write_catalogue(home, release_dir, python):
     # Seed the picker file the config block points at; refresh owns it after.
     result = run([python, '-m', 'codex_router.catalogue', '--merge', str(home / 'mixed-models.json')],
-                 cwd=str(release_dir), capture_output=True, text=True)
+                      cwd=str(release_dir), capture_output=True, text=True)
     if result.returncode != 0:
         raise SystemExit('catalogue merge failed')
 
@@ -348,76 +186,13 @@ def replace_config_block(config_path, block, previous_block=None):
     return before
 
 
-def wait_idle(state, timeout=600, fetch_health=None):
-    """True once inflight reads 0 three polls apart; False on timeout."""
-    good = 0
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        body = fetch_health(state) if fetch_health else health(state, timeout=5)
-        if body and body.get('inflight') == 0:
-            good += 1
-            if good >= 3:
-                return True
-        else:
-            good = 0
-        time.sleep(1)
-    return False
-
-
-def fetch_feed(url, etag, _fetch=fetch):
-    """Read a feed document, revalidating with a saved ETag. Returns (status, body, etag)."""
-    if url.startswith('file://'):
-        return 200, _fetch(url), etag
-    req = urllib.request.Request(url, headers={'If-None-Match': etag} if etag else {})
-    try:
-        with urllib.request.urlopen(req, timeout=30) as response:
-            return response.status, response.read(), response.headers.get('ETag', etag)
-    except urllib.error.HTTPError as exc:
-        if exc.code == 304:
-            return 304, b'', etag
-        raise
-
-
-def channel_feed(home):
-    # An explicit --feed at install time is pinned in home/'feed' and wins
-    # over the channel file, so scheduled updates keep following it. Delete
-    # the file to return to channel resolution.
-    if (home / 'feed').exists():
-        return (home / 'feed').read_text().strip()
-    channel = (home / 'channel').read_text().strip() if (home / 'channel').exists() else 'stable'
-    if channel == 'beta':
-        return feed_verify.beta_feed_url(FEED_URL)
-    return FEED_URL
-
-
-def feed_serial(home):
-    """Last accepted feed serial; 0 when no serialed release was installed."""
-    try:
-        return int((home / 'feed-serial').read_text().strip())
-    except FileNotFoundError:
-        return 0
-    except ValueError:
-        raise SystemExit('feed serial file is corrupt')
-
-
-def check_serial(home, latest):
-    """Refuse feeds older than the last accepted one (replay protection)."""
-    serial = latest.get('serial', 0)
-    if type(serial) is not int:
-        raise SystemExit('feed has a bad serial')
-    stored = feed_serial(home)
-    if serial < stored:
-        raise SystemExit(f'stale feed serial {serial} is older than {stored}')
-    return serial
-
-
 def do_rollback(args):
     """Point current at a previously installed release and verify it serves.
-
     Only releases still present under home/releases can be restored; the feed
     carries the latest bundle only, so there is nothing to download a
     rollback from. The feed serial is never touched.
     """
+    _sync_seams()
     home = Path(args.home).expanduser()
     if args.dry_run:
         print(f'would roll back to {args.version} under {home}')
@@ -448,10 +223,17 @@ def do_rollback(args):
     return 0
 
 
+def _sync_seams():
+    """Mirror _patch_attrs swaps from install_mod onto _svc call sites."""
+    global run, health, wait_idle, wait_version
+    run, health, wait_idle, wait_version = (
+        _svc.run, _svc.health, _svc.wait_idle, _svc.wait_version)
+
+
 def do_install(args, _fetch=fetch, _run=None):
-    global run
     if _run is not None:
-        run = _run
+        _svc.run = _run
+    _sync_seams()
     if args.version:
         return do_rollback(args)
     home = Path(args.home).expanduser()
@@ -484,9 +266,8 @@ def do_install(args, _fetch=fetch, _run=None):
             raise SystemExit('bundle has no MANIFEST.json')
     home.mkdir(parents=True, exist_ok=True)
     (home / 'logs').mkdir(exist_ok=True)
-    pinned_feed = args.feed.strip() if args.feed else ''
-    if pinned_feed:
-        (home / 'feed').write_text(pinned_feed + '\n')
+    # --feed is one-shot: it selects this run's source only. Never pin it,
+    # or one local test would freeze every future scheduled update on it.
     state = ensure_state(home)
     mode = args.openai_mode or state.get('openai_mode', 'subscription')
     if mode not in ('subscription', 'none'):
@@ -511,19 +292,28 @@ def do_install(args, _fetch=fetch, _run=None):
         if exc.code != 3 or setup_url is None:
             raise
     previous = install_bundle(home, latest['version'], tarball, manifest_doc, python)
+    if previous is not None and not wait_idle(state):
+        # Busy router: keep serving the old pointer; the updater retries next
+        # pass instead of killing live Codex traffic mid-request.
+        swap_current(home, home / 'releases' / previous)
+        print('deferred: router busy')
+        return 0
     agents = Path.home() / 'Library' / 'LaunchAgents'
     write_plist(agents / (LABEL + '.plist'), render_plist(python, home, state))
     write_plist(agents / (UPDATE_LABEL + '.plist'),
-                render_update_plist(python, home, pinned_feed or None))
+                render_update_plist(python, home))
     uid = os.getuid()
     if previous is None:
-        restart_service(home, uid)
+        restart_service(uid)
     else:
         run(['launchctl', 'kill', 'TERM', f'gui/{uid}/{LABEL}'], capture_output=True)
     if not wait_version(state, latest['version']):
         if previous:
             swap_current(home, home / 'releases' / previous)
-            restart_service(home, os.getuid())
+            # TERM, not bootout: KeepAlive restarts the old release.
+            # bootout would unload the service and strand a busy machine.
+            run(['launchctl', 'kill', 'TERM', f'gui/{os.getuid()}/{LABEL}'],
+                     capture_output=True)
             print(f'rolled back to {previous}: new version failed health check')
         else:
             if current_release_dir(home) == home / 'releases' / latest['version']:
@@ -582,16 +372,35 @@ def do_install(args, _fetch=fetch, _run=None):
         # It carries the per-install loopback token, so it stays operator-private.
         print(f'open {setup_url} to connect your OpenRouter key')
         webbrowser.open(setup_url)
-    for stale in home.glob('releases/*'):
-        if stale.name not in (latest['version'], previous or ''):
-            shutil.rmtree(stale, ignore_errors=True)
+    prune_releases(home, latest['version'], previous)
     (home / 'feed-serial').write_text(str(serial) + '\n')
     print(f"installed {latest['version']}; health ok; restart Codex to load the router")
     return 0
 
 
+def _release_key(name):
+    try:
+        return [int(x) for x in name.split('.')]
+    except ValueError:
+        return None  # operator dirs sort out of version pruning entirely
+
+
+def prune_releases(home, *keep):
+    """Keep current plus two prior verified releases for rollback depth."""
+    names = [p.name for p in (home / 'releases').glob('*') if p.is_dir()
+             and not p.name.endswith('.partial')]
+    versions = sorted((n for n in names if _release_key(n) is not None),
+                      key=_release_key, reverse=True)
+    for stale in versions[3:]:
+        if stale not in keep:
+            shutil.rmtree(home / 'releases' / stale, ignore_errors=True)
+
+
 def do_check_update(args, _fetch=fetch, _read_feed=None, _sleep=None):
-    read_feed = _read_feed or (lambda url, etag: fetch_feed(url, etag, _fetch))
+    _sync_seams()
+    import random
+    import tempfile
+    read_feed = _read_feed or (lambda url, etag: _svc.fetch_feed(url, etag, _fetch))
     sleep = _sleep or time.sleep
     home = Path(args.home).expanduser()
     feed = args.feed or channel_feed(home)
@@ -642,13 +451,14 @@ def do_check_update(args, _fetch=fetch, _read_feed=None, _sleep=None):
 
 
 def do_uninstall(args):
+    _sync_seams()
     home = Path(args.home).expanduser()
     release = current_release_dir(home)
     if release is not None:
         disable = release / 'tools' / 'disable.py'
         if disable.exists():
             result = run([sys.executable, str(disable)], capture_output=True, text=True,
-                         env={**os.environ, 'ROUTER_HOME': str(home)})
+                              env={**os.environ, 'ROUTER_HOME': str(home)})
             out = result.stdout or ''
             print(out[-2000:])
             if 'OpenAI direct routing restored' not in out:

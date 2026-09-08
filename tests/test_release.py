@@ -70,7 +70,8 @@ class ReleaseTests(unittest.TestCase):
             names = tar.getnames()
         for dep in ('codex_router/models.json',
                     'codex_router/openrouter_base_instructions.txt',
-                    'packaging/router_launch.py'):
+                    'packaging/router_launch.py',
+                    'packaging/service.py'):
             self.assertIn(dep, names, dep)
         extract = out / 'extracted'
         extract.mkdir()
