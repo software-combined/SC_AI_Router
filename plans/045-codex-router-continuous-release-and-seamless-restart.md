@@ -130,8 +130,8 @@ Verification: full suite `OK`.
 - [ ] A push to `beta` produced a pre-release with `latest-beta.json`; a push to `main` (when authorised) produced a release with `latest.json`.
 - [ ] Author's machine on channel `beta` updated itself within 15 minutes of the beta push (`/health` shows the new version; `home/logs/update.log` has the run).
 - [ ] During the restart, a streaming probe completed and a `/health` request in the gap returned 200; router log shows `draining`, `exit`, `socket_activation inherited=true`.
-- [ ] Full suite `OK` including the new lifecycle and installer tests.
-- [ ] `README.md` and `docs/operations.md` updated.
+- [x] Full suite `OK` including the new lifecycle and installer tests. (Verified 2026-09-09: install-lifecycle + lifecycle legs 29 tests green; full discover green same turn.)
+- [x] `README.md` and `docs/operations.md` updated. (Verified 2026-09-09: README documents the 503-drain retry; operations.md has the safe update/restart section.)
 - [ ] `plans/README.md` status row updated.
 
 ## STOP conditions

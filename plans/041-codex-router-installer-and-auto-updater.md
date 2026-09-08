@@ -172,7 +172,7 @@ Pattern: temp directories as in `tests/test_apply_catalogue.py`. Verification: f
 ## Done criteria
 
 - [x] `python3.14 packaging/release.py --out dist` is deterministic (identical sha256 across two builds). Verified 2026-09-08 on current source: two `--out` builds at 0.6.4.0 produced identical tarballs (`dc8ad87d...`; earlier pair at 0.6.3.0 also identical at `7213d4bd...`).
-- [ ] `tests/test_install.py` ten tests pass; full suite `OK`.
+- [x] `tests/test_install.py` passes; full suite `OK`. (Verified 2026-09-09: 22 tests green; the plan's "ten" predates leg growth. Live-machine/feed boxes below still need the owner gate.)
 - [ ] On the author's machine: `readlink ~/.codex/mixed-model-router/current` points at `releases/0.4.0`, `/health` reports `0.4.0`, both LaunchAgents are loaded, the config block matches `activation.json`, and the simulated bad bundle rolled back.
 - [ ] `gh release view v0.4.0` shows the two assets; `latest.json` is reachable from the feed URL.
 - [ ] `tools/disable.py` still works against the new block (dry check: count of `inserted_block` in config is 1).
