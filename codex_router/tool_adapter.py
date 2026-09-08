@@ -3,12 +3,11 @@
 The native Codex executor still owns tool validation and execution. This adapter
 only wraps/unwraps its text input; it never executes tools or changes permissions.
 """
-import json
 import hashlib
+import json
 import re
-import threading
 from copy import deepcopy
-from .compaction import SUMMARY_PREFIX, extract_user_messages
+from .discovered import recall
 from .registry import by_slug
 SEARCH_NAME = 'codex_client_tool_search'
 
@@ -54,34 +53,6 @@ def tool_entries(tools, namespace=None):
 def tool_key(item):
     return (item.get('namespace'), item.get('name'))
 
-_DISCOVERED, _DISCOVERED_LOCK, _DISCOVERED_MAX = {}, threading.Lock(), 16  # post-compaction restores; FIFO, lost on restart
-
-def remember_discovered(items, output):
-    try:
-        text = output[-1]['content'][0]['text']
-    except (IndexError, KeyError, TypeError):
-        return
-    if not isinstance(text, str) or not text.startswith(SUMMARY_PREFIX):
-        return
-    defs = []
-    for item in items if isinstance(items, list) else []:
-        if isinstance(item, dict) and item.get('type') == 'tool_search_output' and isinstance(item.get('tools'), list):
-            defs.extend(deepcopy(item['tools']))
-    if not defs:
-        return
-    with _DISCOVERED_LOCK:
-        _DISCOVERED[hashlib.sha256(text.encode()).hexdigest()] = defs
-        if len(_DISCOVERED) > _DISCOVERED_MAX:
-            _DISCOVERED.pop(next(iter(_DISCOVERED)))
-
-def recall_discovered(payload):
-    found = []
-    with _DISCOVERED_LOCK:
-        for text in extract_user_messages(payload.get('input', [])):
-            if text.startswith(SUMMARY_PREFIX):
-                found.extend(deepcopy(_DISCOVERED.get(hashlib.sha256(text.encode()).hexdigest(), [])))
-    return found
-
 def prepare_tools(payload):
     names = {}
     # OpenAI reads discovered definitions from tool_search_output history. Other
@@ -90,7 +61,7 @@ def prepare_tools(payload):
     for item in payload.get('input', []) if isinstance(payload.get('input'), list) else []:
         if item.get('type') == 'tool_search_output':
             released.extend(deepcopy(item.get('tools', [])))
-    released.extend(recall_discovered(payload))
+    released.extend(recall(payload.get('input', [])))
     declared = {}
     for tool, namespace in tool_entries(payload.get('tools', [])):
         declared.setdefault((namespace, tool.get('name')), tool)

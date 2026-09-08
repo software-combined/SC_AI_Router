@@ -1,8 +1,9 @@
 import unittest
 import base64
 from codex_router.compaction import (PREFIX, TRANSCRIPT_BUDGET, build_compact_v1_output,
-    compaction_text, decode_summary, extract_user_messages, rewrite_input,
-    strip_images, transcript_for_summary, OPAQUE_NOTE)
+    compaction_text, decode_summary, encode_summary, extract_summary, extract_user_messages,
+    has_compaction_trigger, rewrite_input, strip_images, transcript_for_summary,
+    v2_compaction_item, OPAQUE_NOTE)
 
 class CompactionTests(unittest.TestCase):
     def test_transparent_envelope_round_trips(self):
@@ -26,6 +27,48 @@ class CompactionTests(unittest.TestCase):
             build_compact_v1_output(['first task'], '  ')
 
 
+class TriggerTests(unittest.TestCase):
+    def test_trigger_detected_only_by_type(self):
+        self.assertTrue(has_compaction_trigger([{'type': 'compaction_trigger'}]))
+        self.assertTrue(has_compaction_trigger(
+            [{'type': 'message', 'role': 'user', 'content': 'hi'},
+             {'type': 'compaction_trigger', 'extra': 1}]))
+        self.assertFalse(has_compaction_trigger(
+            [{'type': 'message', 'role': 'user', 'content': 'hi'}]))
+        self.assertFalse(has_compaction_trigger([]))
+        self.assertFalse(has_compaction_trigger(None))
+        self.assertFalse(has_compaction_trigger('compaction_trigger'))
+
+    def test_v2_item_carries_exactly_one_decodable_blob(self):
+        item = v2_compaction_item('progress made')
+        self.assertEqual(item['type'], 'compaction')
+        self.assertTrue(item['id'].startswith('cmp_'))
+        self.assertEqual(decode_summary(item['encrypted_content']), 'progress made')
+        self.assertEqual(encode_summary('x'), PREFIX + base64.b64encode(b'x').decode())
+        with self.assertRaisesRegex(ValueError, 'summary'):
+            v2_compaction_item('  ')
+
+    def test_v2_item_replays_through_rewrite(self):
+        item = v2_compaction_item('task done; next: verify')
+        rewritten = rewrite_input(
+            [{'type': 'message', 'role': 'user', 'content': 'older'},
+             item, {'type': 'compaction_trigger'}])
+        self.assertEqual(len(rewritten), 3)
+        self.assertIn('task done; next: verify', rewritten[1]['content'][0]['text'])
+
+    def test_extract_summary_rejects_explicit_incomplete(self):
+        good = {'output': [{'type': 'message', 'content': [
+            {'type': 'output_text', 'text': 'done'}]}]}
+        self.assertEqual(extract_summary(200, good), 'done')
+        self.assertEqual(
+            extract_summary(200, {**good, 'incomplete_details': None}), 'done')
+        self.assertEqual(
+            extract_summary(200, {**good, 'incomplete_details': {'reason': None}}), 'done')
+        with self.assertRaisesRegex(ValueError, 'max_output_tokens'):
+            extract_summary(200, {**good,
+                                  'incomplete_details': {'reason': 'max_output_tokens'}})
+
+
 class TranscriptTests(unittest.TestCase):
     def test_transcript_covers_assistant_and_tool_results(self):
         items = [
@@ -42,6 +85,16 @@ class TranscriptTests(unittest.TestCase):
         items = [{'type': 'message', 'role': 'user', 'content': 'x' * 10000} for _ in range(5)]
         self.assertLessEqual(len(transcript_for_summary(items)), TRANSCRIPT_BUDGET)
         self.assertIn('xxxx', transcript_for_summary(items))
+
+    def test_oversized_newest_message_truncates_tail_never_empty(self):
+        huge = 'x' * (TRANSCRIPT_BUDGET + 5000)
+        out = transcript_for_summary(
+            [{'type': 'message', 'role': 'user', 'content': 'old brief'},
+             {'type': 'message', 'role': 'user', 'content': huge}])
+        self.assertTrue(out)
+        self.assertLessEqual(len(out), TRANSCRIPT_BUDGET)
+        self.assertTrue(out.endswith('x' * 100))
+        self.assertNotIn('old brief', out)
 
     def test_non_list_input_passes_through(self):
         self.assertEqual(rewrite_input('prompt'), 'prompt')

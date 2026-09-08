@@ -6,7 +6,8 @@ from . import compaction as comp, local_services
 from .capabilities import CANONICAL_ORDER, OPENROUTER_HOST, REASONING_LEVELS, check_effort, input_modalities
 from .registry import by_slug
 from .runtime import log_event
-from .tool_adapter import prepare_tools, remember_discovered, stream_events, ToolEvents
+from .discovered import remember
+from .tool_adapter import prepare_tools, stream_events, ToolEvents
 
 HOP_HEADERS = {'host', 'connection', 'content-length', 'transfer-encoding',
                'upgrade', 'keep-alive', 'proxy-authorization', 'proxy-authenticate', 'te', 'trailer'}
@@ -155,8 +156,30 @@ class OpenRouterProvider:
             summary = self.summarize(model, key, items)
             log_event('compact_summarized', model=model, summary_chars=len(summary))
             output = comp.build_compact_v1_output(users, summary)
-            remember_discovered(items, output)
+            remember(items, summary)
             return output
+        except ValueError as exc:
+            raise PreparationError(str(exc))
+
+    def compact_trigger(self, model, payload, key):
+        """Answer a V2 compaction_trigger inline: exactly one ocx1 item back.
+
+        Codex 0.153.x sends the trigger as a normal /responses call and fatals
+        unless the stream carries exactly one compaction output item. Routed
+        models cannot mint OpenAI blobs, so the local summarizer briefs and
+        the summary rides the transparent envelope our replay already decodes.
+        """
+        try:
+            items = [item for item in payload.get('input', [])
+                     if not (isinstance(item, dict)
+                             and item.get('type') == comp.TRIGGER_TYPE)]
+            users = comp.extract_user_messages(items)
+            if not users:
+                raise ValueError('No user messages to compact')
+            summary = self.summarize(model, key, items)
+            log_event('compact_triggered', model=model, summary_chars=len(summary))
+            remember(items, summary)
+            return [comp.v2_compaction_item(summary)]
         except ValueError as exc:
             raise PreparationError(str(exc))
 
@@ -200,6 +223,18 @@ class LocalServicesProvider:
 
 
 PROVIDERS = (OpenRouterProvider(), SubscriptionProvider(), LocalServicesProvider())
+
+
+def compaction_call(provider, model, path, payload):
+    """Bound local serve for openrouter compact/V2-trigger turns, else None."""
+    if provider.name != 'openrouter':
+        return None
+    if path == '/responses/compact':
+        return lambda key: provider.compact(model, payload, key)
+    if (path == '/responses'
+            and comp.has_compaction_trigger(payload.get('input', []))):
+        return lambda key: provider.compact_trigger(model, payload, key)
+    return None
 
 
 def select(model, path, openai_models=(), openai_mode='subscription'):
