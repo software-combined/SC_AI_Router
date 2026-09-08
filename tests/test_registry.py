@@ -6,7 +6,7 @@ from codex_router.registry import FIELDS, MODELS, Model, by_slug, load, openrout
 
 CATALOGUE_FIELDS = set(OPENROUTER_TEMPLATE) | {'slug', 'display_name', 'description',
     'default_reasoning_level', 'supported_reasoning_levels', 'priority',
-    'context_window', 'max_context_window', 'input_modalities', 'base_instructions',
+    'context_window', 'max_context_window', 'input_modalities',
     'supports_reasoning_summary_parameter'}
 
 class RegistryTests(unittest.TestCase):

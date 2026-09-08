@@ -45,6 +45,19 @@ class CatalogueFlagTests(unittest.TestCase):
         self.assertEqual(entry['context_window'], plain['context_window'])
 
 
+    def test_instructions_live_in_model_messages_template(self):
+        from codex_router.catalogue import BASE_INSTRUCTIONS
+        entry = openrouter_entry(by_slug('z-ai/glm-5.3-flash'))
+        self.assertNotIn('base_instructions', entry)
+        self.assertEqual(entry['model_messages'],
+                         {'instructions_template': BASE_INSTRUCTIONS})
+        self.assertTrue(BASE_INSTRUCTIONS.startswith(
+            'You are Codex, a coding agent running the selected OpenRouter model.'))
+        merged = merge({'models': []})
+        for item in merged['models']:
+            self.assertNotIn('base_instructions', item)
+            self.assertIn('instructions_template', item['model_messages'])
+
     def test_merge_preserves_openai_entries_and_refreshes_stale_rows(self):
         slug = next(m.slug for m in MODELS if m.provider == 'openrouter')
         stale = dict(openrouter_entry(by_slug(slug)), description='stale')
