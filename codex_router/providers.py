@@ -5,7 +5,7 @@ from . import compaction as comp, local_services
 from .capabilities import CANONICAL_ORDER, OPENROUTER_HOST, REASONING_LEVELS, check_effort
 from .registry import by_slug
 from .runtime import log_event
-from .tool_adapter import prepare_tools, stream_events, ToolEvents
+from .tool_adapter import prepare_tools, remember_discovered, stream_events, ToolEvents
 
 HOP_HEADERS = {'host', 'connection', 'content-length', 'transfer-encoding',
                'upgrade', 'keep-alive', 'proxy-authorization', 'proxy-authenticate', 'te', 'trailer'}
@@ -118,7 +118,9 @@ class OpenRouterProvider:
                 raise ValueError('No user messages to compact')
             summary = self.summarize(model, key, items)
             log_event('compact_summarized', model=model, summary_chars=len(summary))
-            return comp.build_compact_v1_output(users, summary)
+            output = comp.build_compact_v1_output(users, summary)
+            remember_discovered(items, output)
+            return output
         except ValueError as exc:
             raise PreparationError(str(exc))
 

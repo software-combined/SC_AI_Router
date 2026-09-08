@@ -1,7 +1,8 @@
 import io
 import json
 import unittest
-from codex_router.tool_adapter import prepare_tools, stream_events, ToolEvents, has_recursive_refs, SEARCH_NAME, integer_json
+from codex_router.compaction import SUMMARY_PREFIX
+from codex_router.tool_adapter import prepare_tools, remember_discovered, stream_events, ToolEvents, has_recursive_refs, SEARCH_NAME, integer_json
 
 class ToolAdapterTests(unittest.TestCase):
     def test_integral_provider_numbers_do_not_break_native_integer_arguments(self):
@@ -112,6 +113,34 @@ class ToolAdapterTests(unittest.TestCase):
         self.assertEqual(item['namespace'], 'probe')
         self.assertEqual(item['name'], 'echo')
         self.assertEqual(json.loads(item['arguments']), {'value': 'probe'})
+
+    def test_discovered_tools_survive_compaction_via_summary(self):
+        released = {'type': 'namespace', 'name': 'probe', 'tools': [
+            {'type': 'function', 'name': 'echo', 'description': 'Echo',
+             'parameters': {'type': 'object'}}]}
+        items = [{'type': 'tool_search_output', 'call_id': 's1', 'status': 'completed',
+                  'execution': 'client', 'tools': [released]}]
+        remember_discovered(items, [{'content': [{'text': SUMMARY_PREFIX + '\nrun-7'}]}])
+        payload = {'tools': [], 'input': [
+            {'type': 'message', 'role': 'user', 'content': SUMMARY_PREFIX + '\nrun-7'}]}
+        prepare_tools(payload)
+        self.assertEqual(len(payload['tools']), 1)
+        self.assertTrue(payload['tools'][0]['description'].startswith('probe.echo'))
+        self.assertEqual(payload['tools'][0]['parameters'], {'type': 'object'})
+
+    def test_discovered_cache_evicts_oldest(self):
+        for i in range(20):
+            tool = {'type': 'function', 'name': f'tool-{i}', 'parameters': {'type': 'object'}}
+            items = [{'type': 'tool_search_output', 'call_id': 's', 'tools': [tool]}]
+            remember_discovered(items, [{'content': [{'text': SUMMARY_PREFIX + f'\nrun-{i}'}]}])
+        early = {'tools': [], 'input': [
+            {'type': 'message', 'role': 'user', 'content': SUMMARY_PREFIX + '\nrun-0'}]}
+        prepare_tools(early)
+        self.assertEqual(early['tools'], [])
+        late = {'tools': [], 'input': [
+            {'type': 'message', 'role': 'user', 'content': SUMMARY_PREFIX + '\nrun-19'}]}
+        prepare_tools(late)
+        self.assertEqual(len(late['tools']), 1)
 
     def test_stub_in_tools_is_completed_by_discovered_schema(self):
         schema = {'type': 'object', 'properties': {'value': {'type': 'string'}}}
