@@ -45,7 +45,8 @@ against the installed router, Codex desktop 0.153.4. All six passed with
 | meta/muse-spark-1.3-contributor | passed |
 | ~x-ai/grok-latest | passed |
 
-Capability probes (image, audio, reasoning summary, apply-patch, web
-search, experimental tools) pending probe-flag support.
+Capability probes: `--image` and `--audio` media legs landed in the probe;
+reasoning summary, apply-patch, web search, and experimental-tools legs plus
+paid per-model runs are still pending.
 | anthropic/claude-opus-5 | preview | 2026-09-07 | base round trip |
 | anthropic/claude-fable-5.1 | preview | 2026-09-07 | base round trip |
