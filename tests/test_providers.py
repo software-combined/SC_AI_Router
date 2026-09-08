@@ -96,6 +96,20 @@ class SummarizerTests(unittest.TestCase):
         self._summarize('unknown-model-xyz', seen)
         self.assertNotIn('reasoning', seen)
 
+    def test_compact_remembers_discovered_tools(self):
+        from codex_router.tool_adapter import prepare_tools
+        items = [{'type': 'message', 'role': 'user', 'content': 'do it'},
+                 {'type': 'tool_search_output', 'call_id': 's1', 'status': 'completed',
+                  'execution': 'client', 'tools': [
+                      {'type': 'function', 'name': 'echo', 'description': 'Echo',
+                       'parameters': {'type': 'object'}}]}]
+        with mock.patch.object(providers.OpenRouterProvider, 'summarize', lambda *a: 'did stuff'):
+            out = providers.OpenRouterProvider().compact('z-ai/glm-5.3', {'input': items}, 'key')
+        payload = {'tools': [], 'input': out}
+        prepare_tools(payload)
+        self.assertEqual(len(payload['tools']), 1)
+        self.assertEqual(payload['tools'][0]['parameters'], {'type': 'object'})
+
 
 if __name__ == '__main__':
     unittest.main()
