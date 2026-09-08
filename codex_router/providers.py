@@ -80,8 +80,8 @@ class SubscriptionProvider:
         return isinstance(model, str) and model in openai_models
 
     def prepare(self, model, path, payload, raw_body, headers, credentials):
-        if not headers.get('Authorization', '').startswith('Bearer '):
-            raise PermissionError('Codex subscription authentication required')
+        # The URL path token is the loopback auth; Codex >=0.153.4 omits the
+        # subscription Authorization header, so forward client headers unchanged.
         fwd = {k: v for k, v in headers.items() if k.lower() not in HOP_HEADERS}
         return Prepared(self.host, '/backend-api/codex' + path, fwd, raw_body, set(), self.name)
 

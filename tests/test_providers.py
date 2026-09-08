@@ -40,10 +40,13 @@ class SelectTests(unittest.TestCase):
                          {'Authorization': 'Bearer subscription-secret',
                           'ChatGPT-Account-ID': 'acct'})
 
-    def test_subscription_prepare_without_bearer_is_401(self):
+    def test_subscription_prepare_forwards_headers_unchanged(self):
+        # No Bearer header (Codex >=0.153.4 path-token auth) must forward, not 401.
         provider = providers.select('gpt-6-astra', '/responses', ['gpt-6-astra'])
-        with self.assertRaisesRegex(PermissionError, 'subscription authentication'):
-            provider.prepare('gpt-6-astra', '/responses', {}, b'', {}, None)
+        prepared = provider.prepare('gpt-6-astra', '/responses', {'model': 'x'}, b'raw',
+            {'ChatGPT-Account-ID': 'acct', 'Host': 'h'}, None)
+        self.assertEqual(prepared.host, 'chatgpt.com')
+        self.assertNotIn('Authorization', prepared.headers)
 
 class OutputCapTests(unittest.TestCase):
     def test_output_cap_follows_registry(self):
