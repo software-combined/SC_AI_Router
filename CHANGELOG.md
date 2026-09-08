@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Clarify that the router runtime supports macOS, Windows, and Linux while
+  the managed installer remains macOS-specific.
 - Fix subscription-model 401s: the router no longer requires a
   subscription `Authorization` header on the loopback hop. Codex 0.153.4
   authenticates with the URL path token and omits that header, so every
