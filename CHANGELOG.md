@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.1
+
+- Rename the repository to
+  `software-combined/SC_OpenRouter_adapter` and reframe the README for
+  both clients: the router now serves the Codex picker and Claude Code.
+  Update the release and updater URLs to the new location. No behavior
+  change.
+
 ## 0.6.0 (Claude Code ingress, Preview)
 
 - The loopback router now speaks the Anthropic Messages API at
