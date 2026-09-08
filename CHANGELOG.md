@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Fix subscription-model 401s: the router no longer requires a
+  subscription `Authorization` header on the loopback hop. Codex 0.153.4
+  authenticates with the URL path token and omits that header, so every
+  subscription request was rejected locally before reaching chatgpt.com.
+  Headers now forward unchanged; missing or expired subscription
+  credentials surface as the upstream response instead.
+
 ## 0.6.1
 
 - Rename the repository to
