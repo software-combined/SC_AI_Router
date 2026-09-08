@@ -56,9 +56,12 @@ paid runs against the live router):
 | ~x-ai/grok-latest | failed (turn timed out on media leg; base round trip passes) |
 
 Audio leg: `meta/muse-spark-1.3` rejected upstream (`invalid_prompt`).
-Reasoning summary, apply-patch, web search, and experimental-tools legs are
-not yet built in the probe. Probe item shape fixed this round: Codex 0.153.4
-wants `{"type": "image", "url": ...}`, not `image_url`.
+Reasoning-summary, apply-patch, web-search, and experimental-tools legs are
+built in the probe with offline harness coverage (pass/fail per leg, plus
+contract assertions on the `-c` flags and temp catalogues); paid per-model
+probes against the live router are still pending. Probe item shape fixed
+this round: Codex 0.153.4 wants `{"type": "image", "url": ...}`, not
+`image_url`.
 
 Other preview models (base round trip only):
 
