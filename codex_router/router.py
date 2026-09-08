@@ -38,6 +38,7 @@ class Router(ThreadingHTTPServer):
         self.lock = threading.Lock()
         self.inflight = 0
         self.draining = False
+        self.served_models = {}
         self.credentials = Credentials(state, ROUTER_HOME)
 
     def drain_and_exit(self):
@@ -101,7 +102,8 @@ class Handler(BaseHTTPRequestHandler):
         if path == '/health':
             return self.send_json(200, {'status': 'ok', 'version': VERSION,
                                         'inflight': self.server.inflight,
-                                        'draining': self.server.draining})
+                                        'draining': self.server.draining,
+                                        'served_models': dict(self.server.served_models)})
         if self.server.draining:
             return self.drain_reject()
         if self.headers.get('Upgrade', '').lower() == 'websocket':
@@ -222,13 +224,16 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header('Connection', 'close')
             self.end_headers()
             sent = True
-            for chunk in provider.adapt(response, prepared.tool_names):
+            for chunk in provider.adapt(response, prepared.tool_names, metrics):
                 if 'first_chunk_ms' not in metrics:
                     metrics['first_chunk_ms'] = round((time.monotonic() - started) * 1000, 1)
                 self.wfile.write(chunk)
                 self.wfile.flush()
             log_event('request_completed', **metrics, status=response.status,
                         total_ms=round((time.monotonic() - started) * 1000, 1))
+            if metrics.get('served_model'):
+                with self.server.lock:
+                    self.server.served_models[metrics['model']] = metrics['served_model']
         except (OSError, http.client.HTTPException, ValueError, KeyError) as exc:
             log_event('transport_error',
                         status=response.status if response is not None else None,

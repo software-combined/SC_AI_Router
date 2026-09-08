@@ -151,6 +151,21 @@ class HandlerCharacterisationTests(unittest.TestCase):
                 self.assertEqual(response.status, 503)
                 self.assertEqual(response.getheader('Retry-After'), expected)
 
+    def test_health_reports_served_model(self):
+        wire = (b'data: {"type": "response.completed", "response": '
+                b'{"model": "x-ai/grok-4.6", "output": []}}\n\n')
+        install_fake(self, lambda: FakeUpstream(200, wire, [('Content-Type', 'text/event-stream')]))
+        server = self._server()
+        response = _post(server.server_port, '/test-token/responses',
+            {'model': '~x-ai/grok-latest', 'input': [],
+             'tools': [{'type': 'custom', 'name': 'exec'}]})
+        self.assertEqual(response.status, 200)
+        response.read()
+        conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
+        conn.request('GET', '/test-token/health')
+        served = json.loads(conn.getresponse().read())['served_models']
+        self.assertEqual(served, {'~x-ai/grok-latest': 'x-ai/grok-4.6'})
+
     def test_streaming_tool_call_is_adapted_end_to_end(self):
         item = {'id': 'item1', 'type': 'function_call', 'call_id': 'call1',
                 'name': 'exec', 'arguments': json.dumps({'input': 'code'})}
