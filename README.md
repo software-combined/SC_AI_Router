@@ -40,6 +40,10 @@ the new release. To update now, re-run the installer with
 Start a fresh task when switching providers. Reasoning levels differ
 per model; unavailable levels are hidden. Models labelled Preview in
 the picker are not yet verified: they work, but report anything odd.
+OpenRouter-billed GPT rows stay out of the Codex picker so the
+subscription GPT rows stand alone; requesting one directly still routes
+to OpenRouter. The Claude listing will apply the mirror rule to
+OpenRouter-billed Anthropic rows when it lands.
 In Claude Code, point `ANTHROPIC_BASE_URL` at the router and choose
 the model with `ANTHROPIC_MODEL`; see `docs/claude-code.md`.
 

@@ -2,7 +2,8 @@ import json
 import unittest
 from codex_router.capabilities import CANONICAL_ORDER
 from codex_router.catalogue import OPENROUTER_TEMPLATE, openrouter_entry
-from codex_router.registry import FIELDS, MODELS, Model, by_slug, load, openrouter_slugs
+from codex_router.registry import (FIELDS, MODELS, Model, by_slug, load,
+    models_for, openrouter_slugs, visible_for)
 
 CATALOGUE_FIELDS = set(OPENROUTER_TEMPLATE) | {'slug', 'display_name', 'description',
     'default_reasoning_level', 'supported_reasoning_levels', 'priority',
@@ -90,7 +91,7 @@ class RegistryTests(unittest.TestCase):
         self.assertEqual(kimi['display_name'], 'Kimi K3 · OpenRouter')
         self.assertEqual(kimi['priority'], 104)
         self.assertEqual(len(slugs), len(set(slugs)))
-        self.assertEqual(len(slugs), 1 + len(openrouter_slugs()))
+        self.assertEqual(len(slugs), 1 + len(models_for('codex')))
 
     def test_catalog_name_vendor_prefix_rule(self):
         from codex_router.catalogue import catalog_name
@@ -104,6 +105,44 @@ class RegistryTests(unittest.TestCase):
         self.assertIsNone(by_slug('unknown/model'))
         self.assertEqual(openrouter_slugs(),
                          {m.slug for m in MODELS if m.provider == 'openrouter'})
+
+    def test_visibility_hides_same_billing_rows_per_client(self):
+        self.assertEqual({m.slug for m in MODELS if m.provider == 'openrouter'
+                          and not visible_for(m, 'codex')},
+                         {'openai/gpt-6-astra', 'openai/gpt-5.6-sol',
+                          'openai/gpt-5.6-luna', 'openai/gpt-5.6-terra'})
+        self.assertEqual({m.slug for m in MODELS if m.provider == 'openrouter'
+                          and not visible_for(m, 'claude')},
+                         {'~anthropic/claude-sonnet-latest', '~anthropic/claude-fable-latest',
+                          '~anthropic/claude-haiku-latest', '~anthropic/claude-opus-latest'})
+
+    def test_visibility_keeps_subscription_and_other_vendor_rows(self):
+        openai_sub = Model(slug='gpt-6-astra', provider='openai', display_name='G',
+                           vendor='OpenAI', reasoning=('low',), default_reasoning='low')
+        self.assertTrue(visible_for(openai_sub, 'codex'))
+        self.assertTrue(visible_for(openai_sub, 'claude'))
+        self.assertTrue(visible_for(by_slug('moonshotai/kimi-k3'), 'codex'))
+        self.assertTrue(visible_for(by_slug('moonshotai/kimi-k3'), 'claude'))
+        self.assertTrue(visible_for(by_slug('openai/gpt-6-astra'), 'claude'))
+        self.assertTrue(visible_for(by_slug('~anthropic/claude-sonnet-latest'), 'codex'))
+
+    def test_visibility_tilde_and_plain_prefixes_both_hide(self):
+        self.assertFalse(visible_for(by_slug('~anthropic/claude-sonnet-latest'), 'claude'))
+        plain = Model(slug='anthropic/claude-sonnet-latest', provider='openrouter',
+                      display_name='X', vendor='Anthropic', reasoning=('low',),
+                      default_reasoning='low')
+        self.assertFalse(visible_for(plain, 'claude'))
+        self.assertTrue(visible_for(plain, 'codex'))
+        self.assertFalse(visible_for(by_slug('openai/gpt-6-astra'), 'codex'))
+
+    def test_models_for_matches_visibility_and_rejects_unknown_client(self):
+        for client in ('codex', 'claude'):
+            self.assertEqual({m.slug for m in models_for(client)},
+                             {m.slug for m in MODELS if visible_for(m, client)})
+        with self.assertRaises(ValueError):
+            models_for('other')
+        with self.assertRaises(ValueError):
+            visible_for(by_slug('moonshotai/kimi-k3'), 'other')
 
 if __name__ == '__main__':
     unittest.main()

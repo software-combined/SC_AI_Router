@@ -8,7 +8,7 @@ import json
 import sys
 from pathlib import Path
 from .capabilities import catalogue_patch, describe
-from .registry import MODELS
+from .registry import MODELS, models_for, visible_for
 
 OPENROUTER_TEMPLATE = {
     'shell_type': 'unified_exec',
@@ -81,28 +81,37 @@ def openrouter_entry(model):
             'web_search_tool_type': 'text_and_image' if model.web_search else 'text'}
 
 
-def merge(catalog, roster=()):
+def merge(catalog, roster=(), client='codex'):
     """Merge registry OpenRouter entries, dropping explicitly retired picker rows.
 
-    Roster slugs (the subscription side from runtime state) absent from the
-    catalogue are appended as stubs so a fresh file still lists the approved
-    picker; existing rich entries are never rewritten. Plan 039's live
-    /models remains the proper replacement for this fallback.
+    Only models_for(client) OpenRouter entries are emitted: the Codex
+    picker omits OpenRouter-billed GPT rows, so an upgrade merge also
+    drops a pre-existing hidden row instead of preserving it. Roster
+    slugs (the subscription side from runtime state) absent from the
+    catalogue are appended as stubs so a fresh file still lists the
+    approved picker; other existing rich entries are never rewritten.
+    The future Claude listing reuses models_for('claude') to omit
+    OpenRouter-billed Anthropic rows. Plan 039's live /models remains
+    the proper replacement for this fallback. Routing never consults
+    this filter.
     """
+    visible = [m for m in models_for(client) if m.provider == 'openrouter']
+    hidden = {m.slug for m in MODELS
+              if m.provider == 'openrouter' and not visible_for(m, client)}
     active = {m.slug for m in MODELS}
     models = [m for m in catalog.get('models', [])
-              if m['slug'] not in RETIRED_SLUGS or m['slug'] in active]
+              if (m['slug'] not in RETIRED_SLUGS or m['slug'] in active)
+              and m['slug'] not in hidden]
     entries = {m['slug']: m for m in models}
-    for model in MODELS:
-        if model.provider == 'openrouter':
-            entries[model.slug] = openrouter_entry(model)
-    seen = {m['slug'] for m in models}
+    for model in visible:
+        entries[model.slug] = openrouter_entry(model)
     order = [m['slug'] for m in models]
+    seen = set(order)
     for slug in roster:
         if slug not in entries:
             entries[slug] = {'slug': slug}
             order.append(slug)
-    order += [m.slug for m in MODELS if m.provider == 'openrouter' and m.slug not in seen]
+    order += [m.slug for m in visible if m.slug not in seen]
     catalog['models'] = [entries[slug] for slug in order]
     return catalog
 
@@ -126,13 +135,16 @@ def _same(old, new, key):
     return old.get(key) == new.get(key)
 
 
-def check(path):
+def check(path, client='codex'):
     catalog = json.loads(Path(path).read_text())
     existing = {m['slug']: m for m in catalog.get('models', [])}
     identical, total = 0, 0
-    for model in MODELS:
-        if model.provider != 'openrouter':
-            continue
+    for model in (m for m in MODELS
+                  if m.provider == 'openrouter' and not visible_for(m, client)):
+        if model.slug in existing:
+            print(f'{model.slug}: hidden from the {client} picker but present')
+            return False
+    for model in (m for m in models_for(client) if m.provider == 'openrouter'):
         total += 1
         old = existing.get(model.slug)
         if old is None:
@@ -148,12 +160,23 @@ def check(path):
     return identical == total
 
 
+USAGE = ('usage: python3.14 -m codex_router.catalogue '
+         '[--client codex|claude] --check|--merge <catalogue>')
+
+
 if __name__ == '__main__':
-    if sys.argv[1:2] == ['--merge'] and len(sys.argv) == 3:
-        path = Path(sys.argv[2])
+    args = sys.argv[1:]
+    client = 'codex'
+    if args[:1] == ['--client']:
+        if len(args) < 2 or args[1] not in ('codex', 'claude'):
+            raise SystemExit(USAGE)
+        client = args[1]
+        args = args[2:]
+    if args[:1] == ['--merge'] and len(args) == 2:
+        path = Path(args[1])
         base = json.loads(path.read_text()) if path.exists() else {'models': []}
-        path.write_text(json.dumps(merge(base, read_roster(path)), indent=2) + '\n')
-    elif sys.argv[1:2] == ['--check'] and len(sys.argv) == 3:
-        sys.exit(0 if check(sys.argv[2]) else 1)
+        path.write_text(json.dumps(merge(base, read_roster(path), client), indent=2) + '\n')
+    elif args[:1] == ['--check'] and len(args) == 2:
+        sys.exit(0 if check(args[1], client) else 1)
     else:
-        raise SystemExit('usage: python3.14 -m codex_router.catalogue --check|--merge <catalogue>')
+        raise SystemExit(USAGE)
