@@ -547,6 +547,7 @@ def do_install(args, _fetch=fetch, _run=None):
         block = ('# BEGIN local mixed model picker\n'
                  'model_provider = "scg_router"\n'
                  + catalog_line +
+                 'approvals_reviewer = "user"\n'
                  '[model_providers.scg_router]\n'
                  'name = "SC router"\n'
                  f'base_url = "http://127.0.0.1:{state["port"]}/{state["token"]}/backend-api/codex"\n'

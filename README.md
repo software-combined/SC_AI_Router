@@ -61,7 +61,7 @@ the setup window, and Codex uses a custom provider (`scg_router`) whose
 and no subscription traffic is sent: OpenAI models answer 400, native
 service paths answer 404 locally, and OpenRouter models work with tools,
 compaction, and web search where the model supports it. Server-side thread
-titles and the approvals reviewer are unavailable; set
+titles and the approvals reviewer are unavailable; the installer writes
 `approvals_reviewer = "user"` inside the marked block.
 
 ## Troubleshooting

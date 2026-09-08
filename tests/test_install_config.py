@@ -82,6 +82,8 @@ class InstallConfigTests(unittest.TestCase):
             self.assertNotIn('env_key', block)
             self.assertNotIn('ROUTER_OPENROUTER_KEY_', block)
             self.assertNotIn('openai_base_url', block)
+            approvals_at = block.index('approvals_reviewer = "user"')
+            self.assertLess(approvals_at, table_at)
             state = json.loads((home / 'mixed-router-state.json').read_text())
             self.assertIn(f"/{state['token']}/backend-api/codex", block)
             self.assertEqual(state.get('openai_mode'), 'none')
@@ -110,6 +112,7 @@ class InstallConfigTests(unittest.TestCase):
             block = config.read_text()
             self.assertIn('openai_base_url = ', block)
             self.assertNotIn('model_provider', block)
+            self.assertNotIn('approvals_reviewer', block)
 
     def test_update_plist_carries_home_and_pinned_feed(self):
         with tempfile.TemporaryDirectory() as tmp:
