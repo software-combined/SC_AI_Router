@@ -61,6 +61,20 @@ class LiveRefreshTests(unittest.TestCase):
         self.assertEqual(out[0]['excluded_efforts'], ['max'])
         self.assertEqual(out[0]['default_reasoning'], 'low')
 
+    def test_alias_refresh_preserves_wire_slug_and_identity(self):
+        row = _row(slug='~x-ai/grok-latest', provider='openrouter',
+                   vendor='xAI', tier='verified', priority=101,
+                   display_name='Grok Latest \xb7 OpenRouter')
+        live = _live(alias_target={'name': 'SpaceXAI: Grok 4.6',
+                                   'slug': 'x-ai/grok-4.6'})
+        out = refresh([row], {'~x-ai/grok-latest': live})
+        self.assertEqual(out[0]['slug'], '~x-ai/grok-latest')
+        self.assertEqual(out[0]['provider'], 'openrouter')
+        self.assertEqual(out[0]['vendor'], 'xAI')
+        self.assertEqual(out[0]['tier'], 'verified')
+        self.assertEqual(out[0]['priority'], 101)
+        self.assertEqual(out[0]['display_name'], 'SpaceXAI: Grok 4.6 \xb7 OpenRouter')
+
 
 if __name__ == '__main__':
     unittest.main()

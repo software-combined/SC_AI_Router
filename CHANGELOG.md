@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.4.6 (tool identity slice)
+
+Tool-history, onboarding, and served-model fixes from the audit brief,
+committed on `codex/isolated-install-state`, not yet deployed (live router
+still runs the pre-restructure prototype; see Plan 047 section 2):
+
+- Namespaced custom-tool history now converts exactly like its flattened
+  definition: replayed calls and results take the wire name with no
+  namespace, matching what the response leg already expects. Previously
+  the guard missed namespaced entries entirely and survivors kept the
+  wrong name.
+- Served-model capture no longer depends on tool adaptation: tool-free
+  200 responses are forwarded byte-identical while recording their model
+  from JSON bodies and `response.completed` SSE events, for both
+  providers. Error and malformed bodies stay untouched and unrecorded.
+- `models add --probe` follows preview-activate-verify-promote: the
+  candidate is written as preview first (the file-baked registry cannot
+  route it otherwise), verified through an isolated router with its own
+  home, port, token and catalogue, and only a pass promotes it to
+  verified. `--dry-run` no longer bills a probe, and an explicit `--tier`
+  still decides without probing.
+- Alias display names refreshed from live `alias_target` data (four tilde
+  rows); wire slugs, vendors, and all other fields untouched. Catalogue
+  descriptions no longer double the vendor prefix on alias names.
+- Residual risk: isolated probes bill the key and need the desktop app,
+  so they stay owner-gated like all paid probes.
+
 ## 0.4.5 (compaction contract slice)
 
 Compaction fixes from the audit brief, committed on

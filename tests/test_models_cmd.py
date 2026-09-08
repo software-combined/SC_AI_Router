@@ -93,6 +93,53 @@ class AddTests(unittest.TestCase):
             self.assertEqual(path.read_text(), before)
             self.assertEqual(row['slug'], 'qwen/qwen4-coder')
 
+    def test_probe_activates_preview_before_verifying(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            models_mod.COMPAT_PATH, saved = Path(tmp) / 'compatibility.md', models_mod.COMPAT_PATH
+            self.addCleanup(setattr, models_mod, 'COMPAT_PATH', saved)
+            path = _seeded(tmp, [_row()])
+            seen = {}
+
+            def fake_probe(slug):
+                rows = json.loads(path.read_text())
+                seen['during'] = next(r['tier'] for r in rows if r['slug'] == slug)
+                return True
+
+            row = cmd_add(path, 'qwen/qwen4-coder', LIVE,
+                          probe=True, _probe=fake_probe)
+            self.assertEqual(seen['during'], 'preview')
+            self.assertEqual(row['tier'], 'verified')
+            rows = json.loads(path.read_text())
+            self.assertEqual(
+                next(r['tier'] for r in rows if r['slug'] == 'qwen/qwen4-coder'),
+                'verified')
+
+    def test_failed_probe_keeps_preview(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            models_mod.COMPAT_PATH, saved = Path(tmp) / 'compatibility.md', models_mod.COMPAT_PATH
+            self.addCleanup(setattr, models_mod, 'COMPAT_PATH', saved)
+            path = _seeded(tmp, [_row()])
+            row = cmd_add(path, 'qwen/qwen4-coder', LIVE,
+                          probe=True, _probe=lambda slug: False)
+            self.assertEqual(row['tier'], 'preview')
+            rows = json.loads(path.read_text())
+            self.assertEqual(
+                next(r['tier'] for r in rows if r['slug'] == 'qwen/qwen4-coder'),
+                'preview')
+
+    def test_dry_run_with_probe_neither_writes_nor_probes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = _seeded(tmp, [_row()])
+            before = path.read_text()
+
+            def boom(slug):
+                raise AssertionError('dry run must not bill a probe')
+
+            row = cmd_add(path, 'qwen/qwen4-coder', LIVE,
+                          dry_run=True, probe=True, _probe=boom)
+            self.assertEqual(path.read_text(), before)
+            self.assertEqual(row['tier'], 'preview')
+
     def test_probe_sets_tier(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = _seeded(tmp, [_row()])

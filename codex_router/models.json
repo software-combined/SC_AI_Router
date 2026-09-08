@@ -145,7 +145,7 @@
   {
     "slug": "~x-ai/grok-latest",
     "provider": "openrouter",
-    "display_name": "Grok Latest \u00b7 OpenRouter",
+    "display_name": "SpaceXAI: Grok 4.6 \u00b7 OpenRouter",
     "vendor": "xAI",
     "reasoning": [
       "low",
@@ -252,7 +252,7 @@
   {
     "slug": "~google/gemini-flash-latest",
     "provider": "openrouter",
-    "display_name": "Google Gemini Flash Latest \u00b7 OpenRouter",
+    "display_name": "Google: Gemini 3.8 Flash \u00b7 OpenRouter",
     "vendor": "Google",
     "reasoning": [
       "low",
@@ -280,7 +280,7 @@
   {
     "slug": "~google/gemini-pro-latest",
     "provider": "openrouter",
-    "display_name": "Google Gemini Pro Latest \u00b7 OpenRouter",
+    "display_name": "Google: Gemini 3.1 Pro Preview \u00b7 OpenRouter",
     "vendor": "Google",
     "reasoning": [
       "low",
@@ -424,7 +424,7 @@
   {
     "slug": "~anthropic/claude-sonnet-latest",
     "provider": "openrouter",
-    "display_name": "Anthropic Claude Sonnet Latest \u00b7 OpenRouter",
+    "display_name": "Anthropic: Claude Sonnet 5 \u00b7 OpenRouter",
     "vendor": "Anthropic",
     "reasoning": [
       "low",

@@ -58,6 +58,16 @@ class CatalogueFlagTests(unittest.TestCase):
             self.assertNotIn('base_instructions', item)
             self.assertIn('instructions_template', item['model_messages'])
 
+    def test_alias_display_name_keeps_own_prefix(self):
+        from dataclasses import replace
+        from codex_router.catalogue import catalog_name
+        alias = replace(by_slug('~x-ai/grok-latest'),
+                          display_name='SpaceXAI: Grok 4.6 \xb7 OpenRouter')
+        self.assertEqual(catalog_name(alias), 'SpaceXAI: Grok 4.6')
+        plain = replace(by_slug('z-ai/glm-5.3-flash'))
+        self.assertTrue(catalog_name(plain).startswith(plain.vendor + ': '))
+        self.assertEqual(alias.slug, '~x-ai/grok-latest')
+
     def test_merge_preserves_openai_entries_and_refreshes_stale_rows(self):
         slug = next(m.slug for m in MODELS if m.provider == 'openrouter')
         stale = dict(openrouter_entry(by_slug(slug)), description='stale')
