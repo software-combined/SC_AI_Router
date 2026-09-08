@@ -1,13 +1,15 @@
-# Codex model router
+# Model router
 
-A small program on your Mac that lets the Codex picker offer both your
-ChatGPT subscription models and approved OpenRouter models. The two
-logins stay separate: subscription traffic keeps using ChatGPT sign-in,
-and OpenRouter traffic uses an API key that never leaves your machine.
+A small program on your Mac that serves the Codex picker and Claude
+Code from one place, offering subscription models and approved
+OpenRouter models side by side. The two logins stay separate:
+subscription traffic keeps using the existing ChatGPT or Claude
+sign-in, and OpenRouter traffic uses an API key that never leaves
+your machine.
 
 ## Requirements
 
-macOS with the Codex app, Python 3 (the installer finds or asks for a
+macOS with the Codex app and/or Claude Code, Python 3 (the installer finds or asks for a
 3.14 interpreter to run the router itself), and an OpenRouter API key
 for OpenRouter models.
 
@@ -37,6 +39,8 @@ the new release. To update now, re-run the installer with
 Start a fresh task when switching providers. Reasoning levels differ
 per model; unavailable levels are hidden. Models labelled Preview in
 the picker are not yet verified: they work, but report anything odd.
+In Claude Code, point `ANTHROPIC_BASE_URL` at the router and choose
+the model with `ANTHROPIC_MODEL`; see `docs/claude-code.md`.
 
 ## Costs
 
@@ -68,7 +72,7 @@ never keys or tokens. Subscription headers never accompany OpenRouter requests; 
 
 ## Links
 
-Operator guide: `docs/operations.md`. Compatibility matrix:
+Claude Code setup: `docs/claude-code.md`. Operator guide: `docs/operations.md`. Compatibility matrix:
 `docs/compatibility.md`. Adding a model: `docs/adding-a-model.md`.
 
 ## Runtime files

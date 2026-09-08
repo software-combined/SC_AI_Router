@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 MIN_PYTHON = '3.14'
-REPO = 'software-combined/SC_Codex_openRouter_adapter'
+REPO = 'software-combined/SC_OpenRouter_adapter'
 
 
 def bundle_files(root):

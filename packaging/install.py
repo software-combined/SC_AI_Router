@@ -23,8 +23,8 @@ from pathlib import Path
 
 LABEL = 'com.local.codex-mixed-model-router'
 UPDATE_LABEL = LABEL + '.update'
-FEED_URL = 'https://github.com/software-combined/SC_Codex_openRouter_adapter/releases/latest/download/latest.json'
-BETA_API_URL = 'https://api.github.com/repos/software-combined/SC_Codex_openRouter_adapter/releases?per_page=5'
+FEED_URL = 'https://github.com/software-combined/SC_OpenRouter_adapter/releases/latest/download/latest.json'
+BETA_API_URL = 'https://api.github.com/repos/software-combined/SC_OpenRouter_adapter/releases?per_page=5'
 MIN_PYTHON = (3, 14)
 
 

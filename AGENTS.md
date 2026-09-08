@@ -1,10 +1,11 @@
-# SC_Codex_openRouter_adapter Agent Instructions
+# SC_OpenRouter_adapter Agent Instructions
 
 ## 1. Purpose
 
 Local loopback router that keeps ChatGPT subscription traffic on OpenAI and
-routes approved OpenRouter models with a separate key. Runtime Python 3.14+,
-stdlib only, no third-party dependencies, no network calls in tests.
+Claude subscription traffic on Anthropic, and routes approved OpenRouter
+models with a separate key. Runtime Python 3.14+, stdlib only, no
+third-party dependencies, no network calls in tests.
 
 ## 2. Worktree discipline
 
@@ -41,7 +42,8 @@ Every user-visible change updates `CHANGELOG.md` and `packaging/VERSION`
 
 ## 7. Compatibility rule
 
-After any Codex desktop upgrade, run the paid probe from
-`tools/probe_codex_runtime.py` on one OpenRouter model and one OpenAI model
-before publishing a release. Record the Codex version in
-`docs/compatibility.md`.
+After any Codex desktop or Claude Code upgrade, run the paid probe from
+`tools/probe_codex_runtime.py` on one OpenRouter model and one OpenAI model,
+plus one OpenRouter model and one subscription model through a real Claude
+Code session (see `docs/claude-code.md`), before publishing a release.
+Record both client versions in `docs/compatibility.md`.
