@@ -176,9 +176,13 @@ def render_plist(python, home, state):
             'StandardErrorPath': str(home / 'logs' / 'launchd.log')}
 
 
-def render_update_plist(python, home):
+def render_update_plist(python, home, feed=None):
+    args = [python, str(home / 'current' / 'packaging' / 'install.py'), '--check-update',
+            '--home', str(home)]
+    if feed:
+        args += ['--feed', feed]
     return {'Label': UPDATE_LABEL,
-            'ProgramArguments': [python, str(home / 'current' / 'packaging' / 'install.py'), '--check-update'],
+            'ProgramArguments': args,
             'RunAtLoad': True,
             'StartInterval': 900,
             'StandardOutPath': str(home / 'logs' / 'update.log'),
@@ -220,8 +224,10 @@ def wait_version(state, version, timeout=150, fetch_health=None):
 
 def restart_service(home, uid):
     run(['launchctl', 'bootout', f'gui/{uid}/{LABEL}'], capture_output=True)
+    run(['launchctl', 'bootout', f'gui/{uid}/{UPDATE_LABEL}'], capture_output=True)
     agents = Path.home() / 'Library' / 'LaunchAgents'
     run(['launchctl', 'bootstrap', f'gui/{uid}', str(agents / (LABEL + '.plist'))], check=True)
+    run(['launchctl', 'bootstrap', f'gui/{uid}', str(agents / (UPDATE_LABEL + '.plist'))], check=True)
 
 
 def install_bundle(home, version, tarball, manifest_doc, python):
@@ -321,6 +327,11 @@ def resolve_beta_feed(_fetch=fetch):
 
 
 def channel_feed(home, _fetch=fetch):
+    # An explicit --feed at install time is pinned in home/'feed' and wins
+    # over the channel file, so scheduled updates keep following it. Delete
+    # the file to return to channel resolution.
+    if (home / 'feed').exists():
+        return (home / 'feed').read_text().strip()
     channel = (home / 'channel').read_text().strip() if (home / 'channel').exists() else 'stable'
     if channel == 'beta':
         return resolve_beta_feed(_fetch)
@@ -388,11 +399,15 @@ def do_install(args, _fetch=fetch, _run=None):
             raise SystemExit('bundle has no MANIFEST.json')
     home.mkdir(parents=True, exist_ok=True)
     (home / 'logs').mkdir(exist_ok=True)
+    pinned_feed = args.feed.strip() if args.feed else ''
+    if pinned_feed:
+        (home / 'feed').write_text(pinned_feed + '\n')
     state = ensure_state(home)
-    if args.openai_mode:
-        if args.openai_mode not in ('subscription', 'none'):
-            raise SystemExit('openai_mode must be subscription or none')
-        state['openai_mode'] = args.openai_mode
+    mode = args.openai_mode or state.get('openai_mode', 'subscription')
+    if mode not in ('subscription', 'none'):
+        raise SystemExit('openai_mode must be subscription or none')
+    if state.get('openai_mode') != mode:
+        state['openai_mode'] = mode
         fd = os.open(home / 'mixed-router-state.json', os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, 'w') as stream:
             stream.write(json.dumps(state, indent=2) + '\n')
@@ -400,7 +415,8 @@ def do_install(args, _fetch=fetch, _run=None):
     previous = install_bundle(home, latest['version'], tarball, manifest_doc, python)
     agents = Path.home() / 'Library' / 'LaunchAgents'
     write_plist(agents / (LABEL + '.plist'), render_plist(python, home, state))
-    write_plist(agents / (UPDATE_LABEL + '.plist'), render_update_plist(python, home))
+    write_plist(agents / (UPDATE_LABEL + '.plist'),
+                render_update_plist(python, home, pinned_feed or None))
     uid = os.getuid()
     if previous is None:
         restart_service(home, uid)
@@ -416,19 +432,23 @@ def do_install(args, _fetch=fetch, _run=None):
             print('new version failed health check; see logs/launchd.log')
         raise SystemExit(1)
     config_path = Path.home() / '.codex' / 'config.toml'
-    catalog_line = f'model_catalog_json = "{home}/mixed-models.json"\n' if args.static_catalogue else ''
+    catalog_line = f'model_catalog_json = "{home}/mixed-models.json"\n'
     block = ('# BEGIN local mixed model picker\n'
              f'openai_base_url = "http://127.0.0.1:{state["port"]}/{state["token"]}/backend-api/codex"\n'
              + catalog_line + '# END local mixed model picker\n')
-    if args.openai_mode == 'none':
+    if mode == 'none':
+        # Root keys stay above the provider table; the key name matches the
+        # Plan 043 spike shape (staff export the router path token as its
+        # value) instead of a per-port variable nothing provisions.
         block = ('# BEGIN local mixed model picker\n'
                  'model_provider = "scg_router"\n'
+                 + catalog_line +
                  '[model_providers.scg_router]\n'
                  'name = "SC router"\n'
                  f'base_url = "http://127.0.0.1:{state["port"]}/{state["token"]}/backend-api/codex"\n'
                  'wire_api = "responses"\n'
-                 f'env_key = "ROUTER_OPENROUTER_KEY_{state["port"]}"\n'
-                 + catalog_line + '# END local mixed model picker\n')
+                 'env_key = "SCG_ROUTER_TOKEN"\n'
+                 + '# END local mixed model picker\n')
     receipt_path = home / 'activation.json'
     previous_receipt = json.loads(receipt_path.read_text()) if receipt_path.exists() else {}
     before = replace_config_block(config_path, block, previous_receipt.get('inserted_block'))
@@ -439,6 +459,7 @@ def do_install(args, _fetch=fetch, _run=None):
     except OSError:
         pass
     receipt_path.write_text(json.dumps({'config_path': str(config_path), 'inserted_block': block,
+                                        'openai_mode': mode,
                                         'previous_sha256': hashlib.sha256(before.encode()).hexdigest()},
                                        indent=2) + '\n')
     try:
@@ -485,8 +506,12 @@ def do_check_update(args, _fetch=fetch, _read_feed=None, _sleep=None):
         installer = Path(tmp) / 'packaging' / 'install.py'
         if not installer.exists():
             raise SystemExit('downloaded bundle has no installer')
-        result = run([sys.executable, str(installer), '--feed', feed,
-                      '--home', str(home)], capture_output=True, text=True, timeout=900)
+        # Only forward an explicitly pinned feed; a channel-resolved feed must
+        # not pin home/'feed', or beta would freeze on one release asset URL.
+        cmd = [sys.executable, str(installer), '--home', str(home)]
+        if args.feed:
+            cmd += ['--feed', feed]
+        result = run(cmd, capture_output=True, text=True, timeout=900)
         print(result.stdout[-2000:] if result.stdout else '')
         if result.returncode != 0:
             print(result.stderr[-2000:] if result.stderr else '')
@@ -530,7 +555,8 @@ def build_parser():
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--check-update', action='store_true')
     parser.add_argument('--uninstall', action='store_true')
-    parser.add_argument('--static-catalogue', action='store_true')
+    parser.add_argument('--static-catalogue', action='store_true',
+                        help='No-op: the static catalogue file is now always configured.')
     parser.add_argument('--openai-mode', default=None)
     return parser
 

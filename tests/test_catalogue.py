@@ -83,5 +83,57 @@ class CatalogueFlagTests(unittest.TestCase):
             self.assertTrue(check(str(path)))
 
 
+class CatalogueRosterTests(unittest.TestCase):
+    def test_merge_seeds_missing_roster_slugs_as_stubs(self):
+        merged = merge({'models': []}, roster=('gpt-6-astra', 'gpt-5.6-luna'))
+        by_slug = {m['slug']: m for m in merged['models']}
+        self.assertEqual(by_slug['gpt-6-astra'], {'slug': 'gpt-6-astra'})
+        self.assertEqual(by_slug['gpt-5.6-luna'], {'slug': 'gpt-5.6-luna'})
+        for model in MODELS:
+            if model.provider == 'openrouter':
+                self.assertIn(model.slug, by_slug)
+
+    def test_merge_never_rewrites_existing_roster_entries(self):
+        rich = {'slug': 'gpt-6-astra', 'display_name': 'GPT-6-Astra'}
+        merged = merge({'models': [dict(rich)]}, roster=('gpt-6-astra', 'gpt-5.6-luna'))
+        by_slug = {m['slug']: m for m in merged['models']}
+        self.assertEqual(by_slug['gpt-6-astra'], rich)
+        self.assertIn('gpt-5.6-luna', by_slug)
+        slugs = [m['slug'] for m in merged['models']]
+        self.assertEqual(len(slugs), len(set(slugs)))
+
+    def test_read_roster_from_sibling_state(self):
+        from codex_router.catalogue import read_roster
+        with tempfile.TemporaryDirectory() as tmp:
+            catalog = Path(tmp) / 'mixed-models.json'
+            self.assertEqual(read_roster(catalog), ())
+            (Path(tmp) / 'mixed-router-state.json').write_text(
+                json.dumps({'port': 1, 'token': 't',
+                            'openai_models': ['gpt-6-astra']}) + '\n')
+            self.assertEqual(read_roster(catalog), ('gpt-6-astra',))
+
+    def test_read_roster_rejects_non_object_state(self):
+        from codex_router.catalogue import read_roster
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / 'mixed-router-state.json').write_text('[1, 2]\n')
+            self.assertEqual(read_roster(Path(tmp) / 'mixed-models.json'), ())
+
+    def test_merge_cli_seeds_roster_from_state(self):
+        import subprocess
+        import sys
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / 'mixed-router-state.json').write_text(
+                json.dumps({'port': 1, 'token': 't',
+                            'openai_models': ['gpt-6-astra']}) + '\n')
+            target = home / 'mixed-models.json'
+            proc = subprocess.run(
+                [sys.executable, '-m', 'codex_router.catalogue', '--merge', str(target)],
+                capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            slugs = {m['slug'] for m in json.loads(target.read_text())['models']}
+            self.assertIn('gpt-6-astra', slugs)
+
+
 if __name__ == '__main__':
     unittest.main()
