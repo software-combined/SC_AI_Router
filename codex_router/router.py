@@ -12,7 +12,7 @@ from compression import zstd
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from .credentials import Credentials
 from .runtime import MAX_BODY, ROUTER_HOME, VERSION, log_event
-from . import local_services, providers, setup
+from . import claude, local_services, providers, setup
 from .providers import NATIVE_SERVICE_PATHS, PreparationError
 
 
@@ -130,7 +130,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.error(403, 'Forbidden')
         if self.server.draining:
             return self.drain_reject()
-        if path not in NATIVE_SERVICE_PATHS | {'/responses', '/responses/compact'}:
+        if path not in NATIVE_SERVICE_PATHS | {'/responses', '/responses/compact'} | claude.CLAUDE_PATHS:
             if path.startswith('/setup/'):
                 return setup.serve(self, path[len('/setup/'):], True)
             return self.error(404, 'Unsupported route')
@@ -141,9 +141,12 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(model, str) and path not in NATIVE_SERVICE_PATHS:
                 return self.error(400, 'Missing model')
             mode = self.server.state.get('openai_mode', 'subscription')
-            provider = providers.select(
-                model, path, self.server.state.get('openai_models', []), mode)
-            if provider.name == 'openai-subscription' and not via_path:
+            if path in claude.CLAUDE_PATHS:
+                provider = claude.select(model, path, mode)
+            else:
+                provider = providers.select(
+                    model, path, self.server.state.get('openai_models', []), mode)
+            if provider.name in ('openai-subscription', 'anthropic-subscription') and not via_path:
                 return self.error(401, 'Bearer auth is for no-subscription mode only')
             compact_call = providers.compaction_call(provider, model, path, payload)
             if compact_call is not None:

@@ -77,6 +77,7 @@ A manual install copies ONLY these files beside the private state
 directory at an idle boundary:
 `codex_router/router.py`,
 `codex_router/providers.py`,
+`codex_router/claude.py`,
 `codex_router/registry.py`,
 `codex_router/credentials.py`,
 `codex_router/tool_adapter.py`,

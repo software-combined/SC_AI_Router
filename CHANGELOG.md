@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.6.0 (Claude Code ingress, Preview)
+
+- The loopback router now speaks the Anthropic Messages API at
+  `/<token>/v1/messages` (plus `count_tokens`) for Claude Code, with the
+  same billing split as the Codex picker: OpenRouter-registry slugs go to
+  OpenRouter's Anthropic-compatible endpoint with the router key as the
+  only credential, everything else passes through to `api.anthropic.com`
+  with the client's own subscription credentials.
+- OpenRouter-bound bodies travel byte-identical, so thinking blocks,
+  tool_use IDs and cache_control keep full fidelity with no translation
+  layer. Subscription requests keep version and beta headers; hop headers
+  are stripped. No-subscription mode still serves OpenRouter models.
+- Setup is one variable, `ANTHROPIC_BASE_URL` with the path token, and
+  deliberately no API key variable, which would override the subscription
+  bearer. Operator notes live in `docs/claude-code.md`.
+- Preview status and residual risk: unit-verified against a fake upstream
+  only. A paid live probe through real Claude Code sessions (one
+  OpenRouter model, one subscription model) must pass before this is
+  relied upon. Installer support for `~/.claude/settings.json` is
+  deferred to a follow-up slice.
+
 ## 0.5.0
 
 - Offer only the four Claude Latest aliases: Opus, Fable, Sonnet, and Haiku.
