@@ -32,6 +32,24 @@ def describe(level):
 
 OPENROUTER_HOST = 'openrouter.ai'
 
+def has_recursive_refs(schema):
+    def walk(value, refs=()):
+        if isinstance(value, list):
+            return any(walk(item, refs) for item in value)
+        if not isinstance(value, dict):
+            return False
+        ref = value.get('$ref')
+        if isinstance(ref, str) and ref.startswith('#'):
+            if ref in refs:
+                return True
+            target = schema
+            for segment in ref[2:].split('/') if ref != '#' else []:
+                target = target[segment.replace('~1', '/').replace('~0', '~')]
+            if walk(target, refs + (ref,)):
+                return True
+        return any(walk(item, refs) for key, item in value.items() if key not in ('$defs', 'definitions', '$ref'))
+    return walk(schema)
+
 def advertised_or_pinned(slug, entry):
     return entry or REASONING_LEVELS.get(slug, [])
 

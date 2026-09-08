@@ -7,6 +7,7 @@ import hashlib
 import json
 import re
 from copy import deepcopy
+from .capabilities import has_recursive_refs
 from .discovered import recall
 from .registry import by_slug
 SEARCH_NAME = 'codex_client_tool_search'
@@ -24,24 +25,6 @@ def integer_json(text):
         return text  # Leave malformed arguments for the native validator to reject.
     return re.sub(r'("(?:\\.|[^"\\])*")|(-?\d+)\.0+(?=\s*[,}\]]|\s*$)',
                   lambda match: match[1] if match[1] is not None else match[2], text)
-
-def has_recursive_refs(schema):
-    def walk(value, refs=()):
-        if isinstance(value, list):
-            return any(walk(item, refs) for item in value)
-        if not isinstance(value, dict):
-            return False
-        ref = value.get('$ref')
-        if isinstance(ref, str) and ref.startswith('#'):
-            if ref in refs:
-                return True
-            target = schema
-            for segment in ref[2:].split('/') if ref != '#' else []:
-                target = target[segment.replace('~1', '/').replace('~0', '~')]
-            if walk(target, refs + (ref,)):
-                return True
-        return any(walk(item, refs) for key, item in value.items() if key not in ('$defs', 'definitions', '$ref'))
-    return walk(schema)
 
 def tool_entries(tools, namespace=None):
     for tool in tools:
@@ -128,11 +111,20 @@ def prepare_tools(payload):
             visible = [{'name': wire_names.get((ns, tool.get('name')), tool.get('name')),
                         'description': tool.get('description', '')} for tool, ns in tool_entries(item.pop('tools'))]
             item.update(type='function_call_output', output=json.dumps({'available_tools': visible}))
-        elif item.get('type') == 'custom_tool_call' and tool_key(item) in names:
+        elif item.get('type') == 'custom_tool_call' and (
+                tool_key(item) in names or tool_key(item) in wire_names):
+            key = tool_key(item)
             item['type'] = 'function_call'
             item['arguments'] = json.dumps({'input': item.pop('input')})
+            if key in wire_names:
+                item.pop('namespace', None)
+                item['name'] = wire_names[key]
         elif item.get('type') == 'custom_tool_call_output':
             item['type'] = 'function_call_output'
+            wire = wire_names.get(tool_key(item))
+            if wire:
+                item.pop('namespace', None)
+                item['name'] = wire
         elif item.get('type') == 'function_call':
             wire = wire_names.get(tool_key(item))
             if wire:
@@ -198,6 +190,44 @@ class ToolEvents:
             if kind == 'response.completed' and self.notes is not None and isinstance(response.get('model'), str):
                 self.notes['served_model'] = response['model']
         return event
+
+def snoop_response_identity(response, notes):
+    """Yield a tool-free 200 response unchanged while recording its model."""
+    if 'text/event-stream' not in response.getheader('Content-Type', ''):
+        raw = response.read()
+        try:
+            model = json.loads(raw).get('model')
+        except (ValueError, AttributeError):
+            model = None
+        if isinstance(model, str):
+            notes['served_model'] = model
+        yield raw
+        return
+    block = []
+    for line in response:
+        yield line
+        if line not in (b'\n', b'\r\n'):
+            block.append(line)
+            continue
+        data = b''.join(l[5:].lstrip() for l in block if l.startswith(b'data:')).strip()
+        block = []
+        if data and data != b'[DONE]':
+            completed = _completed_model(data)
+            if completed is not None:
+                notes['served_model'] = completed
+
+
+def _completed_model(data):
+    """Serving model from a response.completed SSE payload, else None."""
+    try:
+        event = json.loads(data)
+        if event['type'] != 'response.completed':
+            return None
+        model = event['response']['model']
+        return model if isinstance(model, str) else None
+    except (ValueError, KeyError, TypeError):
+        return None
+
 
 def stream_events(response, names, notes=None):
     adapter = ToolEvents(names, notes)

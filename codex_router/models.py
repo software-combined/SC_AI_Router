@@ -6,7 +6,6 @@ Usage: python3.14 -m codex_router.models add <slug> [--probe] [--dry-run]
 """
 import argparse
 import json
-import subprocess
 import sys
 import urllib.request
 from datetime import datetime, timezone
@@ -62,27 +61,12 @@ def derive_row(slug, live, rows):
             'tier': 'preview'}
 
 
-def probe_round_trip(slug):
-    """Base tool round trip through the installed router. True on pass."""
-    from .runtime import ROUTER_HOME
-    state = ROUTER_HOME / 'mixed-router-state.json'
-    cmd = [sys.executable, str(Path(__file__).resolve().parents[1]
-                               / 'tools' / 'probe_codex_runtime.py'), slug]
-    if state.exists():
-        cmd += ['--router-state', str(state)]
-    try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=150)
-    except (OSError, subprocess.SubprocessError):
-        return False
-    return '"desktop_runtime_tool_round_trip": "passed"' in (proc.stdout or '')
-
-
 def read_rows(path):
     return json.loads(Path(path).read_text())
 
 
 def cmd_add(path, slug, live_by_id, tier=None, dry_run=False, probe=False,
-           _probe=probe_round_trip):
+           _probe=None):
     if live_by_id is None:
         live_by_id = fetch_live()
     if slug not in live_by_id:
@@ -97,14 +81,27 @@ def cmd_add(path, slug, live_by_id, tier=None, dry_run=False, probe=False,
         if tier not in ('preview', 'verified'):
             raise SystemExit('--tier must be preview or verified')
         row['tier'] = tier
-    elif probe:
-        row['tier'] = 'verified' if _probe(slug) else 'preview'
     if dry_run:
-        print(json.dumps(row, indent=2))
-        return row
-    if probe:
+        # Never writes and never bills: preview what a plain add would store.
+        preview = dict(row)
+        print(json.dumps(preview, indent=2))
+        return preview
+    if probe and tier is None:
+        # Preview-activate-verify-promote: the registry is file-baked, so the
+        # candidate must be written before anything can route it. Verification
+        # runs isolated (own router, home and catalogue); only a pass promotes.
+        from .candidate import verify
+        row['tier'] = 'preview'
+        write_guarded(path, before, json.dumps(rows + [row], indent=2) + '\n')
+        if (_probe or verify)(slug):
+            activated = Path(path).read_text()
+            promoted = [{**entry, 'tier': 'verified'} if entry.get('slug') == slug
+                        else entry for entry in json.loads(activated)]
+            write_guarded(path, activated, json.dumps(promoted, indent=2) + '\n')
+            row['tier'] = 'verified'
         _record_compat(slug, row['tier'])
-    write_guarded(path, before, json.dumps(rows + [row], indent=2) + '\n')
+    else:
+        write_guarded(path, before, json.dumps(rows + [row], indent=2) + '\n')
     print(json.dumps({'added': slug, 'tier': row['tier']}))
     return row
 

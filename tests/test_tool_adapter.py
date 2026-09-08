@@ -8,7 +8,11 @@ import unittest
 from unittest import mock
 from codex_router.compaction import SUMMARY_PREFIX
 from codex_router.discovered import _MEMORY, remember
-from codex_router.tool_adapter import prepare_tools, stream_events, ToolEvents, has_recursive_refs, SEARCH_NAME, integer_json
+from codex_router.capabilities import has_recursive_refs
+from codex_router.tool_adapter import (
+    prepare_tools, snoop_response_identity, stream_events, ToolEvents,
+    SEARCH_NAME, integer_json)
+from tests.fakes import FakeUpstream
 
 
 def _isolated_home(test):
@@ -165,6 +169,63 @@ class ToolAdapterTests(unittest.TestCase):
             {'type': 'message', 'role': 'user', 'content': SUMMARY_PREFIX + '\nrun-0'}]}
         prepare_tools(gone)
         self.assertEqual(gone['tools'], [])
+
+    def test_namespaced_custom_history_matches_flattened_definition(self):
+        payload = {'model': 'z-ai/glm-5.3-flash',
+                   'tools': [{'type': 'namespace', 'name': 'probe', 'tools': [
+                       {'type': 'custom', 'name': 'exec', 'format': {'type': 'grammar'}}]}],
+                   'input': [
+                       {'type': 'custom_tool_call', 'namespace': 'probe', 'name': 'exec',
+                        'call_id': 'c1', 'input': 'echo hi'},
+                       {'type': 'custom_tool_call_output', 'namespace': 'probe', 'name': 'exec',
+                        'call_id': 'c1', 'output': 'hi'}]}
+        names = prepare_tools(payload)
+        wire = payload['tools'][0]['name']
+        self.assertTrue(wire.startswith('ns_'))
+        call, result = payload['input']
+        self.assertEqual(call['type'], 'function_call')
+        self.assertEqual(call['name'], wire)
+        self.assertNotIn('namespace', call)
+        self.assertEqual(json.loads(call['arguments']), {'input': 'echo hi'})
+        self.assertEqual(result['type'], 'function_call_output')
+        self.assertEqual(result['name'], wire)
+        self.assertNotIn('namespace', result)
+        self.assertEqual(result['call_id'], 'c1')
+        # The response leg converts the wire call back to the namespaced shape.
+        back = ToolEvents(names).item(
+            {'type': 'function_call', 'name': wire, 'arguments': call['arguments']})
+        self.assertEqual(back['type'], 'custom_tool_call')
+        self.assertEqual((back['namespace'], back['name']), ('probe', 'exec'))
+        self.assertEqual(back['input'], 'echo hi')
+
+    def test_snoop_records_model_without_tools_json(self):
+        body = b'{"id": "resp_1", "model": "x-ai/grok-4.6", "output": []}'
+        notes = {}
+        out = b''.join(snoop_response_identity(FakeUpstream(200, body, []), notes))
+        self.assertEqual(notes, {'served_model': 'x-ai/grok-4.6'})
+        self.assertEqual(out, body)
+
+    def test_snoop_records_model_without_tools_sse(self):
+        events = (b'event: response.output_item.done\n'
+                  b'data: {"type": "response.output_item.done", "item": {}}\n\n'
+                  b'event: response.completed\n'
+                  b'data: {"type": "response.completed", '
+                  b'"response": {"model": "x-ai/grok-4.6", "output": []}}\n\n')
+        notes = {}
+        out = b''.join(snoop_response_identity(
+            FakeUpstream(200, events, [('Content-Type', 'text/event-stream')]), notes))
+        self.assertEqual(notes, {'served_model': 'x-ai/grok-4.6'})
+        self.assertEqual(out, events)
+
+    def test_snoop_ignores_errors_and_malformed_bodies(self):
+        notes = {}
+        out = b''.join(snoop_response_identity(FakeUpstream(500, b'{"error": 1}', []), notes))
+        self.assertEqual(notes, {})
+        self.assertEqual(out, b'{"error": 1}')
+        notes = {}
+        out = b''.join(snoop_response_identity(FakeUpstream(200, b'not json', []), notes))
+        self.assertEqual(notes, {})
+        self.assertEqual(out, b'not json')
 
     def test_stub_in_tools_is_completed_by_discovered_schema(self):
         schema = {'type': 'object', 'properties': {'value': {'type': 'string'}}}

@@ -49,7 +49,9 @@ BASE_INSTRUCTIONS = (Path(__file__).with_name('openrouter_base_instructions.txt'
 
 def catalog_name(model):
     short = model.display_name.removesuffix(' · OpenRouter')
-    return short if short.startswith(model.vendor) else model.vendor + ': ' + short
+    if short.startswith(model.vendor) or ': ' in short:
+        return short  # Already carries its own vendor-style prefix (aliases do).
+    return model.vendor + ': ' + short
 
 
 def openrouter_entry(model):

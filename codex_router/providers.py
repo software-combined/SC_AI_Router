@@ -7,7 +7,7 @@ from .capabilities import CANONICAL_ORDER, OPENROUTER_HOST, REASONING_LEVELS, ch
 from .registry import by_slug
 from .runtime import log_event
 from .discovered import remember
-from .tool_adapter import prepare_tools, stream_events, ToolEvents
+from .tool_adapter import prepare_tools, snoop_response_identity, stream_events, ToolEvents
 
 HOP_HEADERS = {'host', 'connection', 'content-length', 'transfer-encoding',
                'upgrade', 'keep-alive', 'proxy-authorization', 'proxy-authenticate', 'te', 'trailer'}
@@ -86,7 +86,10 @@ class SubscriptionProvider:
         return Prepared(self.host, '/backend-api/codex' + path, fwd, raw_body, set(), self.name)
 
     def adapt(self, response, tool_names, notes=None):
-        yield from _passthrough(response)
+        if notes is not None and response.status == 200:
+            yield from snoop_response_identity(response, notes)
+        else:
+            yield from _passthrough(response)
 
 
 class OpenRouterProvider:
@@ -124,7 +127,9 @@ class OpenRouterProvider:
                         json.dumps(payload).encode(), tool_names, self.name)
 
     def adapt(self, response, tool_names, notes=None):
-        if tool_names and response.status == 200:
+        if notes is not None and not tool_names and response.status == 200:
+            yield from snoop_response_identity(response, notes)
+        elif tool_names and response.status == 200:
             if 'text/event-stream' in response.getheader('Content-Type', ''):
                 yield from stream_events(response, tool_names, notes)
             else:
@@ -162,13 +167,7 @@ class OpenRouterProvider:
             raise PreparationError(str(exc))
 
     def compact_trigger(self, model, payload, key):
-        """Answer a V2 compaction_trigger inline: exactly one ocx1 item back.
-
-        Codex 0.153.x sends the trigger as a normal /responses call and fatals
-        unless the stream carries exactly one compaction output item. Routed
-        models cannot mint OpenAI blobs, so the local summarizer briefs and
-        the summary rides the transparent envelope our replay already decodes.
-        """
+        """Answer a V2 trigger inline with exactly one ocx1 compaction item."""
         try:
             items = [item for item in payload.get('input', [])
                      if not (isinstance(item, dict)
