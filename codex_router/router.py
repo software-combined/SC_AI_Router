@@ -12,7 +12,7 @@ from compression import zstd
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from .credentials import Credentials
 from .runtime import MAX_BODY, ROUTER_HOME, VERSION, log_event
-from . import local_services, providers
+from . import local_services, providers, setup
 from .providers import NATIVE_SERVICE_PATHS, PreparationError
 
 
@@ -83,7 +83,10 @@ class Handler(BaseHTTPRequestHandler):
             pass  # Client already disconnected; the event log keeps the record.
 
     def authorized_path(self):
-        if self.headers.get('Origin'):
+        # Setup URLs carry their own token plus nonce and enforce same-origin
+        # themselves, so the generic rebinding rejection exempts their path.
+        if (self.headers.get('Origin')
+                and '/setup/' not in self.path.split('?', 1)[0]):
             return None, False
         prefix = '/' + self.server.state['token']
         candidate, sep, _ = self.path[1:].partition('/')
@@ -99,6 +102,8 @@ class Handler(BaseHTTPRequestHandler):
         path, _ = self.authorized_path()
         if path is None:
             return self.error(403, 'Forbidden')
+        if path.startswith('/setup/'):
+            return setup.serve(self, path[len('/setup/'):], False)
         if path == '/health':
             return self.send_json(200, {'status': 'ok', 'version': VERSION,
                                         'inflight': self.server.inflight,
@@ -126,6 +131,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.server.draining:
             return self.drain_reject()
         if path not in NATIVE_SERVICE_PATHS | {'/responses', '/responses/compact'}:
+            if path.startswith('/setup/'):
+                return setup.serve(self, path[len('/setup/'):], True)
             return self.error(404, 'Unsupported route')
         self.connection.settimeout(120)
         try:

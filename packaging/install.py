@@ -8,13 +8,14 @@ import os
 import plistlib
 import random
 import secrets
+import time
+import webbrowser
 import shutil
 import socket
 import subprocess
 import sys
 import tarfile
 import tempfile
-import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -135,6 +136,12 @@ def ensure_state(home):
     with os.fdopen(fd, 'w') as stream:
         stream.write(json.dumps(state, indent=2) + '\n')
     return state
+
+
+def _write_state(home, state):
+    fd = os.open(home / 'mixed-router-state.json', os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, 'w') as stream:
+        stream.write(json.dumps(state, indent=2) + '\n')
 
 
 def ensure_credentials(home, state, env=None):
@@ -442,10 +449,23 @@ def do_install(args, _fetch=fetch, _run=None):
         raise SystemExit('openai_mode must be subscription or none')
     if state.get('openai_mode') != mode:
         state['openai_mode'] = mode
-        fd = os.open(home / 'mixed-router-state.json', os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, 'w') as stream:
-            stream.write(json.dumps(state, indent=2) + '\n')
-    ensure_credentials(home, state)
+        _write_state(home, state)
+    setup_url = None
+    if args.setup:
+        # First-run window: the router boots keyless on this single-use link
+        # and the operator pastes one key there instead of into the terminal.
+        # TTL mirrors codex_router.setup.SETUP_TTL_S; kept literal so the
+        # 3.9-compatible installer never imports the router package.
+        state['setup'] = {'nonce': secrets.token_urlsafe(32),
+                          'expires': int(time.time()) + 15 * 60}
+        _write_state(home, state)
+        setup_url = (f"http://127.0.0.1:{state['port']}/{state['token']}"
+                     f"/setup/{state['setup']['nonce']}")
+    try:
+        ensure_credentials(home, state)
+    except SystemExit as exc:
+        if exc.code != 3 or setup_url is None:
+            raise
     previous = install_bundle(home, latest['version'], tarball, manifest_doc, python)
     agents = Path.home() / 'Library' / 'LaunchAgents'
     write_plist(agents / (LABEL + '.plist'), render_plist(python, home, state))
@@ -507,6 +527,11 @@ def do_install(args, _fetch=fetch, _run=None):
         os.chmod(receipt_path, 0o600)
     except OSError:
         pass
+    if setup_url is not None:
+        # Printed as a fallback: the browser should already show this page.
+        # It carries the per-install loopback token, so it stays operator-private.
+        print(f'open {setup_url} to connect your OpenRouter key')
+        webbrowser.open(setup_url)
     for stale in home.glob('releases/*'):
         if stale.name not in (latest['version'], Path(previous).name if previous else ''):
             shutil.rmtree(stale, ignore_errors=True)
@@ -604,6 +629,9 @@ def build_parser():
     parser.add_argument('--uninstall', action='store_true')
     parser.add_argument('--static-catalogue', action='store_true',
                         help='No-op: the static catalogue file is now always configured.')
+    parser.add_argument('--setup', action='store_true',
+                        help='First-run key window: mint a setup link and open it instead of '
+                             'requiring the key up front.')
     parser.add_argument('--openai-mode', default=None)
     return parser
 

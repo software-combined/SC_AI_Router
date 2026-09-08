@@ -147,6 +147,78 @@ class InstallConfigTests(unittest.TestCase):
             self.assertIn(update, targets)
             self.assertLess(targets.index(main), targets.index(update))
 
+    def test_setup_mode_installs_without_key_and_opens_window(self):
+        import time as _time
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            blob, latest = _craft_bundle('1.0.0')
+            opened = []
+
+            class FakeBrowser:
+                def open(self, url):
+                    opened.append(url)
+                    return True
+
+            _patch_attrs(self, run=lambda cmd, **kwargs: _ok_run(cmd, **kwargs),
+                         self_test=lambda *args: None,
+                         write_catalogue=_fake_write_catalogue,
+                         wait_version=lambda *args, **kwargs: True,
+                         webbrowser=FakeBrowser())
+            args = install_mod.build_parser().parse_args(
+                ['--feed', 'file:///latest.json', '--home', str(home), '--setup'])
+            env = {'HOME': str(Path(tmp) / 'fakehome'), 'PATH': '/usr/bin:/bin'}
+            with mock.patch.dict(os.environ, env, clear=True):
+                self.assertEqual(
+                    install_mod.do_install(args, _fetch=_static_fetch(latest, blob)), 0)
+            state = json.loads((home / 'mixed-router-state.json').read_text())
+            self.assertIn('setup', state)
+            self.assertGreater(state['setup']['expires'], int(_time.time()))
+            self.assertEqual(len(opened), 1)
+            self.assertIn(f"/setup/{state['setup']['nonce']}", opened[0])
+            config = Path(env['HOME']) / '.codex' / 'config.toml'
+            self.assertIn('# BEGIN local mixed model picker', config.read_text())
+
+    def test_setup_mode_with_key_still_opens_window(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            blob, latest = _craft_bundle('1.0.0')
+            opened = []
+
+            class FakeBrowser:
+                def open(self, url):
+                    opened.append(url)
+                    return True
+
+            _patch_attrs(self, run=lambda cmd, **kwargs: _ok_run(cmd, **kwargs),
+                         self_test=lambda *args: None,
+                         write_catalogue=_fake_write_catalogue,
+                         wait_version=lambda *args, **kwargs: True,
+                         webbrowser=FakeBrowser())
+            args = install_mod.build_parser().parse_args(
+                ['--feed', 'file:///latest.json', '--home', str(home), '--setup'])
+            env = {'HOME': str(Path(tmp) / 'fakehome'), 'PATH': '/usr/bin:/bin',
+                   'OPENROUTER_API_KEY': 'test-key'}
+            with mock.patch.dict(os.environ, env, clear=True):
+                self.assertEqual(
+                    install_mod.do_install(args, _fetch=_static_fetch(latest, blob)), 0)
+            self.assertEqual(len(opened), 1)
+
+    def test_no_setup_without_key_still_refuses(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            blob, latest = _craft_bundle('1.0.0')
+            _patch_attrs(self, run=lambda cmd, **kwargs: _ok_run(cmd, **kwargs),
+                         self_test=lambda *args: None,
+                         write_catalogue=_fake_write_catalogue,
+                         wait_version=lambda *args, **kwargs: True)
+            args = install_mod.build_parser().parse_args(
+                ['--feed', 'file:///latest.json', '--home', str(home)])
+            env = {'HOME': str(Path(tmp) / 'fakehome'), 'PATH': '/usr/bin:/bin'}
+            with mock.patch.dict(os.environ, env, clear=True):
+                with self.assertRaises(SystemExit) as ctx:
+                    install_mod.do_install(args, _fetch=_static_fetch(latest, blob))
+            self.assertEqual(ctx.exception.code, 3)
+
     def test_channel_feed_prefers_pinned_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
