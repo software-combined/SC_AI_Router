@@ -5,5 +5,6 @@
   "packaging/service.py": 310,
   "tests/test_install_config.py": 337,
   "tests/test_install_lifecycle.py": 369,
-  "tests/test_install_catalogue.py": 134
+  "tests/test_install_catalogue.py": 134,
+  "tests/test_mixed_router.py": 323
 }

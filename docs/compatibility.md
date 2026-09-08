@@ -6,6 +6,7 @@ Tested Codex desktop versions:
 |---|---|---|
 | 0.153.4 | 2026-09-07 | probe baseline |
 | 0.153.4 | 2026-09-08 | no-subscription spike: custom provider (`scg_router`, no login) runs `thread/start` + `turn/start` to `/responses` with bearer auth; `model/list` unanswered in all login shapes; see Plan 043 Step 1 report |
+| 0.153.4 (desktop 26.901.51231, Arch `codex-desktop-git`) | 2026-09-08 | catalogue schema fix required: chat creation failed with `missing field 'display_name'` until every row carried the full schema; subscription stubs now seed with live picker labels. Linux `systemd` user units verified as the `launchd` equivalent |
 
 Per-model quirks, generated from the registry:
 

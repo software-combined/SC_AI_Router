@@ -156,12 +156,90 @@ class CatalogueFlagTests(unittest.TestCase):
                 self.assertEqual(proc.returncode, 0, proc.stderr)
 
 
+class CatalogueSchemaCompatTests(unittest.TestCase):
+    """Codex >=0.153.4 requires every catalogue row to carry the full schema.
+
+    The subscription roster used to seed bare {'slug': ...} stubs and the
+    OpenRouter template lacked the newer required fields; either made chat
+    creation fail with 'failed to parse model_catalog_json ... missing field
+    `display_name`' (2026-09-08, Codex 26.901.51231 / client 0.153.4).
+    """
+
+    REQUIRED_FIELDS = (
+        'slug', 'display_name', 'description', 'shell_type', 'visibility',
+        'supported_in_api', 'additional_speed_tiers', 'service_tiers',
+        'availability_nux', 'upgrade', 'model_messages',
+        'include_skills_usage_instructions', 'include_plugin_usage_instructions',
+        'include_apps_usage_instructions', 'default_reasoning_summary',
+        'supports_reasoning_summaries', 'supports_reasoning_summary_parameter',
+        'support_verbosity', 'default_verbosity', 'apply_patch_tool_type',
+        'web_search_tool_type', 'truncation_policy',
+        'supports_image_detail_original', 'comp_hash', 'context_window',
+        'max_context_window', 'default_reasoning_level',
+        'supported_reasoning_levels', 'input_modalities', 'priority',
+        'available_in_plans', 'prefer_websockets', 'minimal_client_version',
+        'supports_parallel_tool_calls', 'default_service_tier',
+        'model_specialty', 'auto_compact_token_limit',
+        'auto_review_model_override', 'experimental_supported_tools',
+        'supports_search_tool', 'use_responses_lite',
+        'node_repl_auto_review_required', 'node_repl_disabled', 'tool_mode',
+        'multi_agent_version')
+
+    def test_every_merged_row_carries_the_required_schema(self):
+        merged = merge({'models': []},
+                       roster=('gpt-6-astra', 'gpt-reserve', 'codex-auto-review'))
+        for row in merged['models']:
+            with self.subTest(slug=row['slug']):
+                for field in self.REQUIRED_FIELDS:
+                    self.assertIn(field, row)
+                self.assertTrue(row['display_name'])
+                self.assertTrue(row['description'])
+
+    def test_roster_stub_display_names_match_the_live_picker(self):
+        merged = merge({'models': []},
+                       roster=('gpt-6-astra', 'gpt-reserve', 'gpt-5.6-sol',
+                               'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5',
+                               'gpt-5.4-mini', 'gpt-5.3-codex-spark',
+                               'codex-auto-review'))
+        names = {m['slug']: m['display_name'] for m in merged['models']}
+        self.assertEqual(names['gpt-6-astra'], 'GPT-6-Astra')
+        self.assertEqual(names['gpt-reserve'], 'GPT-Reserve')
+        self.assertEqual(names['gpt-5.6-sol'], 'GPT-5.6-Sol')
+        self.assertEqual(names['gpt-5.6-terra'], 'GPT-5.6-Terra')
+        self.assertEqual(names['gpt-5.6-luna'], 'GPT-5.6-Luna')
+        self.assertEqual(names['gpt-5.5'], 'GPT-5.5')
+        self.assertEqual(names['gpt-5.4-mini'], 'GPT-5.4-Mini')
+        self.assertEqual(names['gpt-5.3-codex-spark'], 'GPT-5.3-Codex-Spark')
+        self.assertEqual(names['codex-auto-review'], 'Codex Auto Review')
+
+    def test_unknown_roster_slug_falls_back_to_slug_as_display_name(self):
+        merged = merge({'models': []}, roster=('gpt-totally-new',))
+        row = next(m for m in merged['models'] if m['slug'] == 'gpt-totally-new')
+        self.assertEqual(row['display_name'], 'gpt-totally-new')
+        self.assertTrue(row['description'])
+
+    def test_openrouter_template_matches_codex_required_fields(self):
+        entry = openrouter_entry(by_slug('z-ai/glm-5.3-flash'))
+        self.assertTrue(entry['prefer_websockets'])
+        self.assertTrue(entry['supports_parallel_tool_calls'])
+        self.assertTrue(entry['supports_reasoning_summaries'])
+        self.assertEqual(entry['minimal_client_version'], '0.153.0')
+        self.assertEqual(entry['default_service_tier'], None)
+        self.assertEqual(entry['model_specialty'], None)
+        self.assertEqual(entry['auto_compact_token_limit'], None)
+        self.assertEqual(entry['auto_review_model_override'], None)
+        self.assertIn('free', entry['available_in_plans'])
+        self.assertIn('enterprise', entry['available_in_plans'])
+
+
 class CatalogueRosterTests(unittest.TestCase):
     def test_merge_seeds_missing_roster_slugs_as_stubs(self):
         merged = merge({'models': []}, roster=('gpt-6-astra', 'gpt-5.6-luna'))
         by_slug = {m['slug']: m for m in merged['models']}
-        self.assertEqual(by_slug['gpt-6-astra'], {'slug': 'gpt-6-astra'})
-        self.assertEqual(by_slug['gpt-5.6-luna'], {'slug': 'gpt-5.6-luna'})
+        self.assertEqual(by_slug['gpt-6-astra']['slug'], 'gpt-6-astra')
+        self.assertEqual(by_slug['gpt-5.6-luna']['slug'], 'gpt-5.6-luna')
+        self.assertEqual(by_slug['gpt-6-astra']['display_name'], 'GPT-6-Astra')
+        self.assertEqual(by_slug['gpt-5.6-luna']['display_name'], 'GPT-5.6-Luna')
         for model in models_for('codex'):
             if model.provider == 'openrouter':
                 self.assertIn(model.slug, by_slug)
