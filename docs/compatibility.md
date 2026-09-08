@@ -5,6 +5,7 @@ Tested Codex desktop versions:
 | version | date | result |
 |---|---|---|
 | 0.153.4 | 2026-09-07 | probe baseline |
+| 0.153.4 | 2026-09-08 | no-subscription spike: custom provider (`scg_router`, no login) runs `thread/start` + `turn/start` to `/responses` with bearer auth; `model/list` unanswered in all login shapes; see Plan 043 Step 1 report |
 
 Per-model quirks, generated from the registry:
 

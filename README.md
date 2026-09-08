@@ -49,6 +49,17 @@ OpenAI models use the ChatGPT subscription. OpenRouter models bill the
 API key per request. There is no local spend cap; watch usage in the
 OpenRouter dashboard.
 
+## Without a ChatGPT subscription
+
+Install with `--openai-mode none --setup`, paste one OpenRouter key into
+the setup window, and Codex uses a custom provider (`scg_router`) whose
+`base_url` carries the per-install path token. No ChatGPT login is needed
+and no subscription traffic is sent: OpenAI models answer 400, native
+service paths answer 404 locally, and OpenRouter models work with tools,
+compaction, and web search where the model supports it. Server-side thread
+titles and the approvals reviewer are unavailable; set
+`approvals_reviewer = "user"` inside the marked block.
+
 ## Troubleshooting
 
 Logs live under `logs/` beside the state directory. Check health at

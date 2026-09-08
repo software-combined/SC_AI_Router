@@ -76,7 +76,7 @@ wire_api = "responses"
 env_key = "SCG_ROUTER_TOKEN"
 ```
 
-  export `SCG_ROUTER_TOKEN=spike-token`, and run the probe with `-c model_provider=...` overrides removed (edit a copy of the probe or add a `--provider <id>` flag that sets `cfg['model_provider']`). Record whether `model/list` asks the sink for `/models`, which native paths (if any) are requested for a custom provider, and whether `turn/start` reaches `/responses` with `Authorization: Bearer spike-token`.
+  export `SCG_ROUTER_TOKEN=<sandbox-value>`, and run the probe with `-c model_provider=...` overrides removed (edit a copy of the probe or add a `--provider <id>` flag that sets `cfg['model_provider']`). Record whether `model/list` asks the sink for `/models`, which native paths (if any) are requested for a custom provider, and whether `turn/start` reaches `/responses` with `Authorization: Bearer <sandbox-value>`.
 
 Then, if the desktop app is the target for staff, check the ChatGPT desktop app's Codex sign-in screen for an API-key or "use custom provider" option and record what is offered (screenshot description only).
 
@@ -87,6 +87,15 @@ Decision table:
 - App-server works but the desktop app requires ChatGPT sign-in: report that no-subscription staff can use the Codex CLI and IDE extension but not the desktop app, and ask Cyril whether to proceed on that basis.
 
 **Verify**: your report contains the per-shape request lists from the sink and the decision-table outcome.
+
+### Step 1 report (ran 2026-09-08, Codex Desktop/0.153.4 app-server, sandboxed CODEX_HOME, no real credentials)
+
+- Shape A (empty CODEX_HOME, no login): `initialize` succeeds; `model/list` never answers (no result, no error, only a plugin-cache warning in stderr). No sink traffic possible since no base_url override is configured.
+- Shape B (placeholder API-key login): `login --with-api-key` accepts the placeholder locally with no OpenAI validation and writes `auth.json`; `initialize` succeeds; `model/list` never answers. Plugin manager warns API-key auth cannot reach the remote catalog. No evidence Codex validates the key before serving.
+- Shape C (custom provider, no OpenAI login, `SCG_ROUTER_TOKEN=<sandbox-value>`): `initialize` succeeds; `thread/start` for `z-ai/glm-5.3-flash` on `scg_router` succeeds with no `auth.json` present; `turn/start` reaches the sink as `POST /backend-api/codex/responses` with `Authorization: Bearer` present (retried 6x against the 404 sink, proving bearer + path routing works). No native `/alpha/*` or `/guardian` calls observed at startup or thread start in this shape.
+- Decision-table outcome: Shape C works in app-server. Preferred path confirmed. Desktop-app sign-in screen check not run (CLI/IDE basis only so far; the owner question on desktop-app ChatGPT sign-in stays open).
+- Note: `thread/start` requires the `experimentalApi` capability flag; without it the server returns `thread/start.dynamicTools requires experimentalApi capability`.
+
 
 ### Step 2: `openai_mode` in state and startup validation
 
