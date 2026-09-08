@@ -70,9 +70,9 @@ class PackagingTests(unittest.TestCase):
             self.assertIn(name, names, name)
         self.assertIn('MANIFEST.json', names)
 
-    def test_version_is_major_minor(self):
+    def test_version_is_semver(self):
         version = (Path(__file__).resolve().parents[1] / 'packaging' / 'VERSION').read_text().strip()
-        self.assertRegex(version, r'^\d+\.\d+$')
+        self.assertRegex(version, r'^\d+\.\d+\.\d+$')
 
     def test_build_composes_full_version_and_manifest(self):
         import importlib.util
