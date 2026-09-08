@@ -25,6 +25,10 @@ jobs:
       - run: python -m compileall -q codex_router tools tests
       - run: python tools/check_source_limits.py
       - run: python -m codex_router.models check || python -m codex_router.models check --offline
+      - name: Catalogue merge check
+        run: |
+          python -m codex_router.catalogue --merge /tmp/ci-catalogue.json
+          python -m codex_router.catalogue --check /tmp/ci-catalogue.json
       - run: python -m unittest discover -s tests -t . -v
       - name: No request cap
         run: |

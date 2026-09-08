@@ -1,0 +1,120 @@
+"""Fresh-install picker catalogue: config flag and merge seeding (Plan 041/039).
+
+Reuses the tests.test_install rig so baseline-pinned tests.test_install.py stays untouched.
+"""
+import hashlib
+import importlib.util
+import json
+import os
+import subprocess
+import tarfile
+import tempfile
+import unittest
+from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
+from codex_router.catalogue import check
+from codex_router.registry import MODELS
+from tests.test_install import _ok_run, _patch_attrs, _static_fetch, install_mod
+
+_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _release_bundle(tmp):
+    feeddir = Path(tmp) / 'feed'
+    feeddir.mkdir()
+    spec = importlib.util.spec_from_file_location(
+        'router_release', _ROOT / 'packaging' / 'release.py')
+    release_mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(release_mod)
+    release_mod.main(['--out', str(feeddir)])
+    tarball = next(iter(feeddir.glob('*.tar.gz')))
+    blob = tarball.read_bytes()
+    with tarfile.open(tarball, mode='r') as tar:
+        manifest = json.loads(tar.extractfile('MANIFEST.json').read())
+    version = manifest['version']
+    latest = {'version': version, 'url': 'file:///bundle.tar.gz',
+              'sha256': hashlib.sha256(blob).hexdigest(), 'min_python': '3.14'}
+    return version, _static_fetch(latest, blob)
+
+
+def _is_catalogue(cmd):
+    return 'codex_router.catalogue' in cmd
+
+
+def _recording_run(calls, fail_catalogue=False):
+    def fake_run(cmd, **kwargs):
+        calls.append(list(cmd))
+        if _is_catalogue(cmd):
+            if fail_catalogue:
+                return SimpleNamespace(returncode=1, stdout='', stderr='merge boom')
+            return subprocess.run(cmd, **kwargs)
+        return _ok_run(cmd, **kwargs)
+    return fake_run
+
+
+def _env(tmp):
+    return {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}
+
+
+def _args(home, *extra_args):
+    return install_mod.build_parser().parse_args(
+        ['--feed', 'file:///latest.json', '--home', str(home), *extra_args])
+
+
+def _setup(test, tmp):
+    home = Path(tmp) / 'home'
+    version, fake_fetch = _release_bundle(tmp)
+    _patch_attrs(test, health=lambda state, timeout=20: {'status': 'ok', 'version': version})
+    return home, version, fake_fetch
+
+
+def _install(test, tmp, home, fake_fetch, fake_run, *extra_args):
+    env = _env(tmp)
+    with mock.patch.dict(os.environ, env):
+        test.assertEqual(
+            install_mod.do_install(_args(home, *extra_args), _fetch=fake_fetch, _run=fake_run), 0)
+    return Path(env['HOME']) / '.codex' / 'config.toml'
+
+
+class InstallCatalogueTests(unittest.TestCase):
+    def test_default_install_omits_static_catalog_line(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home, _, fake_fetch = _setup(self, tmp)
+            config = _install(self, tmp, home, fake_fetch, _recording_run([]))
+            block = config.read_text()
+            self.assertIn('# BEGIN local mixed model picker', block)
+            self.assertNotIn('model_catalog_json', block)
+
+    def test_static_catalogue_flag_writes_catalog_line(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home, _, fake_fetch = _setup(self, tmp)
+            config = _install(self, tmp, home, fake_fetch,
+                              _recording_run([]), '--static-catalogue')
+            self.assertIn(f'model_catalog_json = "{home}/mixed-models.json"', config.read_text())
+
+    def test_install_generates_working_picker_catalogue(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home, _, fake_fetch = _setup(self, tmp)
+            calls = []
+            _install(self, tmp, home, fake_fetch, _recording_run(calls))
+            self.assertTrue(any(_is_catalogue(cmd) and '--merge' in cmd for cmd in calls))
+            catalog = json.loads((home / 'mixed-models.json').read_text())
+            slugs = {m['slug'] for m in catalog['models']}
+            for model in MODELS:
+                if model.provider == 'openrouter':
+                    self.assertIn(model.slug, slugs)
+            self.assertTrue(check(str(home / 'mixed-models.json')))
+
+    def test_catalogue_merge_failure_aborts_install(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home, version, fake_fetch = _setup(self, tmp)
+            with mock.patch.dict(os.environ, _env(tmp)):
+                with self.assertRaisesRegex(SystemExit, 'catalogue merge failed'):
+                    install_mod.do_install(_args(home), _fetch=fake_fetch,
+                                           _run=_recording_run([], fail_catalogue=True))
+            self.assertFalse((home / 'releases' / version).exists())
+
+
+if __name__ == '__main__':
+    unittest.main()
