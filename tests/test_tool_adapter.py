@@ -103,5 +103,33 @@ class ToolAdapterTests(unittest.TestCase):
         self.assertEqual(item['name'], 'echo')
         self.assertEqual(json.loads(item['arguments']), {'value': 'probe'})
 
+    def test_stub_in_tools_is_completed_by_discovered_schema(self):
+        schema = {'type': 'object', 'properties': {'value': {'type': 'string'}}}
+        stub = {'type': 'function', 'name': 'echo', 'description': 'Echo stub'}
+        full = {'type': 'function', 'name': 'echo', 'description': 'Echo', 'parameters': schema}
+        payload = {'tools': [{'type': 'namespace', 'name': 'probe', 'tools': [stub]}],
+            'input': [{'type': 'tool_search_output', 'call_id': 's1', 'status': 'completed',
+                       'execution': 'client',
+                       'tools': [{'type': 'namespace', 'name': 'probe', 'tools': [full]}]}]}
+        prepare_tools(payload)
+        matches = [tool for tool in payload['tools']
+                   if tool.get('description', '').startswith('probe.echo')]
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0]['parameters'], schema)
+
+    def test_declared_schema_is_not_clobbered_by_discovered_stub(self):
+        schema = {'type': 'object', 'properties': {'value': {'type': 'string'}}}
+        full = {'type': 'function', 'name': 'echo', 'description': 'Echo', 'parameters': schema}
+        stub = {'type': 'function', 'name': 'echo', 'description': 'Echo stub'}
+        payload = {'tools': [{'type': 'namespace', 'name': 'probe', 'tools': [full]}],
+            'input': [{'type': 'tool_search_output', 'call_id': 's1', 'status': 'completed',
+                       'execution': 'client',
+                       'tools': [{'type': 'namespace', 'name': 'probe', 'tools': [stub]}]}]}
+        prepare_tools(payload)
+        matches = [tool for tool in payload['tools']
+                   if tool.get('description', '').startswith('probe.echo')]
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0]['parameters'], schema)
+
 if __name__ == '__main__':
     unittest.main()
