@@ -124,6 +124,25 @@ class SetupUnitTests(unittest.TestCase):
                                           _urlopen=_key_ok(), _now=NOW)
         self.assertEqual(status, 409)
         self.assertEqual((home / 'openrouter.key').read_text(), 'old\n')
+        (home / 'openrouter.key').write_bytes(b'\xff\xfe\x00b')
+        status, _ = setup.handle_setup(state, home, 'n' * 16, True,
+                                       b'key=sk-test&mode=subscription',
+                                       _urlopen=_key_ok(), _now=NOW)
+        self.assertEqual(status, 409)
+        self.assertEqual((home / 'openrouter.key').read_bytes(), b'\xff\xfe\x00b')
+
+    def test_post_claims_empty_installer_placeholder(self):
+        home = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, home, True)
+        state = _state(home)
+        (home / 'mixed-router-state.json').write_text(json.dumps(state))
+        (home / 'openrouter.key').write_text('')
+        status, _ = setup.handle_setup(state, home, 'n' * 16, True,
+                                       b'key=sk-test&mode=subscription',
+                                       _urlopen=_key_ok(), _now=NOW)
+        self.assertEqual(status, 200)
+        self.assertEqual((home / 'openrouter.key').read_text(), 'sk-test\n')
+        self.assertEqual(oct((home / 'openrouter.key').stat().st_mode & 0o777), '0o600')
 
     def test_load_state_boots_keyless_on_fresh_nonce(self):
         import time as _time

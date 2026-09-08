@@ -119,7 +119,20 @@ def handle_setup(state, home, nonce, is_post, form, _urlopen=None, _now=None):
     try:
         fd = os.open(key_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     except FileExistsError:
-        return 409, _form(nonce, 'a key file already exists; delete it to rotate keys')
+        # The installer pre-creates an empty placeholder with owner-only mode
+        # before first run; claiming that empty placeholder must succeed or a
+        # --setup install can never store its key. A file holding a real key
+        # still needs explicit deletion before rotation.
+        try:
+            if key_path.read_bytes().strip():
+                return 409, _form(nonce, 'a key file already exists; delete it to rotate keys')
+            fd = os.open(key_path, os.O_WRONLY | os.O_TRUNC, 0o600)
+            try:
+                os.fchmod(fd, 0o600)
+            except OSError:
+                pass
+        except OSError:
+            return 500, _form(nonce, 'could not store the key')
     except OSError:
         return 500, _form(nonce, 'could not store the key')
     with os.fdopen(fd, 'w') as stream:
