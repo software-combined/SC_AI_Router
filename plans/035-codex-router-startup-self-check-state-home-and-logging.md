@@ -157,6 +157,8 @@ Change `root = Path(__file__).resolve().parent` to the same `ROUTER_HOME` expres
 
 ### Step 5: Decide the request cap
 
+> **RESOLVED 2026-09-08: removed, permanently.** The cap is gone from canonical source and is enforced absent by the `No request cap` step in `.github/workflows/check.yml`. The code quoted in "Current state" above is historical background only. Do not reintroduce it, and do not restore it from a backup copy.
+
 Ask the operator: keep or remove the in-memory OpenRouter request cap? Recommended: **remove** it. It is a trial artefact, it resets only on restart, the default of 1000 will trip for a heavy user within a day, and OpenRouter credit limits are the real spend control. If removed: delete `DEFAULT_REQUEST_CAP`, the `with self.server.lock:` cap block at `:146-150`, `self.requests`, the `request_cap` key from the test fixture and the test `test_compact_counts_against_request_cap`. If kept: make it a required state key with a documented meaning and a daily reset, and record the decision in `README.md`.
 
 **Verify**: tests pass; `grep -n request_cap <router module> <test file>` returns nothing (if removed).

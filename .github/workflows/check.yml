@@ -26,6 +26,9 @@ jobs:
       - run: python tools/check_source_limits.py
       - run: python -m codex_router.models check || python -m codex_router.models check --offline
       - run: python -m unittest discover -s tests -t . -v
+      - name: No request cap
+        run: |
+          if grep -rEn "request_cap|DEFAULT_REQUEST_CAP" codex_router tools tests packaging ; then echo "request cap removed by decision (docs/operations.md); do not reintroduce"; exit 1; fi
       - name: Secrets scan
         run: |
           if grep -rEn "sk-or-v1-[A-Za-z0-9]{20,}|Bearer [A-Za-z0-9._-]{30,}" --include='*.py' --include='*.md' --include='*.json' --include='*.toml' . ; then echo "possible secret committed"; exit 1; fi
