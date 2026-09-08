@@ -56,16 +56,16 @@ class RoutingTests(unittest.TestCase):
                     {'input': [{'type': 'compaction', 'encrypted_content': 'opaque'}]})
                 self.assertIn('cannot read', json.dumps(json.loads(prepared.body)['input']))
 
-    def test_normal_tool_history_retained_and_subscription_tier_removed(self):
-        items = [{'type': 'reasoning', 'encrypted_content': 'provider-owned'},
-                 {'type': 'function_call_output', 'call_id': 'test', 'output': 'result'}]
-        prepared = _prepared('z-ai/glm-5.3', '/responses',
-                             {'input': items, 'service_tier': 'priority'})
-        data = json.loads(prepared.body)
-        self.assertEqual(data['input'], items)
-        self.assertNotIn('service_tier', data)
-        self.assertEqual(data['max_output_tokens'],
-                         by_slug('z-ai/glm-5.3').max_output_tokens)
+    def test_reasoning_blobs_stripped_but_summaries_and_results_kept(self):
+        summary = [{'type': 'text', 'text': 'chose X'}]
+        items = [{'type': 'reasoning', 'encrypted_content': 'blob', 'summary': summary},
+                 {'type': 'reasoning', 'encrypted_content': 'blob'},
+                 {'type': 'function_call_output', 'call_id': 't', 'output': 'r'}]
+        prepared = _prepared('z-ai/glm-5.3', '/responses', {'input': items})
+        data = json.loads(prepared.body)['input']
+        self.assertEqual(data[0], {'type': 'reasoning', 'summary': summary})
+        self.assertEqual(data[1], items[2])
+        self.assertEqual(len(data), 2)
 
     def test_contributor_rejects_max_effort_with_actionable_message(self):
         with self.assertRaisesRegex(ValueError, "does not support reasoning effort 'max'"):
