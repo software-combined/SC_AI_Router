@@ -314,6 +314,27 @@ def channel_feed(home, _fetch=fetch):
     return FEED_URL
 
 
+def feed_serial(home):
+    """Last accepted feed serial; 0 when no serialed release was installed."""
+    try:
+        return int((home / 'feed-serial').read_text().strip())
+    except FileNotFoundError:
+        return 0
+    except ValueError:
+        raise SystemExit('feed serial file is corrupt')
+
+
+def check_serial(home, latest):
+    """Refuse feeds older than the last accepted one (replay protection)."""
+    serial = latest.get('serial', 0)
+    if type(serial) is not int:
+        raise SystemExit('feed has a bad serial')
+    stored = feed_serial(home)
+    if serial < stored:
+        raise SystemExit(f'stale feed serial {serial} is older than {stored}')
+    return serial
+
+
 def do_install(args, _fetch=fetch, _run=None):
     global run
     if _run is not None:
@@ -329,9 +350,13 @@ def do_install(args, _fetch=fetch, _run=None):
             raise SystemExit(2)
     feed = args.feed or channel_feed(home)
     if args.version:
+        # Explicit operator pin (e.g. rollback): version comparison and the
+        # replay gate are both skipped, and no serial is recorded.
         latest = {'version': args.version, 'url': feed, 'sha256': None, 'min_python': '3.14'}
+        serial = 0
     else:
         latest = json.loads(_fetch(feed).decode())
+        serial = check_serial(home, latest)
     if not args.version and not newer(latest['version'], current_version(home)):
         print(f"up to date {current_version(home)}")
         return 0
@@ -410,6 +435,8 @@ def do_install(args, _fetch=fetch, _run=None):
     for stale in home.glob('releases/*'):
         if stale.name not in (latest['version'], Path(previous).name if previous else ''):
             shutil.rmtree(stale, ignore_errors=True)
+    if not args.version:
+        (home / 'feed-serial').write_text(str(serial) + '\n')
     print(f"installed {latest['version']}; health ok; restart Codex to load the router")
     return 0
 
@@ -427,6 +454,7 @@ def do_check_update(args, _fetch=fetch, _read_feed=None, _sleep=None):
         print(f"up to date {current_version(home)}")
         return 0
     latest = json.loads(body.decode())
+    check_serial(home, latest)
     if not newer(latest['version'], current_version(home)):
         if etag:
             etag_path.write_text(etag + '\n')

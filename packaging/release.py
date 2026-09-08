@@ -64,6 +64,7 @@ def main(argv=None):
     base = args.url_base or f'https://github.com/{REPO}/releases/download/{tag}'
     latest = {'version': version, 'url': f'{base}/{tarball_name}',
               'sha256': hashlib.sha256(tarball).hexdigest(), 'min_python': MIN_PYTHON,
+              'serial': args.build,
               'published': datetime.now(timezone.utc).isoformat(timespec='seconds')}
     (out_dir / 'latest.json').write_text(json.dumps(latest, indent=2) + '\n')
     print(f'built {tarball_name} {latest["sha256"][:12]}')
