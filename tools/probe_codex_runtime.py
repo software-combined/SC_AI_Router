@@ -112,10 +112,12 @@ def media_items():
     items = []
     if '--image' in sys.argv:
         items.append({'type': 'image',
-                      'image_url': 'data:image/png;base64,' + base64.b64encode(red_png()).decode()})
+                      'url': 'data:image/png;base64,' + base64.b64encode(red_png()).decode()})
     if '--audio' in sys.argv:
+        # Audio key mirrors the verified image shape; still unproven live
+        # (upstream rejects the leg with invalid_prompt).
         items.append({'type': 'audio',
-                      'audio_url': 'data:audio/wav;base64,' + base64.b64encode(silent_wav()).decode()})
+                      'url': 'data:audio/wav;base64,' + base64.b64encode(silent_wav()).decode()})
     return items
 
 def run_switch_leg(thread, target):

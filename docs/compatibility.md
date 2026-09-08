@@ -45,8 +45,24 @@ against the installed router, Codex desktop 0.153.4. All six passed with
 | meta/muse-spark-1.3-contributor | passed |
 | ~x-ai/grok-latest | passed |
 
-Capability probes: `--image` and `--audio` media legs landed in the probe;
-reasoning summary, apply-patch, web search, and experimental-tools legs plus
-paid per-model runs are still pending.
+Capability probes (`--image` leg, Codex desktop 0.153.4, 2026-09-09,
+paid runs against the live router):
+
+| model | image result |
+|---|---|
+| z-ai/glm-5.3-flash | passed (named red) |
+| meta/muse-spark-1.3 | failed (answered `unknown`) |
+| moonshotai/kimi-k3 | failed (answered `Black`) |
+| ~x-ai/grok-latest | failed (turn timed out on media leg; base round trip passes) |
+
+Audio leg: `meta/muse-spark-1.3` rejected upstream (`invalid_prompt`).
+Reasoning summary, apply-patch, web search, and experimental-tools legs are
+not yet built in the probe. Probe item shape fixed this round: Codex 0.153.4
+wants `{"type": "image", "url": ...}`, not `image_url`.
+
+Other preview models (base round trip only):
+
+| model | tier | date | evidence |
+|---|---|---|---|
 | anthropic/claude-opus-5 | preview | 2026-09-07 | base round trip |
 | anthropic/claude-fable-5.1 | preview | 2026-09-07 | base round trip |
