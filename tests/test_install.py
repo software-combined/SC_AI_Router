@@ -67,7 +67,8 @@ def _tarball(files=(), links=()):
 
 def _ok_run(cmd, **kwargs):
     if '-c' in cmd:
-        return SimpleNamespace(returncode=0, stdout='3 14', stderr='')
+        return SimpleNamespace(returncode=0, stdout='3 14\n/opt/homebrew/bin/python3.14\n',
+                               stderr='')
     return SimpleNamespace(returncode=0, stdout='', stderr='')
 
 
@@ -84,7 +85,7 @@ def _craft_bundle(version):
 
 
 _SEAMS = ('run', 'health', 'wait_idle', 'wait_version', 'self_test',
-           'write_catalogue', 'fetch_feed', 'feed_serial')
+           'write_catalogue', 'fetch_feed', 'feed_serial', 'main_plist_exe')
 # webbrowser patches module-global stdlib handle via setattr on install_mod;
 # call sites use `webbrowser.open` so plain setattr suffices (no _svc mirror).
 

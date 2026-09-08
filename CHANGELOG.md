@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.6 (unreleased)
+
+- Fix launchd spawning nothing after update: the installer persisted
+  find_python's bare discovery token (`python3.14`) into the plist,
+  which launchd cannot resolve (no Homebrew PATH). It now persists the
+  probed absolute `sys.executable`, both plist renderers fail closed on
+  non-absolute interpreters, and upgrades detect a legacy bare-python
+  plist and reload the main agent (updater untouched) to heal it.
+
 ## 0.6.5 (unreleased)
 
 - Remove feed signature enforcement: the installer accepts unsigned
