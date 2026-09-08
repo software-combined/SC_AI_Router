@@ -90,6 +90,20 @@ def rewrite_input(items):
             rewritten.append(item)
     return rewritten
 
+def strip_images(items, keep_images):
+    if keep_images or not isinstance(items, list):
+        return items
+    out = []
+    for item in items:
+        if (isinstance(item, dict) and item.get('type') == 'message'
+                and isinstance(item.get('content'), list)):
+            blocks = [b for b in item['content']
+                      if not (isinstance(b, dict) and b.get('type') == 'input_image')]
+            if len(blocks) != len(item['content']):
+                item = {**item, 'content': blocks}
+        out.append(item)
+    return out
+
 def strip_reasoning_blobs(items):
     """Drop OpenAI-owned reasoning blobs other models cannot read; keep plaintext."""
     if not isinstance(items, list):

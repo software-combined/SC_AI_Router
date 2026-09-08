@@ -2,7 +2,7 @@ import unittest
 import base64
 from codex_router.compaction import (PREFIX, TRANSCRIPT_BUDGET, build_compact_v1_output,
     compaction_text, decode_summary, extract_user_messages, rewrite_input,
-    transcript_for_summary, OPAQUE_NOTE)
+    strip_images, transcript_for_summary, OPAQUE_NOTE)
 
 class CompactionTests(unittest.TestCase):
     def test_transparent_envelope_round_trips(self):
@@ -55,6 +55,23 @@ class TranscriptTests(unittest.TestCase):
         self.assertNotIn('', texts)
         self.assertTrue(any('last-task' in text for text in texts))
         self.assertTrue(any('summary' in text for text in texts))
+
+class ImageStripTests(unittest.TestCase):
+    def _item(self):
+        return {'type': 'message', 'role': 'user', 'content': [
+            {'type': 'input_text', 'text': 'look here'},
+            {'type': 'input_image', 'image_url': 'data:image/png;base64,AAA', 'detail': 'high'}]}
+
+    def test_image_blocks_dropped_text_kept_without_mutating(self):
+        item = self._item()
+        out = strip_images([item], False)
+        self.assertEqual(out[0]['content'], [{'type': 'input_text', 'text': 'look here'}])
+        self.assertEqual(len(item['content']), 2)
+
+    def test_keep_images_passes_through(self):
+        item = self._item()
+        self.assertIs(strip_images([item], True)[0], item)
+        self.assertEqual(strip_images('prompt', False), 'prompt')
 
 class TranscriptBoundaryTests(unittest.TestCase):
     def test_drops_oldest_whole_items_newest_first(self):
