@@ -107,12 +107,12 @@ As listed per step; pattern `tests/test_apply_catalogue.py` for temp files and `
 
 ## Done criteria
 
-- [ ] All six existing models carry `tier: verified`; `models check` prints `0 problems`.
-- [ ] `models add <slug> --dry-run` derives a row from live metadata without writing.
-- [ ] Router reloads `models.json` hourly from `models_url`, keeps a last-good cache, and rejects invalid payloads without swapping (tests plus a manual seventh-model check on the author's machine).
-- [ ] Preview models are labelled in the picker.
-- [ ] CI validates `models.json`; the PR template has the checklist.
-- [ ] Full suite `OK`; `plans/README.md` status row updated.
+- [x] All six existing models carry `tier: verified`; `models check` prints `0 problems`. (Verified 2026-09-09: 22 models — 16 verified, 6 preview — 0 problems.)
+- [x] `models add <slug> --dry-run` derives a row from live metadata without writing. (Verified 2026-09-09 against `openai/gpt-4o`.)
+- [ ] Router reloads `models.json` hourly from `models_url`, keeps a last-good cache, and rejects invalid payloads without swapping (tests plus a manual seventh-model check on the author's machine). (Deferred per 2026-09-08 audit brief, pending versioned-update proof; manual check needs the live gate.)
+- [x] Preview models are labelled in the picker. (`catalogue.py:61-64,70-71`: Preview display-name suffix, description note, priority offset.)
+- [x] CI validates `models.json`; the PR template has the checklist. (`check.yml:27-31` models check + catalogue merge check; PR template line 6.)
+- [x] Full suite `OK`; `plans/README.md` status row updated. (Suite green 2026-09-09; row updated same turn.)
 
 ## STOP conditions
 
