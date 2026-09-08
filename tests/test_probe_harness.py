@@ -181,7 +181,8 @@ class ProbeHarnessTests(unittest.TestCase):
             self.assertIn('"media_color_seen": true', proc.stdout)
             recorded = Path(rec).read_text()
             self.assertIn('"type": "image"', recorded)
-            self.assertIn('data:image/png;base64,', recorded)
+            self.assertIn('"url": "data:image/png;base64,', recorded)
+            self.assertNotIn('image_url', recorded)
 
     def test_image_strip_path_for_text_only_model(self):
         slug = _slug_with(self, False)
@@ -197,7 +198,8 @@ class ProbeHarnessTests(unittest.TestCase):
             self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
             recorded = Path(rec).read_text()
             self.assertIn('"type": "audio"', recorded)
-            self.assertIn('data:audio/wav;base64,', recorded)
+            self.assertIn('"url": "data:audio/wav;base64,', recorded)
+            self.assertNotIn('audio_url', recorded)
 
 
 if __name__ == '__main__':

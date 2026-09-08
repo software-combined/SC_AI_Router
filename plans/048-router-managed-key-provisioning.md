@@ -8,16 +8,24 @@
 
 ## Status and first proof
 
-- Status: TODO; design complete, implementation and live account checks pending.
+- Status: IN PROGRESS (owner decision 2026-09-09): IT issues one OpenRouter key
+  per portco user, pasted once into the existing setup window. The full
+  invitation-and-provisioning service below is NOT built; its design is retained
+  for reference. Remaining work: document the IT issue/revoke flow, then verify
+  one install end to end.
 - Priority: P1. Category: direction/security. Effort: L. Delivery risk: HIGH.
 - Planned at router commit `1979e7f`, 2026-09-08; infrastructure reconnaissance
   at `fad37f24`. These are source snapshots, not runtime verification.
 - Depends on existing credential/provider/installer functionality (040, 037,
   041). Does not depend on the blocked live catalogue plan 039 or model plan 046.
-- First observable proof: an invited user outside SCG's Entra tenant installs
+- First observable proof (SUPERSEDED 2026-09-09 by the IT-issued-keys decision
+  above; retained for reference): an invited user outside SCG's Entra tenant installs
   on a clean Mac, verifies their email, receives a restricted individual key
   without seeing or pasting it, completes a synthetic OpenRouter request, and
   loses provider access when IT revokes that installation.
+- Active proof under the IT-issued-keys decision: IT issues one OpenRouter key
+  per portco user, the user pastes it once into the setup window, a synthetic
+  OpenRouter request completes, and provider access ends when IT revokes that key.
 - Full acceptance adds a second portco/domain, lifecycle recovery, admin scope,
   budget enforcement, unattended updates, Business/Enterprise compatibility
   and the release/distribution gates.
@@ -39,7 +47,7 @@ V1 supports one active installation per user. Additional devices are a later
 explicit product decision, requiring shared budget reservations across devices.
 Portco transfers revoke the old grant and its keys before a new grant is issued.
 
-### User and IT journeys
+### User and IT journeys (SUPERSEDED 2026-09-09 by the IT-issued-keys decision above; retained for reference)
 
 1. SCG IT registers a portco, its funding owner and policy; then invites a named
    email address with a monthly allowance. Start with central IT administration.

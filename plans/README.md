@@ -228,24 +228,24 @@ repository's `plans/` and continue there. Paths inside the plans use
 | 038 | Single model registry, quirks as data, generated OpenRouter catalogue entries | P1 | M | 036 | DONE |
 | 037 | Provider interface and thin relay handler | P2 | M | 036, 038, 035 | DONE |
 | 040 | Ordered credential lookup (env, key file, OpenCode fallback), startup fail-closed | P1 | S | 035 (037 either order) | DONE |
-| 043 | No-subscription mode: spike three Codex login shapes, `openai_mode`, local native services | P1 | M | 037, 038 | IN PROGRESS (spike ran 2026-09-08 on Codex 0.153.4: Shape C custom provider works with no login, thread+turn reach the router with bearer auth; `openai_mode` + local 404 services + path-token none-mode config + probe `--provider` + docs landed in source; live desktop proof and CLI/IDE-only acceptability answer still open) |
+| 043 | No-subscription mode: spike three Codex login shapes, `openai_mode`, local native services | P1 | M | 037, 038 | IN PROGRESS (spike ran 2026-09-08 on Codex 0.153.4: Shape C custom provider works with no login, thread+turn reach the router with bearer auth; `openai_mode` + local 404 services + path-token none-mode config + probe `--provider` + docs landed in source; desktop needs sign-in per owner 2026-09-09; GPT Teams likely, so no-subscription path stays CLI/IDE-only) |
 | 039 | Live merged catalogue served by the router, retire the snapshot file | P2 | M | 038, 037, 035, 043 (fallback rules) | BLOCKED (Step 1 no-go: no /models fetch observed; static-file fallback retained per 2026-09-08 audit brief until a replacement is proven) |
 | 041 | Versioned release bundle, stdlib installer, health check and rollback, update agent | P1 | L | 034, 035, 040 (039 optional) | IN PROGRESS (installer/updater landed in source, never deployed to a versioned layout; fleet updates need the 047-A feed decision) |
 | 045 | Release on every push to `main`/`beta`, 15-minute updates, drain and socket-activated restart | P1 | M | 041 | IN PROGRESS (drain + socket activation landed; push-to-release and the live 15-minute loop need the 047-A feed decision and the 047-B cutover gate) |
 | 044 | Full capability parity from live metadata, probe-gated (audio, limits, summaries, freeform patch, web search) | P2 | M to L | 038, 037 (039 for live entries) | IN PROGRESS (partial: registry flags, live_refresh, `models add`, probe media/effort/deferred legs landed; paid per-model probes pending) |
 | 046 | Model onboarding at scale: `models add` command, preview tier, hourly remote model list, CI validation | P1 | M | 038, 039, 044, 045 | IN PROGRESS (partial: `models add` + preview tier + compat record + isolated verify landed; hourly hot-reload deferred per 2026-09-08 audit brief pending versioned-update proof) |
 | 042 | Documentation rewrite, compatibility matrix, retire manual release artefacts, vault note | P3 | S | 035, 038, 039, 040, 041, 046 | DONE (docs rewrite landed; two inaccurate plan-text claims corrected in-file 2026-09-08) |
-| 047 | Router remediation handover: working delivery, versioned cutover, protocol fixes, installers, key window | P0 | L | 041, 045 | IN PROGRESS (source merged to main 9bbdc28: feed serial and signatures, catalogue seeding wired into installer, protocol C/D fixes, pointer-file releases, launcher in bundle, shutdown, setup key claim, none-mode auth, probe provider flag, guidance via current_release_dir; live cutover, feed hosting decision, and money-blocked macOS/Windows signing remain) |
-| 048 | [Invitation-only managed OpenRouter keys across portcos](048-router-managed-key-provisioning.md) | P1 | L | 040, 037, 041; account/auth/distribution preflight | TODO (full plan; implementation and deployment not started; simpler IT-issued-keys option under consideration, no decision taken) |
+| 047 | Router remediation handover: working delivery, versioned cutover, protocol fixes, installers, key window | P0 | L | 041, 045 | IN PROGRESS (source merged to main 9bbdc28: feed serial and signatures, catalogue seeding wired into installer, protocol C/D fixes, pointer-file releases, launcher in bundle, shutdown, setup key claim, none-mode auth, probe provider flag, guidance via current_release_dir; live cutover remains; feed = AWS 651116729473 ap-southeast-2 (owner 2026-09-09, key home TBD); macOS/Windows signing deferred, plugin route to investigate instead of paid certs; Linux install notes expected via contributor PR) |
+| 048 | [Invitation-only managed OpenRouter keys across portcos](048-router-managed-key-provisioning.md) | P1 | L | 040, 037, 041; account/auth/distribution preflight | IN PROGRESS (owner 2026-09-09: IT issues one OpenRouter key per portco user, pasted once into the setup window; full provisioning service not built) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale).
 
 ### Dependency notes
 
-- Plan 048 is the current managed-access design: any invited email domain,
-  independent of Entra, with individual OS-stored keys, bounded allocations,
-  revocation and portco administration. Execute its vertical slices in order;
-  macOS pilot comes before Windows/RMM acceptance. It does not reopen 039/046.
+- Plan 048 (owner decision 2026-09-09): IT issues one OpenRouter key per portco
+  user, pasted once into the setup window; the full provisioning-service design
+  below is retained for reference only and its slice order no longer applies.
+  It does not reopen 039/046.
   Its observed release/distribution preflight supersedes older assumptions for
   this rollout; the plan itself does not authorise publishing or account writes.
 - 036 before 037: the ten characterisation tests are the acceptance suite for the refactor and must pass with unchanged assertions.
