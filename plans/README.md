@@ -204,7 +204,7 @@ registration.
   rejected because the existing 30-second non-blocking health call already
   supplies the required periodic trigger.
 
-## Codex model router plans (034 to 046), added 2026-09-07
+## Codex model router plans (034 to 048), added 2026-09-07
 
 Written after a read-only audit of `domains/ai-platform/codex-model-router` at
 commit `749a6b8d` on branch `codex/codex-adapter-20260907` (the router is not
@@ -228,14 +228,15 @@ repository's `plans/` and continue there. Paths inside the plans use
 | 038 | Single model registry, quirks as data, generated OpenRouter catalogue entries | P1 | M | 036 | DONE |
 | 037 | Provider interface and thin relay handler | P2 | M | 036, 038, 035 | DONE |
 | 040 | Ordered credential lookup (env, key file, OpenCode fallback), startup fail-closed | P1 | S | 035 (037 either order) | DONE |
-| 043 | No-subscription mode: spike three Codex login shapes, `openai_mode`, local native services | P1 | M | 037, 038 | IN PROGRESS (`openai_mode` + local services landed in source; login-shape spike never ran, none-mode config unproven) |
+| 043 | No-subscription mode: spike three Codex login shapes, `openai_mode`, local native services | P1 | M | 037, 038 | IN PROGRESS (`openai_mode` + local services landed in source; none-mode config now uses the path-token base_url instead of the unprovisioned env var and the probe takes `--provider`; login-shape spike never ran, live desktop proof still open) |
 | 039 | Live merged catalogue served by the router, retire the snapshot file | P2 | M | 038, 037, 035, 043 (fallback rules) | BLOCKED (Step 1 no-go: no /models fetch observed; static-file fallback retained per 2026-09-08 audit brief until a replacement is proven) |
 | 041 | Versioned release bundle, stdlib installer, health check and rollback, update agent | P1 | L | 034, 035, 040 (039 optional) | IN PROGRESS (installer/updater landed in source, never deployed to a versioned layout; fleet updates need the 047-A feed decision) |
 | 045 | Release on every push to `main`/`beta`, 15-minute updates, drain and socket-activated restart | P1 | M | 041 | IN PROGRESS (drain + socket activation landed; push-to-release and the live 15-minute loop need the 047-A feed decision and the 047-B cutover gate) |
 | 044 | Full capability parity from live metadata, probe-gated (audio, limits, summaries, freeform patch, web search) | P2 | M to L | 038, 037 (039 for live entries) | IN PROGRESS (partial: registry flags, live_refresh, `models add`, probe media/effort/deferred legs landed; paid per-model probes pending) |
 | 046 | Model onboarding at scale: `models add` command, preview tier, hourly remote model list, CI validation | P1 | M | 038, 039, 044, 045 | IN PROGRESS (partial: `models add` + preview tier + compat record + isolated verify landed; hourly hot-reload deferred per 2026-09-08 audit brief pending versioned-update proof) |
 | 042 | Documentation rewrite, compatibility matrix, retire manual release artefacts, vault note | P3 | S | 035, 038, 039, 040, 041, 046 | DONE (docs rewrite landed; two inaccurate plan-text claims corrected in-file 2026-09-08) |
-| 048 | [Invitation-only managed OpenRouter keys across portcos](048-router-managed-key-provisioning.md) | P1 | L | 040, 037, 041; account/auth/distribution preflight | TODO (full plan; implementation and deployment not started) |
+| 047 | Router remediation handover: working delivery, versioned cutover, protocol fixes, installers, key window | P0 | L | 041, 045 | IN PROGRESS (source slices landed: feed serial and signatures, catalogue seeding, protocol C/D fixes, pointer-file releases, launcher, shutdown, setup key claim, none-mode auth, probe provider flag; live cutover, feed hosting decision, and money-blocked macOS/Windows signing remain) |
+| 048 | [Invitation-only managed OpenRouter keys across portcos](048-router-managed-key-provisioning.md) | P1 | L | 040, 037, 041; account/auth/distribution preflight | TODO (full plan; implementation and deployment not started; simpler IT-issued-keys option under consideration, no decision taken) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale).
 

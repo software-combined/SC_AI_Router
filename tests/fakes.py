@@ -4,13 +4,17 @@ Never opens a network connection. Patch target is
 http.client.HTTPSConnection as used by codex_router.router.
 """
 import http.client
+import json
 from pathlib import Path
 from unittest import mock
+
+from codex_router import feed_verify
 
 
 def install_payloads(version):
     rules = Path(__file__).resolve().parents[1] / 'tools' / 'global_instructions.py'
     return {'packaging/VERSION': (version + '\n').encode(),
+            'packaging/router_launch.py': b'# launcher\n',
             'tools/global_instructions.py': rules.read_bytes()}
 
 
@@ -62,3 +66,28 @@ def install_fake(test, responder):
     test.addCleanup(patcher.stop)
     patcher.start()
     return recorded
+
+
+# Shared feed-signing key for installer tests. Every fake feed is signed with
+# the test seed and trusted through the installer key slot, so the fail-closed
+# signature gate stays exercised on all install paths. Importing this module
+# sets the key; a test proving no-key refusal must patch it back to ''.
+TEST_SEED, TEST_PUB = feed_verify.generate_keypair()
+feed_verify.FEED_PUBLIC_KEY = TEST_PUB
+
+
+def sign_body(body):
+    return feed_verify.sign_hex(TEST_SEED, body).encode()
+
+
+def signed_fetch(latest, blob):
+    """Fake fetcher serving a signed feed doc, its .sig sidecar, and a bundle."""
+    body = json.dumps(latest).encode()
+    sig = sign_body(body)
+
+    def fake_fetch(url):
+        if url.endswith('.sig'):
+            return sig
+        return body if url.endswith('.json') else blob
+
+    return fake_fetch

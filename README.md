@@ -89,6 +89,7 @@ directory at an idle boundary:
 `codex_router/capabilities.py`,
 `codex_router/compaction.py`,
 `codex_router/discovered.py`,
+`codex_router/feed_verify.py`,
 `codex_router/candidate.py`,
 `codex_router/setup.py`,
 `codex_router/runtime.py`,
@@ -104,5 +105,7 @@ directory at an idle boundary:
 `codex_router/openrouter_base_instructions.txt`,
 `tools/probe_codex_runtime.py`,
 `tools/global_instructions.py`,
-`tools/disable.py`. Never copy state, activation, catalogue, backup, or log
-files.
+`tools/disable.py`. The installer also places `packaging/router_launch.py`
+as `router_launch.py` beside the state directory and points the service at
+it, so restarts follow the pointer without symlinks. Never copy state,
+activation, catalogue, backup, or log files.

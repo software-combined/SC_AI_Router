@@ -79,10 +79,11 @@ class InstallConfigTests(unittest.TestCase):
             table_at = block.index('[model_providers.scg_router]')
             self.assertLess(provider_at, table_at)
             self.assertLess(catalog_at, table_at)
-            self.assertIn('env_key = "SCG_ROUTER_TOKEN"', block)
+            self.assertNotIn('env_key', block)
             self.assertNotIn('ROUTER_OPENROUTER_KEY_', block)
             self.assertNotIn('openai_base_url', block)
             state = json.loads((home / 'mixed-router-state.json').read_text())
+            self.assertIn(f"/{state['token']}/backend-api/codex", block)
             self.assertEqual(state.get('openai_mode'), 'none')
             receipt = json.loads((home / 'activation.json').read_text())
             self.assertEqual(receipt.get('openai_mode'), 'none')
@@ -93,7 +94,7 @@ class InstallConfigTests(unittest.TestCase):
             _install(self, tmp, home, '1.0.0', '--openai-mode', 'none')
             config, _, _, _ = _install(self, tmp, home, '1.0.1')
             block = config.read_text()
-            self.assertIn('env_key = "SCG_ROUTER_TOKEN"', block)
+            self.assertNotIn('env_key', block)
             self.assertNotIn('openai_base_url', block)
             state = json.loads((home / 'mixed-router-state.json').read_text())
             self.assertEqual(state.get('openai_mode'), 'none')
@@ -133,6 +134,17 @@ class InstallConfigTests(unittest.TestCase):
                 (agents / (install_mod.UPDATE_LABEL + '.plist')).read_bytes())
             self.assertNotIn('--feed', doc['ProgramArguments'])
             self.assertFalse((home / 'feed').exists())
+
+    def test_update_plist_points_at_resolved_release(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            _install(self, tmp, home, '1.0.0', feed=None)
+            agents = Path(tmp) / 'fakehome' / 'Library' / 'LaunchAgents'
+            doc = plistlib.loads(
+                (agents / (install_mod.UPDATE_LABEL + '.plist')).read_bytes())
+            argv = doc['ProgramArguments']
+            self.assertEqual(argv[argv.index('--home') + 1], str(home))
+            self.assertEqual(argv[1], str(home / 'releases' / '1.0.0' / 'packaging' / 'install.py'))
 
     def test_fresh_install_bootstraps_updater_after_plists(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -225,11 +237,7 @@ class InstallConfigTests(unittest.TestCase):
             self.assertEqual(install_mod.channel_feed(home), install_mod.FEED_URL)
             (home / 'channel').write_text('beta\n')
             (home / 'feed').write_text('file:///pinned.json\n')
-
-            def boom(url):
-                raise AssertionError('pinned feed must not touch the network')
-
-            self.assertEqual(install_mod.channel_feed(home, _fetch=boom),
+            self.assertEqual(install_mod.channel_feed(home),
                              'file:///pinned.json')
 
     def test_check_update_reinvoke_does_not_pin_channel_feed(self):

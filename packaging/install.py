@@ -21,10 +21,12 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from codex_router import feed_verify
+
 LABEL = 'com.local.codex-mixed-model-router'
 UPDATE_LABEL = LABEL + '.update'
 FEED_URL = 'https://github.com/software-combined/SC_OpenRouter_adapter/releases/latest/download/latest.json'
-BETA_API_URL = 'https://api.github.com/repos/software-combined/SC_OpenRouter_adapter/releases?per_page=5'
 MIN_PYTHON = (3, 14)
 
 
@@ -101,9 +103,43 @@ def self_test(python, release_dir):
         raise SystemExit('bundle self-test failed')
 
 
+def current_release_dir(home):
+    """Resolved release dir from the pointer file (or a legacy symlink)."""
+    current = home / 'current'
+    try:
+        if current.is_symlink():
+            target = Path(os.readlink(current))
+        elif current.is_file():
+            # Basename rule matches the launcher: pointer content never
+            # escapes the releases dir, even if hand-edited.
+            name = current.read_text().strip().split('/')[-1]
+            target = home / 'releases' / name if name else None
+        else:
+            return None
+    except (OSError, ValueError):
+        return None
+    return target if target is not None and target.is_dir() else None
+
+
 def current_version(home):
-    marker = home / 'current' / 'packaging' / 'VERSION'
-    return marker.read_text().strip() if marker.exists() else '0.0.0'
+    release = current_release_dir(home)
+    return release.name if release is not None else '0.0.0'
+
+
+def _clear_current(home):
+    current = home / 'current'
+    try:
+        if current.is_symlink() or current.is_file():
+            current.unlink()
+    except OSError:
+        pass
+
+
+def _clear_tmp(tmp):
+    if tmp.is_symlink() or tmp.is_file():
+        tmp.unlink()
+    elif tmp.exists():
+        shutil.rmtree(tmp)
 
 
 # Subscription-side roster for the combined picker: bare slugs that route on
@@ -161,23 +197,27 @@ def ensure_credentials(home, state, env=None):
 
 
 def swap_current(home, release_dir):
-    previous = os.readlink(home / 'current') if (home / 'current').is_symlink() else None
+    """Atomically point current at release_dir; returns the previous version."""
+    resolved = current_release_dir(home)
+    previous = resolved.name if resolved is not None else None
     tmp = home / 'current.tmp'
-    if tmp.is_symlink() or tmp.exists():
-        tmp.unlink()
-    os.symlink(release_dir, tmp)
+    _clear_tmp(tmp)
+    # Pointer file, not a symlink: Windows needs elevation for symlinks.
+    tmp.write_text(release_dir.name + '\n')
     os.replace(tmp, home / 'current')
     return previous
 
 
 def render_plist(python, home, state):
     return {'Label': LABEL,
-            'ProgramArguments': [python, '-m', 'codex_router'],
+            'ProgramArguments': [python, str(home / 'router_launch.py')],
             'Sockets': {'Listeners': {'SockNodeName': '127.0.0.1',
                                       'SockServiceName': str(state['port']),
                                       'SockFamily': 'IPv4',
                                       'SockType': 'stream'}},
-            'WorkingDirectory': str(home / 'current'),
+            # No WorkingDirectory: the router resolves everything from
+            # ROUTER_HOME and its own file location, so the plist stays valid
+            # across releases and a plain TERM restarts into the new pointer.
             'EnvironmentVariables': {'ROUTER_HOME': str(home)},
             'KeepAlive': True, 'RunAtLoad': True, 'ThrottleInterval': 10, 'Umask': 63,
             'StandardOutPath': str(home / 'logs' / 'launchd.log'),
@@ -185,8 +225,9 @@ def render_plist(python, home, state):
 
 
 def render_update_plist(python, home, feed=None):
-    args = [python, str(home / 'current' / 'packaging' / 'install.py'), '--check-update',
-            '--home', str(home)]
+    base = current_release_dir(home) or home / 'current'
+    installer = base / 'packaging' / 'install.py'
+    args = [python, str(installer), '--check-update', '--home', str(home)]
     if feed:
         args += ['--feed', feed]
     return {'Label': UPDATE_LABEL,
@@ -238,6 +279,18 @@ def restart_service(home, uid):
     run(['launchctl', 'bootstrap', f'gui/{uid}', str(agents / (UPDATE_LABEL + '.plist'))], check=True)
 
 
+def install_launcher(home, release_dir):
+    """Copy the stable entry point beside the state directory, atomically."""
+    try:
+        blob = (release_dir / 'packaging' / 'router_launch.py').read_bytes()
+    except OSError:
+        raise SystemExit('bundle has no launcher')
+    tmp = home / 'router_launch.tmp'
+    _clear_tmp(tmp)
+    tmp.write_bytes(blob)
+    os.replace(tmp, home / 'router_launch.py')
+
+
 def install_bundle(home, version, tarball, manifest_doc, python):
     releases = home / 'releases'
     releases.mkdir(parents=True, exist_ok=True)
@@ -257,6 +310,7 @@ def install_bundle(home, version, tarball, manifest_doc, python):
     if final.exists():
         shutil.rmtree(final)
     partial.rename(final)
+    install_launcher(home, final)
     previous = swap_current(home, final)
     return previous
 
@@ -324,17 +378,7 @@ def fetch_feed(url, etag, _fetch=fetch):
         raise
 
 
-def resolve_beta_feed(_fetch=fetch):
-    payload = json.loads(_fetch(BETA_API_URL).decode())
-    for entry in payload:
-        if entry.get('prerelease'):
-            for asset in entry.get('assets', []):
-                if asset.get('name') == 'latest-beta.json':
-                    return asset['browser_download_url']
-    raise SystemExit('no beta release found')
-
-
-def channel_feed(home, _fetch=fetch):
+def channel_feed(home):
     # An explicit --feed at install time is pinned in home/'feed' and wins
     # over the channel file, so scheduled updates keep following it. Delete
     # the file to return to channel resolution.
@@ -342,7 +386,7 @@ def channel_feed(home, _fetch=fetch):
         return (home / 'feed').read_text().strip()
     channel = (home / 'channel').read_text().strip() if (home / 'channel').exists() else 'stable'
     if channel == 'beta':
-        return resolve_beta_feed(_fetch)
+        return feed_verify.beta_feed_url(FEED_URL)
     return FEED_URL
 
 
@@ -393,11 +437,10 @@ def do_rollback(args):
     run(['launchctl', 'kill', 'TERM', f'gui/{os.getuid()}/{LABEL}'], capture_output=True)
     if not wait_version(state, args.version):
         if previous is not None:
-            swap_current(home, Path(previous))
+            swap_current(home, home / 'releases' / previous)
             print(f'rollback to {args.version} failed health check; restored {previous}')
         else:
-            if (home / 'current').is_symlink():
-                (home / 'current').unlink()
+            _clear_current(home)
             print(f'rollback to {args.version} failed health check; no previous release')
         run(['launchctl', 'kill', 'TERM', f'gui/{os.getuid()}/{LABEL}'], capture_output=True)
         raise SystemExit(1)
@@ -421,7 +464,7 @@ def do_install(args, _fetch=fetch, _run=None):
             print('No Python 3.14 found: brew install python@3.14')
             raise SystemExit(2)
     feed = args.feed or channel_feed(home)
-    latest = json.loads(_fetch(feed).decode())
+    latest = feed_verify.load_signed_feed(feed, _fetch)
     serial = check_serial(home, latest)
     if not newer(latest['version'], current_version(home)):
         print(f"up to date {current_version(home)}")
@@ -479,16 +522,12 @@ def do_install(args, _fetch=fetch, _run=None):
         run(['launchctl', 'kill', 'TERM', f'gui/{uid}/{LABEL}'], capture_output=True)
     if not wait_version(state, latest['version']):
         if previous:
-            swap_current(home, Path(previous))
+            swap_current(home, home / 'releases' / previous)
             restart_service(home, os.getuid())
             print(f'rolled back to {previous}: new version failed health check')
         else:
-            failed = home / 'releases' / latest['version']
-            try:
-                if (home / 'current').is_symlink() and (home / 'current').readlink() == failed:
-                    (home / 'current').unlink()
-            except OSError:
-                pass
+            if current_release_dir(home) == home / 'releases' / latest['version']:
+                _clear_current(home)
             run(['launchctl', 'bootout', f'gui/{os.getuid()}/{LABEL}'], capture_output=True)
             print('new version failed health check; see logs/launchd.log')
         raise SystemExit(1)
@@ -498,9 +537,12 @@ def do_install(args, _fetch=fetch, _run=None):
              f'openai_base_url = "http://127.0.0.1:{state["port"]}/{state["token"]}/backend-api/codex"\n'
              + catalog_line + '# END local mixed model picker\n')
     if mode == 'none':
-        # Root keys stay above the provider table; the key name matches the
-        # Plan 043 spike shape (staff export the router path token as its
-        # value) instead of a per-port variable nothing provisions.
+        # No env var: the per-install path token embedded in base_url carries
+        # auth, the same mechanism subscription mode uses in openai_base_url.
+        # Nothing on staff machines provisions SCG_ROUTER_TOKEN, so naming it
+        # here fails closed at the router with a 403. Live desktop proof that
+        # Codex keeps the path prefix on a custom provider base_url is still
+        # the gate for this mode (Plan 043 spike never ran).
         block = ('# BEGIN local mixed model picker\n'
                  'model_provider = "scg_router"\n'
                  + catalog_line +
@@ -508,11 +550,11 @@ def do_install(args, _fetch=fetch, _run=None):
                  'name = "SC router"\n'
                  f'base_url = "http://127.0.0.1:{state["port"]}/{state["token"]}/backend-api/codex"\n'
                  'wire_api = "responses"\n'
-                 'env_key = "SCG_ROUTER_TOKEN"\n'
                  + '# END local mixed model picker\n')
     receipt_path = home / 'activation.json'
     previous_receipt = json.loads(receipt_path.read_text()) if receipt_path.exists() else {}
-    guidance = runpy.run_path(str(home / 'current' / 'tools' / 'global_instructions.py'))
+    release = current_release_dir(home)
+    guidance = runpy.run_path(str(release / 'tools' / 'global_instructions.py'))
     rules_path, rules_before, rules_after, rules_receipt = guidance['prepare'](
         config_path.parent, previous_receipt.get('global_instructions'))
     stamp = time.strftime('%Y%m%d-%H%M%S', time.gmtime())
@@ -539,7 +581,7 @@ def do_install(args, _fetch=fetch, _run=None):
         print(f'open {setup_url} to connect your OpenRouter key')
         webbrowser.open(setup_url)
     for stale in home.glob('releases/*'):
-        if stale.name not in (latest['version'], Path(previous).name if previous else ''):
+        if stale.name not in (latest['version'], previous or ''):
             shutil.rmtree(stale, ignore_errors=True)
     (home / 'feed-serial').write_text(str(serial) + '\n')
     print(f"installed {latest['version']}; health ok; restart Codex to load the router")
@@ -558,7 +600,7 @@ def do_check_update(args, _fetch=fetch, _read_feed=None, _sleep=None):
     if status == 304:
         print(f"up to date {current_version(home)}")
         return 0
-    latest = json.loads(body.decode())
+    latest = feed_verify.load_signed_feed(feed, _fetch, body)
     check_serial(home, latest)
     if not newer(latest['version'], current_version(home)):
         if etag:
@@ -599,9 +641,9 @@ def do_check_update(args, _fetch=fetch, _read_feed=None, _sleep=None):
 
 def do_uninstall(args):
     home = Path(args.home).expanduser()
-    current = home / 'current'
-    if current.is_symlink():
-        disable = current / 'tools' / 'disable.py'
+    release = current_release_dir(home)
+    if release is not None:
+        disable = release / 'tools' / 'disable.py'
         if disable.exists():
             result = run([sys.executable, str(disable)], capture_output=True, text=True,
                          env={**os.environ, 'ROUTER_HOME': str(home)})

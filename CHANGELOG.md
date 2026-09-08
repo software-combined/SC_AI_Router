@@ -15,6 +15,22 @@
   Headers now forward unchanged; missing or expired subscription
   credentials surface as the upstream response instead.
 
+- Installer verifies signed release feeds: detached Ed25519 signature
+  (`latest.json.sig`, pure-stdlib RFC 8032 in `codex_router/feed_verify.py`)
+  over the exact feed bytes before trusting version, URL, checksum or
+  serial; unsigned feeds refused. `packaging/release.py` gains `--gen-key`
+  (owner-only seed file) and `--sign`; the compiled-in release key stays
+  empty until the owner key ceremony, so installs fail closed with a clear
+  message. Beta channel resolves to `beta/latest.json` on the same origin
+  instead of calling the GitHub releases API.
+- First-run key window claims the installer's empty key placeholder, and
+  none-mode Codex config authenticates through the per-install path token.
+- Service lifecycle: `POST /<token>/shutdown` drains and exits behind the
+  path token; the service runs `router_launch.py` from the router home and
+  `current` is a pointer file instead of a symlink.
+- Offline probe accepts `--provider <id>` for the tool round trip on a
+  custom provider.
+
 ## 0.6.1
 
 - Rename the repository to
