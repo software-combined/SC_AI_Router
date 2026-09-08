@@ -1,15 +1,18 @@
-# Codex model router
+# Model router
 
-A small program on your Mac that lets the Codex picker offer both your
-ChatGPT subscription models and approved OpenRouter models. The two
-logins stay separate: subscription traffic keeps using ChatGPT sign-in,
-and OpenRouter traffic uses an API key that never leaves your machine.
+A small program on your computer that serves the Codex picker and Claude
+Code from one place, offering subscription models and approved
+OpenRouter models side by side. The two logins stay separate:
+subscription traffic keeps using the existing ChatGPT or Claude
+sign-in, and OpenRouter traffic uses an API key that never leaves
+your machine.
 
 ## Requirements
 
-macOS with the Codex app, Python 3 (the installer finds or asks for a
+The Codex app and/or Claude Code, Python 3 (the installer finds or asks for a
 3.14 interpreter to run the router itself), and an OpenRouter API key
-for OpenRouter models.
+for OpenRouter models. The router itself runs on macOS, Windows, and Linux;
+the managed installer currently provisions a macOS `launchd` service.
 
 ## Install
 
@@ -37,6 +40,8 @@ the new release. To update now, re-run the installer with
 Start a fresh task when switching providers. Reasoning levels differ
 per model; unavailable levels are hidden. Models labelled Preview in
 the picker are not yet verified: they work, but report anything odd.
+In Claude Code, point `ANTHROPIC_BASE_URL` at the router and choose
+the model with `ANTHROPIC_MODEL`; see `docs/claude-code.md`.
 
 ## Costs
 
@@ -68,7 +73,7 @@ never keys or tokens. Subscription headers never accompany OpenRouter requests; 
 
 ## Links
 
-Operator guide: `docs/operations.md`. Compatibility matrix:
+Claude Code setup: `docs/claude-code.md`. Operator guide: `docs/operations.md`. Compatibility matrix:
 `docs/compatibility.md`. Adding a model: `docs/adding-a-model.md`.
 
 ## Runtime files
@@ -77,6 +82,7 @@ A manual install copies ONLY these files beside the private state
 directory at an idle boundary:
 `codex_router/router.py`,
 `codex_router/providers.py`,
+`codex_router/claude.py`,
 `codex_router/registry.py`,
 `codex_router/credentials.py`,
 `codex_router/tool_adapter.py`,
@@ -98,6 +104,7 @@ directory at an idle boundary:
 `codex_router/models.json`,
 `codex_router/openrouter_base_instructions.txt`,
 `tools/probe_codex_runtime.py`,
+`tools/global_instructions.py`,
 `tools/disable.py`. The installer also places `packaging/router_launch.py`
 as `router_launch.py` beside the state directory and points the service at
 it, so restarts follow the pointer without symlinks. Never copy state,

@@ -1,78 +1,79 @@
 # Changelog
 
-## 0.4.12 (signed release feed)
+## Unreleased
 
-Source changes on `codex/isolated-install-state`, not yet deployed (live
-router still runs the pre-restructure prototype; see Plan 047 section 2):
+- Fix context overflow on OpenRouter models: the output reservation is now
+  capped at half the model's context window. The registry's 943718-token
+  reservation on a 1048576-token window left ~105k for input, so ordinary
+  long-task requests were rejected as exceeding the context.
+- Clarify that the router runtime supports macOS, Windows, and Linux while
+  the managed installer remains macOS-specific.
+- Fix subscription-model 401s: the router no longer requires a
+  subscription `Authorization` header on the loopback hop. Codex 0.153.4
+  authenticates with the URL path token and omits that header, so every
+  subscription request was rejected locally before reaching chatgpt.com.
+  Headers now forward unchanged; missing or expired subscription
+  credentials surface as the upstream response instead.
 
-- Release feeds are authenticated with a detached Ed25519 signature
-  (`latest.json.sig`, pure-stdlib RFC 8032 in `codex_router/feed_verify.py`).
-  The installer verifies the exact feed bytes before trusting the version,
-  URL, checksum or serial, and refuses unsigned feeds. `packaging/release.py`
-  gains `--gen-key` (owner-only seed file) and `--sign`; the compiled-in
-  release key is still empty until the owner key ceremony, so installs keep
-  refusing feeds with a clear message rather than trusting them.
-- Beta channel no longer calls the GitHub releases API; it resolves to
-  `beta/latest.json` on the same origin as the stable feed.
+- Installer verifies signed release feeds: detached Ed25519 signature
+  (`latest.json.sig`, pure-stdlib RFC 8032 in `codex_router/feed_verify.py`)
+  over the exact feed bytes before trusting version, URL, checksum or
+  serial; unsigned feeds refused. `packaging/release.py` gains `--gen-key`
+  (owner-only seed file) and `--sign`; the compiled-in release key stays
+  empty until the owner key ceremony, so installs fail closed with a clear
+  message. Beta channel resolves to `beta/latest.json` on the same origin
+  instead of calling the GitHub releases API.
+- First-run key window claims the installer's empty key placeholder, and
+  none-mode Codex config authenticates through the per-install path token.
+- Service lifecycle: `POST /<token>/shutdown` drains and exits behind the
+  path token; the service runs `router_launch.py` from the router home and
+  `current` is a pointer file instead of a symlink.
+- Offline probe accepts `--provider <id>` for the tool round trip on a
+  custom provider.
 
-## 0.4.11 (none-mode probe flag and plan reconciliation)
+## 0.6.1
 
-Source changes on `codex/isolated-install-state`, not yet deployed (live
-router still runs the pre-restructure prototype; see Plan 047 section 2):
+- Rename the repository to
+  `software-combined/SC_OpenRouter_adapter` and reframe the README for
+  both clients: the router now serves the Codex picker and Claude Code.
+  Update the release and updater URLs to the new location. No behavior
+  change.
 
-- `tools/probe_codex_runtime.py` accepts `--provider <id>` so the offline
-  acceptance harness can drive the tool round trip on a custom provider
-  (e.g. `scg_router`) instead of only the ChatGPT-subscription path. The
-  scripted fake-binary suite covers the flag with no network or billing.
-- `plans/README.md` now tracks 047 (in progress, landed-vs-open scope
-  stated) and 048 (design complete, implementation TODO) alongside 034-046,
-  and the 043 row reflects the path-token none-mode config.
+## 0.6.0 (Claude Code ingress, Preview)
 
-## 0.4.10 (setup key claim and none-mode auth)
+- The loopback router now speaks the Anthropic Messages API at
+  `/<token>/v1/messages` (plus `count_tokens`) for Claude Code, with the
+  same billing split as the Codex picker: OpenRouter-registry slugs go to
+  OpenRouter's Anthropic-compatible endpoint with the router key as the
+  only credential, everything else passes through to `api.anthropic.com`
+  with the client's own subscription credentials.
+- OpenRouter-bound bodies travel byte-identical, so thinking blocks,
+  tool_use IDs and cache_control keep full fidelity with no translation
+  layer. Subscription requests keep version and beta headers; hop headers
+  are stripped. No-subscription mode still serves OpenRouter models.
+- Setup is one variable, `ANTHROPIC_BASE_URL` with the path token, and
+  deliberately no API key variable, which would override the subscription
+  bearer. Operator notes live in `docs/claude-code.md`.
+- Preview status and residual risk: unit-verified against a fake upstream
+  only. A paid live probe through real Claude Code sessions (one
+  OpenRouter model, one subscription model) must pass before this is
+  relied upon. Installer support for `~/.claude/settings.json` is
+  deferred to a follow-up slice.
 
-Source fixes on `codex/isolated-install-state`, not yet deployed (live
-router still runs the pre-restructure prototype; see Plan 047 section 2):
+## 0.5.0
 
-- The setup window now claims the installer's empty key placeholder
-  instead of answering 409, so a `--setup` install can store the pasted
-  key end to end. A file holding a real key still needs explicit deletion
-  before rotation, and a claimed file is tightened to owner-only mode.
-- None-mode Codex config authenticates through the per-install path token
-  embedded in `base_url`, the same mechanism subscription mode uses, and
-  no longer references `SCG_ROUTER_TOKEN`, which nothing on staff machines
-  provisions. Live desktop proof that Codex keeps the path prefix on a
-  custom provider URL is still the gate for this mode (Plan 043 spike
-  never ran).
-
-## 0.4.9 (service lifecycle slice)
-
-Deployment prerequisites from the audit brief (Plan 047 E, unblocked
-parts), committed on `codex/isolated-install-state`, not yet deployed
-(live router still runs the pre-restructure prototype; see Plan 047
-section 2):
-
-- `POST /<token>/shutdown` drains and exits the router behind the path
-  token. Every supervisor relaunches an exited service, so this replaces
-  the macOS-only `launchctl kill` restart primitive on Windows and Linux.
-- The service runs `router_launch.py` from the router home instead of
-  `python -m codex_router` with a working directory: the pointer resolves
-  the active release at exec time, so restarts follow updates with no plist
-  rewrite and no symlink. Dropping `WorkingDirectory` alone would have left
-  fresh installs unbootable (nothing on `sys.path`); the installed launcher
-  booting keyless through `/health` is now covered end to end.
-- `current` is a pointer file holding the release name instead of a
-  symlink, which needs elevation on Windows. Reads resolve legacy
-  symlinks transparently, so existing installs migrate on their next
-  update; stale pointers read as no install. The LaunchAgent drops
-  `WorkingDirectory` (the router never depended on it) so one plist stays
-  valid across releases, and the updater agent points at the resolved
-  release installer.
-- `codex_router/router.py` stands at 262 lines against the 250 soft
-  limit, pinned in the source-limits baseline: the loopback boundary
-  module now serves setup, V2 compaction, and shutdown dispatch, each
-  isolated in its own module behind a few dispatch lines.
-- Still ahead on this axis: splitting the installer into a package
-  before the Windows service backend lands.
+- Offer only the four Claude Latest aliases: Opus, Fable, Sonnet, and Haiku.
+  Remove the previously pinned Opus 5 and Fable 5.1 picker entries on upgrade.
+- Add DeepSeek V4 Pro 0813, V4 Flash 0731, and V4 Flash Vision Exp with
+  current reasoning levels, input modalities, and token limits. Retain
+  the original 0423 identities for existing tasks.
+- Models without advertised effort controls can onboard with reasoning
+  disabled; mandatory or unknown reasoning capabilities still fail closed.
+- Newly added models remain Preview until paid Codex runtime probes pass.
+- Install one global subagent-discovery rules block in Codex's active
+  global AGENTS file, preserving existing instructions. Updates replace
+  only the owned block; uninstall removes it. Rules are not repeated in
+  the model catalogue and do not override permissions or delegation bans.
 
 ## 0.4.8 (first-run key window)
 

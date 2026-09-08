@@ -19,3 +19,14 @@ Preview models route exactly like verified ones; only the picker label
 and ordering differ. A model that needs behaviour the adapter does not
 have (a new quirk type) is a normal code change and release, not a data
 row.
+
+The 2026-09-08 roster uses only the Opus, Fable, Sonnet, and Haiku Latest
+Claude aliases from the [OpenRouter model list](https://openrouter.ai/api/v1/models).
+The current DeepSeek additions are V4 Pro
+0813, V4 Flash 0731, and V4 Flash Vision Exp; the 0423 slugs remain available
+for existing tasks. New entries are Preview, not runtime-verified.
+
+Models with optional reasoning but no advertised effort controls use
+`none` (reasoning disabled); non-reasoning models also use `none`. Mandatory
+reasoning without known effort controls is refused. This does not invent
+Low/High options for older Claude models that only support token budgets.

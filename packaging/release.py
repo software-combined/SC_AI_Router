@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from codex_router import feed_verify
 
 MIN_PYTHON = '3.14'
-REPO = 'software-combined/SC_Codex_openRouter_adapter'
+REPO = 'software-combined/SC_OpenRouter_adapter'
 
 
 def bundle_files(root):

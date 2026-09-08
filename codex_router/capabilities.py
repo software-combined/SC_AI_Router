@@ -4,7 +4,7 @@ Native OpenAI entries keep their catalogue values (multi-agent v2,
 encrypted history, code_mode_only). OpenRouter entries use the proven
 trial values: plaintext V1 subagents, no forced-compaction hash, Node
 REPL offered, and image input only where live metadata advertises it.
-GLM 5.3 and the DeepSeek v4 pair are text-only per live metadata. Contributor rejects max despite
+GLM 5.3 and the DeepSeek v4 text models are text-only per live metadata. Contributor rejects max despite
 advertising it; Grok has no max/minimal. Defaults stay low.
 """
 from .registry import MODELS, openrouter_slugs
@@ -12,8 +12,8 @@ OPENROUTER_MODELS = openrouter_slugs()
 IMAGE_INPUT_MODELS = frozenset(m.slug for m in MODELS if 'image' in m.modalities)
 EXCLUDED_EFFORTS = {m.slug: set(m.excluded_efforts) for m in MODELS if m.excluded_efforts}
 REASONING_LEVELS = {m.slug: list(m.reasoning) for m in MODELS}
-EFFORT_DESCRIPTIONS = {'xhigh': 'Extra high reasoning', 'max': 'Maximum reasoning'}
-CANONICAL_ORDER = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max']
+EFFORT_DESCRIPTIONS = {'none': 'No reasoning', 'xhigh': 'Extra high reasoning', 'max': 'Maximum reasoning'}
+CANONICAL_ORDER = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
 MULTI_AGENT_VERSION = 'v1'
 NODE_REPL_DISABLED = False
 COMP_HASH = None

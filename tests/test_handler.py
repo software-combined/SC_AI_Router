@@ -51,7 +51,8 @@ class HandlerCharacterisationTests(unittest.TestCase):
     def test_openrouter_request_reaches_openrouter_with_router_key_only(self):
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{"output": []}', []))
         server = self._server()
-        cap = by_slug('z-ai/glm-5.3').max_output_tokens
+        entry = by_slug('z-ai/glm-5.3')
+        cap = min(entry.max_output_tokens, entry.context_window // 2)
         response = _post(server.server_port, '/test-token/responses',
             {'model': 'z-ai/glm-5.3',
              'input': [{'type': 'message', 'role': 'user', 'content': 'hi'}],
@@ -87,13 +88,17 @@ class HandlerCharacterisationTests(unittest.TestCase):
             self.assertNotIn(dropped, headers)
         self.assertNotIn('test-key', json.dumps(headers))
 
-    def test_openai_request_without_bearer_is_401(self):
+    def test_openai_request_without_bearer_forwards_via_path_token(self):
+        # Path-token auth without a subscription header must forward, not 401.
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
         server = self._server(openai_models=['gpt-6-astra'])
         response = _post(server.server_port, '/test-token/responses',
                          {'model': 'gpt-6-astra', 'input': []})
-        self.assertEqual(response.status, 401)
-        self.assertEqual(recorded, [])
+        self.assertEqual(response.status, 200)
+        self.assertEqual(len(recorded), 1)
+        host, _, path, _, _ = recorded[0]
+        self.assertEqual(host, 'chatgpt.com')
+        self.assertEqual(path, '/backend-api/codex/responses')
 
     def test_unknown_model_is_400_and_never_reaches_upstream(self):
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))

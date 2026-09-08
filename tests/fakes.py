@@ -5,9 +5,17 @@ http.client.HTTPSConnection as used by codex_router.router.
 """
 import http.client
 import json
+from pathlib import Path
 from unittest import mock
 
 from codex_router import feed_verify
+
+
+def install_payloads(version):
+    rules = Path(__file__).resolve().parents[1] / 'tools' / 'global_instructions.py'
+    return {'packaging/VERSION': (version + '\n').encode(),
+            'packaging/router_launch.py': b'# launcher\n',
+            'tools/global_instructions.py': rules.read_bytes()}
 
 
 class FakeUpstream:
