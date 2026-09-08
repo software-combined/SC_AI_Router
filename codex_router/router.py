@@ -130,6 +130,12 @@ class Handler(BaseHTTPRequestHandler):
             return self.error(403, 'Forbidden')
         if self.server.draining:
             return self.drain_reject()
+        if path == '/shutdown':
+            # Portable restart: every supervisor relaunches an exited service,
+            # unlike `launchctl kill` which exists only on macOS.
+            # Non-daemon like the SIGTERM path, or teardown kills the drain.
+            threading.Thread(target=self.server.drain_and_exit, daemon=False).start()
+            return self.send_json(200, {'status': 'draining'})
         if path not in NATIVE_SERVICE_PATHS | {'/responses', '/responses/compact'}:
             if path.startswith('/setup/'):
                 return setup.serve(self, path[len('/setup/'):], True)

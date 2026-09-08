@@ -56,7 +56,8 @@ def _craft_bundle(version):
     manifest = {'version': version, 'files':
                 {'packaging/VERSION': hashlib.sha256(marker).hexdigest()}}
     blob = _tarball(files=[('MANIFEST.json', json.dumps(manifest)),
-                           ('packaging/VERSION', marker)])
+                           ('packaging/VERSION', marker),
+                           ('packaging/router_launch.py', '# launcher\n')])
     latest = {'version': version, 'url': 'file:///bundle.tar.gz',
               'sha256': None, 'min_python': '3.14'}
     return blob, latest
@@ -120,8 +121,8 @@ class InstallTests(unittest.TestCase):
             '/opt/homebrew/bin/python3.14', Path('/tmp/hm'), {'port': 18749})
         self.assertEqual(content['Label'], 'com.local.codex-mixed-model-router')
         self.assertEqual(content['ProgramArguments'],
-                         ['/opt/homebrew/bin/python3.14', '-m', 'codex_router'])
-        self.assertEqual(content['WorkingDirectory'], '/tmp/hm/current')
+                         ['/opt/homebrew/bin/python3.14', '/tmp/hm/router_launch.py'])
+        self.assertNotIn('WorkingDirectory', content)
         self.assertEqual(content['EnvironmentVariables'], {'ROUTER_HOME': '/tmp/hm'})
         self.assertTrue(content['KeepAlive'] and content['RunAtLoad'])
         self.assertNotIn('token', json.dumps(content))
@@ -138,11 +139,12 @@ class InstallTests(unittest.TestCase):
             first.mkdir(parents=True)
             second.mkdir(parents=True)
             self.assertIsNone(install_mod.swap_current(home, first))
-            self.assertEqual(os.readlink(home / 'current'), str(first))
+            self.assertEqual((home / 'current').read_text(), '0.2.0\n')
+            self.assertFalse((home / 'current').is_symlink())
             previous = install_mod.swap_current(home, second)
-            self.assertEqual(previous, str(first))
-            install_mod.swap_current(home, Path(previous))
-            self.assertEqual(os.readlink(home / 'current'), str(first))
+            self.assertEqual(previous, '0.2.0')
+            install_mod.swap_current(home, home / 'releases' / previous)
+            self.assertEqual((home / 'current').read_text(), '0.2.0\n')
 
     def test_replace_config_block_preserves_unrelated_lines_and_refuses_double_markers(self):
         block = ('# BEGIN local mixed model picker\nopenai_base_url = "http://x"\n'
@@ -205,7 +207,7 @@ class InstallTests(unittest.TestCase):
                 with self.assertRaises(SystemExit) as ctx:
                     install_mod.do_install(args, _fetch=fake_fetch, _run=fake_run)
             self.assertEqual(ctx.exception.code, 1)
-            self.assertEqual(os.readlink(home / 'current'), str(prev))
+            self.assertEqual((home / 'current').read_text(), '0.2.0\n')
             self.assertTrue(any('kill' in cmd for cmd in calls))
 
 
@@ -281,7 +283,7 @@ class InstallTests(unittest.TestCase):
             bootstraps = [saw for cmd, saw in order if 'bootstrap' in cmd]
             self.assertTrue(bootstraps, 'service was never restarted')
             self.assertTrue(all(bootstraps), 'restart ran before plists were written')
-            self.assertEqual(os.readlink(home / 'current'), str(home / 'releases' / version))
+            self.assertEqual((home / 'current').read_text(), version + '\n')
 
 
     def test_recheck_reports_up_to_date_after_install(self):
