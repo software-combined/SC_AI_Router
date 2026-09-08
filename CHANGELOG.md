@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.4.7 (acceptance harness slice)
+
+Harness repairs from the audit brief, committed on
+`codex/isolated-install-state`, not yet deployed (live router still runs
+the pre-restructure prototype; see Plan 047 section 2):
+
+- Compaction failure now fails verification: the probe raises instead of
+  printing a status line and exiting zero, for both failed turns and
+  protocol errors.
+- New legs: `--compact-then-switch` compacts first and then retrieves the
+  exact tool-result marker on another model; `--compact-twice` exercises
+  repeated compaction; `--switch-to` replaces the hardcoded switch target
+  so smaller-context models can be covered; `--expect-error` asserts a
+  named rejection (unsupported effort, Grok's tool ceiling) exits clean
+  while anything else still fails.
+- Media evidence is attached, not discarded: `--image` sends a solid-red
+  PNG and `--audio` a silence clip, with byte counts printed. Models with
+  image input must name the color; text-only models pass by completing
+  through the strip path. Wire shapes follow the canonical app-server
+  protocol (`image`/`audio` items with data URLs).
+- `CODEX_BIN` overrides the desktop binary so the legs above are proven
+  offline against a scripted fake app-server (12 tests); isolated routers
+  gain `restart()` for compact-restart-switch acceptance to build on.
+- Residual risk: image/audio wire shapes and the color assertion still
+  need one live paid run per modality before release.
+
 ## 0.4.6 (tool identity slice)
 
 Tool-history, onboarding, and served-model fixes from the audit brief,
