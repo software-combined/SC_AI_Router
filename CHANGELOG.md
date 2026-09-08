@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fix context overflow on OpenRouter models: the output reservation is now
+  capped at half the model's context window. The registry's 943718-token
+  reservation on a 1048576-token window left ~105k for input, so ordinary
+  long-task requests were rejected as exceeding the context.
 - Clarify that the router runtime supports macOS, Windows, and Linux while
   the managed installer remains macOS-specific.
 - Fix subscription-model 401s: the router no longer requires a
