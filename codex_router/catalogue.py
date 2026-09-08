@@ -68,7 +68,7 @@ def openrouter_entry(model):
                            if model.tier == 'preview' else model.priority),
             'context_window': model.context_window,
             'max_context_window': model.context_window,
-            'base_instructions': BASE_INSTRUCTIONS,
+            'model_messages': {'instructions_template': BASE_INSTRUCTIONS},
             **catalogue_patch(model.slug),
             'input_modalities': list(model.modalities),
             'default_reasoning_summary': model.reasoning_summary,

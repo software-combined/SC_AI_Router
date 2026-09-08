@@ -27,6 +27,9 @@ the pre-restructure prototype; see Plan 047 section 2):
   reporting which model actually served.
 - Release feed carries a monotonic `serial`; the installer refuses feeds
   older than the last accepted one and records it in `feed-serial`.
+- OpenRouter picker entries carry the shared prompt in
+  `model_messages.instructions_template` instead of the legacy
+  `base_instructions` field.
 
 ## 0.4.0 (Plan 041)
 
