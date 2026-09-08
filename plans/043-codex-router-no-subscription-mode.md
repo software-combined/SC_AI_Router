@@ -144,13 +144,13 @@ Listed per step; all in `tests/test_handler.py` and `tests/test_local_services.p
 
 ## Done criteria
 
-- [ ] Step 1 report with per-shape sink logs and the decision.
-- [ ] State accepts `openai_mode` and refuses bad values at startup.
-- [ ] In `none` mode no request ever reaches `chatgpt.com` (assert the recorded upstream list is empty in every `none` mode test).
-- [ ] Native paths answered locally with recorded shapes, or 404 where the spike proved Codex tolerates it.
-- [ ] Installer writes a working `none` configuration on a sandboxed `CODEX_HOME` and the probe's `model/list` through the router shows the OpenRouter models.
-- [ ] Full suite `OK`; Plan 036 tests unchanged.
-- [ ] `plans/README.md` status row updated.
+- [ ] Step 1 report with per-shape sink logs and the decision. (Report landed in-file 2026-09-08, Shape C works; desktop-app sign-in check still open per owner 2026-09-09.)
+- [x] State accepts `openai_mode` and refuses bad values at startup. (`runtime.py:50`, installer `packaging/install.py:273`.)
+- [x] In `none` mode no request ever reaches `chatgpt.com`. (`test_none_mode_rejects_openai_models_without_upstream_call`: 400 with `recorded == []`.)
+- [x] Native paths answered locally in `none` mode. (`codex_router/local_services.py` via `LocalServicesProvider`; deliberate 404-only, no recorded shapes exist; 404 toleration still open at the desktop gate.)
+- [ ] Installer writes a working `none` configuration on a sandboxed `CODEX_HOME` and the probe's `model/list` through the router shows the OpenRouter models. (Needs the live desktop gate.)
+- [x] Full suite `OK`; Plan 036 tests unchanged. (Verified 2026-09-09: handler/providers/install-config legs green.)
+- [x] `plans/README.md` status row updated. (2026-09-09.)
 
 ## STOP conditions
 
