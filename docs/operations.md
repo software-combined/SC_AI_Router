@@ -2,9 +2,13 @@
 
 ## How to ship
 
-Merge to `main`. The release workflow builds the bundle, runs the suite,
-and publishes a `vMAJOR.MINOR.BUILD` release with `latest.json`. Every
-router on the stable channel installs it within about fifteen minutes.
+Work lands on `develop` via `fix/*`/`feat/*` branches, then `develop`
+merges to `main` via PR. Tag the merge `v$(cat packaging/VERSION)` (or
+`v*-beta` for pre-releases): the release workflow runs on `v*` tags
+only, builds the bundle, runs the suite, and publishes the release with
+`latest.json`. Every router on the stable channel installs it within
+about fifteen minutes. Never push to `main` directly for a release;
+a direct push runs checks but publishes nothing.
 
 ## Global subagent guidance
 
@@ -17,33 +21,42 @@ models without duplicating text in the catalogue and grants no new permission.
 
 ## How to test first
 
-Push to `beta`. The workflow publishes a `vMAJOR.MINOR.BUILD-beta`
-pre-release with `latest-beta.json`. Cyril's machine follows the `beta`
-channel (`beta` in the `channel` file beside the state directory), so it
-updates first; watch its `/health` version and `logs/update.log` before
-merging to `main`.
+Tag `v*-beta` from `develop`. The workflow publishes a pre-release with
+`latest-beta.json`. Cyril's machine follows the `beta` channel (`beta`
+in the `channel` file beside the state directory), so it updates first;
+watch its `/health` version and `logs/update.log` before merging
+`develop` to `main` and tagging stable.
 
 ## How to roll back
 
-Push a revert to `main` (the next release supersedes the bad one), or pin
-one machine with `python3 packaging/install.py --version X`. The installer
-itself rolls back automatically when the new release fails its health
-check.
+Revert through `develop` to `main` and tag (the next release supersedes
+the bad one), or pin one machine with
+`python3 packaging/install.py --version X`. The installer itself
+restores the old pointer automatically when the new release fails its
+health check.
 
-## Restart behavior
+## Safe update, restart, reinstall
 
-On update the router stops accepting new requests (they get `503` with
-`Retry-After: 2`), finishes in-flight requests up to the two-minute drain
-deadline, then exits; launchd holds the listening socket so connections
-wait instead of failing. `/health` reports `draining: true` during the
-drain. Without socket activation (manual runs) there is a brief
-refused-connection window at process start; the Codex request and stream
-retry settings cover it.
+Updates never interrupt live traffic. The scheduled updater defers when
+`inflight > 0` and retries on its next pass; a direct install does the
+same instead of TERMing a busy router. Activation swaps the `current`
+pointer, then sends one `TERM`: launchd `KeepAlive` restarts the router
+on the held socket into the new release. Never `bootout` a live
+service: that unloads the definition and strands the machine with no
+router. On failed health the installer restores the old pointer and
+TERMs again; the old release comes back on the same socket.
+
+Releases are installed only when feed version, manifest version and the
+bundled `packaging/VERSION` marker all agree; any mismatch aborts
+before any file, pointer or launchd change. `--feed` selects one run's
+source and is never pinned, so a local test feed cannot freeze future
+updates. Local feed experiments must use an isolated
+`--home /tmp/router-test-<name>` and never touch the live home.
 
 ## Layout of the state directory
 
-`~/.codex/mixed-model-router/` holds `current` (symlink to the live
-release), `releases/` (current plus previous), `logs/`,
+`~/.codex/mixed-model-router/` holds `current` (pointer to the live
+release), `releases/` (current plus two priors for rollback depth), `logs/`,
 `mixed-router-state.json` (port and token, mode 600),
 `activation.json` (config receipt), and `openrouter.key` (mode 600).
 The code may live anywhere; only this directory matters at runtime.

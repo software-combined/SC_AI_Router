@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Harden updates against live traffic: installs defer when the router
+  is busy instead of killing in-flight requests, rollback restores the
+  old pointer with `TERM` (never `bootout`, which stranded machines
+  with no router), releases install only when feed, manifest and
+  bundled marker versions agree, `--feed` is one-shot and never pinned,
+  and three releases are retained for rollback depth. Releases publish
+  from `v*` tags only; work lands on `develop` via short-lived
+  branches, `main` stays release-only.
 - Serve Claude Code model discovery: `GET /v1/models` answers
   `{data: [{id, display_name}]}` from the local registry so the CLI
   `/model` picker and the app picker list the router models as `From
