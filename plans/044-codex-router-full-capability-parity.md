@@ -127,11 +127,11 @@ Verification: full suite `OK`.
 
 ## Done criteria
 
-- [ ] Overlay file committed and reproducible from `live_refresh.py` against the same input.
-- [ ] `grep -n 32768 codex_router/providers.py` returns nothing.
+- [ ] Overlay file committed and reproducible from `live_refresh.py` against the same input. (Superseded by the 2026-09-07 amendment: no overlay file exists; `live_refresh` rewrites derived fields in place in `models.json`. Kept open as written.)
+- [x] `grep -n 32768 codex_router/providers.py` returns nothing. (Verified 2026-09-09: clean.)
 - [ ] Matrix in `docs/compatibility.md` filled for all six models with dates and the Codex version.
 - [ ] Registry flags match the matrix (a reviewer can check row by row).
-- [ ] Both Muse entries advertise `audio` in `input_modalities` unless the audio probe reported `failed`.
+- [ ] Both Muse entries advertise `audio` in `input_modalities` unless the audio probe reported `failed`. (2026-09-09: both Muse rows carry text,image,audio, matching the matrix; upstream audio leg rejected with `invalid_prompt`, client shape unproven live — stays open per plan rule until audio is removed or a passed probe is cited.)
 - [ ] Full suite `OK`.
 - [ ] `plans/README.md` status row updated.
 
