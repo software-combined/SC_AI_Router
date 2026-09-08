@@ -235,11 +235,18 @@ repository's `plans/` and continue there. Paths inside the plans use
 | 044 | Full capability parity from live metadata, probe-gated (audio, limits, summaries, freeform patch, web search) | P2 | M to L | 038, 037 (039 for live entries) | IN PROGRESS (partial: registry flags, live_refresh, `models add`, probe media/effort/deferred legs landed; paid per-model probes pending) |
 | 046 | Model onboarding at scale: `models add` command, preview tier, hourly remote model list, CI validation | P1 | M | 038, 039, 044, 045 | IN PROGRESS (partial: `models add` + preview tier + compat record + isolated verify landed; hourly hot-reload deferred per 2026-09-08 audit brief pending versioned-update proof) |
 | 042 | Documentation rewrite, compatibility matrix, retire manual release artefacts, vault note | P3 | S | 035, 038, 039, 040, 041, 046 | DONE (docs rewrite landed; two inaccurate plan-text claims corrected in-file 2026-09-08) |
+| 048 | [Invitation-only managed OpenRouter keys across portcos](048-router-managed-key-provisioning.md) | P1 | L | 040, 037, 041; account/auth/distribution preflight | TODO (full plan; implementation and deployment not started) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale).
 
 ### Dependency notes
 
+- Plan 048 is the current managed-access design: any invited email domain,
+  independent of Entra, with individual OS-stored keys, bounded allocations,
+  revocation and portco administration. Execute its vertical slices in order;
+  macOS pilot comes before Windows/RMM acceptance. It does not reopen 039/046.
+  Its observed release/distribution preflight supersedes older assumptions for
+  this rollout; the plan itself does not authorise publishing or account writes.
 - 036 before 037: the ten characterisation tests are the acceptance suite for the refactor and must pass with unchanged assertions.
 - 038 before 037: providers look models up through the registry (`by_slug`).
 - 043's spike (Step 1) should run early, right after 037 and 038 land, because its outcome (which Codex login shape works without a subscription) changes what 039 falls back to and what 041 writes into the Codex configuration.
@@ -262,5 +269,8 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED 
 - Video and file input modalities: not actionable. Codex's client only knows `text`, `image`, `audio`; Codex reads files through its own tools.
 - `tool_mode = code_mode_only` and multi-agent `v2` for OpenRouter models: rejected per the trial evidence recorded in the KnowledgeVault note (code mode is not a substitute for provider compatibility; v1 plaintext sub-agents are the proven setting).
 - OpenAI API-key mode (`openai_mode = api_key`): deferred until someone without a subscription but with an API key asks (Plan 043 notes).
-- Signed release manifests and keychain-backed credentials: deferred; HTTPS plus sha256 against GitHub Releases and a mode-600 key file match what Codex and OpenCode themselves rely on (Plans 040, 041 notes).
+- Signed release manifests and keychain-backed credentials: historical deferral
+  superseded for managed installations by Plan 048. Personal installs retain
+  their existing credential behaviour; managed rollout has its own OS-store,
+  publisher-verification and private-repository distribution gates.
 - The transient 7 September outage (state key missing after a deploy): fixed the same evening by the owning session; not planned, but it is the reason for Plan 035's startup self-check and Plan 041's health-checked rollback.
