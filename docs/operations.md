@@ -55,6 +55,30 @@ confirm discovery, one exact callback, and the marker in the final
 answer. If the app-server protocol changed, probes fail before any
 user task does; do not ship model changes until the base probe passes.
 
+## Per-user OpenRouter keys (IT issue and revoke)
+
+Owner decision 2026-09-09: IT issues one OpenRouter key per portco user;
+there is no self-service provisioning. The flow per user:
+
+1. IT creates the key in the OpenRouter dashboard with a monthly allowance
+   and hands it to the user over an existing trusted channel (never commit
+   it, never paste it into chat or email threads beyond that handoff).
+2. The user installs with `--setup`, opens the setup link, and pastes the
+   key once. The window validates it against OpenRouter before storing
+   anything and shows remaining credit; the key lands in `openrouter.key`
+   (mode 600), which the router reads per request.
+3. Rotation: delete `openrouter.key` first (the setup window refuses to
+   overwrite a file holding a real key with 409), then re-run the installer
+   with `--setup` and paste the replacement. File-level alternative is under
+   `Key rotation` below.
+4. Revocation is at the OpenRouter dashboard: delete or pause the user's key,
+   then confirm fail-closed by asking the user to run any OpenRouter request
+   and checking the router log for a `request_completed` entry carrying the
+   upstream 401 rather than a completion. Offboarding also removes the seat
+   per the portco process; there is no local grant to unwind as long as no
+   `OPENROUTER_API_KEY` env or OpenCode-auth fallback is set on that machine,
+   because entitlement otherwise lives entirely in the dashboard key state.
+
 ## Key rotation
 
 Replace the `openrouter.key` file contents. No restart is needed; the
