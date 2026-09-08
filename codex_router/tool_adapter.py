@@ -60,15 +60,22 @@ def prepare_tools(payload):
     for item in payload.get('input', []) if isinstance(payload.get('input'), list) else []:
         if item.get('type') == 'tool_search_output':
             released.extend(deepcopy(item.get('tools', [])))
-    declared = {(namespace, tool.get('name')) for tool, namespace in tool_entries(payload.get('tools', []))}
+    declared = {}
+    for tool, namespace in tool_entries(payload.get('tools', [])):
+        declared.setdefault((namespace, tool.get('name')), tool)
     for tool, namespace in tool_entries(released):
-        if (namespace, tool.get('name')) in declared:
+        key = (namespace, tool.get('name'))
+        existing = declared.get(key)
+        if existing is not None:
+            # Complete a catalogue stub from the discovered schema; never clobber.
+            if existing.get('parameters') is None and tool.get('parameters') is not None:
+                existing['parameters'] = tool['parameters']
             continue
         if namespace:
             payload.setdefault('tools', []).append({'type': 'namespace', 'name': namespace, 'description': namespace + ' tools', 'tools': [tool]})
         else:
             payload.setdefault('tools', []).append(tool)
-        declared.add((namespace, tool.get('name')))
+        declared[key] = tool
     for tool, namespace in tool_entries(payload.get('tools', [])):
         if tool.get('type') == 'tool_search':
             tool.pop('execution', None)
