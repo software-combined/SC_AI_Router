@@ -45,6 +45,15 @@ class LiveRefreshTests(unittest.TestCase):
         derived = derive(_row(), _live(reasoning={'supported_efforts': ['high']}))
         self.assertEqual(derived['reasoning'], ['low', 'high', 'max'])
 
+    def test_alias_target_name_folds_into_display_name(self):
+        live = _live(alias_target={'name': 'SpaceXAI: Grok 4.6', 'slug': 'x-ai/grok-4.6'})
+        derived = derive(_row(display_name='Grok Latest \xb7 OpenRouter'), live)
+        self.assertEqual(derived['display_name'], 'SpaceXAI: Grok 4.6 \xb7 OpenRouter')
+
+    def test_display_name_untouched_without_alias(self):
+        derived = derive(_row(display_name='Grok Latest \xb7 OpenRouter'), _live())
+        self.assertEqual(derived['display_name'], 'Grok Latest \xb7 OpenRouter')
+
     def test_pinned_identity_fields_untouched(self):
         row = _row(slug='m/x', excluded_efforts=['max'])
         out = refresh([row], {'m/x': _live()})
