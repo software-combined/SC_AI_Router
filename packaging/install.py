@@ -11,6 +11,7 @@ import json
 import os
 import runpy
 import secrets
+import subprocess
 import time
 import webbrowser
 import shutil
@@ -43,6 +44,8 @@ fetch_feed = _svc.fetch_feed
 feed_serial = _svc.feed_serial
 find_python = _svc.find_python
 install_launcher = _svc.install_launcher
+main_plist_exe = _svc.main_plist_exe
+reload_main_service = _svc.reload_main_service
 render_plist = _svc.render_plist
 render_update_plist = _svc.render_update_plist
 restart_service = _svc.restart_service
@@ -224,9 +227,9 @@ def do_rollback(args):
 
 def _sync_seams():
     """Mirror _patch_attrs swaps from install_mod onto _svc call sites."""
-    global run, health, wait_idle, wait_version
-    run, health, wait_idle, wait_version = (
-        _svc.run, _svc.health, _svc.wait_idle, _svc.wait_version)
+    global run, health, wait_idle, wait_version, main_plist_exe
+    run, health, wait_idle, wait_version, main_plist_exe = (
+        _svc.run, _svc.health, _svc.wait_idle, _svc.wait_version, _svc.main_plist_exe)
 
 
 def do_install(args, _fetch=fetch, _run=None):
@@ -298,12 +301,33 @@ def do_install(args, _fetch=fetch, _run=None):
         print('deferred: router busy')
         return 0
     agents = Path.home() / 'Library' / 'LaunchAgents'
+    legacy_exe = main_plist_exe()
     write_plist(agents / (LABEL + '.plist'), render_plist(python, home, state))
     write_plist(agents / (UPDATE_LABEL + '.plist'),
                 render_update_plist(python, home))
     uid = os.getuid()
     if previous is None:
         restart_service(uid)
+    elif legacy_exe is not None and legacy_exe != python:
+        # Loaded plist still points at the old (possibly bare) interpreter:
+        # TERM alone would respawn the new code under the stale definition.
+        # Bootstrap failure must still roll back (pointer + loaded old
+        # release); reload leaves the job unloaded, so rollback re-runs it.
+        # The rewritten plist intentionally stays at the new absolute
+        # interpreter; only the pointer rolls back.
+        try:
+            reload_main_service(uid)
+        except (SystemExit, OSError, subprocess.SubprocessError):
+            swap_current(home, home / 'releases' / previous)
+            agents = Path.home() / 'Library' / 'LaunchAgents'
+            healed = run(['launchctl', 'bootstrap', f'gui/{uid}',
+                          str(agents / (LABEL + '.plist'))], capture_output=True)
+            if healed.returncode != 0:
+                print(f'reload failed; restored pointer {previous} but the '
+                      f'router is NOT loaded, bootstrap it by hand')
+                raise SystemExit(1)
+            print(f'reload failed; restored {previous}, re-run the installer')
+            raise SystemExit(1)
     else:
         run(['launchctl', 'kill', 'TERM', f'gui/{uid}/{LABEL}'], capture_output=True)
     if not wait_version(state, latest['version']):
