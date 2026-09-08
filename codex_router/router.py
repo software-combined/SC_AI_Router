@@ -167,8 +167,9 @@ class Handler(BaseHTTPRequestHandler):
             return self.error(413, str(exc))
         except PreparationError as exc:
             return self.error(409, str(exc))
-        except (ValueError, KeyError, LookupError, OSError, TypeError, AttributeError, zstd.ZstdError):
-            return self.error(400, 'Invalid model, payload, or local authentication configuration')
+        except (ValueError, KeyError, LookupError, OSError, zstd.ZstdError,
+                AttributeError, TypeError) as exc:
+            return self.error(*providers.client_error(exc))
         _reasoning = payload.get('reasoning')
         metrics = {'provider': prepared.provider,
                    'model': model, 'path': path, 'request_bytes': size,
@@ -211,16 +212,12 @@ class Handler(BaseHTTPRequestHandler):
                     local_services.answer(metrics['path'])
                 except local_services.LocalAnswer as exc:
                     return self.error(exc.status, exc.message)
-            if response.status == 429:
-                # Codex treats a bare 429 as turn-fatal; 503 with Retry-After retries.
-                response.read()
-                log_event('upstream_rate_limited', provider=prepared.provider, path=metrics['path'])
-                return self.retryable_reject('Upstream rate limited', response.getheader('Retry-After', '2'))
+            retry_after = providers.upstream_retry_after(response, prepared, metrics)
+            if retry_after is not None:
+                return self.retryable_reject('Upstream rate limited', retry_after)
             metrics['upstream_headers_ms'] = round((time.monotonic() - started) * 1000, 1)
             self.send_response(response.status)
-            for k, v in response.getheaders():
-                if k.lower() not in providers.HOP_HEADERS and k.lower() != 'set-cookie':
-                    self.send_header(k, v)
+            providers.relay_headers(response, self.send_header, metrics.get('model'))
             self.send_header('Connection', 'close')
             self.end_headers()
             sent = True

@@ -21,6 +21,10 @@ the pre-restructure prototype; see Plan 047 section 2):
   served); tilde aliases display upstream alias names.
 - CI fails if a request cap is reintroduced; `packaging/VERSION` is
   semver (`0.4.2`) and matches `pyproject.toml`.
+- Internal router bugs surface as 500 with a traceback instead of 400.
+- Upstream `openai-model` header is pinned to the requested slug so a
+  rerouted model never triggers a mismatch warning; `/health` keeps
+  reporting which model actually served.
 
 ## 0.4.0 (Plan 041)
 
