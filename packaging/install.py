@@ -540,9 +540,10 @@ def do_install(args, _fetch=fetch, _run=None):
         # No env var: the per-install path token embedded in base_url carries
         # auth, the same mechanism subscription mode uses in openai_base_url.
         # Nothing on staff machines provisions SCG_ROUTER_TOKEN, so naming it
-        # here fails closed at the router with a 403. Live desktop proof that
-        # Codex keeps the path prefix on a custom provider base_url is still
-        # the gate for this mode (Plan 043 spike never ran).
+        # here fails closed at the router with a 403. The 043 spike (2026-09-08,
+        # Codex 0.153.4) showed thread+turn reaching the router on a custom
+        # provider with bearer auth; live desktop proof that Codex keeps the
+        # path prefix on a custom provider base_url is still the gate.
         block = ('# BEGIN local mixed model picker\n'
                  'model_provider = "scg_router"\n'
                  + catalog_line +
