@@ -51,7 +51,8 @@ class HandlerCharacterisationTests(unittest.TestCase):
     def test_openrouter_request_reaches_openrouter_with_router_key_only(self):
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{"output": []}', []))
         server = self._server()
-        cap = by_slug('z-ai/glm-5.3').max_output_tokens
+        entry = by_slug('z-ai/glm-5.3')
+        cap = min(entry.max_output_tokens, entry.context_window // 2)
         response = _post(server.server_port, '/test-token/responses',
             {'model': 'z-ai/glm-5.3',
              'input': [{'type': 'message', 'role': 'user', 'content': 'hi'}],
