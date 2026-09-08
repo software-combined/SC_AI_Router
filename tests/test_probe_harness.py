@@ -69,6 +69,13 @@ while True:
                   'params': {'item': {'type': 'agentMessage',
                                       'text': os.environ.get('FAKE_COLOR', 'red')}}})
             send({'method': 'turn/completed', 'params': {'turn': {'status': 'completed'}}})
+        elif 'web search' in blob and os.environ.get('FAKE_WEB_SEARCH'):
+            if os.environ['FAKE_WEB_SEARCH'] == 'searched':
+                send({'method': 'item/completed',
+                      'params': {'item': {'type': 'webSearch'}}})
+            send({'method': 'item/completed',
+                  'params': {'item': {'type': 'agentMessage', 'text': 'synthetic-search-answer-482'}}})
+            send({'method': 'turn/completed', 'params': {'turn': {'status': 'completed'}}})
         elif 'apply_patch' in blob and os.environ.get('FAKE_APPLY_PATCH'):
             mode = os.environ['FAKE_APPLY_PATCH']
             if mode in ('applied', 'deleted'):
@@ -146,18 +153,26 @@ class ProbeHarnessTests(unittest.TestCase):
                               capture_output=True, text=True, timeout=60,
                               cwd=str(ROOT), env=full)
 
+    def _run_recorded(self, *args, **env):
+        """Run the probe with FAKE_RECORD; return (proc, -c flags, record lines)."""
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        rec = str(Path(tmp.name) / 'record.jsonl')
+        proc = self._run(*args, FAKE_RECORD=rec, **env)
+        recorded = Path(rec).read_text().splitlines()
+        argv = json.loads(next(l for l in recorded if l.startswith('argv='))[5:])
+        return proc, [a for i, a in enumerate(argv) if argv[i - 1] == '-c'], recorded
+
     def test_round_trip_passes(self):
         proc = self._run('fake-model')
         self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
         self.assertIn('"desktop_runtime_tool_round_trip": "passed"', proc.stdout)
 
     def test_provider_flag_reaches_thread_start(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            rec = str(Path(tmp) / 'record.jsonl')
-            proc = self._run('fake-model', '--provider', 'scg_router', FAKE_RECORD=rec)
-            self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
-            self.assertIn('"desktop_runtime_tool_round_trip": "passed"', proc.stdout)
-            self.assertIn('provider=scg_router', Path(rec).read_text().splitlines())
+        proc, _, recorded = self._run_recorded('fake-model', '--provider', 'scg_router')
+        self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
+        self.assertIn('"desktop_runtime_tool_round_trip": "passed"', proc.stdout)
+        self.assertIn('provider=scg_router', recorded)
 
     def test_compact_failure_fails_verification(self):
         proc = self._run('fake-model', '--compact', FAKE_COMPACT='fail')
@@ -201,15 +216,13 @@ class ProbeHarnessTests(unittest.TestCase):
 
     def test_image_evidence_for_capable_model(self):
         slug = _slug_with(self, True)
-        with tempfile.TemporaryDirectory() as tmp:
-            rec = str(Path(tmp) / 'record.jsonl')
-            proc = self._run(slug, '--image', FAKE_RECORD=rec)
-            self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
-            self.assertIn('"media_color_seen": true', proc.stdout)
-            recorded = Path(rec).read_text()
-            self.assertIn('"type": "image"', recorded)
-            self.assertIn('"url": "data:image/png;base64,', recorded)
-            self.assertNotIn('image_url', recorded)
+        proc, _, recorded = self._run_recorded(slug, '--image')
+        self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
+        self.assertIn('"media_color_seen": true', proc.stdout)
+        blob = '\n'.join(recorded)
+        self.assertIn('"type": "image"', blob)
+        self.assertIn('"url": "data:image/png;base64,', blob)
+        self.assertNotIn('image_url', blob)
 
     def test_image_strip_path_for_text_only_model(self):
         slug = _slug_with(self, False)
@@ -219,28 +232,23 @@ class ProbeHarnessTests(unittest.TestCase):
         self.assertNotIn('media_color_seen', proc.stdout)
 
     def test_reasoning_summary_passes_on_summary_text(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            rec = str(Path(tmp) / 'record.jsonl')
-            proc = self._run('z-ai/glm-5.3-flash', '--reasoning-summary',
-                             FAKE_RECORD=rec, FAKE_REASONING_SUMMARY='summary')
-            self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
-            self.assertIn('"capability": "reasoning_summary"', proc.stdout)
-            self.assertIn('"result": "passed"', proc.stdout)
-            # Streamed summary content itself never reaches stdout.
-            self.assertNotIn('synthetic summary', proc.stdout)
-            # The leg's core contract: auto summary + temp catalog reach -c flags.
-            recorded = Path(rec).read_text().splitlines()
-            argv = json.loads(next(l for l in recorded if l.startswith('argv='))[5:])
-            flags = [a for i, a in enumerate(argv) if argv[i - 1] == '-c']
-            auto = [f for f in flags if f.startswith('model_reasoning_summary=')]
-            self.assertEqual(len(auto), 1, flags)
-            self.assertIn('auto', auto[0])
-            catalog = next(f.split('=', 1)[1] for f in flags
-                           if f.startswith('model_catalog_json='))
-            entry = json.loads(Path(json.loads(catalog)).read_text())['models'][0]
-            self.assertEqual(entry['slug'], 'z-ai/glm-5.3-flash')
-            self.assertEqual(entry['default_reasoning_summary'], 'auto')
-            self.assertTrue(entry['supports_reasoning_summary_parameter'])
+        proc, flags, _ = self._run_recorded('z-ai/glm-5.3-flash', '--reasoning-summary',
+                                            FAKE_REASONING_SUMMARY='summary')
+        self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
+        self.assertIn('"capability": "reasoning_summary"', proc.stdout)
+        self.assertIn('"result": "passed"', proc.stdout)
+        # Streamed summary content itself never reaches stdout.
+        self.assertNotIn('synthetic summary', proc.stdout)
+        # The leg's core contract: auto summary + temp catalog reach -c flags.
+        auto = [f for f in flags if f.startswith('model_reasoning_summary=')]
+        self.assertEqual(len(auto), 1, flags)
+        self.assertIn('auto', auto[0])
+        catalog = next(f.split('=', 1)[1] for f in flags
+                       if f.startswith('model_catalog_json='))
+        entry = json.loads(Path(json.loads(catalog)).read_text())['models'][0]
+        self.assertEqual(entry['slug'], 'z-ai/glm-5.3-flash')
+        self.assertEqual(entry['default_reasoning_summary'], 'auto')
+        self.assertTrue(entry['supports_reasoning_summary_parameter'])
 
     def test_reasoning_summary_fails_without_summary_text(self):
         proc = self._run('z-ai/glm-5.3-flash', '--reasoning-summary',
@@ -250,28 +258,23 @@ class ProbeHarnessTests(unittest.TestCase):
         self.assertIn('"result": "failed"', proc.stdout)
 
     def test_apply_patch_passes_on_file_change(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            rec = str(Path(tmp) / 'record.jsonl')
-            proc = self._run('z-ai/glm-5.3-flash', '--apply-patch',
-                             FAKE_RECORD=rec, FAKE_APPLY_PATCH='applied')
-            self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
-            self.assertIn('"capability": "apply_patch"', proc.stdout)
-            self.assertIn('"result": "passed"', proc.stdout)
-            # The leg's core contract: workspace-write + freeform catalog reach -c flags.
-            recorded = Path(rec).read_text().splitlines()
-            argv = json.loads(next(l for l in recorded if l.startswith('argv='))[5:])
-            flags = [a for i, a in enumerate(argv) if argv[i - 1] == '-c']
-            self.assertEqual([f for f in flags if f.startswith('sandbox_mode=')],
-                             ['sandbox_mode="workspace-write"'], flags)
-            catalog = next(f.split('=', 1)[1] for f in flags
-                           if f.startswith('model_catalog_json='))
-            entry = json.loads(Path(json.loads(catalog)).read_text())['models'][0]
-            self.assertEqual(entry['slug'], 'z-ai/glm-5.3-flash')
-            self.assertEqual(entry['apply_patch_tool_type'], 'freeform')
-            # The thread runs workspace-write rooted at the scratch dir.
-            self.assertIn('sandbox=workspace-write', recorded)
-            cwd = next(l[4:] for l in recorded if l.startswith('cwd='))
-            self.assertTrue(Path(cwd, 'note.txt').exists(), recorded)
+        proc, flags, recorded = self._run_recorded('z-ai/glm-5.3-flash', '--apply-patch',
+                                                   FAKE_APPLY_PATCH='applied')
+        self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
+        self.assertIn('"capability": "apply_patch"', proc.stdout)
+        self.assertIn('"result": "passed"', proc.stdout)
+        # The leg's core contract: workspace-write + freeform catalog reach -c flags.
+        self.assertEqual([f for f in flags if f.startswith('sandbox_mode=')],
+                         ['sandbox_mode="workspace-write"'], flags)
+        catalog = next(f.split('=', 1)[1] for f in flags
+                       if f.startswith('model_catalog_json='))
+        entry = json.loads(Path(json.loads(catalog)).read_text())['models'][0]
+        self.assertEqual(entry['slug'], 'z-ai/glm-5.3-flash')
+        self.assertEqual(entry['apply_patch_tool_type'], 'freeform')
+        # The thread runs workspace-write rooted at the scratch dir.
+        self.assertIn('sandbox=workspace-write', recorded)
+        cwd = next(l[4:] for l in recorded if l.startswith('cwd='))
+        self.assertTrue(Path(cwd, 'note.txt').exists(), recorded)
 
     def test_apply_patch_fails_without_file_change(self):
         proc = self._run('z-ai/glm-5.3-flash', '--apply-patch', FAKE_APPLY_PATCH='skipped')
@@ -285,15 +288,31 @@ class ProbeHarnessTests(unittest.TestCase):
         self.assertIn('"capability": "apply_patch"', proc.stdout)
         self.assertIn('"result": "failed"', proc.stdout)
 
+    def test_web_search_passes_on_search_item(self):
+        proc, flags, _ = self._run_recorded('z-ai/glm-5.3-flash', '--web-search',
+                                            FAKE_WEB_SEARCH='searched')
+        self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
+        self.assertIn('"capability": "web_search"', proc.stdout)
+        self.assertIn('"result": "passed"', proc.stdout)
+        # Search answer content itself never reaches stdout.
+        self.assertNotIn('synthetic-search-answer-482', proc.stdout)
+        # The leg's core contract: the web_search feature reaches -c flags as enabled.
+        self.assertEqual([f for f in flags if f.startswith('web_search=')],
+                         ['web_search="enabled"'], flags)
+
+    def test_web_search_fails_without_search_item(self):
+        proc = self._run('z-ai/glm-5.3-flash', '--web-search', FAKE_WEB_SEARCH='skipped')
+        self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
+        self.assertIn('"capability": "web_search"', proc.stdout)
+        self.assertIn('"result": "failed"', proc.stdout)
+
     def test_audio_attaches_and_completes(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            rec = str(Path(tmp) / 'record.jsonl')
-            proc = self._run('fake-model', '--audio', FAKE_RECORD=rec)
-            self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
-            recorded = Path(rec).read_text()
-            self.assertIn('"type": "audio"', recorded)
-            self.assertIn('"url": "data:audio/wav;base64,', recorded)
-            self.assertNotIn('audio_url', recorded)
+        proc, _, recorded = self._run_recorded('fake-model', '--audio')
+        self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
+        blob = '\n'.join(recorded)
+        self.assertIn('"type": "audio"', blob)
+        self.assertIn('"url": "data:audio/wav;base64,', blob)
+        self.assertNotIn('audio_url', blob)
 
 
 if __name__ == '__main__':
