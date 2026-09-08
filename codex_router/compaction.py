@@ -90,6 +90,19 @@ def rewrite_input(items):
             rewritten.append(item)
     return rewritten
 
+def strip_reasoning_blobs(items):
+    """Drop OpenAI-owned reasoning blobs other models cannot read; keep plaintext."""
+    if not isinstance(items, list):
+        return items
+    out = []
+    for item in items:
+        if isinstance(item, dict) and item.get('type') == 'reasoning' and 'encrypted_content' in item:
+            item = {k: v for k, v in item.items() if k != 'encrypted_content'}
+            if not item.get('summary'):
+                continue
+        out.append(item)
+    return out
+
 def _block_text(content):
     if isinstance(content, str):
         return content

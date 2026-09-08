@@ -68,7 +68,7 @@ class OpenRouterProvider:
             tool_names = prepare_tools(payload)
         except ValueError as exc:
             raise PreparationError(str(exc))
-        payload['input'] = comp.rewrite_input(payload.get('input', []))
+        payload['input'] = comp.strip_reasoning_blobs(comp.rewrite_input(payload.get('input', [])))
         reasoning = payload.get('reasoning')
         try:
             check_effort(model,
