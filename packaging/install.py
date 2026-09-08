@@ -544,9 +544,12 @@ def do_install(args, _fetch=fetch, _run=None):
              f'openai_base_url = "http://127.0.0.1:{state["port"]}/{state["token"]}/backend-api/codex"\n'
              + catalog_line + '# END local mixed model picker\n')
     if mode == 'none':
-        # Root keys stay above the provider table; the key name matches the
-        # Plan 043 spike shape (staff export the router path token as its
-        # value) instead of a per-port variable nothing provisions.
+        # No env var: the per-install path token embedded in base_url carries
+        # auth, the same mechanism subscription mode uses in openai_base_url.
+        # Nothing on staff machines provisions SCG_ROUTER_TOKEN, so naming it
+        # here fails closed at the router with a 403. Live desktop proof that
+        # Codex keeps the path prefix on a custom provider base_url is still
+        # the gate for this mode (Plan 043 spike never ran).
         block = ('# BEGIN local mixed model picker\n'
                  'model_provider = "scg_router"\n'
                  + catalog_line +
@@ -554,7 +557,6 @@ def do_install(args, _fetch=fetch, _run=None):
                  'name = "SC router"\n'
                  f'base_url = "http://127.0.0.1:{state["port"]}/{state["token"]}/backend-api/codex"\n'
                  'wire_api = "responses"\n'
-                 'env_key = "SCG_ROUTER_TOKEN"\n'
                  + '# END local mixed model picker\n')
     receipt_path = home / 'activation.json'
     previous_receipt = json.loads(receipt_path.read_text()) if receipt_path.exists() else {}

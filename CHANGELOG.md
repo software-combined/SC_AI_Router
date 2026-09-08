@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.10 (setup key claim and none-mode auth)
+
+Source fixes on `codex/isolated-install-state`, not yet deployed (live
+router still runs the pre-restructure prototype; see Plan 047 section 2):
+
+- The setup window now claims the installer's empty key placeholder
+  instead of answering 409, so a `--setup` install can store the pasted
+  key end to end. A file holding a real key still needs explicit deletion
+  before rotation, and a claimed file is tightened to owner-only mode.
+- None-mode Codex config authenticates through the per-install path token
+  embedded in `base_url`, the same mechanism subscription mode uses, and
+  no longer references `SCG_ROUTER_TOKEN`, which nothing on staff machines
+  provisions. Live desktop proof that Codex keeps the path prefix on a
+  custom provider URL is still the gate for this mode (Plan 043 spike
+  never ran).
+
 ## 0.4.9 (service lifecycle slice)
 
 Deployment prerequisites from the audit brief (Plan 047 E, unblocked
