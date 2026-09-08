@@ -1,12 +1,17 @@
-"""Build a deterministic release bundle. Usage: python3 packaging/release.py --out dist [--build N] [--sha SHA] [--channel NAME] [--url-base URL]"""
+"""Build a deterministic release bundle. Usage: python3 packaging/release.py --out dist [--build N] [--sha SHA] [--channel NAME] [--url-base URL] [--gen-key FILE] [--sign SEEDFILE]"""
 import argparse
 import gzip
 import hashlib
 import io
 import json
+import os
+import sys
 import tarfile
 from datetime import datetime, timezone
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from codex_router import feed_verify
 
 MIN_PYTHON = '3.14'
 REPO = 'software-combined/SC_Codex_openRouter_adapter'
@@ -29,7 +34,21 @@ def main(argv=None):
     parser.add_argument('--sha', default='')
     parser.add_argument('--channel', default='stable')
     parser.add_argument('--url-base')
+    parser.add_argument('--gen-key', metavar='OUT',
+                        help='write a fresh 32-byte hex release signing seed (owner-only file) and exit')
+    parser.add_argument('--sign', metavar='SEEDFILE',
+                        help='write latest.json.sig (hex detached signature) for this build')
     args = parser.parse_args(argv)
+    if args.gen_key:
+        out = Path(args.gen_key)
+        try:
+            fd = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        except FileExistsError:
+            raise SystemExit(f'refusing to overwrite release seed {out}')
+        with os.fdopen(fd, 'w') as stream:
+            stream.write(feed_verify.generate_keypair()[0] + '\n')
+        print(f'wrote release signing seed to {out}; compile its public key into feed_verify.FEED_PUBLIC_KEY')
+        return
     root = Path(__file__).resolve().parents[1]
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -67,6 +86,13 @@ def main(argv=None):
               'serial': args.build,
               'published': datetime.now(timezone.utc).isoformat(timespec='seconds')}
     (out_dir / 'latest.json').write_text(json.dumps(latest, indent=2) + '\n')
+    if args.sign:
+        try:
+            seed = Path(args.sign).read_text().strip()
+        except OSError:
+            raise SystemExit('cannot read release signing seed')
+        (out_dir / 'latest.json.sig').write_text(
+            feed_verify.sign_hex(seed, (out_dir / 'latest.json').read_bytes()) + '\n')
     print(f'built {tarball_name} {latest["sha256"][:12]}')
 
 

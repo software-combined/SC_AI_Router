@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.12 (signed release feed)
+
+Source changes on `codex/isolated-install-state`, not yet deployed (live
+router still runs the pre-restructure prototype; see Plan 047 section 2):
+
+- Release feeds are authenticated with a detached Ed25519 signature
+  (`latest.json.sig`, pure-stdlib RFC 8032 in `codex_router/feed_verify.py`).
+  The installer verifies the exact feed bytes before trusting the version,
+  URL, checksum or serial, and refuses unsigned feeds. `packaging/release.py`
+  gains `--gen-key` (owner-only seed file) and `--sign`; the compiled-in
+  release key is still empty until the owner key ceremony, so installs keep
+  refusing feeds with a clear message rather than trusting them.
+- Beta channel no longer calls the GitHub releases API; it resolves to
+  `beta/latest.json` on the same origin as the stable feed.
+
 ## 0.4.11 (none-mode probe flag and plan reconciliation)
 
 Source changes on `codex/isolated-install-state`, not yet deployed (live
