@@ -87,6 +87,20 @@ With Cyril's go-ahead, edit `~/KnowledgeVault/agent/Codex Mixed Model Picker.md`
 
 **Verify**: `node ~/KnowledgeVault/tools/validate-vault.mjs` exits 0; `grep -c "six OpenRouter" "$HOME/KnowledgeVault/agent/Codex Mixed Model Picker.md"` prints `0`.
 
+## Reconciliation note (2026-09-08, audit brief)
+
+Two claims in this plan's text are wrong and were not executed as written:
+
+- Step 1 says updates run "automatic daily at 10:00". The updater this plan
+  documents runs every 15 minutes (`StartInterval: 900`); `README.md` and
+  `docs/operations.md` state the fifteen-minute cadence correctly.
+- Step 2's decision log says "catalogue live". Plan 039 never landed, so the
+  static catalogue file remains the supported path; the README and operations
+  guide describe it correctly.
+
+Read the plan's Current state and Steps as the 2026-09-07 proposal, and the
+shipped docs as the corrected record.
+
 ## Test plan
 
 Documentation only; the suite must still pass (`OK`) because `tests/test_packaging.py` reads packaging files this plan edits.

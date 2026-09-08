@@ -5,6 +5,7 @@ import logging.handlers
 import os
 from datetime import datetime, timezone
 from pathlib import Path
+from .setup import setup_pending
 from .credentials import Credentials
 
 ROUTER_HOME = Path(os.environ.get('ROUTER_HOME', Path.home() / '.codex' / 'mixed-model-router'))
@@ -50,7 +51,11 @@ def load_state(path=STATE):
     try:
         Credentials(state, ROUTER_HOME).check()
     except (LookupError, PermissionError, ValueError, OSError) as exc:
-        raise SystemExit(f'OpenRouter credential problem: {exc}')
+        # A fresh unexpired setup nonce lets the router boot keyless so the
+        # first-run window can collect the key; everything billable still
+        # fails closed per request until one resolves.
+        if not setup_pending(state):
+            raise SystemExit(f'OpenRouter credential problem: {exc}')
     return state
 
 

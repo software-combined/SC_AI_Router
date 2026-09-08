@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.4.8 (first-run key window)
+
+First-run setup and plan reconciliation from the audit brief, committed on
+`codex/isolated-install-state`, not yet deployed (live router still runs
+the pre-restructure prototype; see Plan 047 section 2):
+
+- The router serves a first-run key window at `/<token>/setup/<nonce>`
+  (Plan 047 G): single-use short-lived nonce, same-origin POST check, key
+  validated against OpenRouter before anything is stored, owner-only key
+  file, mode question asked up front, nonce closed on success. The generic
+  DNS-rebinding rejection is unchanged for everything else.
+- The router boots keyless while a fresh setup nonce is pending; every
+  billable path still fails closed until a key resolves. `install --setup`
+  mints the link and opens it instead of exiting without a key.
+- `codex_router/router.py` stands at 256 lines against the 250 soft limit,
+  pinned in the source-limits baseline with this justification: the loopback
+  setup route shares the authenticated socket by design and all of its logic
+  lives in the new `setup.py`; the router holds dispatch lines only.
+- Plans truthfully reconciled: 041/043/045 marked implemented-not-accepted,
+  044/046 partial, 042's two inaccurate plan-text claims corrected in-file,
+  obsolete worktree instructions removed, request-cap and repository
+  decisions recorded as settled, hourly hot-reload noted deferred.
+- Residual risk: the setup window needs a live browser run before release;
+  key validation calls OpenRouter but is never billed.
+
 ## 0.4.7 (acceptance harness slice)
 
 Harness repairs from the audit brief, committed on

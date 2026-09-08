@@ -102,8 +102,8 @@ Read `AGENTS.md` in the repo root and `~/.codex/AGENTS.md`. The binding rules:
 
 - **Worktree discipline.** One writable worktree per agent session. Never edit
   the primary checkout at `~/Documents/Github/SC_Codex_openRouter_adapter`.
-  A worktree already exists and is described in section 5 — adopt it rather
-  than creating a second.
+  The session worktree is `~/Documents/Github/.worktrees/codex-isolated-install`
+  (see section 5) — reuse it rather than creating a second.
 - **Source limits.** Modules 250 soft / 400 hard lines, entrypoints and tools
   400 / 700, tests 300 / 500. Enforced by `tools/check_source_limits.py`.
 - **Commit size.** Under 800 changed lines per staged commit, target under 500
@@ -131,14 +131,15 @@ Baseline at handover: **182 tests pass, source limits clean.**
 
 ## 5. What has already been done
 
-An existing worktree holds uncommitted work:
+A now-removed worktree held uncommitted work (landed as `11475c6`, merged
+to `main`; see the reconciliation note in section 4):
 
 ```
-path:   ~/Documents/Github/.worktrees/router-cap-guard
-branch: chore/no-request-cap-guard   (from main @ f2000e8)
+path:   ~/Documents/Github/.worktrees/router-cap-guard   (removed)
+branch: chore/no-request-cap-guard   (from main @ f2000e8, merged)
 ```
 
-Two files modified, not committed:
+Two files modified, committed as `11475c6`:
 
 - `.github/workflows/check.yml` — a `No request cap` step that fails CI if
   `request_cap` or `DEFAULT_REQUEST_CAP` appears in `codex_router`, `tools`,
@@ -152,9 +153,12 @@ Also done, outside the repo: the five `before-*` backup folders in
 capped copies of `mixed_router.py` and were the resurrection source. The live
 router was verified clean and healthy afterwards.
 
-**Your first action**: adopt that worktree, run the verification triad, run
-`pre-commit-review`, and commit as `chore: guard against request cap
-reintroduction`. Then continue in the same worktree.
+**Reconciliation (2026-09-08)**: the cap-guard commit landed as `11475c6`
+and its worktree/branch were removed after integration. The obsolete
+`router-cap-guard` instructions above no longer apply; do not recreate that
+worktree. The live session worktree is `~/Documents/Github/.worktrees/codex-isolated-install`
+(branch `codex/isolated-install-state`, target `main`), owned by the audit-brief
+goal thread and reused across its slices.
 
 Per `docs/operations.md`, `retired/` may be deleted after a one-week hold, so
 not before **2026-09-15**, and only once Work Order B has given the machine a

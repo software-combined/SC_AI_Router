@@ -228,13 +228,13 @@ repository's `plans/` and continue there. Paths inside the plans use
 | 038 | Single model registry, quirks as data, generated OpenRouter catalogue entries | P1 | M | 036 | DONE |
 | 037 | Provider interface and thin relay handler | P2 | M | 036, 038, 035 | DONE |
 | 040 | Ordered credential lookup (env, key file, OpenCode fallback), startup fail-closed | P1 | S | 035 (037 either order) | DONE |
-| 043 | No-subscription mode: spike three Codex login shapes, `openai_mode`, local native services | P1 | M | 037, 038 | DONE |
-| 039 | Live merged catalogue served by the router, retire the snapshot file | P2 | M | 038, 037, 035, 043 (fallback rules) | BLOCKED (Step 1 no-go: no /models fetch observed; needs fallback approval) |
-| 041 | Versioned release bundle, stdlib installer, health check and rollback, update agent | P1 | L | 034, 035, 040 (039 optional) | DONE |
-| 045 | Release on every push to `main`/`beta`, 15-minute updates, drain and socket-activated restart | P1 | M | 041 | DONE |
-| 044 | Full capability parity from live metadata, probe-gated (audio, limits, summaries, freeform patch, web search) | P2 | M to L | 038, 037 (039 for live entries) | TODO |
-| 046 | Model onboarding at scale: `models add` command, preview tier, hourly remote model list, CI validation | P1 | M | 038, 039, 044, 045 | TODO |
-| 042 | Documentation rewrite, compatibility matrix, retire manual release artefacts, vault note | P3 | S | 035, 038, 039, 040, 041, 046 | DONE |
+| 043 | No-subscription mode: spike three Codex login shapes, `openai_mode`, local native services | P1 | M | 037, 038 | IN PROGRESS (`openai_mode` + local services landed in source; login-shape spike never ran, none-mode config unproven) |
+| 039 | Live merged catalogue served by the router, retire the snapshot file | P2 | M | 038, 037, 035, 043 (fallback rules) | BLOCKED (Step 1 no-go: no /models fetch observed; static-file fallback retained per 2026-09-08 audit brief until a replacement is proven) |
+| 041 | Versioned release bundle, stdlib installer, health check and rollback, update agent | P1 | L | 034, 035, 040 (039 optional) | IN PROGRESS (installer/updater landed in source, never deployed to a versioned layout; fleet updates need the 047-A feed decision) |
+| 045 | Release on every push to `main`/`beta`, 15-minute updates, drain and socket-activated restart | P1 | M | 041 | IN PROGRESS (drain + socket activation landed; push-to-release and the live 15-minute loop need the 047-A feed decision and the 047-B cutover gate) |
+| 044 | Full capability parity from live metadata, probe-gated (audio, limits, summaries, freeform patch, web search) | P2 | M to L | 038, 037 (039 for live entries) | IN PROGRESS (partial: registry flags, live_refresh, `models add`, probe media/effort/deferred legs landed; paid per-model probes pending) |
+| 046 | Model onboarding at scale: `models add` command, preview tier, hourly remote model list, CI validation | P1 | M | 038, 039, 044, 045 | IN PROGRESS (partial: `models add` + preview tier + compat record + isolated verify landed; hourly hot-reload deferred per 2026-09-08 audit brief pending versioned-update proof) |
+| 042 | Documentation rewrite, compatibility matrix, retire manual release artefacts, vault note | P3 | S | 035, 038, 039, 040, 041, 046 | DONE (docs rewrite landed; two inaccurate plan-text claims corrected in-file 2026-09-08) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale).
 
@@ -250,8 +250,8 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED 
 
 ### Decisions required from Cyril
 
-1. Repository name and visibility (Plan 034 Step 1). Recommended `software-combined/codex-model-router`, public, so the updater needs no token on staff machines.
-2. Request cap: remove (recommended) or keep with a daily reset (Plan 035 Step 5). The committed code defaults to 1000 requests per process; the deployed copy on the author's machine has no cap.
+1. Repository name and visibility (Plan 034 Step 1). Settled in practice: `software-combined/SC_Codex_openRouter_adapter`, private. The public recommendation was not adopted, so the 047-A feed design must serve updates without anonymous GitHub access.
+2. Request cap: SETTLED 2026-09-08. Removed; the `No request cap` CI step fails the build if it returns. There is no local spend cap: see the KnowledgeVault picker note before promising budget behavior.
 3. Whether CLI and IDE only is acceptable for no-subscription staff if the desktop app turns out to require ChatGPT sign-in (Plan 043 Step 1).
 4. A named Windows test machine before any Windows work (Plan 041 Step 9).
 5. Approval to edit the KnowledgeVault note (Plan 042 Step 5) and to make the first push to `main` that becomes an automatic release (Plan 045).
