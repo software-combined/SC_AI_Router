@@ -29,7 +29,12 @@ class Ed25519Tests(unittest.TestCase):
         sig = feed_verify.sign_hex(seed, b'feed-bytes')
         self.assertTrue(feed_verify.verify_hex(pub, b'feed-bytes', sig))
         self.assertFalse(feed_verify.verify_hex(pub, b'feed-BYTES', sig))
-        self.assertFalse(feed_verify.verify_hex(pub, b'feed-bytes', sig[:-2] + '00'))
+        # Flip a high bit of S: arithmetic on the scalar, never a small-order
+        # tweak. (Zeroing S's low byte only clears its low bits, which the
+        # group equation can still satisfy ~1/16 of the time per key.)
+        s = int.from_bytes(bytes.fromhex(sig[64:]), 'little')
+        bad_s = (s ^ (1 << 250)).to_bytes(32, 'little').hex()
+        self.assertFalse(feed_verify.verify_hex(pub, b'feed-bytes', sig[:64] + bad_s))
         other = feed_verify.generate_keypair()[1]
         self.assertFalse(feed_verify.verify_hex(other, b'feed-bytes', sig))
 

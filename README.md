@@ -12,9 +12,50 @@ your machine.
 The Codex app and/or Claude Code, Python 3 (the installer finds or asks for a
 3.14 interpreter to run the router itself), and an OpenRouter API key
 for OpenRouter models. The router itself runs on macOS, Windows, and Linux;
-the managed installer currently provisions a macOS `launchd` service.
+the managed installer provisions macOS `launchd` or Linux `systemd` user services.
 
-## Install
+### Arch Linux: install the ChatGPT desktop app first
+
+The adapter routes the Codex picker, so it needs the ChatGPT desktop app
+(`codex-desktop`) installed and signed in before the router is useful:
+
+```sh
+yay -S codex-desktop-git   # provides `codex-desktop`
+```
+
+This is an AUR repack of OpenAI's official Linux build
+(`ilysenko/codex-desktop-linux`). Launch it once, sign in with ChatGPT,
+then install the router. The `openai-codex-bin` CLI package is optional
+and not required. (Use `paru -S codex-desktop-git` if you prefer paru.)
+
+### Linux: managed systemd user services
+
+Run the installer below in your signed-in desktop user session. It checks
+that the user systemd manager is available before installation, writes the
+router service and update timer, and enables them for future logins. It
+does not create a root service or enable lingering.
+The repository is private: install GitHub CLI (`gh`) and sign in as this
+same user with repository read access. Scheduled downloads use that login.
+
+Older symlink installations are migrated to `router_launch.py` and a
+`current` pointer file. Existing state, credentials and model settings are
+preserved. The installer replaces legacy updater commands pointing at a
+checkout or local feed with the installed updater and normal release channel.
+A pre-existing `feed` file in the router home still explicitly overrides
+that channel; see [Linux upgrade and verification](docs/linux-upgrade.md).
+
+```sh
+systemctl --user status codex-mixed-model-router.service
+systemctl --user list-timers codex-mixed-model-router-update.timer
+journalctl --user -u codex-mixed-model-router-update.service
+```
+
+Updates wait for idle traffic, then systemd restarts the router through the
+stable launcher. The service allows 150 seconds for the 120-second drain.
+The first update check runs five minutes after installation, then fifteen
+minutes after each check completes. Restart Codex after catalogue changes.
+
+## Install on macOS or Linux
 
 Build a versioned bundle and install it:
 

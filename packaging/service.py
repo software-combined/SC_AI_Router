@@ -36,11 +36,41 @@ UPDATE_LABEL = LABEL + '.update'
 FEED_URL = 'https://github.com/software-combined/SC_OpenRouter_adapter/releases/latest/download/latest.json'
 MIN_PYTHON = (3, 14)
 
+RELEASES_PREFIX = 'https://github.com/software-combined/SC_OpenRouter_adapter/releases/'
+
+
+def github_asset(url):
+    if not url.startswith(RELEASES_PREFIX):
+        return None
+    parts = url[len(RELEASES_PREFIX):].split('/')
+    if len(parts) != 3 or not ((parts[0] == 'latest' and parts[1] == 'download')
+                               or parts[0] == 'download'):
+        raise SystemExit('unsupported router GitHub release URL')
+    tag = None if parts[0] == 'latest' else parts[1]
+    asset = parts[2]
+    if not asset or any(c in asset for c in '?*[]'):
+        raise SystemExit('invalid router release asset name')
+    gh = shutil.which('gh') or next((p for p in (
+        '/opt/homebrew/bin/gh', '/usr/local/bin/gh', '/usr/bin/gh') if Path(p).is_file()), None)
+    if gh is None:
+        raise SystemExit('Private router updates require GitHub CLI (gh), signed in as this user.')
+    cmd = [gh, 'release', 'download', '--repo', 'software-combined/SC_OpenRouter_adapter',
+           '--pattern', asset, '--output', '-']
+    if tag is not None:
+        cmd += ['--', tag]
+    result = run(cmd, capture_output=True, timeout=120)
+    if result.returncode:
+        raise SystemExit('Cannot read private router release; check gh auth status and repository access.')
+    return result.stdout
+
 
 def fetch(url):
     """Single network entry point; tests inject a fake."""
     if url.startswith('file://'):
         return Path(url[len('file://'):]).read_bytes()
+    asset = github_asset(url)
+    if asset is not None:
+        return asset
     with urllib.request.urlopen(url, timeout=30) as response:
         return response.read()
 
@@ -227,7 +257,7 @@ def wait_idle(state, timeout=600, fetch_health=None):
 
 def fetch_feed(url, etag, _fetch=fetch):
     """Read a feed document, revalidating with a saved ETag. Returns (status, body, etag)."""
-    if url.startswith('file://'):
+    if url.startswith('file://') or url.startswith(RELEASES_PREFIX):
         return 200, _fetch(url), etag
     req = urllib.request.Request(url, headers={'If-None-Match': etag} if etag else {})
     try:

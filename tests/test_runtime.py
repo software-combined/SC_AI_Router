@@ -9,9 +9,10 @@ import unittest
 from datetime import datetime
 from pathlib import Path
 from unittest import mock
+from codex_router.credentials import Credentials
 from codex_router.runtime import LOG, load_state
 from tests.fakes import FakeUpstream, install_fake
-from tests.test_mixed_router import _start_auth_server
+from tests.test_mixed_router import _start_auth_server, _start_server, _test_state
 
 
 def _capture_log(test):
@@ -62,8 +63,15 @@ class LoadStateTests(unittest.TestCase):
                 auth = '/nonexistent-auth.json' if payload is None else self._auth(payload)
                 path = self._write({'port': 0, 'token': 't', 'openai_models': [],
                                     'opencode_auth': auth})
-                with self.assertRaises(SystemExit) as ctx:
-                    load_state(Path(path))
+                # Isolate the key-file leg: on machines where the router is
+                # installed, the real ~/.codex/mixed-model-router/openrouter.key
+                # otherwise satisfies the lookup before opencode_auth is read.
+                home = Path(tempfile.mkdtemp())
+                self.addCleanup(shutil.rmtree, str(home), True)
+                with mock.patch('codex_router.runtime.ROUTER_HOME', home), \
+                        mock.patch.dict(os.environ, clear=True):
+                    with self.assertRaises(SystemExit) as ctx:
+                        load_state(Path(path))
                 self.assertIn('OpenRouter credential problem', str(ctx.exception))
 
     def test_load_state_accepts_valid_file(self):
@@ -85,11 +93,12 @@ class LoadStateTests(unittest.TestCase):
 
 
 class CredentialRequestMappingTests(unittest.TestCase):
-    def _server_without_opencode(self):
-        from tests.test_mixed_router import _start_server, _test_state
+    def _server_without_opencode(self, home):
         state = _test_state('/nonexistent-auth.json')
         del state['opencode_auth']
-        server = _start_server(state)
+        # Real Credentials against the temp home: this is the point of the
+        # test. test-key stubs would mask the key-file/env mapping.
+        server = _start_server(state, credentials=Credentials(state, home, env=os.environ))
         self.addCleanup(server.shutdown)
         return server
 
@@ -106,20 +115,18 @@ class CredentialRequestMappingTests(unittest.TestCase):
         os.chmod(home / 'openrouter.key', 0o600)
         with mock.patch.dict(os.environ):
             os.environ.pop('OPENROUTER_API_KEY', None)
-            with mock.patch('codex_router.router.ROUTER_HOME', home):
-                server = self._server_without_opencode()
-                response = self._post(server, {'model': 'z-ai/glm-5.3', 'input': []})
-                self.assertEqual(response.status, 400)
+            server = self._server_without_opencode(home)
+            response = self._post(server, {'model': 'z-ai/glm-5.3', 'input': []})
+            self.assertEqual(response.status, 400)
 
     def test_nothing_configured_maps_to_400(self):
         home = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, str(home), True)
         with mock.patch.dict(os.environ):
             os.environ.pop('OPENROUTER_API_KEY', None)
-            with mock.patch('codex_router.router.ROUTER_HOME', home):
-                server = self._server_without_opencode()
-                response = self._post(server, {'model': 'z-ai/glm-5.3', 'input': []})
-                self.assertEqual(response.status, 400)
+            server = self._server_without_opencode(home)
+            response = self._post(server, {'model': 'z-ai/glm-5.3', 'input': []})
+            self.assertEqual(response.status, 400)
 
 
 class LoggingAndHealthTests(unittest.TestCase):

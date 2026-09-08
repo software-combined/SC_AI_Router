@@ -26,6 +26,11 @@ _spec = importlib.util.spec_from_file_location(
     Path(__file__).resolve().parent / 'service.py')
 _svc = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_svc)
+_linux_spec = importlib.util.spec_from_file_location(
+    'router_systemd', Path(__file__).resolve().parent / 'systemd.py')
+_linux = importlib.util.module_from_spec(_linux_spec)
+_linux_spec.loader.exec_module(_linux)
+PLATFORM = sys.platform
 # Re-exported for tests (installed bundles have no packaging/ package).
 # _patch_attrs(test, run/health/wait_*/...) patches install_mod attrs; the
 # call sites below read them via _svc so swaps take effect. Immutable values
@@ -59,6 +64,26 @@ run = _svc.run
 health = _svc.health
 wait_idle = _svc.wait_idle
 wait_version = _svc.wait_version
+
+
+def systemd_manager(home):
+    return _linux.Manager(home, run) if PLATFORM == 'linux' else None
+
+
+def restart_router(home):
+    manager = systemd_manager(home)
+    if manager:
+        manager.restart()
+    else:
+        run(['launchctl', 'kill', 'TERM', f'gui/{os.getuid()}/{LABEL}'], capture_output=True)
+
+
+def stop_router(home):
+    manager = systemd_manager(home)
+    if manager:
+        manager.stop()
+    else:
+        run(['launchctl', 'bootout', f'gui/{os.getuid()}/{LABEL}'], capture_output=True)
 
 
 def verify_sha256(data, want):
@@ -199,6 +224,9 @@ def do_rollback(args):
     if args.dry_run:
         print(f'would roll back to {args.version} under {home}')
         return 0
+    manager = systemd_manager(home)
+    if manager:
+        manager.check()
     target = home / 'releases' / args.version
     if not target.is_dir() or not (target / 'packaging' / 'VERSION').exists():
         raise SystemExit(f'version {args.version} is not installed under {home}')
@@ -210,8 +238,11 @@ def do_rollback(args):
         state = json.loads((home / 'mixed-router-state.json').read_text())
     except (OSError, ValueError):
         raise SystemExit(f'router state is missing or unreadable under {home}')
+    if not wait_idle(state):
+        print('deferred: router busy')
+        return 0
     previous = swap_current(home, target)
-    run(['launchctl', 'kill', 'TERM', f'gui/{os.getuid()}/{LABEL}'], capture_output=True)
+    restart_router(home)
     if not wait_version(state, args.version):
         if previous is not None:
             swap_current(home, home / 'releases' / previous)
@@ -219,7 +250,7 @@ def do_rollback(args):
         else:
             _clear_current(home)
             print(f'rollback to {args.version} failed health check; no previous release')
-        run(['launchctl', 'kill', 'TERM', f'gui/{os.getuid()}/{LABEL}'], capture_output=True)
+        restart_router(home)
         raise SystemExit(1)
     print(f'rolled back to {args.version}; health ok; restart Codex to load the router')
     return 0
@@ -257,6 +288,9 @@ def do_install(args, _fetch=fetch, _run=None):
         print(f'would fetch {feed}; interpreter {python}')
         print('would verify, unpack, self-test, swap current, restart, write config')
         return 0
+    manager = systemd_manager(home)
+    if manager:
+        manager.check()
     tarball = _fetch(latest['url'])
     if latest.get('sha256'):
         verify_sha256(tarball, latest['sha256'])
@@ -266,7 +300,7 @@ def do_install(args, _fetch=fetch, _run=None):
             manifest_doc = json.loads(tar.extractfile('MANIFEST.json').read())
         except KeyError:
             raise SystemExit('bundle has no MANIFEST.json')
-    home.mkdir(parents=True, exist_ok=True)
+    home.mkdir(mode=0o700, parents=True, exist_ok=True)
     (home / 'logs').mkdir(exist_ok=True)
     # --feed is one-shot: it selects this run's source only. Never pin it,
     # or one local test would freeze every future scheduled update on it.
@@ -293,56 +327,63 @@ def do_install(args, _fetch=fetch, _run=None):
     except SystemExit as exc:
         if exc.code != 3 or setup_url is None:
             raise
-    previous = install_bundle(home, latest['version'], tarball, manifest_doc, python)
-    if previous is not None and not wait_idle(state):
+    if current_release_dir(home) is not None and not wait_idle(state):
         # Busy router: keep serving the old pointer; the updater retries next
         # pass instead of killing live Codex traffic mid-request.
-        swap_current(home, home / 'releases' / previous)
         print('deferred: router busy')
         return 0
-    agents = Path.home() / 'Library' / 'LaunchAgents'
-    legacy_exe = main_plist_exe()
-    write_plist(agents / (LABEL + '.plist'), render_plist(python, home, state))
-    write_plist(agents / (UPDATE_LABEL + '.plist'),
-                render_update_plist(python, home))
-    uid = os.getuid()
-    if previous is None:
-        restart_service(uid)
-    elif legacy_exe is not None and legacy_exe != python:
-        # Loaded plist still points at the old (possibly bare) interpreter:
-        # TERM alone would respawn the new code under the stale definition.
-        # Bootstrap failure must still roll back (pointer + loaded old
-        # release); reload leaves the job unloaded, so rollback re-runs it.
-        # The rewritten plist intentionally stays at the new absolute
-        # interpreter; only the pointer rolls back.
-        try:
-            reload_main_service(uid)
-        except (SystemExit, OSError, subprocess.SubprocessError):
-            swap_current(home, home / 'releases' / previous)
+    catalog_path = home / 'mixed-models.json'
+    before_catalog = catalog_path.read_bytes() if catalog_path.exists() else None
+    previous = install_bundle(home, latest['version'], tarball, manifest_doc, python)
+    try:
+        if manager:
+            manager.install(python, current_release_dir(home))
+        else:
             agents = Path.home() / 'Library' / 'LaunchAgents'
-            healed = run(['launchctl', 'bootstrap', f'gui/{uid}',
-                          str(agents / (LABEL + '.plist'))], capture_output=True)
-            if healed.returncode != 0:
-                print(f'reload failed; restored pointer {previous} but the '
-                      f'router is NOT loaded, bootstrap it by hand')
-                raise SystemExit(1)
-            print(f'reload failed; restored {previous}, re-run the installer')
-            raise SystemExit(1)
-    else:
-        run(['launchctl', 'kill', 'TERM', f'gui/{uid}/{LABEL}'], capture_output=True)
-    if not wait_version(state, latest['version']):
+            legacy_exe = main_plist_exe()
+            write_plist(agents / (LABEL + '.plist'), render_plist(python, home, state))
+            write_plist(agents / (UPDATE_LABEL + '.plist'), render_update_plist(python, home))
+            if previous is None:
+                restart_service(os.getuid())
+            elif legacy_exe is not None and legacy_exe != python:
+                # Reload the old in-memory plist so it uses the absolute interpreter.
+                try:
+                    reload_main_service(os.getuid())
+                except (SystemExit, OSError, subprocess.SubprocessError):
+                    swap_current(home, home / 'releases' / previous)
+                    if before_catalog is not None:
+                        catalog_path.write_bytes(before_catalog)
+                    healed = run(['launchctl', 'bootstrap', f'gui/{os.getuid()}',
+                                  str(agents / (LABEL + '.plist'))], capture_output=True)
+                    if healed.returncode != 0:
+                        print(f'reload failed; restored pointer {previous} but the '
+                              f'router is NOT loaded, bootstrap it by hand')
+                    else:
+                        print(f'reload failed; restored {previous}, re-run the installer')
+                    raise SystemExit(1)
+            else:
+                restart_router(home)
+        healthy = wait_version(state, latest['version'])
+    except (OSError, subprocess.CalledProcessError):
+        healthy = False
+    if not healthy:
+        if before_catalog is None:
+            catalog_path.unlink(missing_ok=True)
+        else:
+            catalog_path.write_bytes(before_catalog)
         if previous:
             swap_current(home, home / 'releases' / previous)
             # TERM, not bootout: KeepAlive restarts the old release.
             # bootout would unload the service and strand a busy machine.
-            run(['launchctl', 'kill', 'TERM', f'gui/{os.getuid()}/{LABEL}'],
-                     capture_output=True)
+            restart_router(home)
+            if manager:
+                manager.start_updates()
             print(f'rolled back to {previous}: new version failed health check')
         else:
             if current_release_dir(home) == home / 'releases' / latest['version']:
                 _clear_current(home)
-            run(['launchctl', 'bootout', f'gui/{os.getuid()}/{LABEL}'], capture_output=True)
-            print('new version failed health check; see logs/launchd.log')
+            stop_router(home)
+            print('new version failed health check; inspect the service logs')
         raise SystemExit(1)
     config_path = Path.home() / '.codex' / 'config.toml'
     catalog_line = f'model_catalog_json = "{home}/mixed-models.json"\n'
@@ -397,6 +438,8 @@ def do_install(args, _fetch=fetch, _run=None):
         webbrowser.open(setup_url)
     prune_releases(home, latest['version'], previous)
     (home / 'feed-serial').write_text(str(serial) + '\n')
+    if manager:
+        manager.start_updates()
     print(f"installed {latest['version']}; health ok; restart Codex to load the router")
     return 0
 
@@ -463,6 +506,9 @@ def do_check_update(args, _fetch=fetch, _read_feed=None, _sleep=None):
         if result.returncode != 0:
             print(result.stderr[-2000:] if result.stderr else '')
             raise SystemExit(result.returncode)
+    if current_version(home) != latest['version']:
+        print('deferred: installer did not activate the requested version')
+        return 0
     (home / 'logs').mkdir(exist_ok=True)
     with open(home / 'logs' / 'update.log', 'a') as stream:
         stream.write(json.dumps({'at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
@@ -476,18 +522,27 @@ def do_check_update(args, _fetch=fetch, _read_feed=None, _sleep=None):
 def do_uninstall(args):
     _sync_seams()
     home = Path(args.home).expanduser()
+    manager = systemd_manager(home)
+    if manager:
+        manager.check()
     release = current_release_dir(home)
     if release is not None:
-        disable = release / 'tools' / 'disable.py'
+        # Use this installer's matching remover even after rolling back old code.
+        disable = Path(__file__).resolve().parents[1] / 'tools' / 'disable.py'
         if disable.exists():
             result = run([sys.executable, str(disable)], capture_output=True, text=True,
-                              env={**os.environ, 'ROUTER_HOME': str(home)})
+                              env={**os.environ, 'ROUTER_HOME': str(home),
+                                   'ROUTER_RESTORE_ONLY': '1'})
             out = result.stdout or ''
             print(out[-2000:])
             if 'OpenAI direct routing restored' not in out:
                 print((result.stderr or '')[-2000:])
                 raise SystemExit('configuration restore failed; '
                                  'services left running for manual review')
+    if manager:
+        manager.uninstall()
+        print(f'uninstalled services; {home} left in place for the operator to delete')
+        return 0
     run(['launchctl', 'bootout', f'gui/{os.getuid()}/{LABEL}'], capture_output=True)
     run(['launchctl', 'bootout', f'gui/{os.getuid()}/{UPDATE_LABEL}'], capture_output=True)
     agents = Path.home() / 'Library' / 'LaunchAgents'
@@ -521,11 +576,14 @@ def build_parser():
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
-    if args.uninstall:
-        return do_uninstall(args)
-    if args.check_update:
-        return do_check_update(args)
-    return do_install(args)
+    action = do_uninstall if args.uninstall else do_check_update if args.check_update else do_install
+    manager = systemd_manager(Path(args.home).expanduser())
+    # The updater spawns the installer, which takes its own lock. Holding
+    # one in the parent would prevent every scheduled update from installing.
+    if manager and not args.check_update and not args.dry_run:
+        with manager.operation():
+            return action(args)
+    return action(args)
 
 
 if __name__ == '__main__':
