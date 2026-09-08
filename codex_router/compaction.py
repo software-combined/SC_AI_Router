@@ -12,7 +12,9 @@ COMPACT_PROMPT = ('You are performing a CONTEXT CHECKPOINT COMPACTION. Create a 
     'critical data or tool results needed to continue. Quote exact values, codes, names and '
     'tool results verbatim so the next model can repeat them exactly. Be concise and structured.')
 import base64
+import secrets
 PREFIX = 'ocx1:'
+TRIGGER_TYPE = 'compaction_trigger'
 SUMMARY_PREFIX = ('Another language model started to solve this problem and '
     'produced a summary of its thinking process.')
 OPAQUE_NOTE = ('[earlier conversation was compacted; the summary is stored '
@@ -37,6 +39,25 @@ def compaction_text(item):
 
 def is_compaction_item(item):
     return isinstance(item, dict) and item.get('type') in COMPACTION_TYPES
+
+
+def has_compaction_trigger(items):
+    """True when Codex opened remote-compaction V2 inline on /responses."""
+    return (isinstance(items, list)
+            and any(isinstance(item, dict) and item.get('type') == TRIGGER_TYPE
+                    for item in items))
+
+
+def encode_summary(summary):
+    return PREFIX + base64.b64encode(summary.encode()).decode()
+
+
+def v2_compaction_item(summary):
+    """The exactly-one output item a V2 trigger turn must carry."""
+    if not isinstance(summary, str) or not summary.strip():
+        raise ValueError('Compaction summary missing or empty; retry compaction.')
+    return {'type': 'compaction', 'id': 'cmp_' + secrets.token_hex(8),
+            'encrypted_content': encode_summary(summary.strip())}
 
 def extract_user_messages(items):
     if not isinstance(items, list):
@@ -151,20 +172,30 @@ def _item_text(item):
         return compaction_text(item)
     return ''
 
+TRUNCATED_NOTE = '[truncated] '
+
+
 def transcript_for_summary(items):
     """Flatten user, assistant, tool and prior-compaction items, newest first."""
     if not isinstance(items, list):
         return ''
-    kept, total = [], 0
+    kept, total, fallback = [], 0, ''
     for item in reversed(items):
         text = _item_text(item)
         if not text.strip():
             continue
+        if not fallback:
+            fallback = text  # Newest non-empty; tail-kept if nothing fits.
         if total + len(text) + 1 > TRANSCRIPT_BUDGET:
             break  # Keep the newest tail; a hole would strand old items.
         kept.append(text)
         total += len(text) + 1
-    return '\n'.join(reversed(kept))
+    if kept:
+        return '\n'.join(reversed(kept))
+    if fallback:
+        # One oversized newest message: keep its tail, never an empty brief.
+        return TRUNCATED_NOTE + fallback[-(TRANSCRIPT_BUDGET - len(TRUNCATED_NOTE)):]
+    return ''
 
 def extract_summary(status, data):
     """Pull summarizer text from a Responses payload; fail closed on bad shape."""
@@ -186,4 +217,8 @@ def extract_summary(status, data):
     summary = '\n'.join(texts).strip()
     if not summary:
         raise ValueError('Compaction summary empty; retry compaction.')
+    incomplete = data.get('incomplete_details') if isinstance(data, dict) else None
+    reason = incomplete.get('reason') if isinstance(incomplete, dict) else None
+    if reason:
+        raise ValueError(f'Compaction summary incomplete ({reason}); retry compaction.')
     return summary

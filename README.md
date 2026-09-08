@@ -82,6 +82,7 @@ directory at an idle boundary:
 `codex_router/tool_adapter.py`,
 `codex_router/capabilities.py`,
 `codex_router/compaction.py`,
+`codex_router/discovered.py`,
 `codex_router/runtime.py`,
 `codex_router/catalogue.py`,
 `codex_router/local_services.py`,

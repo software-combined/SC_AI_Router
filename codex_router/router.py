@@ -138,15 +138,17 @@ class Handler(BaseHTTPRequestHandler):
                 model, path, self.server.state.get('openai_models', []), mode)
             if provider.name == 'openai-subscription' and not via_path:
                 return self.error(401, 'Bearer auth is for no-subscription mode only')
-            if path == '/responses/compact' and provider.name == 'openrouter':
-                # Compact raw history before prepare(): a rejected effort must not block it.
-                # Hold an inflight slot so drain waits for mid-compaction releases. Key
-                # lookup stays outside the try so credential errors keep 401/400, not 502.
+            compact_call = providers.compaction_call(provider, model, path, payload)
+            if compact_call is not None:
+                # Compact before prepare(): a rejected effort must not block it.
+                # Hold an inflight slot so drain waits for mid-compaction
+                # releases. Key lookup stays outside the try so credential
+                # errors keep 401/400, not 502.
                 key = self.server.credentials.openrouter_key()
                 with self.server.lock:
                     self.server.inflight += 1
                 try:
-                    return self.send_json(200, {'output': provider.compact(model, payload, key)})
+                    return self.send_json(200, {'output': compact_call(key)})
                 except PreparationError as exc:
                     return self.error(409, str(exc))
                 except (OSError, http.client.HTTPException):

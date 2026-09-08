@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.4.5 (compaction contract slice)
+
+Compaction fixes from the audit brief, committed on
+`codex/isolated-install-state`, not yet deployed (live router still runs
+the pre-restructure prototype; see Plan 047 section 2):
+
+- V2 `compaction_trigger` turns on OpenRouter models are answered inline
+  with exactly one `ocx1:` compaction item briefed by the local
+  summarizer; the trigger is never forwarded upstream. Contract proven
+  against lidge-jun/opencodex f7f890f (MIT): trigger arrives as a normal
+  non-streamed /responses call and the client fatals unless exactly one
+  compaction item returns. Subscription traffic still flows to OpenAI,
+  which mints its own blobs natively. `comp_hash` stays null.
+- The summarizer rejects explicitly incomplete results
+  (`incomplete_details.reason`) instead of installing a cut-off summary.
+- An oversized newest message truncates to its tail instead of yielding
+  an empty transcript.
+- Discovered tool schemas persist per summary to `discovered-tools/`
+  (owner-only, capped, insertion-ordered eviction) and chain across
+  repeated compactions, so V1, V2, and restarted routers all resolve the
+  same entry. Residual risk: live Codex acceptance of a real V2 trigger
+  turn still needs a paid long-thread probe before release.
+
 ## 0.4.4 (installer lifecycle slice)
 
 Lifecycle fixes from the audit brief, committed on

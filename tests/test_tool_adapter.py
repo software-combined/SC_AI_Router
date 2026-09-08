@@ -1,8 +1,25 @@
 import io
 import json
+import os
+import shutil
+import tempfile
+from pathlib import Path
 import unittest
+from unittest import mock
 from codex_router.compaction import SUMMARY_PREFIX
-from codex_router.tool_adapter import prepare_tools, remember_discovered, stream_events, ToolEvents, has_recursive_refs, SEARCH_NAME, integer_json
+from codex_router.discovered import _MEMORY, remember
+from codex_router.tool_adapter import prepare_tools, stream_events, ToolEvents, has_recursive_refs, SEARCH_NAME, integer_json
+
+
+def _isolated_home(test):
+    tmp = tempfile.mkdtemp()
+    test.addCleanup(shutil.rmtree, tmp, True)
+    _MEMORY.clear()
+    test.addCleanup(_MEMORY.clear)
+    patcher = mock.patch.dict(os.environ, {'ROUTER_HOME': tmp})
+    patcher.start()
+    test.addCleanup(patcher.stop)
+    return tmp
 
 class ToolAdapterTests(unittest.TestCase):
     def test_integral_provider_numbers_do_not_break_native_integer_arguments(self):
@@ -120,7 +137,8 @@ class ToolAdapterTests(unittest.TestCase):
              'parameters': {'type': 'object'}}]}
         items = [{'type': 'tool_search_output', 'call_id': 's1', 'status': 'completed',
                   'execution': 'client', 'tools': [released]}]
-        remember_discovered(items, [{'content': [{'text': SUMMARY_PREFIX + '\nrun-7'}]}])
+        _isolated_home(self)
+        remember(items, 'run-7')
         payload = {'tools': [], 'input': [
             {'type': 'message', 'role': 'user', 'content': SUMMARY_PREFIX + '\nrun-7'}]}
         prepare_tools(payload)
@@ -128,19 +146,25 @@ class ToolAdapterTests(unittest.TestCase):
         self.assertTrue(payload['tools'][0]['description'].startswith('probe.echo'))
         self.assertEqual(payload['tools'][0]['parameters'], {'type': 'object'})
 
-    def test_discovered_cache_evicts_oldest(self):
+    def test_discovered_cache_bounds_memory_but_keeps_disk(self):
+        home = Path(_isolated_home(self))
         for i in range(20):
             tool = {'type': 'function', 'name': f'tool-{i}', 'parameters': {'type': 'object'}}
             items = [{'type': 'tool_search_output', 'call_id': 's', 'tools': [tool]}]
-            remember_discovered(items, [{'content': [{'text': SUMMARY_PREFIX + f'\nrun-{i}'}]}])
-        early = {'tools': [], 'input': [
+            remember(items, f'run-{i}')
+        self.assertLessEqual(len(_MEMORY), 16)
+        stored = sorted((home / 'discovered-tools').glob('*.json'))
+        self.assertEqual(len(stored), 16)
+        _MEMORY.clear()  # Simulate a router restart: disk is the only copy.
+        for run in ('run-4', 'run-19'):
+            payload = {'tools': [], 'input': [
+                {'type': 'message', 'role': 'user', 'content': SUMMARY_PREFIX + f'\n{run}'}]}
+            prepare_tools(payload)
+            self.assertEqual(len(payload['tools']), 1)
+        gone = {'tools': [], 'input': [
             {'type': 'message', 'role': 'user', 'content': SUMMARY_PREFIX + '\nrun-0'}]}
-        prepare_tools(early)
-        self.assertEqual(early['tools'], [])
-        late = {'tools': [], 'input': [
-            {'type': 'message', 'role': 'user', 'content': SUMMARY_PREFIX + '\nrun-19'}]}
-        prepare_tools(late)
-        self.assertEqual(len(late['tools']), 1)
+        prepare_tools(gone)
+        self.assertEqual(gone['tools'], [])
 
     def test_stub_in_tools_is_completed_by_discovered_schema(self):
         schema = {'type': 'object', 'properties': {'value': {'type': 'string'}}}
