@@ -43,6 +43,9 @@ def _install_mod():
     spec = importlib.util.spec_from_file_location('router_install', _ROOT / 'packaging' / 'install.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    # This existing rig exercises launchd on every host. Linux lifecycle
+    # tests explicitly select linux and use the same installer seams.
+    module.PLATFORM = 'darwin'
     return module
 
 
@@ -67,7 +70,8 @@ def _tarball(files=(), links=()):
 
 def _ok_run(cmd, **kwargs):
     if '-c' in cmd:
-        return SimpleNamespace(returncode=0, stdout='3 14', stderr='')
+        return SimpleNamespace(returncode=0, stdout='3 14\n/opt/homebrew/bin/python3.14\n',
+                               stderr='')
     return SimpleNamespace(returncode=0, stdout='', stderr='')
 
 
@@ -84,7 +88,7 @@ def _craft_bundle(version):
 
 
 _SEAMS = ('run', 'health', 'wait_idle', 'wait_version', 'self_test',
-           'write_catalogue', 'fetch_feed', 'feed_serial')
+           'write_catalogue', 'fetch_feed', 'feed_serial', 'main_plist_exe')
 # webbrowser patches module-global stdlib handle via setattr on install_mod;
 # call sites use `webbrowser.open` so plain setattr suffices (no _svc mirror).
 
