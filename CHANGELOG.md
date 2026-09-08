@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.4.3 (isolated-install slice)
+
+Clean-install and configuration fixes from the audit brief, committed on
+`codex/isolated-install-state`, not yet deployed (live router still runs
+the pre-restructure prototype; see Plan 047 section 2):
+
+- Fresh installs configure the static picker catalogue by default: the
+  router serves no `/models`, so omitting `model_catalog_json` left a
+  fresh picker with nothing to read. `--static-catalogue` stays accepted
+  as a no-op.
+- Fresh picker catalogues now list the subscription roster alongside the
+  OpenRouter registry entries. `catalogue --merge` seeds missing roster
+  slugs from the sibling state file as stubs and never rewrites existing
+  rich entries. Plan 039's live `/models` remains the proper replacement.
+- The no-subscription config block keeps root keys (`model_provider`,
+  `model_catalog_json`) above the `[model_providers.scg_router]` table,
+  uses the Plan 043 spike key name `SCG_ROUTER_TOKEN` instead of a
+  per-port variable nothing provisions, and always points at the catalogue.
+- Updates without `--openai-mode` keep the installed mode from state
+  instead of silently rewriting a no-subscription block as a subscription
+  block; the receipt records the installed mode.
+- The updater agent is bootstrapped on fresh installs and carries
+  `--home` always plus `--feed` when explicitly pinned. An explicit feed
+  is pinned in `home/feed` (channel resolution otherwise); scheduled
+  re-invokes no longer pin a channel-resolved feed.
+
 ## 0.4.2 (Plan 047)
 
 Router correctness and installer fixes, committed on

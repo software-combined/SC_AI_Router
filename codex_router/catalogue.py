@@ -78,16 +78,40 @@ def openrouter_entry(model):
             'web_search_tool_type': 'text_and_image' if model.web_search else 'text'}
 
 
-def merge(catalog):
-    entries = {m['slug']: m for m in catalog.get('models', [])}
+def merge(catalog, roster=()):
+    """Merge registry OpenRouter entries; keep every existing entry in place.
+
+    Roster slugs (the subscription side from runtime state) absent from the
+    catalogue are appended as stubs so a fresh file still lists the approved
+    picker; existing rich entries are never rewritten. Plan 039's live
+    /models remains the proper replacement for this fallback.
+    """
+    models = catalog.get('models', [])
+    entries = {m['slug']: m for m in models}
     for model in MODELS:
         if model.provider == 'openrouter':
             entries[model.slug] = openrouter_entry(model)
-    seen = {m['slug'] for m in catalog.get('models', [])}
-    order = [m['slug'] for m in catalog.get('models', []) if m['slug'] in entries]
+    seen = {m['slug'] for m in models}
+    order = [m['slug'] for m in models]
+    for slug in roster:
+        if slug not in entries:
+            entries[slug] = {'slug': slug}
+            order.append(slug)
     order += [m.slug for m in MODELS if m.provider == 'openrouter' and m.slug not in seen]
     catalog['models'] = [entries[slug] for slug in order]
     return catalog
+
+
+def read_roster(catalog_path):
+    """Subscription roster from the state file beside the catalogue; () when absent."""
+    try:
+        state = json.loads((Path(catalog_path).parent / 'mixed-router-state.json').read_text())
+    except (OSError, ValueError):
+        return ()
+    if not isinstance(state, dict):
+        return ()
+    roster = state.get('openai_models')
+    return tuple(roster) if isinstance(roster, list) else ()
 
 
 def _same(old, new, key):
@@ -123,7 +147,7 @@ if __name__ == '__main__':
     if sys.argv[1:2] == ['--merge'] and len(sys.argv) == 3:
         path = Path(sys.argv[2])
         base = json.loads(path.read_text()) if path.exists() else {'models': []}
-        path.write_text(json.dumps(merge(base), indent=2) + '\n')
+        path.write_text(json.dumps(merge(base, read_roster(path)), indent=2) + '\n')
     elif sys.argv[1:2] == ['--check'] and len(sys.argv) == 3:
         sys.exit(0 if check(sys.argv[2]) else 1)
     else:

@@ -78,15 +78,16 @@ def _install(test, tmp, home, fake_fetch, fake_run, *extra_args):
 
 
 class InstallCatalogueTests(unittest.TestCase):
-    def test_default_install_omits_static_catalog_line(self):
+    def test_default_install_writes_static_catalog_line(self):
+        # The router serves no /models, so the file pointer is the default.
         with tempfile.TemporaryDirectory() as tmp:
             home, _, fake_fetch = _setup(self, tmp)
             config = _install(self, tmp, home, fake_fetch, _recording_run([]))
             block = config.read_text()
             self.assertIn('# BEGIN local mixed model picker', block)
-            self.assertNotIn('model_catalog_json', block)
+            self.assertIn(f'model_catalog_json = "{home}/mixed-models.json"', block)
 
-    def test_static_catalogue_flag_writes_catalog_line(self):
+    def test_static_catalogue_flag_kept_as_noop(self):
         with tempfile.TemporaryDirectory() as tmp:
             home, _, fake_fetch = _setup(self, tmp)
             config = _install(self, tmp, home, fake_fetch,
@@ -105,6 +106,15 @@ class InstallCatalogueTests(unittest.TestCase):
                 if model.provider == 'openrouter':
                     self.assertIn(model.slug, slugs)
             self.assertTrue(check(str(home / 'mixed-models.json')))
+
+    def test_install_catalogue_contains_subscription_roster(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home, _, fake_fetch = _setup(self, tmp)
+            _install(self, tmp, home, fake_fetch, _recording_run([]))
+            catalog = json.loads((home / 'mixed-models.json').read_text())
+            slugs = {m['slug'] for m in catalog['models']}
+            for slug in install_mod.DEFAULT_OPENAI_MODELS:
+                self.assertIn(slug, slugs)
 
     def test_catalogue_merge_failure_aborts_install(self):
         with tempfile.TemporaryDirectory() as tmp:
