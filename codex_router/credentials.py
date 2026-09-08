@@ -7,9 +7,16 @@ ENV_VAR = 'OPENROUTER_API_KEY'
 KEY_FILE = 'openrouter.key'
 
 
+def default_home():
+    """Router home, resolved at call time so tests can patch the env var."""
+    return Path(os.environ.get('ROUTER_HOME', Path.home() / '.codex' / 'mixed-model-router'))
+
+
 class Credentials:
-    def __init__(self, state, home, env=None):
-        self.state, self.home, self.env = state, Path(home), os.environ if env is None else env
+    def __init__(self, state, home=None, env=None):
+        self.state = state
+        self.home = Path(home) if home is not None else default_home()
+        self.env = os.environ if env is None else env
 
     def openrouter_key(self):
         value = self.env.get(ENV_VAR, '').strip()

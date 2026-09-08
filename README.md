@@ -12,7 +12,87 @@ your machine.
 The Codex app and/or Claude Code, Python 3 (the installer finds or asks for a
 3.14 interpreter to run the router itself), and an OpenRouter API key
 for OpenRouter models. The router itself runs on macOS, Windows, and Linux;
-the managed installer currently provisions a macOS `launchd` service.
+the managed installer currently provisions a macOS `launchd` service, with
+Linux `systemd` user units documented below.
+
+### Arch Linux: install the ChatGPT desktop app first
+
+The adapter routes the Codex picker, so it needs the ChatGPT desktop app
+(`codex-desktop`) installed and signed in before the router is useful:
+
+```sh
+yay -S codex-desktop-git   # provides `codex-desktop`
+```
+
+This is an AUR repack of OpenAI's official Linux build
+(`ilysenko/codex-desktop-linux`). Launch it once, sign in with ChatGPT,
+then install the router. The `openai-codex-bin` CLI package is optional
+and not required. (Use `paru -S codex-desktop-git` if you prefer paru.)
+
+### Linux: run the router as a systemd user service
+
+The macOS installer writes `launchd` plists; on Linux, provision the
+equivalent pair of `systemd` user units instead. With `port` and `token`
+from `~/.codex/mixed-model-router/mixed-router-state.json`:
+
+`~/.config/systemd/user/codex-mixed-model-router.service`:
+
+```ini
+[Unit]
+Description=SC Codex mixed model router (loopback)
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3.14 -m codex_router
+WorkingDirectory=%h/.codex/mixed-model-router/current
+Environment=ROUTER_HOME=%h/.codex/mixed-model-router
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+```
+
+`~/.config/systemd/user/codex-mixed-model-router-update.service`:
+
+```ini
+[Unit]
+Description=SC Codex mixed model router - check for updates
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3.14 /path/to/SC_OpenRouter_adapter/packaging/install.py --check-update
+Environment=ROUTER_HOME=%h/.codex/mixed-model-router
+```
+
+`~/.config/systemd/user/codex-mixed-model-router-update.timer`:
+
+```ini
+[Unit]
+Description=Check for SC mixed model router updates every 15 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+
+[Install]
+WantedBy=timers.target
+```
+
+Then:
+
+```sh
+systemctl --user daemon-reload
+systemctl --user enable --now codex-mixed-model-router.service
+systemctl --user enable --now codex-mixed-model-router-update.timer
+```
+
+Note the service runs `python3.14 -m codex_router` directly: it needs an
+`openrouter.key` in the router home first (the installer creates the empty
+placeholder and prints the path), otherwise the router exits until a key
+is pasted in. Verify with the `/health` URL from the state file, and
+restart the ChatGPT desktop app after the installer writes the Codex
+config block — it reads `config.toml` at startup.
 
 ## Install
 
