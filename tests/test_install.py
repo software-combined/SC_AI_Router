@@ -1,6 +1,7 @@
 """Plan 041 installer tests. install.py imports cleanly as a module."""
 import contextlib
 import hashlib
+import importlib.util
 import io
 import json
 import os
@@ -9,7 +10,6 @@ import subprocess
 import sys
 import tarfile
 import tempfile
-import importlib.util
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -19,6 +19,24 @@ from tests.fakes import sign_body as _sign_body
 from tests.fakes import signed_fetch as _static_fetch
 
 _ROOT = Path(__file__).resolve().parents[1]
+
+
+def _real_bundle(tmp):
+    """Build a real release bundle via packaging/release.py (slow; ~3s)."""
+    feeddir = Path(tmp) / 'feed'
+    feeddir.mkdir()
+    spec = importlib.util.spec_from_file_location(
+        'router_release', _ROOT / 'packaging' / 'release.py')
+    release_mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(release_mod)
+    release_mod.main(['--out', str(feeddir)])
+    tarball = next(iter(feeddir.glob('*.tar.gz')))
+    blob = tarball.read_bytes()
+    with tarfile.open(tarball, mode='r') as tar:
+        manifest = json.loads(tar.extractfile('MANIFEST.json').read())
+    return manifest['version'], _static_fetch(
+        {'version': manifest['version'], 'url': 'file:///bundle.tar.gz',
+         'sha256': hashlib.sha256(blob).hexdigest(), 'min_python': '3.14'}, blob), blob, manifest
 
 
 def _install_mod():
@@ -65,10 +83,28 @@ def _craft_bundle(version):
     return blob, latest
 
 
+_SEAMS = ('run', 'health', 'wait_idle', 'wait_version', 'self_test',
+           'write_catalogue', 'fetch_feed', 'feed_serial')
+# webbrowser patches module-global stdlib handle via setattr on install_mod;
+# call sites use `webbrowser.open` so plain setattr suffices (no _svc mirror).
+
+
 def _patch_attrs(test, **overrides):
     for name, value in overrides.items():
+        if name == 'webbrowser':
+            # Module-global stdlib handle; call sites use webbrowser.open.
+            test.addCleanup(setattr, install_mod, name, getattr(install_mod, name))
+            setattr(install_mod, name, value)
+            continue
+        if name not in _SEAMS and not hasattr(install_mod, name):
+            raise AttributeError(f'unknown installer seam: {name}')
         test.addCleanup(setattr, install_mod, name, getattr(install_mod, name))
         setattr(install_mod, name, value)
+        # Call sites sync from install_mod._svc on entry; mirror there too.
+        if hasattr(install_mod._svc, name):
+            test.addCleanup(setattr, install_mod._svc, name,
+                            getattr(install_mod._svc, name))
+            setattr(install_mod._svc, name, value)
 
 
 def _run_install(test, tmp, home, fake_fetch, fake_run):
@@ -163,6 +199,11 @@ class InstallTests(unittest.TestCase):
         self.assertFalse(
             install_mod.wait_idle(state, timeout=2, fetch_health=lambda s: {'inflight': 1}))
 
+    def test_wait_idle_treats_dead_router_as_idle(self):
+        # health None (crashed router) must heal, not defer forever.
+        self.assertTrue(
+            install_mod.wait_idle({}, timeout=5, fetch_health=lambda s: None))
+
     def test_install_dry_run_performs_no_writes(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
@@ -194,6 +235,7 @@ class InstallTests(unittest.TestCase):
             _patch_attrs(self, run=fake_run,
                          self_test=lambda *args: None,
                          health=lambda state, timeout=20: None,
+                         wait_idle=lambda *args, **kwargs: True,
                          wait_version=lambda *args, **kwargs: None)
 
             args = install_mod.build_parser().parse_args(
@@ -222,23 +264,15 @@ class InstallTests(unittest.TestCase):
             self.assertEqual(config.read_text().count('# BEGIN local mixed model picker'), 1)
 
     def test_self_test_passes_on_extracted_bundle(self):
-        import importlib.util
         with tempfile.TemporaryDirectory() as tmp:
-            feeddir = Path(tmp) / 'feed'
-            feeddir.mkdir()
-            spec = importlib.util.spec_from_file_location(
-                'router_release', _ROOT / 'packaging' / 'release.py')
-            release_mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(release_mod)
-            release_mod.main(['--out', str(feeddir)])
-            tarball = next(iter(feeddir.glob('*.tar.gz')))
+            version, _, blob, manifest = _real_bundle(tmp)
             extract = Path(tmp) / 'extracted'
             extract.mkdir()
-            with tarfile.open(tarball, mode='r') as tar:
+            with tarfile.open(Path(tmp) / 'feed' / f'codex-model-router-{version}.tar.gz',
+                              mode='r') as tar:
                 tar.extractall(extract, filter='data')
             install_mod.self_test(sys.executable, extract)
-            with tarfile.open(tarball, mode='r') as tar:
-                want = json.loads(tar.extractfile('MANIFEST.json').read())['version']
+            want = manifest['version']
             proc = subprocess.run(
                 [sys.executable, '-c', 'from codex_router.runtime import VERSION; print(VERSION)'],
                 cwd=str(extract), capture_output=True, text=True)
@@ -246,21 +280,9 @@ class InstallTests(unittest.TestCase):
             self.assertEqual(proc.stdout.strip(), want)
 
     def test_fresh_install_writes_plists_before_first_restart(self):
-        import importlib.util
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
-            feeddir = Path(tmp) / 'feed'
-            feeddir.mkdir()
-            spec = importlib.util.spec_from_file_location(
-                'router_release', _ROOT / 'packaging' / 'release.py')
-            release_mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(release_mod)
-            release_mod.main(['--out', str(feeddir)])
-            tarball = next(iter(feeddir.glob('*.tar.gz')))
-            blob = tarball.read_bytes()
-            with tarfile.open(tarball, mode='r') as tar:
-                manifest = json.loads(tar.extractfile('MANIFEST.json').read())
-            version = manifest['version']
+            version, fake_fetch, blob, _manifest = _real_bundle(tmp)
             latest = {'version': version, 'url': 'file:///bundle.tar.gz',
                       'sha256': hashlib.sha256(blob).hexdigest(), 'min_python': '3.14'}
 
@@ -274,7 +296,8 @@ class InstallTests(unittest.TestCase):
                 order.append((list(cmd), plist.exists()))
                 return _ok_run(cmd, **kwargs)
 
-            _patch_attrs(self, health=lambda state, timeout=20: {'status': 'ok', 'version': version})
+            _patch_attrs(self, health=lambda state, timeout=20: {'status': 'ok', 'version': version},
+                         wait_idle=lambda *a, **k: True)
             _run_install(self, tmp, home, fake_fetch, fake_run)
             bootstraps = [saw for cmd, saw in order if 'bootstrap' in cmd]
             self.assertTrue(bootstraps, 'service was never restarted')
@@ -283,31 +306,16 @@ class InstallTests(unittest.TestCase):
 
 
     def test_recheck_reports_up_to_date_after_install(self):
-        import importlib.util
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
-            feeddir = Path(tmp) / 'feed'
-            feeddir.mkdir()
-            spec = importlib.util.spec_from_file_location(
-                'router_release', _ROOT / 'packaging' / 'release.py')
-            release_mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(release_mod)
-            release_mod.main(['--out', str(feeddir)])
-            tarball = next(iter(feeddir.glob('*.tar.gz')))
-            blob = tarball.read_bytes()
-            with tarfile.open(tarball, mode='r') as tar:
-                manifest = json.loads(tar.extractfile('MANIFEST.json').read())
-            version = manifest['version']
+            version, _, blob, _manifest = _real_bundle(tmp)
             latest = {'version': version, 'url': 'file:///bundle.tar.gz',
                       'sha256': hashlib.sha256(blob).hexdigest(), 'min_python': '3.14'}
 
             fake_fetch = _static_fetch(latest, blob)
 
-            def no_idle(*args, **kwargs):
-                raise AssertionError('wait_idle must not run for a current install')
-
             _patch_attrs(self, health=lambda state, timeout=20: {'status': 'ok', 'version': version},
-                         wait_idle=no_idle)
+                         wait_idle=lambda *a, **k: True)
             calls = []
 
             def fake_run(cmd, **kwargs):
@@ -320,6 +328,9 @@ class InstallTests(unittest.TestCase):
             with mock.patch.dict(os.environ, env):
                 buf = io.StringIO()
                 with contextlib.redirect_stdout(buf):
+                    def no_idle(*args, **kwargs):
+                        raise AssertionError('wait_idle must not run for a current install')
+                    _patch_attrs(self, wait_idle=no_idle)
                     rc = install_mod.do_check_update(
                         args, _fetch=fake_fetch, _sleep=lambda s: None)
             self.assertEqual(rc, 0)
@@ -408,6 +419,7 @@ class InstallTests(unittest.TestCase):
 
             _patch_attrs(self, run=fake_run,
                          self_test=lambda *args: None,
+                         wait_idle=lambda *args, **kwargs: True,
                          health=lambda state, timeout=20: {'status': 'ok', 'version': '9.9.9'})
             _run_install(self, tmp, home, fake_fetch, fake_run)
             kills = [cmd for cmd in calls if cmd[:3] == ['launchctl', 'kill', 'TERM']]
@@ -437,9 +449,12 @@ class InstallTests(unittest.TestCase):
                     return _sign_body(json.dumps(latest).encode())
                 raise AssertionError('tarball must not download when deferred')
 
-            saved_idle = install_mod.wait_idle
+            saved_idle = install_mod._svc.wait_idle
+            self.addCleanup(setattr, install_mod._svc, 'wait_idle', saved_idle)
             self.addCleanup(setattr, install_mod, 'wait_idle', saved_idle)
-            install_mod.wait_idle = lambda *args, **kwargs: False
+            def _busy(*a, **k):
+                return False
+            install_mod._svc.wait_idle = install_mod.wait_idle = _busy
             args = install_mod.build_parser().parse_args(
                 ['--feed', 'file:///latest.json', '--home', str(home)])
             buf = io.StringIO()
