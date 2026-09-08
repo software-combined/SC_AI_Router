@@ -1,6 +1,6 @@
 # Model router
 
-A small program on your Mac that serves the Codex picker and Claude
+A small program on your computer that serves the Codex picker and Claude
 Code from one place, offering subscription models and approved
 OpenRouter models side by side. The two logins stay separate:
 subscription traffic keeps using the existing ChatGPT or Claude
@@ -9,9 +9,10 @@ your machine.
 
 ## Requirements
 
-macOS with the Codex app and/or Claude Code, Python 3 (the installer finds or asks for a
+The Codex app and/or Claude Code, Python 3 (the installer finds or asks for a
 3.14 interpreter to run the router itself), and an OpenRouter API key
-for OpenRouter models.
+for OpenRouter models. The router itself runs on macOS, Windows, and Linux;
+the managed installer currently provisions a macOS `launchd` service.
 
 ## Install
 
