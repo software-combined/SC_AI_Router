@@ -132,13 +132,24 @@ class HandlerCharacterisationTests(unittest.TestCase):
         self.assertEqual(json.loads(recorded[0][3])['model'], 'z-ai/glm-5.3')
 
     def test_upstream_status_and_body_are_relayed(self):
-        install_fake(self, lambda: FakeUpstream(429, b'{"error": "slow down"}',
+        install_fake(self, lambda: FakeUpstream(400, b'{"error": "slow down"}',
                                                 [('Content-Type', 'application/json')]))
         server = self._server()
         response = _post(server.server_port, '/test-token/responses',
                          {'model': 'z-ai/glm-5.3', 'input': []})
-        self.assertEqual(response.status, 429)
+        self.assertEqual(response.status, 400)
         self.assertEqual(json.loads(response.read()), {'error': 'slow down'})
+
+    def test_upstream_429_becomes_retryable_503(self):
+        for headers, expected in (([], '2'), ([('Retry-After', '9')], '9')):
+            with self.subTest(headers=headers):
+                install_fake(self, lambda: FakeUpstream(429, b'{"error": "slow"}', [
+                    ('Content-Type', 'application/json'), *headers]))
+                server = self._server()
+                response = _post(server.server_port, '/test-token/responses',
+                                 {'model': 'z-ai/glm-5.3', 'input': []})
+                self.assertEqual(response.status, 503)
+                self.assertEqual(response.getheader('Retry-After'), expected)
 
     def test_streaming_tool_call_is_adapted_end_to_end(self):
         item = {'id': 'item1', 'type': 'function_call', 'call_id': 'call1',
