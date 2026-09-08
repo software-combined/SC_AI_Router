@@ -240,6 +240,31 @@ class CompactBranchTests(unittest.TestCase):
                     {'type': 'message', 'role': 'user', 'content': 'do the task'}]})
             self.assertEqual(response.status, 409)
 
+    def test_compact_ignores_rejected_effort(self):
+        req = {'model': 'z-ai/glm-5.3', 'reasoning': {'effort': 'medium'}, 'input': [
+            {'type': 'message', 'role': 'user', 'content': 'x'}]}
+        with mock.patch.object(providers.OpenRouterProvider, 'summarize', lambda *a: 'progress'):
+            self._server()
+            out = json.loads(self._post('/responses/compact', req).read())
+            self.assertIn('progress', out['output'][-1]['content'][0]['text'])
+
+    def test_compact_holds_inflight_slot(self):
+        entered, release = threading.Event(), threading.Event()
+        def slow(*a):
+            entered.set()
+            return 'progress' if release.wait(timeout=10) else 'stalled'
+        job = {'model': 'z-ai/glm-5.3', 'input': [
+            {'type': 'message', 'role': 'user', 'content': 'x'}]}
+        with mock.patch.object(providers.OpenRouterProvider, 'summarize', slow):
+            self._server()
+            worker = threading.Thread(target=lambda: self._post('/responses/compact', job))
+            worker.start()
+            self.assertTrue(entered.wait(timeout=10))
+            self.assertEqual(self._started.inflight, 1)
+            release.set()
+            worker.join(timeout=10)
+            self.assertEqual(self._started.inflight, 0)
+
 class SummarizerParsingTests(unittest.TestCase):
     def _fake_conn(self, status, payload):
         patcher = mock.patch.object(providers.http.client, 'HTTPSConnection',
