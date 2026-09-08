@@ -106,11 +106,15 @@ def _item_text(item):
         role = item.get('role', 'user')
         return f'{role}: {_block_text(item.get("content", ""))}'.strip()
     if kind in ('function_call', 'custom_tool_call'):
-        return 'assistant tool call: ' + str(item.get('arguments', item.get('input', '')))[:2000]
+        label = item.get('name', '')
+        if item.get('namespace'):
+            label = f"{item['namespace']}.{label}"
+        return f'assistant tool call {label}: ' + str(item.get('arguments', item.get('input', '')))[:2000]
     if kind in ('function_call_output', 'custom_tool_call_output'):
+        label = f" {item['name']}" if item.get('name') else ''
         for key in ('output', 'result', 'content', 'text', 'data'):
             if item.get(key):
-                return 'tool result: ' + _block_text(item[key])[:2000]
+                return f'tool result{label}: ' + _block_text(item[key])[:2000]
         return ''
     if kind == 'reasoning':
         if 'encrypted_content' in item:
@@ -127,8 +131,10 @@ def transcript_for_summary(items):
     kept, total = [], 0
     for item in reversed(items):
         text = _item_text(item)
-        if not text.strip() or total + len(text) + 1 > TRANSCRIPT_BUDGET:
+        if not text.strip():
             continue
+        if total + len(text) + 1 > TRANSCRIPT_BUDGET:
+            break  # Keep the newest tail; a hole would strand old items.
         kept.append(text)
         total += len(text) + 1
     return '\n'.join(reversed(kept))
