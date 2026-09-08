@@ -120,6 +120,11 @@ def check(path):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 3 or sys.argv[1] != '--check':
-        raise SystemExit('usage: python3.14 -m codex_router.catalogue --check <catalogue>')
-    sys.exit(0 if check(sys.argv[2]) else 1)
+    if sys.argv[1:2] == ['--merge'] and len(sys.argv) == 3:
+        path = Path(sys.argv[2])
+        base = json.loads(path.read_text()) if path.exists() else {'models': []}
+        path.write_text(json.dumps(merge(base), indent=2) + '\n')
+    elif sys.argv[1:2] == ['--check'] and len(sys.argv) == 3:
+        sys.exit(0 if check(sys.argv[2]) else 1)
+    else:
+        raise SystemExit('usage: python3.14 -m codex_router.catalogue --check|--merge <catalogue>')

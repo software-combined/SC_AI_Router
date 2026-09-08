@@ -222,6 +222,7 @@ def install_bundle(home, version, tarball, manifest_doc, python):
     try:
         check_manifest(partial, manifest_doc)
         self_test(python, partial)
+        write_catalogue(home, partial, python)
     except (SystemExit, OSError):
         shutil.rmtree(partial, ignore_errors=True)
         raise
@@ -231,6 +232,14 @@ def install_bundle(home, version, tarball, manifest_doc, python):
     partial.rename(final)
     previous = swap_current(home, final)
     return previous
+
+
+def write_catalogue(home, release_dir, python):
+    # Seed the picker file the config block points at; refresh owns it after.
+    result = run([python, '-m', 'codex_router.catalogue', '--merge', str(home / 'mixed-models.json')],
+                 cwd=str(release_dir), capture_output=True, text=True)
+    if result.returncode != 0:
+        raise SystemExit('catalogue merge failed')
 
 
 def replace_config_block(config_path, block, previous_block=None):
@@ -369,7 +378,7 @@ def do_install(args, _fetch=fetch, _run=None):
             print('new version failed health check; see logs/launchd.log')
         raise SystemExit(1)
     config_path = Path.home() / '.codex' / 'config.toml'
-    catalog_line = f'model_catalog_json = "{home}/mixed-models.json"\n'
+    catalog_line = f'model_catalog_json = "{home}/mixed-models.json"\n' if args.static_catalogue else ''
     block = ('# BEGIN local mixed model picker\n'
              f'openai_base_url = "http://127.0.0.1:{state["port"]}/{state["token"]}/backend-api/codex"\n'
              + catalog_line + '# END local mixed model picker\n')
