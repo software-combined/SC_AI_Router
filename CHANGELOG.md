@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Hide OpenRouter-billed GPT rows from the Codex picker: the
+  `openai/*` OpenRouter entries no longer list, so the picker shows
+  the ChatGPT subscription models instead of a same-name paid
+  duplicate. A directly requested hidden slug still routes to
+  OpenRouter; nothing else in request handling changes. The future
+  Claude listing reuses the same rule to hide OpenRouter-billed
+  Anthropic rows.
 - Fix context overflow on OpenRouter models: the output reservation is now
   capped at half the model's context window. The registry's 943718-token
   reservation on a 1048576-token window left ~105k for input, so ordinary

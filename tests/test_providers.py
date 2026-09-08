@@ -22,6 +22,9 @@ class SelectTests(unittest.TestCase):
             providers.select('unknown/model', '/responses', ['gpt-6-astra'])
 
     def test_openrouter_prepare_emits_router_key_only(self):
+        # Picker visibility never gates routing: hidden GPT slugs still route.
+        hidden = providers.select('openai/gpt-6-astra', '/responses', [])
+        self.assertIsInstance(hidden, providers.OpenRouterProvider)
         provider = providers.select('z-ai/glm-5.3', '/responses', [])
         prepared = provider.prepare('z-ai/glm-5.3', '/responses',
             {'model': 'z-ai/glm-5.3', 'input': []}, b'raw',
