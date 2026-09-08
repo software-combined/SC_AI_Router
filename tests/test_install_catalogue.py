@@ -7,6 +7,7 @@ import importlib.util
 import json
 import os
 import subprocess
+import sys
 import tarfile
 import tempfile
 import unittest
@@ -48,7 +49,9 @@ def _recording_run(calls, fail_catalogue=False):
         if _is_catalogue(cmd):
             if fail_catalogue:
                 return SimpleNamespace(returncode=1, stdout='', stderr='merge boom')
-            return subprocess.run(cmd, **kwargs)
+            # Portable: run the catalogue merge with this interpreter, not
+            # the installer-resolved absolute path (Homebrew-only on macOS).
+            return subprocess.run([sys.executable, *cmd[1:]], **kwargs)
         return _ok_run(cmd, **kwargs)
     return fake_run
 

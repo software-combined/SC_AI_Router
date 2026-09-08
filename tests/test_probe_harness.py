@@ -33,6 +33,9 @@ def read():
         sys.exit(0)
     return json.loads(line)
 turns = 0
+_ap_cwd = ''
+if os.environ.get('FAKE_RECORD'):
+    open(os.environ['FAKE_RECORD'], 'a').write('argv=' + json.dumps(sys.argv) + '\\n')
 while True:
     msg = read()
     mid, method = msg.get('id'), msg.get('method')
@@ -49,6 +52,9 @@ while True:
         rec = os.environ.get('FAKE_RECORD')
         if rec:
             open(rec, 'a').write('provider=' + str(params.get('modelProvider')) + '\\n')
+            open(rec, 'a').write('sandbox=' + str(params.get('sandbox')) + '\\n')
+            open(rec, 'a').write('cwd=' + str(params.get('cwd')) + '\\n')
+        _ap_cwd = params.get('cwd', '')
         send({'id': mid, 'result': {'thread': {'id': 't1'},
                                     'modelProvider': 'openai', 'model': 'm'}})
     elif method == 'turn/start':
@@ -62,6 +68,19 @@ while True:
             send({'method': 'item/completed',
                   'params': {'item': {'type': 'agentMessage',
                                       'text': os.environ.get('FAKE_COLOR', 'red')}}})
+            send({'method': 'turn/completed', 'params': {'turn': {'status': 'completed'}}})
+        elif 'apply_patch' in blob and os.environ.get('FAKE_APPLY_PATCH'):
+            mode = os.environ['FAKE_APPLY_PATCH']
+            if mode in ('applied', 'deleted'):
+                send({'method': 'item/completed',
+                      'params': {'item': {'type': 'fileChange'}}})
+                target = os.path.join(_ap_cwd, 'note.txt')
+                if mode == 'applied':
+                    open(target, 'w').write('beta\\n')
+                else:
+                    os.remove(target)
+            send({'method': 'item/completed',
+                  'params': {'item': {'type': 'agentMessage', 'text': 'done'}}})
             send({'method': 'turn/completed', 'params': {'turn': {'status': 'completed'}}})
         elif 'model' in params:
             rec = os.environ.get('FAKE_RECORD')
@@ -78,6 +97,14 @@ while True:
             send({'method': 'item/tool/call', 'id': 'ev1',
                   'params': {'tool': 'echo_probe', 'arguments': {'value': 'probe'}}})
             read()  # tool result
+            if os.environ.get('FAKE_REASONING_SUMMARY') == 'summary':
+                send({'method': 'item/completed',
+                      'params': {'item': {'type': 'reasoning',
+                                          'summary': [{'type': 'summary_text',
+                                                       'text': 'synthetic summary'}]}}})
+            elif os.environ.get('FAKE_REASONING_SUMMARY') == 'empty':
+                send({'method': 'item/completed',
+                      'params': {'item': {'type': 'reasoning', 'summary': []}}})
             send({'method': 'item/completed',
                   'params': {'item': {'type': 'agentMessage', 'text': MARKER}}})
             send({'method': 'turn/completed', 'params': {'turn': {'status': 'completed'}}})
@@ -190,6 +217,73 @@ class ProbeHarnessTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
         self.assertIn('"image_capable": false', proc.stdout)
         self.assertNotIn('media_color_seen', proc.stdout)
+
+    def test_reasoning_summary_passes_on_summary_text(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rec = str(Path(tmp) / 'record.jsonl')
+            proc = self._run('z-ai/glm-5.3-flash', '--reasoning-summary',
+                             FAKE_RECORD=rec, FAKE_REASONING_SUMMARY='summary')
+            self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
+            self.assertIn('"capability": "reasoning_summary"', proc.stdout)
+            self.assertIn('"result": "passed"', proc.stdout)
+            # Streamed summary content itself never reaches stdout.
+            self.assertNotIn('synthetic summary', proc.stdout)
+            # The leg's core contract: auto summary + temp catalog reach -c flags.
+            recorded = Path(rec).read_text().splitlines()
+            argv = json.loads(next(l for l in recorded if l.startswith('argv='))[5:])
+            flags = [a for i, a in enumerate(argv) if argv[i - 1] == '-c']
+            auto = [f for f in flags if f.startswith('model_reasoning_summary=')]
+            self.assertEqual(len(auto), 1, flags)
+            self.assertIn('auto', auto[0])
+            catalog = next(f.split('=', 1)[1] for f in flags
+                           if f.startswith('model_catalog_json='))
+            entry = json.loads(Path(json.loads(catalog)).read_text())['models'][0]
+            self.assertEqual(entry['slug'], 'z-ai/glm-5.3-flash')
+            self.assertEqual(entry['default_reasoning_summary'], 'auto')
+            self.assertTrue(entry['supports_reasoning_summary_parameter'])
+
+    def test_reasoning_summary_fails_without_summary_text(self):
+        proc = self._run('z-ai/glm-5.3-flash', '--reasoning-summary',
+                         FAKE_REASONING_SUMMARY='empty')
+        self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
+        self.assertIn('"capability": "reasoning_summary"', proc.stdout)
+        self.assertIn('"result": "failed"', proc.stdout)
+
+    def test_apply_patch_passes_on_file_change(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rec = str(Path(tmp) / 'record.jsonl')
+            proc = self._run('z-ai/glm-5.3-flash', '--apply-patch',
+                             FAKE_RECORD=rec, FAKE_APPLY_PATCH='applied')
+            self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
+            self.assertIn('"capability": "apply_patch"', proc.stdout)
+            self.assertIn('"result": "passed"', proc.stdout)
+            # The leg's core contract: workspace-write + freeform catalog reach -c flags.
+            recorded = Path(rec).read_text().splitlines()
+            argv = json.loads(next(l for l in recorded if l.startswith('argv='))[5:])
+            flags = [a for i, a in enumerate(argv) if argv[i - 1] == '-c']
+            self.assertEqual([f for f in flags if f.startswith('sandbox_mode=')],
+                             ['sandbox_mode="workspace-write"'], flags)
+            catalog = next(f.split('=', 1)[1] for f in flags
+                           if f.startswith('model_catalog_json='))
+            entry = json.loads(Path(json.loads(catalog)).read_text())['models'][0]
+            self.assertEqual(entry['slug'], 'z-ai/glm-5.3-flash')
+            self.assertEqual(entry['apply_patch_tool_type'], 'freeform')
+            # The thread runs workspace-write rooted at the scratch dir.
+            self.assertIn('sandbox=workspace-write', recorded)
+            cwd = next(l[4:] for l in recorded if l.startswith('cwd='))
+            self.assertTrue(Path(cwd, 'note.txt').exists(), recorded)
+
+    def test_apply_patch_fails_without_file_change(self):
+        proc = self._run('z-ai/glm-5.3-flash', '--apply-patch', FAKE_APPLY_PATCH='skipped')
+        self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
+        self.assertIn('"capability": "apply_patch"', proc.stdout)
+        self.assertIn('"result": "failed"', proc.stdout)
+
+    def test_apply_patch_fails_cleanly_when_file_deleted(self):
+        proc = self._run('z-ai/glm-5.3-flash', '--apply-patch', FAKE_APPLY_PATCH='deleted')
+        self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
+        self.assertIn('"capability": "apply_patch"', proc.stdout)
+        self.assertIn('"result": "failed"', proc.stdout)
 
     def test_audio_attaches_and_completes(self):
         with tempfile.TemporaryDirectory() as tmp:

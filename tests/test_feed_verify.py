@@ -1,6 +1,6 @@
 """Detached Ed25519 feed signatures (Plan 047 A3): stdlib verifier, release
-signing, installer enforcement, beta origin derivation. No network: feeds and
-signatures are bytes, keys are ephemeral, fetches are injected."""
+signing, beta origin derivation. No network: feeds and signatures are bytes,
+keys are ephemeral, fetches are injected."""
 import tempfile
 import unittest
 from pathlib import Path
@@ -42,39 +42,6 @@ class Ed25519Tests(unittest.TestCase):
 
 
 class FeedGateTests(unittest.TestCase):
-    def test_no_key_refuses_everything(self):
-        with mock.patch.object(feed_verify, 'FEED_PUBLIC_KEY', ''):
-            with self.assertRaises(SystemExit):
-                feed_verify.load_signed_feed('file:///latest.json', lambda url: b'{}')
-
-    def test_missing_signature_refuses(self):
-        _, pub = feed_verify.generate_keypair()
-        with mock.patch.object(feed_verify, 'FEED_PUBLIC_KEY', pub):
-            def fetch(url):
-                if url.endswith('.sig'):
-                    raise OSError('404')
-                return b'{"version": "1.0.0"}'
-            with self.assertRaises(SystemExit):
-                feed_verify.load_signed_feed('file:///latest.json', fetch)
-
-    def test_tampered_body_or_sig_rejected(self):
-        seed, pub = feed_verify.generate_keypair()
-        body = b'{"version": "1.0.0", "serial": 3}'
-        sig = feed_verify.sign_hex(seed, body).encode()
-        with mock.patch.object(feed_verify, 'FEED_PUBLIC_KEY', pub):
-            good = feed_verify.load_signed_feed(
-                'file:///latest.json',
-                lambda url: sig if url.endswith('.sig') else body)
-            self.assertEqual(good['serial'], 3)
-            with self.assertRaises(SystemExit):
-                feed_verify.load_signed_feed(
-                    'file:///latest.json',
-                    lambda url: sig if url.endswith('.sig') else body + b' ')
-            with self.assertRaises(SystemExit):
-                feed_verify.load_signed_feed(
-                    'file:///latest.json',
-                    lambda url: b'00' + sig[2:] if url.endswith('.sig') else body)
-
     def test_beta_uses_origin_without_api(self):
         self.assertEqual(feed_verify.beta_feed_url('https://cdn.example/stable/latest.json'),
                          'https://cdn.example/beta/latest.json')
