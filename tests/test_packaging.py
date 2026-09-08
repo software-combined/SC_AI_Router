@@ -8,6 +8,7 @@ from pathlib import Path
 FILES = [
          'codex_router/router.py',
          'codex_router/providers.py',
+         'codex_router/claude.py',
          'codex_router/registry.py',
          'codex_router/credentials.py',
          'codex_router/tool_adapter.py',
