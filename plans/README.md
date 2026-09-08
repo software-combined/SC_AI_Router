@@ -204,7 +204,7 @@ registration.
   rejected because the existing 30-second non-blocking health call already
   supplies the required periodic trigger.
 
-## Codex model router plans (034 to 048), added 2026-09-07
+## Codex model router plans (034 to 049), added 2026-09-07
 
 Written after a read-only audit of `domains/ai-platform/codex-model-router` at
 commit `749a6b8d` on branch `codex/codex-adapter-20260907` (the router is not
@@ -237,11 +237,20 @@ repository's `plans/` and continue there. Paths inside the plans use
 | 042 | Documentation rewrite, compatibility matrix, retire manual release artefacts, vault note | P3 | S | 035, 038, 039, 040, 041, 046 | DONE (docs rewrite landed; two inaccurate plan-text claims corrected in-file 2026-09-08) |
 | 047 | Router remediation handover: working delivery, versioned cutover, protocol fixes, installers, key window | P0 | L | 041, 045 | IN PROGRESS (source merged to main 9bbdc28: feed serial and signatures, catalogue seeding wired into installer, protocol C/D fixes, pointer-file releases, launcher in bundle, shutdown, setup key claim, none-mode auth, probe provider flag, guidance via current_release_dir; live cutover remains; feed = AWS 651116729473 ap-southeast-2 (owner 2026-09-09, key home TBD); macOS/Windows signing deferred, plugin route to investigate instead of paid certs; Linux install notes expected via contributor PR) |
 | 048 | [Invitation-only managed OpenRouter keys across portcos](048-router-managed-key-provisioning.md) | P1 | L | 040, 037, 041; account/auth/distribution preflight | IN PROGRESS (owner 2026-09-09: IT issues one OpenRouter key per portco user, pasted once into the setup window; full provisioning service not built) |
+| 049 | [Codex/Claude plugin setup and native macOS, Windows and Arch Linux lifecycle](049-agent-plugin-and-three-os-installation.md) | P1 | L | 047-A AWS delivery; existing Arch contribution; designated staff acceptance | TODO (planning only: all three OS families required for first supported release; keep source/plugin package in adapter repo and catalogue in SC_Agent_plugins; integrate contributor's Arch PR when available) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale).
 
 ### Dependency notes
 
+- Plan 049 is the active plugin/installer direction: reuse the existing installer
+  and the Arch contributor's work, rather than creating duplicate delivery code.
+  It supersedes 047 E/F's native installer-package approach, retains AWS-feed
+  and live-cutover gates, and keeps 048's IT-issued-key decision. The integrated
+  owner decision to remove signature enforcement supersedes older signing
+  requirements; keep checksum, serial and identity checks. macOS, Windows
+  and Arch Linux must all pass on designated staff machines before the first
+  supported plugin release. This plan does not authorise implementation or rollout.
 - Plan 048 (owner decision 2026-09-09): IT issues one OpenRouter key per portco
   user, pasted once into the setup window; the full provisioning-service design
   below is retained for reference only and its slice order no longer applies.
