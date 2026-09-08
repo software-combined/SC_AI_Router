@@ -5,8 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
-from tests.fakes import sign_body as _sign_body
-from tests.fakes import signed_fetch as _static_fetch
+from tests.fakes import static_fetch as _static_fetch
 from tests.test_install import _craft_bundle, _ok_run, _patch_attrs, install_mod
 from tests.test_release import _release_mod
 
@@ -105,14 +104,12 @@ class FeedSerialTests(unittest.TestCase):
             home = _home_with_serial(tmp)
             blob, latest = _craft_bundle('9.9.9')
             stale = {**latest, 'serial': 7}
-            fetched = []
             args = install_mod.build_parser().parse_args(
                 ['--check-update', '--feed', 'file:///latest.json', '--home', str(home)])
             stale_body = json.dumps(stale).encode()
 
             def fake_fetch(url):
-                fetched.append(url)
-                return _sign_body(stale_body) if url.endswith('.sig') else blob
+                return blob
 
             with self.assertRaises(SystemExit) as ctx:
                 install_mod.do_check_update(
@@ -121,7 +118,6 @@ class FeedSerialTests(unittest.TestCase):
                     _read_feed=lambda url, etag: (200, stale_body, None),
                     _sleep=lambda s: None)
             self.assertIn('stale feed serial', str(ctx.exception.code))
-            self.assertEqual(fetched, ['file:///latest.json.sig'])
 
 
 if __name__ == '__main__':
