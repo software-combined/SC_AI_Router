@@ -12,6 +12,7 @@ import os
 import plistlib
 import tempfile
 import unittest
+from types import SimpleNamespace
 from pathlib import Path
 from unittest import mock
 
@@ -44,6 +45,7 @@ def _install(test, tmp, home, version, *extra_args, feed='file:///latest.json'):
 
     _patch_attrs(test, run=fake_run, self_test=lambda *args: None,
                  write_catalogue=_fake_write_catalogue,
+                 wait_idle=lambda *args, **kwargs: True,
                  wait_version=lambda *args, **kwargs: True)
     argv = ['--home', str(home), *extra_args]
     if feed is not None:
@@ -114,7 +116,9 @@ class InstallConfigTests(unittest.TestCase):
             self.assertNotIn('model_provider', block)
             self.assertNotIn('approvals_reviewer', block)
 
-    def test_update_plist_carries_home_and_pinned_feed(self):
+    def test_update_plist_carries_home_without_feed_pin(self):
+        # --feed is one-shot: it selects this run's source but must not pin
+        # future scheduled updates (pin froze prod on a local file in 0.6.2.4).
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             _install(self, tmp, home, '1.0.0', feed='file:///pinned.json')
@@ -124,9 +128,8 @@ class InstallConfigTests(unittest.TestCase):
             argv = doc['ProgramArguments']
             self.assertIn('--home', argv)
             self.assertEqual(argv[argv.index('--home') + 1], str(home))
-            self.assertIn('--feed', argv)
-            self.assertEqual(argv[argv.index('--feed') + 1], 'file:///pinned.json')
-            self.assertEqual((home / 'feed').read_text().strip(), 'file:///pinned.json')
+            self.assertNotIn('--feed', argv)
+            self.assertFalse((home / 'feed').exists())
 
     def test_update_plist_omits_feed_for_channel_resolution(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -149,10 +152,31 @@ class InstallConfigTests(unittest.TestCase):
             self.assertEqual(argv[argv.index('--home') + 1], str(home))
             self.assertEqual(argv[1], str(home / 'releases' / '1.0.0' / 'packaging' / 'install.py'))
 
-    def test_fresh_install_bootstraps_updater_after_plists(self):
+    def test_fresh_install_bootstraps_missing_updater_after_main(self):
+        # Fresh home, updater never loaded: restart_service bootstraps main,
+        # then bootstraps the updater only because `launchctl print` misses.
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
-            _, calls, _, _ = _install(self, tmp, home, '1.0.0')
+            blob, latest = _craft_bundle('1.0.0')
+            fake_fetch = _static_fetch(latest, blob)
+            calls = []
+
+            def fake_run(cmd, **kwargs):
+                calls.append(list(cmd))
+                if cmd[:2] == ['launchctl', 'print']:
+                    return SimpleNamespace(returncode=1, stdout='', stderr='')
+                return _ok_run(cmd, **kwargs)
+
+            _patch_attrs(self, run=fake_run, self_test=lambda *args: None,
+                         write_catalogue=_fake_write_catalogue,
+                         wait_idle=lambda *args, **kwargs: True,
+                         wait_version=lambda *args, **kwargs: True)
+            args = install_mod.build_parser().parse_args(
+                ['--feed', 'file:///latest.json', '--home', str(home)])
+            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}
+            with mock.patch.dict(os.environ, env):
+                self.assertEqual(
+                    install_mod.do_install(args, _fetch=fake_fetch, _run=fake_run), 0)
             agents = Path(tmp) / 'fakehome' / 'Library' / 'LaunchAgents'
             main = str(agents / (install_mod.LABEL + '.plist'))
             update = str(agents / (install_mod.UPDATE_LABEL + '.plist'))
@@ -161,6 +185,23 @@ class InstallConfigTests(unittest.TestCase):
             self.assertIn(main, targets)
             self.assertIn(update, targets)
             self.assertLess(targets.index(main), targets.index(update))
+
+    def test_fresh_install_leaves_loaded_updater_alone(self):
+        # Same fresh install but the updater already loaded: no updater
+        # bootout/bootstrap churn, only the main service bootstrap.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            _, calls, _, _ = _install(self, tmp, home, '1.0.0')
+            agents = Path(tmp) / 'fakehome' / 'Library' / 'LaunchAgents'
+            main = str(agents / (install_mod.LABEL + '.plist'))
+            update = str(agents / (install_mod.UPDATE_LABEL + '.plist'))
+            self.assertFalse(any(cmd[:2] == ['launchctl', 'bootout']
+                                 and cmd[-1].endswith('.update') for cmd in calls),
+                             'loaded updater must not be booted out')
+            boots = [cmd for cmd in calls if cmd[:2] == ['launchctl', 'bootstrap']]
+            targets = [cmd[-1] for cmd in boots]
+            self.assertIn(main, targets)
+            self.assertNotIn(update, targets)
 
     def test_setup_mode_installs_without_key_and_opens_window(self):
         import time as _time
@@ -177,6 +218,7 @@ class InstallConfigTests(unittest.TestCase):
             _patch_attrs(self, run=lambda cmd, **kwargs: _ok_run(cmd, **kwargs),
                          self_test=lambda *args: None,
                          write_catalogue=_fake_write_catalogue,
+                         wait_idle=lambda *args, **kwargs: True,
                          wait_version=lambda *args, **kwargs: True,
                          webbrowser=FakeBrowser())
             args = install_mod.build_parser().parse_args(
@@ -207,6 +249,7 @@ class InstallConfigTests(unittest.TestCase):
             _patch_attrs(self, run=lambda cmd, **kwargs: _ok_run(cmd, **kwargs),
                          self_test=lambda *args: None,
                          write_catalogue=_fake_write_catalogue,
+                         wait_idle=lambda *args, **kwargs: True,
                          wait_version=lambda *args, **kwargs: True,
                          webbrowser=FakeBrowser())
             args = install_mod.build_parser().parse_args(
@@ -225,6 +268,7 @@ class InstallConfigTests(unittest.TestCase):
             _patch_attrs(self, run=lambda cmd, **kwargs: _ok_run(cmd, **kwargs),
                          self_test=lambda *args: None,
                          write_catalogue=_fake_write_catalogue,
+                         wait_idle=lambda *args, **kwargs: True,
                          wait_version=lambda *args, **kwargs: True)
             args = install_mod.build_parser().parse_args(
                 ['--feed', 'file:///latest.json', '--home', str(home)])

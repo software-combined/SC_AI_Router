@@ -9,6 +9,7 @@ import contextlib
 import io
 import json
 import os
+import tarfile
 import tempfile
 import unittest
 from pathlib import Path
@@ -27,6 +28,31 @@ from tests.test_install_config import _fake_write_catalogue
 
 def _no_fetch(url):
     raise AssertionError('rollback must not fetch anything')
+
+
+def _recording(calls):
+    def fake_run(cmd, **kwargs):
+        calls.append(list(cmd))
+        return _ok_run(cmd, **kwargs)
+    return fake_run
+
+
+def _remanifest(blob, **fields):
+    """Re-tar a crafted bundle with patched MANIFEST.json fields."""
+    with tarfile.open(fileobj=io.BytesIO(blob), mode='r') as tar:
+        manifest = json.loads(tar.extractfile('MANIFEST.json').read())
+        names = tar.getnames()
+        members = {name: tar.extractfile(name).read() for name in names
+                   if name != 'MANIFEST.json'}
+    manifest = dict(manifest, **fields)
+    out = io.BytesIO()
+    with tarfile.open(fileobj=out, mode='w') as tar:
+        for name in names:
+            data = json.dumps(manifest).encode() if name == 'MANIFEST.json' else members[name]
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+    return out.getvalue()
 
 
 def _uninstall_home(tmp):
@@ -53,6 +79,7 @@ def _run_install(test, tmp, home, version, *extra_args, feed='file:///latest.jso
 
     _patch_attrs(test, run=fake_run, self_test=lambda *args: None,
                  write_catalogue=_fake_write_catalogue,
+                 wait_idle=lambda *args, **kwargs: True,
                  wait_version=lambda *args, **kwargs: wait_version)
     argv = ['--home', str(home), *extra_args]
     if feed is not None:
@@ -237,6 +264,105 @@ class InstallLifecycleTests(unittest.TestCase):
             self.assertEqual(rc, 0)
             self.assertIn('installed 1.0.0', buf.getvalue())
             self.assertEqual((home / 'current').read_text(), '1.0.0\n')
+
+
+class SafeUpdateTests(unittest.TestCase):
+    """Long-term safe-update seams: identity gate, busy deferral, TERM-only
+    rollback, three-release retention (incident 2026-09-08: 0.6.4.100 feed
+    pointed at a 0.6.4.0 bundle, installer waited on an impossible version,
+    then bootout stranded the machine with no router)."""
+
+    def test_identity_mismatch_aborts_before_mutation(self):
+        # Feed 9.9.9 vs manifest 9.9.8 through the real install path: no
+        # pointer, no published release, no launchd signal, no serial write.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            blob, latest = _craft_bundle('9.9.9')
+            bad_blob = _remanifest(blob, version='9.9.8')
+            calls = []
+            _patch_attrs(self, run=_recording(calls),
+                         self_test=lambda *a: None,
+                         write_catalogue=_fake_write_catalogue,
+                         wait_idle=lambda *a, **k: True,
+                         wait_version=lambda *a, **k: True)
+            args = install_mod.build_parser().parse_args(
+                ['--feed', 'file:///latest.json', '--home', str(home)])
+            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}
+            with mock.patch.dict(os.environ, env):
+                with self.assertRaisesRegex(SystemExit, 'release identity mismatch'):
+                    install_mod.do_install(args, _fetch=_static_fetch(latest, bad_blob))
+            self.assertFalse((home / 'current').exists())
+            self.assertFalse((home / 'feed-serial').exists())
+            self.assertFalse(list((home / 'releases').glob('9.9.9')),
+                             'identity failure must not publish a release')
+            signals = [c for c in calls if c[:2] == ['launchctl', 'kill']
+                       or 'bootout' in c or 'bootstrap' in c]
+            self.assertFalse(signals, 'identity failure must not signal launchd')
+
+    def test_busy_upgrade_defers_without_kill(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            rc, calls, _, _ = _run_install(self, tmp, home, '1.0.0')
+            self.assertEqual(rc, 0)
+            blob, latest = _craft_bundle('1.0.1')
+            _patch_attrs(self, wait_idle=lambda *args, **kwargs: False)
+            args = install_mod.build_parser().parse_args(
+                ['--feed', 'file:///latest.json', '--home', str(home)])
+            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}
+            n_calls = len(calls)
+            with mock.patch.dict(os.environ, env):
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    rc = install_mod.do_install(
+                        args, _fetch=_static_fetch(latest, blob),
+                        _run=_recording(calls))
+            self.assertEqual(rc, 0)
+            self.assertIn('deferred: router busy', buf.getvalue())
+            self.assertEqual((home / 'current').read_text(), '1.0.0\n')
+            fresh = [c for c in calls[n_calls:]
+                     if c[:2] == ['launchctl', 'kill'] or 'bootout' in c]
+            self.assertFalse(fresh, 'busy upgrade must not signal launchd')
+
+    def test_failed_upgrade_rolls_back_with_term_not_bootout(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            _run_install(self, tmp, home, '1.0.0')
+            blob, latest = _craft_bundle('1.0.1')
+            calls = []
+            _patch_attrs(self, run=_recording(calls),
+                         self_test=lambda *a: None,
+                         wait_idle=lambda *a, **k: True,
+                         wait_version=lambda *a, **k: None)
+            args = install_mod.build_parser().parse_args(
+                ['--feed', 'file:///latest.json', '--home', str(home)])
+            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}
+            with mock.patch.dict(os.environ, env):
+                with self.assertRaises(SystemExit):
+                    install_mod.do_install(args, _fetch=_static_fetch(latest, blob))
+            self.assertEqual((home / 'current').read_text(), '1.0.0\n')
+            self.assertFalse(any('bootout' in c for c in calls),
+                             'rollback must TERM, never bootout a live service')
+            self.assertTrue(any(c[:3] == ['launchctl', 'kill', 'TERM'] for c in calls))
+
+    def test_prune_releases_keeps_three(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            rel = home / 'releases'
+            for v in ('1.0.0', '1.0.1', '1.0.2', '1.0.3'):
+                (rel / v).mkdir(parents=True)
+            install_mod.prune_releases(home, '1.0.3', '1.0.2')
+            kept = sorted(p.name for p in rel.iterdir())
+            self.assertEqual(kept, ['1.0.1', '1.0.2', '1.0.3'])
+
+    def test_prune_releases_ignores_non_version_dirs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            rel = home / 'releases'
+            for v in ('1.0.0', '1.0.1', '1.0.2', '1.0.3', 'manual-backup'):
+                (rel / v).mkdir(parents=True)
+            install_mod.prune_releases(home, '1.0.3', '1.0.2')
+            kept = sorted(p.name for p in rel.iterdir())
+            self.assertEqual(kept, ['1.0.1', '1.0.2', '1.0.3', 'manual-backup'])
 
 
 if __name__ == '__main__':
