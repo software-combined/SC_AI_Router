@@ -110,6 +110,20 @@ class SummarizerTests(unittest.TestCase):
         self.assertEqual(len(payload['tools']), 1)
         self.assertEqual(payload['tools'][0]['parameters'], {'type': 'object'})
 
+    def test_text_only_models_drop_image_blocks(self):
+        def shapes(model):
+            payload = {'model': model, 'input': [
+                {'type': 'message', 'role': 'user', 'content': [
+                    {'type': 'input_text', 'text': 'look'},
+                    {'type': 'input_image', 'image_url': 'data:image/png;base64,AAA'}]}]}
+            prepared = providers.OpenRouterProvider().prepare(
+                model, '/responses', payload, b'raw', {}, _stub_credentials())
+            return json.loads(prepared.body)['input'][0]['content']
+        stripped = shapes('z-ai/glm-5.3')
+        self.assertEqual(stripped, [{'type': 'input_text', 'text': 'look'}])
+        kept = shapes('moonshotai/kimi-k3')
+        self.assertEqual(len(kept), 2)
+
 
 if __name__ == '__main__':
     unittest.main()

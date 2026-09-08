@@ -2,7 +2,7 @@
 import http.client
 import json
 from . import compaction as comp, local_services
-from .capabilities import CANONICAL_ORDER, OPENROUTER_HOST, REASONING_LEVELS, check_effort
+from .capabilities import CANONICAL_ORDER, OPENROUTER_HOST, REASONING_LEVELS, check_effort, input_modalities
 from .registry import by_slug
 from .runtime import log_event
 from .tool_adapter import prepare_tools, remember_discovered, stream_events, ToolEvents
@@ -68,7 +68,8 @@ class OpenRouterProvider:
             tool_names = prepare_tools(payload)
         except ValueError as exc:
             raise PreparationError(str(exc))
-        payload['input'] = comp.strip_reasoning_blobs(comp.rewrite_input(payload.get('input', [])))
+        keep_images = 'image' in input_modalities(model) if isinstance(model, str) else True
+        payload['input'] = comp.strip_images(comp.strip_reasoning_blobs(comp.rewrite_input(payload.get('input', []))), keep_images)
         reasoning = payload.get('reasoning')
         try:
             check_effort(model,
