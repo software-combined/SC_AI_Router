@@ -102,6 +102,7 @@ class Handler(BaseHTTPRequestHandler):
         path, _ = self.authorized_path()
         if path is None:
             return self.error(403, 'Forbidden')
+        path = path.split('?', 1)[0]
         if path.startswith('/setup/'):
             return setup.serve(self, path[len('/setup/'):], False)
         if path == '/health':
@@ -109,6 +110,8 @@ class Handler(BaseHTTPRequestHandler):
                                         'inflight': self.server.inflight,
                                         'draining': self.server.draining,
                                         'served_models': dict(self.server.served_models)})
+        if path == '/v1/models':
+            return self.send_json(200, claude.models_listing())
         if self.server.draining:
             return self.drain_reject()
         if self.headers.get('Upgrade', '').lower() == 'websocket':

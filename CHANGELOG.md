@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Serve Claude Code model discovery: `GET /v1/models` answers
+  `{data: [{id, display_name}]}` from the local registry so the CLI
+  `/model` picker and the app picker list the router models as `From
+  gateway` entries when
+  `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=true` (Claude Code
+  2.1.x, restart after changing the base URL). Listing ids are
+  `claude/<vendor>/<name>` aliases, plus the bare `anthropic/...`
+  Claude aliases which already pass the client's `claude|anthropic`
+  filter; the router strips each alias back to its registry slug
+  before routing, so billing follows the registry row and direct
+  slugs keep working byte-identical. Unknown `claude/`-prefixed ids
+  pass through to the subscription untouched.
 - Hide OpenRouter-billed GPT rows from the Codex picker: the
   `openai/*` OpenRouter entries no longer list, so the picker shows
   the ChatGPT subscription models instead of a same-name paid
