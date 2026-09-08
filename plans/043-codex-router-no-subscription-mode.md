@@ -125,10 +125,12 @@ Log `log_event('local_service', path=path)` for each.
 
 ### Step 5: Catalogue and installer in `none` mode
 
-- With Plan 039: in `none` mode, `GET /models` returns `{"models": [openrouter_entry(m) for registry OpenRouter models]}` with no upstream call; in `subscription` mode, when upstream returns 401 or 403, fall back to the same registry-only body and log `catalogue_fallback`.
+- With Plan 039 (SUPERSEDED 2026-09-08: the 039 Step 1 spike showed Codex never issues `GET /models` through `openai_base_url`, so no router `/models` route exists; the static `model_catalog_json` file remains the catalogue mechanism): in `none` mode, `GET /models` would have returned the registry-only body with no upstream call; in `subscription` mode, upstream 401/403 would have fallen back to it with a `catalogue_fallback` log.
 - Installer `--openai-mode none` (Plan 041): writes the Codex configuration matching the shape chosen in Step 1 (custom provider block with `env_key` set through the LaunchAgent-free path, meaning the staff member exports the token in their shell profile, or the `openai_base_url` block for Shape B), sets `approvals_reviewer = "user"` inside the marked block, and stores `openai_mode` in state. `tools/disable.py` continues to work because the block is still delimited by the same markers.
 
-**Verify**: `tests/test_handler.py::test_models_in_none_mode_is_registry_only`, `test_models_upstream_403_falls_back_to_registry`; installer dry run with `--openai-mode none` prints the block it would write and contains `approvals_reviewer`.
+**Verify**: installer dry run with `--openai-mode none` prints the block it would write and contains `approvals_reviewer` (landed, tested).
+
+Note 2026-09-08: the `test_models_in_none_mode_is_registry_only` / `test_models_upstream_403_falls_back_to_registry` criteria cannot land: the 039 Step 1 spike showed Codex 0.153.4 never issues `GET /models` through `openai_base_url` (catalogue arrives over app-server `model/list` RPC), so there is no router `/models` route to test. The static `model_catalog_json` file remains the catalogue mechanism in both modes.
 
 ### Step 6: Documentation
 

@@ -81,6 +81,14 @@ Outcomes:
 
 **Verify**: your report contains the sink's request lines.
 
+### Step 1 report (ran 2026-09-08, Codex Desktop/0.153.4 app-server, no billing)
+
+- Driver: `probe_codex_runtime.py z-ai/glm-5.3-flash --capture-tools http://127.0.0.1:18998/backend-api/codex` with a sandboxed `CODEX_HOME` carrying the Shape C custom-provider config (no login, no credentials).
+- Sink lines observed: `GET /backend-api/codex/responses` (x3, then the turn errored on the 404 sink as expected). No `GET /models` or `/models` path variant appeared during startup, `model/list` (which answered over app-server RPC with the subscription catalogue), `thread/start`, or `turn/start`.
+- Outcome: **STOP / no-go**. Codex 0.153.4 fetches its catalogue over the app-server `model/list` RPC, not through `openai_base_url`. The `/models`-forward design in Step 2 does not match observed client behavior.
+- Consequence: the static-file fallback (`model_catalog_json`) stands. Any replacement needs the operator-approved capture-and-merge build step (Step 6) or a different discovery mechanism; not improvised here.
+
+
 ### Step 2: Forward and merge `/models`
 
 In `do_GET`, before the WebSocket check, add a branch for a path whose part before `?` equals `/models` (match the path recorded in Step 1):
