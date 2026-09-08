@@ -200,6 +200,18 @@ class ClaudeIngressTests(unittest.TestCase):
         self.assertEqual(conn.getresponse().status, 200)
         self.assertEqual(recorded[0][3].decode(), raw)
 
+    def test_post_with_query_string_routes_like_bare_path(self):
+        # Claude's gateway client sends /v1/messages?beta=true; the query
+        # must not 404 a route the bare path serves.
+        recorded = install_fake(self, lambda: FakeUpstream(
+            200, b'{"id":"msg_q","type":"message","content":[]}', []))
+        server = self._server()
+        response = _post(server.server_port, '/test-token/v1/messages?beta=true',
+                         _messages(), {'Authorization': 'Bearer test-key-bearer'})
+        self.assertEqual(response.status, 200)
+        host, _, path, _, _ = recorded[0]
+        self.assertEqual((host, path), ('openrouter.ai', '/api/v1/messages'))
+
     def test_post_to_models_listing_is_404(self):
         server = self._server()
         response = _post(server.server_port, '/test-token/v1/models',

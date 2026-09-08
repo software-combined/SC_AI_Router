@@ -131,6 +131,7 @@ class Handler(BaseHTTPRequestHandler):
         path, via_path = self.authorized_path()
         if path is None:
             return self.error(403, 'Forbidden')
+        path = path.split('?', 1)[0]
         if self.server.draining:
             return self.drain_reject()
         if path == '/shutdown':

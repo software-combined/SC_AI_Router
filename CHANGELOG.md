@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Fix Claude POSTs with a query string (`/v1/messages?beta=true`)
+  being rejected: `do_POST` now strips `?...` for route matching,
+  mirroring `do_GET`, so query-bearing inference calls route like
+  the bare path.
+- Fix tag-gated releases never matching: the workflow stripped
+  `-v` instead of `v`, so every tag would have failed the
+  version check. Tags now compare correctly.
 - Harden updates against live traffic: installs defer when the router
   is busy instead of killing in-flight requests, rollback restores the
   old pointer with `TERM` (never `bootout`, which stranded machines
