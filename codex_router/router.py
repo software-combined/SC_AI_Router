@@ -57,11 +57,13 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass  # Request URLs and upstream credentials must never enter access logs.
 
-    def send_json(self, status, obj):
+    def send_json(self, status, obj, headers=None):
         body = json.dumps(obj).encode()
         self.send_response(status)
         self.send_header('Content-Type', 'application/json')
         self.send_header('Content-Length', str(len(body)))
+        for k, v in (headers or {}).items():
+            self.send_header(k, v)
         self.send_header('Connection', 'close')
         self.end_headers()
         self.wfile.write(body)
@@ -108,16 +110,11 @@ class Handler(BaseHTTPRequestHandler):
         return self.error(404, 'Unsupported route')
 
     def drain_reject(self):
-        body = json.dumps({'error': {'message': 'Server draining',
-                                     'type': 'router_error'}}).encode()
-        self.send_response(503)
-        self.send_header('Content-Type', 'application/json')
-        self.send_header('Content-Length', str(len(body)))
-        self.send_header('Retry-After', '2')
-        self.send_header('Connection', 'close')
-        self.end_headers()
-        self.wfile.write(body)
-        self.close_connection = True
+        return self.retryable_reject('Server draining')
+
+    def retryable_reject(self, message, retry_after='2'):
+        self.send_json(503, {'error': {'message': message, 'type': 'router_error'}},
+                       {'Retry-After': retry_after})
 
     def do_POST(self):
         started = time.monotonic()
@@ -212,6 +209,11 @@ class Handler(BaseHTTPRequestHandler):
                     local_services.answer(metrics['path'])
                 except local_services.LocalAnswer as exc:
                     return self.error(exc.status, exc.message)
+            if response.status == 429:
+                # Codex treats a bare 429 as turn-fatal; 503 with Retry-After retries.
+                response.read()
+                log_event('upstream_rate_limited', provider=prepared.provider, path=metrics['path'])
+                return self.retryable_reject('Upstream rate limited', response.getheader('Retry-After', '2'))
             metrics['upstream_headers_ms'] = round((time.monotonic() - started) * 1000, 1)
             self.send_response(response.status)
             for k, v in response.getheaders():
