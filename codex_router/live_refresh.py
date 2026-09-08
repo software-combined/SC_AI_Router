@@ -23,6 +23,8 @@ def derive(row, live):
     modalities = [m for m in CODEX_MODALITIES if m in live_modalities]
     top = live.get('top_provider') or {}
     advertised = (live.get('reasoning') or {}).get('supported_efforts')
+    alias = live.get('alias_target')
+    alias = alias.get('name') if isinstance(alias, dict) else None
     reasoning = list(row['reasoning'])
     if advertised:
         filtered = [lv for lv in CANONICAL_ORDER
@@ -32,7 +34,8 @@ def derive(row, live):
     return {'modalities': modalities or list(row['modalities']),
             'context_window': live.get('context_length', row['context_window']),
             'max_output_tokens': top.get('max_completion_tokens') or row['max_output_tokens'],
-            'reasoning': reasoning}
+            'reasoning': reasoning,
+            'display_name': f'{alias} \xb7 OpenRouter' if alias else row.get('display_name')}
 
 
 def refresh(rows, live_by_id):
