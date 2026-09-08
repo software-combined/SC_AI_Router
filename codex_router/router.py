@@ -139,6 +139,22 @@ class Handler(BaseHTTPRequestHandler):
                 model, path, self.server.state.get('openai_models', []), mode)
             if provider.name == 'openai-subscription' and not via_path:
                 return self.error(401, 'Bearer auth is for no-subscription mode only')
+            if path == '/responses/compact' and provider.name == 'openrouter':
+                # Compact raw history before prepare(): a rejected effort must not block it.
+                # Hold an inflight slot so drain waits for mid-compaction releases. Key
+                # lookup stays outside the try so credential errors keep 401/400, not 502.
+                key = self.server.credentials.openrouter_key()
+                with self.server.lock:
+                    self.server.inflight += 1
+                try:
+                    return self.send_json(200, {'output': provider.compact(model, payload, key)})
+                except PreparationError as exc:
+                    return self.error(409, str(exc))
+                except (OSError, http.client.HTTPException):
+                    return self.error(502, 'Compaction summarizer unavailable')
+                finally:
+                    with self.server.lock:
+                        self.server.inflight -= 1
             try:
                 prepared = provider.prepare(model, path, payload, raw,
                                             dict(self.headers), self.server.credentials)
@@ -146,14 +162,6 @@ class Handler(BaseHTTPRequestHandler):
                 return self.error(exc.status, exc.message)
             if os.environ.get('ROUTER_DEBUG'):
                 log_event('provider_selected', provider=provider.name, model=model, path=path)
-            if path == '/responses/compact' and provider.name == 'openrouter':
-                key = self.server.credentials.openrouter_key()
-                try:
-                    return self.send_json(200, {'output': provider.compact(model, payload, key)})
-                except PreparationError as exc:
-                    return self.error(409, str(exc))
-                except (OSError, http.client.HTTPException):
-                    return self.error(502, 'Compaction summarizer unavailable')
         except PermissionError as exc:
             return self.error(401, str(exc))
         except InvalidSize as exc:
