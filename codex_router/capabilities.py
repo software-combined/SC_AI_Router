@@ -77,6 +77,36 @@ def check_effort(slug, effort):
             + ' (change effort before switching models).')
 
 
+def has_images(items):
+    """True when the turn carries image blocks a text-only model would lose."""
+    if not isinstance(items, list):
+        return False
+    for item in items:
+        if (isinstance(item, dict) and item.get('type') == 'message'
+                and isinstance(item.get('content'), list)
+                and any(isinstance(b, dict) and b.get('type') == 'input_image'
+                        for b in item['content'])):
+            return True
+    return False
+
+
+def check_images(slug, items):
+    """Fail closed when a text-only model is asked to read image blocks.
+
+    Mid-thread model switches carry the old thread input over, so an
+    image-bearing thread switching to a text-only model must be rejected
+    with a clear message instead of silently dropping the images.
+    Unknown shapes pass through untouched; only a known-bad combination
+    raises.
+    """
+    if not isinstance(slug, str) or slug not in OPENROUTER_MODELS:
+        return
+    if 'image' not in input_modalities(slug) and has_images(items):
+        raise ValueError(
+            slug + ' does not accept image input, but this turn carries image blocks'
+            + ' (switch back to an image-capable model, or continue without images).')
+
+
 def catalogue_patch(slug):
     if slug not in OPENROUTER_MODELS:
         raise KeyError('Unknown OpenRouter model: ' + slug)

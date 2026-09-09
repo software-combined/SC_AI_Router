@@ -20,8 +20,8 @@ The machine's agent should:
    if it is the obsolete local development feed, retain a backup and remove
    that override so subsequent checks use the normal release channel.
 3. Build the pulled source into a local feed with `packaging/release.py`.
-   Set `--build` to the existing `feed-serial` value, or `0` when absent.
-   Do not use a timestamp or invent a larger serial, which can block later
+   `--build` is free to choose: a `--feed` install neither checks nor records
+   the anti-replay serial, so a local build can no longer block later
    published releases. Pass the output directory as a `file://` URL with
    `--url-base`, so the local feed resolves its local tarball.
 4. At an idle boundary, run the new source's `packaging/install.py` with

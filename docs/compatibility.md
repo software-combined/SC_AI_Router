@@ -29,9 +29,7 @@ Per-model quirks, generated from the registry:
 | z-ai/glm-5.3-flash | text,image | native | None | - | verified |
 | z-ai/glm-5.3 | text | native | None | - | verified |
 | moonshotai/kimi-k3 | text,image | native | None | - | verified |
-| ~x-ai/grok-latest | text,image | native | 350 | - | verified |
-| deepseek/deepseek-v4-pro | text | native | None | - | verified |
-| deepseek/deepseek-v4-flash | text | native | None | - | verified |
+| ~x-ai/grok-latest | text,image | json_text_root | 350 | - | verified |
 | qwen/qwen3.8-max-0902 | text,image | native | None | - | verified |
 | ~google/gemini-flash-latest | text,image,audio | native | None | - | verified |
 | ~google/gemini-pro-latest | text,image,audio | native | None | - | verified |
@@ -66,7 +64,7 @@ paid runs against the live router):
 | z-ai/glm-5.3-flash | passed (named red) |
 | meta/muse-spark-1.3 | failed (answered `unknown`) |
 | moonshotai/kimi-k3 | failed (answered `Black`) |
-| ~x-ai/grok-latest | failed (turn timed out on media leg; base round trip passes) |
+| ~x-ai/grok-latest | text-only with note (ships in 0.6.7; 0.6.7.19 install still stalls upstream) |
 
 Audio leg: `meta/muse-spark-1.3` rejected upstream (`invalid_prompt`).
 Reasoning-summary, apply-patch, web-search, and experimental-tools legs are

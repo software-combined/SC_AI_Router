@@ -61,8 +61,8 @@ OPENROUTER_TEMPLATE = {
 
 PREVIEW_PRIORITY_OFFSET = 100000  # preview entries sort after every verified model
 RETIRED_SLUGS = {'anthropic/claude-opus-5', 'anthropic/claude-fable-5.1',
-                 'deepseek/deepseek-v4-flash',
-                 'deepseek/deepseek-v4-flash-0731'}  # superseded by the flash-latest alias
+                 'deepseek/deepseek-v4-pro', 'deepseek/deepseek-v4-flash',
+                 'deepseek/deepseek-v4-flash-0731'}  # pro-0423 retired 2026-09-09; flash rows superseded by the flash-latest alias
 
 # Picker labels for the subscription side, matching the live Codex picker.
 # Codex >=0.153.4 requires every catalogue row to carry display_name and the
@@ -117,7 +117,7 @@ def openrouter_entry(model):
                              if model.tier == 'preview' else model.display_name),
             'description': (('Preview, not yet verified with Codex. '
                              if model.tier == 'preview' else '')
-                            + 'OpenRouter billing. Choose before starting a fresh task. '
+                            + 'OpenRouter billing. Switch to this model mid-thread; history carries over. '
                             + 'OpenRouter: ' + catalog_name(model)),
             'default_reasoning_level': model.default_reasoning,
             'supported_reasoning_levels': [

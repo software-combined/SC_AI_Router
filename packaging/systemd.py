@@ -1,7 +1,6 @@
 """Linux user service lifecycle. Python 3.9+, no privileged service or lingering."""
 import json
 import os
-from contextlib import contextmanager
 from pathlib import Path
 
 SERVICE = 'codex-mixed-model-router.service'
@@ -32,21 +31,6 @@ class Manager:
         if result is None or result.returncode:
             raise SystemExit('Linux installation requires a running systemd user manager; '
                              'run this installer in the signed-in desktop user session.')
-
-    @contextmanager
-    def operation(self):
-        import fcntl
-        self.check()
-        self.home.mkdir(mode=0o700, parents=True, exist_ok=True)
-        fd = os.open(self.home / 'install.lock', os.O_CREAT | os.O_RDWR, 0o600)
-        try:
-            try:
-                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError:
-                raise SystemExit('Another router operation is in progress; retry when idle.')
-            yield
-        finally:
-            os.close(fd)
 
     def install(self, python, release):
         import shutil

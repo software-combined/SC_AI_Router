@@ -39,7 +39,7 @@ class RegistryTests(unittest.TestCase):
 
     def test_bad_row_shape_is_refused(self):
         good = dict(zip(FIELDS, ['x/y', 'openrouter', 'X', 'V',
-            ['low'], 'low', ['text'], [], 'native', None, 1, 100,
+            ['low'], 'low', ['text'], [], 'native', None, False, 1, 100,
             32768, 'none', 'none', [], True, 'verified']))
         for bad in ({k: v for k, v in good.items() if k != 'vendor'},
                     {k: v for k, v in good.items() if k != 'web_search'},
@@ -50,7 +50,8 @@ class RegistryTests(unittest.TestCase):
                     {**good, 'max_output_tokens': 0},
                     {**good, 'max_output_tokens': 'many'},
                     {**good, 'web_search': 'yes'},
-                    {**good, 'experimental_tools': ['ok', 7]}):
+                    {**good, 'experimental_tools': ['ok', 7]},
+                    {**good, 'drop_images': 'yes'}):
             with self.subTest(bad=bad):
                 with self.assertRaises(SystemExit):
                     load(json.dumps([bad]))
@@ -59,7 +60,7 @@ class RegistryTests(unittest.TestCase):
         for model in MODELS:
             self.assertIn(model.tier, ('verified', 'preview'), model.slug)
         good = dict(zip(FIELDS, ['x/y', 'openrouter', 'X', 'V',
-            ['low'], 'low', ['text'], [], 'native', None, 1, 100,
+            ['low'], 'low', ['text'], [], 'native', None, False, 1, 100,
             32768, 'none', 'none', [], True, 'verified']))
         for bad in ({k: v for k, v in good.items() if k != 'tier'},
                     {**good, 'tier': 'beta'}):
@@ -97,8 +98,8 @@ class RegistryTests(unittest.TestCase):
 
     def test_catalog_name_vendor_prefix_rule(self):
         from codex_router.catalogue import catalog_name
-        deepseek = by_slug('deepseek/deepseek-v4-pro')
-        self.assertEqual(catalog_name(deepseek), 'DeepSeek: V4 Pro 0423')
+        deepseek = by_slug('deepseek/deepseek-v4-pro-0813')
+        self.assertEqual(catalog_name(deepseek), 'DeepSeek: V4 Pro 0813')
         muse = by_slug('meta/muse-spark-1.3')
         self.assertEqual(catalog_name(muse), 'Meta: Muse Spark 1.3')
 

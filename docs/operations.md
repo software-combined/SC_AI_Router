@@ -35,16 +35,45 @@ the bad one), or pin one machine with
 restores the old pointer automatically when the new release fails its
 health check.
 
+A release before 0.6.9 recorded a `--feed` install's own build number in
+`<home>/feed-serial`, so a local build could leave a number the published
+feed has not reached. Every scheduled check then refuses the real feed with
+`stale feed serial N is older than M`. Delete `<home>/feed-serial` to clear
+it; the next unpinned update records the channel's own serial. Installs from
+0.6.9 on leave that file alone.
+
 ## Safe update, restart, reinstall
 
-The scheduled updater defers when
-`inflight > 0` and retries on its next pass; a direct install does the
-same instead of TERMing a busy router. Activation swaps the `current`
-pointer, then sends one `TERM`: launchd `KeepAlive` restarts the router
-on the held socket into the new release. Never `bootout` a live
-service: that unloads the definition and strands the machine with no
-router. On failed health the installer restores the old pointer and
-TERMs again; the old release comes back on the same socket. Linux uses
+Updates do not wait for idle traffic. Activation swaps the `current`
+pointer, then sends one `TERM`: launchd `KeepAlive` restarts the router on
+the held socket into the new release, so new connections queue in the
+kernel while the outgoing process finishes the requests it already
+accepted. An in-flight chat completes on the old release, and on macOS
+nothing is refused. Linux has no socket activation (see below): the
+outgoing process owns the port and stops accepting for the length of its
+drain, so a connection attempted mid-handover fails until the new process
+binds. One writer at a time, enforced by an advisory lock on
+`install.lock` in the router home, so a scheduled pass and a manual run
+cannot interleave.
+
+Prefer `TERM` over `bootout` for a live service: `bootout` unloads the
+definition, and if the following `bootstrap` does not take, the machine is
+left with no router and no `KeepAlive` to recover it. A reload is only for
+a plist launchd has actually loaded differently (a changed interpreter or
+port), and it must wait for the label to leave the domain before
+bootstrapping: `bootout` returns success while the job is still draining,
+and a `bootstrap` issued in that window fails with `Bootstrap failed: 5`.
+The installer never boots out the scheduled updater from inside it, since
+that job is what runs the installer.
+
+On failed health the installer restores the old pointer, TERMs again, and
+then verifies a loaded job is serving the restored version, bootstrapping
+it if launchd has none; it says the router is not serving rather than
+reporting a clean rollback over a dead machine. A version that fails three
+times is parked, so a bad release stops costing a service restart every
+fifteen minutes; run the installer by hand to retry. The count lives in the
+state file, which is what parks it on the production feed -- that feed is
+read through the GitHub CLI and carries no ETag to save. Linux uses
 systemd user service restart with a 150-second stop timeout; the launcher
 opens the same loopback port after the old process drains. It does not use
 launchd socket activation. Failed upgrades restore the prior catalogue too.
