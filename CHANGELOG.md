@@ -2,6 +2,9 @@
 
 ## 0.6.7 (unreleased)
 
+- Preserve the owner's picker selection (`model`, `model_reasoning_effort`)
+  inside the managed Codex config block across installs and scheduled
+  updates instead of resetting it on every rewrite.
 - Reject OpenRouter requests whose estimated input plus reserved output
   would exceed the model's context window (409 with an actionable message)
   instead of forwarding a doomed turn that the endpoint 400s outright.
