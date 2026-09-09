@@ -46,6 +46,20 @@ def _wrap_string_envelope(tool, noun):
                           'required': ['arguments_json'], 'additionalProperties': False}
     tool['strict'] = True
 
+def _grok_needs_envelope(parameters):
+    """True when xAI would reject the parameter root without a string envelope."""
+    if not isinstance(parameters, dict):
+        return False
+    if parameters.get('type') != 'object':
+        return True
+    for key in ('anyOf', 'oneOf'):
+        branches = parameters.get(key)
+        if isinstance(branches, list):
+            for branch in branches:
+                if isinstance(branch, dict) and branch.get('type') != 'object':
+                    return True
+    return False
+
 def prepare_tools(payload):
     names = {}
     # OpenAI reads discovered definitions from tool_search_output history. Other
@@ -92,11 +106,12 @@ def prepare_tools(payload):
             _wrap_string_envelope(tool, 'object')
             names[(namespace, tool['name'])] = 'json_text'
         elif (_quirk(payload, 'schema_mode') == 'json_text_root'
-                and isinstance(tool.get('parameters'), dict)
-                and tool['parameters'].get('type') != 'object'):
-            # xAI rejects non-object parameter roots (anyOf/oneOf unions with a
-            # non-object branch). Same string envelope as json_text, but the
+                and _grok_needs_envelope(tool.get('parameters'))):
+            # xAI rejects non-object parameter roots, including object roots
+            # with an anyOf/oneOf union holding a non-object branch (e.g. the
+            # automation tool). Same string envelope as json_text, but the
             # value may be any JSON type the original schema accepts.
+            # Object-only unions stay native.
             _wrap_string_envelope(tool, 'value')
             names[(namespace, tool['name'])] = 'json_text_root'
     wire_names = {}
