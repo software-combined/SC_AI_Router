@@ -45,6 +45,7 @@ def prepare_tools(payload):
         if item.get('type') == 'tool_search_output':
             released.extend(deepcopy(item.get('tools', [])))
     released.extend(recall(payload.get('input', [])))
+    released_keys = {(namespace, tool.get('name')) for tool, namespace in tool_entries(released)}
     declared = {}
     for tool, namespace in tool_entries(payload.get('tools', [])):
         declared.setdefault((namespace, tool.get('name')), tool)
@@ -91,6 +92,9 @@ def prepare_tools(payload):
             digest = hashlib.sha256((namespace + '\0' + tool['name']).encode()).hexdigest()[:12]
             wire = 'ns_' + digest + '_' + tool['name'][:48]
             kind = names.pop(original, 'identity')
+            if original in released_keys:
+                released_keys.discard(original)
+                released_keys.add((None, wire))
             names[(None, wire)] = {'kind': kind, 'namespace': namespace, 'name': tool['name']}
             wire_names[original] = wire
             tool['description'] = namespace + '.' + tool['name'] + ': ' + tool.get('description', '')
@@ -100,7 +104,20 @@ def prepare_tools(payload):
     payload['tools'] = flattened
     ceiling = _quirk(payload, 'max_tools')
     if ceiling and len(flattened) > ceiling:
-        raise ValueError(f'{payload.get("model")} supports at most {ceiling} exposed tools (this turn exposes {len(flattened)}). Switch to a model without the ceiling, or trim tools, then retry in the same thread.')
+        # ponytail: drop, don't page; the search tool reloads on demand.
+        kinds = [names.get((None, tool.get('name'))) for tool in flattened]
+        kinds = [kind.get('kind') if isinstance(kind, dict) else kind for kind in kinds]
+        kept = [tool for tool, kind in zip(flattened, kinds)
+                if kind == 'search' or (None, tool.get('name')) in released_keys]
+        if 'search' not in kinds or len(kept) > ceiling:
+            raise ValueError(
+                f'{payload.get("model")} supports at most {ceiling} exposed tools '
+                f'(this turn exposes {len(flattened)}). Switch to a model without '
+                'the ceiling, or trim tools, then retry in the same thread.')
+        for tool in flattened:
+            if tool not in kept:
+                names.pop((None, tool.get('name')), None)
+        payload['tools'] = kept
     for item in payload.get('input', []) if isinstance(payload.get('input'), list) else []:
         if item.get('type') == 'tool_search_call':
             item.pop('execution', None)

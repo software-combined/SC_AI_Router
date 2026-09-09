@@ -19,10 +19,13 @@
   items, tool calls/results) replays cleanly on Muse; blobs are
   stripped, readable summaries and results are kept, and opaque native
   compaction replays as a visible note rather than readable context.
-  Image blocks do not carry over to text-only models, and a model
-  tool-count ceiling (Grok, 350 tools) still rejects an over-ceiling
-  turn: switch to a model without the ceiling, or trim tools, then
-  retry in the same thread.
+  Image blocks do not carry over to text-only models. A model
+  tool-count ceiling (Grok, 350 tools) defers instead of rejecting:
+  over-ceiling turns go out with the search tool plus already-released
+  tools, and the rest load on demand; the 409 stays only when the turn
+  cannot fit under the ceiling that way. Grok image turns run text-only (new pinned
+  `drop_images` registry quirk) with a short note where each image was,
+  instead of stalling upstream.
   The thread effort carries over, and an effort the new model does not
   support (for example carried max onto Contributor) is rejected with
   the allowed levels instead of failing opaquely upstream.

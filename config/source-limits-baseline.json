@@ -11,5 +11,7 @@
   "tests/test_probe_harness.py": 349,
   "codex_router/providers.py": 257,
   "tests/test_setup.py": 301,
-  "codex_router/compaction.py": 269
+  "codex_router/compaction.py": 287,
+  "codex_router/tool_adapter.py": 265,
+  "tests/test_tool_adapter.py": 333
 }

@@ -2,8 +2,8 @@
 
 Derived (rewritten in place in models.json): modalities, context_window,
 max_output_tokens, reasoning. Pinned (never touched): identity,
-excluded_efforts, schema_mode, max_tools, priority, and the capability
-flags, which only probes may enable.
+excluded_efforts, schema_mode, max_tools, drop_images, priority, and the
+capability flags, which only probes may enable.
 """
 import json
 import sys

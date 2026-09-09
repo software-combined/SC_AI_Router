@@ -105,7 +105,8 @@ class OpenRouterProvider:
         except ValueError as exc:
             raise PreparationError(str(exc))
         keep_images = 'image' in input_modalities(model) if isinstance(model, str) else True
-        payload['input'] = comp.strip_images(rewritten, keep_images)
+        entry = by_slug(model) if isinstance(model, str) else model
+        payload['input'] = comp.note_images(rewritten) if getattr(entry, 'drop_images', False) else comp.strip_images(rewritten, keep_images)
         reasoning = payload.get('reasoning')
         try:
             check_effort(model,
@@ -113,7 +114,6 @@ class OpenRouterProvider:
         except ValueError as exc:
             raise PreparationError(str(exc))
         payload.pop('service_tier', None)
-        entry = by_slug(model) if isinstance(model, str) else model
         if entry is None:
             raise PreparationError(f'unknown model: {model}')
         limit = entry.max_output_tokens
