@@ -7,6 +7,7 @@ import json
 import os
 import sys
 import tarfile
+import importlib.util
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -27,6 +28,7 @@ def bundle_files(root):
            'packaging/router_launch.py', 'packaging/service.py',
            'packaging/systemd.py', 'packaging/update_launch.py',
            'packaging/updater.py', 'packaging/codex_config.py',
+           'packaging/runtime.lock', 'packaging/runtime_lock.py',
            'packaging/platforms/__init__.py',
            'packaging/platforms/darwin.py', 'packaging/platforms/linux.py']
     )
@@ -55,6 +57,13 @@ def main(argv=None):
         print(f'wrote release signing seed to {out}; compile its public key into feed_verify.FEED_PUBLIC_KEY')
         return
     root = Path(__file__).resolve().parents[1]
+    # The runtime lock must validate before any bundle ships: a broken pin
+    # table must never reach a release artifact.
+    _lock_spec = importlib.util.spec_from_file_location(
+        'router_runtime_lock', root / 'packaging' / 'runtime_lock.py')
+    _lock_mod = importlib.util.module_from_spec(_lock_spec)
+    _lock_spec.loader.exec_module(_lock_mod)
+    _lock_mod.validate(_lock_mod.load())
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     base_version = (root / 'packaging' / 'VERSION').read_text().strip()
