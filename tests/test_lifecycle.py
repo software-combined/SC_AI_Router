@@ -106,10 +106,18 @@ class LauncherBootTests(unittest.TestCase):
                     except OSError:
                         time.sleep(0.2)
                 else:
+                    alive = proc.poll() is None
                     proc.terminate()
                     _, err = proc.communicate(timeout=20)
-                    self.fail('installed launcher never served /health: '
-                              + (err or '').strip()[-2000:])
+                    # The child logs router_started to logs/router.jsonl at
+                    # boot: its presence means the child bound somewhere
+                    # unexpected, its absence means it hung before serving.
+                    log = home / 'logs' / 'router.jsonl'
+                    started = log.read_text() if log.exists() else '<no log>'
+                    self.fail('installed launcher never served /health '
+                              f'(alive={alive}): '
+                              + (err or '').strip()[-1000:]
+                              + ' | log tail: ' + started.strip()[-1000:])
                 with urllib.request.urlopen(base + '/setup/' + 'n' * 16,
                                             timeout=5) as r:
                     self.assertEqual(r.status, 200)
