@@ -2,6 +2,12 @@
 
 ## 0.6.10 (unreleased)
 
+- Pin the private CPython 3.14 runtime: new `packaging/runtime.lock`
+  names one install-only distribution per qualified target with validation
+  and wrapper-table generation (Stage 1). Entries ship unpinned by design;
+  provisioning refuses until review pins an immutable source and digest.
+  Release builds validate the lock first.
+
 - Give each client explicit activation: new `packaging/codex_config.py`
   owns the Codex block, picker preservation, guidance, and receipts; the
   installer checks the remover's exit status instead of its wording.

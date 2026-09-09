@@ -74,6 +74,7 @@ class ReleaseTests(unittest.TestCase):
                     'packaging/service.py',
                     'packaging/updater.py',
                     'packaging/codex_config.py',
+                     'packaging/runtime.lock', 'packaging/runtime_lock.py',
                     'packaging/platforms/__init__.py',
                     'packaging/platforms/darwin.py',
                     'packaging/platforms/linux.py'):
