@@ -236,13 +236,14 @@ repository's `plans/` and continue there. Paths inside the plans use
 | 046 | Model onboarding at scale: `models add` command, preview tier, hourly remote model list, CI validation | P1 | M | 038, 039, 044, 045 | IN PROGRESS (partial: `models add` + preview tier + compat record + isolated verify landed; source boxes verified 2026-09-09; hourly hot-reload deferred per 2026-09-08 audit brief pending versioned-update proof; manual seventh-model check needs the live gate) |
 | 042 | Documentation rewrite, compatibility matrix, retire manual release artefacts, vault note | P3 | S | 035, 038, 039, 040, 041, 046 | DONE (docs rewrite landed; two inaccurate plan-text claims corrected in-file 2026-09-08) |
 | 047 | Router remediation handover: working delivery, versioned cutover, protocol fixes, installers, key window | P0 | L | 041, 045 | IN PROGRESS (source merged to main 9bbdc28: feed serial and signatures, catalogue seeding wired into installer, protocol C/D fixes, pointer-file releases, launcher in bundle, shutdown, setup key claim, none-mode auth, probe provider flag, guidance via current_release_dir; live cutover remains; feed = AWS 651116729473 ap-southeast-2 (owner 2026-09-09, key home TBD); macOS/Windows signing deferred, plugin route to investigate instead of paid certs; Linux install notes expected via contributor PR) |
-| 048 | [Invitation-only managed OpenRouter keys across portcos](048-router-managed-key-provisioning.md) | P1 | L | 040, 037, 041; account/auth/distribution preflight | IN PROGRESS (owner 2026-09-09: IT issues one OpenRouter key per portco user, pasted once into the setup window; full provisioning service not built) |
+| 048 | [Invitation-only managed OpenRouter keys across portcos](048-router-managed-key-provisioning.md) | P1 | L | 040, 037, 041; account/auth/distribution preflight | IN PROGRESS (owner 2026-09-09: IT issues one OpenRouter key per portco user, pasted once into the setup window; full provisioning service not built; key-provisioning decision superseded by Plan 055) |
 | 049 | [Codex/Claude plugin setup and native macOS, Windows and Arch Linux lifecycle](049-agent-plugin-and-three-os-installation.md) | P1 | L | 047-A AWS delivery; existing Arch contribution; designated staff acceptance | TODO (planning only: all three OS families required for first supported release; keep source/plugin package in adapter repo and catalogue in SC_Agent_plugins; integrate contributor's Arch PR when available) |
 | 050 | [Router service recovery and update readiness](050-router-service-recovery-and-update-readiness.md) | P1 | S | Fresh service/release readback; lifecycle writer coordination | TODO (planning only; observed live 0.6.5.17, updater not loaded) |
 | 051 | [Claude CLI and desktop gateway setup](051-claude-cli-and-desktop-gateway-setup.md) | P1 | M | 050 healthy service or equivalent verified state | TODO (planning only; CLI and desktop auth/discovery verified separately) |
 | 052 | [Claude billing probes and release acceptance](052-claude-billing-probes-and-release-acceptance.md) | P1 | M | 050, 051; explicit paid-run approval | TODO (planning only; tool, billing, source, release and rollout gates separate) |
 | 053 | [Private Claude Code plugin](053-claude-code-private-plugin.md) | P1 | M | 049 shared installer; 051 client contract; 052 acceptance; 054 feed model | TODO (planning only; private catalogue, shared package, no automatic mutation) |
 | 054 | [Group distribution, private feed and push-to-main auto-update](054-group-distribution-private-feed-and-auto-update.md) | P1 | L | 049 §2 distribution rules; 050 healthy service; AWS account, DNS and publication approvals | TODO (planning only; owner 2026-09-09: main publishes stable, reads token-gated, no signature ceremony; free-plan private repo has no branch protection) |
+| 055 | [Central per-user key federation and the first-use key window](055-central-key-federation-and-first-use-key-window.md) | P1 | M | 054 onboarding and install token; OpenRouter organisation write; AWS approvals | TODO (planning only; owner 2026-09-09: provision centrally and write the key at 0600, never displayed, no inference proxy; supersedes 048's paste-once decision; Stage 3 key window is independent) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale).
 
@@ -259,7 +260,7 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED 
 - Plan 049 is the active plugin/installer direction: reuse the existing installer
   and the Arch contributor's work, rather than creating duplicate delivery code.
   It supersedes 047 E/F's native installer-package approach, retains AWS-feed
-  and live-cutover gates, and keeps 048's IT-issued-key decision. The integrated
+  and live-cutover gates, and keeps 048's invitation model, though key provisioning itself is now governed by Plan 055, which supersedes 048's paste-once decision. The integrated
   owner decision to remove signature enforcement supersedes older signing
   requirements; keep checksum, serial and identity checks. macOS, Windows
   and Arch Linux must all pass on designated staff machines before the first
@@ -278,6 +279,19 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED 
   decision, and records that the free-plan private repository has no branch
   protection, so publication trust equals repository write access plus bucket
   write access. It does not authorise AWS, DNS, publication, live-updater,
+  staff-machine or release actions.
+- Plan 055 (owner direction 2026-09-09) supersedes Plan 048's "IT issues one
+  OpenRouter key per portco user, pasted once into the setup window": keys are
+  provisioned centrally through an OpenRouter Management API key held in AWS,
+  budgeted per person with Guardrails, written at `0600` and never displayed.
+  An operator script delivers the key until Plan 054 Stage 4 issues the
+  per-install credential that may authorise issuance; the shared feed token
+  never may. Inference is not proxied. The identity
+  anchor is the onboarding-verified work email, not the Codex login email,
+  because the observed Codex account on the owner Mac is a provisioned address
+  rather than a personal one. Anthropic models need no separate plan; they are
+  already reachable through OpenRouter, which is also the compliant route. It
+  does not authorise AWS, OpenRouter organisation, key-provisioning,
   staff-machine or release actions.
 - 036 before 037: the ten characterisation tests are the acceptance suite for the refactor and must pass with unchanged assertions.
 - 038 before 037: providers look models up through the registry (`by_slug`).
