@@ -30,7 +30,7 @@ class SystemdTests(unittest.TestCase):
             self.addCleanup(patcher.stop)
         _patch_attrs(self, run=self.run_command, self_test=lambda *a: None,
                      write_catalogue=lambda home, *a: (home / 'mixed-models.json').write_text('new'),
-                     wait_idle=lambda *a, **kw: True, wait_version=lambda *a, **kw: True)
+                     wait_version=lambda *a, **kw: True)
 
     def run_command(self, cmd, **kwargs):
         self.calls.append(cmd)
@@ -79,19 +79,6 @@ class SystemdTests(unittest.TestCase):
         self.assertEqual(catalogue.read_text(), 'previous catalogue')
         self.assertEqual(self.calls[-1], ['systemctl', '--user', 'start', install_mod._linux.TIMER])
 
-    def test_busy_legacy_install_keeps_symlink_and_catalogue_untouched(self):
-        self.install('0.6.2.0')
-        current = self.home / 'current'
-        current.unlink()
-        current.symlink_to(self.home / 'releases' / '0.6.2.0')
-        catalogue = (self.home / 'mixed-models.json').read_bytes()
-        self.calls.clear()
-        _patch_attrs(self, wait_idle=lambda *a, **kw: False)
-        self.assertEqual(self.install('0.6.6.0'), 0)
-        self.assertTrue(current.is_symlink())
-        self.assertEqual((self.home / 'mixed-models.json').read_bytes(), catalogue)
-        self.assertFalse(any('restart' in c or 'stop' in c for c in self.calls))
-
     def test_rollback_and_uninstall_use_systemd_and_preserve_home(self):
         self.install('0.6.2.0')
         self.install('0.6.6.0')
@@ -109,15 +96,6 @@ class SystemdTests(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, 'systemd user manager'):
             install_mod.main(args)
         self.assertFalse(self.home.exists())
-
-    def test_operation_lock_prevents_overlapping_writers(self):
-        manager = install_mod.systemd_manager(self.home)
-        with manager.operation():
-            with self.assertRaisesRegex(SystemExit, 'operation is in progress'):
-                with manager.operation():
-                    self.fail('second writer acquired the lock')
-        with manager.operation():
-            pass
 
     def test_scheduled_installer_does_not_stop_its_parent_service(self):
         with mock.patch.dict(os.environ, {'ROUTER_UPDATE_SERVICE': '1'}):

@@ -1,14 +1,17 @@
 {
-  "packaging/install.py": 590,
-  "tests/test_install.py": 500,
+  "packaging/install.py": 670,
+  "tests/test_install.py": 466,
   "codex_router/router.py": 269,
-  "packaging/service.py": 385,
-  "tests/test_install_config.py": 339,
-  "tests/test_install_lifecycle.py": 463,
-  "tests/test_install_catalogue.py": 137,
+  "packaging/service.py": 591,
+  "tests/test_install_config.py": 345,
+  "tests/test_install_lifecycle.py": 476,
+  "tests/test_install_catalogue.py": 138,
   "tests/test_mixed_router.py": 323,
-  "tests/test_interpreter_resolution.py": 189,
+  "tests/test_interpreter_resolution.py": 254,
   "tests/test_probe_harness.py": 349,
   "codex_router/providers.py": 260,
-  "tests/test_setup.py": 301
+  "tests/test_setup.py": 301,
+  "tests/test_launchd.py": 274,
+  "tests/test_update_channel.py": 335,
+  "tools/check_source_limits.py": 30
 }
