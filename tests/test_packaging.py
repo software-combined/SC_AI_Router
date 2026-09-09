@@ -80,7 +80,10 @@ class PackagingTests(unittest.TestCase):
         # both stable launchers plus every module service.py imports.
         for name in ('packaging/router_launch.py', 'packaging/update_launch.py',
                      'packaging/launchd.py', 'packaging/service.py',
-                     'packaging/install.py', 'packaging/updater.py'):
+                     'packaging/install.py', 'packaging/updater.py',
+                     'packaging/platforms/__init__.py',
+                     'packaging/platforms/darwin.py',
+                     'packaging/platforms/linux.py'):
             self.assertIn(name, names, name)
 
     def test_version_is_semver(self):
