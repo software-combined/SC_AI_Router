@@ -31,6 +31,10 @@ _plat_spec = importlib.util.spec_from_file_location(
     'router_platforms', Path(__file__).resolve().parent / 'platforms' / '__init__.py')
 _platforms = importlib.util.module_from_spec(_plat_spec)
 _plat_spec.loader.exec_module(_platforms)
+_cfg_spec = importlib.util.spec_from_file_location(
+    'router_codex_config', Path(__file__).resolve().parent / 'codex_config.py')
+_codex_config = importlib.util.module_from_spec(_cfg_spec)
+_cfg_spec.loader.exec_module(_codex_config)
 _linux = _platforms._linux_mod().systemd
 _upd_spec = importlib.util.spec_from_file_location(
     'router_updater', Path(__file__).resolve().parent / 'updater.py')
@@ -215,54 +219,31 @@ def write_catalogue(home, release_dir, python):
         raise SystemExit('catalogue merge failed')
 
 
-def _preserve_picker_selection(config_path, previous_block, block):
-    """Carry owner-chosen picker lines across managed block rewrites.
+_preserve_picker_selection = _codex_config.preserve_picker_selection
+replace_config_block = _codex_config.replace_config_block
 
-    The installer owns the connection lines (base URL, catalogue) but the
-    owner picks `model` / `model_reasoning_effort` inside the same marked
-    block. A plain rewrite would silently reset that choice on every
-    update, so re-emit those lines from the previous owned block.
+
+def _restore_owned_config(home):
+    """Detach an active client via the single owned remover path.
+
+    Runs the matching tools/disable.py with ROUTER_RESTORE_ONLY=1: exact
+    owned-block plus guidance restore with atomic temp and concurrent-edit
+    checks. The machine result decides; success text alone never passes.
     """
-    if not previous_block:
-        return block
+    disable = Path(__file__).resolve().parents[1] / 'tools' / 'disable.py'
+    result = run([sys.executable, str(disable)], capture_output=True, text=True,
+                 env={**os.environ, 'ROUTER_HOME': str(home),
+                      'ROUTER_RESTORE_ONLY': '1'})
+    print((result.stdout or '')[-2000:])
+    if result.returncode != 0:
+        print((result.stderr or '')[-2000:])
+        raise SystemExit('configuration restore failed; refusing the client change')
+    # The remover restores files but keeps the receipt; a detached client
+    # must not leave a claim to settings it no longer owns.
     try:
-        before = Path(config_path).read_text() if Path(config_path).exists() else ''
-    except OSError:
-        return block
-    if previous_block not in before:
-        return block
-    keep = [line for line in previous_block.splitlines()
-            if line.startswith('model = ') or line.startswith('model_reasoning_effort = ')]
-    if not keep:
-        return block
-    lines = block.splitlines()
-    lines[-1:-1] = keep
-    return '\n'.join(lines) + '\n'
-
-
-def replace_config_block(config_path, block, previous_block=None):
-    """Insert or replace the marked block; refuse hand-edited markers."""
-    config_path = Path(config_path)
-    before = config_path.read_text() if config_path.exists() else ''
-    if previous_block and previous_block in before:
-        if before.count(previous_block) != 1:
-            raise SystemExit('config block was edited by hand; run tools/disable.py first')
-        after = before.replace(previous_block, block, 1)
-    elif '# BEGIN local mixed model picker' in before or '# END local mixed model picker' in before:
-        raise SystemExit('config block was edited by hand; run tools/disable.py first')
-    else:
-        after = block + '\n' + before
-    home = config_path.parent
-    if not config_path.exists():
-        home.mkdir(parents=True, exist_ok=True)
-    fd = os.open(config_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, 'w') as stream:
-        stream.write(after)
-    try:
-        os.chmod(config_path, 0o600)
+        (Path(home) / 'activation.json').unlink()
     except OSError:
         pass
-    return before
 
 
 def do_rollback(args):
@@ -353,6 +334,16 @@ def do_install(args, _fetch=fetch, _run=None):
     # --feed is one-shot: it selects this run's source only. Never pin it,
     # or one local test would freeze every future scheduled update on it.
     state = ensure_state(home)
+    # Absence in legacy state means Codex, not service-only.
+    client = args.client or state.get('client', 'codex')
+    if client not in ('codex', 'none'):
+        raise SystemExit('client must be codex or none')
+    if state.get('client', 'codex') != client:
+        state['client'] = client
+        _write_state(home, state)
+    if args.anthropic_mode is not None and args.anthropic_mode != state.get('anthropic_mode'):
+        state['anthropic_mode'] = args.anthropic_mode
+        _write_state(home, state)
     mode = args.openai_mode or state.get('openai_mode', 'subscription')
     if mode not in ('subscription', 'none'):
         raise SystemExit('openai_mode must be subscription or none')
@@ -415,30 +406,22 @@ def do_install(args, _fetch=fetch, _run=None):
             stop_router(home)
             print('new version failed health check; inspect the service logs')
         raise SystemExit(1)
+    previous_receipt = _codex_config.read_receipt(home)
+    if client == 'none' and previous_receipt.get('inserted_block'):
+        # Never silently detach an active Codex configuration: restore the
+        # exact owned settings first, or refuse when the block was edited.
+        _restore_owned_config(home)
+        previous_receipt = _codex_config.read_receipt(home)
+    if client == 'none':
+        prune_releases(home, latest['version'], previous,
+                       backend.pinned_release(home))
+        if not args.feed:
+            (home / 'feed-serial').write_text(str(serial) + '\n')
+        backend.start_updates(home)
+        print(f"installed {latest['version']}; health ok; service-only, no client changes")
+        return 0
     config_path = Path.home() / '.codex' / 'config.toml'
-    catalog_line = f'model_catalog_json = "{home}/mixed-models.json"\n'
-    block = ('# BEGIN local mixed model picker\n'
-             f'openai_base_url = "http://127.0.0.1:{state["port"]}/{state["token"]}/backend-api/codex"\n'
-             + catalog_line + '# END local mixed model picker\n')
-    if mode == 'none':
-        # No env var: the per-install path token embedded in base_url carries
-        # auth, the same mechanism subscription mode uses in openai_base_url.
-        # Nothing on staff machines provisions SCG_ROUTER_TOKEN, so naming it
-        # here fails closed at the router with a 403. The 043 spike (2026-09-08,
-        # Codex 0.153.4) showed thread+turn reaching the router on a custom
-        # provider with bearer auth; live desktop proof that Codex keeps the
-        # path prefix on a custom provider base_url is still the gate.
-        block = ('# BEGIN local mixed model picker\n'
-                 'model_provider = "scg_router"\n'
-                 + catalog_line +
-                 'approvals_reviewer = "user"\n'
-                 '[model_providers.scg_router]\n'
-                 'name = "SC router"\n'
-                 f'base_url = "http://127.0.0.1:{state["port"]}/{state["token"]}/backend-api/codex"\n'
-                 'wire_api = "responses"\n'
-                 + '# END local mixed model picker\n')
-    receipt_path = home / 'activation.json'
-    previous_receipt = json.loads(receipt_path.read_text()) if receipt_path.exists() else {}
+    block = _codex_config.build_block(home, state, mode)
     block = _preserve_picker_selection(config_path, previous_receipt.get('inserted_block'), block)
     release = current_release_dir(home)
     guidance = runpy.run_path(str(release / 'tools' / 'global_instructions.py'))
@@ -453,15 +436,7 @@ def do_install(args, _fetch=fetch, _run=None):
         pass
     before = replace_config_block(config_path, block, previous_receipt.get('inserted_block'))
     guidance['write'](rules_path, rules_before, rules_after)
-    receipt_path.write_text(json.dumps({'config_path': str(config_path), 'inserted_block': block,
-                                        'global_instructions': rules_receipt,
-                                        'openai_mode': mode,
-                                        'previous_sha256': hashlib.sha256(before.encode()).hexdigest()},
-                                       indent=2) + '\n')
-    try:
-        os.chmod(receipt_path, 0o600)
-    except OSError:
-        pass
+    _codex_config.write_receipt(home, config_path, block, rules_receipt, mode, before)
     if setup_url is not None:
         # Printed as a fallback: the browser should already show this page.
         # It carries the per-install loopback token, so it stays operator-private.
@@ -516,7 +491,25 @@ def do_uninstall(args):
     home = Path(args.home).expanduser()
     backend = platform_backend()
     backend.check(home)
+    # A missing receipt with a managed block still present means manual
+    # interference: fail closed before any release or service decision rather
+    # than orphan the client configuration.
+    config_path = Path.home() / '.codex' / 'config.toml'
+    try:
+        configured = config_path.read_text()
+    except OSError:
+        configured = ''
+    if (_codex_config.read_receipt(home) == {}
+            and (_codex_config.BEGIN in configured or _codex_config.END in configured)):
+        raise SystemExit('managed Codex block present without a receipt; '
+                         'run tools/disable.py first')
     release = current_release_dir(home)
+    if release is not None and _codex_config.read_receipt(home) == {}:
+        # Service-only installation: no client settings were ever touched,
+        # so there is no receipt and no restore to run.
+        backend.uninstall(home)
+        print(f'uninstalled services; {home} left in place for the operator to delete')
+        return 0
     if release is not None:
         # Use this installer's matching remover even after rolling back old code.
         disable = Path(__file__).resolve().parents[1] / 'tools' / 'disable.py'
@@ -524,9 +517,8 @@ def do_uninstall(args):
             result = run([sys.executable, str(disable)], capture_output=True, text=True,
                               env={**os.environ, 'ROUTER_HOME': str(home),
                                    'ROUTER_RESTORE_ONLY': '1'})
-            out = result.stdout or ''
-            print(out[-2000:])
-            if 'OpenAI direct routing restored' not in out:
+            print((result.stdout or '')[-2000:])
+            if result.returncode != 0:
                 print((result.stderr or '')[-2000:])
                 raise SystemExit('configuration restore failed; '
                                  'services left running for manual review')
@@ -551,6 +543,13 @@ def build_parser():
                         help='First-run key window: mint a setup link and open it instead of '
                              'requiring the key up front.')
     parser.add_argument('--openai-mode', default=None)
+    parser.add_argument('--anthropic-mode', default=None,
+                        choices=('subscription', 'none'),
+                        help='Independent Claude subscription choice; '
+                             'unset follows the OpenAI mode as before.')
+    parser.add_argument('--client', default=None, choices=('codex', 'none'),
+                        help='Client to activate (default codex); none leaves '
+                             'all client settings and guidance untouched.')
     return parser
 
 

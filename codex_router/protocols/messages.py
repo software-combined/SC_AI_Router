@@ -11,8 +11,8 @@ class _Policy:
     name = 'messages'
 
     def select_provider(self, model, path, state, mode):
-        del state
-        return claude.select(model, path, mode)
+        return claude.select(model, path, mode,
+                             anthropic_mode=state.get('anthropic_mode'))
 
     def compaction_call(self, provider, model, path, payload):
         del provider, model, path, payload

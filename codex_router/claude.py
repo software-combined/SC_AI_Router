@@ -124,10 +124,12 @@ class ClaudeSubscriptionProvider:
         yield from transport.passthrough(response)
 
 
-def select(model, path, openai_mode='subscription'):
+def select(model, path, openai_mode='subscription', anthropic_mode=None):
     if _is_openrouter_slug(model):
         return ClaudeOpenRouterProvider()
-    if openai_mode == 'none':
+    # Independent subscription choice; missing mode reproduces the legacy
+    # behavior of following openai_mode. Never widened by migration.
+    if (anthropic_mode if anthropic_mode is not None else openai_mode) == 'none':
         raise ValueError('Model is not available without a Claude subscription; '
                          'use an OpenRouter model')
     return ClaudeSubscriptionProvider()

@@ -65,6 +65,9 @@ def _uninstall_home(tmp):
     (rel / 'tools').mkdir(parents=True)
     (rel / 'tools' / 'disable.py').write_text('# stub\n')
     (home / 'current').write_text('1.0.0\n')
+    (home / 'activation.json').write_text(json.dumps(
+        {'config_path': str(Path(tmp) / 'fakehome' / '.codex' / 'config.toml'),
+         'inserted_block': '# BEGIN local mixed model picker\n# END local mixed model picker\n'}))
     agents = Path(tmp) / 'fakehome' / 'Library' / 'LaunchAgents'
     agents.mkdir(parents=True)
     return home, agents
