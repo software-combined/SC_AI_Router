@@ -14,8 +14,15 @@ concurrency:
 
 jobs:
   test:
-    name: Test
-    runs-on: ubuntu-latest
+    name: Test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # Plan 056 Stage 4: guard the platform split on all three targets.
+        # Windows runs the suite only; the install layer skips itself there
+        # until Plan 057 (see tests/_platform.py).
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -24,15 +31,20 @@ jobs:
           python-version: "3.14"
       - run: python -m compileall -q codex_router tools tests packaging
       - run: python tools/check_source_limits.py
-      - run: python -m codex_router.models check || python -m codex_router.models check --offline
+      - name: Model registry check (offline)
+        # Live-model check needs network; offline mode pins the registry
+        # shape deterministically on every runner.
+        run: python -m codex_router.models check --offline
       - name: Catalogue merge check
         run: |
-          python -m codex_router.catalogue --merge /tmp/ci-catalogue.json
-          python -m codex_router.catalogue --check /tmp/ci-catalogue.json
+          python -m codex_router.catalogue --merge ./ci-catalogue.json
+          python -m codex_router.catalogue --check ./ci-catalogue.json
       - run: python -m unittest discover -s tests -t . -v
       - name: No request cap
+        shell: bash
         run: |
           if grep -rEn "request_cap|DEFAULT_REQUEST_CAP" codex_router tools tests packaging ; then echo "request cap removed by decision (docs/operations.md); do not reintroduce"; exit 1; fi
       - name: Secrets scan
+        shell: bash
         run: |
           if grep -rEn "sk-or-v1-[A-Za-z0-9]{20,}|Bearer [A-Za-z0-9._-]{30,}" --include='*.py' --include='*.md' --include='*.json' --include='*.toml' . ; then echo "possible secret committed"; exit 1; fi
