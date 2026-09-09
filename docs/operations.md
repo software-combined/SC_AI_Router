@@ -35,12 +35,12 @@ the bad one), or pin one machine with
 restores the old pointer automatically when the new release fails its
 health check.
 
-A release before 0.6.8 recorded a `--feed` install's own build number in
+A release before 0.6.9 recorded a `--feed` install's own build number in
 `<home>/feed-serial`, so a local build could leave a number the published
 feed has not reached. Every scheduled check then refuses the real feed with
 `stale feed serial N is older than M`. Delete `<home>/feed-serial` to clear
 it; the next unpinned update records the channel's own serial. Installs from
-0.6.8 on leave that file alone.
+0.6.9 on leave that file alone.
 
 ## Safe update, restart, reinstall
 
