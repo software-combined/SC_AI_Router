@@ -42,6 +42,24 @@ def _write_disk(key, defs):
         pass  # The memory entry still serves this process.
 
 
+def _stamp_after(path, latest):
+    """Set path's mtime strictly past `latest`, surviving filesystem rounding.
+
+    Windows FILETIME has 100 ns granularity and truncates the written value on
+    readback, so a +1 ns bump ties with the sibling instead of ordering after
+    it. Step past `latest`, confirm the stored value actually moved, and widen
+    the step for any filesystem that rounds harder."""
+    step = 1000
+    for _ in range(20):
+        target = latest + step
+        os.utime(path, ns=(target, target))
+        stored = path.stat().st_mtime_ns
+        if stored > latest:
+            return stored
+        step *= 8
+    return latest + step  # unreachable in practice; keep strict ordering
+
+
 def _stamp_and_prune(directory, newest, limit):
     """Order by insertion, not the clock: stamp the new file past every
     sibling so rapid successive compactions still evict oldest-first."""
@@ -51,8 +69,8 @@ def _stamp_and_prune(directory, newest, limit):
         return
     try:
         latest = max(ns for ns, p in entries if p != newest)
-        os.utime(newest, ns=(latest + 1, latest + 1))
-        entries = [(latest + 1 if p == newest else ns, p) for ns, p in entries]
+        stamped = _stamp_after(newest, latest)
+        entries = [(stamped if p == newest else ns, p) for ns, p in entries]
     except (OSError, ValueError):
         pass
     entries.sort()

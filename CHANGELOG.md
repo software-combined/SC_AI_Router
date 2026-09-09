@@ -32,6 +32,17 @@
   failed upgrade, and retain the updater's ETag when a child installer defers.
 - Download this private repository's release assets through the user's
   authenticated GitHub CLI, including scheduled checks.
+- Make the cross-platform pieces work on Windows so `python -m unittest
+  discover` runs green there. The discovered-tools cache stamped each new file
+  one nanosecond past its siblings to order eviction by insertion, but Windows
+  FILETIME truncates that bump on readback, tying timestamps and evicting the
+  wrong entries; it now steps past the sibling by an amount it confirms
+  survives readback. Release bundles and the source-limit checker build member
+  and baseline paths with POSIX separators (`as_posix`) instead of the host
+  separator, and the stable launcher reads its pointer file as UTF-8. The
+  install, update and service suites (macOS launchd / Linux systemd, which have
+  no Windows equivalent) and a few POSIX-permission assertions are skipped on
+  Windows only; they still run in full on macOS and Linux.
 
 ## 0.6.6
 

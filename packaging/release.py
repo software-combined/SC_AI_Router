@@ -19,10 +19,10 @@ REPO = 'software-combined/SC_OpenRouter_adapter'
 
 def bundle_files(root):
     return (
-        sorted(str(p.relative_to(root)) for p in (root / 'codex_router').rglob('*.py'))
-        + sorted(str(p.relative_to(root)) for p in (root / 'codex_router').glob('*.txt'))
-        + sorted(str(p.relative_to(root)) for p in (root / 'codex_router').glob('*.json'))
-        + sorted(str(p.relative_to(root)) for p in (root / 'tools').glob('*.py'))
+        sorted(p.relative_to(root).as_posix() for p in (root / 'codex_router').rglob('*.py'))
+        + sorted(p.relative_to(root).as_posix() for p in (root / 'codex_router').glob('*.txt'))
+        + sorted(p.relative_to(root).as_posix() for p in (root / 'codex_router').glob('*.json'))
+        + sorted(p.relative_to(root).as_posix() for p in (root / 'tools').glob('*.py'))
         + ['packaging/VERSION', 'packaging/install.py', 'packaging/router_launch.py',
            'packaging/service.py', 'packaging/systemd.py']
     )
