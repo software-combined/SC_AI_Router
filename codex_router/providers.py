@@ -92,6 +92,9 @@ class OpenRouterProvider:
     def prepare(self, model, path, payload, raw_body, headers, credentials):
         if path not in ('/responses', '/responses/compact'):
             raise PreparationError('OpenRouter supports responses only')
+        # Scrub before prepare_tools: fragments KeyError its indexing, and
+        # tool_search_output items (released-tool discovery) are never scrubbed.
+        payload['input'] = comp.scrub_tool_fragments(payload.get('input', []))
         try:
             tool_names = prepare_tools(payload)
         except ValueError as exc:

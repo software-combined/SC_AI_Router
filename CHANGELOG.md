@@ -26,6 +26,10 @@
   The thread effort carries over, and an effort the new model does not
   support (for example carried max onto Contributor) is rejected with
   the allowed levels instead of failing opaquely upstream.
+- Scrub incomplete tool history before forwarding: partial calls and
+  orphan outputs left by interrupted turns are dropped from replayed
+  history instead of failing the whole turn with an upstream 400.
+  Complete call pairs pass through untouched, on every model.
 - Reject OpenRouter requests whose estimated input plus reserved output
   would exceed the model's context window (409 with an actionable message)
   instead of forwarding a doomed turn that the endpoint 400s outright.
