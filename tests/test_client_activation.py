@@ -294,7 +294,10 @@ class ServiceOnlyTests(unittest.TestCase):
                 if agents.exists():
                     self.assertNotIn('codex-model-router', agents.read_text())
 
-    def test_codex_detach_preserves_sibling_attachment(self):
+    def test_codex_reinstall_never_silently_detaches_claude(self):
+        # Plan 049: setup attaches selected clients and never silently
+        # detaches an already attached one. A codex reinstall keeps the
+        # Claude settings and claim untouched.
         # A sibling client attachment survives the codex detach: only the
         # codex entry is forgotten and the receipt file remains.
         with tempfile.TemporaryDirectory() as tmp:
@@ -302,14 +305,37 @@ class ServiceOnlyTests(unittest.TestCase):
             config, _, _, _ = _install(self, tmp, home, '1.0.0')
             receipt = json.loads((home / 'activation.json').read_text())
             block = receipt['clients']['codex']['inserted_block']
-            receipt['clients']['claude'] = {'config_path': '/c/settings.json',
-                                            'inserted_block': 'claude-block'}
-            (home / 'activation.json').write_text(json.dumps(receipt))
+            claude_settings = Path(tmp) / 'claude-settings.json'
+            claude_settings.write_text(json.dumps({'env': {}}))
+            install_mod.attach_claude(home, json.loads(
+                (home / 'mixed-router-state.json').read_text()),
+                settings_path=claude_settings)
+            config2, _, _, _ = _install(self, tmp, home, '1.0.1')
+            self.assertEqual(config2, config)
+            kept = json.loads((home / 'activation.json').read_text())
+            self.assertEqual(set(kept['clients']), {'codex', 'claude'})
+            claude_doc = json.loads(claude_settings.read_text())
+            self.assertIn('ANTHROPIC_BASE_URL', claude_doc.get('env', {}))
+
+    def test_service_only_detaches_all_attachments(self):
+        # Explicit service-only drops every attachment and restores owned
+        # settings, leaving a never-attached-shaped home.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            config, _, _, _ = _install(self, tmp, home, '1.0.0')
+            receipt = json.loads((home / 'activation.json').read_text())
+            block = receipt['clients']['codex']['inserted_block']
+            claude_settings = Path(tmp) / 'claude-settings.json'
+            claude_settings.write_text(json.dumps({'env': {}}))
+            install_mod.attach_claude(home, json.loads(
+                (home / 'mixed-router-state.json').read_text()),
+                settings_path=claude_settings)
             rc, _, _ = self._install_service_only(self, tmp, home, '1.0.1')
             self.assertEqual(rc, 0)
             self.assertNotIn(block, config.read_text())
-            kept = json.loads((home / 'activation.json').read_text())
-            self.assertEqual(set(kept['clients']), {'claude'})
+            self.assertFalse((home / 'activation.json').exists())
+            claude_doc = json.loads(claude_settings.read_text())
+            self.assertNotIn('ANTHROPIC_BASE_URL', claude_doc.get('env', {}))
 
     def test_codex_to_none_refuses_edited_block(self):
         with tempfile.TemporaryDirectory() as tmp:

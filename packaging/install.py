@@ -35,6 +35,10 @@ _cfg_spec = importlib.util.spec_from_file_location(
     'router_codex_config', Path(__file__).resolve().parent / 'codex_config.py')
 _codex_config = importlib.util.module_from_spec(_cfg_spec)
 _cfg_spec.loader.exec_module(_codex_config)
+_claude_spec = importlib.util.spec_from_file_location(
+    'router_claude_config', Path(__file__).resolve().parent / 'claude_config.py')
+_claude_config = importlib.util.module_from_spec(_claude_spec)
+_claude_spec.loader.exec_module(_claude_config)
 _diag_spec = importlib.util.spec_from_file_location(
     'router_diagnostics', Path(__file__).resolve().parent / 'diagnostics.py')
 _diag = importlib.util.module_from_spec(_diag_spec)
@@ -361,6 +365,30 @@ def do_install(args, _fetch=fetch, _run=None):
     if state.get('client', 'codex') != client:
         state['client'] = client
         _write_state(home, state)
+    # --clients selects attachments; --client none stays service-only.
+    # Unset means the legacy Codex-only path below. `both` keeps the Codex
+    # attach and adds Claude; `claude` attaches Claude without touching
+    # Codex settings.
+    clients = args.clients
+    if clients is None and client == 'none':
+        clients = 'none'
+    if clients is None:
+        clients = 'codex'
+    if clients not in ('codex', 'claude', 'both', 'none'):
+        raise SystemExit('clients must be codex, claude, both, or none')
+    if client == 'none' and clients != 'none':
+        raise SystemExit('--client none conflicts with --clients %s' % clients)
+    if args.client == 'codex' and args.clients == 'claude':
+        raise SystemExit('--client codex conflicts with --clients claude: '
+                         'use --clients both to keep the Codex attachment')
+    claude_mode = args.claude_mode
+    if claude_mode is None:
+        claude_mode = state.get('claude_mode', state.get('anthropic_mode', 'subscription'))
+    if claude_mode not in ('subscription', 'none'):
+        raise SystemExit('claude_mode must be subscription or none')
+    if state.get('claude_mode') != claude_mode:
+        state['claude_mode'] = claude_mode
+        _write_state(home, state)
     if args.anthropic_mode is not None and args.anthropic_mode != state.get('anthropic_mode'):
         state['anthropic_mode'] = args.anthropic_mode
         _write_state(home, state)
@@ -427,18 +455,34 @@ def do_install(args, _fetch=fetch, _run=None):
             print('new version failed health check; inspect the service logs')
         raise SystemExit(1)
     previous_receipt = _codex_config.codex_attachment(home)
-    if client == 'none' and previous_receipt.get('inserted_block'):
+    if clients == 'none' and previous_receipt.get('inserted_block'):
         # Never silently detach an active Codex configuration: restore the
         # exact owned settings first, or refuse when the block was edited.
         _restore_owned_config(home)
         previous_receipt = _codex_config.codex_attachment(home)
-    if client == 'none':
+    if clients == 'none' and _codex_config.read_receipt(home).get('clients', {}).get('claude'):
+        detach_claude(home)
+    if clients == 'none':
         prune_releases(home, latest['version'], previous,
                        backend.pinned_release(home))
         if not args.feed:
             (home / 'feed-serial').write_text(str(serial) + '\n')
         backend.start_updates(home)
         print(f"installed {latest['version']}; health ok; service-only, no client changes")
+        return 0
+    if claude_mode == 'none' and clients in ('claude', 'both'):
+        raise SystemExit('claude_mode is none: re-run with --claude-mode subscription '
+                         'to attach Claude Code, or select --clients codex')
+    if clients in ('claude', 'both'):
+        attach_claude(home, state)
+    # A selection without Claude never silently detaches it: only an
+    # explicit service-only install or uninstall drops attachments.
+    if clients == 'claude':
+        # Claude-only: the shared service is up; Codex settings untouched.
+        if not args.feed:
+            (home / 'feed-serial').write_text(str(serial) + '\n')
+        backend.start_updates(home)
+        print(f"installed {latest['version']}; health ok; Claude Code attached")
         return 0
     config_path = Path.home() / '.codex' / 'config.toml'
     block = _codex_config.build_block(home, state, mode)
@@ -474,6 +518,16 @@ def do_install(args, _fetch=fetch, _run=None):
     backend.start_updates(home)
     print(f"installed {latest['version']}; health ok; restart Codex to load the router")
     return 0
+
+
+def attach_claude(home, state, settings_path=None, env=None):
+    return _claude_config.attach(home, state, _codex_config,
+                                 settings_path_override=settings_path, env=env)
+
+
+def detach_claude(home, settings_path=None, env=None):
+    return _claude_config.detach(home, _codex_config,
+                                 settings_path_override=settings_path, env=env)
 
 
 def _release_key(name):
@@ -525,7 +579,12 @@ def do_uninstall(args):
         raise SystemExit('managed Codex block present without a receipt; '
                          'run tools/disable.py first')
     release = current_release_dir(home)
-    if release is not None and attached == {}:
+    claude_attached = bool(_codex_config.read_receipt(home).get('clients', {}).get('claude'))
+    if claude_attached:
+        # Claude-only or leftover attachment: restore its settings before
+        # any early return, or uninstall would orphan its loopback routing.
+        detach_claude(home)
+    if release is not None and attached == {} and not claude_attached:
         # Service-only installation: no client settings were ever touched,
         # so there is no receipt and no restore to run.
         backend.uninstall(home)
@@ -543,6 +602,8 @@ def do_uninstall(args):
                 print((result.stderr or '')[-2000:])
                 raise SystemExit('configuration restore failed; '
                                  'services left running for manual review')
+    if _codex_config.read_receipt(home).get('clients', {}).get('claude'):
+        detach_claude(home)
     backend.uninstall(home)
     print(f'uninstalled services; {home} left in place for the operator to delete')
     return 0
@@ -587,6 +648,13 @@ def build_parser():
     parser.add_argument('--client', default=None, choices=('codex', 'none'),
                         help='Client to activate (default codex); none leaves '
                              'all client settings and guidance untouched.')
+    parser.add_argument('--clients', default=None, choices=('codex', 'claude', 'both'),
+                        help='Clients to attach (default codex); both attaches '
+                             'Codex and Claude Code.')
+    parser.add_argument('--claude-mode', default=None,
+                        choices=('subscription', 'none'),
+                        help='Independent Claude subscription choice; '
+                             'unset follows the Anthropic mode as before.')
     return parser
 
 

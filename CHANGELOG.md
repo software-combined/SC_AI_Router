@@ -2,6 +2,13 @@
 
 ## 0.6.10 (unreleased)
 
+- Attach Claude Code without touching Codex: new `--clients
+  claude|both` merges only the two owned `env` settings into the
+  user's `settings.json` with conflict refusal and receipt record,
+  plus validated `scg-openrouter` plugin manifests and a shared
+  `manage-router` skill driving the canonical installer (offline
+  proofs; staff-surface acceptance still pending).
+
 - Read installer state without touching it: new `--status [--json]`
   prints installed version, service state, attached clients, and
   key-present/usable booleans with no secret-bearing values. The

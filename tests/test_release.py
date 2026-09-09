@@ -74,6 +74,7 @@ class ReleaseTests(unittest.TestCase):
                     'packaging/service.py',
                     'packaging/updater.py',
                     'packaging/codex_config.py',
+                    'packaging/claude_config.py',
                     'packaging/diagnostics.py',
                      'packaging/runtime.lock', 'packaging/runtime_lock.py',
                     'packaging/platforms/__init__.py',
