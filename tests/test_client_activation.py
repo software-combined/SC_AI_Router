@@ -174,6 +174,7 @@ if __name__ == '__main__':
     unittest.main()
 
 
+@unix_only
 class ServiceOnlyTests(unittest.TestCase):
     def _install_service_only(self, test, tmp, home, version, *extra):
         from tests.test_install import _craft_bundle, _static_fetch
@@ -358,6 +359,7 @@ class ServiceOnlyTests(unittest.TestCase):
             self.assertFalse(home.exists())
 
 
+@unix_only
 class SubscriptionModeTests(unittest.TestCase):
     def test_all_four_mode_combinations(self):
         from tests.fakes import FakeUpstream, install_fake

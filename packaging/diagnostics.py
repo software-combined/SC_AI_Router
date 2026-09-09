@@ -41,6 +41,31 @@ _SEAM_NAMES = {'feed_url': 'FEED_URL', 'route_prefix': 'github_route_prefix',
                'codex_config': '_codex_config'}
 
 
+_winacl_spec = importlib.util.spec_from_file_location(
+    'router_winacl', Path(__file__).resolve().parents[1] / 'codex_router' / 'winacl.py')
+_winacl = importlib.util.module_from_spec(_winacl_spec)
+_winacl_spec.loader.exec_module(_winacl)
+
+
+def _key_private(key_file):
+    """Owner-only gate mirroring credentials.openrouter_key() precedence.
+
+    POSIX checks mode bits; Windows defers to the icacls owner-only check
+    (st_mode carries no ACL meaning on NTFS). A failed Windows check means
+    not usable, never an exception: this is read-only diagnostics.
+    """
+    if os.name == 'nt':
+        try:
+            _winacl.check(key_file)
+            return True
+        except SystemExit:
+            return False
+    try:
+        return not (key_file.stat().st_mode & 0o077)
+    except OSError:
+        return False
+
+
 def bind(**overrides):
     for name, value in overrides.items():
         if name not in ('find_python', 'health', 'current_version',
@@ -125,10 +150,7 @@ def do_status(args):
         key_text = key_file.read_text() if key_exists else ''
     except OSError:
         key_text = ''
-    try:
-        key_private = key_exists and not (key_file.stat().st_mode & 0o077)
-    except OSError:
-        key_private = False
+    key_private = _key_private(key_file) if key_exists else False
     auth_path = (state or {}).get('opencode_auth') if isinstance(state, dict) else None
     auth_key = ''
     if isinstance(auth_path, str) and auth_path:
