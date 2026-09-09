@@ -2,6 +2,11 @@
 
 ## 0.6.10 (unreleased)
 
+- Separate HTTP transport from wire-protocol policy: shared `Prepared`,
+  hop-header, stream, and header-relay leaves move to `transport.py`, and
+  the handler dispatches through an explicit `protocols/` method/path
+  table instead of client-specific branches. On-wire behavior is unchanged.
+
 - Refuse unreadable encrypted agent briefs before dispatch: an
   `agent_message` carrying an encrypted block now fails closed with a
   content-free preparation error instead of forwarding opacity a child

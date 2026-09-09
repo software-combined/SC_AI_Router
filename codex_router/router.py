@@ -11,7 +11,8 @@ import traceback
 from compression import zstd
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from .credentials import Credentials
-from . import claude, errors, local_services, providers, setup
+from . import claude, errors, local_services, providers, setup, transport
+from .protocols import owned_paths, select as select_protocol
 from .errors import InvalidSize, PreparationError
 from .providers import NATIVE_SERVICE_PATHS
 from .runtime import MAX_BODY, ROUTER_HOME, VERSION, log_event
@@ -168,7 +169,7 @@ class Handler(BaseHTTPRequestHandler):
             # Non-daemon like the SIGTERM path, or teardown kills the drain.
             threading.Thread(target=self.server.drain_and_exit, daemon=False).start()
             return self.send_json(200, {'status': 'draining'})
-        if path not in NATIVE_SERVICE_PATHS | {'/responses', '/responses/compact'} | claude.CLAUDE_PATHS:
+        if path not in owned_paths():
             if path.startswith('/setup/'):
                 return setup.serve(self, path[len('/setup/'):], True)
             return self.error(errors.unsupported_route())
@@ -179,14 +180,13 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(model, str) and path not in NATIVE_SERVICE_PATHS:
                 return self.error(errors.missing_model())
             mode = self.server.state.get('openai_mode', 'subscription')
-            if path in claude.CLAUDE_PATHS:
-                provider = claude.select(model, path, mode)
-            else:
-                provider = providers.select(
-                    model, path, self.server.state.get('openai_models', []), mode)
+            policy = select_protocol(self.command, path)
+            if policy is None:
+                return self.error(errors.unsupported_route())
+            provider = policy.select_provider(model, path, self.server.state, mode)
             if provider.name in ('openai-subscription', 'anthropic-subscription') and not via_path:
                 return self.error(errors.bearer_for_no_subscription_only())
-            compact_call = providers.compaction_call(provider, model, path, payload)
+            compact_call = policy.compaction_call(provider, model, path, payload)
             if compact_call is not None:
                 # Compact before prepare(): a rejected effort must not block it.
                 # Hold an inflight slot so drain waits for mid-compaction
@@ -293,7 +293,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self.error(errors.upstream_described(message) if status == 502
                                       else errors.preparation(message))
                 self.send_response(response.status)
-                providers.relay_headers(response, self.send_header, metrics.get('model'))
+                transport.relay_headers(response, self.send_header, metrics.get('model'))
                 self.send_header('Connection', 'close')
                 self.end_headers()
                 self.wfile.write(raw)
@@ -302,7 +302,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             metrics['upstream_headers_ms'] = round((time.monotonic() - started) * 1000, 1)
             self.send_response(response.status)
-            providers.relay_headers(response, self.send_header, metrics.get('model'))
+            transport.relay_headers(response, self.send_header, metrics.get('model'))
             self.send_header('Connection', 'close')
             self.end_headers()
             sent = True
