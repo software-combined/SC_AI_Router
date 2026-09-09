@@ -69,8 +69,7 @@ def _args(home, *extra_args):
 def _setup(test, tmp):
     home = Path(tmp) / 'home'
     version, fake_fetch, _blob, _manifest = _release_bundle(tmp)
-    _patch_attrs(test, health=lambda state, timeout=20: {'status': 'ok', 'version': version},
-                 wait_idle=lambda *args, **kwargs: True)
+    _patch_attrs(test, health=lambda state, timeout=20: {'status': 'ok', 'version': version})
     return home, version, fake_fetch
 
 

@@ -6,6 +6,7 @@ ExitTimeOut 150 on the main plist, restart_service bootstraps the updater
 only when missing, render_update_plist takes no feed (one-shot --feed).
 Runs on Python 3.9+ like the installer.
 """
+import contextlib
 import io
 import json
 import os
@@ -20,9 +21,30 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+try:                      # POSIX advisory locking
+    import fcntl
+except ImportError:       # pragma: no cover - Windows
+    fcntl = None
+try:                      # Windows advisory locking
+    import msvcrt
+except ImportError:       # pragma: no cover - POSIX
+    msvcrt = None
+
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from codex_router import feed_verify  # noqa: E402  (3.9-safe, no router import)
+
+import importlib.util  # noqa: E402
+_ld_spec = importlib.util.spec_from_file_location(
+    'router_launchd', Path(__file__).resolve().parent / 'launchd.py')
+_launchd = importlib.util.module_from_spec(_ld_spec)
+_ld_spec.loader.exec_module(_launchd)
+
+# Patchable seam so tests never sleep through a real launchd settle window.
+_sleep = time.sleep
+# Bounded by the router drain deadline (ExitTimeOut 150 on the main plist).
+UNLOAD_TIMEOUT_S = 180
+LOAD_TIMEOUT_S = 60
 
 # Subscription-side roster for the combined picker: bare slugs that route on
 # the ChatGPT subscription. Matches the live picker and state file; the
@@ -190,9 +212,12 @@ def render_plist(python, home, state):
 
 def render_update_plist(python, home):
     python = _require_absolute(python)
-    base = current_release_dir(home) or home / 'current'
-    installer = base / 'packaging' / 'install.py'
-    args = [python, str(installer), '--check-update', '--home', str(home)]
+    # The stable home launcher, never a per-release install.py path. launchd
+    # keeps running its in-memory copy of a loaded plist, so a versioned path
+    # outlives the release it names: after a prune the updater keeps firing a
+    # deleted or obsolete installer every 15 minutes. update_launch.py
+    # resolves `current` at exec time instead, exactly like router_launch.py.
+    args = [python, str(home / 'update_launch.py')]
     return {'Label': UPDATE_LABEL,
             'ProgramArguments': args,
             'RunAtLoad': True,
@@ -234,27 +259,6 @@ def wait_version(state, version, timeout=150, fetch_health=None):
     return None
 
 
-def wait_idle(state, timeout=600, fetch_health=None):
-    """True once inflight reads 0 three polls apart; False on timeout.
-
-    A dead router (health None) counts as idle: no live traffic to
-    protect, and the install must proceed to heal it. Only observed
-    inflight > 0 defers.
-    """
-    good = 0
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        body = fetch_health(state) if fetch_health else health(state, timeout=5)
-        if body is None or body.get('inflight') == 0:
-            good += 1
-            if good >= 3:
-                return True
-        else:
-            good = 0
-        time.sleep(1)
-    return False
-
-
 def fetch_feed(url, etag, _fetch=fetch):
     """Read a feed document, revalidating with a saved ETag. Returns (status, body, etag)."""
     if url.startswith('file://') or url.startswith(RELEASES_PREFIX):
@@ -269,56 +273,258 @@ def fetch_feed(url, etag, _fetch=fetch):
         raise
 
 
-def restart_service(uid):
-    # Fresh install only: no live service to preserve.
-    run(['launchctl', 'bootout', f'gui/{uid}/{LABEL}'], capture_output=True)
-    agents = Path.home() / 'Library' / 'LaunchAgents'
-    run(['launchctl', 'bootstrap', f'gui/{uid}', str(agents / (LABEL + '.plist'))], check=True)
-    loaded = run(['launchctl', 'print', f'gui/{uid}/{UPDATE_LABEL}'],
-                   capture_output=True)
-    if loaded.returncode != 0:
-        run(['launchctl', 'bootstrap', f'gui/{uid}', str(agents / (UPDATE_LABEL + '.plist'))],
-            check=True)
+def _agents(agents=None):
+    return Path(agents) if agents else Path.home() / 'Library' / 'LaunchAgents'
 
 
-def main_plist_exe(agents=None):
-    """Installed main plist's ProgramArguments[0], or None when unreadable."""
-    try:
-        doc = plistlib.loads(((agents or Path.home() / 'Library' / 'LaunchAgents')
-                              / (LABEL + '.plist')).read_bytes())
-        return doc['ProgramArguments'][0]
-    except (OSError, ValueError, KeyError, IndexError, TypeError):
-        return None
+@contextlib.contextmanager
+def install_lock(home):
+    """Serialise installs on one router home. Yields False when one is running.
 
-
-def reload_main_service(uid):
-    """bootout+bootstrap the main agent only (legacy bare-python repair).
-
-    Rewriting a loaded plist does not update launchd's in-memory copy;
-    only a reload picks up the absolute interpreter. The updater is never
-    touched here. Raises SystemExit when the agent fails to load again.
+    The scheduled updater and a manual run fire independently, and both swap
+    `current`, rewrite both plists and reload the same launchd label. The lock
+    is advisory and held on an open descriptor, so the OS releases it when the
+    holder exits and a killed installer never leaves one behind for an
+    operator to clear.
     """
-    agents = Path.home() / 'Library' / 'LaunchAgents'
-    run(['launchctl', 'bootout', f'gui/{uid}/{LABEL}'], capture_output=True)
-    loaded = run(['launchctl', 'bootstrap', f'gui/{uid}', str(agents / (LABEL + '.plist'))],
-                 capture_output=True)
-    if loaded.returncode != 0:
-        raise SystemExit(f'bootstrap failed for {LABEL}')
-
-
-def install_launcher(home, release_dir):
-    """Copy the stable entry point beside the state directory, atomically."""
+    path = Path(home)
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    # Note: callers that must not write (--dry-run) skip the lock entirely.
+    if fcntl is None and msvcrt is None:  # pragma: no cover - neither platform
+        print('warning: no advisory file locking here; concurrent installs '
+              'are not serialised')
+        yield True
+        return
+    handle = os.open(path / 'install.lock', os.O_RDWR | os.O_CREAT, 0o600)
     try:
-        blob = (release_dir / 'packaging' / 'router_launch.py').read_bytes()
+        try:
+            if fcntl is not None:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            else:
+                msvcrt.locking(handle, msvcrt.LK_NBLCK, 1)
+        except OSError:
+            yield False
+            return
+        yield True
+    finally:
+        os.close(handle)
+
+
+def restart_service(uid, agents=None):
+    # First install: a reload rather than a plain load, because "no previous
+    # release" does not prove no job is loaded -- a half-finished earlier
+    # attempt can leave one behind running a release that is now gone.
+    agents = _agents(agents)
+    if not _launchd.reload_job(run, uid, LABEL, agents=agents,
+                               unload_timeout=UNLOAD_TIMEOUT_S,
+                               load_timeout=LOAD_TIMEOUT_S, sleep=_sleep):
+        raise SystemExit(f'bootstrap failed for {LABEL}')
+    if not _launchd.load(run, uid, UPDATE_LABEL, agents=agents,
+                         timeout=LOAD_TIMEOUT_S, sleep=_sleep):
+        raise SystemExit(f'bootstrap failed for {UPDATE_LABEL}')
+
+
+def same_interpreter(left, right):
+    """True when two paths name the same interpreter binary.
+
+    `/opt/homebrew/bin/python3.14` and
+    `/opt/homebrew/opt/python@3.14/bin/python3.14` are one binary reached by
+    two symlink spellings. A string compare calls them different and forces
+    the destructive reload path on a run that only needed a TERM handover.
+    """
+    if not left or not right:
+        return False
+    try:
+        return os.path.realpath(left) == os.path.realpath(right)
     except OSError:
-        raise SystemExit('bundle has no launcher')
-    tmp = home / 'router_launch.tmp'
+        return left == right
+
+
+def command_matches(loaded, rendered):
+    """True when launchd's loaded command is the one we intend to run.
+
+    argv[0] is compared by resolved path because two symlink spellings name
+    one interpreter; every later argument must match exactly, so a changed
+    launcher path is never mistaken for no change at all.
+    """
+    if not loaded or not rendered or len(loaded) != len(rendered):
+        return False
+    if not same_interpreter(loaded[0], rendered[0]):
+        return False
+    return list(loaded[1:]) == list(rendered[1:])
+
+
+def running_under(label):
+    """True when this process is inside the launchd job for `label`.
+
+    launchd stamps XPC_SERVICE_NAME into the job's environment and children
+    inherit it, so the scheduled updater's own installer can tell that
+    booting out that label would kill the process issuing the bootout.
+    """
+    return os.environ.get('XPC_SERVICE_NAME') == label
+
+
+def plist_differs(path, content):
+    """True when the plist on disk does not already say exactly this."""
+    try:
+        return plistlib.loads(Path(path).read_bytes()) != content
+    except (OSError, ValueError):
+        return True
+
+
+def main_plist_needs_reload(uid, python, home, state, agents=None):
+    """True when launchd is running something other than what we will write.
+
+    Compared against launchd's in-memory program rather than the file: a
+    previous failed run may already have rewritten the plist while the loaded
+    job kept the old command.
+    """
+    agents = _agents(agents)
+    rendered = render_plist(python, home, state)
+    loaded = _launchd.loaded_command(run, uid, LABEL)
+    if loaded is None or not command_matches(loaded, rendered['ProgramArguments']):
+        return True
+    # Catches everything launchd owns that is not argv, the port above all.
+    return plist_differs(agents / (LABEL + '.plist'), rendered)
+
+
+def ensure_updater(uid, python, home, agents=None):
+    """Keep the scheduled updater loaded and running the current command.
+
+    Writing the file is not enough: launchd adopts a rewritten plist only on
+    reload, which is how the updater kept invoking an installer from a release
+    that had already been pruned.
+
+    But the scheduled updater is what runs this installer, so a bootout here
+    would kill the process issuing it and leave the job unloaded with no
+    bootstrap -- the same silent-loss failure this release fixes for the
+    router. When this run *is* that job, the rewritten file is left for the
+    next manual install or login to adopt; the plist now names a
+    release-independent launcher, so one adoption is final.
+    """
+    agents = _agents(agents)
+    rendered = render_update_plist(python, home)['ProgramArguments']
+    loaded = _launchd.loaded_command(run, uid, UPDATE_LABEL)
+    if loaded is None:
+        return _launchd.load(run, uid, UPDATE_LABEL, agents=agents,
+                             timeout=LOAD_TIMEOUT_S, sleep=_sleep)
+    if command_matches(loaded, rendered):
+        return True
+    if running_under(UPDATE_LABEL):
+        print('scheduled updater command changed; adopting it needs a reload '
+              'from outside its own job, so the next manual install or login '
+              'will pick it up')
+        return True
+    return _launchd.reload_job(run, uid, UPDATE_LABEL, agents=agents,
+                               unload_timeout=UNLOAD_TIMEOUT_S,
+                               load_timeout=LOAD_TIMEOUT_S, sleep=_sleep)
+
+
+def _read_failures(home):
+    """State document plus its failure map; (None, {}) when unreadable.
+
+    Always read fresh here rather than reusing a copy taken earlier in the
+    run: the child installer writes the same file, and merging onto a stale
+    copy would drop its changes.
+    """
+    try:
+        state = json.loads((home / 'mixed-router-state.json').read_text())
+    except (OSError, ValueError):
+        return None, {}
+    failures = state.get('update_failures')
+    return state, dict(failures) if isinstance(failures, dict) else {}
+
+
+def update_failures(home):
+    """Failed attempts per version; {} when none are recorded."""
+    return _read_failures(home)[1]
+
+
+def record_update_failure(home, version):
+    """Count a failed attempt at one version; returns the new count."""
+    state, failures = _read_failures(home)
+    if state is None:
+        return 0
+    failures[version] = failures.get(version, 0) + 1
+    state['update_failures'] = failures
+    _write_state(home, state)
+    return failures[version]
+
+
+def clear_update_failures(home, version):
+    state, failures = _read_failures(home)
+    if state is None or version not in failures:
+        return
+    del failures[version]
+    state['update_failures'] = failures
+    _write_state(home, state)
+
+def loaded_updater_release(uid, home):
+    """Release name inside launchd's loaded updater command, or None.
+
+    Before this release the updater plist named a per-release installer, and
+    launchd runs the command it loaded until the job is reloaded -- which a
+    scheduled run deliberately defers, because it cannot bootout its own job.
+    Pruning that release would leave the updater firing a missing file.
+    """
+    prefix = str(Path(home) / 'releases') + os.sep
+    for token in (_launchd.loaded_command(run, uid, UPDATE_LABEL) or [])[1:]:
+        if token.startswith(prefix):
+            return token[len(prefix):].split(os.sep)[0] or None
+    return None
+
+
+def ensure_serving(uid, home, state, agents=None, timeout=180, version=None):
+    """Guarantee a loaded main job that answers /health; returns the body.
+
+    The installer's last act on every path, success or rollback. A pointer
+    swap plus `launchctl kill TERM` cannot recover a machine whose job is not
+    loaded, because KeepAlive has nothing to keep alive -- and that is exactly
+    the state a failed reload leaves behind.
+    """
+    _launchd.load(run, uid, LABEL, agents=_agents(agents),
+                  timeout=LOAD_TIMEOUT_S, sleep=_sleep)
+    if version is not None:
+        return wait_version(state, version, timeout=timeout)
+    return health(state, timeout=timeout)
+
+
+def reload_main_service(uid, agents=None):
+    """Make launchd adopt the rewritten main plist. True when loaded again.
+
+    Rewriting a loaded plist does not update launchd's in-memory copy; only a
+    reload picks up a changed interpreter or port. The updater is never
+    touched here. Returns False rather than raising so the caller can roll
+    back and then restore service on the previous release.
+    """
+    return _launchd.reload_job(run, uid, LABEL, agents=_agents(agents),
+                               unload_timeout=UNLOAD_TIMEOUT_S,
+                               load_timeout=LOAD_TIMEOUT_S, sleep=_sleep)
+
+
+def _install_home_file(home, release_dir, name):
+    """Copy one stable entry point beside the state directory, atomically."""
+    try:
+        blob = (release_dir / 'packaging' / name).read_bytes()
+    except OSError:
+        raise SystemExit(f'bundle has no {name}')
+    tmp = home / (name + '.tmp')
     if tmp.is_symlink() or tmp.is_file():
         tmp.unlink()
     elif tmp.exists():
         shutil.rmtree(tmp)
     tmp.write_bytes(blob)
-    os.replace(tmp, home / 'router_launch.py')
+    os.replace(tmp, home / name)
+
+
+def install_launcher(home, release_dir):
+    """Install both stable entry points beside the state directory.
+
+    Each resolves `current` at exec time, so the plists that name them stay
+    valid across every future update and prune.
+    """
+    _install_home_file(home, release_dir, 'router_launch.py')
+    _install_home_file(home, release_dir, 'update_launch.py')
 
 
 def _write_state(home, state):
