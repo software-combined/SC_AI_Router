@@ -183,7 +183,7 @@ class LoggingAndHealthTests(unittest.TestCase):
                     self.assertEqual(event['provider'], 'openrouter')
                     self.assertNotIn('Authorization', json.dumps(event))
 
-    def test_transport_error_carries_traceback(self):
+    def test_transport_error_carries_type_not_text(self):
         def boom(*a, **k):
             raise OSError('reset by peer')
         install_fake(self, boom)
@@ -200,7 +200,9 @@ class LoggingAndHealthTests(unittest.TestCase):
         lines = [json.loads(line) for line in text.splitlines() if line.strip()]
         errors = [e for e in lines if e.get('event') == 'transport_error']
         self.assertEqual(len(errors), 1)
-        self.assertIn('OSError', errors[0]['traceback'])
+        self.assertEqual(errors[0]['error_type'], 'OSError')
+        self.assertNotIn('traceback', errors[0])
+        self.assertNotIn('reset by peer', text)
         self.assertNotIn('Bearer', text)
         self.assertNotIn('test-key', text)
 
