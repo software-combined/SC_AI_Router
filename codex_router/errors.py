@@ -222,6 +222,11 @@ def upstream_failed():
     return _error(502, 'UPSTREAM_FAILED', 'Upstream request failed')
 
 
+def upstream_described(message):
+    """502 with a named failure; detail keeps model, wait, and retry action."""
+    return _error(502, 'UPSTREAM_FAILED', message)
+
+
 def map_client_error(exc):
     """Split the old vague catch-all: bugs 500, credentials 400/401, else payload/model 400.
 
