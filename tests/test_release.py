@@ -72,7 +72,10 @@ class ReleaseTests(unittest.TestCase):
                     'codex_router/openrouter_base_instructions.txt',
                     'packaging/router_launch.py',
                     'packaging/service.py',
-                    'packaging/updater.py'):
+                    'packaging/updater.py',
+                    'packaging/platforms/__init__.py',
+                    'packaging/platforms/darwin.py',
+                    'packaging/platforms/linux.py'):
             self.assertIn(dep, names, dep)
         extract = out / 'extracted'
         extract.mkdir()
