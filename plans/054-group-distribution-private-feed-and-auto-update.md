@@ -6,6 +6,7 @@
 
 Priority P1; effort L; risk HIGH (fleet-wide code execution path).
 Planned 2026-09-09 at `1327da3f369eb1af82a3b29c6544f51f3d1049cd`.
+Updated 2026-09-09: Entra group download gate, B2B guest path, and canonical AWS endpoints recorded (owner discussion).
 
 ## Outcome
 
@@ -242,6 +243,20 @@ and `install.ps1` (Windows):
 3. Download `stable/latest.json`, then the bundle; verify the checksum; run
    `packaging/install.py` from the verified bundle with that interpreter.
 
+The canonical download endpoints, served from the Stage 1 feed and
+republished on every push to `main` (section 3):
+
+- `https://dist.softwarecombined.com/stable/latest.json`
+- `https://dist.softwarecombined.com/bundles/codex-model-router-<version>.tar.gz`
+- `https://dist.softwarecombined.com/runtime/<os>-<arch>/<pbs-filename>`
+- `https://dist.softwarecombined.com/bootstrap/install.sh`
+- `https://dist.softwarecombined.com/bootstrap/install.ps1`
+
+Every endpoint above is token-gated (section 2): the installer sends
+`X-SCG-Feed-Token` on each request, so an AWS link alone never authorises
+a download. Entra groups (section 7) decide who receives the page that
+carries the token, not the bytes.
+
 The user downloads the file and runs it (`sh install.sh`; Windows see below).
 Nothing is piped from the network into a shell, no execution policy is bypassed
 and no quarantine attribute is removed. A downloaded `install.sh` runs under
@@ -264,12 +279,31 @@ code-signing decision. Resolve before Stage 3 acceptance.
 
 ### 7. Onboarding surface
 
-Stage A, no new authentication code: an identity-gated page in the wider-team
-SharePoint (`~/TechnologyIT`, the authoritative IT document location) hosts
-`install.sh`, `install.ps1` and the three-OS instructions with the current
-token embedded. Microsoft 365 sign-in is the email and domain gate. Portfolio
-company staff outside the tenant join as guests or receive the page through
-their own channel.
+Stage A, no new authentication code: the joiner flow is add-to-Entra,
+send-link, install. One parent Entra security group (for example
+`sg-SCG-Router-Users`) plus one subgroup per portfolio company (for example
+`sg-SCG-Router-<Portco>`) controls access to an identity-gated download page in the
+wider-team SharePoint (`~/TechnologyIT`, the authoritative IT document
+location). The page links the AWS bootstrap endpoints (section 5) with the
+current feed token embedded. The downloaded installer pulls the runtime and
+the bundle from CloudFront, and every later update polls the same feed.
+Microsoft 365 sign-in is the email and domain gate.
+
+Guests: portfolio company staff whose mailboxes live outside Microsoft 365
+(for example on Google Workspace) are invited as Entra B2B guests on their
+work address and redeem with email one-time passcode. Neither Google federation
+nor adding a non-Microsoft domain to Entra is needed. Grant each portco
+subgroup directly to the download site rather than relying only on nesting.
+When the TechnologyIT page must stay staff-only, host the portco download
+on a separate site collection with guest sharing on, or route that portco
+through its own channel.
+
+Offboarding boundary: removing a user from the Entra group stops future
+downloads only. It does not stop their updater while the shared Stage A feed
+token is valid, and it does not stop their spend. The leaver path is remove
+from the subgroup, rotate the feed token when warranted, and delete that
+user's OpenRouter key by id (Plan 055). Per-install tokens and central key
+revocation remain the real offboarding control in Stage 4.
 
 Stage B, optional and later: self-serve `dist.softwarecombined.com/install`
 (the same host and certificate, an ungated path in front of the token gate)
@@ -287,7 +321,7 @@ entry point that calls the same bootstrap and the same feed.
 |---|---|---|---|
 | 0 | Re-point the owner Mac's updater LaunchAgent at the `0.6.7.19` installer: while the update job is not running, rewrite `ProgramArguments[1]` in `~/Library/LaunchAgents/com.local.codex-mixed-model-router.update.plist` to `<home>/releases/0.6.7.19/packaging/install.py`, then `launchctl bootout gui/<uid>/com.local.codex-mixed-model-router.update` and `launchctl bootstrap gui/<uid> <that plist>`. Touch only the update agent, never the router agent (`docs/operations.md:44`); add these steps to `docs/operations.md` as a runbook entry. A host still on `0.6.6.18` needs one local install of `0.6.7.19` first; its updater cannot pull the fix because the fix is in the fetch path | `launchctl print gui/<uid>/com.local.codex-mixed-model-router.update` names the `0.6.7.19` installer; `update.log` shows `up to date 0.6.7.19` over `gh`, no 404; last exit 0 | staff-machine action (owner) |
 | 1 | AWS: bucket, OAC, CloudFront, function and KeyValueStore, publish role, ACM, DNS. Repo: branch-driven `release.yml`, `release.py --feed-token-file`, updater §4 (origins, token, launcher-based job), transitional release; once T has installed on the owner Mac, re-run the Stage 0 runbook entry (bootout and bootstrap the update label while the job is not running) so the launcher-based job loads | a merge to `main` reaches the owner Mac within 15 min via CloudFront with token and without `gh`; `launchctl print` shows the loaded updater job running the launcher, not a release path | AWS creation, DNS and ACM, GitHub organisation plan upgrade (owner, recurring spend), publication cutover (owner) |
-| 2 | `runtime.lock`, runtime mirror, real `install.sh` and `install.ps1` (§5), SharePoint page | a clean Mac without Python 3.14 installs from the page and auto-updates; then Linux on the contributor's machine | staff-machine changes (Plan 049) |
+| 2 | `runtime.lock`, runtime mirror, real `install.sh` and `install.ps1` (§5), Entra parent plus per-portco subgroups, SharePoint page (§7) | a joiner added to a portco subgroup installs a clean Mac without Python 3.14 from the page and auto-updates; then Linux on the contributor's machine | staff-machine changes (Plan 049) |
 | 3 | `packaging/windows.py`, Task Scheduler updater, Windows entry decision (§5) | the designated Windows 11 x64 machine installs and auto-updates | Windows machine designation and entry decision (owner) |
 | 4 (optional) | self-serve email-OTP page, per-install tokens, audit | a portfolio company user onboards with no Software Combined account; revoking their token stops their updates | account and domain approval (owner) |
 

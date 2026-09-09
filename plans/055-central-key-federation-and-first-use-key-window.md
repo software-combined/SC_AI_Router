@@ -6,6 +6,7 @@
 
 Priority P1; effort M; risk HIGH (credential handling and spend).
 Planned 2026-09-09 at `db3eb406c3406e7487cc4e2a51ec7f157c9ee246`.
+Updated 2026-09-09: Entra `mail` recorded as the verified work email anchor for Plan 054 Stage A onboarding (owner discussion).
 
 ## Outcome
 
@@ -73,6 +74,10 @@ inference spend. CloudTrail records every read.
 
 After Plan 054 verifies the work email (operator-run script in Stage 1, the
 self-serve page later):
+
+For users onboarded through the Plan 054 Stage A page, the Entra `mail`
+value (tenant member or B2B guest) is the verified work email: the operator
+reads it from the portco subgroup membership rather than re-verifying it.
 
 1. `POST /api/v1/keys/` with a `name` carrying the verified email and a machine
    label, a `limit`, and `limit_reset` monthly.
