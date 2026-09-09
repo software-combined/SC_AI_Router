@@ -2,6 +2,15 @@
 
 ## 0.6.8 (unreleased)
 
+- Make `--feed` one-shot for the anti-replay serial as well as the URL. A
+  local bundle carries its own build number as its serial, so a pinned
+  install recorded a number the real feed had not reached, and every later
+  scheduled check refused the real feed with `stale feed serial` -- updates
+  stopped silently. A pinned feed is now exempt on both sides: its serial is
+  neither checked against nor recorded. Checking it was the trap that invited
+  choosing a build number high enough to pass, which is what froze the
+  channel; the unattended channel keeps full replay protection.
+
 - String-wrap non-object tool parameter roots for `~x-ai/grok-latest`
   (new `json_text_root` schema mode): xAI rejects union-root schemas such
   as the desktop automation tool, failing even a plain greeting. Ordinary
