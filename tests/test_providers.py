@@ -201,19 +201,35 @@ class SummarizerTests(unittest.TestCase):
         self.assertEqual(len(payload['tools']), 1)
         self.assertEqual(payload['tools'][0]['parameters'], {'type': 'object'})
 
-    def test_text_only_models_drop_image_blocks(self):
-        def shapes(model):
-            payload = {'model': model, 'input': [
-                {'type': 'message', 'role': 'user', 'content': [
-                    {'type': 'input_text', 'text': 'look'},
-                    {'type': 'input_image', 'image_url': 'data:image/png;base64,AAA'}]}]}
-            prepared = providers.OpenRouterProvider().prepare(
-                model, '/responses', payload, b'raw', {}, _stub_credentials())
-            return json.loads(prepared.body)['input'][0]['content']
-        stripped = shapes('z-ai/glm-5.3')
-        self.assertEqual(stripped, [{'type': 'input_text', 'text': 'look'}])
-        kept = shapes('moonshotai/kimi-k3')
+    def test_text_only_models_reject_image_blocks(self):
+        # Fail closed like the effort path: a mid-thread switch to a
+        # text-only model must name the image content and the remedy,
+        # never silently drop the blocks.
+        payload = {'model': 'z-ai/glm-5.3', 'input': [
+            {'type': 'message', 'role': 'user', 'content': [
+                {'type': 'input_text', 'text': 'look'},
+                {'type': 'input_image', 'image_url': 'data:image/png;base64,AAA'}]}]}
+        with self.assertRaisesRegex(providers.PreparationError,
+                                    'does not accept image input.*image-capable'):
+            providers.OpenRouterProvider().prepare(
+                'z-ai/glm-5.3', '/responses', payload, b'raw', {}, _stub_credentials())
+
+    def test_image_capable_models_keep_image_blocks(self):
+        payload = {'model': 'moonshotai/kimi-k3', 'input': [
+            {'type': 'message', 'role': 'user', 'content': [
+                {'type': 'input_text', 'text': 'look'},
+                {'type': 'input_image', 'image_url': 'data:image/png;base64,AAA'}]}]}
+        prepared = providers.OpenRouterProvider().prepare(
+            'moonshotai/kimi-k3', '/responses', payload, b'raw', {}, _stub_credentials())
+        kept = json.loads(prepared.body)['input'][0]['content']
         self.assertEqual(len(kept), 2)
+
+    def test_text_only_models_pass_without_images(self):
+        payload = {'model': 'z-ai/glm-5.3', 'input': [
+            {'type': 'message', 'role': 'user', 'content': 'look'}]}
+        prepared = providers.OpenRouterProvider().prepare(
+            'z-ai/glm-5.3', '/responses', payload, b'raw', {}, _stub_credentials())
+        self.assertEqual(prepared.host, 'openrouter.ai')
 
 
 if __name__ == '__main__':

@@ -11,13 +11,10 @@ import traceback
 from compression import zstd
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from .credentials import Credentials
+from . import claude, errors, local_services, providers, setup
+from .errors import InvalidSize, PreparationError
+from .providers import NATIVE_SERVICE_PATHS
 from .runtime import MAX_BODY, ROUTER_HOME, VERSION, log_event
-from . import claude, local_services, providers, setup
-from .providers import NATIVE_SERVICE_PATHS, PreparationError
-
-
-class InvalidSize(ValueError):
-    """Request body rejected on size grounds; maps to 413."""
 
 
 class Router(ThreadingHTTPServer):
@@ -70,15 +67,14 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
         self.close_connection = True
 
-    def error(self, status, message):
-        if 400 <= status <= 599:
-            prefix = '/' + self.server.state.get('token', '')
-            raw = self.path
-            suffix = raw[len(prefix):] if prefix != '/' and raw.startswith(prefix) else '<unrouted>'
-            log_event('request_rejected', status=status, reason=message,
-                      path=suffix.split('?')[0][:200])
+    def error(self, err):
+        prefix = '/' + self.server.state.get('token', '')
+        raw = self.path
+        suffix = raw[len(prefix):] if prefix != '/' and raw.startswith(prefix) else '<unrouted>'
+        log_event('request_rejected', status=err.status, code=err.code,
+                  reason=err.message, path=suffix.split('?')[0][:200])
         try:
-            self.send_json(status, {'error': {'message': message, 'type': 'router_error'}})
+            self.send_json(err.status, err.body())
         except OSError:
             pass  # Client already disconnected; the event log keeps the record.
 
@@ -101,7 +97,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path, _ = self.authorized_path()
         if path is None:
-            return self.error(403, 'Forbidden')
+            return self.error(errors.forbidden())
         path = path.split('?', 1)[0]
         if path.startswith('/setup/'):
             return setup.serve(self, path[len('/setup/'):], False)
@@ -116,21 +112,20 @@ class Handler(BaseHTTPRequestHandler):
             return self.drain_reject()
         if self.headers.get('Upgrade', '').lower() == 'websocket':
             # Codex explicitly handles 426 by switching this session to HTTP/SSE.
-            return self.error(426, 'Use HTTP streaming for this local trial')
-        return self.error(404, 'Unsupported route')
+            return self.error(errors.websocket_rejected())
+        return self.error(errors.unsupported_route())
 
     def drain_reject(self):
-        return self.retryable_reject('Server draining')
+        return self.retryable_reject(errors.draining())
 
-    def retryable_reject(self, message, retry_after='2'):
-        self.send_json(503, {'error': {'message': message, 'type': 'router_error'}},
-                       {'Retry-After': retry_after})
+    def retryable_reject(self, err, retry_after='2'):
+        self.send_json(err.status, err.body(), {'Retry-After': retry_after})
 
     def do_POST(self):
         started = time.monotonic()
         path, via_path = self.authorized_path()
         if path is None:
-            return self.error(403, 'Forbidden')
+            return self.error(errors.forbidden())
         path = path.split('?', 1)[0]
         if self.server.draining:
             return self.drain_reject()
@@ -143,13 +138,13 @@ class Handler(BaseHTTPRequestHandler):
         if path not in NATIVE_SERVICE_PATHS | {'/responses', '/responses/compact'} | claude.CLAUDE_PATHS:
             if path.startswith('/setup/'):
                 return setup.serve(self, path[len('/setup/'):], True)
-            return self.error(404, 'Unsupported route')
+            return self.error(errors.unsupported_route())
         self.connection.settimeout(120)
         try:
             raw, payload, size = self.read_body()
             model = payload.get('model')
             if not isinstance(model, str) and path not in NATIVE_SERVICE_PATHS:
-                return self.error(400, 'Missing model')
+                return self.error(errors.missing_model())
             mode = self.server.state.get('openai_mode', 'subscription')
             if path in claude.CLAUDE_PATHS:
                 provider = claude.select(model, path, mode)
@@ -157,7 +152,7 @@ class Handler(BaseHTTPRequestHandler):
                 provider = providers.select(
                     model, path, self.server.state.get('openai_models', []), mode)
             if provider.name in ('openai-subscription', 'anthropic-subscription') and not via_path:
-                return self.error(401, 'Bearer auth is for no-subscription mode only')
+                return self.error(errors.bearer_for_no_subscription_only())
             compact_call = providers.compaction_call(provider, model, path, payload)
             if compact_call is not None:
                 # Compact before prepare(): a rejected effort must not block it.
@@ -170,9 +165,9 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     return self.send_json(200, {'output': compact_call(key)})
                 except PreparationError as exc:
-                    return self.error(409, str(exc))
+                    return self.error(errors.preparation(str(exc)))
                 except (OSError, http.client.HTTPException):
-                    return self.error(502, 'Compaction summarizer unavailable')
+                    return self.error(errors.compaction_unavailable())
                 finally:
                     with self.server.lock:
                         self.server.inflight -= 1
@@ -180,18 +175,22 @@ class Handler(BaseHTTPRequestHandler):
                 prepared = provider.prepare(model, path, payload, raw,
                                             dict(self.headers), self.server.credentials)
             except local_services.LocalAnswer as exc:
-                return self.error(exc.status, exc.message)
+                return self.error(exc)
             if os.environ.get('ROUTER_DEBUG'):
                 log_event('provider_selected', provider=provider.name, model=model, path=path)
         except PermissionError as exc:
-            return self.error(401, str(exc))
+            return self.error(errors.map_client_error(exc))
         except InvalidSize as exc:
-            return self.error(413, str(exc))
+            return self.error(errors.invalid_size(str(exc)))
         except PreparationError as exc:
-            return self.error(409, str(exc))
+            return self.error(errors.preparation(str(exc)))
         except (ValueError, KeyError, LookupError, OSError, zstd.ZstdError,
                 AttributeError, TypeError) as exc:
-            return self.error(*providers.client_error(exc))
+            err = errors.map_client_error(exc)
+            if err.code == 'INTERNAL_ERROR':
+                log_event('request_failed', code=err.code,
+                          traceback=traceback.format_exc(limit=3)[-4000:])
+            return self.error(err)
         _reasoning = payload.get('reasoning')
         metrics = {'provider': prepared.provider,
                    'model': model, 'path': path, 'request_bytes': size,
@@ -233,10 +232,10 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     local_services.answer(metrics['path'])
                 except local_services.LocalAnswer as exc:
-                    return self.error(exc.status, exc.message)
+                    return self.error(exc)
             retry_after = providers.upstream_retry_after(response, prepared, metrics)
             if retry_after is not None:
-                return self.retryable_reject('Upstream rate limited', retry_after)
+                return self.retryable_reject(errors.upstream_rate_limited(), retry_after)
             metrics['upstream_headers_ms'] = round((time.monotonic() - started) * 1000, 1)
             self.send_response(response.status)
             providers.relay_headers(response, self.send_header, metrics.get('model'))
@@ -261,7 +260,7 @@ class Handler(BaseHTTPRequestHandler):
                         traceback=traceback.format_exc(limit=3)[-4000:],
                         total_ms=round((time.monotonic() - started) * 1000, 1))
             if not sent:
-                self.error(502, 'Upstream request failed')
+                self.error(errors.upstream_failed())
         finally:
             with self.server.lock:
                 self.server.inflight -= 1

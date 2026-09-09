@@ -145,6 +145,7 @@ directory at an idle boundary:
 `codex_router/capabilities.py`,
 `codex_router/compaction.py`,
 `codex_router/discovered.py`,
+`codex_router/errors.py`,
 `codex_router/feed_verify.py`,
 `codex_router/candidate.py`,
 `codex_router/setup.py`,
