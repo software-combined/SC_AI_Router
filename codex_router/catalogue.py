@@ -63,13 +63,29 @@ PREVIEW_PRIORITY_OFFSET = 100000  # preview entries sort after every verified mo
 RETIRED_SLUGS = {'anthropic/claude-opus-5', 'anthropic/claude-fable-5.1',
                  'deepseek/deepseek-v4-pro', 'deepseek/deepseek-v4-flash',
                  'deepseek/deepseek-v4-flash-0731'}  # pro-0423 retired 2026-09-09; flash rows superseded by the flash-latest alias
+# Subscription roster entries withdrawn from the picker. merge() drops these
+# from roster, catalogue and state-derived seeding alike, so a scheduled
+# update repairs machines that still carry the row.
+RETIRED_SUBSCRIPTION_SLUGS = frozenset({'gpt-reserve'})
+
+# Native reasoning levels per subscription slug (2026-09-07 owner-Mac
+# models_cache). Fresh installs seed these so the effort picker works.
+_A = ('low', 'medium', 'high', 'xhigh', 'max', 'ultra')
+_M = ('low', 'medium', 'high', 'xhigh', 'max')
+_X = ('low', 'medium', 'high', 'xhigh')
+SUBSCRIPTION_REASONING = {
+    'gpt-6-astra': ('medium', _A), 'gpt-5.6-sol': ('low', _A),
+    'gpt-5.6-terra': ('medium', _A), 'gpt-5.6-luna': ('medium', _M),
+    'gpt-5.5': ('medium', _X), 'gpt-5.4-mini': ('medium', _X),
+    'gpt-5.3-codex-spark': ('high', _X), 'codex-auto-review': ('medium', _M),
+}
+
 
 # Picker labels for the subscription side, matching the live Codex picker.
 # Codex >=0.153.4 requires every catalogue row to carry display_name and the
 # full schema, so roster rows can no longer seed as bare {'slug': ...} stubs.
 SUBSCRIPTION_DISPLAY_NAMES = {
     'gpt-6-astra': 'GPT-6-Astra',
-    'gpt-reserve': 'GPT-Reserve',
     'gpt-5.6-sol': 'GPT-5.6-Sol',
     'gpt-5.6-terra': 'GPT-5.6-Terra',
     'gpt-5.6-luna': 'GPT-5.6-Luna',
@@ -87,12 +103,14 @@ def subscription_stub(slug):
     but the Codex catalogue parser requires the complete schema.
     """
     name = SUBSCRIPTION_DISPLAY_NAMES.get(slug, slug)
+    default, efforts = SUBSCRIPTION_REASONING.get(slug, ('medium', ('medium',)))
     return {**OPENROUTER_TEMPLATE,
             'slug': slug,
             'display_name': name,
             'description': 'ChatGPT subscription billing.',
-            'default_reasoning_level': 'medium',
-            'supported_reasoning_levels': [{'effort': 'medium', 'description': 'Balanced.'}],
+            'default_reasoning_level': default,
+            'supported_reasoning_levels': [
+                {'effort': level, 'description': describe(level)} for level in efforts],
             'supports_reasoning_summary_parameter': False,
             'context_window': 272000,
             'max_context_window': 272000,
@@ -146,6 +164,9 @@ def merge(catalog, roster=(), client='codex'):
     catalogue are appended as stubs so a fresh file still lists the
     approved picker. Existing rows gain missing schema defaults while
     retaining their model-specific values, repairing older bare stubs.
+    Order is subscription rows in roster order, then verified OpenRouter
+    rows A-Z by display name, then preview rows A-Z; values are never
+    rewritten to achieve it. Retired subscription slugs are dropped.
     The future Claude listing reuses models_for('claude') to omit
     OpenRouter-billed Anthropic rows. Plan 039's live /models remains
     the proper replacement for this fallback. Routing never consults
@@ -161,14 +182,21 @@ def merge(catalog, roster=(), client='codex'):
     entries = {m['slug']: {**subscription_stub(m['slug']), **m} for m in models}
     for model in visible:
         entries[model.slug] = openrouter_entry(model)
-    order = [m['slug'] for m in models]
-    seen = set(order)
+    # Retired subscription rows never come back: a roster or catalogue that
+    # still names one loses it here, so the dead picker row cannot linger.
+    for slug in RETIRED_SUBSCRIPTION_SLUGS:
+        entries.pop(slug, None)
     for slug in roster:
-        if slug not in entries:
+        if slug not in entries and slug not in RETIRED_SUBSCRIPTION_SLUGS:
             entries[slug] = subscription_stub(slug)
-            order.append(slug)
-    order += [m.slug for m in visible if m.slug not in seen]
-    catalog['models'] = [entries[slug] for slug in order]
+    shown = {m.slug for m in visible}
+    subs = [s for s in dict.fromkeys(roster) if s in entries]
+    subs += [m['slug'] for m in models
+             if m['slug'] in entries and m['slug'] not in shown and m['slug'] not in subs]
+    def rank(slug):
+        model = next(m for m in visible if m.slug == slug)
+        return (model.tier != 'verified', model.display_name.casefold(), slug)
+    catalog['models'] = [entries[s] for s in subs + sorted(shown, key=rank)]
     return catalog
 
 

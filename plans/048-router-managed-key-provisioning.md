@@ -1,5 +1,13 @@
 # Plan 048: Provision and manage OpenRouter access across portcos
 
+> **Superseded execution plan, reconciled 2026-09-09 at `96db57f`.** Do not
+> implement the historical invitation service, storage/signing choices or
+> paste-once journey below. Plans 054/055 own distribution, verified-email
+> admission, per-install authority, provisioning, budgets and revocation.
+> Preserve Business/Enterprise acceptance, per-person budget isolation and
+> entitlement controls in the consolidated roadmap. This is design history,
+> not a parallel work order.
+
 > Executor: read this entire plan and both repositories' current instructions.
 > This is a plan, not authority to deploy, send invitations, create paid keys,
 > change production accounts, or publish a router release. Build and verify one

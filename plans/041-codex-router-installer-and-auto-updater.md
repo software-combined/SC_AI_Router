@@ -1,5 +1,13 @@
 # Plan 041: Ship the router as a versioned release bundle with a stdlib installer, health-checked rollback and a daily auto-updater
 
+> **Reconciliation 2026-09-09 at `96db57f`:** installer/updater source and a
+> versioned owner-Mac installation now exist; health reports `0.6.9.22` and
+> both jobs use stable launchers. Do not reinstall historical `0.4.0`, replace
+> the regular `current` pointer with a symlink, or recreate an old release.
+> Remaining lifecycle evidence is owned by 050/054/057/058; publication is
+> 054, not the superseded beta-branch/signing design. Refresh readback before
+> closing acceptance criteria. Source completion is not fleet acceptance.
+
 > **Deviation recorded 2026-09-08 (installer-core commit):** the bundle
 > excludes `tests/*.py`, and `self_test` is an import smoke (`catalogue`
 > and `registry` load with non-empty `MODELS`) rather than full discover

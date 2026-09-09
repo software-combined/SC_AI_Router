@@ -1,5 +1,13 @@
 # Plan 044: Expose every capability each OpenRouter model has that Codex can use, driven by live metadata and proven by probes
 
+> **Reconciliation 2026-09-09 at `96db57f`:** execute remaining capability
+> qualification with Plan 064's consistent client projections and Plan 066's
+> agent-transport checks. The overlay-file criterion is SUPERSEDED, not undone
+> implementation: `live_refresh` updates registry data in place. Test current
+> promised models/capabilities, not a stale count of six. Failed or unproven
+> audio/image cells cannot justify advertised support. Preserve provider facts
+> separately from proven client delivery; tier alone is not capability proof.
+
 > **Amended 2026-09-07**: there is no separate `live-capabilities.json` overlay. `live_refresh.py` rewrites the derived fields (`modalities`, `context_window`, `max_output_tokens`, `reasoning`) in place inside `codex_router/models.json` (Plan 038 as amended), and Plan 046's `models add` command uses the same derivation. Pinned fields (`excluded_efforts`, `schema_mode`, `max_tools`, the capability flags) are never overwritten by the refresh.
 
 > **Executor instructions**: Follow this plan step by step. Run every

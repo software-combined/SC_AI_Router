@@ -185,7 +185,7 @@ class FailureDescriptionTests(unittest.TestCase):
 
     def test_nested_provider_400_becomes_actionable_409(self):
         raw = ('{"code": "invalid-argument", "error": "Failed to start sampling: '
-               '[invalid_client_tool_schema] ns_abc_tool_update: tool parameter '
+               '[invalid_client_tool_schema] ns_abc123def456_tool_update: tool parameter '
                'root must be an object type"}')
         body = json.dumps({'error': {'message': 'Provider returned error',
                                      'metadata': {'raw': raw, 'provider_name': 'xAI'}}})
@@ -195,7 +195,9 @@ class FailureDescriptionTests(unittest.TestCase):
              'elapsed_ms': 1831.8, 'timeout_s': 120, 'has_image': False})
         self.assertEqual(status, 409)
         self.assertIn('xAI', message)
-        self.assertIn('ns_abc_tool_update', message)
+        self.assertIn('ns_abc123def456_tool_update', message)
+        self.assertIn('tool schema was rejected', message)
+        self.assertNotIn('Failed to start sampling', message)
         self.assertNotIn('arguments_json', message)
 
     def test_unparseable_upstream_body_passes_through(self):

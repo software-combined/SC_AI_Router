@@ -31,6 +31,14 @@ _linux_spec = importlib.util.spec_from_file_location(
     'router_systemd', Path(__file__).resolve().parent / 'systemd.py')
 _linux = importlib.util.module_from_spec(_linux_spec)
 _linux_spec.loader.exec_module(_linux)
+_upd_spec = importlib.util.spec_from_file_location(
+    'router_updater', Path(__file__).resolve().parent / 'updater.py')
+_updater = importlib.util.module_from_spec(_upd_spec)
+_upd_spec.loader.exec_module(_updater)
+# One shared service module: tests patch install_mod._svc attrs and the
+# updater must see the same object. Bound once at load; _sync_seams keeps
+# the function seams fresh per call.
+_updater.bind(svc=_svc)
 PLATFORM = sys.platform
 # Re-exported for tests (installed bundles have no packaging/ package).
 # _patch_attrs(test, run/health/wait_*/...) patches install_mod attrs; the
@@ -72,6 +80,19 @@ run = _svc.run
 health = _svc.health
 wait_version = _svc.wait_version
 ensure_serving = _svc.ensure_serving
+
+
+SUPPORTED_PLATFORMS = ('darwin', 'linux')
+
+
+def require_supported_platform():
+    # Plan 057 Stage 1: refuse before any router home or bundle work. Without
+    # this, PLATFORM == 'win32' falls through every `if manager:` pair into
+    # the launchd path and dies on os.getuid() after a partial install.
+    if PLATFORM not in SUPPORTED_PLATFORMS:
+        raise SystemExit(
+            'Windows is not supported by this installer yet; '
+            'no files were changed. See plans/057-windows-install-and-service-support.md.')
 
 
 def systemd_manager(home):
@@ -291,6 +312,8 @@ def _sync_seams():
     global run, health, wait_version, ensure_serving
     run, health, wait_version, ensure_serving = (
         _svc.run, _svc.health, _svc.wait_version, _svc.ensure_serving)
+    _updater.bind(svc=_svc, newer=newer, verify_sha256=verify_sha256,
+                  sync_seams=_sync_seams)
 
 
 def do_install(args, _fetch=fetch, _run=None):
@@ -512,108 +535,16 @@ def prune_releases(home, *keep):
             shutil.rmtree(home / 'releases' / stale, ignore_errors=True)
 
 
-MAX_VERSION_FAILURES = 3
+MAX_VERSION_FAILURES = _updater.MAX_VERSION_FAILURES
 
 
 def _park(home, etag, etag_path, version):
-    """Count a failed attempt and stop retrying once it is hopeless.
-
-    A version that has failed this often will not start working on its own,
-    and every pass costs a service restart. The saved ETag skips even the
-    feed re-read, but the production feed is served through the GitHub CLI
-    and carries no ETag, so the count in the state file is what actually
-    parks it there.
-    """
-    count = _record_update_failure(home, version)
-    if count < MAX_VERSION_FAILURES:
-        return
-    if etag:
-        etag_path.write_text(etag + '\n')
-    print(f'parking {version} after {count} failed attempts; '
-          f'run the installer by hand to retry')
+    return _updater._park(home, etag, etag_path, version)
 
 
 def do_check_update(args, _fetch=fetch, _read_feed=None, _sleep=None):
-    _sync_seams()
-    import random
-    import tempfile
-    read_feed = _read_feed or (lambda url, etag: _svc.fetch_feed(url, etag, _fetch))
-    sleep = _sleep or time.sleep
-    home = Path(args.home).expanduser()
-    feed = args.feed or channel_feed(home)
-    sleep(random.uniform(0, 120))
-    etag_path = home / 'update-etag'
-    etag = etag_path.read_text().strip() if etag_path.exists() else None
-    # Transient fetch failures (offline, locked-keychain TLS, DNS blip) retry
-    # in-run with bounded backoff. HTTPError is an OSError subclass, so HTTP
-    # errors re-raise without retry; deterministic errors (SystemExit from
-    # serial/version checks, HTTP status) still fail fast below.
-    for attempt in range(4):
-        try:
-            status, body, etag = read_feed(feed, etag)
-            break
-        except OSError as exc:
-            if isinstance(exc, urllib.error.HTTPError) or attempt == 3:
-                raise
-            sleep(30 * 2 ** attempt)
-            print(f'retrying feed fetch ({exc})')
-    if status == 304:
-        print(f"up to date {current_version(home)}")
-        return 0
-    latest = json.loads(body.decode())
-    check_serial(home, latest, pinned=bool(args.feed))
-    if not newer(latest['version'], current_version(home)):
-        if etag:
-            etag_path.write_text(etag + '\n')
-        print(f"up to date {current_version(home)}")
-        return 0
-    failed = _update_failures(home).get(latest['version'], 0)
-    if failed >= MAX_VERSION_FAILURES:
-        if etag:
-            etag_path.write_text(etag + '\n')
-        print(f"skipping {latest['version']}: {failed} failed attempts; "
-              f"run the installer by hand to retry")
-        return 0
-    state = json.loads((home / 'mixed-router-state.json').read_text())
-    tarball = _fetch(latest['url'])
-    if latest.get('sha256'):
-        verify_sha256(tarball, latest['sha256'])
-    with tempfile.TemporaryDirectory() as tmp:
-        safe_extract(tarball, tmp)
-        installer = Path(tmp) / 'packaging' / 'install.py'
-        if not installer.exists():
-            raise SystemExit('downloaded bundle has no installer')
-        # Only forward an explicitly pinned feed; a channel-resolved feed must
-        # not pin home/'feed', or beta would freeze on one release asset URL.
-        cmd = [sys.executable, str(installer), '--home', str(home)]
-        if args.feed:
-            cmd += ['--feed', feed]
-        try:
-            result = run(cmd, capture_output=True, text=True, timeout=900)
-        except subprocess.SubprocessError as exc:
-            # A child that is killed or never starts reports nothing itself,
-            # so count it here or a hanging release retries every 15 minutes
-            # forever. TimeoutExpired is a SubprocessError, not an OSError.
-            _park(home, etag, etag_path, latest['version'])
-            print(f'installer did not complete: {type(exc).__name__}')
-            raise SystemExit(1)
-        print(result.stdout[-2000:] if result.stdout else '')
-        if result.returncode != 0:
-            print(result.stderr[-2000:] if result.stderr else '')
-            _park(home, etag, etag_path, latest['version'])
-            raise SystemExit(result.returncode)
-    if current_version(home) != latest['version']:
-        print('deferred: installer did not activate the requested version')
-        return 0
-    _clear_update_failures(home, latest['version'])
-    (home / 'logs').mkdir(exist_ok=True)
-    with open(home / 'logs' / 'update.log', 'a') as stream:
-        stream.write(json.dumps({'at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
-                                 'version': latest['version']}) + '\n')
-    if etag:
-        etag_path.write_text(etag + '\n')
-    print(f"installed {latest['version']}")
-    return 0
+    return _updater.do_check_update(args, _fetch=_fetch, _read_feed=_read_feed,
+                                    _sleep=_sleep)
 
 
 def do_uninstall(args):
@@ -673,6 +604,7 @@ def build_parser():
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
+    require_supported_platform()
     action = do_uninstall if args.uninstall else do_check_update if args.check_update else do_install
     home = Path(args.home).expanduser()
     manager = systemd_manager(home)

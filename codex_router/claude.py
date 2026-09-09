@@ -50,9 +50,13 @@ def unalias(model):
 
 
 def models_listing():
-    """Anthropic-style {data: [{id, display_name}]} for gateway discovery."""
+    """Anthropic-style {data: [{id, display_name}]} for gateway discovery.
+
+    Verified rows first A-Z by display name, then preview rows A-Z."""
+    ordered = sorted(MODELS, key=lambda m: (m.tier != 'verified',
+                                            m.display_name.casefold()))
     rows = []
-    for entry in MODELS:
+    for entry in ordered:
         alias = claude_alias(entry.slug)
         if alias is not None:
             rows.append({'id': alias, 'display_name': entry.display_name})

@@ -1,5 +1,21 @@
 # Plan 049: Install and manage the router through Codex and Claude Code on macOS, Windows and Arch Linux
 
+> **Consolidation, 2026-09-09 at `96db57f`:** retain this umbrella's full
+> Codex/Claude and macOS/native-Windows/Arch acceptance scope. Later decisions
+> override historical wording below: 054 owns private token-gated downloads
+> and future main-to-stable/develop-to-beta publication; 055 owns centrally
+> provisioned keys recipients never paste; 059 implements the selected private
+> Python runtime. Current releases remain tag-driven until 054's approved
+> cutover. PR #3 is merged (`cc365629`); qualify its Linux implementation.
+>
+> Execution owners: 067 updater extraction, 056 OS backends/CI, 057 Windows,
+> 058 recipient docs/native Linux acceptance, 059 interpreter/bootstrap,
+> 061 domain/bundle rules, 063 shared client receipts/modes, 051 Claude
+> settings, and 053 Claude plugin. This umbrella retains the Codex manifest,
+> shared skill, catalogue publication and cross-client/OS acceptance. Reuse
+> their source, never build it twice. Synthetic bootstrap/client slices need
+> not wait for AWS publication or staff hosts.
+
 > Planning only. This document does not authorise implementation, paid probes,
 > staff-machine changes, cloud deployment, marketplace publication or live-router
 > cutover. Execute one working slice at a time after implementation is requested.

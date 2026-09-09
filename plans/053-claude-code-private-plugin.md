@@ -25,8 +25,9 @@ Adapter code, shared skill, installers and both manifests belong in private
 `software-combined/SC_OpenRouter_adapter`, local
 `~/Documents/Github/SC_Codex_openRouter_adapter`. Private
 `software-combined/SC_Agent_plugins` is the discovery catalogue. Neither repo
-nor plugin becomes public. Plan 049's proposed publicly reachable HTTPS
-runtime downloads are separate, enabling updates without private GitHub access.
+nor plugin becomes public. Plan 054 supersedes the older public-download
+proposal: runtime downloads are private and token-gated, while unattended
+updates no longer need recipient GitHub access after that cutover.
 
 Read `AGENTS.md`, Plan 049's installer contract, `docs/claude-code.md`,
 `packaging/install.py`, `tools/disable.py` and `tests/test_install_config.py`.
@@ -83,9 +84,11 @@ and ownership before relying on it; do not assume all installer work is included
    call canonical bootstrap/installer commands. Status is read-only and redacted.
    Mutations follow the user's request and host policy; installing/enabling the
    plugin changes no service, settings, key or session. No bypass flags.
-4. **Preserve credentials and auth.** IT-issued per-user keys go into the
-   existing expiring loopback window, never chat, skill arguments, credential
-   overrides or marketplace settings. Preserve native login. CLI setup uses the
+4. **Preserve credentials and auth.** Use Plan 055's central provisioning and
+   private shared writer so recipients never paste their issued key. The
+   local window remains its specified missing/revoked-key recovery path, never
+   chat, skill arguments, credential overrides or marketplace settings.
+   Preserve native login. CLI setup uses the
    receipt-owned two env settings; desktop uses Plan 051's separately qualified
    surface. Distinguish restart, discovery and paid acceptance. Missing desktop
    auth support is reported, never bypassed with a dummy token.

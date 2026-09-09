@@ -42,10 +42,12 @@ def upstream_retry_after(response, prepared, metrics):
 
 
 def _provider_reason(body):
-    """(provider_name, short_reason, wire_tool) from an upstream error body.
+    """(provider_name, fixed_category, wire_tool) from an upstream error body.
 
-    Only structural fragments leave this function: never raw bodies,
-    schemas, argument values, or secret-bearing text.
+    Only structural fragments leave this function: never raw bodies, schemas,
+    argument values, secret-bearing text, or arbitrary upstream prose. The
+    category is fixed wording chosen from the error shape; the offending tool
+    is kept only after the bounded identity match below.
     """
     try:
         payload = json.loads(body.decode() if isinstance(body, bytes) else body)
@@ -74,9 +76,13 @@ def _provider_reason(body):
     match = re.search(r'\bns_[0-9a-f]{12}_\S+|\b[a-z][\w.-]*\.[\w-]+\b', text)
     if match:
         tool = match.group(0).rstrip(':,.')
-    reason = text.strip()
-    if len(reason) > 300:
-        reason = reason[:297] + '...'
+    lowered = text.lower()
+    if 'invalid_client_tool_schema' in lowered or 'must be an object' in lowered:
+        reason = 'the tool schema was rejected'
+    elif 'invalid' in lowered and 'tool' in lowered:
+        reason = 'a tool call was rejected'
+    else:
+        reason = 'the request was rejected'
     return provider, reason, tool
 
 

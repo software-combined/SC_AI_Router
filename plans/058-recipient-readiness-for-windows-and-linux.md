@@ -85,7 +85,7 @@ up front.
 
 | Prerequisite | Why it bites | Current behaviour |
 |---|---|---|
-| **Python 3.14** | Genuinely required: `codex_router/router.py:11` imports `compression.zstd` (3.14 stdlib) to decode Codex's zstd request bodies, and the table above shows the two most widely deployed Linux targets cannot supply it. **This is the single biggest obstacle to handing the router to someone.** Owner decision and options in [Plan 059](059-python-314-interpreter-provisioning.md) | `find_python` probes sensible paths, then prints `No Python 3.14 found: brew install python@3.14` - macOS advice, on every platform |
+| **Python 3.14** | Required for `compression.zstd`. The managed route provisions the private runtime already selected by 049/054 and implemented by [Plan 059](059-python-314-interpreter-provisioning.md); no system package installation | Existing detection still gives macOS-specific advice on other platforms |
 | **GitHub CLI, signed in, with read access to a private repo** | `FEED_URL` points at releases in the private `software-combined/SC_OpenRouter_adapter`; anonymous asset URLs 404, so `fetch` shells out to `gh release download` | Fails at download time with "Private router updates require GitHub CLI (gh)" - correct message, but discovered late and repeated silently every 15 minutes by the timer |
 | **A systemd user manager (Linux)** | Headless servers, some containers and minimal WSL setups have none | Already refused cleanly and early by `Manager.check()`. This one is right |
 | **Codex desktop or Claude Code installed and signed in** | The router configures a client that must exist | Not checked; the config block is written regardless |
@@ -93,28 +93,26 @@ up front.
 
 ## Stages
 
-**Stage 1 - one preflight, before anything is written.** A `--preflight` path (and
-the same checks run at the top of a normal install) that reports every missing
-prerequisite at once, with the platform-correct remedy, and exits without
-creating a router home. Platform-aware interpreter guidance replaces the `brew`
-string (Plan 057 Stage 5 covers the same line; land it once, in whichever plan
-executes first).
-*Gate: on a machine with no Python 3.14 and no `gh`, the output names both, and
-`~/.codex/mixed-model-router` does not exist afterwards.*
+**Stage 1 - one preflight, before anything is written.** Report missing
+prerequisites together, with platform-correct remedies, without creating a
+router home. Plan 059 owns the shell/PowerShell entry that works without
+Python; a Python-only `--preflight` cannot meet that requirement. Reuse the
+same result contract when invoking the Python installer directly.
+Check the selected route: transitional GitHub needs authenticated `gh`; 054's
+private feed needs its download credential and native tools, not `gh`.
+Missing Python selects 059's runtime provisioning on the managed route.
+Check only selected clients; service-only staging does not require Codex.
+*Gate: native preflight on a no-Python machine reports applicable missing
+requirements and the planned runtime action with no router-home writes. A
+private-feed install is not rejected merely because `gh` is absent.*
 
-**Stage 2 - decide and document how recipients get the bundle.** The private-repo
-plus `gh` requirement is the single largest friction point, and it is a
-distribution decision rather than a code one.
-
-| Option | Trade-off |
-|---|---|
-| Keep private repo, require `gh` | No new infrastructure; every recipient must install `gh` and hold repo read. Ties distribution to GitHub org membership |
-| Private feed behind the Entra group gate in Plan 054 | Matches the group-distribution direction already planned; needs that work to land first |
-| Signed public bundles, private feed metadata | Widest reach, largest change; reopens the signature question that was deliberately closed |
-
-*Recommendation: fold into Plan 054 rather than solving twice. This plan's job
-is to make the requirement visible at Stage 1, not to pick the transport.*
-*Gate: owner decision recorded here and in Plan 054.*
+**Stage 2 - consume the settled distribution contract.** Plan 054 selects
+private token-gated CloudFront at `dist.softwarecombined.com` and a
+SharePoint/Entra discovery page. Entra page admission and the shared download
+token are different controls. Do not reopen public bundles, signatures or
+mandatory recipient GitHub access. Keep `gh` only for the transition.
+*Gate: docs/preflight match the active 054 stage; the download token is never
+authority to mint a personal API key.*
 
 **Stage 3 - Linux acceptance on a real desktop.** Run the checklist in
 `docs/linux-upgrade.md` on the contributor's Arch machine and one Ubuntu or
@@ -149,14 +147,23 @@ Audited 2026-09-09 against the verified state above:
 | Arch Linux AUR instructions | A vendor-specific AUR command is the first thing any Linux reader meets, above the generic install section | Move below the generic path |
 | Security: "the key file is owner-only" | True on macOS and Linux, false on Windows: `codex_router/credentials.py:27` skips the check when `os.name == 'nt'`, and the `0o600` writers only set the read-only attribute there | Qualify per platform until Plan 057 Stage 2 makes it true everywhere |
 | "Runtime files" list of 27 files | Stale and would produce a broken install. It names `packaging/router_launch.py` alone, while `packaging/release.py:bundle_files` ships `install.py`, `launchd.py`, `service.py`, `systemd.py`, `update_launch.py` and `VERSION` as well (verified against a built tarball this session). A test pins the `codex_router/` and `tools/` half of the list, but nothing pins the `packaging/` half, which is where it is wrong | Delete or generate the list, **and update its guard test in the same change**: `tests/test_packaging.py::test_readme_runtime_list_matches_files` scrapes every backticked `codex_router/` and `tools/` path out of the README and asserts the set equals `FILES`, so deleting the list alone turns the suite red. The list does not drift silently today - that test is what stops it - but it duplicates `bundle_files`, which is the real answer |
-| Linux session persistence | `packaging/systemd.py` deliberately does not enable lingering, so the router stops at logout. The README says lingering is not enabled but never what that means at logout | State it, with the `loginctl enable-linger` remedy for anyone who wants it running headless |
+| Linux session persistence | `packaging/systemd.py` deliberately does not enable lingering, so the router stops at logout. The README says lingering is not enabled but never what that means at logout | State the desktop-session contract; headless/lingering changes require separate approval, never implicit enablement |
 
 **Stage 5a (now):** correct the claims that are wrong today - the platform
 matrix marking Windows installer as unsupported, prerequisites in one place,
 the Windows key-file qualification, the stale runtime-files list, and a
 recipient install path for macOS and Linux.
+Also close Plan 035's remaining supervisor-log obligation: inventory the
+actual stdout/stderr/update destinations separately from rotating
+`router.jsonl`. Document effective retention; where a file sink is unbounded,
+use the smallest platform-native or existing rotating-log mechanism and test
+bounded retention without losing startup failures. Do not add another logging
+framework or write request/token content. Reuse 060's content allowlist and
+056/057's service definitions.
 *Gate: no claim in the README that a reader could act on and fail. Every
-statement about a platform matches a row in `docs/compatibility.md`.*
+statement about a platform matches a row in `docs/compatibility.md`; each
+service log sink has bounded retention or an explicit unresolved acceptance
+item, rather than inheriting 035's broad DONE label.*
 
 **Stage 5b (after Plan 057 Stage 6):** flip Windows to supported, document its
 install command and service model, and remove the Windows caveats added in 5a.
@@ -170,7 +177,7 @@ place a platform is first declared supported.*
 | Someone sends the current build to a Windows colleague | Plan 057 Stage 1 (fail closed) is the cheapest guard and should land first, independent of the rest |
 | The container result is read as Linux acceptance | Stated as a caveat above and gated by Stage 3. Do not update the support matrix before Stage 3 |
 | `gh` requirement discovered only when the first update fires | Stage 1 checks it at install time, when a person is present to fix it |
-| Recipients on distributions with no 3.14 package give up | Stage 1 names the concrete remedy per platform; bundling an interpreter is Plan 059's owner decision, not taken here |
+| Recipients on distributions with no 3.14 package give up | Stage 1 routes managed installs to the pinned private runtime selected in 059; native failures remain actionable |
 
 ## Out of scope
 
