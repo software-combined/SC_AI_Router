@@ -7,6 +7,7 @@ import shutil
 import tempfile
 import unittest
 import urllib.error
+from tests._platform import requires_posix_perms
 import urllib.request
 from pathlib import Path
 from unittest import mock
@@ -76,6 +77,7 @@ class SetupUnitTests(unittest.TestCase):
                                        _urlopen=_key_ok(), _now=NOW)
         self.assertEqual(status, 404)
 
+    @requires_posix_perms
     def test_post_stores_key_and_closes_setup(self):
         home = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, home, True)
@@ -132,6 +134,7 @@ class SetupUnitTests(unittest.TestCase):
         self.assertEqual(status, 409)
         self.assertEqual((home / 'openrouter.key').read_bytes(), b'\xff\xfe\x00b')
 
+    @requires_posix_perms
     def test_post_claims_empty_installer_placeholder(self):
         home = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, home, True)

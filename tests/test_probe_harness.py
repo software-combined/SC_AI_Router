@@ -14,6 +14,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from tests._platform import unix_only
 
 ROOT = Path(__file__).resolve().parents[1]
 PROBE = ROOT / 'tools' / 'probe_codex_runtime.py'
@@ -145,6 +146,7 @@ def _slug_with(test, capable):
     test.fail('no image-capable model in registry' if capable else 'no text-only model')
 
 
+@unix_only
 class ProbeHarnessTests(unittest.TestCase):
     def _fake_bin(self):
         tmp = tempfile.mkdtemp()

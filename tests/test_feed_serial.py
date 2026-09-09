@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
+from tests._platform import unix_only
 from tests.fakes import static_fetch as _static_fetch
 from tests.test_install import _craft_bundle, _ok_run, _patch_attrs, install_mod
 from tests.test_release import _release_mod
@@ -22,6 +23,7 @@ def _home_with_serial(tmp, text='9\n'):
     return home
 
 
+@unix_only
 class FeedSerialTests(unittest.TestCase):
     def test_release_emits_build_as_serial(self):
         release_mod = _release_mod()

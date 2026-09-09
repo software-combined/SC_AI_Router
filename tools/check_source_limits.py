@@ -12,7 +12,7 @@ def main():
     checked, failures = 0, 0
     for area in SOFT:
         for path in sorted((root / area).rglob('*.py')):
-            rel = str(path.relative_to(root))
+            rel = path.relative_to(root).as_posix()
             count = sum(1 for _ in open(path))
             checked += 1
             if count > HARD[area]:
