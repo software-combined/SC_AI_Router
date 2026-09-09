@@ -25,7 +25,8 @@ def bundle_files(root):
         + sorted(p.relative_to(root).as_posix() for p in (root / 'tools').glob('*.py'))
         + ['packaging/VERSION', 'packaging/install.py', 'packaging/launchd.py',
            'packaging/router_launch.py', 'packaging/service.py',
-           'packaging/systemd.py', 'packaging/update_launch.py']
+           'packaging/systemd.py', 'packaging/update_launch.py',
+           'packaging/updater.py']
     )
 
 
