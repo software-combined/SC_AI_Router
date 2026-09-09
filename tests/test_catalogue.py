@@ -31,6 +31,11 @@ class CatalogueFlagTests(unittest.TestCase):
         self.assertIsNone(entry['apply_patch_tool_type'])
         self.assertEqual(entry['experimental_supported_tools'], [])
         self.assertEqual(entry['web_search_tool_type'], 'text_and_image')
+        self.assertNotIn('fresh task', entry['description'])
+        self.assertIn('mid-thread', entry['description'])
+        readme = (Path(__file__).resolve().parents[1] / 'README.md').read_text()
+        self.assertIn('Switch models mid-thread from the picker', readme)
+        self.assertNotIn('Start a fresh task when switching providers', readme)
 
     def test_preview_entry_is_labelled(self):
         preview = replace(by_slug('z-ai/glm-5.3-flash'), tier='preview')
