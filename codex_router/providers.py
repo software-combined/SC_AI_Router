@@ -1,6 +1,7 @@
 """Provider adapters. Each owns model membership, request preparation, upstream target and response adaptation."""
 import http.client
 import json
+import re
 from . import compaction as comp, local_services
 from .capabilities import (CANONICAL_ORDER, OPENROUTER_HOST, REASONING_LEVELS, check_effort,
                               check_images, input_modalities)
@@ -25,6 +26,83 @@ def upstream_retry_after(response, prepared, metrics):
     response.read()
     log_event('upstream_rate_limited', provider=prepared.provider, path=metrics['path'])
     return response.getheader('Retry-After', '2')
+
+
+def _provider_reason(body):
+    """(provider_name, short_reason, wire_tool) from an upstream error body.
+
+    Only structural fragments leave this function: never raw bodies,
+    schemas, argument values, or secret-bearing text.
+    """
+    try:
+        payload = json.loads(body.decode() if isinstance(body, bytes) else body)
+    except (ValueError, UnicodeDecodeError, AttributeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    error = payload.get('error')
+    if not isinstance(error, dict):
+        return None
+    metadata = error.get('metadata')
+    provider = metadata.get('provider_name') if isinstance(metadata, dict) else None
+    raw = metadata.get('raw') if isinstance(metadata, dict) else None
+    text = None
+    if isinstance(raw, str):
+        try:
+            inner = json.loads(raw)
+            text = inner.get('error') if isinstance(inner, dict) else raw
+        except ValueError:
+            text = raw
+    if not isinstance(text, str):
+        text = error.get('message') if isinstance(error.get('message'), str) else None
+    if not isinstance(text, str) or not text.strip():
+        return None
+    tool = None
+    match = re.search(r'\bns_[0-9a-f]{12}_\S+|\b[a-z][\w.-]*\.[\w-]+\b', text)
+    if match:
+        tool = match.group(0).rstrip(':,.')
+    reason = text.strip()
+    if len(reason) > 300:
+        reason = reason[:297] + '...'
+    return provider, reason, tool
+
+
+def describe_failure(exc, response, info):
+    """Name an upstream failure for the client: (status, message) or None.
+
+    Pure: no reads, no logging, no clock. `response` is a snapshot
+    {'status': int, 'body': bytes} or None when headers never arrived.
+    Unknown shapes return None so the caller keeps existing behavior.
+    """
+    model = info.get('model', 'the model')
+    timeout = info.get('timeout_s', 120)
+    if response is not None:
+        if response.get('status') == 429:
+            return None  # existing Retry-After path owns 429s
+        parsed = _provider_reason(response.get('body', b''))
+        if parsed is None:
+            return None
+        provider, reason, tool = parsed
+        who = f'upstream {provider}' if provider else 'upstream'
+        message = (f'{model} was rejected by {who} '
+                   f'(HTTP {response.get("status")}): {reason}. '
+                   'Do not retry the unchanged request')
+        if tool:
+            message += f'; offending tool: {tool}'
+        return 409, message
+    if isinstance(exc, TimeoutError):
+        elapsed = round((info.get('elapsed_ms') or 0) / 1000)
+        message = (f'{model} did not answer within {timeout}s '
+                   f'(waited {elapsed}s). Retry a shorter turn')
+        if isinstance(model, str) and model.startswith('~x-ai/') and info.get('has_image'):
+            message += '; Grok image turns stall upstream, retry text-only'
+        return 502, message
+    if isinstance(exc, OSError):
+        host = info.get('host')
+        if host:
+            return 502, f'{model} is unreachable at {host}: check the network connection and retry'
+        return 502, f'{model} lost its upstream connection before responding; retry'
+    return None
 
 
 def relay_headers(response, send_header, model):
