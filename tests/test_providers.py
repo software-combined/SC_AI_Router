@@ -100,7 +100,7 @@ class SummarizerTests(unittest.TestCase):
             return providers.OpenRouterProvider().summarize(model, 'key', [])
 
     def test_summarizer_pins_lowest_supported_effort(self):
-        for model, effort in (('deepseek/deepseek-v4-flash', 'high'),
+        for model, effort in (('~deepseek/deepseek-v4-flash-latest', 'low'),
                               ('z-ai/glm-5.3', 'low')):
             with self.subTest(model=model):
                 seen = {}
