@@ -1,5 +1,15 @@
 # Implementation Plans
 
+Start with the [full router backlog and execution order](2026-09-09-router-roadmap.md)
+and the [complete executor prompt](2026-09-09-execute-all-router-plans.md).
+Reconciled at `96db57f`, 9 September 2026: platform Plans 056-059 and
+AGENTS.md section 9 are integrated; audit Plans 060-067 and this consolidation
+remain planning deliverables. No source refactor or rollout is implied.
+
+The inherited 001-033 material below belongs to the former SC_Infrastructure /
+SC_AI index. Those plan files are absent from this repository and are historical
+context, not work for the router executor. The router scope is 034-067.
+
 Plans 001-003 were generated on 2026-07-13. Plan 004 was added on 2026-07-14
 after read-only inspection of the active v0.2 OpenCode stream, the installed
 desktop/config surface, current OpenCode contracts, OpenRouter routing, and
@@ -204,123 +214,108 @@ registration.
   rejected because the existing 30-second non-blocking health call already
   supplies the required periodic trigger.
 
-## Codex model router plans (034 to 053), added 2026-09-07
+## Router plans 034-067: reconciled 9 September 2026
 
-Written after a read-only audit of `domains/ai-platform/codex-model-router` at
-commit `749a6b8d` on branch `codex/codex-adapter-20260907` (the router is not
-on `main`; the branch is pushed, no pull request), the deployed copy in
-`~/.codex/mixed-model-router`, its logs (10,609 structured lines), a live probe
-of the running service, the Codex desktop binary (`codex-cli 0.153.4`) and the
-live OpenRouter model metadata. Baseline: 58 unit tests pass at `749a6b8d`
-(`/opt/homebrew/bin/python3 -m unittest discover -s domains/ai-platform/codex-model-router -p 'test_*.py'`).
-Plan 034 moves the router into its own repository; the plans are written to
-travel with the code, so copy `plans/034-*` to `plans/046-*` into the new
-repository's `plans/` and continue there. Paths inside the plans use
-`ROUTER_ROOT` for the router directory before and after the move.
+The [roadmap](2026-09-09-router-roadmap.md) owns remaining requirements,
+sequencing, evidence and acceptance gates. Read individual plans for execution
+detail. Original source excerpts are dated: rebase their intent onto current
+source, never recreate an already integrated predecessor.
 
-### Execution order and status
+Seven plans have delivered their principal source work, two designs are parked
+or superseded, and 25 plans or umbrella plans retain work. These are not 25
+independent implementations: the owner mapping prevents duplicate execution.
 
-| Plan | Title | Priority | Effort | Depends on | Status |
-|------|-------|----------|--------|------------|--------|
-| 034 | Own product repository, package layout, governance, CI | P1 | M | none (two operator decisions) | DONE |
-| 035 | Startup self-check, `ROUTER_HOME`, timestamped rotating logs, `/health` version and inflight | P1 | S | none | DONE |
-| 036 | Handler characterisation tests (ten end-to-end tests, fake upstream) | P1 | S | 035 | DONE |
-| 038 | Single model registry, quirks as data, generated OpenRouter catalogue entries | P1 | M | 036 | DONE |
-| 037 | Provider interface and thin relay handler | P2 | M | 036, 038, 035 | DONE |
-| 040 | Ordered credential lookup (env, key file, OpenCode fallback), startup fail-closed | P1 | S | 035 (037 either order) | DONE |
-| 043 | No-subscription mode: spike three Codex login shapes, `openai_mode`, local native services | P1 | M | 037, 038 | IN PROGRESS (spike ran 2026-09-08 on Codex 0.153.4: Shape C custom provider works with no login, thread+turn reach the router with bearer auth; `openai_mode` + local 404 services + path-token none-mode config + probe `--provider` + docs landed in source; source boxes verified 2026-09-09; desktop sign-in check + sandboxed live install proof per owner 2026-09-09; GPT Teams likely, so no-subscription path stays CLI/IDE-only) |
-| 039 | Live merged catalogue served by the router, retire the snapshot file | P2 | M | 038, 037, 035, 043 (fallback rules) | BLOCKED (Step 1 no-go: no /models fetch observed; static-file fallback retained per 2026-09-08 audit brief until a replacement is proven) |
-| 041 | Versioned release bundle, stdlib installer, health check and rollback, update agent | P1 | L | 034, 035, 040 (039 optional) | IN PROGRESS (installer/updater landed in source, never deployed to a versioned layout; fleet updates need the 047-A feed decision) |
-| 045 | Release on every push to `main`/`beta`, 15-minute updates, drain and socket-activated restart | P1 | M | 041 | IN PROGRESS (drain + socket activation landed; push-to-release and the live 15-minute loop need the 047-A feed decision and the 047-B cutover gate) |
-| 044 | Full capability parity from live metadata, probe-gated (audio, limits, summaries, freeform patch, web search) | P2 | M to L | 038, 037 (039 for live entries) | IN PROGRESS (partial: registry flags, live_refresh, `models add`, probe media/effort/deferred legs plus offline reasoning-summary/apply-patch/web-search/experimental-tools legs with harness coverage landed; paid per-model probes pending) |
-| 046 | Model onboarding at scale: `models add` command, preview tier, hourly remote model list, CI validation | P1 | M | 038, 039, 044, 045 | IN PROGRESS (partial: `models add` + preview tier + compat record + isolated verify landed; source boxes verified 2026-09-09; hourly hot-reload deferred per 2026-09-08 audit brief pending versioned-update proof; manual seventh-model check needs the live gate) |
-| 042 | Documentation rewrite, compatibility matrix, retire manual release artefacts, vault note | P3 | S | 035, 038, 039, 040, 041, 046 | DONE (docs rewrite landed; two inaccurate plan-text claims corrected in-file 2026-09-08) |
-| 047 | Router remediation handover: working delivery, versioned cutover, protocol fixes, installers, key window | P0 | L | 041, 045 | IN PROGRESS (source merged to main 9bbdc28: feed serial and signatures, catalogue seeding wired into installer, protocol C/D fixes, pointer-file releases, launcher in bundle, shutdown, setup key claim, none-mode auth, probe provider flag, guidance via current_release_dir; live cutover remains; feed = AWS 651116729473 ap-southeast-2 (owner 2026-09-09, key home TBD); macOS/Windows signing deferred, plugin route to investigate instead of paid certs; Linux install notes expected via contributor PR) |
-| 048 | [Invitation-only managed OpenRouter keys across portcos](048-router-managed-key-provisioning.md) | P1 | L | 040, 037, 041; account/auth/distribution preflight | IN PROGRESS (owner 2026-09-09: IT issues one OpenRouter key per portco user, pasted once into the setup window; full provisioning service not built; key-provisioning decision superseded by Plan 055) |
-| 049 | [Codex/Claude plugin setup and native macOS, Windows and Arch Linux lifecycle](049-agent-plugin-and-three-os-installation.md) | P1 | L | 047-A AWS delivery; existing Arch contribution; designated staff acceptance | TODO (planning only: all three OS families required for first supported release; keep source/plugin package in adapter repo and catalogue in SC_Agent_plugins; integrate contributor's Arch PR when available) |
-| 050 | [Router service recovery and update readiness](050-router-service-recovery-and-update-readiness.md) | P1 | S | Fresh service/release readback; lifecycle writer coordination | TODO (planning only; observed live 0.6.5.17, updater not loaded) |
-| 051 | [Claude CLI and desktop gateway setup](051-claude-cli-and-desktop-gateway-setup.md) | P1 | M | 050 healthy service or equivalent verified state | TODO (planning only; CLI and desktop auth/discovery verified separately) |
-| 052 | [Claude billing probes and release acceptance](052-claude-billing-probes-and-release-acceptance.md) | P1 | M | 050, 051; explicit paid-run approval | TODO (planning only; tool, billing, source, release and rollout gates separate) |
-| 053 | [Private Claude Code plugin](053-claude-code-private-plugin.md) | P1 | M | 049 shared installer; 051 client contract; 052 acceptance; 054 feed model | TODO (planning only; private catalogue, shared package, no automatic mutation) |
-| 054 | [Group distribution, private feed and push-to-main auto-update](054-group-distribution-private-feed-and-auto-update.md) | P1 | L | 049 §2 distribution rules; 050 healthy service; AWS account, DNS and publication approvals | TODO (planning only; owner 2026-09-09: main publishes stable, reads token-gated, no signature ceremony; free-plan private repo has no branch protection) |
-| 055 | [Central per-user key federation and the first-use key window](055-central-key-federation-and-first-use-key-window.md) | P1 | M | 054 onboarding and install token; OpenRouter organisation write; AWS approvals | TODO (planning only; owner 2026-09-09: provision centrally and write the key at 0600, never displayed, no inference proxy; supersedes 048's paste-once decision; Stage 3 key window is independent) |
-| 056 | [Installer platform-backends refactor](056-installer-platform-backends-refactor.md) | P1 | M | None (enabler for 057) | TODO (planning only; sequence after the concurrent `updater.py` split, one writer at a time; verified 2026-09-09: `packaging/install.py` is 699 lines against a 700 hard limit at `6840312`, so a third backend cannot be added inline; `None` from `systemd_manager()` currently means "macOS", which is how Windows reaches launchd) |
-| 057 | [Windows install and service support](057-windows-install-and-service-support.md) | P1 | L | 056 Stage 3 (Stage 1 independent); 056 Stage 4 for Stage 7; 059 for Stage 5's interpreter message; a named Windows test machine (open decision 4 below) | TODO (planning only; verified 2026-09-09: simulated Windows dispatch raises `AttributeError: os.getuid`, no autostart mechanism exists in source, and the OpenRouter key has no ACL protection there. Stage 1 fail-closed refusal should land first and is independent) |
-| 058 | [Recipient readiness for Windows and Linux](058-recipient-readiness-for-windows-and-linux.md) | P1 | M | 057 for Windows; 054 for the feed transport decision; 059 for the interpreter remedy | TODO (planning only; verified 2026-09-09: full Linux lifecycle - install, health, scheduled update, rollback, uninstall - passed against a real systemd user manager in a container. Real-desktop acceptance, prerequisite preflight and honest platform docs remain) |
-| 059 | [Python 3.14 interpreter provisioning](059-python-314-interpreter-provisioning.md) | P0 for distribution | M | None (blocks 058 Stage 1 remedies and 057 Stage 5) | TODO (planning only; owner decision required. Verified 2026-09-09: the 3.14 requirement is real (`compression.zstd` in `router.py`), Ubuntu 26.04 and Fedora 42 carry it, Ubuntu 24.04 LTS and Debian 13 do not. Recommendation: detect-and-instruct now, ship a private relocatable interpreter as the target; do not install via system package managers as root) |
+| Plan | Current status | Remaining owner / next action |
+|---|---|---|
+| [034](034-codex-router-own-repository-and-governance.md) | Repository/package/CI delivered; governance incomplete | 054 owns branch-protection/publisher controls; verify target before changes |
+| [035](035-codex-router-startup-self-check-state-home-and-logging.md) | Startup/state/structured logging delivered | 060 owns content safety; 058 closes supervisor-log retention documentation |
+| [036](036-codex-router-handler-characterisation-tests.md) | DONE: handler characterization | Preserve tests through 062 |
+| [037](037-codex-router-provider-interface-and-handler-decomposition.md) | DONE: provider interface | 062 extends domain ownership without replaying original extraction |
+| [038](038-codex-router-single-model-registry.md) | DONE: registry | 064 owns projection consistency |
+| [039](039-codex-router-live-merged-catalogue.md) | PARKED: live catalogue route not proven | Keep static merged catalogue; reopen only on actual supported client fetch |
+| [040](040-codex-router-credential-lookup.md) | DONE: ordered credential lookup | 055/057 own new writer/recovery/ACL requirements |
+| [041](041-codex-router-installer-and-auto-updater.md) | PARTIAL: versioned install/update/rollback source and owner-Mac layout exist | 050, 054, 057-059 own remaining operational/platform acceptance |
+| [042](042-codex-router-docs-and-release-hygiene.md) | Original docs rewrite delivered; current README inaccurate | 058 Stage 5 is the active correction owner, coupled with pinned docs tests |
+| [043](043-codex-router-no-subscription-mode.md) | PARTIAL: no-subscription CLI route exists | Desktop sign-in decision, isolated install and native-services tolerance proof |
+| [044](044-codex-router-full-capability-parity.md) | PARTIAL: capability plumbing/probe harness exists | 064 projection fix then approved per-model/client capability probes |
+| [045](045-codex-router-continuous-release-and-seamless-restart.md) | PARTIAL: drain/socket/update source exists | 054 owns branch publishing and observed 15-minute update; 058 cross-OS acceptance |
+| [046](046-codex-router-model-onboarding-at-scale.md) | PARTIAL: model add/remove/check/preview exists | Manual unseen-model picker proof; hourly refresh follows authenticated update acceptance and its live-change gate |
+| [047](047-router-remediation-handover.md) | PARTIAL umbrella; source C/D fixes integrated | B recovery via 050; A delivery via 054; E/F/G replaced by 049/053/055-059 |
+| [048](048-router-managed-key-provisioning.md) | SUPERSEDED design; retain relevant acceptance requirements | 054/055 own onboarding, budgets, revocation, Business/Enterprise and person isolation; no old invitation service |
+| [049](049-agent-plugin-and-three-os-installation.md) | TODO umbrella: shared installer and Codex plugin | 063/059/056/057 foundations; 053 Claude plugin; 054/055 distribution; all three OS staff gates |
+| [050](050-router-service-recovery-and-update-readiness.md) | PARTIAL: healthy owner-Mac versioned service and both launchers observed | Fresh readback; real successful update + rollback evidence, no replay of old repair |
+| [051](051-claude-cli-and-desktop-gateway-setup.md) | TODO: separate Claude CLI and desktop setup | 063 activation seam; preserve native auth and independent discovery/restoration |
+| [052](052-claude-billing-probes-and-release-acceptance.md) | TODO: Claude tool and billing acceptance | 051 plus paid authority; CLI and desktop each tested |
+| [053](053-claude-code-private-plugin.md) | TODO: private Claude plugin | 063 then 051 client contract; local package before 054 publication and 052 acceptance |
+| [054](054-group-distribution-private-feed-and-auto-update.md) | TODO: private distribution and identity onboarding | 067/056/059/063 source reused; AWS/DNS, Team decision, publisher and machine gates |
+| [055](055-central-key-federation-and-first-use-key-window.md) | TODO: central keys and first-use recovery | Stage 3 independently first; operator path then 054 Stage 4 for automated issuance |
+| [056](056-installer-platform-backends-refactor.md) | TODO: platform backends | After 067; own actual backend modules and shared OS CI |
+| [057](057-windows-install-and-service-support.md) | TODO: Windows support | Stage 1 refusal early; 056/059/063 for remaining source; named Win11 x64 and entry-policy proof for acceptance |
+| [058](058-recipient-readiness-for-windows-and-linux.md) | TODO: recipient preflight, native acceptance and README | Wrong-today docs now; native preflight before runtime download; consumes 056/057/059 |
+| [059](059-python-314-interpreter-provisioning.md) | TODO: private CPython 3.14 runtime | Single pinned lock/native wrappers, isolated bootstrap then 054 mirror; ongoing patch owner required |
+| [060](060-content-safe-router-diagnostics.md) | TODO: content-safe diagnostics | First small source fix; synthetic regression already reproduced |
+| [061](061-domain-rules-and-bundle-contracts.md) | TODO: domain rules and extracted-bundle checks | Before structural moves; preserve AGENTS.md section 9 |
+| [062](062-protocol-and-upstream-boundaries.md) | TODO: protocol/transport boundaries | 060/061, with 066 protocol work reconciled before moving shared files |
+| [063](063-client-activation-and-subscription-policy.md) | TODO: client activation/subscription policy | 056/061/062; Codex/service-only first, then 051/053 |
+| [064](064-model-facts-and-client-projections.md) | TODO: model facts and client projections | 061; serialize shared files with 062; feeds 044/046 |
+| [065](065-kiro-client-compatibility-spike.md) | TODO: Kiro IDE/CLI compatibility spike | Independent, supported hooks only; a verified negative result completes spike |
+| [066](066-mixed-provider-agent-instruction-delivery.md) | TODO: mixed-provider instruction delivery | Early containment/capture; real plaintext delivery remains separate from file-brief workaround |
+| [067](067-installer-updater-extraction.md) | TODO: scheduled-updater extraction | Before 056 grows install.py; skip if equivalent work has already integrated |
 
-Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale).
+### Consolidated decisions and dependencies
 
-### Dependency notes
+- Private relocatable CPython 3.14 is the target already selected in 049/054;
+  059 implements and maintains it. Do not install system packages as root.
+- Use one installer, platform manager family, runtime lock, bootstrap pair,
+  client receipt/status contract and release workflow. Local synthetic
+  artifacts unblock source work before AWS or staff-machine acceptance.
+- Installer writers serialize: 067 → 056 → 063, with 059/057 rebasing as needed.
+  061 protects extracted-bundle closure before adding nested modules.
+- 054 owns private S3/CloudFront at `dist.softwarecombined.com`, Entra/member/B2B
+  download access, branch-to-channel publishing, token rotation and the
+  publisher-control decision. 055 owns Management API keys, person budgets and
+  recovery. Shared feed access never authorizes key issuance.
+- 054 Stage 4 is included in the complete backlog because 055 Stage 4 depends
+  on its per-install identity; it is later-stage work, not a first-install gate.
+- A named Windows machine gates native acceptance, not offline source work.
+  Windows entry must work under the actual device policy without bypass.
+  A plugin invoking the same blocked script is not a proven remedy.
+- Preserve CLI/IDE-only no-subscription scope until desktop sign-in is checked.
+  Native Claude auth and Anthropic-via-OpenRouter are separate routes.
+- Read upstream Codex/OpenCode/Claude sources per AGENTS.md section 9, pinned
+  to commit/version; use official Kiro evidence under 065. No invented API.
+- Required reviews use the current on-disk model table and skill. The
+  file-brief audit workaround succeeded once, with served identity
+  `unverified`; direct encrypted mixed-provider briefs remain broken.
 
-- Plans 050-053 were added on 2026-09-09 as separate execution plans; Plan 049
-  is unchanged. Start with current service reconciliation, then CLI/desktop
-  configuration, then explicitly approved billing probes. The handover's old
-  failed-install snapshot is superseded by Plan 050's dated readback. Plan 053
-  owns the Claude-plugin slice of 049, reusing its shared installer and package.
-  PR #3 is the now-visible Arch contribution; recheck its status and ownership.
-  These plans do not authorise runtime, client, paid or publication actions.
-  Desktop authentication compatibility remains an independent gate.
-- Plan 049 is the active plugin/installer direction: reuse the existing installer
-  and the Arch contributor's work, rather than creating duplicate delivery code.
-  It supersedes 047 E/F's native installer-package approach, retains AWS-feed
-  and live-cutover gates, and keeps 048's invitation model, though key provisioning itself is now governed by Plan 055, which supersedes 048's paste-once decision. The integrated
-  owner decision to remove signature enforcement supersedes older signing
-  requirements; keep checksum, serial and identity checks. macOS, Windows
-  and Arch Linux must all pass on designated staff machines before the first
-  supported plugin release. This plan does not authorise implementation or rollout.
-- Plan 048 (owner decision 2026-09-09): IT issues one OpenRouter key per portco
-  user, pasted once into the setup window; the full provisioning-service design
-  below is retained for reference only and its slice order no longer applies.
-  It does not reopen 039/046.
-  Its observed release/distribution preflight supersedes older assumptions for
-  this rollout; the plan itself does not authorise publishing or account writes.
-- Plan 054 (owner direction 2026-09-09) is the group rollout of 049 §2's AWS
-  delivery: private S3 origin behind CloudFront, reads gated by a rotatable
-  token, `main` publishing straight to `stable` and `develop` to `beta`, native
-  pinned CPython bootstrap, and Windows Task Scheduler lifecycle. It supersedes
-  049's publicly reachable download surface, keeps the signature-removal
-  decision, and records that the free-plan private repository has no branch
-  protection, so publication trust equals repository write access plus bucket
-  write access. It does not authorise AWS, DNS, publication, live-updater,
-  staff-machine or release actions.
-- Plan 055 (owner direction 2026-09-09) supersedes Plan 048's "IT issues one
-  OpenRouter key per portco user, pasted once into the setup window": keys are
-  provisioned centrally through an OpenRouter Management API key held in AWS,
-  budgeted per person with Guardrails, written at `0600` and never displayed.
-  An operator script delivers the key until Plan 054 Stage 4 issues the
-  per-install credential that may authorise issuance; the shared feed token
-  never may. Inference is not proxied. The identity
-  anchor is the onboarding-verified work email, not the Codex login email,
-  because the observed Codex account on the owner Mac is a provisioned address
-  rather than a personal one. Anthropic models need no separate plan; they are
-  already reachable through OpenRouter, which is also the compliant route. It
-  does not authorise AWS, OpenRouter organisation, key-provisioning,
-  staff-machine or release actions.
-- 036 before 037: the ten characterisation tests are the acceptance suite for the refactor and must pass with unchanged assertions.
-- 038 before 037: providers look models up through the registry (`by_slug`).
-- 043's spike (Step 1) should run early, right after 037 and 038 land, because its outcome (which Codex login shape works without a subscription) changes what 039 falls back to and what 041 writes into the Codex configuration.
-- 041 before 045: 045 replaces 041's update cadence, release trigger and restart, but relies on its installer core.
-- 044 runs paid probes per model; do it after 039 so the generated entries are live and one restart shows the result.
-- 046 after 044 and 045: it reuses the probe flags and the release feed, and it is what makes "enable more models as we go" a data change instead of a release.
-- 042 last; it documents what actually landed.
+### Open execution gates
 
-### Decisions required from Cyril
+See the roadmap's gate register for exact scope: Windows and Linux/Arch staff
+targets, Windows entry policy, private-runtime maintenance owner, AWS/DNS/Entra
+authority, GitHub Team and repository-access changes, publication/cutover,
+paid client/billing probes and production per-user key operations. Plans and
+this index do not themselves authorize those actions. Continue independent
+source work while an external gate is pending.
 
-1. Repository name and visibility (Plan 034 Step 1). Settled in practice: `software-combined/SC_Codex_openRouter_adapter`, private. The public recommendation was not adopted, so the 047-A feed design must serve updates without anonymous GitHub access.
-2. Request cap: SETTLED 2026-09-08. Removed; the `No request cap` CI step fails the build if it returns. There is no local spend cap: see the KnowledgeVault picker note before promising budget behavior.
-3. Whether CLI and IDE only is acceptable for no-subscription staff if the desktop app turns out to require ChatGPT sign-in (Plan 043 Step 1).
-4. A named Windows test machine before any Windows work (Plan 041 Step 9).
-5. Approval to edit the KnowledgeVault note (Plan 042 Step 5) and to make the first push to `main` that becomes an automatic release (Plan 045).
+### Findings considered and rejected
 
-### Findings considered and rejected or deferred
-
-- Central AWS hosting of the whole router: rejected for now. It would carry every staff member's ChatGPT bearer through a shared service, needs real per-user authentication instead of a path token, adds a network hop to request bodies of up to 1.5 MB, and Codex's catalogue still has to be answered locally. Revisit only as an OpenRouter gateway with per-user sub-keys and spend limits, which the provider interface from Plan 037 makes possible.
-- Video and file input modalities: not actionable. Codex's client only knows `text`, `image`, `audio`; Codex reads files through its own tools.
-- `tool_mode = code_mode_only` and multi-agent `v2` for OpenRouter models: rejected per the trial evidence recorded in the KnowledgeVault note (code mode is not a substitute for provider compatibility; v1 plaintext sub-agents are the proven setting).
-- OpenAI API-key mode (`openai_mode = api_key`): deferred until someone without a subscription but with an API key asks (Plan 043 notes).
-- Signed release manifests and keychain-backed credentials: historical deferral
-  superseded for managed installations by Plan 048. Personal installs retain
-  their existing credential behaviour; managed rollout has its own OS-store,
-  publisher-verification and private-repository distribution gates.
-- The transient 7 September outage (state key missing after a deploy): fixed the same evening by the owning session; not planned, but it is the reason for Plan 035's startup self-check and Plan 041's health-checked rollback.
+- A full rewrite, universal message format, dynamic plugin framework, renamed
+  homes/services, or duplicate installers: bounded existing seams suffice.
+- `router_launch.py` and `update_launch.py` are separate contracts, not
+  accidental duplicates. `opencode_auth` is an intentional credential fallback.
+- The installer Windows uninstall blocker is not the direct `disable.py`
+  service call: installer restore passes `ROUTER_RESTORE_ONLY=1`.
+  Standalone disable still needs the shared backend contract.
+- Systemd/container Linux lifecycle evidence is useful but not native desktop
+  or staff-machine acceptance; old Linux-uninstall memory is superseded.
+- Do not remove README's runtime-file list without updating its pinning test
+  and proving bundle closure. 058 owns the correction, 061 the artifact gate.
+- Native OpenRouter multi-agent v1 metadata does not prove plaintext delivery
+  from a v2 parent. 066 replaces that earlier assumption.
+- Do not promote Muse audio or any capability from metadata alone. 044
+  reconciles advertised capabilities with actual probe evidence after 064.
+- Kiro MCP/tool integration is not proof of custom inference support.
+- No new signing ceremony, request cap, inference proxy, old invitation
+  service, or unapproved hourly model hot-reload.
+- Retired Muse duplicate drafts are in [rejected-muse-retry](rejected-muse-retry/README.md);
+  they are provenance, not active numbered plans.

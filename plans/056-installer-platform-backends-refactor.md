@@ -7,6 +7,19 @@ Priority P1; effort M; risk MEDIUM (the installer owns service lifecycle and
 Codex configuration on every staff machine).
 Planned 2026-09-09 at `9262e5a9bf8bc14aa1b5b330168ed28d0e33fcd8`.
 
+## Consolidation amendment, 2026-09-09
+
+Reconciled at `96db57f` with the domain audit. This plan owns OS lifecycle;
+061 owns architecture rules and extracted-bundle checks, 062 owns wire
+protocols/upstreams, and 063 owns client activation/receipts. These are
+complementary extractions. The previously unnamed updater split is now
+[Plan 067](067-installer-updater-extraction.md): land it before this plan changes
+`install.py`, one writer at a time. Plan 061's source/bundle checks can land
+first; its expanded OS coverage waits for this plan Stage 4, without creating
+a dependency cycle. Use `packaging/platforms/`, plural, to avoid shadowing
+stdlib `platform` when running an installer script. No implementation is
+authorised by this amendment.
+
 ## Outcome
 
 `packaging/install.py` stops being a macOS installer with a Linux branch bolted
@@ -52,7 +65,7 @@ packaging/
   install.py        shared: feed, download, verify, extract, self-test,
                     swap, config block, rollback, prune  (no platform code)
   service.py        shared helpers (unchanged responsibilities)
-  platform/
+  platforms/
     __init__.py     select() -> backend for sys.platform, or None
     darwin.py       launchd: plists, reload, updater job  (from install.py + launchd.py)
     linux.py        systemd user units and timer          (today's systemd.py)
@@ -120,7 +133,7 @@ reordered or dropped, because that is exactly the regression a refactor risks.
 deliberately reordered copy.*
 
 **Stage 2 - extract the interface and the two existing backends.** Create
-`packaging/platform/`, move `systemd.py` to `linux.py` behind the interface, and
+`packaging/platforms/`, move `systemd.py` to `linux.py` behind the interface, and
 lift the launchd branch out of `do_install` into `darwin.py`. Behaviour identical;
 no new features. `packaging/release.py:bundle_files` must be updated to ship the
 new package, or installed bundles will be missing their backend - check this

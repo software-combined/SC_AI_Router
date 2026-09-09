@@ -1,5 +1,13 @@
 # Plan 050: Reconcile the live router and restore safe update readiness
 
+> **Fresh readback 2026-09-09:** router health `ok`, version `0.6.9.22`; router
+> LaunchAgent loaded/running through `router_launch.py`; updater loaded with
+> interval 900 through `update_launch.py` (idle between runs). Both disk
+> executables exist; neither loaded job names a release-specific installer.
+> This supersedes the missing-updater snapshot below. Start by rechecking,
+> not reinstalling. Busy deferral, scheduled activation and rollback acceptance
+> still need their own evidence; these observations do not close those gates.
+
 > Planning only. No live installer run, restart, updater activation, paid call
 > or release is authorised by this document.
 

@@ -1,5 +1,13 @@
 # Plan 046: Add a model with one command, ship it as data, and let routers pick it up without a release
 
+> **Reconciliation 2026-09-09 at `96db57f`:** model CLI, previews and validation
+> exist. Hourly registry pickup remains unimplemented. Resume that remaining
+> stage after 064's projection contract and 054's authenticated/versioned feed
+> are qualified; retain last-good state, atomic validation/swap and picker
+> refresh proof. Do not depend on 039's unsupported live `/models` mechanism
+> or advertise refresh from a timer alone. In-process inference data refresh
+> and Codex's static catalogue/cache refresh require separate evidence.
+
 > **Executor instructions**: Follow this plan step by step. Run every
 > verification command and confirm the expected result before moving to the
 > next step. If anything in the "STOP conditions" section occurs, stop and

@@ -1,109 +1,159 @@
-# Plan 059: Python 3.14 interpreter provisioning
+# Plan 059: Provision and maintain a private CPython 3.14 runtime
 
-> Planning only. This document authorises no implementation, no new release
-> artefact, no third-party repository and no staff-machine change. The option
-> chosen in "Decision required" is an owner call and is not assumed here.
+> Planning only. No download execution, system changes, publication or
+> staff-machine action is authorised here. Reconciled at `96db57f`, 2026-09-09.
+> Read current instructions and compare in-scope source before implementation.
 
-Priority P0 for distribution; effort M; risk MEDIUM (a bundled runtime becomes
-something we must keep patched).
-Planned 2026-09-09 at `6840312`.
-Blocks Plan 058 Stage 1 remedies and Plan 057 Stage 5.
+Priority P0 for distribution; effort M; risk MEDIUM. This plan implements the
+runtime/bootstrap contract already selected in Plan 049 section 2 and Plan 054
+sections 3/5. Plan 056 owns OS backends; 054 owns private hosting; 058 owns
+recipient preflight and documentation. One runtime lock and one native
+bootstrap per OS family serve all of them.
 
-## The problem in one line
+## Decision and first proof
 
-The router genuinely requires Python 3.14, and most Linux machines cannot get
-it from their own package archive, so the prerequisite - not the code - is what
-stops us handing this to people.
+Use a pinned, private, relocatable CPython 3.14 runtime. Automatic `apt`, PPA,
+`dnf`, `pacman`, `winget`, Homebrew installation and system-Python replacement
+are excluded from managed bootstrap. Existing interpreter detection stays as
+a preflight/failure aid and an explicit verified override. This resolves the
+old "C now, B later" choice: B is the delivery target, with C's diagnostics.
 
-## The requirement is real, not an arbitrary pin
+First proof: on a clean Mac without Python 3.14, the native wrapper verifies
+and extracts the locked runtime in the router home, proves `compression.zstd`,
+and starts the canonical installer. The same contract then works on qualified
+Linux and Windows targets. No admin or system-PATH change.
 
-`codex_router/router.py:11` imports `compression.zstd` and uses it at
-`router.py:227-228` to decode `Content-Encoding: zstd` request bodies from
-Codex. That module is stdlib from Python 3.14 only (PEP 784). `pyproject.toml`
-declares `requires-python = ">=3.14"`, `packaging/service.py:59` sets
-`MIN_PYTHON = (3, 14)`, and `find_python` probes candidates with
-`import sys,compression.zstd`. Dropping to 3.13 would mean vendoring a zstd
-decoder or refusing zstd bodies, which is a larger change than provisioning an
-interpreter.
+The repository requires 3.14: `router.py:11` imports `compression.zstd`;
+`service.py` probes that module as well as the version. The old archive table
+was a dated container observation, not a portable dependency strategy. A
+private runtime removes that prerequisite variance, but does not remove libc,
+CPU, OS policy or native library limits.
 
-## Verified availability, 2026-09-09
+## Runtime source and qualified targets
 
-The Linux rows were checked in containers on this host; `python3` is not
-preinstalled on any of the base images, so those are archive contents rather
-than image contents. The macOS and Windows rows are the known vendor routes,
-not checks run here.
+Use reviewed `astral-sh/python-build-standalone` install-only distributions,
+as already specified in 049/054. Its [distribution metadata](https://gregoryszorc.com/docs/python-build-standalone/main/distributions.html)
+records target triples, interpreter paths and native runtime requirements;
+the [project](https://github.com/astral-sh/python-build-standalone) publishes
+redistributable builds. Verify each selected archive and licences at
+implementation time; no mutable runtime URL or invented checksum.
 
-| Target | Python 3.14 from the distribution? | Evidence |
-|---|---|---|
-| Ubuntu 26.04 LTS | **Yes** | `python3.14` present in the archive |
-| Fedora 42 | **Yes** | `python3.14.aarch64 3.14.5-1.fc42` in `updates` |
-| Ubuntu 24.04 LTS | **No** - archive tops out at `python3.12` | deadsnakes PPA offers candidate `3.14.6-1+noble1` (verified), but adding a PPA to a managed machine is an IT policy decision, not an installer's |
-| Debian 13 (trixie) | **No** - archive tops out at `python3.13` | No PPA equivalent. python.org, `pyenv` or a source build are the remaining routes, none tested |
-| Arch | Untested here (no `linux/arm64` image on this host) | Rolling release; `docs/compatibility.md` records the contributor running the router under `python3.14`, so treat as available pending a real check |
-| macOS | Yes, via Homebrew | `--install-python` already runs `brew install python@3.14` (`packaging/install.py:305-307`), macOS-only and non-root |
-| Windows | Yes, via python.org or `winget` | Nothing automated; `install.ps1` does not even find an installed one (Plan 057 W6) |
+Initial pins: macOS arm64/x86_64, Linux x86_64/glibc and Windows x64.
+Linux arm64 may have a pin only after qualification; it is not a first-release
+requirement. Keep Windows ARM, musl and unsupported variants refused. Linux
+acceptance covers Arch plus the Ubuntu or Fedora desktop in 058; a Debian
+clean-start test preserves the earlier no-system-3.14 case. This is not
+universal Linux support.
 
-The Linux lifecycle proof in Plan 058 was obtained by placing a 3.14 interpreter
-into a Debian trixie container by hand. It proves the router and the systemd
-units; it does not prove a recipient on Debian 13 can get that interpreter.
+## Scope and conventions
 
-## Decision required from the owner
+Canonical repo: `/Users/cyrilallart/Documents/Github/SC_Codex_openRouter_adapter`.
+Use one owned worktree targeting `develop`; never the primary checkout.
+Runtime is stdlib-only; native shell/PowerShell bootstrap works without
+Python. Preserve standalone file-based installer imports. Read
+`packaging/install.{sh,ps1,py}`, `service.py`, `release.py`, stable launchers,
+`tests/test_interpreter_resolution.py` and installer tests.
 
-**"Should the installer install Python 3.14 itself?"** Yes in effect, but the
-form matters, and the three forms have very different consequences.
+In scope: new `packaging/runtime.lock`, wrappers, a small generator for
+lock-derived tables, interpreter selection/activation helpers, necessary
+launcher integration, related tests, a release-workflow pin check, docs and
+CHANGELOG/VERSION. Coordinate with 056/057/058/063/067. Hosting consumes 054;
+do not create another feed, installer or infrastructure stack.
 
-| Option | What it means | Consequences |
-|---|---|---|
-| **A. Install through the system package manager** | Extend today's macOS `brew` path to `apt`/`dnf`/`pacman`/`winget` | Needs **root** on every Linux target. On Ubuntu 24.04 it also means adding the deadsnakes **PPA**, and on Debian 13 there is no package to install at all. Directly contradicts the deliberate design: per-user services, no privileged operation, no lingering. Distro-specific branches to maintain forever |
-| **B. Ship a private relocatable interpreter** | The installer downloads a standalone CPython 3.14 build into `<home>/runtime/`, verifies its checksum, and points the service at it | **No root, no third-party repositories, no distro variance, identical on all three operating systems.** Also removes the Windows interpreter problem (Plan 057 W6) in the same stroke. Costs: one extra ~30-60 MB download per machine, and **we own patching that CPython**. The router is stdlib-only with zero third-party dependencies, so a private interpreter adds no other dependency surface |
-| **C. Detect and instruct only** | Preflight names the exact remedy for the detected platform and stops | Zero privilege, zero new artefacts, smallest change. But on Debian 13 the honest instruction is "build Python from source or use pyenv", which most recipients will not do |
+## Stages
 
-**Planning recommendation: C now, B as the target.**
+### 1. Define and validate one lock
 
-C is needed regardless - even with B there must be a clear failure path when the
-runtime download is blocked - and it is small enough to land inside Plan 058
-Stage 1. B is what actually makes "hand this to a colleague" work on Ubuntu
-24.04 and Debian 13, and it is one decision covering macOS, Windows and Linux
-instead of six package-manager branches.
+Record exact CPython/build versions, OS/CPU/libc constraints, immutable source
+URL, private mirror path, archive format, SHA-256, executable-relative path
+and licence files. Generate wrapper pin tables from it. Test missing/duplicate
+target, invalid digest and table drift. Runtime versioning is independent of
+router bundle version so unchanged interpreters are not downloaded repeatedly.
 
-A is not recommended. Requiring root and a third-party APT source on managed
-corporate machines is a bigger imposition than shipping our own runtime, and it
-is the one option that breaks a design principle the router currently holds
-everywhere.
+Gate: offline lock/generator tests pass; each target maps to one entry;
+unsupported targets refuse. Synthetic archives unblock source before AWS.
 
-## What B would involve, if chosen
+### 2. Implement native bootstrap and safe extraction
 
-Sketch only; not authorised by this document.
+Native preflight checks OS/CPU, current-user home, download/hash/extraction
+tools, policy and selected delivery route before creating the router home.
+A Python `--preflight` cannot be the first step on a machine without Python.
+059 owns native entry; 058 owns the shared prerequisite results/remedies.
 
-- Source: a relocatable CPython distribution published for
-  `linux-x86_64`, `linux-aarch64`, `macos-aarch64`, `macos-x86_64` and
-  `windows-x86_64`. Pin an exact build and record its checksum the same way
-  `latest.json` pins the bundle, so the existing `verify_sha256` path is reused
-  rather than a new trust mechanism invented.
-- Placement: `<home>/runtime/`, versioned like `releases/`, so an interpreter
-  upgrade is the same swap-and-verify operation as a bundle upgrade and can
-  roll back the same way.
-- Selection: `find_python` gains the private runtime as its **first** candidate
-  and keeps every existing probe, so a machine that already has a suitable
-  system 3.14 is unaffected and nothing regresses.
-- Service wiring: unchanged. The launchd plist and systemd unit already take an
-  absolute interpreter path (`_require_absolute`), which is exactly what a
-  private runtime provides.
-- Ongoing duty: a CPython security release means a new pinned build and a
-  router release. This is the real cost of B and the reason it is an owner
-  decision rather than an implementation detail.
+Fetch through 054's authorised private path, verify before execution, stage
+under `<home>/runtime/<sha>/`. Match archive format to available native tools.
+Reject traversal, absolute paths and links escaping the target; Windows ACL
+protection precedes secret-bearing writes. Never disable TLS, execution
+policy, quarantine or endpoint controls. Do not pipe downloads to a shell.
+Invoke the canonical installer only after exact version and module checks.
 
-## Risks and how each is bounded
+Gate: wrong-hash/platform/traversal fixtures never execute; partial downloads
+leave the active runtime untouched; a no-Python sandbox reaches the installer.
+Blocked downloads report a concrete remedy.
 
-| Risk | Bound |
-|---|---|
-| A bundled CPython goes unpatched | Make the pin visible in `latest.json` and treat a CPython security release like any other release trigger. If we will not commit to that, choose C and accept the narrower reach |
-| The runtime download is blocked by a proxy or endpoint protection | The preflight from Option C stays in place as the fallback path and names the system-interpreter route |
-| Bundle size makes updates painful on poor connections | Version the runtime separately from the release bundle so it downloads once, not on every router update |
-| We build B and most machines never needed it | The table above already shows two of the four Linux targets actually checked cannot self-serve, including the most widely deployed LTS. Ubuntu 24.04 alone justifies it |
+### 3. Select and update without losing the working interpreter
 
-## Out of scope
+Managed installs use the lock. A verified explicit `--python` is an
+operator-owned override; preserve it across updates and report that its patch
+lifecycle is external. Never alter system Python or global PATH. Persist the
+effective absolute interpreter choice for scheduled operations.
 
-Dropping the 3.14 requirement by vendoring a zstd decoder, the installer
-refactor (Plan 056), the Windows service backend (Plan 057), and the feed
-transport decision (Plan 054).
+Stage a candidate, prove version/native modules and candidate-bundle smoke
+before activation. Coordinate existing idle/drain and stable launchers.
+Rollback restores both bundle and interpreter selections. Keep runtimes
+referenced by active and retained rollback releases; never prune by age alone.
+Windows cannot overwrite/delete a running interpreter. Router and updater
+must both use the intended interpreter after their next launch.
+
+Gate: repeat install avoids unchanged downloads; candidate failure preserves
+the old pair; update/rollback restores the intended pair; loaded schedulers
+reference retained paths. Native lifecycle proof follows 056/057/058; it does
+not block offline implementation.
+
+### 4. Own CPython patch maintenance
+
+SCG IT's router release maintainers own the lock/security updates, with Cyril
+accountable for release decisions. Include CPython and bundled native
+dependencies in the maintenance runbook. Add a weekly CI check that detects
+newer compatible 3.14/security builds and creates or updates one review item.
+It must not change pins, execute unreviewed binaries, publish or update staff
+machines automatically. Use reviewed lock changes, beta qualification, then
+approved stable publication.
+
+A relevant security advisory triggers an out-of-cycle patch candidate. Apply
+SCG's applicable patch deadlines and record exceptions before fleet rollout.
+Preserve licences, provenance and rollback compatibility. Runtime downloads
+change only when the reviewed lock changes.
+
+Gate: synthetic new-build/advisory input produces one actionable review item
+and no publication; pin-update tests verify new-runtime download and recovery
+from activation failure. Do not create a schedule in the planning session.
+
+### 5. Qualify clean-machine setup
+
+Prove clean/repeat install, runtime patch, bundle update, rollback and uninstall
+on designated macOS, Windows and Linux targets. Record OS/CPU/libc, Python
+build, bundle and client versions. Windows source/CI may proceed before its
+staff machine is named; staff acceptance remains open. Reuse 054's mirror and
+058's walkthrough.
+
+## Checks and STOP conditions
+
+Run focused interpreter/bootstrap tests, then:
+
+```sh
+python3.14 -m unittest discover -s tests -t .
+python3.14 -m compileall -q codex_router tools tests packaging
+python3.14 tools/check_source_limits.py
+git diff --check
+```
+
+Tests protect the contracts above. Run current pre-commit review for bounded
+commits; integrate into `develop`, verify and clean the owned worktree.
+Live publication, staff changes and paid probes retain their authority gates.
+
+STOP for absent archives, unverified provenance/checksum/licence, unsupported
+native requirements, policy bypass, writer conflict or inability to restore
+the prior interpreter/bundle pair. No source-build or privileged package-manager
+fallback is implied. Report source, native qualification, deployment and
+maintenance readiness separately.
