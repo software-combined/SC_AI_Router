@@ -270,5 +270,43 @@ class EnsureServingTests(unittest.TestCase):
             self.assertTrue(domain.loaded(LABEL))
 
 
+
+class SupervisorLogRotationTests(unittest.TestCase):
+    """Bounded retention for supervisor-captured logs (Plan 058 Stage 5a).
+
+    router.jsonl already rotates via RotatingFileHandler; launchd.log and
+    update.log were unbounded supervisor sinks. rotate_log bounds them with
+    rotate-on-start semantics without losing the newest startup failures.
+    """
+
+    def _service(self):
+        return _load('router_service_rotate_under_test', 'service.py')
+
+    def test_under_limit_log_is_untouched(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / 'update.log'
+            target.write_bytes(b'x' * 100)
+            self._service().rotate_log(target, limit_bytes=1024, backups=2)
+            self.assertEqual(target.read_bytes(), b'x' * 100)
+            self.assertFalse(Path(str(target) + '.1').exists())
+
+    def test_missing_log_is_a_no_op(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / 'missing.log'
+            self._service().rotate_log(target, limit_bytes=10, backups=2)
+            self.assertFalse(target.exists())
+
+    def test_over_limit_log_rotates_keeping_newest_first(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / 'launchd.log'
+            target.write_bytes(b'new-failure-traceback')
+            first = Path(str(target) + '.1')
+            first.write_bytes(b'older-output')
+            self._service().rotate_log(target, limit_bytes=10, backups=2)
+            self.assertEqual(Path(str(target) + '.2').read_bytes(), b'older-output')
+            self.assertEqual(first.read_bytes(), b'new-failure-traceback')
+            self.assertEqual(target.read_bytes(), b'')
+
+
 if __name__ == '__main__':
     unittest.main()

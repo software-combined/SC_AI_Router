@@ -2,6 +2,12 @@
 
 ## 0.6.10 (unreleased)
 
+- Tell the truth up front: the README names Windows installer support as
+  not-yet (the installer refuses before changing anything), lists GitHub
+  CLI access as a transitional requirement, moves Arch setup below the
+  generic Linux path, and qualifies key-file protection per platform.
+  Supervisor logs rotate at service start (1 MB each, two backups).
+
 - Separate HTTP transport from wire-protocol policy: shared `Prepared`,
   hop-header, stream, and header-relay leaves move to `transport.py`, and
   the handler dispatches through an explicit `protocols/` method/path
