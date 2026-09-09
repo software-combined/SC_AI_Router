@@ -17,6 +17,7 @@ import webbrowser
 import shutil
 import sys
 import tarfile
+import urllib.error
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -473,7 +474,19 @@ def do_check_update(args, _fetch=fetch, _read_feed=None, _sleep=None):
     sleep(random.uniform(0, 120))
     etag_path = home / 'update-etag'
     etag = etag_path.read_text().strip() if etag_path.exists() else None
-    status, body, etag = read_feed(feed, etag)
+    # Transient fetch failures (offline, locked-keychain TLS, DNS blip) retry
+    # in-run with bounded backoff. HTTPError is an OSError subclass, so HTTP
+    # errors re-raise without retry; deterministic errors (SystemExit from
+    # serial/version checks, HTTP status) still fail fast below.
+    for attempt in range(4):
+        try:
+            status, body, etag = read_feed(feed, etag)
+            break
+        except OSError as exc:
+            if isinstance(exc, urllib.error.HTTPError) or attempt == 3:
+                raise
+            sleep(30 * 2 ** attempt)
+            print(f'retrying feed fetch ({exc})')
     if status == 304:
         print(f"up to date {current_version(home)}")
         return 0
