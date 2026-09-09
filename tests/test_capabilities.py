@@ -10,13 +10,12 @@ class CapabilityTests(unittest.TestCase):
 
     def test_text_only_set_matches_live_metadata(self):
         for slug in ('z-ai/glm-5.3', 'deepseek/deepseek-v4-pro',
-                     'deepseek/deepseek-v4-flash', 'deepseek/deepseek-v4-pro-0813',
-                     'deepseek/deepseek-v4-flash-0731'):
+                     'deepseek/deepseek-v4-pro-0813',
+                     '~deepseek/deepseek-v4-flash-latest'):
             self.assertEqual(input_modalities(slug), ['text'])
         for slug in OPENROUTER_MODELS - {'z-ai/glm-5.3', 'deepseek/deepseek-v4-pro',
-                                         'deepseek/deepseek-v4-flash',
                                          'deepseek/deepseek-v4-pro-0813',
-                                         'deepseek/deepseek-v4-flash-0731'}:
+                                         '~deepseek/deepseek-v4-flash-latest'}:
             self.assertIn('image', input_modalities(slug))
 
     def test_reasoning_matches_live_acceptance(self):
@@ -24,7 +23,8 @@ class CapabilityTests(unittest.TestCase):
         self.assertIn('max', reasoning_levels('meta/muse-spark-1.3'))
         self.assertEqual(reasoning_levels('~x-ai/grok-latest'), ['low', 'medium', 'high', 'xhigh'])
         self.assertEqual(reasoning_levels('deepseek/deepseek-v4-pro'), ['high', 'xhigh'])
-        self.assertEqual(reasoning_levels('deepseek/deepseek-v4-flash'), ['high', 'xhigh'])
+        self.assertEqual(reasoning_levels('~deepseek/deepseek-v4-flash-latest'),
+                         ['low', 'high', 'max'])
 
     def test_trial_values_proven_for_subagents_and_switching(self):
         patch = catalogue_patch('z-ai/glm-5.3')

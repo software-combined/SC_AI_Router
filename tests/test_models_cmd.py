@@ -7,7 +7,8 @@ import unittest
 from pathlib import Path
 
 from codex_router import models as models_mod
-from codex_router.models import cmd_add, cmd_check, cmd_list, cmd_remove, derive_row
+from codex_router.models import (cmd_add, cmd_check, cmd_list, cmd_remove, derive_row,
+                                 qualify_name)
 
 LIVE = {
     'qwen/qwen4-coder': {
@@ -48,7 +49,7 @@ class DeriveTests(unittest.TestCase):
     def test_name_split_modalities_priority_and_default(self):
         rows = [_row('a/b', 100), _row('c/d', 101)]
         row = derive_row('qwen/qwen4-coder', LIVE['qwen/qwen4-coder'], rows)
-        self.assertEqual(row['display_name'], 'Qwen4 Coder \u00b7 OpenRouter')
+        self.assertEqual(row['display_name'], 'Qwen: Qwen4 Coder \u00b7 OpenRouter')
         self.assertEqual(row['vendor'], 'Qwen')
         self.assertEqual(row['modalities'], ['text', 'image'])
         self.assertEqual(row['priority'], 102)
@@ -60,11 +61,22 @@ class DeriveTests(unittest.TestCase):
 
     def test_name_without_vendor_and_lowest_default(self):
         row = derive_row('plain/model', LIVE['plain/model'], [])
-        self.assertEqual(row['display_name'], 'No Vendor Here \u00b7 OpenRouter')
+        self.assertEqual(row['display_name'], 'Plain: No Vendor Here \u00b7 OpenRouter')
+        self.assertEqual(row['vendor'], 'Plain')
         self.assertEqual(row['default_reasoning'], 'medium')
         self.assertEqual(row['modalities'], ['text'])
         self.assertFalse(row['web_search'])
         self.assertEqual(row['priority'], 101)
+
+    def test_qualify_name_keeps_snapshots_and_dedupes_vendor(self):
+        vendor, label = qualify_name(
+            'deepseek/deepseek-v4-pro-0813',
+            {'name': 'DeepSeek: DeepSeek V4 Pro 0813'})
+        self.assertEqual((vendor, label), ('DeepSeek', 'DeepSeek: V4 Pro 0813'))
+        vendor, label = qualify_name(
+            '~deepseek/deepseek-v4-flash-latest',
+            {'name': 'DeepSeek V4 Flash Latest'})
+        self.assertEqual((vendor, label), ('DeepSeek', 'DeepSeek: V4 Flash Latest'))
 
     def test_empty_reasoning_refused(self):
         live = dict(LIVE['plain/model'], reasoning={'supported_efforts': []})

@@ -45,10 +45,27 @@ class LiveRefreshTests(unittest.TestCase):
         derived = derive(_row(), _live(reasoning={'supported_efforts': ['high']}))
         self.assertEqual(derived['reasoning'], ['low', 'high', 'max'])
 
-    def test_alias_target_name_folds_into_display_name(self):
+    def test_alias_row_keeps_tracking_name_despite_snapshot_target(self):
         live = _live(alias_target={'name': 'SpaceXAI: Grok 4.6', 'slug': 'x-ai/grok-4.6'})
-        derived = derive(_row(display_name='Grok Latest \xb7 OpenRouter'), live)
-        self.assertEqual(derived['display_name'], 'SpaceXAI: Grok 4.6 \xb7 OpenRouter')
+        row = _row(slug='~x-ai/grok-latest',
+                   display_name='SpaceXAI: Grok Latest \xb7 OpenRouter')
+        self.assertEqual(derive(row, live)['display_name'],
+                         'SpaceXAI: Grok Latest \xb7 OpenRouter')
+
+    def test_plain_row_requalifies_from_alias_target(self):
+        live = _live(alias_target={'name': 'DeepSeek: DeepSeek V4 Flash 0731',
+                                   'slug': 'deepseek/deepseek-v4-flash-0731'})
+        row = _row(slug='deepseek/deepseek-v4-flash-0731',
+                   display_name='DeepSeek: V4 Flash 0731 \xb7 OpenRouter')
+        self.assertEqual(derive(row, live)['display_name'],
+                         'DeepSeek: V4 Flash 0731 \xb7 OpenRouter')
+
+    def test_upstream_rebrand_does_not_rewrite_pinned_vendor(self):
+        row = _row(slug='deepseek/deepseek-v4-pro', vendor='DeepSeek',
+                   display_name='DeepSeek: V4 Pro 0423 \xb7 OpenRouter')
+        live = _live(name='NewCorp: DeepSeek V4 Pro 0423')
+        self.assertEqual(derive(row, live)['display_name'],
+                         'DeepSeek: V4 Pro 0423 \xb7 OpenRouter')
 
     def test_display_name_untouched_without_alias(self):
         derived = derive(_row(display_name='Grok Latest \xb7 OpenRouter'), _live())
@@ -63,17 +80,17 @@ class LiveRefreshTests(unittest.TestCase):
 
     def test_alias_refresh_preserves_wire_slug_and_identity(self):
         row = _row(slug='~x-ai/grok-latest', provider='openrouter',
-                   vendor='xAI', tier='verified', priority=101,
-                   display_name='Grok Latest \xb7 OpenRouter')
+                   vendor='SpaceXAI', tier='verified', priority=101,
+                   display_name='SpaceXAI: Grok Latest \xb7 OpenRouter')
         live = _live(alias_target={'name': 'SpaceXAI: Grok 4.6',
                                    'slug': 'x-ai/grok-4.6'})
         out = refresh([row], {'~x-ai/grok-latest': live})
         self.assertEqual(out[0]['slug'], '~x-ai/grok-latest')
         self.assertEqual(out[0]['provider'], 'openrouter')
-        self.assertEqual(out[0]['vendor'], 'xAI')
+        self.assertEqual(out[0]['vendor'], 'SpaceXAI')
         self.assertEqual(out[0]['tier'], 'verified')
         self.assertEqual(out[0]['priority'], 101)
-        self.assertEqual(out[0]['display_name'], 'SpaceXAI: Grok 4.6 \xb7 OpenRouter')
+        self.assertEqual(out[0]['display_name'], 'SpaceXAI: Grok Latest \xb7 OpenRouter')
 
 
 if __name__ == '__main__':
