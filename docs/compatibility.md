@@ -1,5 +1,25 @@
 # Compatibility
 
+## Token-budget protocol check, 2026-09-09
+
+`python3.14 tools/probe_context_budget.py` passed against Codex CLI 0.153.4
+bundled with desktop 26.901.51231. It uses an isolated temporary Codex home,
+the real router, synthetic usage, and a fake upstream; no model is called.
+The unchanged 90% threshold triggers native compaction, and the following
+request retains a marker from the earlier assistant response. A recognized
+upstream context error becomes Codex's `contextWindowExceeded`; explicit
+compaction and continuation preserve the marker afterward. Automatic
+next-turn recovery after an error is not guaranteed by this check.
+This is protocol evidence, not paid model or Claude compatibility acceptance.
+
+Paid Codex tool round trips also passed on 2026-09-09 against the 0.6.10
+candidate source on a separate loopback listener: `meta/muse-spark-1.3-contributor`
+through OpenRouter and `gpt-5.6-luna` through the subscription route. The
+OpenRouter response reported the requested Muse model. These probes do not
+prove recovery of the original long task or installation of the candidate.
+Claude Code 2.1.223 reported signed out, so its live compatibility probes
+remain unverified.
+
 Tested Codex desktop versions:
 
 | version | date | result |
