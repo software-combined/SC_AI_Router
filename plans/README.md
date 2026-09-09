@@ -1,6 +1,6 @@
 # Implementation Plans
 
-Start with the [full router backlog and execution order](2026-09-09-router-roadmap.md)
+For the earlier backlog, start with the [router backlog and execution order](2026-09-09-router-roadmap.md)
 and the [complete executor prompt](2026-09-09-execute-all-router-plans.md).
 Reconciled at `96db57f`, 9 September 2026: platform Plans 056-059 and
 AGENTS.md section 9 are integrated; audit Plans 060-067 and this consolidation
@@ -320,3 +320,30 @@ source work while an external gate is pending.
   service, or unapproved hourly model hot-reload.
 - Retired Muse duplicate drafts are in [rejected-muse-retry](rejected-muse-retry/README.md);
   they are provenance, not active numbered plans.
+
+## Optimisation plans 068-072: 10 September 2026
+
+The [optimisation audit and adjudication](2026-09-10-router-optimisation-audit.md)
+records the evidence, limitations and the independent
+[Opus 5 high review](2026-09-10-opus-optimisation-review.md).
+All five are planning deliverables at source `83a5023`; no runtime optimisation
+has been implemented or deployed by this planning task.
+
+| Plan | Outcome | Priority / effort | Depends on | Status |
+|---|---|---|---|---|
+| [068](068-router-latency-measurement.md) | Separate body/preparation, connection, upstream wait and forwarding metrics | P1 / S-M | None | TODO |
+| [069](069-router-streaming-identity-inspection.md) | Preserve incremental forwarding during optional identity inspection | P1 / M | 068 for live attribution; offline regression independent | TODO |
+| [070](070-discovered-schema-deduplication.md) | Deduplicate cached schemas without changing effective tools | P2 / S | None | TODO |
+| [071](071-upstream-connection-reuse-experiment.md) | Measured go/no-go for connection reuse | P3 / S investigation | 068 evidence, 069 | TODO: investigation only |
+| [072](072-client-cancellation-investigation.md) | Establish material residual cancellation delay and a safe signal | P3 / S-M investigation | 068 evidence, 069 | TODO: investigation only |
+
+Recommended order: 068 then 069; 070 can proceed independently with separate
+write ownership. 071/072 can finish with NO-GO or EVIDENCE-UNAVAILABLE; they do
+not authorise runtime pooling, active cancellation or paid probes. Serialize
+future transport writers. Reuse Plan 060 privacy, Plan 062 domain boundaries and
+Plan 045 drain behavior; do not duplicate their implemented source work.
+
+Rejected directions: cross-request caching of served-model identity; an async
+rewrite without measured need; arbitrary schema eviction; automatic replay of
+paid POSTs; calling a socket reset a client disconnect without its I/O phase;
+or claiming absent upstream timeouts (the existing operation timeout is 120 s).
