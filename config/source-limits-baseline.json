@@ -4,7 +4,7 @@
   "codex_router/providers.py": 352,
   "codex_router/router.py": 340,
   "codex_router/tool_adapter.py": 282,
-  "packaging/install.py": 699,
+  "packaging/install.py": 617,
   "packaging/service.py": 601,
   "tests/test_handler.py": 352,
   "tests/test_install.py": 466,
