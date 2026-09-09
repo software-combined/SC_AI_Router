@@ -13,6 +13,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tests._platform import requires_posix_perms
 from tests.test_install import _patch_attrs, install_mod
 
 
@@ -67,6 +68,7 @@ class StatusTests(unittest.TestCase):
         self.assertNotIn('test-token', blob)
         self.assertNotIn('sk-test', blob)
 
+    @requires_posix_perms
     def test_group_readable_key_is_present_but_not_usable(self):
         home = self._home()
         (home / 'openrouter.key').write_text('sk-test\n')
@@ -114,6 +116,7 @@ class StatusTests(unittest.TestCase):
         doc = json.loads(buf.getvalue())
         self.assertFalse(doc['serving'])
 
+    @requires_posix_perms
     def test_shadowed_opencode_auth_is_not_usable(self):
         # A 0640 key file shadows opencode_auth at request time, so status
         # must not report usable on the auth file alone.
