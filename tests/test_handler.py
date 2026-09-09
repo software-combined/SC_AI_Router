@@ -11,6 +11,7 @@ import tempfile
 import unittest
 from compression import zstd
 from codex_router.registry import by_slug
+from codex_router.router import _payload_has_image
 from tests.fakes import FakeUpstream, install_fake
 from tests.test_mixed_router import _start_server, _test_state
 
@@ -144,6 +145,58 @@ class HandlerCharacterisationTests(unittest.TestCase):
                          {'model': 'z-ai/glm-5.3', 'input': []})
         self.assertEqual(response.status, 400)
         self.assertEqual(json.loads(response.read()), {'error': 'slow down'})
+
+    def test_nested_provider_400_becomes_409_before_headers(self):
+        inner = ('{"code": "invalid-argument", "error": "Failed to start sampling: '
+                 '[invalid_client_tool_schema] ns_abc_tool_update: root must be object"}')
+        body = json.dumps({'error': {'message': 'Provider returned error',
+                                     'metadata': {'raw': inner, 'provider_name': 'xAI'}}})
+        install_fake(self, lambda: FakeUpstream(400, body.encode(),
+                                                [('Content-Type', 'application/json')]))
+        server = self._server()
+        response = _post(server.server_port, '/test-token/responses',
+                         {'model': '~x-ai/grok-latest', 'input': []})
+        self.assertEqual(response.status, 409)
+        message = json.loads(response.read())['error']['message']
+        self.assertIn('xAI', message)
+        self.assertIn('ns_abc_tool_update', message)
+        self.assertEqual(response.getheader('openai-model'), None)
+
+    def test_unparseable_upstream_400_passes_through_with_clean_accounting(self):
+        install_fake(self, lambda: FakeUpstream(400, b'<html>bad gateway</html>',
+                                                [('Content-Type', 'text/html')]))
+        server = self._server()
+        before = server.inflight
+        response = _post(server.server_port, '/test-token/responses',
+                         {'model': '~x-ai/grok-latest', 'input': []})
+        self.assertEqual(response.status, 400)
+        self.assertEqual(response.read(), b'<html>bad gateway</html>')
+        self.assertEqual(server.inflight, before)
+
+    def test_payload_image_check_matches_blocks_not_prose(self):
+        block = json.dumps({'model': 'm', 'input': [
+            {'type': 'message', 'role': 'user', 'content': [
+                {'type': 'input_text', 'text': 'look'},
+                {'type': 'input_image', 'image_url': 'data:x'}]}]}).encode()
+        self.assertTrue(_payload_has_image(block))
+        prose = json.dumps({'model': 'm', 'input': [
+            {'type': 'message', 'role': 'user',
+             'content': 'tell me about "image" processing'}]}).encode()
+        self.assertFalse(_payload_has_image(prose))
+        self.assertFalse(_payload_has_image(b'not json'))
+        self.assertFalse(_payload_has_image(None))
+
+    def test_upstream_stall_names_model_in_502(self):
+        def stall():
+            raise TimeoutError('timed out')
+        install_fake(self, stall)
+        server = self._server()
+        response = _post(server.server_port, '/test-token/responses',
+                         {'model': '~x-ai/grok-latest', 'input': []})
+        self.assertEqual(response.status, 502)
+        message = json.loads(response.read())['error']['message']
+        self.assertIn('~x-ai/grok-latest', message)
+        self.assertIn('120', message)
 
     def test_upstream_429_becomes_retryable_503(self):
         for headers, expected in (([], '2'), ([('Retry-After', '9')], '9')):

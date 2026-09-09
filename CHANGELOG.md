@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.8 (unreleased)
+
+- String-wrap non-object tool parameter roots for `~x-ai/grok-latest`
+  (new `json_text_root` schema mode): xAI rejects union-root schemas such
+  as the desktop automation tool, failing even a plain greeting. Ordinary
+  object-root tools are unchanged; Meta recursive-schema handling is kept.
+- Name upstream failures at the client: stalls before upstream headers keep
+  502 but name the model, elapsed wait and timeout with a retry action
+  (Grok image turns stall upstream, retry text-only); DNS/refused names the
+  host; parseable upstream 4xx bodies become 409 with the provider reason
+  and offending tool instead of a bare passthrough; unknown shapes relay
+  verbatim and mid-stream disconnects stay log-only.
+- Retire the stale `deepseek/deepseek-v4-pro` (V4 Pro 0423) picker row via
+  `RETIRED_SLUGS`. Kept DeepSeek rows: Pro 0813, the Flash Latest tracking
+  alias, and Flash Vision Exp.
+
 ## 0.6.7 (unreleased)
 
 - Preserve the owner's picker selection (`model`, `model_reasoning_effort`)

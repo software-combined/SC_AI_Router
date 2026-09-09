@@ -56,6 +56,9 @@ while True:
             open(rec, 'a').write('sandbox=' + str(params.get('sandbox')) + '\\n')
             open(rec, 'a').write('cwd=' + str(params.get('cwd')) + '\\n')
         _ap_cwd = params.get('cwd', '')
+        rec = os.environ.get('FAKE_RECORD')
+        if rec and params.get('dynamicTools'):
+            open(rec, 'a').write('dynamicTools=' + json.dumps(params['dynamicTools']) + '\\n')
         send({'id': mid, 'result': {'thread': {'id': 't1'},
                                     'modelProvider': 'openai', 'model': 'm'}})
     elif method == 'turn/start':
@@ -182,6 +185,16 @@ class ProbeHarnessTests(unittest.TestCase):
         proc = self._run('fake-model')
         self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
         self.assertIn('"desktop_runtime_tool_round_trip": "passed"', proc.stdout)
+
+    def test_union_root_flag_shapes_tool_schema(self):
+        proc, _, recorded = self._run_recorded('fake-model', '--union-root')
+        self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
+        blob = next(l[13:] for l in recorded if l.startswith('dynamicTools='))
+        schema = json.loads(blob)[0]['inputSchema']
+        self.assertIn('anyOf', schema)
+        proc, _, recorded = self._run_recorded('fake-model')
+        blob = next(l[13:] for l in recorded if l.startswith('dynamicTools='))
+        self.assertNotIn('anyOf', json.loads(blob)[0]['inputSchema'])
 
     def test_provider_flag_reaches_thread_start(self):
         proc, _, recorded = self._run_recorded('fake-model', '--provider', 'scg_router')
