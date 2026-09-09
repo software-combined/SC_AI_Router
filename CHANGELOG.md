@@ -2,6 +2,12 @@
 
 ## 0.6.10 (unreleased)
 
+- Keep upstream prose and exception text out of diagnostics: rejected
+  upstream turns now name a fixed category (tool-schema, tool-call, or
+  request rejection) with the provider and offending tool instead of
+  reflecting upstream prose, and structured logs carry the stable error
+  code without message content. Client status codes are unchanged.
+
 - Wrap Grok tools whose object root carries an `anyOf`/`oneOf` union with a
   non-object branch (reported 409: `automation_update` declares
   `type: object` with a root `oneOf` including a scalar). The PR #25 guard
