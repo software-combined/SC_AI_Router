@@ -170,6 +170,24 @@ def scrub_tool_fragments(items):
     return out
 
 
+def note_images(items):
+    """Swap image blocks for a short note; the turn stays text-only."""
+    if not isinstance(items, list):
+        return items
+    out = []
+    for item in items:
+        if (isinstance(item, dict) and item.get('type') == 'message'
+                and isinstance(item.get('content'), list)):
+            blocks = [{'type': 'input_text',
+                       'text': '[image omitted: this model runs text-only]'}
+                      if isinstance(b, dict) and b.get('type') == 'input_image'
+                      else b for b in item['content']]
+            if blocks != item['content']:
+                item = {**item, 'content': blocks}
+        out.append(item)
+    return out
+
+
 def strip_reasoning_blobs(items):
     """Drop OpenAI-owned reasoning blobs other models cannot read; keep plaintext."""
     if not isinstance(items, list):

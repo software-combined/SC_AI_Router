@@ -34,21 +34,85 @@ class ToolAdapterTests(unittest.TestCase):
         item = adapter.item({'type': 'function_call', 'name': SEARCH_NAME, 'arguments': '{"query":"echo_probe","limit":8.0}'})
         self.assertIs(type(item['arguments']['limit']), int)
 
-    def test_grok_oversized_catalog_fails_before_upstream_retries(self):
+    def test_grok_oversized_catalog_defers_instead_of_rejecting(self):
+        payload = {'model': '~x-ai/grok-latest',
+            'tools': [{'type': 'tool_search', 'description': 's',
+                       'parameters': {'type': 'object', 'properties': {}}}] + [
+                {'type': 'function', 'name': f'tool_{i}', 'parameters': {'type': 'object'}}
+                for i in range(400)],
+            'input': []}
+        names = prepare_tools(payload)
+        self.assertEqual([tool.get('name') for tool in payload['tools']],
+                         [SEARCH_NAME])
+        item = ToolEvents(names).item({'type': 'function_call', 'name': SEARCH_NAME,
+            'arguments': '{"query":"echo"}'})
+        self.assertEqual((item['type'], item['execution']), ('tool_search_call', 'client'))
+
+    def test_grok_ceiling_without_search_still_fails_closed(self):
         payload = {'model': '~x-ai/grok-latest', 'tools': [
             {'type': 'function', 'name': f'tool_{i}', 'parameters': {'type': 'object'}} for i in range(351)]}
         with self.assertRaisesRegex(ValueError, '350'):
             prepare_tools(payload)
 
-    def test_grok_ceiling_message_names_switch_or_trim_remedy(self):
-        payload = {'model': '~x-ai/grok-latest', 'tools': [
-            {'type': 'function', 'name': f'tool_{i}', 'parameters': {'type': 'object'}} for i in range(351)]}
-        with self.assertRaisesRegex(ValueError, 'same thread') as raised:
+    def test_grok_released_stub_overlap_survives_the_ceiling_cut(self):
+        released = {'type': 'namespace', 'name': 'probe', 'tools': [
+            {'type': 'function', 'name': 'echo', 'description': 'Echo',
+             'parameters': {'type': 'object'}}]}
+        stub = {'type': 'namespace', 'name': 'probe', 'tools': [
+            {'type': 'function', 'name': 'echo', 'description': 'Echo'}]}
+        payload = {'model': '~x-ai/grok-latest',
+            'tools': [{'type': 'tool_search', 'description': 's',
+                       'parameters': {'type': 'object', 'properties': {}}},
+                      stub] + [
+                {'type': 'function', 'name': f'tool_{i}', 'parameters': {'type': 'object'}}
+                for i in range(400)],
+            'input': [{'type': 'tool_search_output', 'call_id': 's1', 'tools': [released]}]}
+        names = prepare_tools(payload)
+        self.assertEqual(len(payload['tools']), 2)
+        item = ToolEvents(names).item({'type': 'function_call', 'name': payload['tools'][1]['name'],
+            'arguments': '{"value":"probe"}'})
+        self.assertEqual((item.get('namespace'), item.get('name')), ('probe', 'echo'))
+
+    def test_grok_kept_over_ceiling_still_fails_closed(self):
+        released = [{'type': 'function', 'name': f'found_{i}', 'description': 'Found',
+                     'parameters': {'type': 'object'}} for i in range(400)]
+        payload = {'model': '~x-ai/grok-latest',
+            'tools': [{'type': 'tool_search', 'description': 's',
+                       'parameters': {'type': 'object', 'properties': {}}}],
+            'input': [{'type': 'tool_search_output', 'call_id': 's1', 'tools': released}]}
+        with self.assertRaisesRegex(ValueError, '350'):
             prepare_tools(payload)
-        message = str(raised.exception)
-        self.assertIn('351', message)
-        self.assertIn('Switch to a model without the ceiling, or trim tools', message)
-        self.assertNotIn('fresh task', message)
+
+    def test_grok_released_custom_tool_survives_with_its_kind(self):
+        released = {'type': 'custom', 'name': 'exec', 'format': {'type': 'grammar'}}
+        payload = {'model': '~x-ai/grok-latest',
+            'tools': [{'type': 'tool_search', 'description': 's',
+                       'parameters': {'type': 'object', 'properties': {}}}] + [
+                {'type': 'function', 'name': f'tool_{i}', 'parameters': {'type': 'object'}}
+                for i in range(400)],
+            'input': [{'type': 'tool_search_output', 'call_id': 's1', 'tools': [released]}]}
+        names = prepare_tools(payload)
+        self.assertEqual([tool.get('name') for tool in payload['tools']],
+                         [SEARCH_NAME, 'exec'])
+        item = ToolEvents(names).item({'type': 'function_call', 'name': 'exec',
+            'arguments': '{"input":"hi"}'})
+        self.assertEqual((item['type'], item['input']), ('custom_tool_call', 'hi'))
+
+    def test_grok_released_tool_survives_the_ceiling_cut(self):
+        released = {'type': 'namespace', 'name': 'probe', 'tools': [
+            {'type': 'function', 'name': 'echo', 'description': 'Echo',
+             'parameters': {'type': 'object'}}]}
+        payload = {'model': '~x-ai/grok-latest',
+            'tools': [{'type': 'tool_search', 'description': 's',
+                       'parameters': {'type': 'object', 'properties': {}}}] + [
+                {'type': 'function', 'name': f'tool_{i}', 'parameters': {'type': 'object'}}
+                for i in range(400)],
+            'input': [{'type': 'tool_search_output', 'call_id': 's1', 'tools': [released]}]}
+        names = prepare_tools(payload)
+        self.assertEqual(len(payload['tools']), 2)
+        item = ToolEvents(names).item({'type': 'function_call', 'name': payload['tools'][1]['name'],
+            'arguments': '{"value":"probe"}'})
+        self.assertEqual((item.get('namespace'), item.get('name')), ('probe', 'echo'))
 
     def test_freeform_tool_and_history_round_trip(self):
         code = 'text(await tools.echo_probe({value: "probe"}));\n'

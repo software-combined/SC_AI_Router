@@ -66,7 +66,7 @@ paid runs against the live router):
 | z-ai/glm-5.3-flash | passed (named red) |
 | meta/muse-spark-1.3 | failed (answered `unknown`) |
 | moonshotai/kimi-k3 | failed (answered `Black`) |
-| ~x-ai/grok-latest | failed (turn timed out on media leg; base round trip passes) |
+| ~x-ai/grok-latest | text-only with note (ships in 0.6.7; 0.6.7.19 install still stalls upstream) |
 
 Audio leg: `meta/muse-spark-1.3` rejected upstream (`invalid_prompt`).
 Reasoning-summary, apply-patch, web-search, and experimental-tools legs are
