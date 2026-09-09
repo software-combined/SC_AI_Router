@@ -2,6 +2,12 @@
 
 ## 0.6.10 (unreleased)
 
+- Give model facts one owner each: pure metadata normalization moves to
+  `model_metadata.py`, the Codex capability projection is shared by merge
+  and apply (identical fields for the same snapshot, audio preserved where
+  advertised), and picker visibility moves to the client domain. No roster,
+  tier, or routing changes.
+
 - Tell the truth up front: the README names Windows installer support as
   not-yet (the installer refuses before changing anything), lists GitHub
   CLI access as a transitional requirement, moves Arch setup below the

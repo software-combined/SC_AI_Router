@@ -56,7 +56,8 @@ Rules:
   `protocols/` (Plan 062 landed the split; full protocol file moves remain
   open).
 - `codex_router/catalogue.py` + `models.py` + `live_refresh.py` share client
-  projection duties (Plan 064 unifies normalization and projection).
+  projection duties through `model_metadata.py` (pure normalization) and
+  `clients/` (capability projection, picker visibility).
 - Client activation and receipts live in the installer config-block path
   (Plan 063 extracts them per client).
 
