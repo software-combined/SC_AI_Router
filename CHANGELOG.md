@@ -39,6 +39,12 @@
   and setup-window refusal on unprotectable keys (offline proofs only;
   the installer still refuses Windows until backend acceptance).
 
+- Add the Windows Task Scheduler backend in source (Plan 057 Stage 3,
+  offline proofs only): per-user logon router task plus 15-minute updater
+  task, pythonw.exe router with python.exe updater, graceful /shutdown
+  restart, and registration readback that names group-policy refusals.
+  The installer still refuses Windows until real-machine acceptance.
+
 - Pin the private CPython 3.14 runtime: new `packaging/runtime.lock`
   names one install-only distribution per qualified target with validation
   and wrapper-table generation (Stage 1). Entries ship unpinned by design;

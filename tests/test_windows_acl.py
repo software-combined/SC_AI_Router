@@ -186,19 +186,9 @@ class WinProtectTests(unittest.TestCase):
 
 
 class WinBackendShapeTests(unittest.TestCase):
-    def test_uninstall_removes_both_scheduled_tasks(self):
-        calls = []
-
-        def fake_run(cmd, **kwargs):
-            calls.append(list(cmd))
-            return SimpleNamespace(returncode=0, stdout='', stderr='')
-
-        backend.Backend(None, fake_run).uninstall('/home/x')
-        deleted = [c[3] for c in calls
-                   if c[:3] == ['schtasks', '/delete', '/tn']]
-        self.assertEqual(deleted,
-                         ['CodexMixedModelRouter', 'CodexMixedModelRouterUpdate'])
-
+    # Lifecycle shape (install/restart/stop/uninstall task control) moved to
+    # tests/test_windows_backend.py with the Stage 3 implementation; only
+    # the failure-path pins that have no counterpart there stay here.
     def test_uninstall_failure_names_the_surviving_task(self):
         def fake_run(cmd, **kwargs):
             if 'CodexMixedModelRouterUpdate' in cmd:
@@ -229,13 +219,6 @@ class WinBackendShapeTests(unittest.TestCase):
             self.assertFalse((home / 'openrouter.key').exists())
             self.assertEqual(len(calls), 1)
 
-    def test_lifecycle_entry_points_refuse_until_stage_3(self):
-        backend_obj = backend.Backend(None, lambda *a, **k: None)
-        for call in (lambda: backend_obj.install('py', 'h', {}, 'r', None),
-                     lambda: backend_obj.restart('h'),
-                     lambda: backend_obj.stop('h')):
-            with self.assertRaisesRegex(SystemExit, 'not supported yet'):
-                call()
 
 
 if __name__ == '__main__':
