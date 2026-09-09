@@ -21,5 +21,14 @@ except (OSError, ValueError):
 installer = home / 'releases' / name / 'packaging' / 'install.py'
 if not installer.is_file():
     raise SystemExit('router release missing: reinstall the router')
+try:
+    import importlib.util as _ilu
+    _rotate_spec = _ilu.spec_from_file_location(
+        'router_service_rotate', home / 'releases' / name / 'packaging' / 'service.py')
+    _rotate_mod = _ilu.module_from_spec(_rotate_spec)
+    _rotate_spec.loader.exec_module(_rotate_mod)
+    _rotate_mod.rotate_log(home / 'logs' / 'update.log')
+except (OSError, ImportError, AttributeError):
+    pass  # Rotation is hygiene; an older release without it still boots.
 sys.argv = [str(installer), '--check-update', '--home', str(home)]
 runpy.run_path(str(installer), run_name='__main__')

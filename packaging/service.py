@@ -502,6 +502,33 @@ def reload_main_service(uid, agents=None):
                                load_timeout=LOAD_TIMEOUT_S, sleep=_sleep)
 
 
+def rotate_log(path, limit_bytes=1024 * 1024, backups=2):
+    """Bound a supervisor-captured log with rotate-on-start semantics.
+
+    launchd/systemd own the open file description, so a rename takes effect
+    on the next job start; each start keeps at most limit*(backups+1) bytes.
+    Pure stdlib, no logging framework; never touches request content.
+    """
+    path = Path(path)
+    try:
+        if path.stat().st_size <= limit_bytes:
+            return
+    except OSError:
+        return
+    for index in range(backups, 0, -1):
+        src = path if index == 1 else Path(str(path) + f'.{index - 1}')
+        dst = Path(str(path) + f'.{index}')
+        try:
+            if src.exists():
+                os.replace(src, dst)
+        except OSError:
+            return
+    try:
+        path.touch()
+    except OSError:
+        pass
+
+
 def _install_home_file(home, release_dir, name):
     """Copy one stable entry point beside the state directory, atomically."""
     try:
