@@ -80,6 +80,7 @@ def derive_row(slug, live, rows):
             'excluded_efforts': [],
             'schema_mode': 'native',
             'max_tools': None,
+            'drop_images': False,
             'context_window': live.get('context_length', 0),
             'priority': max([100] + priorities) + 1,
             'max_output_tokens': top.get('max_completion_tokens') or 32768,

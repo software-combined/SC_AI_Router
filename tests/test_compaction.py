@@ -2,7 +2,7 @@ import unittest
 import base64
 from codex_router.compaction import (PREFIX, TRANSCRIPT_BUDGET, build_compact_v1_output,
     compaction_text, decode_summary, encode_summary, extract_summary, extract_user_messages,
-    has_compaction_trigger, rewrite_input, scrub_tool_fragments, strip_images,
+    has_compaction_trigger, note_images, rewrite_input, scrub_tool_fragments, strip_images,
     transcript_for_summary, v2_compaction_item, OPAQUE_NOTE)
 
 class CompactionTests(unittest.TestCase):
@@ -165,6 +165,15 @@ class ImageStripTests(unittest.TestCase):
         item = self._item()
         self.assertIs(strip_images([item], True)[0], item)
         self.assertEqual(strip_images('prompt', False), 'prompt')
+
+    def test_noted_images_stay_text_only_without_mutating(self):
+        item = self._item()
+        out = note_images([item])
+        self.assertEqual(out[0]['content'],
+            [{'type': 'input_text', 'text': 'look here'},
+             {'type': 'input_text', 'text': '[image omitted: this model runs text-only]'}])
+        self.assertEqual(len(item['content']), 2)
+        self.assertEqual(note_images('prompt'), 'prompt')
 
 class TranscriptBoundaryTests(unittest.TestCase):
     def test_drops_oldest_whole_items_newest_first(self):
