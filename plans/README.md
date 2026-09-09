@@ -241,7 +241,8 @@ repository's `plans/` and continue there. Paths inside the plans use
 | 050 | [Router service recovery and update readiness](050-router-service-recovery-and-update-readiness.md) | P1 | S | Fresh service/release readback; lifecycle writer coordination | TODO (planning only; observed live 0.6.5.17, updater not loaded) |
 | 051 | [Claude CLI and desktop gateway setup](051-claude-cli-and-desktop-gateway-setup.md) | P1 | M | 050 healthy service or equivalent verified state | TODO (planning only; CLI and desktop auth/discovery verified separately) |
 | 052 | [Claude billing probes and release acceptance](052-claude-billing-probes-and-release-acceptance.md) | P1 | M | 050, 051; explicit paid-run approval | TODO (planning only; tool, billing, source, release and rollout gates separate) |
-| 053 | [Private Claude Code plugin](053-claude-code-private-plugin.md) | P1 | M | 049 shared installer; 051 client contract; 052 acceptance | TODO (planning only; private catalogue, shared package, no automatic mutation) |
+| 053 | [Private Claude Code plugin](053-claude-code-private-plugin.md) | P1 | M | 049 shared installer; 051 client contract; 052 acceptance; 054 feed model | TODO (planning only; private catalogue, shared package, no automatic mutation) |
+| 054 | [Group distribution, private feed and push-to-main auto-update](054-group-distribution-private-feed-and-auto-update.md) | P1 | L | 049 §2 distribution rules; 050 healthy service; AWS account, DNS and publication approvals | TODO (planning only; owner 2026-09-09: main publishes stable, reads token-gated, no signature ceremony; free-plan private repo has no branch protection) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale).
 
@@ -269,6 +270,15 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED 
   It does not reopen 039/046.
   Its observed release/distribution preflight supersedes older assumptions for
   this rollout; the plan itself does not authorise publishing or account writes.
+- Plan 054 (owner direction 2026-09-09) is the group rollout of 049 §2's AWS
+  delivery: private S3 origin behind CloudFront, reads gated by a rotatable
+  token, `main` publishing straight to `stable` and `develop` to `beta`, native
+  pinned CPython bootstrap, and Windows Task Scheduler lifecycle. It supersedes
+  049's publicly reachable download surface, keeps the signature-removal
+  decision, and records that the free-plan private repository has no branch
+  protection, so publication trust equals repository write access plus bucket
+  write access. It does not authorise AWS, DNS, publication, live-updater,
+  staff-machine or release actions.
 - 036 before 037: the ten characterisation tests are the acceptance suite for the refactor and must pass with unchanged assertions.
 - 038 before 037: providers look models up through the registry (`by_slug`).
 - 043's spike (Step 1) should run early, right after 037 and 038 land, because its outcome (which Codex login shape works without a subscription) changes what 039 falls back to and what 041 writes into the Codex configuration.
