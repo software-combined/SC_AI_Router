@@ -182,6 +182,14 @@ def ensure_credentials(home, state, env=None):
     key_file = home / 'openrouter.key'
     fd = os.open(key_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     os.close(fd)
+    try:
+        platform_backend().protect_secret(key_file)
+    except SystemExit:
+        try:
+            key_file.unlink()
+        except OSError:
+            pass
+        raise
     print(f'Paste your OpenRouter key into {key_file} (owner-only file) and re-run the installer')
     raise SystemExit(3)
 

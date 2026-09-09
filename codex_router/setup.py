@@ -17,6 +17,8 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import parse_qsl
 
+_ON_WINDOWS = os.name == 'nt'
+
 SETUP_PREFIX = '/setup/'
 SETUP_TTL_S = 15 * 60
 FORM_LIMIT = 4096
@@ -137,6 +139,21 @@ def handle_setup(state, home, nonce, is_post, form, _urlopen=None, _now=None):
         return 500, _form(nonce, 'could not store the key')
     with os.fdopen(fd, 'w') as stream:
         stream.write(key + '\n')
+    if _ON_WINDOWS:
+        # The installer backend cannot reach this runtime write; verify the
+        # platform ACL here so a Windows setup window never leaves an exposed
+        # key. Refuse rather than continue exposed.
+        from . import winacl
+        try:
+            winacl.check(key_path)
+        except SystemExit:
+            try:
+                key_path.unlink()
+            except OSError:
+                return 500, _form(
+                    nonce, 'could not protect %s; delete it and resubmit this page'
+                    % key_path)
+            return 500, _form(nonce, 'could not protect the key file')
     if not _finish_setup(state, home, mode):
         return 500, _form(nonce, 'key stored but setup could not be closed; '
                                  'delete the key file and resubmit this page')

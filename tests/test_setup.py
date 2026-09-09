@@ -98,6 +98,44 @@ class SetupUnitTests(unittest.TestCase):
         self.assertEqual(saved['token'], 'test-token')
         self.assertNotIn('setup', state)
 
+    def test_post_on_windows_refuses_unprotectable_key(self):
+        # The nt branch verifies the platform ACL after writing; a failed
+        # check refuses rather than leaving an exposed key.
+        home = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, home, True)
+        state_path = home / 'mixed-router-state.json'
+        state = _state(home)
+        state_path.write_text(json.dumps(state))
+        form = b'key=sk-test&mode=none'
+        with mock.patch.object(setup, '_ON_WINDOWS', True), \
+                mock.patch('codex_router.winacl.check',
+                            side_effect=SystemExit('cannot verify')):
+            status, _ = setup.handle_setup(state, home, 'n' * 16, True, form,
+                                           _urlopen=_key_ok(), _now=NOW)
+        self.assertEqual(status, 500)
+        self.assertFalse((home / 'openrouter.key').exists())
+
+    def test_post_on_windows_names_key_when_cleanup_fails(self):
+        # Verify-fail plus unlink-fail must name the file with an explicit
+        # delete instruction instead of a generic 500.
+        home = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, home, True)
+        state_path = home / 'mixed-router-state.json'
+        state = _state(home)
+        state_path.write_text(json.dumps(state))
+        form = b'key=sk-test&mode=none'
+        with mock.patch.object(setup, '_ON_WINDOWS', True), \
+                mock.patch('codex_router.winacl.check',
+                            side_effect=SystemExit('cannot verify')), \
+                mock.patch.object(Path, 'unlink',
+                                   side_effect=OSError('locked')):
+            status, body = setup.handle_setup(state, home, 'n' * 16, True, form,
+                                              _urlopen=_key_ok(), _now=NOW)
+        self.assertEqual(status, 500)
+        text = body.decode() if isinstance(body, bytes) else body
+        self.assertIn('openrouter.key', text)
+        self.assertIn('delete it', text)
+
     def test_post_rejects_bad_key_modes_and_clashes(self):
         home = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, home, True)
