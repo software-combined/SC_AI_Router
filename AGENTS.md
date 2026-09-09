@@ -14,6 +14,10 @@ Never run `git reset --hard` or `git checkout --` without explicit approval.
 Record worktree ownership (path, branch, owning task, integration target) and
 reuse the same worktree for follow-ups. Clean up after verified integration.
 
+Base every branch on `develop` and target every PR at `develop`,
+except release PRs from `develop` to `main`. Never work off or push
+to `main`.
+
 ## 3. Source limits
 
 Modules 250 lines soft / 400 hard, entrypoints and tools 400/700, tests
