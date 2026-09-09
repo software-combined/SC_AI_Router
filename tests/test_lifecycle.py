@@ -97,10 +97,15 @@ class LauncherBootTests(unittest.TestCase):
                 stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
             try:
                 base = f'http://127.0.0.1:{port}/{token}'
+                # Bypass ambient proxies: loopback must never leave the
+                # machine, whatever the runner exports (urllib honors
+                # http_proxy; http.client, used elsewhere, does not).
+                direct = urllib.request.build_opener(
+                    urllib.request.ProxyHandler({}))
                 deadline = time.monotonic() + 30
                 while time.monotonic() < deadline:
                     try:
-                        with urllib.request.urlopen(base + '/health', timeout=2) as r:
+                        with direct.open(base + '/health', timeout=2) as r:
                             if r.status == 200 and json.load(r).get('status') == 'ok':
                                 break
                     except OSError:
@@ -118,8 +123,8 @@ class LauncherBootTests(unittest.TestCase):
                               f'(alive={alive}): '
                               + (err or '').strip()[-1000:]
                               + ' | log tail: ' + started.strip()[-1000:])
-                with urllib.request.urlopen(base + '/setup/' + 'n' * 16,
-                                            timeout=5) as r:
+                with direct.open(base + '/setup/' + 'n' * 16,
+                                 timeout=5) as r:
                     self.assertEqual(r.status, 200)
             finally:
                 proc.terminate()
