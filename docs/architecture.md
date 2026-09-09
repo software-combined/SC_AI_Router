@@ -14,9 +14,13 @@ catalogue / models / live_refresh / apply_catalogue (client projections)
   |
 compaction / tool_adapter / discovered (request normalization)
   |
-providers (upstream adapters: target, credentials, response adaptation)
+providers (Responses adapters) + claude (Messages adapters)
   |
-router (HTTP transport: loopback auth, body limits, drain/inflight)
+protocols (explicit method/path dispatch table; no policy of its own)
+  |
+transport (Prepared, hop-header rules, raw stream, header relay)
+  |
+router (HTTP control: auth, body limits, drain/inflight, relay)
 ```
 
 Rules:
@@ -47,8 +51,10 @@ Rules:
   `systemd_manager()` two-valued flag (Plan 056 extracts `packaging/platforms/`).
 - `packaging/service.py` mixes launchd/plist/feed/state helpers (Plan 056
   re-homes the launchd half with the darwin backend).
-- `codex_router/providers.py` mixes protocol shaping and upstream transport
-  (Plan 062 separates them).
+- `codex_router/providers.py` keeps Responses shaping plus failure
+  description; shared transport lives in `transport.py` and dispatch in
+  `protocols/` (Plan 062 landed the split; full protocol file moves remain
+  open).
 - `codex_router/catalogue.py` + `models.py` + `live_refresh.py` share client
   projection duties (Plan 064 unifies normalization and projection).
 - Client activation and receipts live in the installer config-block path

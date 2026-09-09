@@ -13,7 +13,7 @@ client credentials are never stored or logged.
 """
 import json
 
-from . import providers
+from . import providers, transport
 from .capabilities import OPENROUTER_HOST
 from .errors import PreparationError
 from .registry import MODELS, by_slug
@@ -99,14 +99,14 @@ class ClaudeOpenRouterProvider:
             if isinstance(obj, dict):
                 obj['model'] = slug
                 body = json.dumps(obj).encode()
-        return providers.Prepared(
+        return transport.Prepared(
             OPENROUTER_HOST, ANTHROPIC_PREFIX + path,
             {'Authorization': 'Bearer ' + credentials.openrouter_key(),
              'Content-Type': 'application/json'},
             body, set(), self.name)
 
     def adapt(self, response, tool_names, notes=None):
-        yield from providers._passthrough(response)
+        yield from transport.passthrough(response)
 
 
 class ClaudeSubscriptionProvider:
@@ -117,11 +117,11 @@ class ClaudeSubscriptionProvider:
         auth = headers.get('Authorization', '')
         if not (auth.startswith('Bearer ') or 'x-api-key' in headers):
             raise PermissionError('Claude subscription authentication required')
-        fwd = {k: v for k, v in headers.items() if k.lower() not in providers.HOP_HEADERS}
-        return providers.Prepared(self.host, path, fwd, raw_body, set(), self.name)
+        fwd = {k: v for k, v in headers.items() if k.lower() not in transport.HOP_HEADERS}
+        return transport.Prepared(self.host, path, fwd, raw_body, set(), self.name)
 
     def adapt(self, response, tool_names, notes=None):
-        yield from providers._passthrough(response)
+        yield from transport.passthrough(response)
 
 
 def select(model, path, openai_mode='subscription'):
