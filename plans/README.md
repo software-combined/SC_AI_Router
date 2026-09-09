@@ -214,7 +214,7 @@ registration.
   rejected because the existing 30-second non-blocking health call already
   supplies the required periodic trigger.
 
-## Router plans 034-067: reconciled 9 September 2026
+## Router plans 034-068: reconciled 9 September 2026, 068 added 10 September 2026
 
 The [roadmap](2026-09-09-router-roadmap.md) owns remaining requirements,
 sequencing, evidence and acceptance gates. Read individual plans for execution
@@ -261,6 +261,7 @@ independent implementations: the owner mapping prevents duplicate execution.
 | [065](065-kiro-client-compatibility-spike.md) | DONE: negative spike, no verified Kiro inference hook (2026-09-10) | `docs/kiro-compatibility.md`; IDE and CLI separately decided; reopen only on dated official custom-endpoint evidence |
 | [066](066-mixed-provider-agent-instruction-delivery.md) | TODO: mixed-provider instruction delivery | Early containment/capture; real plaintext delivery remains separate from file-brief workaround |
 | [067](067-installer-updater-extraction.md) | DONE: updater extracted to `packaging/updater.py` (2026-09-10) | `8808349` on develop; 50 focused tests OK plus release-bundle omission smoke; 056 unblocked |
+| [068](068-portco-model-policy.md) | TODO: per-portco model allowlists as resolved data | Amends 046/064/055; no groups on the machine; Stage 0 tests first, then grant/loader/picker/routing/refresh/docs |
 
 ### Consolidated decisions and dependencies
 
