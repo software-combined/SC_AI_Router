@@ -1,8 +1,8 @@
 # Plan 054: Group distribution, private feed and push-to-main auto-update
 
-> Planning only. No AWS resource creation, DNS or certificate change, workflow
-> publication, live updater change, staff-machine install or release is
-> authorised by this document. Each is a separate owner gate listed below.
+> Planning only. No AWS resource creation, DNS or certificate change, GitHub
+> organisation plan change, workflow publication, live updater change,
+> staff-machine install or release is authorised by this document. Each is a separate owner gate listed below.
 
 Priority P1; effort L; risk HIGH (fleet-wide code execution path).
 Planned 2026-09-09 at `1327da3f369eb1af82a3b29c6544f51f3d1049cd`.
@@ -31,7 +31,7 @@ Recorded before or during planning; this plan does not reopen them.
 | macOS LaunchAgents, Windows per-user Task Scheduler, Linux systemd user units; no root, no stored Windows password, no lingering | Plan 049 target table |
 | `main` publishes straight to `stable` on every push | Owner, 2026-09-09 (this plan) |
 | Runtime downloads are not publicly reachable: reads are token-gated | Owner, 2026-09-09; supersedes the publicly reachable HTTPS runtime downloads that Plan 053 attributes to 049 |
-| Per-user OpenRouter keys are IT-issued and pasted once into the setup window | Plan 048 owner decision |
+| Per-user OpenRouter keys, provisioned centrally and delivered by this plan's bootstrap, never displayed | Plan 055 (owner 2026-09-09), superseding Plan 048's paste-once decision |
 
 ## Verified current state (2026-09-09, read-only)
 
@@ -71,11 +71,39 @@ the bucket. Controls that keep it tight:
   the head commit is a PR merge; a direct pusher can also edit the workflow, so
   this is hygiene, not a control.
 - The read token is a confidentiality control only. Leaking it discloses the
-  bundle; it cannot inject code.
+  bundle; it cannot inject code. It must never authorise anything else: in
+  particular Plan 055 key issuance requires a per-install credential from
+  Stage 4, never this shared value.
 
-Open owner decision (default: accept as is): keep the four-writer boundary,
-reduce write access, or move to a paid plan for branch protection. Record the
-choice in the `docs/operations.md` decision log.
+Resolved 2026-09-09 on owner delegation, in two parts, both to be recorded in
+the `docs/operations.md` decision log:
+
+1. **Move the organisation to GitHub Team before Stage 1 publishes to
+   `stable`.** Branch rules cannot be applied to private repositories on the
+   free organisation plan, and rulesets need Pro, Team or Enterprise, which is
+   why this repository's protection and ruleset endpoints both answer 403.
+   Team is the cheapest plan that makes a pushed commit reviewable before it
+   executes on every machine in the group, at roughly USD 4 per user per month
+   for 6 seats; confirm the current figure on GitHub's pricing page, as the
+   published rate has moved before. Then require a pull request and the
+   existing `Test` check on `main`, **with an empty bypass list and enforcement
+   for administrators**. Without that, the rule closes nothing here: after part
+   2 the three remaining writers are all admins, and admins bypass branch
+   protection by default and can edit or delete a repository ruleset, so the
+   direct-push path stays open. Apply the same to tags if the fallback below is
+   used, since `push tag v*` remains a publish trigger. With the bypass closed,
+   this is what makes the owner's `main`-publishes-`stable` decision defensible
+   rather than merely accepted; if the owner declines the plan change, the
+   fleet-wide unreviewed-push risk stays open and accepted.
+2. **Reduce the writer set now, at no cost.** `gbane-softcom` holds write
+   without admin; drop that to read or triage unless there is a current reason
+   to push, leaving three admins. Least privilege applies whether or not the
+   plan changes.
+
+If the owner declines the plan change, the fallback that preserves the same
+safety is to publish `stable` from a tag and leave `main` publishing `beta`
+only; that contradicts the recorded decision, so it stays a fallback, not the
+design.
 
 ## Design
 
@@ -91,18 +119,31 @@ Block Public Access on, reads only through CloudFront Origin Access Control.
 | `runtime/<os>-<arch>/<pbs-filename>` | immutable | mirrored `python-build-standalone` install-only CPython 3.14, pinned by URL and SHA-256 in `packaging/runtime.lock` (Plan 049 §2); licences retained |
 | `bootstrap/install.sh`, `bootstrap/install.ps1` | `max-age=300` | download-then-run entry points (§5) |
 
-Hostname `updates.softwarecombined.com` (assumption; owner confirms). ACM
-certificate in `us-east-1`, DNS-validated in the existing zone.
+Hostname `dist.softwarecombined.com`, decided 2026-09-09 on owner
+delegation: one host serves the feed, bundles, pinned runtimes and bootstrap
+scripts, so one ACM certificate, one distribution, one function and one DNS
+record cover the lot, and a later public `/install` path can share it rather
+than needing a second name. ACM certificate in `us-east-1`, DNS-validated in
+the existing `softwarecombined.com` zone (`Z0272966357LH6IEJY0NV`).
 `feed_verify.beta_feed_url` derives `<origin>/beta/latest.json`, which is
 correct on a dedicated origin and removes today's `https://github.com/beta/`
 mis-derivation.
 
 ### 2. Read access: token header checked at the edge
 
-A viewer-request CloudFront Function compares header `X-SCG-Feed-Token` with
-the active values in a CloudFront KeyValueStore and returns 403 otherwise. No
-AWS credentials, IP allowlists or AWS CLI on hosts. Tokens are random 32-byte
-values; the store holds one or more active values so rotation overlaps.
+A viewer-request CloudFront Function looks the header `X-SCG-Feed-Token` up in
+a CloudFront KeyValueStore and returns 403 otherwise. No AWS credentials, IP
+allowlists or AWS CLI on hosts. Tokens are random 32-byte values, stored as
+KVS *keys* so a lookup is one operation and retiring one token is a single key
+deletion; the store holds one or more active tokens so rotation overlaps.
+
+The function must fail closed. `kvs.get()` raises when a key is absent, so the
+handler returns 403 on a missing header, an absent key and any lookup error,
+and never falls through to the origin. Constraints that shape it, verified
+2026-09-09: JavaScript runtime 2.0 is required, one key value store may be
+associated per function, keys are capped at 512 bytes and values at 1 KB, and
+an updated store propagates to edge locations within seconds, which is what
+makes revocation immediate.
 
 Hosts keep the token at `<home>/feed-token` (mode 0600), written by the
 bootstrap at first install. `latest.json` carries the current value as
@@ -131,7 +172,7 @@ passes it to `release.py` for `latest.json`. Never log it (Plan 050 rule).
 Steps: checkout, Python 3.14, `unittest`, `aws-actions/configure-aws-credentials`
 (OIDC `role-to-assume`), read token from the store, `release.py --out dist
 --build $GITHUB_RUN_NUMBER --sha $GITHUB_SHA --channel <c> --url-base
-https://updates.softwarecombined.com/bundles --feed-token-file <tmp>`, upload
+https://dist.softwarecombined.com/bundles --feed-token-file <tmp>`, upload
 the bundle (immutable), upload `latest.json` (short cache), invalidate
 `/<channel>/latest.json`. Runtime archives upload only when `runtime.lock`
 changes, so updates never re-download an unchanged interpreter.
@@ -143,7 +184,7 @@ until stable overtakes it; the runbook records this step.
 
 ### 4. Updater changes (`packaging/service.py`, `packaging/install.py`)
 
-- `FEED_URL` becomes `https://updates.softwarecombined.com/stable/latest.json`.
+- `FEED_URL` becomes `https://dist.softwarecombined.com/stable/latest.json`.
 - `TRUSTED_ORIGINS` replaces the `RELEASES_PREFIX` gate: any feed or bundle URL
   off the trusted origin (or `file://` in tests) is refused before fetch.
 - One shared request builder adds `X-SCG-Feed-Token` from `<home>/feed-token`
@@ -230,11 +271,12 @@ token embedded. Microsoft 365 sign-in is the email and domain gate. Portfolio
 company staff outside the tenant join as guests or receive the page through
 their own channel.
 
-Stage B, optional and later: self-serve `install.softwarecombined.com` with an
-email-domain allowlist and SES one-time codes (production access and DKIM are in
-place), issuing per-install tokens into the KeyValueStore with a DynamoDB audit
-row. Adds per-user revocation and cross-tenant onboarding without changing the
-runtime or the feed.
+Stage B, optional and later: self-serve `dist.softwarecombined.com/install`
+(the same host and certificate, an ungated path in front of the token gate)
+with an email-domain allowlist and SES one-time codes (production access and
+DKIM are in place), issuing per-install tokens into the KeyValueStore with a
+DynamoDB audit row. Adds per-user revocation and cross-tenant onboarding
+without changing the runtime or the feed.
 
 Plan 049's plugin lane (`scg-openrouter`, `manage-router`) stays a parallel
 entry point that calls the same bootstrap and the same feed.
@@ -244,7 +286,7 @@ entry point that calls the same bootstrap and the same feed.
 | Stage | Work | Proof | Gate |
 |---|---|---|---|
 | 0 | Re-point the owner Mac's updater LaunchAgent at the `0.6.7.19` installer: while the update job is not running, rewrite `ProgramArguments[1]` in `~/Library/LaunchAgents/com.local.codex-mixed-model-router.update.plist` to `<home>/releases/0.6.7.19/packaging/install.py`, then `launchctl bootout gui/<uid>/com.local.codex-mixed-model-router.update` and `launchctl bootstrap gui/<uid> <that plist>`. Touch only the update agent, never the router agent (`docs/operations.md:44`); add these steps to `docs/operations.md` as a runbook entry. A host still on `0.6.6.18` needs one local install of `0.6.7.19` first; its updater cannot pull the fix because the fix is in the fetch path | `launchctl print gui/<uid>/com.local.codex-mixed-model-router.update` names the `0.6.7.19` installer; `update.log` shows `up to date 0.6.7.19` over `gh`, no 404; last exit 0 | staff-machine action (owner) |
-| 1 | AWS: bucket, OAC, CloudFront, function and KeyValueStore, publish role, ACM, DNS. Repo: branch-driven `release.yml`, `release.py --feed-token-file`, updater §4 (origins, token, launcher-based job), transitional release; once T has installed on the owner Mac, re-run the Stage 0 runbook entry (bootout and bootstrap the update label while the job is not running) so the launcher-based job loads | a merge to `main` reaches the owner Mac within 15 min via CloudFront with token and without `gh`; `launchctl print` shows the loaded updater job running the launcher, not a release path | AWS creation, DNS and ACM, publication cutover (owner) |
+| 1 | AWS: bucket, OAC, CloudFront, function and KeyValueStore, publish role, ACM, DNS. Repo: branch-driven `release.yml`, `release.py --feed-token-file`, updater §4 (origins, token, launcher-based job), transitional release; once T has installed on the owner Mac, re-run the Stage 0 runbook entry (bootout and bootstrap the update label while the job is not running) so the launcher-based job loads | a merge to `main` reaches the owner Mac within 15 min via CloudFront with token and without `gh`; `launchctl print` shows the loaded updater job running the launcher, not a release path | AWS creation, DNS and ACM, GitHub organisation plan upgrade (owner, recurring spend), publication cutover (owner) |
 | 2 | `runtime.lock`, runtime mirror, real `install.sh` and `install.ps1` (§5), SharePoint page | a clean Mac without Python 3.14 installs from the page and auto-updates; then Linux on the contributor's machine | staff-machine changes (Plan 049) |
 | 3 | `packaging/windows.py`, Task Scheduler updater, Windows entry decision (§5) | the designated Windows 11 x64 machine installs and auto-updates | Windows machine designation and entry decision (owner) |
 | 4 (optional) | self-serve email-OTP page, per-install tokens, audit | a portfolio company user onboards with no Software Combined account; revoking their token stops their updates | account and domain approval (owner) |
