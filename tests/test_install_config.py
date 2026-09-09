@@ -95,7 +95,7 @@ class InstallConfigTests(unittest.TestCase):
             self.assertIn(f"/{state['token']}/backend-api/codex", block)
             self.assertEqual(state.get('openai_mode'), 'none')
             receipt = json.loads((home / 'activation.json').read_text())
-            self.assertEqual(receipt.get('openai_mode'), 'none')
+            self.assertEqual(receipt['clients']['codex'].get('openai_mode'), 'none')
 
     def test_mode_survives_update_without_flag(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -125,7 +125,7 @@ class InstallConfigTests(unittest.TestCase):
             config.write_text(full[:start] + picked + full[end:])
             receipt_path = home / 'activation.json'
             receipt = json.loads(receipt_path.read_text())
-            receipt['inserted_block'] = picked
+            receipt['clients']['codex']['inserted_block'] = picked
             receipt_path.write_text(json.dumps(receipt) + '\n')
             config, _, _, _ = _install(self, tmp, home, '1.0.1')
             block = config.read_text()

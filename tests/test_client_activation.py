@@ -44,13 +44,13 @@ class ClientActivationTests(unittest.TestCase):
             config, _, _, _ = _install(self, tmp, home, '1.0.0')
             receipt_path = home / 'activation.json'
             receipt = json.loads(receipt_path.read_text())
-            owned = receipt['inserted_block'].replace(
+            owned = receipt['clients']['codex']['inserted_block'].replace(
                 '# END local mixed model picker\n',
                 'model = "z-ai/glm-5.3"\nmodel_reasoning_effort = "high"\n'
                 '# END local mixed model picker\n')
             config.write_text(config.read_text().replace(
-                receipt['inserted_block'], owned))
-            receipt['inserted_block'] = owned
+                receipt['clients']['codex']['inserted_block'], owned))
+            receipt['clients']['codex']['inserted_block'] = owned
             receipt_path.write_text(json.dumps(receipt))
             config2, _, _, _ = _install(self, tmp, home, '1.0.1')
             self.assertEqual(config2, config)
@@ -86,7 +86,7 @@ class ClientActivationTests(unittest.TestCase):
             home = Path(tmp) / 'home'
             config, _, _, _ = _install(self, tmp, home, '1.0.0')
             receipt = json.loads((home / 'activation.json').read_text())
-            block = receipt['inserted_block']
+            block = receipt['clients']['codex']['inserted_block']
             (home / 'activation.json').write_text(json.dumps(
                 {'config_path': str(config), 'inserted_block': block}))
             disable = (Path(__file__).resolve().parents[1] / 'tools' / 'disable.py')
@@ -127,6 +127,48 @@ class ClientActivationTests(unittest.TestCase):
         # kept as a named pointer to the verdict contract.
         self.assertTrue(callable(install_mod.do_uninstall))
 
+
+class ReceiptVersionTests(unittest.TestCase):
+    # Plan 049: versioned receipts carry a clients map; legacy flat
+    # receipts import as the codex attachment with restore info intact.
+    def _mod(self):
+        import importlib.util as _ilu
+        spec = _ilu.spec_from_file_location(
+            'router_codex_config', Path(__file__).resolve().parents[1] / 'packaging' / 'codex_config.py')
+        mod = _ilu.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    def test_legacy_flat_receipt_imports_as_codex(self):
+        mod = self._mod()
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            home.mkdir()
+            (home / 'activation.json').write_text(json.dumps(
+                {'config_path': '/home/u/.codex/config.toml',
+                 'inserted_block': '# BEGIN local mixed model picker\n# END\n'}))
+            doc = mod.read_receipt(home)
+            self.assertEqual(doc['version'], mod.RECEIPT_VERSION)
+            self.assertEqual(doc['clients']['codex']['config_path'],
+                             '/home/u/.codex/config.toml')
+            # Read imports without rewriting: the flat file is untouched.
+            raw = json.loads((home / 'activation.json').read_text())
+            self.assertNotIn('version', raw)
+
+    def test_second_client_write_preserves_first(self):
+        mod = self._mod()
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            home.mkdir()
+            mod.write_receipt(home, '/c/config.toml', 'block-codex', None, 'subscription', '')
+            mod.write_receipt(home, '/c/settings.json', 'block-claude', None, 'subscription',
+                              '', client='claude')
+            doc = mod.read_receipt(home)
+            self.assertEqual(set(doc['clients']), {'codex', 'claude'})
+            self.assertTrue(mod.drop_client(home, 'claude'))
+            doc = mod.read_receipt(home)
+            self.assertEqual(set(doc['clients']), {'codex'})
+            self.assertFalse(mod.drop_client(home, 'claude'))
 
 if __name__ == '__main__':
     unittest.main()
@@ -241,7 +283,7 @@ class ServiceOnlyTests(unittest.TestCase):
             home = Path(tmp) / 'home'
             config, _, _, _ = _install(self, tmp, home, '1.0.0')
             receipt = json.loads((home / 'activation.json').read_text())
-            block = receipt['inserted_block']
+            block = receipt['clients']['codex']['inserted_block']
             rc, _, _ = self._install_service_only(self, tmp, home, '1.0.1')
             self.assertEqual(rc, 0)
             self.assertNotIn(block, config.read_text())
@@ -251,6 +293,23 @@ class ServiceOnlyTests(unittest.TestCase):
                 agents = Path(tmp) / 'fakehome' / '.codex' / name
                 if agents.exists():
                     self.assertNotIn('codex-model-router', agents.read_text())
+
+    def test_codex_detach_preserves_sibling_attachment(self):
+        # A sibling client attachment survives the codex detach: only the
+        # codex entry is forgotten and the receipt file remains.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            config, _, _, _ = _install(self, tmp, home, '1.0.0')
+            receipt = json.loads((home / 'activation.json').read_text())
+            block = receipt['clients']['codex']['inserted_block']
+            receipt['clients']['claude'] = {'config_path': '/c/settings.json',
+                                            'inserted_block': 'claude-block'}
+            (home / 'activation.json').write_text(json.dumps(receipt))
+            rc, _, _ = self._install_service_only(self, tmp, home, '1.0.1')
+            self.assertEqual(rc, 0)
+            self.assertNotIn(block, config.read_text())
+            kept = json.loads((home / 'activation.json').read_text())
+            self.assertEqual(set(kept['clients']), {'claude'})
 
     def test_codex_to_none_refuses_edited_block(self):
         with tempfile.TemporaryDirectory() as tmp:
