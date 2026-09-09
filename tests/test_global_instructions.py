@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from tests._platform import unix_only
 from codex_router.catalogue import merge
 from tests.test_install_config import _install
 from tools.global_instructions import BLOCK, prepare, restore, write
@@ -19,6 +20,7 @@ def install_rules(home, previous=None):
     return receipt
 
 
+@unix_only
 class GlobalInstructionsTests(unittest.TestCase):
     def test_fresh_install_update_and_uninstall_preserve_other_instructions(self):
         with tempfile.TemporaryDirectory() as tmp:
