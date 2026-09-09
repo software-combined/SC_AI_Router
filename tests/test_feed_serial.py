@@ -58,8 +58,7 @@ class FeedSerialTests(unittest.TestCase):
             blob, latest = _craft_bundle('0.4.2.9')
             latest = {**latest, 'serial': 9}
             version = latest['version']
-            _patch_attrs(self, health=lambda state, timeout=20: {'status': 'ok', 'version': version},
-                             wait_idle=lambda *args, **kwargs: True)
+            _patch_attrs(self, health=lambda state, timeout=20: {'status': 'ok', 'version': version})
             env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}
             with mock.patch.dict(os.environ, env):
                 self.assertEqual(
@@ -81,8 +80,7 @@ class FeedSerialTests(unittest.TestCase):
                 blob, latest = _craft_bundle(version)
                 latest = {**latest, 'serial': serial}
                 _patch_attrs(self, health=lambda state, timeout=20, version=version: {
-                    'status': 'ok', 'version': version},
-                                 wait_idle=lambda *args, **kwargs: True)
+                    'status': 'ok', 'version': version})
                 with mock.patch.dict(os.environ, env):
                     self.assertEqual(
                         install_mod.do_install(

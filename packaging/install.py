@@ -44,13 +44,20 @@ DEFAULT_OPENAI_MODELS = _svc.DEFAULT_OPENAI_MODELS
 channel_feed = _svc.channel_feed
 check_serial = _svc.check_serial
 ensure_state = _svc.ensure_state
+install_lock = _svc.install_lock
 _write_state = _svc._write_state
 fetch = _svc.fetch
 fetch_feed = _svc.fetch_feed
 feed_serial = _svc.feed_serial
 find_python = _svc.find_python
 install_launcher = _svc.install_launcher
-main_plist_exe = _svc.main_plist_exe
+main_plist_needs_reload = _svc.main_plist_needs_reload
+same_interpreter = _svc.same_interpreter
+ensure_updater = _svc.ensure_updater
+loaded_updater_release = _svc.loaded_updater_release
+_update_failures = _svc.update_failures
+_record_update_failure = _svc.record_update_failure
+_clear_update_failures = _svc.clear_update_failures
 reload_main_service = _svc.reload_main_service
 render_plist = _svc.render_plist
 render_update_plist = _svc.render_update_plist
@@ -63,8 +70,8 @@ write_plist = _svc.write_plist
 # Patchable seams: tests override these on install_mod via _patch_attrs.
 run = _svc.run
 health = _svc.health
-wait_idle = _svc.wait_idle
 wait_version = _svc.wait_version
+ensure_serving = _svc.ensure_serving
 
 
 def systemd_manager(home):
@@ -264,9 +271,6 @@ def do_rollback(args):
         state = json.loads((home / 'mixed-router-state.json').read_text())
     except (OSError, ValueError):
         raise SystemExit(f'router state is missing or unreadable under {home}')
-    if not wait_idle(state):
-        print('deferred: router busy')
-        return 0
     previous = swap_current(home, target)
     restart_router(home)
     if not wait_version(state, args.version):
@@ -284,9 +288,9 @@ def do_rollback(args):
 
 def _sync_seams():
     """Mirror _patch_attrs swaps from install_mod onto _svc call sites."""
-    global run, health, wait_idle, wait_version, main_plist_exe
-    run, health, wait_idle, wait_version, main_plist_exe = (
-        _svc.run, _svc.health, _svc.wait_idle, _svc.wait_version, _svc.main_plist_exe)
+    global run, health, wait_version, ensure_serving
+    run, health, wait_version, ensure_serving = (
+        _svc.run, _svc.health, _svc.wait_version, _svc.ensure_serving)
 
 
 def do_install(args, _fetch=fetch, _run=None):
@@ -353,44 +357,48 @@ def do_install(args, _fetch=fetch, _run=None):
     except SystemExit as exc:
         if exc.code != 3 or setup_url is None:
             raise
-    if current_release_dir(home) is not None and not wait_idle(state):
-        # Busy router: keep serving the old pointer; the updater retries next
-        # pass instead of killing live Codex traffic mid-request.
-        print('deferred: router busy')
-        return 0
+    # No idle gate. A version swap is a pointer write plus a TERM: launchd
+    # owns the listening socket, so new connections queue for the incoming
+    # process while the outgoing one finishes the requests it already
+    # accepted (codex_router.router.drain_and_exit). Waiting for inflight to
+    # reach zero delayed every update on a machine that is actually in use,
+    # and bought nothing that the drain does not already guarantee.
     catalog_path = home / 'mixed-models.json'
     before_catalog = catalog_path.read_bytes() if catalog_path.exists() else None
     previous = install_bundle(home, latest['version'], tarball, manifest_doc, python)
+    # POSIX-only call, and the launchd branch below is its only consumer.
+    uid = os.getuid() if hasattr(os, 'getuid') else 0
+    agents = Path.home() / 'Library' / 'LaunchAgents'
     try:
         if manager:
             manager.install(python, current_release_dir(home))
         else:
-            agents = Path.home() / 'Library' / 'LaunchAgents'
-            legacy_exe = main_plist_exe()
+            # Decided before the rewrite: once the file is replaced it can no
+            # longer tell us whether launchd's loaded copy went stale.
+            needs_reload = main_plist_needs_reload(uid, python, home, state, agents)
             write_plist(agents / (LABEL + '.plist'), render_plist(python, home, state))
             write_plist(agents / (UPDATE_LABEL + '.plist'), render_update_plist(python, home))
             if previous is None:
-                restart_service(os.getuid())
-            elif legacy_exe is not None and legacy_exe != python:
-                # Reload the old in-memory plist so it uses the absolute interpreter.
-                try:
-                    reload_main_service(os.getuid())
-                except (SystemExit, OSError, subprocess.SubprocessError):
-                    swap_current(home, home / 'releases' / previous)
-                    if before_catalog is not None:
-                        catalog_path.write_bytes(before_catalog)
-                    healed = run(['launchctl', 'bootstrap', f'gui/{os.getuid()}',
-                                  str(agents / (LABEL + '.plist'))], capture_output=True)
-                    if healed.returncode != 0:
-                        print(f'reload failed; restored pointer {previous} but the '
-                              f'router is NOT loaded, bootstrap it by hand')
-                    else:
-                        print(f'reload failed; restored {previous}, re-run the installer')
-                    raise SystemExit(1)
+                restart_service(uid, agents)
+            elif needs_reload:
+                if not reload_main_service(uid, agents):
+                    raise SystemExit(f'router service reload failed for {LABEL}')
             else:
+                # Nothing launchd owns changed, so hand over in place. TERM lets
+                # the old process drain in-flight requests while launchd keeps
+                # the listening socket and respawns into the new pointer, so no
+                # connection is refused and no bootout can strand the machine.
                 restart_router(home)
+            if not ensure_updater(uid, python, home, agents):
+                # The router is fine; only the update channel is not. Say so
+                # rather than exiting clean over a machine that will never
+                # update itself again.
+                print('warning: the scheduled updater is not loaded; run the '
+                      'installer again to restore automatic updates')
         healthy = wait_version(state, latest['version'])
-    except (OSError, subprocess.CalledProcessError):
+    except (OSError, subprocess.CalledProcessError, SystemExit):
+        # SystemExit is caught on purpose: reload and launcher failures raise it,
+        # and letting it through here skipped the rollback below entirely.
         healthy = False
     if not healthy:
         if before_catalog is None:
@@ -402,9 +410,17 @@ def do_install(args, _fetch=fetch, _run=None):
             # TERM, not bootout: KeepAlive restarts the old release.
             # bootout would unload the service and strand a busy machine.
             restart_router(home)
+            rolled_back = f'rolled back to {previous}: new version failed health check'
             if manager:
                 manager.start_updates()
-            print(f'rolled back to {previous}: new version failed health check')
+                print(rolled_back)
+            elif ensure_serving(uid, home, state, agents, version=previous):
+                print(rolled_back)
+            else:
+                # A TERM cannot revive a job that is not loaded, so never report
+                # a clean rollback over a router that is not actually serving.
+                print(f'{rolled_back}; router is NOT serving on port '
+                      f'{state["port"]}, run the installer again')
         else:
             if current_release_dir(home) == home / 'releases' / latest['version']:
                 _clear_current(home)
@@ -463,7 +479,11 @@ def do_install(args, _fetch=fetch, _run=None):
         # It carries the per-install loopback token, so it stays operator-private.
         print(f'open {setup_url} to connect your OpenRouter key')
         webbrowser.open(setup_url)
-    prune_releases(home, latest['version'], previous)
+    # launchd keeps the updater command it loaded until the job is reloaded,
+    # and a scheduled run defers that reload. Pruning the release that command
+    # names would leave the updater firing a missing file every 15 minutes.
+    prune_releases(home, latest['version'], previous,
+                   None if manager else loaded_updater_release(uid, home))
     (home / 'feed-serial').write_text(str(serial) + '\n')
     if manager:
         manager.start_updates()
@@ -487,6 +507,27 @@ def prune_releases(home, *keep):
     for stale in versions[3:]:
         if stale not in keep:
             shutil.rmtree(home / 'releases' / stale, ignore_errors=True)
+
+
+MAX_VERSION_FAILURES = 3
+
+
+def _park(home, etag, etag_path, version):
+    """Count a failed attempt and stop retrying once it is hopeless.
+
+    A version that has failed this often will not start working on its own,
+    and every pass costs a service restart. The saved ETag skips even the
+    feed re-read, but the production feed is served through the GitHub CLI
+    and carries no ETag, so the count in the state file is what actually
+    parks it there.
+    """
+    count = _record_update_failure(home, version)
+    if count < MAX_VERSION_FAILURES:
+        return
+    if etag:
+        etag_path.write_text(etag + '\n')
+    print(f'parking {version} after {count} failed attempts; '
+          f'run the installer by hand to retry')
 
 
 def do_check_update(args, _fetch=fetch, _read_feed=None, _sleep=None):
@@ -523,10 +564,14 @@ def do_check_update(args, _fetch=fetch, _read_feed=None, _sleep=None):
             etag_path.write_text(etag + '\n')
         print(f"up to date {current_version(home)}")
         return 0
-    state = json.loads((home / 'mixed-router-state.json').read_text())
-    if not wait_idle(state):
-        print('deferred: router busy')
+    failed = _update_failures(home).get(latest['version'], 0)
+    if failed >= MAX_VERSION_FAILURES:
+        if etag:
+            etag_path.write_text(etag + '\n')
+        print(f"skipping {latest['version']}: {failed} failed attempts; "
+              f"run the installer by hand to retry")
         return 0
+    state = json.loads((home / 'mixed-router-state.json').read_text())
     tarball = _fetch(latest['url'])
     if latest.get('sha256'):
         verify_sha256(tarball, latest['sha256'])
@@ -540,14 +585,24 @@ def do_check_update(args, _fetch=fetch, _read_feed=None, _sleep=None):
         cmd = [sys.executable, str(installer), '--home', str(home)]
         if args.feed:
             cmd += ['--feed', feed]
-        result = run(cmd, capture_output=True, text=True, timeout=900)
+        try:
+            result = run(cmd, capture_output=True, text=True, timeout=900)
+        except subprocess.SubprocessError as exc:
+            # A child that is killed or never starts reports nothing itself,
+            # so count it here or a hanging release retries every 15 minutes
+            # forever. TimeoutExpired is a SubprocessError, not an OSError.
+            _park(home, etag, etag_path, latest['version'])
+            print(f'installer did not complete: {type(exc).__name__}')
+            raise SystemExit(1)
         print(result.stdout[-2000:] if result.stdout else '')
         if result.returncode != 0:
             print(result.stderr[-2000:] if result.stderr else '')
+            _park(home, etag, etag_path, latest['version'])
             raise SystemExit(result.returncode)
     if current_version(home) != latest['version']:
         print('deferred: installer did not activate the requested version')
         return 0
+    _clear_update_failures(home, latest['version'])
     (home / 'logs').mkdir(exist_ok=True)
     with open(home / 'logs' / 'update.log', 'a') as stream:
         stream.write(json.dumps({'at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
@@ -616,13 +671,25 @@ def build_parser():
 def main(argv=None):
     args = build_parser().parse_args(argv)
     action = do_uninstall if args.uninstall else do_check_update if args.check_update else do_install
-    manager = systemd_manager(Path(args.home).expanduser())
-    # The updater spawns the installer, which takes its own lock. Holding
-    # one in the parent would prevent every scheduled update from installing.
-    if manager and not args.check_update and not args.dry_run:
-        with manager.operation():
-            return action(args)
-    return action(args)
+    home = Path(args.home).expanduser()
+    manager = systemd_manager(home)
+    # --check-update spawns the installer as a child, and that child takes the
+    # lock itself; holding it here would deadlock every scheduled update. A
+    # dry run mutates nothing, so it takes no lock and creates no home.
+    if args.check_update or args.dry_run:
+        return action(args)
+    if manager:
+        # Before the lock: a host with no systemd user manager must be refused
+        # without leaving a router home behind.
+        manager.check()
+    with install_lock(home) as held:
+        if not held:
+            # A scheduled pass and a manual run can fire at the same moment,
+            # and both would swap `current`, rewrite both plists and reload
+            # the same service. Second one out: the winner has this covered.
+            print('deferred: another router operation is in progress')
+            return 0
+        return action(args)
 
 
 if __name__ == '__main__':

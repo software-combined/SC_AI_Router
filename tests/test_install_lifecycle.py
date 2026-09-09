@@ -25,6 +25,7 @@ from tests.test_install import (
     _static_fetch,
     install_mod,
 )
+from tests.fakes import launchd_in_sync
 from tests.test_install_config import _fake_write_catalogue
 
 
@@ -81,7 +82,6 @@ def _run_install(test, tmp, home, version, *extra_args, feed='file:///latest.jso
 
     _patch_attrs(test, run=fake_run, self_test=lambda *args: None,
                  write_catalogue=_fake_write_catalogue,
-                 wait_idle=lambda *args, **kwargs: True,
                  wait_version=lambda *args, **kwargs: wait_version)
     argv = ['--home', str(home), *extra_args]
     if feed is not None:
@@ -330,7 +330,9 @@ class InstallLifecycleTests(unittest.TestCase):
 
     def test_check_update_retries_transient_feed_failure(self):
         # A blipped feed fetch must not kill the poll: the run retries
-        # in-cycle, then proceeds (here to a clean busy-deferral).
+        # in-cycle, then proceeds. There is no idle gate any more, so this
+        # ends at the surviving deferral: the child installer ran but did not
+        # activate the requested version.
         with tempfile.TemporaryDirectory() as tmp:
             home = self._check_update_home(tmp)
             latest = {'version': '9.9.9', 'url': 'file:///bundle.tar.gz',
@@ -343,20 +345,18 @@ class InstallLifecycleTests(unittest.TestCase):
                     raise OSError('simulated transient network failure')
                 return 200, json.dumps(latest).encode(), 'etag-B'
 
-            def boom(url):
-                raise AssertionError('tarball must not download when deferred')
-
-            _patch_attrs(self, wait_idle=lambda *a, **k: False)
+            blob, _ = _craft_bundle('9.9.9')
+            _patch_attrs(self, run=lambda cmd, **kw: _ok_run(cmd, **kw))
             args = self._check_update_args(home)
             buf = io.StringIO()
             with contextlib.redirect_stdout(buf):
                 rc = install_mod.do_check_update(
-                    args, _fetch=boom, _read_feed=flaky_read,
+                    args, _fetch=lambda url: blob, _read_feed=flaky_read,
                     _sleep=lambda s: None)
             self.assertEqual(rc, 0, buf.getvalue())
             self.assertEqual(len(attempts), 2, 'feed must be re-read after transient failure')
             self.assertIn('retrying feed fetch', buf.getvalue())
-            self.assertIn('deferred: router busy', buf.getvalue())
+            self.assertIn('deferred', buf.getvalue())
 
 class SafeUpdateTests(unittest.TestCase):
     """Long-term safe-update seams: identity gate, busy deferral, TERM-only
@@ -375,7 +375,6 @@ class SafeUpdateTests(unittest.TestCase):
             _patch_attrs(self, run=_recording(calls),
                          self_test=lambda *a: None,
                          write_catalogue=_fake_write_catalogue,
-                         wait_idle=lambda *a, **k: True,
                          wait_version=lambda *a, **k: True)
             args = install_mod.build_parser().parse_args(
                 ['--feed', 'file:///latest.json', '--home', str(home)])
@@ -392,13 +391,22 @@ class SafeUpdateTests(unittest.TestCase):
             self.assertFalse(signals, 'identity failure must not signal launchd')
 
     @unix_only
-    def test_busy_upgrade_defers_without_kill(self):
+    def test_busy_upgrade_proceeds_and_hands_over_in_place(self):
+        # There is no idle gate: waiting for inflight to reach zero delayed
+        # every update on a machine actually in use. A TERM is safe while
+        # requests are in flight because launchd keeps the listening socket
+        # and the outgoing process drains what it already accepted.
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             rc, calls, _, _ = _run_install(self, tmp, home, '1.0.0')
             self.assertEqual(rc, 0)
             blob, latest = _craft_bundle('1.0.1')
-            _patch_attrs(self, wait_idle=lambda *args, **kwargs: False)
+            _patch_attrs(self,
+                         health=lambda state, timeout=20: {
+                             'status': 'ok', 'version': '1.0.1', 'inflight': 3},
+                         wait_version=lambda *a, **k: {'status': 'ok',
+                                                       'version': '1.0.1'})
+            launchd_in_sync(home, install_mod.LABEL, install_mod.UPDATE_LABEL)
             args = install_mod.build_parser().parse_args(
                 ['--feed', 'file:///latest.json', '--home', str(home)])
             env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}
@@ -409,12 +417,15 @@ class SafeUpdateTests(unittest.TestCase):
                     rc = install_mod.do_install(
                         args, _fetch=_static_fetch(latest, blob),
                         _run=_recording(calls))
-            self.assertEqual(rc, 0)
-            self.assertIn('deferred: router busy', buf.getvalue())
-            self.assertEqual((home / 'current').read_text(), '1.0.0\n')
-            fresh = [c for c in calls[n_calls:]
-                     if c[:2] == ['launchctl', 'kill'] or 'bootout' in c]
-            self.assertFalse(fresh, 'busy upgrade must not signal launchd')
+            self.assertEqual(rc, 0, buf.getvalue())
+            self.assertNotIn('deferred', buf.getvalue())
+            self.assertEqual((home / 'current').read_text(), '1.0.1\n',
+                             'a busy router must still be updated')
+            fresh = calls[n_calls:]
+            self.assertTrue([c for c in fresh if c[:3] == ['launchctl', 'kill', 'TERM']],
+                            'the swap hands over with a TERM')
+            self.assertFalse([c for c in fresh if 'bootout' in c],
+                             'an in-place handover must never bootout')
 
     @unix_only
     def test_failed_upgrade_rolls_back_with_term_not_bootout(self):
@@ -425,8 +436,10 @@ class SafeUpdateTests(unittest.TestCase):
             calls = []
             _patch_attrs(self, run=_recording(calls),
                          self_test=lambda *a: None,
-                         wait_idle=lambda *a, **k: True,
                          wait_version=lambda *a, **k: None)
+            # launchd is running what the previous install wrote, so this
+            # upgrade needs no reload and the rollback has a live job to TERM.
+            launchd_in_sync(home, install_mod.LABEL, install_mod.UPDATE_LABEL)
             args = install_mod.build_parser().parse_args(
                 ['--feed', 'file:///latest.json', '--home', str(home)])
             env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}

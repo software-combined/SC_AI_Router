@@ -76,7 +76,12 @@ class PackagingTests(unittest.TestCase):
         for name in FILES:
             self.assertIn(name, names, name)
         self.assertIn('MANIFEST.json', names)
-        self.assertIn('packaging/router_launch.py', names)
+        # An installed release must be able to boot and to update itself:
+        # both stable launchers plus every module service.py imports.
+        for name in ('packaging/router_launch.py', 'packaging/update_launch.py',
+                     'packaging/launchd.py', 'packaging/service.py',
+                     'packaging/install.py'):
+            self.assertIn(name, names, name)
 
     def test_version_is_semver(self):
         version = (Path(__file__).resolve().parents[1] / 'packaging' / 'VERSION').read_text().strip()

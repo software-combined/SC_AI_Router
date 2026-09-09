@@ -16,7 +16,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from codex_router import feed_verify
-from tests.fakes import static_fetch as _static_fetch
+from tests.fakes import LAUNCHD, static_fetch as _static_fetch
 
 _ROOT = Path(__file__).resolve().parents[1]
 
@@ -72,6 +72,12 @@ def _ok_run(cmd, **kwargs):
     if '-c' in cmd:
         return SimpleNamespace(returncode=0, stdout='3 14\n/opt/homebrew/bin/python3.14\n',
                                stderr='')
+    # launchctl goes through the stateful domain model: a fake that answered
+    # `print` with rc 0 for a booted-out label is what let the bootout/bootstrap
+    # defect reach a release.
+    answer = LAUNCHD(cmd, **kwargs)
+    if answer is not None:
+        return answer
     return SimpleNamespace(returncode=0, stdout='', stderr='')
 
 
@@ -87,13 +93,23 @@ def _craft_bundle(version):
     return blob, latest
 
 
-_SEAMS = ('run', 'health', 'wait_idle', 'wait_version', 'self_test',
-           'write_catalogue', 'fetch_feed', 'feed_serial', 'main_plist_exe')
+_SEAMS = ('run', 'health', 'wait_version', 'self_test',
+           'write_catalogue', 'fetch_feed', 'feed_serial')
 # webbrowser patches module-global stdlib handle via setattr on install_mod;
 # call sites use `webbrowser.open` so plain setattr suffices (no _svc mirror).
 
 
 def _patch_attrs(test, **overrides):
+    test.addCleanup(LAUNCHD.reset)
+    LAUNCHD.reset()
+    # Real launchd settle windows are minutes long; tests must never wait on
+    # wall-clock time, and must never fall back to a real time.sleep.
+    for mod in (install_mod, install_mod._svc):
+        for name, value in (('UNLOAD_TIMEOUT_S', 2), ('LOAD_TIMEOUT_S', 2),
+                            ('_sleep', lambda *_a, **_k: None)):
+            if hasattr(mod, name):
+                test.addCleanup(setattr, mod, name, getattr(mod, name))
+                setattr(mod, name, value)
     for name, value in overrides.items():
         if name == 'webbrowser':
             # Module-global stdlib handle; call sites use webbrowser.open.
@@ -198,16 +214,6 @@ class InstallTests(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 install_mod.replace_config_block(config, block, block)
 
-    def test_wait_idle_returns_false_when_inflight_stays_positive(self):
-        state = {'port': 1, 'token': 'x'}
-        self.assertFalse(
-            install_mod.wait_idle(state, timeout=2, fetch_health=lambda s: {'inflight': 1}))
-
-    def test_wait_idle_treats_dead_router_as_idle(self):
-        # health None (crashed router) must heal, not defer forever.
-        self.assertTrue(
-            install_mod.wait_idle({}, timeout=5, fetch_health=lambda s: None))
-
     def test_install_dry_run_performs_no_writes(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
@@ -239,7 +245,6 @@ class InstallTests(unittest.TestCase):
             _patch_attrs(self, run=fake_run,
                          self_test=lambda *args: None,
                          health=lambda state, timeout=20: None,
-                         wait_idle=lambda *args, **kwargs: True,
                          wait_version=lambda *args, **kwargs: None)
 
             args = install_mod.build_parser().parse_args(
@@ -300,8 +305,7 @@ class InstallTests(unittest.TestCase):
                 order.append((list(cmd), plist.exists()))
                 return _ok_run(cmd, **kwargs)
 
-            _patch_attrs(self, health=lambda state, timeout=20: {'status': 'ok', 'version': version},
-                         wait_idle=lambda *a, **k: True)
+            _patch_attrs(self, health=lambda state, timeout=20: {'status': 'ok', 'version': version})
             _run_install(self, tmp, home, fake_fetch, fake_run)
             bootstraps = [saw for cmd, saw in order if 'bootstrap' in cmd]
             self.assertTrue(bootstraps, 'service was never restarted')
@@ -318,8 +322,7 @@ class InstallTests(unittest.TestCase):
 
             fake_fetch = _static_fetch(latest, blob)
 
-            _patch_attrs(self, health=lambda state, timeout=20: {'status': 'ok', 'version': version},
-                         wait_idle=lambda *a, **k: True)
+            _patch_attrs(self, health=lambda state, timeout=20: {'status': 'ok', 'version': version})
             calls = []
 
             def fake_run(cmd, **kwargs):
@@ -332,9 +335,6 @@ class InstallTests(unittest.TestCase):
             with mock.patch.dict(os.environ, env):
                 buf = io.StringIO()
                 with contextlib.redirect_stdout(buf):
-                    def no_idle(*args, **kwargs):
-                        raise AssertionError('wait_idle must not run for a current install')
-                    _patch_attrs(self, wait_idle=no_idle)
                     rc = install_mod.do_check_update(
                         args, _fetch=fake_fetch, _sleep=lambda s: None)
             self.assertEqual(rc, 0)
@@ -404,65 +404,31 @@ class InstallTests(unittest.TestCase):
         self.assertTrue(content['RunAtLoad'])
         self.assertNotIn('StartCalendarInterval', content)
 
-    def test_upgrade_restart_uses_kill_term(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            home = Path(tmp) / 'home'
-            prev = home / 'releases' / '0.2.0'
-            (prev / 'packaging').mkdir(parents=True)
-            (prev / 'packaging' / 'VERSION').write_text('0.2.0\n')
-            home.mkdir(parents=True, exist_ok=True)
-            os.symlink(str(prev), home / 'current')
-            blob, latest = _craft_bundle('9.9.9')
-            fake_fetch = _static_fetch(latest, blob)
-
-            calls = []
-
-            def fake_run(cmd, **kwargs):
-                calls.append(list(cmd))
-                return _ok_run(cmd, **kwargs)
-
-            _patch_attrs(self, run=fake_run,
-                         self_test=lambda *args: None,
-                         wait_idle=lambda *args, **kwargs: True,
-                         health=lambda state, timeout=20: {'status': 'ok', 'version': '9.9.9'})
-            _run_install(self, tmp, home, fake_fetch, fake_run)
-            kills = [cmd for cmd in calls if cmd[:3] == ['launchctl', 'kill', 'TERM']]
-            self.assertTrue(kills, 'upgrade must TERM the running router')
-            bootstraps = [cmd for cmd in calls if 'bootstrap' in cmd]
-            self.assertFalse(bootstraps, 'upgrade must not bootstrap over a live service')
-            agents = Path(tmp) / 'fakehome' / 'Library' / 'LaunchAgents'
-            self.assertTrue((agents / (install_mod.LABEL + '.plist')).exists())
-
-
     def test_deferred_check_keeps_old_etag(self):
+        # Retaining the old ETag is what makes the next poll re-read the feed.
+        # There is no busy gate any more, so the deferral under test is the
+        # one that remains: the child installer ran and did not activate the
+        # requested version.
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             home.mkdir()
             (home / 'update-etag').write_text('etag-A\n')
             (home / 'mixed-router-state.json').write_text(
                 json.dumps({'port': 1, 'token': 'x'}))
-            latest = {'version': '9.9.9', 'url': 'file:///bundle.tar.gz',
-                      'sha256': None, 'min_python': '3.14'}
+            blob, latest = _craft_bundle('9.9.9')
 
             def fake_read(feed, etag):
                 self.assertEqual(etag, 'etag-A')
                 return 200, json.dumps(latest).encode(), 'etag-B'
 
-            def boom(url):
-                raise AssertionError('tarball must not download when deferred')
-
-            saved_idle = install_mod._svc.wait_idle
-            self.addCleanup(setattr, install_mod._svc, 'wait_idle', saved_idle)
-            self.addCleanup(setattr, install_mod, 'wait_idle', saved_idle)
-            def _busy(*a, **k):
-                return False
-            install_mod._svc.wait_idle = install_mod.wait_idle = _busy
+            _patch_attrs(self, run=lambda cmd, **kw: _ok_run(cmd, **kw))
             args = install_mod.build_parser().parse_args(
                 ['--feed', 'file:///latest.json', '--home', str(home)])
             buf = io.StringIO()
             with contextlib.redirect_stdout(buf):
                 rc = install_mod.do_check_update(
-                    args, _fetch=boom, _read_feed=fake_read, _sleep=lambda s: None)
+                    args, _fetch=lambda url: blob, _read_feed=fake_read,
+                    _sleep=lambda s: None)
             self.assertEqual(rc, 0)
             self.assertIn('deferred', buf.getvalue())
             self.assertEqual((home / 'update-etag').read_text(), 'etag-A\n')
