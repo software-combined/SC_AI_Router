@@ -215,6 +215,10 @@ try:
         input_schema['properties']['tree'] = {'$ref': '#/$defs/Node'}
         input_schema['$defs'] = {'Node': {'type': 'object', 'properties': {
             'name': {'type': 'string'}, 'children': {'type': 'array', 'items': {'$ref': '#/$defs/Node'}}}}}
+    if '--union-root' in sys.argv:
+        # xAI rejects non-object parameter roots; the router must string-wrap
+        # this union the same way it wraps Meta's recursive schemas.
+        input_schema = {'anyOf': [dict(input_schema), {'type': 'string'}]}
     dynamic = {'type': 'function', 'name': 'echo_probe', 'deferLoading': '--deferred' in sys.argv,
                'description': 'Looks up and returns a synthetic test result for the supplied probe name.', 'inputSchema': input_schema}
     dynamic_tools = [{'type': 'namespace', 'name': 'probe', 'description': 'Synthetic lookup tools.', 'tools': [dynamic]}] if '--deferred' in sys.argv else [dynamic]

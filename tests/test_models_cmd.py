@@ -40,7 +40,7 @@ def _row(slug='a/b', priority=100):
     return {'slug': slug, 'provider': 'openrouter', 'display_name': 'A',
             'vendor': 'V', 'reasoning': ['low'], 'default_reasoning': 'low',
             'modalities': ['text'], 'excluded_efforts': [], 'schema_mode': 'native',
-            'max_tools': None, 'context_window': 1, 'priority': priority,
+            'max_tools': None, 'drop_images': False, 'context_window': 1, 'priority': priority,
             'max_output_tokens': 7, 'reasoning_summary': 'none', 'apply_patch': 'none',
             'experimental_tools': [], 'web_search': True, 'tier': 'verified'}
 

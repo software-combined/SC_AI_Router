@@ -16,6 +16,12 @@ def _install_args(home, *extra):
         ['--feed', 'file:///latest.json', '--home', str(home), *extra])
 
 
+def _unpinned_args(home, *extra):
+    """Args with no --feed, so the channel-resolved release feed is used."""
+    return install_mod.build_parser().parse_args(
+        ['--home', str(home), *extra])
+
+
 def _home_with_serial(tmp, text='9\n'):
     home = Path(tmp) / 'home'
     home.mkdir(parents=True)
@@ -53,23 +59,71 @@ class FeedSerialTests(unittest.TestCase):
                 install_mod.check_serial(home, {'serial': 9})
 
     def test_install_persists_serial_and_refuses_replay(self):
+        # The channel-resolved feed is the one whose serial is worth recording.
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             blob, latest = _craft_bundle('0.4.2.9')
             latest = {**latest, 'serial': 9}
             version = latest['version']
-            _patch_attrs(self, health=lambda state, timeout=20: {'status': 'ok', 'version': version},
-                             wait_idle=lambda *args, **kwargs: True)
+            _patch_attrs(self, health=lambda state, timeout=20: {'status': 'ok', 'version': version})
             env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}
             with mock.patch.dict(os.environ, env):
                 self.assertEqual(
-                    install_mod.do_install(_install_args(home), _fetch=_static_fetch(latest, blob),
+                    install_mod.do_install(_unpinned_args(home),
+                                           _fetch=_static_fetch(latest, blob),
                                            _run=_ok_run), 0)
             self.assertEqual((home / 'feed-serial').read_text(), '9\n')
             stale = {**latest, 'version': '9.9.9', 'serial': 7}
             with mock.patch.dict(os.environ, env), self.assertRaises(SystemExit):
-                install_mod.do_install(_install_args(home), _fetch=_static_fetch(stale, blob),
+                install_mod.do_install(_unpinned_args(home), _fetch=_static_fetch(stale, blob),
                                        _run=_ok_run)
+
+    def test_a_pinned_feed_never_advances_the_release_serial(self):
+        # A locally built bundle carries its own build number as the serial.
+        # Recording it made the replay guard reject every later release from
+        # the real feed as stale, which silently stopped all updates.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = _home_with_serial(tmp, '9\n')
+            blob, latest = _craft_bundle('0.4.2.99')
+            latest = {**latest, 'serial': 99}
+            version = latest['version']
+            _patch_attrs(self, health=lambda state, timeout=20: {'status': 'ok', 'version': version})
+            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}
+            with mock.patch.dict(os.environ, env):
+                self.assertEqual(
+                    install_mod.do_install(_install_args(home),
+                                           _fetch=_static_fetch(latest, blob),
+                                           _run=_ok_run), 0)
+            self.assertEqual((home / 'current').read_text(), version + '\n',
+                             'the pinned install must still activate')
+            self.assertEqual((home / 'feed-serial').read_text(), '9\n',
+                             'a one-shot feed must leave the release serial alone')
+
+    def test_a_pinned_feed_is_exempt_from_the_replay_guard(self):
+        # A local bundle's serial is its build number, which defaults to 0.
+        # Refusing it against the real feed's recorded serial invited picking
+        # a build number high enough to win, and that number then froze the
+        # real channel. A pinned feed is operator-supplied for one run.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = _home_with_serial(tmp, '21\n')
+            blob, latest = _craft_bundle('0.4.2.0')
+            latest = {**latest, 'serial': 0}
+            version = latest['version']
+            _patch_attrs(self, health=lambda state, timeout=20: {'status': 'ok', 'version': version})
+            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}
+            with mock.patch.dict(os.environ, env):
+                self.assertEqual(
+                    install_mod.do_install(_install_args(home),
+                                           _fetch=_static_fetch(latest, blob),
+                                           _run=_ok_run), 0)
+            self.assertEqual((home / 'current').read_text(), version + '\n')
+            self.assertEqual((home / 'feed-serial').read_text(), '21\n',
+                             'the recorded serial must be left untouched')
+            # The unattended channel keeps full replay protection.
+            with mock.patch.dict(os.environ, env), self.assertRaises(SystemExit) as ctx:
+                install_mod.do_install(_unpinned_args(home),
+                                       _fetch=_static_fetch(latest, blob), _run=_ok_run)
+            self.assertIn('stale feed serial', str(ctx.exception.code))
 
     def test_version_pin_bypasses_serial_gate(self):
         # --version restores an installed release without consulting the feed
@@ -81,8 +135,7 @@ class FeedSerialTests(unittest.TestCase):
                 blob, latest = _craft_bundle(version)
                 latest = {**latest, 'serial': serial}
                 _patch_attrs(self, health=lambda state, timeout=20, version=version: {
-                    'status': 'ok', 'version': version},
-                                 wait_idle=lambda *args, **kwargs: True)
+                    'status': 'ok', 'version': version})
                 with mock.patch.dict(os.environ, env):
                     self.assertEqual(
                         install_mod.do_install(
@@ -106,12 +159,13 @@ class FeedSerialTests(unittest.TestCase):
             home = _home_with_serial(tmp)
             blob, latest = _craft_bundle('9.9.9')
             stale = {**latest, 'serial': 7}
+            # Unpinned: the unattended channel is what the guard protects.
             args = install_mod.build_parser().parse_args(
-                ['--check-update', '--feed', 'file:///latest.json', '--home', str(home)])
+                ['--check-update', '--home', str(home)])
             stale_body = json.dumps(stale).encode()
 
             def fake_fetch(url):
-                return blob
+                raise AssertionError('a stale feed must be refused before download')
 
             with self.assertRaises(SystemExit) as ctx:
                 install_mod.do_check_update(

@@ -61,14 +61,29 @@ class RoutingTests(unittest.TestCase):
 
     def test_reasoning_blobs_stripped_but_summaries_and_results_kept(self):
         summary = [{'type': 'text', 'text': 'chose X'}]
+        call = {'type': 'function_call', 'name': 'e', 'call_id': 't',
+                'arguments': '{"v": 1}'}
         items = [{'type': 'reasoning', 'encrypted_content': 'blob', 'summary': summary},
                  {'type': 'reasoning', 'encrypted_content': 'blob'},
+                 call,
                  {'type': 'function_call_output', 'call_id': 't', 'output': 'r'}]
         prepared = _prepared('z-ai/glm-5.3', '/responses', {'input': items})
         data = json.loads(prepared.body)['input']
         self.assertEqual(data[0], {'type': 'reasoning', 'summary': summary})
-        self.assertEqual(data[1], items[2])
-        self.assertEqual(len(data), 2)
+        self.assertEqual(data[1], call)
+        self.assertEqual(data[2]['output'], 'r')
+        self.assertEqual(len(data), 3)
+
+    def test_fragment_history_with_declared_tools_prepares_cleanly(self):
+        # A fragment custom_tool_call used to KeyError inside prepare_tools.
+        payload = {'model': 'meta/muse-spark-1.3-contributor',
+                   'tools': [{'type': 'custom', 'name': 'exec', 'description': 'x'}],
+                   'input': [{'type': 'message', 'role': 'user', 'content': 'hi'},
+                             {'type': 'custom_tool_call', 'name': 'exec', 'call_id': 'c1'}],
+                   'reasoning': {'effort': 'xhigh'}}
+        data = json.loads(_prepared('meta/muse-spark-1.3-contributor', '/responses',
+                                    payload).body)['input']
+        self.assertEqual([i.get('type') for i in data], ['message'])
 
     def test_contributor_rejects_max_effort_with_actionable_message(self):
         with self.assertRaisesRegex(ValueError, "does not support reasoning effort 'max'"):
@@ -96,6 +111,34 @@ class RoutingTests(unittest.TestCase):
             prepared = _prepared('z-ai/glm-5.3', '/responses',
                                  dict(payload, model='z-ai/glm-5.3'))
             self.assertIn('input', json.loads(prepared.body))
+
+    def test_astra_history_replays_on_contributor_mid_thread(self):
+        # Picker switch: Astra blobs/compaction/tool history prepare cleanly
+        # on Contributor; carried xhigh passes, carried max fails closed.
+        items = [{'type': 'reasoning', 'encrypted_content': 'astra-blob',
+                  'summary': [{'type': 'text', 'text': 'ten-call cap'}]},
+                 {'type': 'compaction', 'encrypted_content': 'opaque'},
+                 {'type': 'function_call', 'call_id': 'c1', 'name': 'echo_probe',
+                  'arguments': '{"value": "probe"}'},
+                 {'type': 'function_call_output', 'call_id': 'c1', 'output': 'ok'}]
+        prepared = _prepared('meta/muse-spark-1.3-contributor', '/responses',
+                             {'model': 'meta/muse-spark-1.3-contributor',
+                              'input': items, 'reasoning': {'effort': 'xhigh'}})
+        data = json.loads(prepared.body)['input']
+        self.assertNotIn('astra-blob', json.dumps(data))
+        call = next(i for i in data if i.get('type') == 'function_call')
+        self.assertEqual((call['call_id'], call['name'],
+                          json.loads(call['arguments'])),
+                         ('c1', 'echo_probe', {'value': 'probe'}))
+        result = next(i for i in data if i.get('type') == 'function_call_output')
+        self.assertEqual((result['call_id'], result['output']), ('c1', 'ok'))
+        blob = json.dumps(data)
+        for keep in ('ten-call cap', 'cannot read'):
+            self.assertIn(keep, blob)
+        with self.assertRaisesRegex(ValueError, "does not support reasoning effort 'max'"):
+            _prepared('meta/muse-spark-1.3-contributor', '/responses',
+                      {'model': 'meta/muse-spark-1.3-contributor', 'input': [],
+                       'reasoning': {'effort': 'max'}})
 
 def _test_state(auth_path):
     return {'port': 0, 'token': 'test-token',

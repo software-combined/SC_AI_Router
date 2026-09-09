@@ -16,10 +16,12 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests._platform import unix_only
+from tests.fakes import LAUNCHD, launchd_in_sync, static_fetch as _static_fetch
 from tests.test_install import (
     _craft_bundle,
     _ok_run,
     _patch_attrs,
+    _run_install,
     install_mod,
 )
 
@@ -73,7 +75,6 @@ class LegacyReloadTests(unittest.TestCase):
     """Legacy bare-python plist heals via targeted main-only reload."""
 
     def test_bare_legacy_plist_triggers_main_reload_not_term(self):
-        from tests.fakes import static_fetch as _static_fetch
         from tests.test_install_config import _fake_write_catalogue
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
@@ -85,9 +86,7 @@ class LegacyReloadTests(unittest.TestCase):
 
             _patch_attrs(self, run=fake_run, self_test=lambda *a: None,
                          write_catalogue=_fake_write_catalogue,
-                         wait_idle=lambda *a, **k: True,
-                         wait_version=lambda *a, **k: {'status': 'ok', 'version': '1.0.1'},
-                         main_plist_exe=lambda agents=None: 'python3.14')
+                         wait_version=lambda *a, **k: {'status': 'ok', 'version': '1.0.1'})
             env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'k'}
             with mock.patch.dict(os.environ, env):
                 args = install_mod.build_parser().parse_args(
@@ -97,6 +96,9 @@ class LegacyReloadTests(unittest.TestCase):
                     install_mod.do_install(
                         args, _fetch=_static_fetch(latest_seed, blob_seed),
                         _run=fake_run), 0)
+                # Legacy machine: launchd is running a bare discovery token, so
+                # the loaded job cannot be repaired by a TERM handover alone.
+                LAUNCHD.reset(program='python3.14')
                 calls.clear()  # isolate the upgrade: seed's bootout must not satisfy us
                 blob1, latest1 = _craft_bundle('1.0.1')
                 buf = io.StringIO()
@@ -110,60 +112,120 @@ class LegacyReloadTests(unittest.TestCase):
                       and str(install_mod.LABEL) in c[-1] and 'update' not in c[-1]]
             self.assertTrue(main, 'legacy bare plist must bootout the main agent')
             self.assertTrue(straps, 'legacy bare plist must bootstrap the main agent')
-            self.assertFalse([c for c in calls if 'update' in c[-1]],
-                             'updater must never be touched by legacy repair')
+            # The updater is running the same stale interpreter, so it must be
+            # reloaded too: writing its plist is not enough, launchd keeps the
+            # loaded copy and would go on invoking the old command forever.
+            self.assertTrue([c for c in calls if c[:2] == ['launchctl', 'bootstrap']
+                             and 'update' in c[-1]],
+                            'a stale updater command must be reloaded, not just rewritten')
 
-    def test_reload_bootstrap_failure_restores_previous_and_reloads(self):
-        from tests.fakes import static_fetch as _static_fetch
+    def _legacy_upgrade(self, tmp, bootstrap_failures, wait_version):
+        """Seed 1.0.0, then upgrade 1.0.1 on a machine with a stale plist."""
         from tests.test_install_config import _fake_write_catalogue
+        home = Path(tmp) / 'home'
+        calls = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append(list(cmd))
+            return _ok_run(cmd, **kwargs)
+
+        # The seed must succeed on its own terms; only the upgrade under test
+        # gets the caller's health outcome.
+        _patch_attrs(self, run=fake_run, self_test=lambda *a: None,
+                     write_catalogue=_fake_write_catalogue,
+                     wait_version=lambda *a, **k: {'status': 'ok'})
+        env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'k'}
+        with mock.patch.dict(os.environ, env):
+            args = install_mod.build_parser().parse_args(
+                ['--feed', 'file:///latest.json', '--home', str(home)])
+            blob_seed, latest_seed = _craft_bundle('1.0.0')
+            self.assertEqual(
+                install_mod.do_install(
+                    args, _fetch=_static_fetch(latest_seed, blob_seed),
+                    _run=_ok_run), 0)
+            for mod in (install_mod, install_mod._svc):
+                setattr(mod, 'wait_version', wait_version)
+            LAUNCHD.reset(program='python3.14',
+                          bootstrap_failures=bootstrap_failures)
+            calls.clear()
+            blob1, latest1 = _craft_bundle('1.0.1')
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                try:
+                    rc = install_mod.do_install(
+                        args, _fetch=_static_fetch(latest1, blob1), _run=fake_run)
+                except SystemExit as exc:
+                    rc = exc.code
+        return home, calls, rc, buf.getvalue()
+
+    def test_transient_bootstrap_failure_is_retried_not_fatal(self):
+        # bootout returns before the job leaves the domain, so the first
+        # bootstrap after it loses a race and returns error 5. Trusting that
+        # single rc is what unloaded the router and left nothing to restart.
+        with tempfile.TemporaryDirectory() as tmp:
+            home, calls, rc, _out = self._legacy_upgrade(
+                tmp, bootstrap_failures=1,
+                wait_version=lambda *a, **k: {'status': 'ok', 'version': '1.0.1'})
+            self.assertEqual(rc, 0, 'a retryable bootstrap race must not fail the install')
+            self.assertEqual((home / 'current').read_text(), '1.0.1\n')
+            straps = [c for c in calls if c[:2] == ['launchctl', 'bootstrap']
+                      and 'update' not in c[-1]]
+            self.assertGreaterEqual(len(straps), 2, 'bootstrap must be retried')
+
+    def test_persistent_reload_failure_rolls_back_and_reports_not_serving(self):
+        # The outage shape: the reload cannot load the job at all. Rolling the
+        # pointer back and sending TERM cannot help, because KeepAlive has no
+        # job to keep alive -- so the installer must say the router is down
+        # instead of printing a clean rollback over a dead machine.
+        with tempfile.TemporaryDirectory() as tmp:
+            home, _calls, rc, out = self._legacy_upgrade(
+                tmp, bootstrap_failures=99, wait_version=lambda *a, **k: None)
+            self.assertEqual(rc, 1)
+            self.assertEqual((home / 'current').read_text(), '1.0.0\n',
+                             'a failed reload must restore the previous pointer')
+            self.assertIn('NOT serving', out)
+
+
+class HandoverTests(unittest.TestCase):
+    """An ordinary upgrade hands over in place; it never bootouts."""
+
+    def test_upgrade_hands_over_with_term_not_bootout(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
+            prev = home / 'releases' / '0.2.0'
+            (prev / 'packaging').mkdir(parents=True)
+            (prev / 'packaging' / 'VERSION').write_text('0.2.0\n')
+            home.mkdir(parents=True, exist_ok=True)
+            os.symlink(str(prev), home / 'current')
+            blob, latest = _craft_bundle('9.9.9')
+            fake_fetch = _static_fetch(latest, blob)
+
             calls = []
-            attempts = {'n': 0}
 
             def fake_run(cmd, **kwargs):
                 calls.append(list(cmd))
-                if cmd[:2] == ['launchctl', 'bootstrap']:
-                    attempts['n'] += 1
-                    if attempts['n'] == 1:
-                        # Reload bootstrap fails; rollback re-bootstrap heals.
-                        return SimpleNamespace(returncode=1, stdout='', stderr='boom')
                 return _ok_run(cmd, **kwargs)
 
-            _patch_attrs(self, run=fake_run, self_test=lambda *a: None,
-                         write_catalogue=_fake_write_catalogue,
-                         wait_idle=lambda *a, **k: True,
-                         wait_version=lambda *a, **k: {'status': 'ok', 'version': '1.0.1'},
-                         main_plist_exe=lambda agents=None: 'python3.14')
-            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'k'}
-            with mock.patch.dict(os.environ, env):
-                args = install_mod.build_parser().parse_args(
-                    ['--feed', 'file:///latest.json', '--home', str(home)])
-                blob_seed, latest_seed = _craft_bundle('1.0.0')
-                # Seed via plain ok-run (bootstrap must succeed there).
-                self.assertEqual(
-                    install_mod.do_install(
-                        args, _fetch=_static_fetch(latest_seed, blob_seed),
-                        _run=_ok_run), 0)
-                blob1, latest1 = _craft_bundle('1.0.1')
-                buf = io.StringIO()
-                with contextlib.redirect_stdout(buf):
-                    with self.assertRaises(SystemExit) as ctx:
-                        install_mod.do_install(
-                            args, _fetch=_static_fetch(latest1, blob1), _run=fake_run)
-            self.assertEqual(ctx.exception.code, 1)
-            self.assertEqual((home / 'current').read_text(), '1.0.0\n')
-
-            def is_main_bootstrap(cmd):
-                return (cmd[:2] == ['launchctl', 'bootstrap'] and len(cmd) == 4
-                        and cmd[2].startswith('gui/') and cmd[3].endswith('.plist')
-                        and 'update' not in cmd[3])
-
-            straps = [c for c in calls if is_main_bootstrap(c)]
-            self.assertEqual(len(straps), 2,
-                             'failed reload must retry bootstrap for the old release')
-            self.assertFalse([c for c in calls if 'update' in c[-1]],
-                             'updater must never be touched by reload rollback')
+            _patch_attrs(self, run=fake_run,
+                         self_test=lambda *args: None,
+                         health=lambda state, timeout=20: {'status': 'ok', 'version': '9.9.9'})
+            # A live upgrade finds its plists already written and launchd
+            # already running them. Without that the installer would rightly
+            # choose a reload, so stage it to test the handover path.
+            agents = Path(tmp) / 'fakehome' / 'Library' / 'LaunchAgents'
+            state = install_mod.ensure_state(home)
+            install_mod.write_plist(
+                agents / (install_mod.LABEL + '.plist'),
+                install_mod.render_plist(LAUNCHD.DEFAULT_PROGRAM, home, state))
+            launchd_in_sync(home, install_mod.LABEL, install_mod.UPDATE_LABEL)
+            _run_install(self, tmp, home, fake_fetch, fake_run)
+            kills = [cmd for cmd in calls if cmd[:3] == ['launchctl', 'kill', 'TERM']]
+            self.assertTrue(kills, 'upgrade must TERM the running router')
+            bootouts = [cmd for cmd in calls if cmd[:2] == ['launchctl', 'bootout']]
+            self.assertFalse(bootouts, 'upgrade must not bootout a live service')
+            bootstraps = [cmd for cmd in calls if 'bootstrap' in cmd]
+            self.assertFalse(bootstraps, 'upgrade must not bootstrap over a live service')
+            self.assertTrue((agents / (install_mod.LABEL + '.plist')).exists())
 
 
 class PortableOrderTests(unittest.TestCase):

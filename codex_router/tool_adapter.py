@@ -36,6 +36,16 @@ def tool_entries(tools, namespace=None):
 def tool_key(item):
     return (item.get('namespace'), item.get('name'))
 
+def _wrap_string_envelope(tool, noun):
+    """Share the arguments_json string envelope between json_text kinds."""
+    schema = tool['parameters']
+    tool['description'] = tool.get('description', '') + (
+        f'\nPass arguments_json as a JSON {noun} encoded in a string, '
+        'following this schema: ' + json.dumps(schema))
+    tool['parameters'] = {'type': 'object', 'properties': {'arguments_json': {'type': 'string'}},
+                          'required': ['arguments_json'], 'additionalProperties': False}
+    tool['strict'] = True
+
 def prepare_tools(payload):
     names = {}
     # OpenAI reads discovered definitions from tool_search_output history. Other
@@ -45,6 +55,7 @@ def prepare_tools(payload):
         if item.get('type') == 'tool_search_output':
             released.extend(deepcopy(item.get('tools', [])))
     released.extend(recall(payload.get('input', [])))
+    released_keys = {(namespace, tool.get('name')) for tool, namespace in tool_entries(released)}
     declared = {}
     for tool, namespace in tool_entries(payload.get('tools', [])):
         declared.setdefault((namespace, tool.get('name')), tool)
@@ -76,13 +87,18 @@ def prepare_tools(payload):
             tool.update(type='function', parameters={'type': 'object',
                 'properties': {'input': {'type': 'string', 'description': 'The complete raw tool input.'}},
                 'required': ['input'], 'additionalProperties': False}, strict=True)
-        elif _quirk(payload, 'schema_mode') == 'json_text' and has_recursive_refs(tool.get('parameters', {})):
+        elif (_quirk(payload, 'schema_mode') == 'json_text'
+                and has_recursive_refs(tool.get('parameters', {}))):
+            _wrap_string_envelope(tool, 'object')
             names[(namespace, tool['name'])] = 'json_text'
-            schema = tool['parameters']
-            tool['description'] = tool.get('description', '') + '\nPass arguments_json as a JSON object encoded in a string, following this schema: ' + json.dumps(schema)
-            tool['parameters'] = {'type': 'object', 'properties': {'arguments_json': {'type': 'string'}},
-                                  'required': ['arguments_json'], 'additionalProperties': False}
-            tool['strict'] = True
+        elif (_quirk(payload, 'schema_mode') == 'json_text_root'
+                and isinstance(tool.get('parameters'), dict)
+                and tool['parameters'].get('type') != 'object'):
+            # xAI rejects non-object parameter roots (anyOf/oneOf unions with a
+            # non-object branch). Same string envelope as json_text, but the
+            # value may be any JSON type the original schema accepts.
+            _wrap_string_envelope(tool, 'value')
+            names[(namespace, tool['name'])] = 'json_text_root'
     wire_names = {}
     flattened = []
     for tool, namespace in tool_entries(payload.get('tools', [])):
@@ -91,6 +107,9 @@ def prepare_tools(payload):
             digest = hashlib.sha256((namespace + '\0' + tool['name']).encode()).hexdigest()[:12]
             wire = 'ns_' + digest + '_' + tool['name'][:48]
             kind = names.pop(original, 'identity')
+            if original in released_keys:
+                released_keys.discard(original)
+                released_keys.add((None, wire))
             names[(None, wire)] = {'kind': kind, 'namespace': namespace, 'name': tool['name']}
             wire_names[original] = wire
             tool['description'] = namespace + '.' + tool['name'] + ': ' + tool.get('description', '')
@@ -100,7 +119,20 @@ def prepare_tools(payload):
     payload['tools'] = flattened
     ceiling = _quirk(payload, 'max_tools')
     if ceiling and len(flattened) > ceiling:
-        raise ValueError(f'{payload.get("model")} supports at most {ceiling} exposed tools. Restart Codex and start a fresh task to load the deferred tool catalog.')
+        # ponytail: drop, don't page; the search tool reloads on demand.
+        kinds = [names.get((None, tool.get('name'))) for tool in flattened]
+        kinds = [kind.get('kind') if isinstance(kind, dict) else kind for kind in kinds]
+        kept = [tool for tool, kind in zip(flattened, kinds)
+                if kind == 'search' or (None, tool.get('name')) in released_keys]
+        if 'search' not in kinds or len(kept) > ceiling:
+            raise ValueError(
+                f'{payload.get("model")} supports at most {ceiling} exposed tools '
+                f'(this turn exposes {len(flattened)}). Switch to a model without '
+                'the ceiling, or trim tools, then retry in the same thread.')
+        for tool in flattened:
+            if tool not in kept:
+                names.pop((None, tool.get('name')), None)
+        payload['tools'] = kept
     for item in payload.get('input', []) if isinstance(payload.get('input'), list) else []:
         if item.get('type') == 'tool_search_call':
             item.pop('execution', None)
@@ -132,7 +164,7 @@ def prepare_tools(payload):
                 item['name'] = wire
             entry = names.get(tool_key(item))
             kind = entry.get('kind') if isinstance(entry, dict) else entry
-            if kind == 'json_text':
+            if kind in ('json_text', 'json_text_root'):
                 item['arguments'] = json.dumps({'arguments_json': item['arguments']})
     return names
 
@@ -165,10 +197,12 @@ class ToolEvents:
                 args['query'] = query.replace('.', ' ')
             item.update(type='tool_search_call', execution='client', arguments=args)
             return item
-        if kind == 'json_text':
+        if kind in ('json_text', 'json_text_root'):
             value = '' if started else integer_json(json.loads(arguments)['arguments_json'])
-            if not started and not isinstance(json.loads(value), dict):
-                raise ValueError('Tool arguments must be a JSON object')
+            if not started:
+                parsed = json.loads(value)  # any JSON value the original schema accepts
+                if kind == 'json_text' and not isinstance(parsed, dict):
+                    raise ValueError('Tool arguments must be a JSON object')
             item['arguments'] = value
             return item
         value = '' if started else json.loads(arguments)['input']

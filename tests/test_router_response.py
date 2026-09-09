@@ -1,4 +1,5 @@
 """Router response correctness: error mapping and upstream header policy."""
+import json
 import unittest
 from tests.fakes import FakeUpstream, install_fake
 from tests.test_handler import _auth_file, _post
@@ -19,6 +20,32 @@ class RouterResponseTests(unittest.TestCase):
         response = _post(server.server_port, '/test-token/responses',
                          {'model': 'z-ai/glm-5.3', 'input': [], 'tools': 'not-a-list'})
         self.assertEqual(response.status, 500)
+        self.assertEqual(recorded, [])
+
+    def test_image_turn_to_text_only_model_is_409_with_code(self):
+        # Stable code is the catalog contract; statuses/messages are pinned elsewhere.
+        recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
+        server = self._server()
+        response = _post(server.server_port, '/test-token/responses',
+                         {'model': 'z-ai/glm-5.3', 'input': [
+                             {'type': 'message', 'role': 'user', 'content': [
+                                 {'type': 'input_text', 'text': 'look'},
+                                 {'type': 'input_image',
+                                  'image_url': 'data:image/png;base64,AAA'}]}]})
+        self.assertEqual(response.status, 409)
+        body = json.loads(response.read())
+        self.assertEqual(body['error']['code'], 'PROVIDER_REJECTED')
+        self.assertIn('does not accept image input', body['error']['message'])
+        self.assertEqual(recorded, [])
+
+    def test_unknown_model_is_400_with_code(self):
+        recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
+        server = self._server()
+        response = _post(server.server_port, '/test-token/responses',
+                         {'model': 'nobody/none', 'input': []})
+        self.assertEqual(response.status, 400)
+        body = json.loads(response.read())
+        self.assertEqual(body['error']['code'], 'UNKNOWN_MODEL')
         self.assertEqual(recorded, [])
 
     def test_openai_model_header_is_pinned_to_requested_model(self):

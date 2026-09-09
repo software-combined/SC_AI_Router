@@ -9,11 +9,10 @@ class CapabilityTests(unittest.TestCase):
                          {m.slug for m in MODELS if m.provider == 'openrouter'})
 
     def test_text_only_set_matches_live_metadata(self):
-        for slug in ('z-ai/glm-5.3', 'deepseek/deepseek-v4-pro',
-                     'deepseek/deepseek-v4-pro-0813',
+        for slug in ('z-ai/glm-5.3', 'deepseek/deepseek-v4-pro-0813',
                      '~deepseek/deepseek-v4-flash-latest'):
             self.assertEqual(input_modalities(slug), ['text'])
-        for slug in OPENROUTER_MODELS - {'z-ai/glm-5.3', 'deepseek/deepseek-v4-pro',
+        for slug in OPENROUTER_MODELS - {'z-ai/glm-5.3',
                                          'deepseek/deepseek-v4-pro-0813',
                                          '~deepseek/deepseek-v4-flash-latest'}:
             self.assertIn('image', input_modalities(slug))
@@ -22,7 +21,8 @@ class CapabilityTests(unittest.TestCase):
         self.assertNotIn('max', reasoning_levels('meta/muse-spark-1.3-contributor'))
         self.assertIn('max', reasoning_levels('meta/muse-spark-1.3'))
         self.assertEqual(reasoning_levels('~x-ai/grok-latest'), ['low', 'medium', 'high', 'xhigh'])
-        self.assertEqual(reasoning_levels('deepseek/deepseek-v4-pro'), ['high', 'xhigh'])
+        self.assertEqual(reasoning_levels('deepseek/deepseek-v4-pro-0813'),
+                         ['low', 'high', 'max'])
         self.assertEqual(reasoning_levels('~deepseek/deepseek-v4-flash-latest'),
                          ['low', 'high', 'max'])
 

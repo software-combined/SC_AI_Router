@@ -40,19 +40,21 @@ class ModelRosterTests(unittest.TestCase):
                 self.assertEqual(model.max_output_tokens, output)
                 self.assertEqual(model.modalities, modalities)
                 self.assertEqual(model.tier, 'preview')
-        # Existing tasks retain their original upstream identity.
-        self.assertIsNotNone(by_slug('deepseek/deepseek-v4-pro'))
-        # The dated flash snapshots merged into the flash-latest alias.
+        # Pro 0423 is retired; the dated flash snapshots merged into the flash-latest alias.
+        self.assertIsNone(by_slug('deepseek/deepseek-v4-pro'))
         self.assertIsNone(by_slug('deepseek/deepseek-v4-flash'))
         self.assertIsNone(by_slug('deepseek/deepseek-v4-flash-0731'))
+        self.assertIn('deepseek/deepseek-v4-pro', RETIRED_SLUGS)
         self.assertIn('deepseek/deepseek-v4-flash', RETIRED_SLUGS)
         self.assertIn('deepseek/deepseek-v4-flash-0731', RETIRED_SLUGS)
 
     def test_retired_deepseek_snapshots_drop_from_merged_catalogue(self):
+        stale_pro = {'slug': 'deepseek/deepseek-v4-pro'}
         stale_flash = {'slug': 'deepseek/deepseek-v4-flash'}
         stale_0731 = {'slug': 'deepseek/deepseek-v4-flash-0731'}
-        merged = merge({'models': [stale_flash, stale_0731]})
+        merged = merge({'models': [stale_pro, stale_flash, stale_0731]})
         slugs = {m['slug'] for m in merged['models']}
+        self.assertNotIn('deepseek/deepseek-v4-pro', slugs)
         self.assertNotIn('deepseek/deepseek-v4-flash', slugs)
         self.assertNotIn('deepseek/deepseek-v4-flash-0731', slugs)
         self.assertIn('~deepseek/deepseek-v4-flash-latest', slugs)
