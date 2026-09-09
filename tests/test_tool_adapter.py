@@ -174,6 +174,26 @@ class ToolAdapterTests(unittest.TestCase):
         qualified = ToolEvents(names).item({'type': 'function_call', 'name': SEARCH_NAME, 'arguments': '{"query":"probe.echo_probe"}'})
         self.assertEqual(qualified['arguments'], {'query': 'probe echo_probe'})
 
+    def test_union_root_schema_is_string_wrapped_for_grok_only(self):
+        union = {'anyOf': [{'type': 'object', 'properties': {'value': {'type': 'string'}}},
+                           {'type': 'string'}]}
+        for model, wrapped in (('~x-ai/grok-latest', True), ('z-ai/glm-5.3-flash', False)):
+            with self.subTest(model=model):
+                payload = {'model': model, 'tools': [
+                    {'type': 'function', 'name': 'flex', 'description': 'Flex',
+                     'parameters': union}]}
+                names = prepare_tools(payload)
+                tool = payload['tools'][0]
+                if wrapped:
+                    self.assertEqual(tool['parameters']['properties'], {'arguments_json': {'type': 'string'}})
+                    self.assertIn(json.dumps(union), tool['description'])
+                    for value in ({'value': 'x'}, 'plain'):
+                        item = ToolEvents(names).item({'type': 'function_call', 'name': tool['name'],
+                            'arguments': json.dumps({'arguments_json': json.dumps(value)})})
+                        self.assertEqual(json.loads(item['arguments']), value)
+                else:
+                    self.assertEqual(tool['parameters'], union)
+
     def test_recursive_schema_keeps_exact_arguments_and_native_contract(self):
         schema = {'type': 'object', 'properties': {'tree': {'$ref': '#/$defs/Node'}},
             '$defs': {'Node': {'type': 'object', 'properties': {'children': {'type': 'array', 'items': {'$ref': '#/$defs/Node'}}}}}}
