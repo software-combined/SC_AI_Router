@@ -2,6 +2,13 @@
 
 ## 0.6.10 (unreleased)
 
+- Give each client explicit activation: new `packaging/codex_config.py`
+  owns the Codex block, picker preservation, guidance, and receipts; the
+  installer checks the remover's exit status instead of its wording.
+  `--client none` installs service-only without touching client settings,
+  and `--anthropic-mode` sets the Claude subscription choice independently
+  (unset follows the OpenAI mode as before).
+
 - Give model facts one owner each: pure metadata normalization moves to
   `model_metadata.py`, the Codex capability projection is shared by merge
   and apply (identical fields for the same snapshot, audio preserved where

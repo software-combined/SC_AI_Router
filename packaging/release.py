@@ -26,7 +26,8 @@ def bundle_files(root):
         + ['packaging/VERSION', 'packaging/install.py', 'packaging/launchd.py',
            'packaging/router_launch.py', 'packaging/service.py',
            'packaging/systemd.py', 'packaging/update_launch.py',
-           'packaging/updater.py', 'packaging/platforms/__init__.py',
+           'packaging/updater.py', 'packaging/codex_config.py',
+           'packaging/platforms/__init__.py',
            'packaging/platforms/darwin.py', 'packaging/platforms/linux.py']
     )
 

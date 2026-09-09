@@ -126,6 +126,21 @@ there is no self-service provisioning. The flow per user:
    `OPENROUTER_API_KEY` env or OpenCode-auth fallback is set on that machine,
    because entitlement otherwise lives entirely in the dashboard key state.
 
+## Client activation and subscription policy
+
+`--client codex` (the default) manages the Codex config block, picker
+preservation, global guidance, and the activation receipt.
+`--client none` installs, updates, rolls back, and uninstalls the router
+lifecycle without touching any client file; uninstall needs no receipt.
+Switching an active Codex install to `none` restores the exact owned block
+first, or refuses when the block was edited. The choice persists in router
+state and survives scheduled updates.
+
+Subscription routing is independent per client: `openai_mode` governs
+Responses, `anthropic_mode` governs Messages when explicitly set, otherwise
+Messages follows the legacy `openai_mode` fallback. Neither mode widens
+access on migration; unsets keep prior behavior.
+
 ## Key rotation
 
 Replace the `openrouter.key` file contents. No restart is needed; the

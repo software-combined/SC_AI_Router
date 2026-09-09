@@ -73,6 +73,7 @@ class ReleaseTests(unittest.TestCase):
                     'packaging/router_launch.py',
                     'packaging/service.py',
                     'packaging/updater.py',
+                    'packaging/codex_config.py',
                     'packaging/platforms/__init__.py',
                     'packaging/platforms/darwin.py',
                     'packaging/platforms/linux.py'):
