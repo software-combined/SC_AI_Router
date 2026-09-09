@@ -71,7 +71,8 @@ class ReleaseTests(unittest.TestCase):
         for dep in ('codex_router/models.json',
                     'codex_router/openrouter_base_instructions.txt',
                     'packaging/router_launch.py',
-                    'packaging/service.py'):
+                    'packaging/service.py',
+                    'packaging/updater.py'):
             self.assertIn(dep, names, dep)
         extract = out / 'extracted'
         extract.mkdir()
@@ -83,6 +84,12 @@ class ReleaseTests(unittest.TestCase):
             cwd=str(extract), capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertGreater(int(result.stdout.strip()), 0)
+        # The extracted installer must reach its extracted updater helper
+        # without checkout imports; omitting updater.py must fail the smoke.
+        result = subprocess.run(
+            [sys.executable, 'packaging/install.py', '--help'],
+            cwd=str(extract), capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
 
 if __name__ == '__main__':
