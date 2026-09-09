@@ -18,6 +18,12 @@ Base every branch on `develop` and target every PR at `develop`,
 except release PRs from `develop` to `main`. Never work off or push
 to `main`.
 
+## 2a. Architecture
+
+`docs/architecture.md` owns domain responsibilities and allowed dependency
+direction. New modules go where that map says; transitional owners name the
+plan that will move them.
+
 ## 3. Source limits
 
 Modules 250 lines soft / 400 hard, entrypoints and tools 400/700, tests
@@ -34,7 +40,7 @@ per-install. Subscription headers never accompany OpenRouter requests.
 ## 5. Verification before commit
 
 Run `python3.14 -m unittest discover -s tests -t .`,
-`python3.14 -m compileall -q codex_router tools tests`, and
+`python3.14 -m compileall -q codex_router tools tests packaging`, and
 `python3.14 tools/check_source_limits.py`, then the shared
 `pre-commit-review` skill. Commit subjects use `<type>: <short summary>`
 with type `feat`, `fix`, `refactor`, `test`, `chore` or `docs`.
