@@ -1,5 +1,14 @@
 # Plan 047: Router remediation handover
 
+> **Historical work order, reconciled 2026-09-09 at `96db57f`.** Do not execute
+> this document linearly. Protocol C/D, compaction V2 and several delivery/key
+> foundations are already in source. The owner Mac is versioned and healthy.
+> Remaining A/B delivery acceptance maps to 050/054/057/058; E/F maps to
+> 049/056/057/059; G recovery/provisioning maps to 055; H docs/diagnostics maps
+> to 058/060/061. Preserve unknown live evidence, but never revive removed
+> signature enforcement, paid installer certificates, old versions or retired
+> paths. Use the master execution plan for the complete active backlog.
+
 > **Executor instructions**: This is a self-contained handover. You do not have
 > the investigating session's context and should not need it. Follow the work
 > order. Run every verification before moving on. If a STOP condition fires,

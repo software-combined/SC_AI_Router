@@ -1,5 +1,20 @@
 # Plan 054: Group distribution, private feed and push-to-main auto-update
 
+> **Consolidation 2026-09-09 at `96db57f`:** the owner-Mac recovery described in
+> Stage 0 is historical. Current readback is healthy `0.6.9.22`, both jobs
+> loaded, router/update jobs using stable launchers, updater interval 900.
+> Reconcile and skip an already satisfied repair; never re-point to `0.6.7.19`
+> just to replay the old procedure. Feed-token/CloudFront and branch-publishing
+> work remain pending; current source is still tag-driven/private GitHub.
+>
+> Execution ownership: 067 extracts the updater, 056 supplies platform
+> backends, 057 supplies `packaging/platforms/windows.py`, 059 supplies the
+> single runtime lock/native bootstrap, 058 supplies recipient preflight/docs,
+> and 063 supplies shared client activation. Reuse these pieces in Stages 1-3.
+> Source/synthetic checks do not wait for cloud publication. Stage 4 identity
+> and per-install authority must precede 055 Stage 4 automated key issuance.
+> Stable-launcher work is already implemented; verify it rather than duplicate.
+
 > Planning only. No AWS resource creation, DNS or certificate change, GitHub
 > organisation plan change, workflow publication, live updater change,
 > staff-machine install or release is authorised by this document. Each is a separate owner gate listed below.
@@ -34,7 +49,10 @@ Recorded before or during planning; this plan does not reopen them.
 | Runtime downloads are not publicly reachable: reads are token-gated | Owner, 2026-09-09; supersedes the publicly reachable HTTPS runtime downloads that Plan 053 attributes to 049 |
 | Per-user OpenRouter keys, provisioned centrally and delivered by this plan's bootstrap, never displayed | Plan 055 (owner 2026-09-09), superseding Plan 048's paste-once decision |
 
-## Verified current state (2026-09-09, read-only)
+## Historical planning snapshot (2026-09-09, read-only)
+
+The owner-Mac rows below predate the `96db57f` consolidation readback. Use
+the current evidence at the top of this plan; do not execute an old repair.
 
 | Check | Observed |
 |---|---|
@@ -197,18 +215,12 @@ until stable overtakes it; the runbook records this step.
   value in `<home>/feed-token.previous`; on a 403 retry once with the previous
   value and restore it when it works. A host that is already current therefore
   still picks up a rotated token.
-- The updater job launches through the release-independent launcher that
-  already serves the router agent (`router_launch.py` resolves `<home>/current`
-  at exec time), given a `--check-update` entry point, instead of a
-  release-specific `install.py` path. Today `render_update_plist` bakes in
-  `current_release_dir(home)`, and launchd keeps that loaded definition after
-  an upgrade: `restart_service` bootstraps the updater only when it is missing
-  and `reload_main_service` reloads the router agent only (`service.py:5-6`,
-  `277-306`), so a host keeps running the previous release's poller until its
-  next login. Reloading from inside the child installer is not an option: a
-  `bootout` of the update job would terminate the running poller and the
-  installer with it. With the launcher, the loaded job never goes stale on any
-  of the three supervisors.
+- Preserve the implemented `update_launch.py` contract: resolve the active
+  release at each invocation, then run its installer with `--check-update`.
+  It is distinct from `router_launch.py`; do not merge their roles. Older
+  loaded jobs may still need one external reload, but the owner Mac already
+  uses the stable updater launcher. Never boot out a running update job from
+  its child installer. Plans 067/056/057 preserve this across supervisors.
 - Keep `github_asset()` for exactly one transitional release, then remove it.
 
 Migration for installed hosts: Stage 0 restores updates over `gh`. After Stage 1
@@ -234,12 +246,14 @@ Plan 049 §2 already requires the shell and PowerShell wrappers to run without
 Python. This plan gives them a home and a source. `install.sh` (macOS, Linux)
 and `install.ps1` (Windows):
 
-1. Take the feed token from an environment variable or the value embedded by
-   the download page; write `<home>/feed-token`.
+1. Run 058's native no-Python prerequisite and platform preflight before
+   changing disk state. Take the feed token from the authorized delivery
+   surface; write it through the shared protected-file contract.
 2. Download the matching CPython 3.14 archive from the feed using pin data
    generated from `packaging/runtime.lock`; verify SHA-256 with `shasum`,
    `sha256sum` or `Get-FileHash`; install under `<home>/runtime/<sha>/`; verify
-   `compression.zstd`. Reuse a verified suitable Python when present.
+   `compression.zstd`. Reuse the verified managed runtime when present; a
+   system interpreter is only an explicit qualified override under 059.
 3. Download `stable/latest.json`, then the bundle; verify the checksum; run
    `packaging/install.py` from the verified bundle with that interpreter.
 
@@ -262,20 +276,20 @@ Nothing is piped from the network into a shell, no execution policy is bypassed
 and no quarantine attribute is removed. A downloaded `install.sh` runs under
 `sh` without Gatekeeper interaction.
 
-Windows open item: a downloaded `.ps1` will not run under the default
-`Restricted` policy or under `RemoteSigned` while it carries the download mark,
-and 049 forbids bypassing either. On Windows the plugin lane (§7) is therefore
-the primary entry; `install.ps1` serves users whose machines already permit
-local scripts. A signed script would remove the friction and needs the deferred
-code-signing decision. Resolve before Stage 3 acceptance.
+Windows entry remains an acceptance gate: inspect the designated machine's
+actual policy and download marking. A plugin invoking the same refused script
+does not establish a usable entry. Reuse 057's policy-compliant entry decision;
+do not bypass policy or remove the mark. If the permitted unsigned path is
+insufficient, prepare the exact alternative for the owner before Stage 3
+acceptance, without silently reopening the code-signing decision.
 
 ### 6. Three operating systems
 
 | OS | Router service | Updater | Status |
 |---|---|---|---|
-| macOS | LaunchAgent via `router_launch.py` (exists) | LaunchAgent, 900 s (exists, release-specific path) | router works; the loaded updater job goes stale after an upgrade until next login (§4 fix), which is the live state on the owner Mac |
+| macOS | LaunchAgent via `router_launch.py` | LaunchAgent via `update_launch.py`, 900 s | both stable launchers observed loaded; private-feed update acceptance remains |
 | Linux | systemd user units (PR 3) | systemd user timer (PR 3) | integrated; staff acceptance pending (Plan 049) |
-| Windows 11 x64 | per-user Task Scheduler task at logon | per-user Task Scheduler task, 15 min | new: `packaging/windows.py` `Manager` mirroring `systemd.Manager`; `install.py` selects by platform; no admin, no stored password; both tasks run the stable launcher so upgrades never re-register them |
+| Windows 11 x64 | per-user Task Scheduler task at logon | per-user Task Scheduler task, 15 min | consume 057's `packaging/platforms/windows.py` behind 056's manager contract; no admin/stored password; stable launcher contracts |
 
 ### 7. Onboarding surface
 
@@ -319,16 +333,19 @@ entry point that calls the same bootstrap and the same feed.
 
 | Stage | Work | Proof | Gate |
 |---|---|---|---|
-| 0 | Re-point the owner Mac's updater LaunchAgent at the `0.6.7.19` installer: while the update job is not running, rewrite `ProgramArguments[1]` in `~/Library/LaunchAgents/com.local.codex-mixed-model-router.update.plist` to `<home>/releases/0.6.7.19/packaging/install.py`, then `launchctl bootout gui/<uid>/com.local.codex-mixed-model-router.update` and `launchctl bootstrap gui/<uid> <that plist>`. Touch only the update agent, never the router agent (`docs/operations.md:44`); add these steps to `docs/operations.md` as a runbook entry. A host still on `0.6.6.18` needs one local install of `0.6.7.19` first; its updater cannot pull the fix because the fix is in the fetch path | `launchctl print gui/<uid>/com.local.codex-mixed-model-router.update` names the `0.6.7.19` installer; `update.log` shows `up to date 0.6.7.19` over `gh`, no 404; last exit 0 | staff-machine action (owner) |
-| 1 | AWS: bucket, OAC, CloudFront, function and KeyValueStore, publish role, ACM, DNS. Repo: branch-driven `release.yml`, `release.py --feed-token-file`, updater §4 (origins, token, launcher-based job), transitional release; once T has installed on the owner Mac, re-run the Stage 0 runbook entry (bootout and bootstrap the update label while the job is not running) so the launcher-based job loads | a merge to `main` reaches the owner Mac within 15 min via CloudFront with token and without `gh`; `launchctl print` shows the loaded updater job running the launcher, not a release path | AWS creation, DNS and ACM, GitHub organisation plan upgrade (owner, recurring spend), publication cutover (owner) |
+| 0 | Read back current service/updater with 050; skip already satisfied repairs. Only a genuinely old loaded job receives a prepared, separately authorized external reload, never a re-point to a historical version | correct active version, healthy service, stable loaded launchers; no mutation from a stale snapshot | read-only first; actual repair is owner-gated |
+| 1 | AWS bucket/OAC/CloudFront/KVS/publish role/ACM/DNS; branch workflow, release token input, origin/token updater, transitional migration. Reuse existing stable launchers; reload only a verified old host from outside its job | merge to main reaches owner Mac within 15 min through token-gated CloudFront, without gh; loaded updater uses update_launch.py | AWS/DNS/ACM, Team recurring spend and publication/cutover authority |
 | 2 | `runtime.lock`, runtime mirror, real `install.sh` and `install.ps1` (§5), Entra parent plus per-portco subgroups, SharePoint page (§7) | a joiner added to a portco subgroup installs a clean Mac without Python 3.14 from the page and auto-updates; then Linux on the contributor's machine | staff-machine changes (Plan 049) |
-| 3 | `packaging/windows.py`, Task Scheduler updater, Windows entry decision (§5) | the designated Windows 11 x64 machine installs and auto-updates | Windows machine designation and entry decision (owner) |
-| 4 (optional) | self-serve email-OTP page, per-install tokens, audit | a portfolio company user onboards with no Software Combined account; revoking their token stops their updates | account and domain approval (owner) |
+| 3 | Consume 057's Windows manager and 059's bootstrap; validate actual entry policy | designated Windows 11 x64 machine installs and auto-updates | Windows target and entry authority |
+| 4 (later, required for complete 055) | self-serve email-OTP page, per-install tokens, audit | portfolio user onboards; per-install revocation stops updates; identity can authorize 055 issuance | account/domain authority; not a Stage 1 prerequisite |
 
-Each stage is its own PR under 500 changed lines of logic. Infrastructure is
-applied by CLI with the exact commands added to `docs/operations.md` as each
-stage lands, then read back before the repository change that depends on it is merged. Running
-cost at this scale is a few dollars a month.
+Split stages into coherent PRs under the applicable commit limits. Source and
+synthetic/infrastructure validation may integrate before production resources
+exist; do not activate a workflow against an absent target. Prepare exact
+commands and rollback in `docs/operations.md`, obtain missing authority, apply
+to the verified target, then read back before enabling dependent publication
+or host cutover. Estimate current costs for approval rather than reusing the
+historical monthly estimate.
 
 ## Verification
 
@@ -366,7 +383,7 @@ cost at this scale is a few dollars a month.
 | Four write-access accounts, no branch protection on the free plan | open owner decision above |
 | `python-build-standalone` mirror | pinned URL and SHA-256, licences retained, install-only builds; unqualified architectures refused (Plan 049) |
 | Windows is new lifecycle code and has the entry-point open item | separate stage, designated machine, no admin or stored credentials |
-| The loaded macOS updater job goes stale after an upgrade (pre-existing installer behaviour, live on the owner Mac) | launcher-based updater job (§4) removes the need to reload; existing hosts pick it up at next login or by re-running the Stage 0 runbook entry once T has installed; Stage 0 and Stage 1 proofs read back the loaded job |
+| A legacy host still has a release-specific loaded updater job | read back each host; preserve the stable launcher already implemented; externally reload only a proven legacy job under authorized recovery |
 
 ## Out of scope
 

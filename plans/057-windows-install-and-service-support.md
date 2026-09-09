@@ -12,6 +12,24 @@ Stage 5's interpreter message additionally needs the Plan 059 owner decision;
 and Stage 7 needs Plan 056 Stage 4, which is what adds the Windows CI runner.
 Extends the Windows commitment in Plan 049.
 
+## Consolidation amendment, 2026-09-09
+
+The decisions below are settled for planning: per-user Task Scheduler,
+interactive-token/least-privilege execution, no stored password, 15-minute
+updater, brief reconnect on restart, Windows ACL verification, and a
+`pythonw.exe` router. Preserve Plan 049's concrete task XML rules (`IgnoreNew`,
+`PT0S`, battery behavior, recovery trigger) and graceful shutdown contract.
+The backend is `packaging/platforms/windows.py`, shared with 056 and 054;
+do not create a second `packaging/windows.py`. Plan 059 owns the interpreter
+and native wrapper; this plan consumes that shared bootstrap.
+
+A named native Windows 11 x64 staff machine remains required for acceptance.
+Source and offline/CI work can proceed while it is arranged, but no stage
+requiring real-machine evidence is marked complete from mocks. Stage 1 refuses
+an absent/unsupported backend; once the backend exists, internal acceptance
+may exercise it. Public support remains gated by Stage 6, avoiding a circular
+rule that would prohibit the very install needed to prove support.
+
 ## Outcome
 
 A Windows staff member runs one command, gets a router that starts with their
@@ -46,7 +64,7 @@ Windows at all. W5 means Windows support cannot ship on POSIX mode bits alone.
 
 ## Design decisions to settle before Stage 3
 
-These change scope materially and are owner calls, not defaults to assume.
+These are selected planning decisions after reconciliation with Plans 049/054.
 Only the key-protection row feeds Stage 2; the other four are backend inputs
 and must not hold up the ACL work.
 
@@ -91,13 +109,15 @@ key window on a Windows machine, then `icacls` both `openrouter.key` and
 side by widening the ACL and confirming the router refuses the key, mirroring
 POSIX. The same `icacls` check on a real install belongs to Stage 3's gate.*
 
-**Stage 3 - the Windows backend.** Implement `packaging/platform/windows.py`
+**Stage 3 - the Windows backend.** Implement `packaging/platforms/windows.py`
 against the Plan 056 interface: create, replace and delete both Scheduled
 Tasks; restart; stop; report whether the router task is registered. Uses
 `schtasks` (present on every Windows edition) or the `win32com` task scheduler
 API if a dependency is acceptable - `schtasks` is preferred for zero
 dependencies. `router_launch.py` and `update_launch.py` already resolve the
-active release at exec time and need no change.
+active release at exec time; preserve that behavior. Task Scheduler history is
+not stdout capture: explicitly route bounded, content-safe updater output to
+the router log directory and test diagnostic retrieval after a failed update.
 *Gate: offline unit tests for XML/command generation, plus a real Windows 11
 install reaching `/health` with the installed version. Stage 2 must have landed
 first, so that install writes a protected key rather than an exposed one -
@@ -116,16 +136,14 @@ from the installer. It bites only on a standalone `disable.py` run.
 *Gate: uninstall completes on Windows, removes both Scheduled Tasks, restores
 the Codex config, and leaves no registered task behind.*
 
-**Stage 5 - bootstrap and messages.** Rewrite `install.ps1` to prefer
-`py -3.14`, then `py -3`, then `python`, and to fail with an actionable message
-naming the python.org download when none is a 3.14. Make the no-interpreter
-message in `install.py` platform-aware (W7): `brew` on macOS, the distribution
-or python.org on Linux, python.org or `winget install Python.Python.3.14` on
-Windows. The exact wording depends on the Plan 059 decision: if a private
-interpreter is adopted, the message changes from "install this yourself" to a
-download the installer performs.
-*Gate: on a Windows machine with no Python, the wrapper prints the actionable
-message and does not open the Microsoft Store.*
+**Stage 5 - bootstrap and messages.** Consume Plan 059's shared PowerShell
+bootstrap and native preflight. On a clean machine it provisions the pinned
+private runtime; it neither opens a Store alias nor requires a system Python.
+Respect a verified explicit `--python` override. If download, policy or native
+prerequisites prevent setup, report the exact remedy without bypassing policy.
+Do not implement a competing interpreter-discovery order here.
+*Gate: a no-Python Windows machine receives a verified private interpreter and
+reaches the installer, or a specific pre-mutation failure; no Store launch.*
 
 **Stage 6 - lifecycle acceptance on a real machine.** Install, `/health`,
 sign-out and sign-in, scheduled update to a newer bundle, rollback, uninstall,

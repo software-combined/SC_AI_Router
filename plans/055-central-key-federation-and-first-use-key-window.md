@@ -1,5 +1,15 @@
 # Plan 055: Central per-user key federation and the first-use key window
 
+> **Consolidation 2026-09-09 at `96db57f`:** retain all four stages, including
+> final self-service delivery after 054 Stage 4. Stage 3 keyless/revoked-key
+> recovery is independent; its shared writer must be reused by central delivery
+> and 057's Windows ACL protection. Build/test operator provisioning with fake
+> APIs before AWS/OpenRouter writes. Neither a shared download token nor a
+> Codex login email is identity/issuance authority. Retain 048's relevant
+> Business/Enterprise and per-person isolation acceptance without reviving its
+> old service, signing or paste-once design. Anthropic-in-Codex uses OpenRouter;
+> native Claude through Claude Code retains its separate 051/052 auth gate.
+
 > Planning only. No AWS resource creation, OpenRouter organisation write, key
 > provisioning, staff-machine install or release is authorised by this
 > document. Each is a separate owner gate listed below.
