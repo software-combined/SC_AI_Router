@@ -189,6 +189,31 @@ def write_catalogue(home, release_dir, python):
         raise SystemExit('catalogue merge failed')
 
 
+def _preserve_picker_selection(config_path, previous_block, block):
+    """Carry owner-chosen picker lines across managed block rewrites.
+
+    The installer owns the connection lines (base URL, catalogue) but the
+    owner picks `model` / `model_reasoning_effort` inside the same marked
+    block. A plain rewrite would silently reset that choice on every
+    update, so re-emit those lines from the previous owned block.
+    """
+    if not previous_block:
+        return block
+    try:
+        before = Path(config_path).read_text() if Path(config_path).exists() else ''
+    except OSError:
+        return block
+    if previous_block not in before:
+        return block
+    keep = [line for line in previous_block.splitlines()
+            if line.startswith('model = ') or line.startswith('model_reasoning_effort = ')]
+    if not keep:
+        return block
+    lines = block.splitlines()
+    lines[-1:-1] = keep
+    return '\n'.join(lines) + '\n'
+
+
 def replace_config_block(config_path, block, previous_block=None):
     """Insert or replace the marked block; refuse hand-edited markers."""
     config_path = Path(config_path)
@@ -410,6 +435,7 @@ def do_install(args, _fetch=fetch, _run=None):
                  + '# END local mixed model picker\n')
     receipt_path = home / 'activation.json'
     previous_receipt = json.loads(receipt_path.read_text()) if receipt_path.exists() else {}
+    block = _preserve_picker_selection(config_path, previous_receipt.get('inserted_block'), block)
     release = current_release_dir(home)
     guidance = runpy.run_path(str(release / 'tools' / 'global_instructions.py'))
     rules_path, rules_before, rules_after, rules_receipt = guidance['prepare'](
