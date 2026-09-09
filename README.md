@@ -83,8 +83,8 @@ with its text history and tools intact, subject to the new model's
 limits. Readable summaries carry over; opaque native compaction
 replays as a visible note rather than readable context. Image blocks
 do not carry over to text-only models, and a model tool-count ceiling
-(Grok, 350 tools) still rejects an over-ceiling thread with a
-fresh-task message. Each turn routes on its own model,
+(Grok, 350 tools) still rejects an over-ceiling turn: switch to a model
+without the ceiling, or trim tools, then retry in the same thread. Each turn routes on its own model,
 so if one model reports it is at capacity, switch to another
 and carry on. Reasoning levels differ per model and the thread's effort
 carries over; an effort the new model does not support is rejected with
