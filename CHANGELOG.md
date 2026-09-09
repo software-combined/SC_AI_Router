@@ -2,6 +2,9 @@
 
 ## 0.6.7 (unreleased)
 
+- Retry transient feed-fetch failures inside the scheduled update check
+  (up to 4 attempts, 30s/60s/120s backoff) instead of waiting a full
+  15-minute poll cycle; deterministic errors still fail fast.
 - Repair existing bare or incomplete subscription catalogue rows on merge,
   preserving their model-specific metadata. Catalogue checks now reject
   rows missing schema fields instead of accepting an unusable picker.

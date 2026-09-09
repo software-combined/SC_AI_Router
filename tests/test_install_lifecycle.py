@@ -12,6 +12,7 @@ import os
 import tarfile
 import tempfile
 import unittest
+import urllib.error
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -265,6 +266,90 @@ class InstallLifecycleTests(unittest.TestCase):
             self.assertIn('installed 1.0.0', buf.getvalue())
             self.assertEqual((home / 'current').read_text(), '1.0.0\n')
 
+    def _check_update_home(self, tmp):
+        """Bare home dir with router state for check-update tests."""
+        home = Path(tmp) / 'home'
+        home.mkdir()
+        (home / 'mixed-router-state.json').write_text(
+            json.dumps({'port': 1, 'token': 'x'}))
+        return home
+
+    def _check_update_args(self, home):
+        return install_mod.build_parser().parse_args(
+            ['--feed', 'file:///latest.json', '--home', str(home)])
+
+    def test_check_update_fails_fast_on_http_error(self):
+        # Deterministic feed errors (HTTP 4xx/5xx) must not burn backoff.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = self._check_update_home(tmp)
+            attempts = []
+            sleeps = []
+
+            def denied(feed, etag):
+                attempts.append(feed)
+                raise urllib.error.HTTPError(feed, 404, 'Not Found', {}, None)
+
+            args = self._check_update_args(home)
+            with self.assertRaises(urllib.error.HTTPError):
+                install_mod.do_check_update(
+                    args, _read_feed=denied, _sleep=sleeps.append)
+            self.assertEqual(len(attempts), 1, 'HTTP errors must not retry')
+            # Only the opening jitter sleep runs; no backoff sleep on fail-fast path.
+            self.assertEqual(len(sleeps), 1, sleeps)
+            self.assertLessEqual(sleeps[0], 120)
+
+    def test_check_update_reraises_after_retry_exhaustion(self):
+        # Persistent outage: exactly 4 attempts, backoff [30, 60, 120], then raise.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = self._check_update_home(tmp)
+            attempts = []
+            sleeps = []
+
+            def down(feed, etag):
+                attempts.append(feed)
+                raise OSError('simulated persistent outage')
+
+            def boom(url):
+                raise AssertionError('tarball must not download on persistent outage')
+
+            args = self._check_update_args(home)
+            with self.assertRaises(OSError):
+                install_mod.do_check_update(
+                    args, _fetch=boom, _read_feed=down, _sleep=sleeps.append)
+            self.assertEqual(len(attempts), 4, 'must exhaust all attempts')
+            self.assertLessEqual(sleeps[0], 120, 'opening jitter sleep')
+            self.assertEqual(sleeps[1:], [30, 60, 120], 'bounded backoff schedule')
+            self.assertFalse((home / 'update-etag').exists(), 'no etag write on failure')
+
+    def test_check_update_retries_transient_feed_failure(self):
+        # A blipped feed fetch must not kill the poll: the run retries
+        # in-cycle, then proceeds (here to a clean busy-deferral).
+        with tempfile.TemporaryDirectory() as tmp:
+            home = self._check_update_home(tmp)
+            latest = {'version': '9.9.9', 'url': 'file:///bundle.tar.gz',
+                      'sha256': None, 'min_python': '3.14'}
+            attempts = []
+
+            def flaky_read(feed, etag):
+                attempts.append(feed)
+                if len(attempts) == 1:
+                    raise OSError('simulated transient network failure')
+                return 200, json.dumps(latest).encode(), 'etag-B'
+
+            def boom(url):
+                raise AssertionError('tarball must not download when deferred')
+
+            _patch_attrs(self, wait_idle=lambda *a, **k: False)
+            args = self._check_update_args(home)
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                rc = install_mod.do_check_update(
+                    args, _fetch=boom, _read_feed=flaky_read,
+                    _sleep=lambda s: None)
+            self.assertEqual(rc, 0, buf.getvalue())
+            self.assertEqual(len(attempts), 2, 'feed must be re-read after transient failure')
+            self.assertIn('retrying feed fetch', buf.getvalue())
+            self.assertIn('deferred: router busy', buf.getvalue())
 
 class SafeUpdateTests(unittest.TestCase):
     """Long-term safe-update seams: identity gate, busy deferral, TERM-only
