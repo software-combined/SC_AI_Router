@@ -8,7 +8,8 @@ from dataclasses import replace
 from pathlib import Path
 from codex_router.catalogue import (SUBSCRIPTION_REASONING, catalog_name, check, merge,
                                      openrouter_entry, subscription_stub)
-from codex_router.registry import MODELS, by_slug, models_for
+from codex_router.registry import MODELS, by_slug
+from codex_router.clients import models_for
 
 
 class CatalogueFlagTests(unittest.TestCase):
@@ -73,8 +74,8 @@ class CatalogueFlagTests(unittest.TestCase):
         slugs = [m['slug'] for m in merged['models']]
         self.assertEqual(slugs[:len(roster)], roster)
         shown = slugs[len(roster):]
-        by_slug_map = {m.slug: m for m in models_for('codex')}
-        self.assertEqual(len(shown), len([m for m in models_for('codex')
+        by_slug_map = {m.slug: m for m in models_for(MODELS, 'codex')}
+        self.assertEqual(len(shown), len([m for m in models_for(MODELS, 'codex')
                                           if m.provider == 'openrouter']))
         verified = [s for s in shown if by_slug_map[s].tier == 'verified']
         preview = [s for s in shown if by_slug_map[s].tier == 'preview']
@@ -199,7 +200,7 @@ class CatalogueFlagTests(unittest.TestCase):
         self.assertEqual(alias.slug, '~x-ai/grok-latest')
 
     def test_merge_preserves_openai_entries_and_refreshes_stale_rows(self):
-        slug = next(m.slug for m in models_for('codex') if m.provider == 'openrouter')
+        slug = next(m.slug for m in models_for(MODELS, 'codex') if m.provider == 'openrouter')
         stale = dict(openrouter_entry(by_slug(slug)), description='stale')
         base = {'models': [{'slug': 'gpt-6-astra'}, {'slug': 'gpt-5.6-luna'}, stale]}
         merged = merge(base)
@@ -207,14 +208,14 @@ class CatalogueFlagTests(unittest.TestCase):
         self.assertEqual(slugs[:2], ['gpt-6-astra', 'gpt-5.6-luna'])
         self.assertEqual(len(slugs), len(set(slugs)))
         self.assertNotEqual(merged['models'][2]['description'], 'stale')
-        for model in models_for('codex'):
+        for model in models_for(MODELS, 'codex'):
             if model.provider == 'openrouter':
                 self.assertIn(model.slug, slugs)
 
     def test_merge_then_check_round_trips(self):
         merged = merge({'models': []})
         slugs = {m['slug'] for m in merged['models']}
-        for model in models_for('codex'):
+        for model in models_for(MODELS, 'codex'):
             if model.provider == 'openrouter':
                 self.assertIn(model.slug, slugs)
         with tempfile.TemporaryDirectory() as tmp:
@@ -247,10 +248,10 @@ class CatalogueFlagTests(unittest.TestCase):
         claude = merge({'models': []}, client='claude')
         codex_slugs = {m['slug'] for m in codex['models']}
         claude_slugs = {m['slug'] for m in claude['models']}
-        for model in models_for('codex'):
+        for model in models_for(MODELS, 'codex'):
             if model.provider == 'openrouter':
                 self.assertIn(model.slug, codex_slugs)
-        for model in models_for('claude'):
+        for model in models_for(MODELS, 'claude'):
             if model.provider == 'openrouter':
                 self.assertIn(model.slug, claude_slugs)
         self.assertFalse(codex_slugs & {'openai/gpt-6-astra', 'openai/gpt-5.6-sol',
@@ -369,7 +370,7 @@ class CatalogueRosterTests(unittest.TestCase):
         self.assertEqual(by_slug['gpt-5.6-luna']['slug'], 'gpt-5.6-luna')
         self.assertEqual(by_slug['gpt-6-astra']['display_name'], 'GPT-6-Astra')
         self.assertEqual(by_slug['gpt-5.6-luna']['display_name'], 'GPT-5.6-Luna')
-        for model in models_for('codex'):
+        for model in models_for(MODELS, 'codex'):
             if model.provider == 'openrouter':
                 self.assertIn(model.slug, by_slug)
 

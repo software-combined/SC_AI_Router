@@ -28,6 +28,9 @@ FILES = [
          'codex_router/activation.py',
          'codex_router/__init__.py',
          'codex_router/__main__.py',
+         'codex_router/model_metadata.py',
+         'codex_router/clients/__init__.py',
+         'codex_router/clients/codex.py',
          'codex_router/transport.py',
          'codex_router/protocols/__init__.py',
          'codex_router/protocols/responses.py',
@@ -50,8 +53,10 @@ class PackagingTests(unittest.TestCase):
         # A fresh copy-install following FILES must start: every package
         # module plus the data files read at import must be listed.
         root = Path(__file__).resolve().parents[1]
-        for path in sorted((root / 'codex_router').glob('*.py')):
-            self.assertIn('codex_router/%s' % path.name, FILES,
+        for path in sorted((root / 'codex_router').rglob('*.py')):
+            if '__pycache__' in path.parts:
+                continue
+            self.assertIn(path.relative_to(root).as_posix(), FILES,
                           'runtime module missing from deploy list')
         for dep in ('codex_router/models.json',
                     'codex_router/openrouter_base_instructions.txt'):

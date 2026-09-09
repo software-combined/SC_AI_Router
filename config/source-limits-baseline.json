@@ -1,5 +1,5 @@
 {
-  "codex_router/catalogue.py": 282,
+  "codex_router/catalogue.py": 284,
   "codex_router/compaction.py": 314,
   "codex_router/errors.py": 263,
   "codex_router/providers.py": 348,
@@ -8,7 +8,7 @@
   "packaging/install.py": 582,
   "packaging/service.py": 632,
   "tests/test_agent_containment.py": 94,
-  "tests/test_catalogue.py": 418,
+  "tests/test_catalogue.py": 419,
   "tests/test_handler.py": 354,
   "tests/test_install.py": 486,
   "tests/test_install_config.py": 369,

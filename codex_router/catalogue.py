@@ -8,7 +8,9 @@ import json
 import sys
 from pathlib import Path
 from .capabilities import catalogue_patch, describe
-from .registry import MODELS, models_for, visible_for
+from .clients.codex import capability_fields as codex_projection
+from .clients import models_for, visible_for
+from .registry import MODELS
 
 OPENROUTER_TEMPLATE = {
     'shell_type': 'unified_exec',
@@ -129,6 +131,7 @@ def catalog_name(model):
 
 
 def openrouter_entry(model):
+    projected = codex_projection(model)
     return {**OPENROUTER_TEMPLATE,
             'slug': model.slug,
             'display_name': (model.display_name + ' · Preview'
@@ -138,15 +141,14 @@ def openrouter_entry(model):
                             + 'OpenRouter billing. Switch to this model mid-thread; history carries over. '
                             + 'OpenRouter: ' + catalog_name(model)),
             'default_reasoning_level': model.default_reasoning,
-            'supported_reasoning_levels': [
-                {'effort': level, 'description': describe(level)} for level in model.reasoning],
+            'supported_reasoning_levels': projected['supported_reasoning_levels'],
             'priority': (model.priority + PREVIEW_PRIORITY_OFFSET
                            if model.tier == 'preview' else model.priority),
             'context_window': model.context_window,
             'max_context_window': model.context_window,
             'model_messages': {'instructions_template': BASE_INSTRUCTIONS},
             **catalogue_patch(model.slug),
-            'input_modalities': list(model.modalities),
+            'input_modalities': projected['input_modalities'],
             'default_reasoning_summary': model.reasoning_summary,
             'supports_reasoning_summary_parameter': model.reasoning_summary == 'auto',
             'apply_patch_tool_type': 'freeform' if model.apply_patch == 'freeform' else None,
@@ -174,7 +176,7 @@ def merge(catalog, roster=(), client='codex'):
     the proper replacement for this fallback. Routing never consults
     this filter.
     """
-    visible = [m for m in models_for(client) if m.provider == 'openrouter']
+    visible = [m for m in models_for(MODELS, client) if m.provider == 'openrouter']
     hidden = {m.slug for m in MODELS
               if m.provider == 'openrouter' and not visible_for(m, client)}
     active = {m.slug for m in MODELS}
@@ -244,7 +246,7 @@ def check(path, client='codex'):
         if model.slug in existing:
             print(f'{model.slug}: hidden from the {client} picker but present')
             return False
-    for model in (m for m in models_for(client) if m.provider == 'openrouter'):
+    for model in (m for m in models_for(MODELS, client) if m.provider == 'openrouter'):
         total += 1
         old = existing.get(model.slug)
         if old is None:
