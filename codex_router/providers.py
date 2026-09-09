@@ -1,9 +1,10 @@
 """Provider adapters. Each owns model membership, request preparation, upstream target and response adaptation."""
 import http.client
 import json
-import traceback
 from . import compaction as comp, local_services
-from .capabilities import CANONICAL_ORDER, OPENROUTER_HOST, REASONING_LEVELS, check_effort, input_modalities
+from .capabilities import (CANONICAL_ORDER, OPENROUTER_HOST, REASONING_LEVELS, check_effort,
+                              check_images, input_modalities)
+from .errors import PreparationError
 from .registry import by_slug
 from .runtime import log_event
 from .discovered import remember
@@ -26,14 +27,6 @@ def upstream_retry_after(response, prepared, metrics):
     return response.getheader('Retry-After', '2')
 
 
-def client_error(exc):
-    """Map request failures to (status, message); bugs 500 with traceback, never 400."""
-    if isinstance(exc, (AttributeError, TypeError)):
-        log_event('request_failed', traceback=traceback.format_exc(limit=3)[-4000:])
-        return 500, 'Internal router error'
-    return 400, 'Invalid model, payload, or local authentication configuration'
-
-
 def relay_headers(response, send_header, model):
     """Forward upstream headers, pinning openai-model to the requested slug.
 
@@ -46,10 +39,6 @@ def relay_headers(response, send_header, model):
         send_header(key, value)
     if isinstance(model, str):
         send_header('openai-model', model)
-
-
-class PreparationError(ValueError):
-    """A well-formed request the provider cannot serve; maps to 409."""
 
 
 class Prepared:
@@ -107,8 +96,13 @@ class OpenRouterProvider:
             tool_names = prepare_tools(payload)
         except ValueError as exc:
             raise PreparationError(str(exc))
+        rewritten = comp.strip_reasoning_blobs(comp.rewrite_input(payload.get('input', [])))
+        try:
+            check_images(model, rewritten)
+        except ValueError as exc:
+            raise PreparationError(str(exc))
         keep_images = 'image' in input_modalities(model) if isinstance(model, str) else True
-        payload['input'] = comp.strip_images(comp.strip_reasoning_blobs(comp.rewrite_input(payload.get('input', []))), keep_images)
+        payload['input'] = comp.strip_images(rewritten, keep_images)
         reasoning = payload.get('reasoning')
         try:
             check_effort(model,

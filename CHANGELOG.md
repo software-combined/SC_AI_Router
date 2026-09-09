@@ -5,6 +5,12 @@
 - Preserve the owner's picker selection (`model`, `model_reasoning_effort`)
   inside the managed Codex config block across installs and scheduled
   updates instead of resetting it on every rewrite.
+- Reject image-bearing turns routed to a text-only model (409 naming the
+  image content and the target model) instead of silently stripping the
+  images: switch back to an image-capable model or continue without images.
+- Route defined HTTP failures through one shared error catalog with stable
+  codes (`codex_router/errors.py`, now in the deploy list); CLI/tool exits
+  print `CODE: message` and logs record the same code.
 - Reject OpenRouter requests whose estimated input plus reserved output
   would exceed the model's context window (409 with an actionable message)
   instead of forwarding a doomed turn that the endpoint 400s outright.

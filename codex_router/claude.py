@@ -15,7 +15,7 @@ import json
 
 from . import providers
 from .capabilities import OPENROUTER_HOST
-from .providers import PreparationError
+from .errors import PreparationError
 from .registry import MODELS, by_slug
 
 ANTHROPIC_HOST = 'api.anthropic.com'
