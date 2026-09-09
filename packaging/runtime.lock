@@ -1,0 +1,53 @@
+{
+  "cpython": "3.14.4",
+  "build": "20260812",
+  "source": "astral-sh/python-build-standalone",
+  "note": "install-only distributions; verify archive and licences at implementation time. No mutable URL or invented checksum ships here: entries below carry the review inputs, and pins land only through reviewed lock changes.",
+  "targets": [
+    {
+      "os": "darwin",
+      "cpu": "arm64",
+      "triple": "aarch64-apple-darwin-install_only.tar.gz",
+      "url": "",
+      "mirror": "runtimes/cpython-3.14.4-aarch64-apple-darwin-install_only.tar.gz",
+      "format": "tar.gz",
+      "sha256": "",
+      "exec": "python/bin/python3.14",
+      "licences": ["python/LICENSE", "python/README.rst"]
+    },
+    {
+      "os": "darwin",
+      "cpu": "x86_64",
+      "triple": "x86_64-apple-darwin-install_only.tar.gz",
+      "url": "",
+      "mirror": "runtimes/cpython-3.14.4-x86_64-apple-darwin-install_only.tar.gz",
+      "format": "tar.gz",
+      "sha256": "",
+      "exec": "python/bin/python3.14",
+      "licences": ["python/LICENSE", "python/README.rst"]
+    },
+    {
+      "os": "linux",
+      "cpu": "x86_64",
+      "libc": "glibc",
+      "triple": "x86_64-unknown-linux-gnu-install_only.tar.gz",
+      "url": "",
+      "mirror": "runtimes/cpython-3.14.4-x86_64-unknown-linux-gnu-install_only.tar.gz",
+      "format": "tar.gz",
+      "sha256": "",
+      "exec": "python/bin/python3.14",
+      "licences": ["python/LICENSE", "python/README.rst"]
+    },
+    {
+      "os": "windows",
+      "cpu": "x86_64",
+      "triple": "x86_64-pc-windows-msvc-install_only.tar.gz",
+      "url": "",
+      "mirror": "runtimes/cpython-3.14.4-x86_64-pc-windows-msvc-install_only.tar.gz",
+      "format": "tar.gz",
+      "sha256": "",
+      "exec": "python/python.exe",
+      "licences": ["python/LICENSE.txt"]
+    }
+  ]
+}
