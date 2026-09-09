@@ -158,13 +158,13 @@ git diff --check
 
 ## Done criteria
 
-- [ ] Ordinary Codex installs and legacy receipts preserve exact owned settings.
-- [ ] Service-only lifecycle leaves all client settings/guidance unchanged.
-- [ ] Selected client survives scheduled updates; unsupported clients fail early.
-- [ ] Uninstall uses a machine outcome and refuses removal after restore failure.
-- [ ] Explicit independent subscription choices work; legacy permission is preserved.
-- [ ] Packaged bootstrap/runtime and full tests pass; source limits pass.
-- [ ] Current review gate, `develop` integration and worktree cleanup recorded.
+- [x] Ordinary Codex installs and legacy receipts preserve exact owned settings.
+- [x] Service-only lifecycle leaves all client settings/guidance unchanged.
+- [x] Selected client survives scheduled updates; unsupported clients fail early.
+- [x] Uninstall uses a machine outcome and refuses removal after restore failure.
+- [x] Explicit independent subscription choices work; legacy permission is preserved.
+- [x] Packaged bootstrap/runtime and full tests pass; source limits pass.
+- [x] Current review gate, `develop` integration and worktree cleanup recorded.
 
 ## STOP conditions and maintenance
 
