@@ -6,7 +6,7 @@
   "codex_router/router.py": 343,
   "codex_router/setup.py": 221,
   "codex_router/tool_adapter.py": 297,
-  "packaging/install.py": 589,
+  "packaging/install.py": 629,
   "packaging/platforms/windows.py": 113,
   "packaging/service.py": 632,
   "tests/test_agent_containment.py": 94,
@@ -26,5 +26,6 @@
   "tests/test_setup.py": 339,
   "tests/test_tool_adapter.py": 384,
   "tests/test_update_channel.py": 335,
-  "tests/test_windows_acl.py": 220
+  "tests/test_windows_acl.py": 220,
+  "tests/test_preflight.py": 74
 }

@@ -62,6 +62,7 @@ _write_state = _svc._write_state
 fetch = _svc.fetch
 fetch_feed = _svc.fetch_feed
 feed_serial = _svc.feed_serial
+github_route_prefix = _svc.RELEASES_PREFIX
 find_python = _svc.find_python
 install_launcher = _svc.install_launcher
 main_plist_needs_reload = _svc.main_plist_needs_reload
@@ -535,6 +536,43 @@ def do_uninstall(args):
     return 0
 
 
+def do_preflight(args):
+    """Report missing install prerequisites together; change nothing.
+
+    Plan 058 Stage 1: one check before anything is written, with a
+    platform-correct remedy per missing item. Never creates the router
+    home, never touches the network: the feed check only reads which
+    route is selected (the transitional GitHub route needs the `gh`
+    binary; an explicit `--feed` needs nothing beyond this machine).
+    Sign-in itself is verified when the feed is actually fetched.
+    """
+    missing = []
+    if find_python(args.python) is None:
+        if args.python:
+            missing.append('no Python 3.14 at ' + args.python + ': pass a '
+                           'verified --python interpreter path')
+        else:
+            missing.append('no Python 3.14 found: the managed install provisions '
+                           'the pinned private runtime; otherwise install '
+                           'Python 3.14 first')
+    feed = args.feed or FEED_URL
+    # Same route decision as fetch(): the private GitHub route needs the
+    # `gh` binary; anything else needs nothing beyond this machine.
+    # Prefix test only: github_asset() itself would spawn `gh`.
+    if feed.startswith(github_route_prefix) and shutil.which('gh') is None:
+        missing.append('GitHub CLI (gh) binary not found: install gh, sign it in '
+                       'with `gh auth login` as this user, or pass an explicit '
+                       '--feed bundle URL')
+    if (args.client or 'codex') == 'codex' and shutil.which('codex') is None:
+        missing.append('Codex CLI not found: install Codex first, or pass '
+                       '--client none for a service-only install')
+    if missing:
+        for line in missing:
+            print('preflight: ' + line)
+        raise SystemExit(2)
+    print('preflight: Python, feed-route, and client prerequisites present')
+    return 0
+
 def build_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--feed', default=None)
@@ -545,6 +583,8 @@ def build_parser():
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--check-update', action='store_true')
     parser.add_argument('--uninstall', action='store_true')
+    parser.add_argument('--preflight', action='store_true',
+                        help='Report missing install prerequisites and exit.')
     parser.add_argument('--static-catalogue', action='store_true',
                         help='No-op: the static catalogue file is now always configured.')
     parser.add_argument('--setup', action='store_true',
@@ -564,13 +604,13 @@ def build_parser():
 def main(argv=None):
     args = build_parser().parse_args(argv)
     require_supported_platform()
-    action = do_uninstall if args.uninstall else do_check_update if args.check_update else do_install
+    action = do_preflight if args.preflight else do_uninstall if args.uninstall else do_check_update if args.check_update else do_install
     home = Path(args.home).expanduser()
     backend = platform_backend()
     # --check-update spawns the installer as a child, and that child takes the
     # lock itself; holding it here would deadlock every scheduled update. A
     # dry run mutates nothing, so it takes no lock and creates no home.
-    if args.check_update or args.dry_run:
+    if args.preflight or args.check_update or args.dry_run:
         return action(args)
     # Before the lock: a host with no service manager must be refused
     # without leaving a router home behind.
