@@ -33,6 +33,7 @@ class ClaudeMergeTests(unittest.TestCase):
             self.assertEqual(previous, {'ANTHROPIC_BASE_URL': None,
                                         'CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY': None})
 
+    @unix_only
     def test_rerun_is_stable_and_reports_unchanged(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'settings.json'
