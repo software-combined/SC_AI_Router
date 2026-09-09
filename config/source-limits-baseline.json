@@ -3,7 +3,7 @@
   "codex_router/compaction.py": 314,
   "codex_router/errors.py": 263,
   "codex_router/providers.py": 348,
-  "codex_router/router.py": 376,
+  "codex_router/router.py": 384,
   "codex_router/setup.py": 333,
   "codex_router/tool_adapter.py": 297,
   "packaging/install.py": 690,

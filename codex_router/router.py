@@ -23,14 +23,22 @@ class Router(ThreadingHTTPServer):
     drain_deadline_s = 120
 
     def __init__(self, state, fileno=None, credentials=None):
-        if fileno is None:
+        sock = (None if fileno is None else
+                socket.fromfd(fileno, socket.AF_INET, socket.SOCK_STREAM))
+        if sock is not None and sock.getsockname()[1] != state['port']:
+            # A foreign launchd socket (e.g. the CI runner's own Listeners
+            # entry) would serve nobody on our port: drop it and fall back
+            # to the configured bind instead of going deaf with no error.
+            sock.close()
+            sock = None
+        if sock is None:
             self.allow_reuse_port = True
             super().__init__(('127.0.0.1', state['port']), Handler)
         else:
             super().__init__(('127.0.0.1', state['port']), Handler,
                              bind_and_activate=False)
             self.socket.close()
-            self.socket = socket.fromfd(fileno, socket.AF_INET, socket.SOCK_STREAM)
+            self.socket = sock
             self.server_activate()
         self.state = state
         self.lock = threading.Lock()

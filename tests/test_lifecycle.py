@@ -230,7 +230,8 @@ class SocketActivationTests(unittest.TestCase):
         self.addCleanup(listener.close)
         listener.bind(('127.0.0.1', 0))
         listener.listen(5)
-        server = Router({'port': 0, 'token': 'test-token', 'openai_models': []},
+        port = listener.getsockname()[1]
+        server = Router({'port': port, 'token': 'test-token', 'openai_models': []},
                         fileno=listener.fileno())
         self.addCleanup(server.server_close)
         self.assertEqual(server.socket.getsockname(), listener.getsockname())
@@ -238,9 +239,25 @@ class SocketActivationTests(unittest.TestCase):
         thread.start()
         self.addCleanup(server.shutdown)
         conn = http.client.HTTPConnection(
-            '127.0.0.1', listener.getsockname()[1], timeout=10)
+            '127.0.0.1', port, timeout=10)
         conn.request('GET', '/test-token/health')
         self.assertEqual(conn.getresponse().status, 200)
+
+    def test_foreign_listener_falls_back_to_configured_port(self):
+        # A launchd socket for another port (e.g. the CI runner's own
+        # Listeners entry) must not capture the router: it serves the
+        # configured port instead of going deaf with no error.
+        foreign = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.addCleanup(foreign.close)
+        foreign.bind(('127.0.0.1', 0))
+        foreign.listen(5)
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            probe.bind(('127.0.0.1', 0))
+            port = probe.getsockname()[1]
+        server = Router({'port': port, 'token': 'test-token', 'openai_models': []},
+                        fileno=foreign.fileno())
+        self.addCleanup(server.server_close)
+        self.assertEqual(server.socket.getsockname(), ('127.0.0.1', port))
 
     def test_inherited_listener_returns_none_without_launchd(self):
         with mock.patch('ctypes.CDLL', side_effect=AttributeError('no symbol')):
