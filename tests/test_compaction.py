@@ -2,8 +2,8 @@ import unittest
 import base64
 from codex_router.compaction import (PREFIX, TRANSCRIPT_BUDGET, build_compact_v1_output,
     compaction_text, decode_summary, encode_summary, extract_summary, extract_user_messages,
-    has_compaction_trigger, rewrite_input, strip_images, transcript_for_summary,
-    v2_compaction_item, OPAQUE_NOTE)
+    has_compaction_trigger, rewrite_input, scrub_tool_fragments, strip_images,
+    transcript_for_summary, v2_compaction_item, OPAQUE_NOTE)
 
 class CompactionTests(unittest.TestCase):
     def test_transparent_envelope_round_trips(self):
@@ -25,6 +25,46 @@ class CompactionTests(unittest.TestCase):
         self.assertIn('progress made', out[-1]['content'][0]['text'])
         with self.assertRaisesRegex(ValueError, 'summary'):
             build_compact_v1_output(['first task'], '  ')
+
+
+class ScrubFragmentsTests(unittest.TestCase):
+    def test_partial_calls_are_dropped(self):
+        items = [{'type': 'apply_patch_call'},
+                 {'type': 'function_call', 'name': 'e', 'call_id': 'c1'},
+                 {'type': 'custom_tool_call', 'name': 'e'},
+                 {'type': 'message', 'role': 'user', 'content': 'hi'}]
+        scrubbed = scrub_tool_fragments(items)
+        self.assertEqual(scrubbed, [items[-1]])
+
+    def test_apply_patch_call_needs_status_and_operation(self):
+        good = {'type': 'apply_patch_call', 'call_id': 'c1',
+                'status': 'completed', 'operation': {'op': 'create'}}
+        self.assertIn(good, scrub_tool_fragments([good]))
+        for bad in ({'type': 'apply_patch_call', 'call_id': 'c1',
+                     'status': 'completed'},
+                    {'type': 'apply_patch_call', 'call_id': 'c1',
+                     'operation': {'op': 'create'}},
+                    {'type': 'apply_patch_call', 'call_id': 'c1',
+                     'status': 'failed', 'operation': {'op': 'x'}}):
+            self.assertNotIn(bad, scrub_tool_fragments([bad]))
+
+    def test_orphan_outputs_are_dropped_complete_pairs_survive(self):
+        call = {'type': 'function_call', 'name': 'e', 'call_id': 'c1',
+                'arguments': '{"v": 1}'}
+        result = {'type': 'function_call_output', 'call_id': 'c1', 'output': 'ok'}
+        self.assertEqual(scrub_tool_fragments([call, result]), [call, result])
+        orphan = {'type': 'function_call_output', 'call_id': 'c9', 'output': 'ok'}
+        self.assertEqual(scrub_tool_fragments([call, orphan]), [call])
+        self.assertEqual(scrub_tool_fragments(
+            [{'type': 'custom_tool_call_output', 'call_id': 'c9', 'output': 'ok'}]), [])
+
+    def test_non_list_input_passes_through(self):
+        self.assertEqual(scrub_tool_fragments('do the task'), 'do the task')
+
+    def test_output_of_dropped_partial_call_is_dropped_too(self):
+        items = [{'type': 'function_call', 'name': 'e', 'call_id': 'c1'},
+                 {'type': 'function_call_output', 'call_id': 'c1', 'output': 'ok'}]
+        self.assertEqual(scrub_tool_fragments(items), [])
 
 
 class TriggerTests(unittest.TestCase):
