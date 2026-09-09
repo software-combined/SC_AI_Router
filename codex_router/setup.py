@@ -11,6 +11,7 @@ import hmac
 import html
 import json
 import os
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -54,18 +55,63 @@ def same_origin(origin, port):
     return origin is None or origin == f'http://127.0.0.1:{port}'
 
 
+class KeyRejected(ValueError):
+    """check_key refusal carrying the HTTP status; 401/403 means a dead key."""
+    def __init__(self, message, status=None):
+        super().__init__(message)
+        self.status = status
+
+
 def check_key(key, _urlopen=urllib.request.urlopen):
-    """(label, limit, usage) for a live key; ValueError when rejected, OSError when down."""
+    """(label, limit, usage) for a live key; KeyRejected when refused, OSError when down."""
     req = urllib.request.Request(KEY_URL, headers={'Authorization': 'Bearer ' + key})
     try:
         with _urlopen(req, timeout=20) as response:
             payload = json.load(response)
-    except urllib.error.HTTPError:
-        raise ValueError('OpenRouter rejected the key')
+    except urllib.error.HTTPError as exc:
+        raise KeyRejected('OpenRouter rejected the key', status=exc.code)
     data = payload.get('data') if isinstance(payload, dict) else None
     if not isinstance(data, dict):
-        raise ValueError('OpenRouter returned an unexpected key response')
+        raise KeyRejected('OpenRouter returned an unexpected key response')
     return (data.get('label') or 'key', data.get('limit'), data.get('usage'))
+
+
+class KeyExists(OSError):
+    """The key file holds a live key; rotation needs explicit deletion."""
+
+
+def _claim_truncated(key_path):
+    """Open an existing key file for overwrite, keeping owner-only mode."""
+    fd = os.open(key_path, os.O_WRONLY | os.O_TRUNC, 0o600)
+    try:
+        os.fchmod(fd, 0o600)
+    except OSError:
+        pass
+    return fd
+
+
+def store_key(home, key, _check_live=None):
+    """Write an OpenRouter key through the one shared writer.
+
+    Plan 055 Stage 3: claims the installer's empty placeholder, refuses a
+    file holding a live key, and truncates only a stored key that
+    `_check_live(stored)` proves dead by returning False. Returns the open
+    fd for writing the new key, or raises KeyExists / OSError.
+    """
+    key_path = Path(home) / 'openrouter.key'
+    try:
+        return os.open(key_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        pass
+    try:
+        stored = key_path.read_bytes().strip()
+    except OSError:
+        raise OSError('could not store the key')
+    if not stored:
+        return _claim_truncated(key_path)
+    if _check_live is not None and _check_live(stored.decode('utf-8', 'replace')) is False:
+        return _claim_truncated(key_path)
+    raise KeyExists('a key file already exists; delete it to rotate keys')
 
 
 def _page(title, body):
@@ -119,22 +165,9 @@ def handle_setup(state, home, nonce, is_post, form, _urlopen=None, _now=None):
         return 502, _form(nonce, 'could not reach OpenRouter; retry shortly')
     key_path = Path(home) / 'openrouter.key'
     try:
-        fd = os.open(key_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    except FileExistsError:
-        # The installer pre-creates an empty placeholder with owner-only mode
-        # before first run; claiming that empty placeholder must succeed or a
-        # --setup install can never store its key. A file holding a real key
-        # still needs explicit deletion before rotation.
-        try:
-            if key_path.read_bytes().strip():
-                return 409, _form(nonce, 'a key file already exists; delete it to rotate keys')
-            fd = os.open(key_path, os.O_WRONLY | os.O_TRUNC, 0o600)
-            try:
-                os.fchmod(fd, 0o600)
-            except OSError:
-                pass
-        except OSError:
-            return 500, _form(nonce, 'could not store the key')
+        fd = store_key(home, key, _check_live=lambda stored: _stored_key_live(stored, _fetch))
+    except KeyExists as exc:
+        return 409, _form(nonce, str(exc))
     except OSError:
         return 500, _form(nonce, 'could not store the key')
     with os.fdopen(fd, 'w') as stream:
@@ -160,6 +193,89 @@ def handle_setup(state, home, nonce, is_post, form, _urlopen=None, _now=None):
     return 200, _done(label, limit, usage, mode)
 
 
+def _stored_key_live(stored, _fetch):
+    """True when the stored key still validates; False only on 401/403.
+
+    Any other outcome (network down, rate limit, unparseable body) refuses
+    the carve-out: truncating there could destroy the only copy of a live
+    provisioned secret.
+    """
+    try:
+        check_key(stored, _fetch)
+    except KeyRejected as exc:
+        return exc.status not in (401, 403)
+    except (ValueError, OSError):
+        return True
+    return True
+
+
+def open_key_window(server, home, _opener=None):
+    """Mint one setup nonce and open the loopback key page; True when opened.
+
+    Plan 055 Stage 3: at most one window per live nonce. When
+    `setup_pending` already holds, the existing page is the window and no
+    new nonce is minted. The nonce persists atomically (temp file plus
+    `os.replace`), never through a truncating rewrite. The URL carries the
+    per-install path token: it is opened in the browser, printed only on a
+    TTY, and otherwise recorded as a token-free lifecycle event.
+    """
+    import secrets as _secrets
+    import webbrowser as _webbrowser
+    opener = _opener or _webbrowser.open
+    state = server.state
+    with server.lock:
+        if setup_pending(state):
+            return True
+        nonce = _secrets.token_urlsafe(32)
+        expires = int(time.time()) + SETUP_TTL_S
+        path = Path(home) / 'mixed-router-state.json'
+        try:
+            doc = json.loads(path.read_text())
+            if not isinstance(doc, dict):
+                return False
+            doc['setup'] = {'nonce': nonce, 'expires': expires}
+            _atomic_replace(path, doc)
+        except (OSError, ValueError):
+            return False
+        if isinstance(state, dict):
+            state['setup'] = {'nonce': nonce, 'expires': expires}
+        url = ('http://127.0.0.1:%s/%s/setup/%s'
+               % (state.get('port'), state.get('token'), nonce))
+    try:
+        opened = opener(url)
+    except OSError:
+        opened = False
+    opened = opened is not False
+    if sys.stdout.isatty():
+        print('open %s to connect your OpenRouter key' % url)
+    else:
+        from .runtime import log_event as _log_event
+        _log_event('setup_window_opened' if opened else 'setup_window_pending',
+                   port=state.get('port'), path='/setup/')
+    return opened
+
+
+def _atomic_replace(path, doc):
+    """Write doc atomically via tmp plus os.replace; retry past a stale tmp.
+
+    A crash between O_EXCL create and replace leaves the deterministic tmp
+    behind; without the retry every later nonce mint or close fails closed
+    forever until someone unlinks it by hand.
+    """
+    tmp = path.with_name(path.name + '.setup.tmp')
+    try:
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        try:
+            tmp.unlink()
+        except OSError:
+            raise OSError('could not replace %s' % path)
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, 'w') as stream:
+        stream.write(json.dumps(doc, indent=2) + '\n')
+    os.replace(tmp, path)
+
+
 def _finish_setup(state, home, mode):
     """Drop the single-use nonce and persist the chosen mode; False on IO failure."""
     path = Path(home) / 'mixed-router-state.json'
@@ -169,11 +285,7 @@ def _finish_setup(state, home, mode):
             return False
         doc.pop('setup', None)
         doc['openai_mode'] = mode
-        tmp = path.with_name(path.name + '.setup.tmp')
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        with os.fdopen(fd, 'w') as stream:
-            stream.write(json.dumps(doc, indent=2) + '\n')
-        os.replace(tmp, path)
+        _atomic_replace(path, doc)
     except (OSError, ValueError):
         return False
     if isinstance(state, dict):
