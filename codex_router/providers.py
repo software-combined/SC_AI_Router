@@ -124,6 +124,18 @@ class OpenRouterProvider:
         if window:  # reservation counts against context; keep half for input
             limit = min(limit, window // 2)
         payload['max_output_tokens'] = min(payload.get('max_output_tokens') or limit, limit)
+        if window:
+            # Fail closed before the endpoint bills a doomed turn: input
+            # estimate (chars//4 over the serialized input) plus the output
+            # reservation must fit the window. 409 fails fast with an
+            # actionable message; the endpoint 400 kills the turn outright.
+            used = len(json.dumps(payload.get('input', []))) // 4
+            reserved = payload['max_output_tokens']
+            if used + reserved > window:
+                raise PreparationError(
+                    f'request needs ~{used + reserved} tokens '
+                    f'(~{used} input + {reserved} reserved output) '
+                    f'but {(model if isinstance(model, str) else entry.slug)} allows {window}; compact or shorten the turn')
         return Prepared(self.host, '/api/v1/responses',
                         {'Authorization': 'Bearer ' + credentials.openrouter_key(),
                          'Content-Type': 'application/json'},

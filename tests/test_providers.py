@@ -82,6 +82,78 @@ class OutputCapTests(unittest.TestCase):
                              {'model': 'unknown/model', 'input': []},
                              b'raw', {}, _stub_credentials())
 
+    def test_request_over_context_window_is_rejected_before_upstream(self):
+        # Live 2026-09-09: ~501k input tokens with a 524288 output
+        # reservation against a 1048576 window (~1050400 total). The endpoint
+        # 400s the whole turn with no retry; the router must 409 first with
+        # an actionable message instead of forwarding the doomed turn.
+        from codex_router.registry import by_slug
+        provider = providers.OpenRouterProvider()
+        entry = by_slug('meta/muse-spark-1.3-contributor')
+        payload = {'model': 'meta/muse-spark-1.3-contributor',
+                   'input': [{'type': 'message', 'role': 'user',
+                              'content': 'x' * 2100000}],
+                   'max_output_tokens': 524288}
+        with self.assertRaisesRegex(providers.PreparationError, 'compact'):
+            provider.prepare(entry, '/responses', payload, b'raw', {},
+                             _stub_credentials())
+
+    def test_request_within_context_window_still_passes(self):
+        from codex_router.registry import by_slug
+        provider = providers.OpenRouterProvider()
+        entry = by_slug('meta/muse-spark-1.3-contributor')
+        payload = {'model': 'meta/muse-spark-1.3-contributor',
+                   'input': [{'type': 'message', 'role': 'user',
+                              'content': 'y' * 400000}],
+                   'max_output_tokens': 524288}
+        prepared = provider.prepare(entry, '/responses', payload, b'raw', {},
+                                    _stub_credentials())
+        self.assertEqual(json.loads(prepared.body)['max_output_tokens'], 524288)
+
+    def test_request_exactly_at_window_passes(self):
+        # Strict > pins the boundary: estimate + reserve == window forwards.
+        import json as _json
+        from codex_router.registry import by_slug
+        provider = providers.OpenRouterProvider()
+        entry = by_slug('meta/muse-spark-1.3-contributor')
+        reserved = entry.context_window // 2
+        overhead = len(_json.dumps([{'type': 'message', 'role': 'user',
+                                     'content': ''}]))
+        pad = 'x' * (reserved * 4 - overhead)
+        payload = {'model': entry.slug,
+                   'input': [{'type': 'message', 'role': 'user',
+                              'content': pad}],
+                   'max_output_tokens': reserved}
+        prepared = provider.prepare(entry, '/responses', payload, b'raw', {},
+                                    _stub_credentials())
+        self.assertEqual(json.loads(prepared.body)['max_output_tokens'], reserved)
+
+    def test_unknown_window_skips_guard(self):
+        # Registry default context_window=0: forward as before, endpoint enforces.
+        provider = providers.OpenRouterProvider()
+        fake = SimpleNamespace(max_output_tokens=1000, context_window=0,
+                               slug='fake/model')
+        payload = {'model': 'fake/model',
+                   'input': [{'type': 'message', 'role': 'user',
+                              'content': 'z' * 2000000}]}
+        prepared = provider.prepare(fake, '/responses', payload, b'raw', {},
+                                    _stub_credentials())
+        self.assertEqual(json.loads(prepared.body)['max_output_tokens'], 1000)
+
+    def test_non_list_input_never_escapes_as_500(self):
+        # Wire input of any JSON shape is measured, never a TypeError leak.
+        from codex_router.registry import by_slug
+        provider = providers.OpenRouterProvider()
+        entry = by_slug('meta/muse-spark-1.3-contributor')
+        for shape in ('do the task', {'text': 'do the task'}, None):
+            payload = {'model': entry.slug, 'input': shape}
+            try:
+                provider.prepare(entry, '/responses', dict(payload), b'raw', {},
+                                 _stub_credentials())
+            except providers.PreparationError as exc:
+                self.assertNotIn('Bearer', str(exc))
+                self.assertNotIn('router-secret', str(exc))
+
 
 class SummarizerTests(unittest.TestCase):
     def _summarize(self, model, seen):
