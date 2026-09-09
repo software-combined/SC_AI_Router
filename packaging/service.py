@@ -49,7 +49,7 @@ LOAD_TIMEOUT_S = 60
 # Subscription-side roster for the combined picker: bare slugs that route on
 # the ChatGPT subscription. Matches the live picker and state file; the
 # OpenRouter-side roster lives in codex_router/models.json instead.
-DEFAULT_OPENAI_MODELS = ['gpt-6-astra', 'gpt-reserve', 'gpt-5.6-sol',
+DEFAULT_OPENAI_MODELS = ['gpt-6-astra', 'gpt-5.6-sol',
                          'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5',
                          'gpt-5.4-mini', 'gpt-5.3-codex-spark', 'codex-auto-review']
 
@@ -539,6 +539,10 @@ def ensure_state(home):
         state = json.loads(path.read_text())
         if not isinstance(state.get('openai_models'), list):
             state['openai_models'] = list(DEFAULT_OPENAI_MODELS)
+            path.write_text(json.dumps(state, indent=2) + '\n')
+        elif 'gpt-reserve' in state['openai_models']:
+            # Retired slug: prune so routing stops authorizing it on update.
+            state['openai_models'].remove('gpt-reserve')
             path.write_text(json.dumps(state, indent=2) + '\n')
         return state
     port = 18749

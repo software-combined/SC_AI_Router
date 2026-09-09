@@ -154,6 +154,19 @@ class ClaudeIngressTests(unittest.TestCase):
             listed['claude/z-ai/glm-5.3-flash'], 'Z.ai: GLM 5.3 Flash \u00b7 OpenRouter')
         self.assertIn('anthropic/claude-sonnet-latest', listed)
 
+    def test_models_listing_orders_verified_then_preview_az(self):
+        # Reorder-only: verified A-Z, then preview A-Z; ids and labels untouched.
+        server = self._server()
+        response = _get(server.server_port, '/test-token/v1/models')
+        body = json.loads(response.read())
+        names = [row['display_name'] for row in body['data']]
+        by_label = {m.display_name: m for m in MODELS if m.provider == 'openrouter'}
+        verified = [n for n in names if by_label[n].tier == 'verified']
+        preview = [n for n in names if by_label[n].tier == 'preview']
+        self.assertEqual(names, verified + preview)
+        self.assertEqual(verified, sorted(verified, key=str.casefold))
+        self.assertEqual(preview, sorted(preview, key=str.casefold))
+
     def test_models_listing_ignores_discovery_query_string(self):
         # Claude fetches <base>/v1/models?limit=1000; the query must not 404.
         server = self._server()

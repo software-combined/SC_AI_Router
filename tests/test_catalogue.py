@@ -65,6 +65,69 @@ class CatalogueFlagTests(unittest.TestCase):
             self.assertNotIn('base_instructions', item)
             self.assertIn('instructions_template', item['model_messages'])
 
+    def test_merge_orders_subscriptions_then_verified_then_preview_az(self):
+        from tests.test_install import install_mod
+        roster = list(install_mod.DEFAULT_OPENAI_MODELS)
+        merged = merge({'models': []}, roster=tuple(roster))
+        slugs = [m['slug'] for m in merged['models']]
+        self.assertEqual(slugs[:len(roster)], roster)
+        shown = slugs[len(roster):]
+        by_slug_map = {m.slug: m for m in models_for('codex')}
+        self.assertEqual(len(shown), len([m for m in models_for('codex')
+                                          if m.provider == 'openrouter']))
+        verified = [s for s in shown if by_slug_map[s].tier == 'verified']
+        preview = [s for s in shown if by_slug_map[s].tier == 'preview']
+        self.assertEqual(shown, verified + preview)
+        names = {m['slug']: m['display_name'] for m in merged['models']}
+        self.assertEqual([names[s] for s in verified],
+                         sorted([names[s] for s in verified], key=str.casefold))
+        self.assertEqual([names[s] for s in preview],
+                         sorted([names[s] for s in preview], key=str.casefold))
+
+    def test_merge_keeps_custom_subscription_row_values_when_reordering(self):
+        from codex_router.catalogue import subscription_stub
+        custom = dict(subscription_stub('gpt-6-astra'), display_name='Mine',
+                      context_window=1000000)
+        merged = merge({'models': [dict(custom)]}, roster=('gpt-6-astra',))
+        row = next(m for m in merged['models'] if m['slug'] == 'gpt-6-astra')
+        self.assertEqual(row['display_name'], 'Mine')
+        self.assertEqual(row['context_window'], 1000000)
+        slugs = [m['slug'] for m in merged['models']]
+        self.assertEqual(slugs[0], 'gpt-6-astra')
+
+    def test_subscription_stubs_carry_native_reasoning_levels(self):
+        from codex_router.catalogue import SUBSCRIPTION_REASONING, subscription_stub
+        self.assertNotIn('gpt-reserve', SUBSCRIPTION_REASONING)
+        want = {'gpt-6-astra': ('medium', 6), 'gpt-5.6-sol': ('low', 6),
+                'gpt-5.6-terra': ('medium', 6), 'gpt-5.6-luna': ('medium', 5),
+                'gpt-5.5': ('medium', 4), 'gpt-5.4-mini': ('medium', 4),
+                'gpt-5.3-codex-spark': ('high', 4), 'codex-auto-review': ('medium', 5)}
+        self.assertEqual(set(SUBSCRIPTION_REASONING), set(want))
+        for slug, (default, count) in want.items():
+            with self.subTest(slug=slug):
+                stub = subscription_stub(slug)
+                self.assertEqual(stub['default_reasoning_level'], default)
+                self.assertEqual(len(stub['supported_reasoning_levels']), count)
+                self.assertIn(default, [e['effort']
+                                        for e in stub['supported_reasoning_levels']])
+
+    def test_merge_evicts_retired_subscription_rows(self):
+        # A machine whose state still rosters gpt-reserve loses the row on
+        # the next merge, from catalogue and roster alike.
+        stale = dict(subscription_stub('gpt-6-astra'), slug='gpt-reserve',
+                     display_name='GPT-Reserve')
+        merged = merge({'models': [stale]},
+                       roster=('gpt-6-astra', 'gpt-reserve', 'gpt-5.6-luna'))
+        slugs = [m['slug'] for m in merged['models']]
+        self.assertNotIn('gpt-reserve', slugs)
+        self.assertEqual(slugs[:2], ['gpt-6-astra', 'gpt-5.6-luna'])
+
+    def test_merge_dedupes_a_doubled_roster(self):
+        merged = merge({'models': []},
+                       roster=('gpt-6-astra', 'gpt-6-astra', 'gpt-5.6-luna'))
+        slugs = [m['slug'] for m in merged['models']]
+        self.assertEqual(slugs.count('gpt-6-astra'), 1)
+
     def test_alias_display_name_keeps_own_prefix(self):
         alias = replace(by_slug('~x-ai/grok-latest'),
                           display_name='SpaceXAI: Grok Latest \xb7 OpenRouter')
@@ -192,7 +255,7 @@ class CatalogueSchemaCompatTests(unittest.TestCase):
 
     def test_every_merged_row_carries_the_required_schema(self):
         merged = merge({'models': []},
-                       roster=('gpt-6-astra', 'gpt-reserve', 'codex-auto-review'))
+                       roster=('gpt-6-astra', 'codex-auto-review'))
         for row in merged['models']:
             with self.subTest(slug=row['slug']):
                 for field in self.REQUIRED_FIELDS:
@@ -202,13 +265,12 @@ class CatalogueSchemaCompatTests(unittest.TestCase):
 
     def test_roster_stub_display_names_match_the_live_picker(self):
         merged = merge({'models': []},
-                       roster=('gpt-6-astra', 'gpt-reserve', 'gpt-5.6-sol',
+                       roster=('gpt-6-astra', 'gpt-5.6-sol',
                                'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5',
                                'gpt-5.4-mini', 'gpt-5.3-codex-spark',
                                'codex-auto-review'))
         names = {m['slug']: m['display_name'] for m in merged['models']}
         self.assertEqual(names['gpt-6-astra'], 'GPT-6-Astra')
-        self.assertEqual(names['gpt-reserve'], 'GPT-Reserve')
         self.assertEqual(names['gpt-5.6-sol'], 'GPT-5.6-Sol')
         self.assertEqual(names['gpt-5.6-terra'], 'GPT-5.6-Terra')
         self.assertEqual(names['gpt-5.6-luna'], 'GPT-5.6-Luna')
