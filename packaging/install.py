@@ -27,10 +27,11 @@ _spec = importlib.util.spec_from_file_location(
     Path(__file__).resolve().parent / 'service.py')
 _svc = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_svc)
-_linux_spec = importlib.util.spec_from_file_location(
-    'router_systemd', Path(__file__).resolve().parent / 'systemd.py')
-_linux = importlib.util.module_from_spec(_linux_spec)
-_linux_spec.loader.exec_module(_linux)
+_plat_spec = importlib.util.spec_from_file_location(
+    'router_platforms', Path(__file__).resolve().parent / 'platforms' / '__init__.py')
+_platforms = importlib.util.module_from_spec(_plat_spec)
+_plat_spec.loader.exec_module(_platforms)
+_linux = _platforms._linux_mod().systemd
 _upd_spec = importlib.util.spec_from_file_location(
     'router_updater', Path(__file__).resolve().parent / 'updater.py')
 _updater = importlib.util.module_from_spec(_upd_spec)
@@ -95,24 +96,21 @@ def require_supported_platform():
             'no files were changed. See plans/057-windows-install-and-service-support.md.')
 
 
-def systemd_manager(home):
-    return _linux.Manager(home, run) if PLATFORM == 'linux' else None
+def platform_backend():
+    """Backend for this platform, or None when unsupported.
+
+    None no longer means macOS: every caller must refuse it explicitly.
+    Tests drive other platforms by patching PLATFORM before calling in.
+    """
+    return _platforms.select(PLATFORM, _svc, run)
 
 
 def restart_router(home):
-    manager = systemd_manager(home)
-    if manager:
-        manager.restart()
-    else:
-        run(['launchctl', 'kill', 'TERM', f'gui/{os.getuid()}/{LABEL}'], capture_output=True)
+    platform_backend().restart(home)
 
 
 def stop_router(home):
-    manager = systemd_manager(home)
-    if manager:
-        manager.stop()
-    else:
-        run(['launchctl', 'bootout', f'gui/{os.getuid()}/{LABEL}'], capture_output=True)
+    platform_backend().stop(home)
 
 
 def verify_sha256(data, want):
@@ -278,9 +276,7 @@ def do_rollback(args):
     if args.dry_run:
         print(f'would roll back to {args.version} under {home}')
         return 0
-    manager = systemd_manager(home)
-    if manager:
-        manager.check()
+    platform_backend().check(home)
     target = home / 'releases' / args.version
     if not target.is_dir() or not (target / 'packaging' / 'VERSION').exists():
         raise SystemExit(f'version {args.version} is not installed under {home}')
@@ -341,9 +337,8 @@ def do_install(args, _fetch=fetch, _run=None):
         print(f'would fetch {feed}; interpreter {python}')
         print('would verify, unpack, self-test, swap current, restart, write config')
         return 0
-    manager = systemd_manager(home)
-    if manager:
-        manager.check()
+    backend = platform_backend()
+    backend.check(home)
     tarball = _fetch(latest['url'])
     if latest.get('sha256'):
         verify_sha256(tarball, latest['sha256'])
@@ -389,35 +384,8 @@ def do_install(args, _fetch=fetch, _run=None):
     catalog_path = home / 'mixed-models.json'
     before_catalog = catalog_path.read_bytes() if catalog_path.exists() else None
     previous = install_bundle(home, latest['version'], tarball, manifest_doc, python)
-    # POSIX-only call, and the launchd branch below is its only consumer.
-    uid = os.getuid() if hasattr(os, 'getuid') else 0
-    agents = Path.home() / 'Library' / 'LaunchAgents'
     try:
-        if manager:
-            manager.install(python, current_release_dir(home))
-        else:
-            # Decided before the rewrite: once the file is replaced it can no
-            # longer tell us whether launchd's loaded copy went stale.
-            needs_reload = main_plist_needs_reload(uid, python, home, state, agents)
-            write_plist(agents / (LABEL + '.plist'), render_plist(python, home, state))
-            write_plist(agents / (UPDATE_LABEL + '.plist'), render_update_plist(python, home))
-            if previous is None:
-                restart_service(uid, agents)
-            elif needs_reload:
-                if not reload_main_service(uid, agents):
-                    raise SystemExit(f'router service reload failed for {LABEL}')
-            else:
-                # Nothing launchd owns changed, so hand over in place. TERM lets
-                # the old process drain in-flight requests while launchd keeps
-                # the listening socket and respawns into the new pointer, so no
-                # connection is refused and no bootout can strand the machine.
-                restart_router(home)
-            if not ensure_updater(uid, python, home, agents):
-                # The router is fine; only the update channel is not. Say so
-                # rather than exiting clean over a machine that will never
-                # update itself again.
-                print('warning: the scheduled updater is not loaded; run the '
-                      'installer again to restore automatic updates')
+        backend.install(python, home, state, current_release_dir(home), previous)
         healthy = wait_version(state, latest['version'])
     except (OSError, subprocess.CalledProcessError, SystemExit):
         # SystemExit is caught on purpose: reload and launcher failures raise it,
@@ -434,10 +402,7 @@ def do_install(args, _fetch=fetch, _run=None):
             # bootout would unload the service and strand a busy machine.
             restart_router(home)
             rolled_back = f'rolled back to {previous}: new version failed health check'
-            if manager:
-                manager.start_updates()
-                print(rolled_back)
-            elif ensure_serving(uid, home, state, agents, version=previous):
+            if backend.rollback_serving_ok(home, state, previous):
                 print(rolled_back)
             else:
                 # A TERM cannot revive a job that is not loaded, so never report
@@ -506,13 +471,12 @@ def do_install(args, _fetch=fetch, _run=None):
     # and a scheduled run defers that reload. Pruning the release that command
     # names would leave the updater firing a missing file every 15 minutes.
     prune_releases(home, latest['version'], previous,
-                   None if manager else loaded_updater_release(uid, home))
+                   backend.pinned_release(home))
     if not args.feed:
         # One-shot rule, as for the feed URL: a pinned feed keeps its own
         # serial, so recording it makes the real feed look stale for good.
         (home / 'feed-serial').write_text(str(serial) + '\n')
-    if manager:
-        manager.start_updates()
+    backend.start_updates(home)
     print(f"installed {latest['version']}; health ok; restart Codex to load the router")
     return 0
 
@@ -550,9 +514,8 @@ def do_check_update(args, _fetch=fetch, _read_feed=None, _sleep=None):
 def do_uninstall(args):
     _sync_seams()
     home = Path(args.home).expanduser()
-    manager = systemd_manager(home)
-    if manager:
-        manager.check()
+    backend = platform_backend()
+    backend.check(home)
     release = current_release_dir(home)
     if release is not None:
         # Use this installer's matching remover even after rolling back old code.
@@ -567,19 +530,8 @@ def do_uninstall(args):
                 print((result.stderr or '')[-2000:])
                 raise SystemExit('configuration restore failed; '
                                  'services left running for manual review')
-    if manager:
-        manager.uninstall()
-        print(f'uninstalled services; {home} left in place for the operator to delete')
-        return 0
-    run(['launchctl', 'bootout', f'gui/{os.getuid()}/{LABEL}'], capture_output=True)
-    run(['launchctl', 'bootout', f'gui/{os.getuid()}/{UPDATE_LABEL}'], capture_output=True)
-    agents = Path.home() / 'Library' / 'LaunchAgents'
-    for name in (LABEL, UPDATE_LABEL):
-        try:
-            (agents / (name + '.plist')).unlink()
-        except FileNotFoundError:
-            pass
-    print(f'uninstalled agents; {home} left in place for the operator to delete')
+    backend.uninstall(home)
+    print(f'uninstalled services; {home} left in place for the operator to delete')
     return 0
 
 
@@ -607,16 +559,15 @@ def main(argv=None):
     require_supported_platform()
     action = do_uninstall if args.uninstall else do_check_update if args.check_update else do_install
     home = Path(args.home).expanduser()
-    manager = systemd_manager(home)
+    backend = platform_backend()
     # --check-update spawns the installer as a child, and that child takes the
     # lock itself; holding it here would deadlock every scheduled update. A
     # dry run mutates nothing, so it takes no lock and creates no home.
     if args.check_update or args.dry_run:
         return action(args)
-    if manager:
-        # Before the lock: a host with no systemd user manager must be refused
-        # without leaving a router home behind.
-        manager.check()
+    # Before the lock: a host with no service manager must be refused
+    # without leaving a router home behind.
+    backend.check(home)
     with install_lock(home) as held:
         if not held:
             # A scheduled pass and a manual run can fire at the same moment,
