@@ -83,21 +83,57 @@ def replace_config_block(config_path, block, previous_block=None):
     return before
 
 
+RECEIPT_VERSION = 2
+
+
 def read_receipt(home):
+    """Versioned activation record: {version, clients: {name: attachment}}.
+
+    Legacy flat receipts (config path plus block, no version) import as the
+    `codex` attachment without losing restore information; nothing is
+    rewritten on read.
+    """
     receipt_path = Path(home) / 'activation.json'
     if not receipt_path.exists():
         return {}
-    return json.loads(receipt_path.read_text())
+    doc = json.loads(receipt_path.read_text())
+    if not isinstance(doc, dict):
+        return {}
+    if doc.get('version') == RECEIPT_VERSION and isinstance(doc.get('clients'), dict):
+        return doc
+    if 'inserted_block' in doc and 'config_path' in doc:
+        entry = {k: doc[k] for k in ('config_path', 'inserted_block', 'global_instructions',
+                                     'openai_mode', 'previous_sha256') if k in doc}
+        return {'version': RECEIPT_VERSION, 'clients': {'codex': entry}}
+    return {}
 
 
-def write_receipt(home, config_path, block, rules_receipt, mode, before=''):
+def write_receipt(home, config_path, block, rules_receipt, mode, before='', client='codex'):
+    """Record one client attachment; existing attachments are preserved."""
     receipt_path = Path(home) / 'activation.json'
-    receipt_path.write_text(json.dumps({'config_path': str(config_path), 'inserted_block': block,
-                                        'global_instructions': rules_receipt,
-                                        'openai_mode': mode,
-                                        'previous_sha256': hashlib.sha256(before.encode()).hexdigest()},
-                                       indent=2) + '\n')
+    doc = read_receipt(home) or {'version': RECEIPT_VERSION, 'clients': {}}
+    doc.setdefault('clients', {})[client] = {
+        'config_path': str(config_path), 'inserted_block': block,
+        'global_instructions': rules_receipt, 'openai_mode': mode,
+        'previous_sha256': hashlib.sha256(before.encode()).hexdigest()}
+    receipt_path.write_text(json.dumps(doc, indent=2) + '\n')
     try:
         os.chmod(receipt_path, 0o600)
     except OSError:
         pass
+
+
+def codex_attachment(home):
+    """The codex attachment, or {} when never attached."""
+    return read_receipt(home).get('clients', {}).get('codex', {})
+
+
+def drop_client(home, client):
+    """Forget one attachment; returns True when anything was removed."""
+    doc = read_receipt(home)
+    clients = doc.get('clients', {})
+    if client not in clients:
+        return False
+    del clients[client]
+    Path(home, 'activation.json').write_text(json.dumps(doc, indent=2) + '\n')
+    return True

@@ -248,7 +248,11 @@ def _restore_owned_config(home):
         print((result.stderr or '')[-2000:])
         raise SystemExit('configuration restore failed; refusing the client change')
     # The remover restores files but keeps the receipt; a detached client
-    # must not leave a claim to settings it no longer owns.
+    # must not leave a claim to settings it no longer owns. Sibling client
+    # attachments are preserved; the file goes only when none remain.
+    _codex_config.drop_client(home, 'codex')
+    if _codex_config.read_receipt(home).get('clients', {}):
+        return
     try:
         (Path(home) / 'activation.json').unlink()
     except OSError:
@@ -415,12 +419,12 @@ def do_install(args, _fetch=fetch, _run=None):
             stop_router(home)
             print('new version failed health check; inspect the service logs')
         raise SystemExit(1)
-    previous_receipt = _codex_config.read_receipt(home)
+    previous_receipt = _codex_config.codex_attachment(home)
     if client == 'none' and previous_receipt.get('inserted_block'):
         # Never silently detach an active Codex configuration: restore the
         # exact owned settings first, or refuse when the block was edited.
         _restore_owned_config(home)
-        previous_receipt = _codex_config.read_receipt(home)
+        previous_receipt = _codex_config.codex_attachment(home)
     if client == 'none':
         prune_releases(home, latest['version'], previous,
                        backend.pinned_release(home))
@@ -508,12 +512,13 @@ def do_uninstall(args):
         configured = config_path.read_text()
     except OSError:
         configured = ''
-    if (_codex_config.read_receipt(home) == {}
+    attached = _codex_config.codex_attachment(home)
+    if (attached == {}
             and (_codex_config.BEGIN in configured or _codex_config.END in configured)):
         raise SystemExit('managed Codex block present without a receipt; '
                          'run tools/disable.py first')
     release = current_release_dir(home)
-    if release is not None and _codex_config.read_receipt(home) == {}:
+    if release is not None and attached == {}:
         # Service-only installation: no client settings were ever touched,
         # so there is no receipt and no restore to run.
         backend.uninstall(home)
