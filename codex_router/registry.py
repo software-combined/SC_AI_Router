@@ -18,7 +18,7 @@ FIELDS = ('slug', 'provider', 'display_name', 'vendor', 'reasoning',
 class Model:
     slug: str
     provider: str                 # 'openrouter' | 'openai'
-    display_name: str             # picker label, e.g. 'GLM 5.3 Flash'
+    display_name: str             # picker label, e.g. 'Z.ai: GLM 5.3 Flash · OpenRouter'
     vendor: str                   # 'Z.ai'
     reasoning: tuple              # last-known-good levels, canonical order
     default_reasoning: str

@@ -14,6 +14,10 @@ Never run `git reset --hard` or `git checkout --` without explicit approval.
 Record worktree ownership (path, branch, owning task, integration target) and
 reuse the same worktree for follow-ups. Clean up after verified integration.
 
+Base every branch on `develop` and target every PR at `develop`,
+except release PRs from `develop` to `main`. Never work off or push
+to `main`.
+
 ## 3. Source limits
 
 Modules 250 lines soft / 400 hard, entrypoints and tools 400/700, tests
@@ -47,3 +51,14 @@ After any Codex desktop or Claude Code upgrade, run the paid probe from
 plus one OpenRouter model and one subscription model through a real Claude
 Code session (see `docs/claude-code.md`), before publishing a release.
 Record both client versions in `docs/compatibility.md`.
+
+## 8. Model naming convention
+
+Picker labels read `<Vendor>: <Model> <Version?>` (e.g. `Z.ai: GLM 5.3 Flash`).
+`display_name` is stored fully qualified with the ` · OpenRouter` suffix; the
+prefix always equals the row's `vendor` field, with one redundant leading vendor
+word dropped (`DeepSeek: DeepSeek V4 ...` becomes `DeepSeek: V4 ...`). Tilde
+alias rows track with `Latest`, never a pinned snapshot; pinned rows keep any
+version/snapshot token verbatim, and dated snapshots merge into a tracking alias
+only when upstream actually serves the `~` id (never invent one). `models add`
+and `live_refresh` must produce conforming rows; the registry naming test enforces it.
