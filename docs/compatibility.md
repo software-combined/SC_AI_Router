@@ -29,9 +29,7 @@ Per-model quirks, generated from the registry:
 | z-ai/glm-5.3-flash | text,image | native | None | - | verified |
 | z-ai/glm-5.3 | text | native | None | - | verified |
 | moonshotai/kimi-k3 | text,image | native | None | - | verified |
-| ~x-ai/grok-latest | text,image | native | 350 | - | verified |
-| deepseek/deepseek-v4-pro | text | native | None | - | verified |
-| deepseek/deepseek-v4-flash | text | native | None | - | verified |
+| ~x-ai/grok-latest | text,image | json_text_root | 350 | - | verified |
 | qwen/qwen3.8-max-0902 | text,image | native | None | - | verified |
 | ~google/gemini-flash-latest | text,image,audio | native | None | - | verified |
 | ~google/gemini-pro-latest | text,image,audio | native | None | - | verified |

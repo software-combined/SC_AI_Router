@@ -25,6 +25,7 @@ class Model:
     modalities: tuple = ('text', 'image')
     excluded_efforts: frozenset = frozenset()   # live-advertised but proven unsupported
     schema_mode: str = 'native'   # 'native' | 'json_text' (recursive schemas as JSON string)
+                                  # | 'json_text_root' (non-object roots as JSON value)
     max_tools: int | None = None  # provider ceiling on exposed tools
     drop_images: bool = False  # upstream stalls on image input; run text-only
     context_window: int = 0
@@ -55,7 +56,7 @@ def load(text):
         seen.add(row['slug'])
         if row['provider'] not in ('openrouter', 'openai'):
             raise SystemExit(f'models.json {row["slug"]}: bad provider')
-        if row['schema_mode'] not in ('native', 'json_text'):
+        if row['schema_mode'] not in ('native', 'json_text', 'json_text_root'):
             raise SystemExit(f'models.json {row["slug"]}: bad schema_mode')
         if row['default_reasoning'] not in row['reasoning']:
             raise SystemExit(f'models.json {row["slug"]}: default not in reasoning')

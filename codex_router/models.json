@@ -164,38 +164,12 @@
       "image"
     ],
     "excluded_efforts": [],
-    "schema_mode": "native",
+    "schema_mode": "json_text_root",
     "max_tools": 350,
     "drop_images": true,
     "context_window": 500000,
     "priority": 105,
     "max_output_tokens": 450000,
-    "reasoning_summary": "none",
-    "apply_patch": "none",
-    "experimental_tools": [],
-    "web_search": true,
-    "tier": "verified"
-  },
-  {
-    "slug": "deepseek/deepseek-v4-pro",
-    "provider": "openrouter",
-    "display_name": "DeepSeek: V4 Pro 0423 \u00b7 OpenRouter",
-    "vendor": "DeepSeek",
-    "reasoning": [
-      "high",
-      "xhigh"
-    ],
-    "default_reasoning": "high",
-    "modalities": [
-      "text"
-    ],
-    "excluded_efforts": [],
-    "schema_mode": "native",
-    "max_tools": null,
-    "drop_images": false,
-    "context_window": 1048576,
-    "priority": 106,
-    "max_output_tokens": 384000,
     "reasoning_summary": "none",
     "apply_patch": "none",
     "experimental_tools": [],
