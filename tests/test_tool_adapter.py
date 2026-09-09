@@ -40,6 +40,16 @@ class ToolAdapterTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, '350'):
             prepare_tools(payload)
 
+    def test_grok_ceiling_message_names_switch_or_trim_remedy(self):
+        payload = {'model': '~x-ai/grok-latest', 'tools': [
+            {'type': 'function', 'name': f'tool_{i}', 'parameters': {'type': 'object'}} for i in range(351)]}
+        with self.assertRaisesRegex(ValueError, 'same thread') as raised:
+            prepare_tools(payload)
+        message = str(raised.exception)
+        self.assertIn('351', message)
+        self.assertIn('Switch to a model without the ceiling, or trim tools', message)
+        self.assertNotIn('fresh task', message)
+
     def test_freeform_tool_and_history_round_trip(self):
         code = 'text(await tools.echo_probe({value: "probe"}));\n'
         payload = {'tools': [{'type': 'custom', 'name': 'exec', 'format': {'type': 'grammar'}}],
