@@ -72,6 +72,9 @@ class Backend:
     def pinned_release(self, home):
         return self._svc.loaded_updater_release(self._uid(), home)
 
+    def protect_secret(self, path):
+        del path  # POSIX mode bits (0600) already own this.
+
     def uninstall(self, home):
         svc = self._svc
         uid, agents = self._uid(), self._agents()

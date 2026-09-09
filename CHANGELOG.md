@@ -2,6 +2,11 @@
 
 ## 0.6.10 (unreleased)
 
+- Harden Windows key protection in source: icacls owner-only enforcement
+  with verify-after-write, a read-time ACL gate mirroring the POSIX check,
+  and setup-window refusal on unprotectable keys (offline proofs only;
+  the installer still refuses Windows until backend acceptance).
+
 - Pin the private CPython 3.14 runtime: new `packaging/runtime.lock`
   names one install-only distribution per qualified target with validation
   and wrapper-table generation (Stage 1). Entries ship unpinned by design;

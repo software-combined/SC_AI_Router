@@ -202,6 +202,7 @@ directory at an idle boundary:
 `codex_router/__init__.py`,
 `codex_router/__main__.py`,
 `codex_router/model_metadata.py`,
+`codex_router/winacl.py`,
 `codex_router/clients/__init__.py`,
 `codex_router/clients/codex.py`,
 `codex_router/transport.py`,

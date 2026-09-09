@@ -54,5 +54,8 @@ class Backend:
     def pinned_release(self, home):
         return None  # No cached in-memory command on systemd; prune freely.
 
+    def protect_secret(self, path):
+        del path  # POSIX mode bits (0600) already own this.
+
     def uninstall(self, home):
         self._manager(home).uninstall()

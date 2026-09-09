@@ -1,0 +1,220 @@
+"""Plan 057 Stage 2: Windows key ACL hardening, proven offline.
+
+Write-side protect_file restricts parent-first then verifies; read-side
+winacl.check refuses widened ACLs mirroring the POSIX gate. Fake icacls
+and whoami only; no Windows machine, no real ACL, no secrets.
+"""
+import importlib.util
+import os
+import tempfile
+import unittest
+from unittest import mock
+from pathlib import Path
+from types import SimpleNamespace
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def _load_winacl():
+    spec = importlib.util.spec_from_file_location(
+        'router_winacl_under_test', ROOT / 'codex_router' / 'winacl.py')
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _load_backend():
+    spec = importlib.util.spec_from_file_location(
+        'router_windows_backend_under_test',
+        ROOT / 'packaging' / 'platforms' / 'windows.py')
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+winacl = _load_winacl()
+backend = _load_backend()
+
+
+def _ok(cmd_responses):
+    def fake_run(cmd, **kwargs):
+        for prefix, result in cmd_responses:
+            if cmd[:len(prefix)] == prefix:
+                return result
+        raise AssertionError('unexpected command: %r' % (cmd,))
+    return fake_run
+
+
+def _ok_acl(user='CORP\\cyril'):
+    return SimpleNamespace(returncode=0, stdout=user + '\n', stderr='')
+
+
+OWNER_ONLY = ('C:\\keys\\openrouter.key\n'
+              '   CORP\\cyril:(F)\n'
+              'Successfully processed 1 files; Failed processing 0 files\n')
+WIDENED = ('C:\\keys\\openrouter.key\n'
+           '   BUILTIN\\Users:(R)\n'
+           '   CORP\\cyril:(F)\n'
+           'Successfully processed 1 files; Failed processing 0 files\n')
+
+
+class WinAclCheckTests(unittest.TestCase):
+    def test_owner_only_acl_passes(self):
+        run = _ok([(['icacls'], SimpleNamespace(returncode=0, stdout=OWNER_ONLY, stderr='')),
+                   (['whoami'], _ok_acl())])
+        winacl.check('C:\\keys\\openrouter.key', run=run)
+
+    def test_widened_acl_is_refused(self):
+        run = _ok([(['icacls'], SimpleNamespace(returncode=0, stdout=WIDENED, stderr='')),
+                   (['whoami'], _ok_acl())])
+        with self.assertRaisesRegex(SystemExit, 'readable by'):
+            winacl.check('C:\\keys\\openrouter.key', run=run)
+
+    def test_same_line_ace_granting_non_owner_is_refused(self):
+        # Real icacls prints the first ACE on the filename line itself; a
+        # path-prefix skip would discard it and pass vacuously.
+        same_line = ('C:\\keys\\openrouter.key BUILTIN\\Users:(R)\n'
+                     '   CORP\\cyril:(F)\n'
+                     'Successfully processed 1 files; Failed processing 0 files\n')
+        run = _ok([(['icacls'], SimpleNamespace(returncode=0, stdout=same_line, stderr='')),
+                   (['whoami'], _ok_acl())])
+        with self.assertRaisesRegex(SystemExit, 'readable by'):
+            winacl.check('C:\\keys\\openrouter.key', run=run)
+
+    def test_same_name_cross_domain_ace_is_refused(self):
+        # A bare-name suffix rule would accept OTHERDOMAIN\\cyril for a
+        # CORP\\cyril owner; only the full whoami identity passes.
+        cross = ('C:\\keys\\openrouter.key\n'
+                 '   OTHERDOMAIN\\cyril:(F)\n'
+                 '   CORP\\cyril:(F)\n'
+                 'Successfully processed 1 files; Failed processing 0 files\n')
+        run = _ok([(['icacls'], SimpleNamespace(returncode=0, stdout=cross, stderr='')),
+                   (['whoami'], _ok_acl())])
+        with self.assertRaisesRegex(SystemExit, 'readable by'):
+            winacl.check('C:\\keys\\openrouter.key', run=run)
+
+    def test_icacls_failure_is_refused(self):
+        run = _ok([(['icacls'], SimpleNamespace(returncode=1, stdout='', stderr='Access denied'))])
+        with self.assertRaisesRegex(SystemExit, 'cannot verify'):
+            winacl.check('C:\\keys\\openrouter.key', run=run)
+
+
+class WinProtectTests(unittest.TestCase):
+    def test_protect_restricts_parent_first_then_verifies(self):
+        order = []
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / 'sub' / 'openrouter.key'
+
+            def fake_run(cmd, **kwargs):
+                order.append(list(cmd))
+                if cmd[:1] == ['icacls'] and len(cmd) > 2 and cmd[2].startswith('/inheritance'):
+                    return SimpleNamespace(returncode=0, stdout='', stderr='')
+                if cmd[:1] == ['icacls']:
+                    queried = cmd[1]
+                    return SimpleNamespace(
+                        returncode=0,
+                        stdout='%s\n   CORP\\cyril:(F)\n'
+                               'Successfully processed 1 files; Failed processing 0 files\n'
+                               % queried,
+                        stderr='')
+                if cmd[:1] == ['whoami']:
+                    return _ok_acl()
+                raise AssertionError('unexpected command: %r' % (cmd,))
+
+            backend.protect_file(target, run=fake_run)
+            grants = [c for c in order if c[:1] == ['icacls'] and '/grant:r' in c]
+            self.assertEqual(len(grants), 2)
+            # Parent restricted before the file grant: never widen-then-narrow.
+            self.assertIn('sub', grants[0][1])
+            self.assertTrue(target.exists())
+
+    def test_grants_name_the_resolved_user_never_a_literal(self):
+        seen = []
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / 'openrouter.key'
+
+            def fake_run(cmd, **kwargs):
+                seen.append(list(cmd))
+                if cmd[:1] == ['icacls'] and '/grant:r' in cmd:
+                    return SimpleNamespace(returncode=0, stdout='', stderr='')
+                if cmd[:1] == ['icacls']:
+                    return SimpleNamespace(
+                        returncode=0,
+                        stdout='%s\n   testuser:(F)\nSuccessfully processed 1 files\n' % cmd[1],
+                        stderr='')
+                if cmd[:1] == ['whoami']:
+                    return SimpleNamespace(returncode=0, stdout='testuser\n', stderr='')
+                raise AssertionError('unexpected command: %r' % (cmd,))
+
+            with mock.patch.dict(os.environ, {'USERNAME': 'testuser'}):
+                backend.protect_file(target, run=fake_run)
+            grants = [c for c in seen if '/grant:r' in c]
+            self.assertEqual(len(grants), 2)
+            for grant in grants:
+                idx = grant.index('/grant:r')
+                self.assertEqual(grant[idx + 1], 'testuser:F')
+
+    def test_protect_failure_leaves_no_silent_exposure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / 'openrouter.key'
+            run = _ok([(['icacls'], SimpleNamespace(returncode=1, stdout='', stderr='denied')),
+                       (['whoami'], _ok_acl())])
+            with self.assertRaisesRegex(SystemExit, 'cannot restrict|cannot protect'):
+                backend.protect_file(target, run=run)
+
+
+class WinBackendShapeTests(unittest.TestCase):
+    def test_uninstall_removes_both_scheduled_tasks(self):
+        calls = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append(list(cmd))
+            return SimpleNamespace(returncode=0, stdout='', stderr='')
+
+        backend.Backend(None, fake_run).uninstall('/home/x')
+        deleted = [c[3] for c in calls
+                   if c[:3] == ['schtasks', '/delete', '/tn']]
+        self.assertEqual(deleted,
+                         ['CodexMixedModelRouter', 'CodexMixedModelRouterUpdate'])
+
+    def test_uninstall_failure_names_the_surviving_task(self):
+        def fake_run(cmd, **kwargs):
+            if 'CodexMixedModelRouterUpdate' in cmd:
+                return SimpleNamespace(returncode=1, stdout='', stderr='not found')
+            return SimpleNamespace(returncode=0, stdout='', stderr='')
+
+        with self.assertRaisesRegex(SystemExit, 'CodexMixedModelRouterUpdate'):
+            backend.Backend(None, fake_run).uninstall('/home/x')
+
+    def test_failed_protection_removes_the_placeholder(self):
+        # A failed protect_secret must not leave an unprotected placeholder
+        # that the next run's exists-early-return would trust.
+        from tests.test_install import install_mod
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            home.mkdir()
+            calls = []
+
+            class StubBackend:
+                def protect_secret(self, path):
+                    calls.append(path)
+                    raise SystemExit('cannot protect')
+
+            with mock.patch.object(install_mod, 'platform_backend',
+                                    return_value=StubBackend()):
+                with self.assertRaisesRegex(SystemExit, 'cannot protect'):
+                    install_mod.ensure_credentials(home, {})
+            self.assertFalse((home / 'openrouter.key').exists())
+            self.assertEqual(len(calls), 1)
+
+    def test_lifecycle_entry_points_refuse_until_stage_3(self):
+        backend_obj = backend.Backend(None, lambda *a, **k: None)
+        for call in (lambda: backend_obj.install('py', 'h', {}, 'r', None),
+                     lambda: backend_obj.restart('h'),
+                     lambda: backend_obj.stop('h')):
+            with self.assertRaisesRegex(SystemExit, 'not supported yet'):
+                call()
+
+
+if __name__ == '__main__':
+    unittest.main()
