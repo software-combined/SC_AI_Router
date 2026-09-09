@@ -148,7 +148,7 @@ class HandlerCharacterisationTests(unittest.TestCase):
 
     def test_nested_provider_400_becomes_409_before_headers(self):
         inner = ('{"code": "invalid-argument", "error": "Failed to start sampling: '
-                 '[invalid_client_tool_schema] ns_abc_tool_update: root must be object"}')
+                 '[invalid_client_tool_schema] ns_abc123def456_tool_update: root must be object"}')
         body = json.dumps({'error': {'message': 'Provider returned error',
                                      'metadata': {'raw': inner, 'provider_name': 'xAI'}}})
         install_fake(self, lambda: FakeUpstream(400, body.encode(),
@@ -159,7 +159,9 @@ class HandlerCharacterisationTests(unittest.TestCase):
         self.assertEqual(response.status, 409)
         message = json.loads(response.read())['error']['message']
         self.assertIn('xAI', message)
-        self.assertIn('ns_abc_tool_update', message)
+        self.assertIn('ns_abc123def456_tool_update', message)
+        self.assertIn('tool schema was rejected', message)
+        self.assertNotIn('Failed to start sampling', message)
         self.assertEqual(response.getheader('openai-model'), None)
 
     def test_unparseable_upstream_400_passes_through_with_clean_accounting(self):

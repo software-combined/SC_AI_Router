@@ -88,7 +88,7 @@ class Handler(BaseHTTPRequestHandler):
         raw = self.path
         suffix = raw[len(prefix):] if prefix != '/' and raw.startswith(prefix) else '<unrouted>'
         log_event('request_rejected', status=err.status, code=err.code,
-                  reason=err.message, path=suffix.split('?')[0][:200])
+                  path=suffix.split('?')[0][:200])
         try:
             self.send_json(err.status, err.body())
         except OSError:
@@ -116,7 +116,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.error(err)
         # Codex recognizes context_length_exceeded inside response.failed;
         # a plain HTTP 400/409 does not mark its context full for recovery.
-        log_event('request_rejected', status=200, code=err.code, reason=err.message)
+        log_event('request_rejected', status=200, code=err.code)
         body = ('event: response.failed\ndata: ' + json.dumps(
             {'type': 'response.failed', 'response': err.body()}) + '\n\n').encode()
         self.send_response(200)
@@ -223,8 +223,12 @@ class Handler(BaseHTTPRequestHandler):
                 AttributeError, TypeError) as exc:
             err = errors.map_client_error(exc)
             if err.code == 'INTERNAL_ERROR':
+                frames = traceback.extract_tb(exc.__traceback__, limit=3)
+                location = ';'.join(
+                    f'{frame.filename.split("/")[-1]}:{frame.lineno}:{frame.name}'
+                    for frame in frames)
                 log_event('request_failed', code=err.code,
-                          traceback=traceback.format_exc(limit=3)[-4000:])
+                          error_type=type(exc).__name__, location=location)
             return self.error(err)
         _reasoning = payload.get('reasoning')
         metrics = {'provider': prepared.provider,
@@ -318,7 +322,6 @@ class Handler(BaseHTTPRequestHandler):
                         status=response.status if response is not None else None,
                         **metrics, error_type=type(exc).__name__,
                         error_category=exc.msg if isinstance(exc, json.JSONDecodeError) else type(exc).__name__,
-                        traceback=traceback.format_exc(limit=3)[-4000:],
                         total_ms=total_ms)
             if not sent:
                 described = providers.describe_failure(
