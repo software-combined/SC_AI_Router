@@ -28,6 +28,7 @@ def bundle_files(root):
            'packaging/router_launch.py', 'packaging/service.py',
            'packaging/systemd.py', 'packaging/update_launch.py',
            'packaging/updater.py', 'packaging/codex_config.py',
+           'packaging/claude_config.py',
            'packaging/diagnostics.py',
            'packaging/runtime.lock', 'packaging/runtime_lock.py',
            'packaging/platforms/__init__.py',

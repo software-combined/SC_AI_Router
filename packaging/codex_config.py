@@ -129,11 +129,22 @@ def codex_attachment(home):
 
 
 def drop_client(home, client):
-    """Forget one attachment; returns True when anything was removed."""
+    """Forget one attachment; returns True when anything was removed.
+
+    Removes the receipt file itself when no attachments remain, so a
+    fully detached home reads the same as a never-attached one.
+    """
     doc = read_receipt(home)
     clients = doc.get('clients', {})
     if client not in clients:
         return False
     del clients[client]
-    Path(home, 'activation.json').write_text(json.dumps(doc, indent=2) + '\n')
+    receipt_path = Path(home, 'activation.json')
+    if clients:
+        receipt_path.write_text(json.dumps(doc, indent=2) + '\n')
+    else:
+        try:
+            receipt_path.unlink()
+        except OSError:
+            pass
     return True

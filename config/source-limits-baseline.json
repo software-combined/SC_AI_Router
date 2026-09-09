@@ -6,12 +6,12 @@
   "codex_router/router.py": 376,
   "codex_router/setup.py": 333,
   "codex_router/tool_adapter.py": 297,
-  "packaging/install.py": 618,
+  "packaging/install.py": 686,
   "packaging/platforms/windows.py": 113,
   "packaging/service.py": 632,
   "tests/test_agent_containment.py": 94,
   "tests/test_catalogue.py": 419,
-  "tests/test_client_activation.py": 409,
+  "tests/test_client_activation.py": 435,
   "tests/test_credentials.py": 99,
   "tests/test_handler.py": 467,
   "tests/test_install.py": 486,
@@ -29,5 +29,8 @@
   "tests/test_windows_acl.py": 220,
   "tests/test_preflight.py": 74,
   "packaging/diagnostics.py": 176,
-  "tests/test_status.py": 159
+  "tests/test_status.py": 159,
+  "packaging/claude_config.py": 168,
+  "tests/test_claude_config.py": 142,
+  "packaging/codex_config.py": 150
 }
