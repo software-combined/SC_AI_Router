@@ -4,12 +4,14 @@ import unittest
 from types import SimpleNamespace
 
 from codex_router.apply_catalogue import apply
-from codex_router.catalogue import merge
+from codex_router.catalogue import RETIRED_SLUGS, merge
 from codex_router.providers import OpenRouterProvider, PreparationError, select
 from codex_router.registry import by_slug
 
-LATEST_DEEPSEEK = ('deepseek-v4-pro-0813', 'deepseek-v4-flash-0731',
-                   'deepseek-v4-flash-vision-exp')
+LATEST_DEEPSEEK = (('deepseek/deepseek-v4-pro-0813', 1048576, 384000, ('text',)),
+                   ('~deepseek/deepseek-v4-flash-latest', 1310720, 393216, ('text',)),
+                   ('deepseek/deepseek-v4-flash-vision-exp', 1048576, 384000,
+                    ('text', 'image')))
 
 
 class ModelRosterTests(unittest.TestCase):
@@ -29,12 +31,10 @@ class ModelRosterTests(unittest.TestCase):
                 self.assertIn('Anthropic', entries[slug]['description'])
 
     def test_latest_deepseek_metadata_and_preview_status(self):
-        for name, context, output, modalities in zip(
-                LATEST_DEEPSEEK, (1048576, 1310720, 1048576),
-                (384000, 131072, 384000),
-                (('text',), ('text',), ('text', 'image'))):
-            model = by_slug('deepseek/' + name)
-            with self.subTest(slug=model.slug):
+        for slug, context, output, modalities in LATEST_DEEPSEEK:
+            model = by_slug(slug)
+            with self.subTest(slug=slug):
+                self.assertIsNotNone(model)
                 self.assertEqual(model.reasoning, ('low', 'high', 'max'))
                 self.assertEqual(model.context_window, context)
                 self.assertEqual(model.max_output_tokens, output)
@@ -42,7 +42,20 @@ class ModelRosterTests(unittest.TestCase):
                 self.assertEqual(model.tier, 'preview')
         # Existing tasks retain their original upstream identity.
         self.assertIsNotNone(by_slug('deepseek/deepseek-v4-pro'))
-        self.assertIsNotNone(by_slug('deepseek/deepseek-v4-flash'))
+        # The dated flash snapshots merged into the flash-latest alias.
+        self.assertIsNone(by_slug('deepseek/deepseek-v4-flash'))
+        self.assertIsNone(by_slug('deepseek/deepseek-v4-flash-0731'))
+        self.assertIn('deepseek/deepseek-v4-flash', RETIRED_SLUGS)
+        self.assertIn('deepseek/deepseek-v4-flash-0731', RETIRED_SLUGS)
+
+    def test_retired_deepseek_snapshots_drop_from_merged_catalogue(self):
+        stale_flash = {'slug': 'deepseek/deepseek-v4-flash'}
+        stale_0731 = {'slug': 'deepseek/deepseek-v4-flash-0731'}
+        merged = merge({'models': [stale_flash, stale_0731]})
+        slugs = {m['slug'] for m in merged['models']}
+        self.assertNotIn('deepseek/deepseek-v4-flash', slugs)
+        self.assertNotIn('deepseek/deepseek-v4-flash-0731', slugs)
+        self.assertIn('~deepseek/deepseek-v4-flash-latest', slugs)
 
     def test_claude_without_effort_control_survives_refresh_and_prepares_none(self):
         slug = '~anthropic/claude-haiku-latest'

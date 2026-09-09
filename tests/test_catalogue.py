@@ -62,8 +62,8 @@ class CatalogueFlagTests(unittest.TestCase):
 
     def test_alias_display_name_keeps_own_prefix(self):
         alias = replace(by_slug('~x-ai/grok-latest'),
-                          display_name='SpaceXAI: Grok 4.6 \xb7 OpenRouter')
-        self.assertEqual(catalog_name(alias), 'SpaceXAI: Grok 4.6')
+                          display_name='SpaceXAI: Grok Latest \xb7 OpenRouter')
+        self.assertEqual(catalog_name(alias), 'SpaceXAI: Grok Latest')
         plain = replace(by_slug('z-ai/glm-5.3-flash'))
         self.assertTrue(catalog_name(plain).startswith(plain.vendor + ': '))
         self.assertEqual(alias.slug, '~x-ai/grok-latest')
