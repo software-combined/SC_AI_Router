@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.8 (unreleased)
+## 0.6.9 (unreleased)
 
 - Make `--feed` one-shot for the anti-replay serial as well as the URL. A
   local bundle carries its own build number as its serial, so a pinned
@@ -11,53 +11,6 @@
   choosing a build number high enough to pass, which is what froze the
   channel; the unattended channel keeps full replay protection.
 
-- String-wrap non-object tool parameter roots for `~x-ai/grok-latest`
-  (new `json_text_root` schema mode): xAI rejects union-root schemas such
-  as the desktop automation tool, failing even a plain greeting. Ordinary
-  object-root tools are unchanged; Meta recursive-schema handling is kept.
-- Name upstream failures at the client: stalls before upstream headers keep
-  502 but name the model, elapsed wait and timeout with a retry action
-  (Grok image turns stall upstream, retry text-only); DNS/refused names the
-  host; parseable upstream 4xx bodies become 409 with the provider reason
-  and offending tool instead of a bare passthrough; unknown shapes relay
-  verbatim and mid-stream disconnects stay log-only.
-- Retire the stale `deepseek/deepseek-v4-pro` (V4 Pro 0423) picker row via
-  `RETIRED_SLUGS`. Kept DeepSeek rows: Pro 0813, the Flash Latest tracking
-  alias, and Flash Vision Exp.
-
-## 0.6.7 (unreleased)
-
-- Preserve the owner's picker selection (`model`, `model_reasoning_effort`)
-  inside the managed Codex config block across installs and scheduled
-  updates instead of resetting it on every rewrite.
-- Reject image-bearing turns routed to a text-only model (409 naming the
-  image content and the target model) instead of silently stripping the
-  images: switch back to an image-capable model or continue without images.
-- Route defined HTTP failures through one shared error catalog with stable
-  codes (`codex_router/errors.py`, now in the deploy list); CLI/tool exits
-  print `CODE: message` and logs record the same code.
-- Promise and prove mid-thread model switching in Codex: switching models
-  from the picker continues the same thread with history and tools
-  intact, since every turn routes on its own model. If one
-  model reports it is at capacity, switch to another and carry on.
-  Astra subscription history (encrypted reasoning blobs, compaction
-  items, tool calls/results) replays cleanly on Muse; blobs are
-  stripped, readable summaries and results are kept, and opaque native
-  compaction replays as a visible note rather than readable context.
-  Image blocks do not carry over to text-only models. A model
-  tool-count ceiling (Grok, 350 tools) defers instead of rejecting:
-  over-ceiling turns go out with the search tool plus already-released
-  tools, and the rest load on demand; the 409 stays only when the turn
-  cannot fit under the ceiling that way. Grok image turns run text-only (new pinned
-  `drop_images` registry quirk) with a short note where each image was,
-  instead of stalling upstream.
-  The thread effort carries over, and an effort the new model does not
-  support (for example carried max onto Contributor) is rejected with
-  the allowed levels instead of failing opaquely upstream.
-- Scrub incomplete tool history before forwarding: partial calls and
-  orphan outputs left by interrupted turns are dropped from replayed
-  history instead of failing the whole turn with an upstream 400.
-  Complete call pairs pass through untouched, on every model.
 - Stop the updater from unloading the router and leaving nothing running.
   `launchctl bootout` returns 0 as soon as teardown *starts*, so the
   `bootstrap` issued immediately after it failed with `Bootstrap failed: 5:
@@ -135,6 +88,54 @@
   `OSError` and `CalledProcessError`, so the `SystemExit` raised by a failed
   reload or launcher install skipped the rollback block entirely and left the
   pointer on an unverified release.
+
+- String-wrap non-object tool parameter roots for `~x-ai/grok-latest`
+  (new `json_text_root` schema mode): xAI rejects union-root schemas such
+  as the desktop automation tool, failing even a plain greeting. Ordinary
+  object-root tools are unchanged; Meta recursive-schema handling is kept.
+- Name upstream failures at the client: stalls before upstream headers keep
+  502 but name the model, elapsed wait and timeout with a retry action
+  (Grok image turns stall upstream, retry text-only); DNS/refused names the
+  host; parseable upstream 4xx bodies become 409 with the provider reason
+  and offending tool instead of a bare passthrough; unknown shapes relay
+  verbatim and mid-stream disconnects stay log-only.
+- Retire the stale `deepseek/deepseek-v4-pro` (V4 Pro 0423) picker row via
+  `RETIRED_SLUGS`. Kept DeepSeek rows: Pro 0813, the Flash Latest tracking
+  alias, and Flash Vision Exp.
+
+- Preserve the owner's picker selection (`model`, `model_reasoning_effort`)
+  inside the managed Codex config block across installs and scheduled
+  updates instead of resetting it on every rewrite.
+- Reject image-bearing turns routed to a text-only model (409 naming the
+  image content and the target model) instead of silently stripping the
+  images: switch back to an image-capable model or continue without images.
+- Route defined HTTP failures through one shared error catalog with stable
+  codes (`codex_router/errors.py`, now in the deploy list); CLI/tool exits
+  print `CODE: message` and logs record the same code.
+- Promise and prove mid-thread model switching in Codex: switching models
+  from the picker continues the same thread with history and tools
+  intact, since every turn routes on its own model. If one
+  model reports it is at capacity, switch to another and carry on.
+  Astra subscription history (encrypted reasoning blobs, compaction
+  items, tool calls/results) replays cleanly on Muse; blobs are
+  stripped, readable summaries and results are kept, and opaque native
+  compaction replays as a visible note rather than readable context.
+  Image blocks do not carry over to text-only models. A model
+  tool-count ceiling (Grok, 350 tools) defers instead of rejecting:
+  over-ceiling turns go out with the search tool plus already-released
+  tools, and the rest load on demand; the 409 stays only when the turn
+  cannot fit under the ceiling that way. Grok image turns run text-only (new pinned
+  `drop_images` registry quirk) with a short note where each image was,
+  instead of stalling upstream.
+  The thread effort carries over, and an effort the new model does not
+  support (for example carried max onto Contributor) is rejected with
+  the allowed levels instead of failing opaquely upstream.
+- Scrub incomplete tool history before forwarding: partial calls and
+  orphan outputs left by interrupted turns are dropped from replayed
+  history instead of failing the whole turn with an upstream 400.
+  Complete call pairs pass through untouched, on every model.
+
+## 0.6.7
 
 - Reject OpenRouter requests whose estimated input plus reserved output
   would exceed the model's context window (409 with an actionable message)
