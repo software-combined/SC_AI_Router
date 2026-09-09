@@ -5,7 +5,7 @@ import re
 from . import compaction as comp, local_services
 from .capabilities import (CANONICAL_ORDER, OPENROUTER_HOST, REASONING_LEVELS, check_effort,
                               check_images, input_modalities)
-from .errors import PreparationError
+from .errors import ContextWindowExceeded, PreparationError
 from .registry import by_slug
 from .runtime import log_event
 from .discovered import remember
@@ -14,6 +14,19 @@ from .tool_adapter import prepare_tools, snoop_response_identity, stream_events,
 HOP_HEADERS = {'host', 'connection', 'content-length', 'transfer-encoding',
                'upgrade', 'keep-alive', 'proxy-authorization', 'proxy-authenticate', 'te', 'trailer'}
 NATIVE_SERVICE_PATHS = {'/alpha/search', '/alpha/notes/v2/thread_hint', '/guardian', '/guardian-classifier'}
+
+
+def is_context_error(body):
+    """Recognize explicit upstream codes, never infer from user-bearing prose."""
+    try:
+        error = json.loads(body)['error']
+        if error.get('code') == 'context_length_exceeded':
+            return True
+        raw = error.get('metadata', {}).get('raw')
+        return (isinstance(raw, str)
+                and json.loads(raw)['error'].get('code') == 'context_length_exceeded')
+    except (ValueError, KeyError, TypeError, AttributeError):
+        return False
 
 
 def upstream_retry_after(response, prepared, metrics):
@@ -198,16 +211,20 @@ class OpenRouterProvider:
         window = getattr(entry, 'context_window', 0) or 0
         if window:  # reservation counts against context; keep half for input
             limit = min(limit, window // 2)
-        payload['max_output_tokens'] = min(payload.get('max_output_tokens') or limit, limit)
+        # Codex omits the cap and compacts at 90% of context. Its remaining
+        # headroom must fit our default output, not the provider's maximum.
+        default = min(32000, entry.max_output_tokens)
         if window:
-            # Fail closed before the endpoint bills a doomed turn: input
-            # estimate (chars//4 over the serialized input) plus the output
-            # reservation must fit the window. 409 fails fast with an
-            # actionable message; the endpoint 400 kills the turn outright.
+            default = min(default, window - window * 9 // 10)
+        requested = payload.get('max_output_tokens')
+        payload['max_output_tokens'] = min(requested, limit) if requested else default
+        if window:
+            # Approximate input plus reserved output must fit. The typed
+            # error lets the client mark context full and compact next turn.
             used = len(json.dumps(payload.get('input', []))) // 4
             reserved = payload['max_output_tokens']
             if used + reserved > window:
-                raise PreparationError(
+                raise ContextWindowExceeded(
                     f'request needs ~{used + reserved} tokens '
                     f'(~{used} input + {reserved} reserved output) '
                     f'but {(model if isinstance(model, str) else entry.slug)} allows {window}; compact or shorten the turn')

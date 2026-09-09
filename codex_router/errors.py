@@ -27,6 +27,10 @@ class PreparationError(ValueError):
     """A well-formed request the provider cannot serve; maps to 409."""
 
 
+class ContextWindowExceeded(PreparationError):
+    """Context exhaustion must reach Codex's compaction recovery path."""
+
+
 class LocalAnswer(RouterError):
     """A native path answered locally; never guess an upstream shape."""
 
@@ -189,6 +193,10 @@ def internal_error():
 # Provider preparation (409): keep the provider's actionable message.
 def preparation(message):
     return _error(409, 'PROVIDER_REJECTED', message)
+
+
+def context_window(message='The model context window is full; compact or shorten the turn.'):
+    return _error(400, 'context_length_exceeded', message)
 
 
 # Local services (no-subscription mode answers).
