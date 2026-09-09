@@ -8,6 +8,19 @@
 - Retry transient feed-fetch failures inside the scheduled update check
   (up to 4 attempts, 30s/60s/120s backoff) instead of waiting a full
   15-minute poll cycle; deterministic errors still fail fast.
+- Normalize picker labels to `<Vendor>: <Model> <Version?>` (e.g. `Z.ai: GLM 5.3
+  Flash`, `Anthropic: Claude Haiku Latest`, `DeepSeek: V4 Flash Latest`):
+  every `display_name` is stored qualified with its vendor prefix, alias rows
+  track with `Latest` instead of a pinned snapshot, and pinned rows keep any
+  version/snapshot token verbatim. `models add` (`qualify_name`) and
+  `live_refresh` (alias rows keep their pinned tracking label) now produce
+  conforming rows, and a registry test pins the convention.
+- Merge the dated DeepSeek flash snapshots into the tracking alias
+  `~deepseek/deepseek-v4-flash-latest` (upstream serves this id, aliasing
+  0731); the old `deepseek-v4-flash` and `deepseek-v4-flash-0731` picker rows
+  retire via `RETIRED_SLUGS`. Upstream serves no pro-latest id, so Pro keeps
+  dated ids with clean names. Vision Exp stays separate as the only
+  image-capable DeepSeek row.
 - Repair existing bare or incomplete subscription catalogue rows on merge,
   preserving their model-specific metadata. Catalogue checks now reject
   rows missing schema fields instead of accepting an unusable picker.
