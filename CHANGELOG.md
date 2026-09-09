@@ -9,6 +9,16 @@
   (`NT AUTHORITY\SYSTEM`, `BUILTIN\Administrators`) while still
   refusing broad groups and other users.
 
+- Deliver readable agent handoffs to OpenRouter children without weakening
+  native encryption: new `collaboration_plaintext` aliases for the already
+  exposed spawn/message/follow-up tools, restored to native calls with
+  `encrypted_function_args: []` on JSON and SSE responses, plaintext agent
+  messages converted at the OpenRouter boundary with sender/recipient kept,
+  and opaque or mixed encrypted assignments rejected before credential
+  lookup. Proven Astra v2 parent to Muse child with scripted children
+  (installed router, Codex 0.153.4); v1 subscription parents stay
+  fail-closed and need their own plan.
+
 - Attach Claude Code without touching Codex: new `--clients
   claude|both` merges only the two owned `env` settings into the
   user's `settings.json` with conflict refusal and receipt record,

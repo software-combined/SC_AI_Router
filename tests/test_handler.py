@@ -69,7 +69,7 @@ class HandlerCharacterisationTests(unittest.TestCase):
         self.assertEqual(host, 'openrouter.ai')
         self.assertEqual(path, '/api/v1/responses')
         self.assertEqual(headers, {'Authorization': 'Bearer test-key',
-                                   'Content-Type': 'application/json'})
+                                   'Content-Type': 'application/json', 'Accept-Encoding': 'identity'})
         sent = json.loads(body)
         self.assertNotIn('service_tier', sent)
         self.assertEqual(sent['max_output_tokens'], cap)

@@ -1,11 +1,11 @@
 {
   "codex_router/catalogue.py": 284,
-  "codex_router/compaction.py": 314,
+  "codex_router/compaction.py": 319,
   "codex_router/errors.py": 263,
-  "codex_router/providers.py": 348,
-  "codex_router/router.py": 384,
+  "codex_router/providers.py": 367,
+  "codex_router/router.py": 385,
   "codex_router/setup.py": 333,
-  "codex_router/tool_adapter.py": 297,
+  "codex_router/tool_adapter.py": 292,
   "packaging/install.py": 690,
   "packaging/platforms/windows.py": 113,
   "packaging/service.py": 632,
@@ -33,5 +33,9 @@
   "tests/test_status.py": 159,
   "packaging/claude_config.py": 168,
   "tests/test_claude_config.py": 144,
-  "packaging/codex_config.py": 150
+  "packaging/codex_config.py": 150,
+  "codex_router/agent_handoffs.py": 139,
+  "codex_router/sse.py": 29,
+  "tests/test_agent_handoffs.py": 118,
+  "tests/test_agent_handoff_providers.py": 168
 }

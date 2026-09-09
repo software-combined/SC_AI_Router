@@ -2,7 +2,7 @@
 import http.client
 import json
 import re
-from . import compaction as comp, local_services
+from . import compaction as comp, local_services, agent_handoffs
 from .capabilities import (CANONICAL_ORDER, OPENROUTER_HOST, REASONING_LEVELS, check_effort,
                               check_images, input_modalities)
 from .errors import ContextWindowExceeded, PreparationError
@@ -95,6 +95,14 @@ def reject_opaque_agent_items(items):
             'resend the assignment as plain text')
 
 
+def validate_response(response, prepared):
+    """Check adapted Responses encoding before forwarding response headers."""
+    if prepared.provider in ('openai-subscription', 'openrouter') and prepared.tool_names:
+        encoding = response.getheader('Content-Encoding', '').strip().lower()
+        if encoding not in ('', 'identity'):
+            raise ValueError('unsupported plaintext handoff response encoding')
+
+
 def describe_failure(exc, response, info):
     """Name an upstream failure for the client: (status, message) or None.
 
@@ -155,10 +163,20 @@ class SubscriptionProvider:
         # The URL path token is the loopback auth; Codex >=0.153.4 omits the
         # subscription Authorization header, so forward client headers unchanged.
         fwd = {k: v for k, v in headers.items() if k.lower() not in HOP_HEADERS}
-        return Prepared(self.host, '/backend-api/codex' + path, fwd, raw_body, set(), self.name)
+        try:
+            names = agent_handoffs.add_plaintext_tools(payload) if path == '/responses' else set()
+        except ValueError as exc:
+            raise PreparationError(str(exc)) from exc
+        if names:
+            fwd = {k: v for k, v in fwd.items() if k.lower() not in ('content-encoding', 'accept-encoding')}
+            fwd['Accept-Encoding'] = 'identity'
+            raw_body = json.dumps(payload).encode()
+        return Prepared(self.host, '/backend-api/codex' + path, fwd, raw_body, names, self.name)
 
     def adapt(self, response, tool_names, notes=None):
-        if notes is not None and response.status == 200:
+        if tool_names and response.status == 200:
+            yield from agent_handoffs.adapt_response(response, tool_names, notes)
+        elif notes is not None and response.status == 200:
             yield from snoop_response_identity(response, notes)
         else:
             yield from _passthrough(response)
@@ -183,10 +201,11 @@ class OpenRouterProvider:
         # tool_search_output items (released-tool discovery) are never scrubbed.
         payload['input'] = comp.scrub_tool_fragments(payload.get('input', []))
         try:
+            agent_handoffs.add_plaintext_tools(payload)
             tool_names = prepare_tools(payload)
+            rewritten = comp.strip_reasoning_blobs(comp.rewrite_input(payload.get('input', [])))
         except ValueError as exc:
             raise PreparationError(str(exc))
-        rewritten = comp.strip_reasoning_blobs(comp.rewrite_input(payload.get('input', [])))
         try:
             check_images(model, rewritten)
         except ValueError as exc:
@@ -226,7 +245,7 @@ class OpenRouterProvider:
                     f'but {(model if isinstance(model, str) else entry.slug)} allows {window}; compact or shorten the turn')
         return Prepared(self.host, '/api/v1/responses',
                         {'Authorization': 'Bearer ' + credentials.openrouter_key(),
-                         'Content-Type': 'application/json'},
+                         'Content-Type': 'application/json', 'Accept-Encoding': 'identity'},
                         json.dumps(payload).encode(), tool_names, self.name)
 
     def adapt(self, response, tool_names, notes=None):
