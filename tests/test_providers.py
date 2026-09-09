@@ -84,9 +84,9 @@ class OutputCapTests(unittest.TestCase):
 
     def test_request_over_context_window_is_rejected_before_upstream(self):
         # Live 2026-09-09: ~501k input tokens with a 524288 output
-        # reservation against a 1048576 window (~1050400 total). The endpoint
-        # 400s the whole turn with no retry; the router must 409 first with
-        # an actionable message instead of forwarding the doomed turn.
+        # explicit reservation against a 1048576 window (~1050400 total).
+        # Reject before forwarding, using the context-specific error so
+        # Codex can distinguish exhaustion from other preparation failures.
         from codex_router.registry import by_slug
         provider = providers.OpenRouterProvider()
         entry = by_slug('meta/muse-spark-1.3-contributor')

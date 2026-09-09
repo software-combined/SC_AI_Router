@@ -110,6 +110,23 @@ class Handler(BaseHTTPRequestHandler):
             return self.path.removeprefix('/backend-api/codex'), False
         return None, False
 
+    def context_error(self, message, streaming):
+        err = errors.context_window(message)
+        if not streaming:
+            return self.error(err)
+        # Codex recognizes context_length_exceeded inside response.failed;
+        # a plain HTTP 400/409 does not mark its context full for recovery.
+        log_event('request_rejected', status=200, code=err.code, reason=err.message)
+        body = ('event: response.failed\ndata: ' + json.dumps(
+            {'type': 'response.failed', 'response': err.body()}) + '\n\n').encode()
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/event-stream')
+        self.send_header('Content-Length', str(len(body)))
+        self.send_header('Connection', 'close')
+        self.end_headers()
+        self.wfile.write(body)
+        self.close_connection = True
+
     def do_GET(self):
         path, _ = self.authorized_path()
         if path is None:
@@ -198,6 +215,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.error(errors.map_client_error(exc))
         except InvalidSize as exc:
             return self.error(errors.invalid_size(str(exc)))
+        except errors.ContextWindowExceeded as exc:
+            return self.context_error(str(exc), payload.get('stream') is True)
         except PreparationError as exc:
             return self.error(errors.preparation(str(exc)))
         except (ValueError, KeyError, LookupError, OSError, zstd.ZstdError,
@@ -210,6 +229,7 @@ class Handler(BaseHTTPRequestHandler):
         _reasoning = payload.get('reasoning')
         metrics = {'provider': prepared.provider,
                    'model': model, 'path': path, 'request_bytes': size,
+                   'stream': payload.get('stream') is True,
                    'reasoning_effort': _reasoning.get('effort') if isinstance(_reasoning, dict) else None,
                    'tool_definitions': len(payload.get('tools', [])),
                    'local_prepare_ms': round((time.monotonic() - started) * 1000, 1)}
@@ -254,6 +274,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.retryable_reject(errors.upstream_rate_limited(), retry_after)
             if response.status >= 400:
                 raw = response.read()
+                if prepared.provider == 'openrouter' and providers.is_context_error(raw):
+                    return self.context_error(errors.context_window().message, metrics['stream'])
                 described = providers.describe_failure(
                     None, {'status': response.status, 'body': raw},
                     {'model': metrics.get('model'), 'provider': prepared.provider,

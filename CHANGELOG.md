@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.10 (unreleased)
+
+- Default omitted OpenRouter output limits to at most 32,000 tokens, bounded
+  by the provider ceiling and the headroom after Codex's 90% compaction
+  threshold. Reserving half the window previously rejected long tasks well
+  before native compaction. Explicit output limits keep their existing caps.
+- Report estimated context exhaustion and explicit upstream context-limit
+  codes using Codex's `context_length_exceeded` signal: `response.failed`
+  over SSE for streaming requests and HTTP 400 JSON otherwise. Other
+  preparation errors remain 409. Native compaction thresholds are unchanged.
+
 ## 0.6.9 (unreleased)
 
 - Make `--feed` one-shot for the anti-replay serial as well as the URL. A
