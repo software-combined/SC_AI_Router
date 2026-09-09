@@ -125,6 +125,51 @@ def strip_images(items, keep_images):
         out.append(item)
     return out
 
+# Calls the endpoint accepts, and outputs keyed by call. A fragment missing
+# these fields (interrupted call, orphan output) 400s the whole turn, so the
+# scrub drops fragments before anything is forwarded. A partial call never
+# executed, so the next turn regenerates it if still needed.
+CALL_TYPES = frozenset({'function_call', 'custom_tool_call', 'apply_patch_call',
+                        'web_search_call', 'file_search_call', 'image_generation_call',
+                        'code_interpreter_call', 'computer_call'})
+OUTPUT_TYPES = frozenset({'function_call_output', 'custom_tool_call_output',
+                          'apply_patch_call_output'})
+
+
+def _call_complete(item):
+    kind = item.get('type')
+    if not isinstance(item.get('call_id'), str):
+        return False
+    field = {'function_call': 'arguments', 'custom_tool_call': 'input'}.get(kind)
+    if field is not None:
+        return isinstance(item.get(field), str)
+    if kind == 'apply_patch_call':
+        return (item.get('status') in ('in_progress', 'completed')
+                and isinstance(item.get('operation'), dict))
+    return True
+
+
+def scrub_tool_fragments(items):
+    """Drop incomplete tool history; complete pairs pass through untouched."""
+    if not isinstance(items, list):
+        return items
+    calls = {item.get('call_id') for item in items
+             if isinstance(item, dict) and item.get('type') in CALL_TYPES
+             and _call_complete(item)}
+    out = []
+    for item in items:
+        if not isinstance(item, dict):
+            out.append(item)
+            continue
+        kind = item.get('type')
+        if kind in CALL_TYPES and not _call_complete(item):
+            continue
+        if kind in OUTPUT_TYPES and item.get('call_id') not in calls:
+            continue
+        out.append(item)
+    return out
+
+
 def strip_reasoning_blobs(items):
     """Drop OpenAI-owned reasoning blobs other models cannot read; keep plaintext."""
     if not isinstance(items, list):
