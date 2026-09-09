@@ -94,7 +94,7 @@ class LauncherBootTests(unittest.TestCase):
             proc = subprocess.Popen(
                 [sys.executable, str(home / 'router_launch.py')],
                 env={**os.environ, 'ROUTER_HOME': str(home)},
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
             try:
                 base = f'http://127.0.0.1:{port}/{token}'
                 deadline = time.monotonic() + 30
@@ -106,7 +106,10 @@ class LauncherBootTests(unittest.TestCase):
                     except OSError:
                         time.sleep(0.2)
                 else:
-                    self.fail('installed launcher never served /health')
+                    proc.terminate()
+                    _, err = proc.communicate(timeout=20)
+                    self.fail('installed launcher never served /health: '
+                              + (err or '').strip()[-2000:])
                 with urllib.request.urlopen(base + '/setup/' + 'n' * 16,
                                             timeout=5) as r:
                     self.assertEqual(r.status, 200)
