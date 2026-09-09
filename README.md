@@ -50,8 +50,10 @@ systemctl --user list-timers codex-mixed-model-router-update.timer
 journalctl --user -u codex-mixed-model-router-update.service
 ```
 
-Updates wait for idle traffic, then systemd restarts the router through the
-stable launcher. The service allows 150 seconds for the 120-second drain.
+Updates do not wait for idle traffic; systemd restarts the router through
+the stable launcher and the outgoing process finishes the requests it has
+already accepted. Linux has no socket activation, so connections attempted
+during the handover fail until the new process binds the port. The service allows 150 seconds for the 120-second drain.
 The first update check runs five minutes after installation, then fifteen
 minutes after each check completes. Restart Codex after catalogue changes.
 
@@ -71,9 +73,13 @@ paste the key in, then re-run. Restart Codex afterwards.
 
 ## Updating
 
-Releases install themselves within about fifteen minutes while the
-router is idle. The router finishes in-flight requests, then swaps to
-the new release. To update now, re-run the installer with
+Releases install themselves within about fifteen minutes, whether or not
+the router is busy, and the outgoing process finishes the requests it has
+already accepted, so an in-flight chat is not dropped and nothing waits for
+an idle window. On macOS launchd holds the listening socket, so new
+connections queue for the incoming process too; on Linux there is no socket
+activation, so a connection attempted mid-handover fails until the new
+process binds the port. To update now, re-run the installer with
 `--check-update`. Machines on the `beta` channel follow pre-releases.
 
 ## Choosing a model

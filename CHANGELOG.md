@@ -2,6 +2,84 @@
 
 ## 0.6.7 (unreleased)
 
+- Stop the updater from unloading the router and leaving nothing running.
+  `launchctl bootout` returns 0 as soon as teardown *starts*, so the
+  `bootstrap` issued immediately after it failed with `Bootstrap failed: 5:
+  Input/output error` and the job ended up loaded nowhere. Recovery then
+  could not work either: both the reload's heal and the health-check rollback
+  relied on `launchctl kill TERM` plus `KeepAlive`, and an absent job has
+  nothing to keep alive. Every subsequent 15-minute update run spent 150s
+  waiting on a `/health` that nobody was serving and reported "new version
+  failed health check" against a release that was perfectly good. Unload and
+  load now wait for the launchd domain to settle, retry a bootstrap that lost
+  the teardown race, verify the end state, and fail closed rather than
+  mistaking a surviving stale job for a successful reload.
+- Never report a clean rollback over a router that is not serving. Every
+  install path, success or rollback, now ends by asserting a loaded job that
+  answers `/health` on the expected version, bootstrapping it when missing,
+  and says the router is down when it cannot.
+- Reload the service only when launchd's in-memory copy actually differs from
+  what is being written, compared against the loaded job rather than the file
+  on disk. An ordinary version update now hands over in place with a TERM:
+  `router_launch.py` re-reads `current` on exec and launchd keeps the
+  listening socket, so in-flight requests drain on the old process, no
+  connection is refused, and no bootout can strand the machine.
+- Compare interpreter identity by resolved path. `/opt/homebrew/bin/python3.14`
+  and `/opt/homebrew/opt/python@3.14/bin/python3.14` are one binary reached by
+  two symlinks, and a string compare called them different, forcing the
+  destructive reload path on runs that needed only a handover.
+- Point the scheduled-update job at a stable `update_launch.py` in the router
+  home instead of a per-release `install.py` path, and reload that job when
+  its command changes. launchd runs its in-memory copy of a loaded plist, so a
+  versioned path outlived the release it named: after a prune the updater kept
+  invoking a deleted installer every 15 minutes.
+- Adopt a changed scheduled-update command by comparing the whole loaded
+  command, not just the interpreter. On a normal upgrade the interpreter is
+  unchanged, so an argv[0] check never fired and launchd kept running the old
+  per-release installer path indefinitely.
+- Never `bootout` the scheduled updater from inside it. That job is what runs
+  the installer, so the bootout would kill the process issuing it, wait out
+  its whole timeout for a label that cannot leave the domain while its own
+  process lives, and return without bootstrapping: automatic updates gone,
+  exit status clean. A scheduled run now leaves the rewritten plist for the
+  next manual install or login to adopt, and the installer reports it when
+  the updater is not loaded instead of exiting quietly.
+- Stop waiting for an idle router before updating. A swap is a pointer write
+  plus a `TERM`: launchd holds the listening socket, so new connections queue
+  for the incoming process while the outgoing one drains the requests it
+  already accepted. The idle gate delayed every update on a machine that was
+  actually in use and protected nothing the drain does not already cover.
+- Serialise installs on every platform, not just Linux, with one advisory
+  lock on `install.lock` taken at the entry point. The scheduled pass and a
+  manual run could previously interleave on macOS, both swapping `current`,
+  rewriting both plists and reloading the same label. The duplicate lock in
+  `systemd.py` is gone; `--dry-run` takes no lock and creates no router home.
+- Enforce the documented source budget on `packaging/` too. The checker only
+  walked `codex_router`, `tools` and `tests`, so the two installer entrypoints
+  grew unguarded and their baseline entries were decorative; `install.py` had
+  reached 16 lines short of its hard limit with no signal. The failure-count
+  helpers moved to `service.py`, which already owns state reads and writes.
+- Keep the release that launchd's loaded updater command still names. A
+  scheduled run defers the updater reload (it cannot bootout its own job), so
+  launchd goes on running the old per-release installer path; pruning that
+  release would leave it firing a missing file every fifteen minutes, which is
+  the failure this release exists to remove.
+- Count an installer child that never reports as a failed attempt. A child
+  killed by the 900-second timeout raises `TimeoutExpired`, which is a
+  `SubprocessError` and not an `OSError`, so nothing recorded it and the
+  version was never parked.
+- Park a version that fails three times instead of
+  re-fetching and re-activating it every fifteen minutes. Each failed pass
+  cost a service restart and most of a cycle with the router down. A
+  successful install clears the count, and a different version always gets
+  its own attempts. The count lives in the state file, which is what parks a
+  version on the production feed: that feed is read through the GitHub CLI
+  and carries no ETag to save.
+- Let installer failures reach their own rollback. The health guard caught only
+  `OSError` and `CalledProcessError`, so the `SystemExit` raised by a failed
+  reload or launcher install skipped the rollback block entirely and left the
+  pointer on an unverified release.
+
 - Reject OpenRouter requests whose estimated input plus reserved output
   would exceed the model's context window (409 with an actionable message)
   instead of forwarding a doomed turn that the endpoint 400s outright.
