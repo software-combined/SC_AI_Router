@@ -78,9 +78,19 @@ the new release. To update now, re-run the installer with
 
 ## Choosing a model
 
-Start a fresh task when switching providers. Reasoning levels differ
-per model; unavailable levels are hidden. Models labelled Preview in
-the picker are not yet verified: they work, but report anything odd.
+Switch models mid-thread from the picker; the same thread continues
+with its text history and tools intact, subject to the new model's
+limits. Readable summaries carry over; opaque native compaction
+replays as a visible note rather than readable context. Image blocks
+do not carry over to text-only models, and a model tool-count ceiling
+(Grok, 350 tools) still rejects an over-ceiling thread with a
+fresh-task message. Each turn routes on its own model,
+so if one model reports it is at capacity, switch to another
+and carry on. Reasoning levels differ per model and the thread's effort
+carries over; an effort the new model does not support is rejected with
+the allowed levels (change effort before switching). Models labelled
+Preview in the picker are not yet verified: they work, but report
+anything odd.
 OpenRouter-billed GPT rows stay out of the Codex picker so the
 subscription GPT rows stand alone; requesting one directly still routes
 to OpenRouter. The Claude listing will apply the mirror rule to

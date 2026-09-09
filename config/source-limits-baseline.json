@@ -6,7 +6,7 @@
   "tests/test_install_config.py": 363,
   "tests/test_install_lifecycle.py": 463,
   "tests/test_install_catalogue.py": 137,
-  "tests/test_mixed_router.py": 323,
+  "tests/test_mixed_router.py": 351,
   "tests/test_interpreter_resolution.py": 189,
   "tests/test_probe_harness.py": 349,
   "codex_router/providers.py": 254,
