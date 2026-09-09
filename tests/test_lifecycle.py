@@ -103,12 +103,16 @@ class LauncherBootTests(unittest.TestCase):
                 direct = urllib.request.build_opener(
                     urllib.request.ProxyHandler({}))
                 deadline = time.monotonic() + 30
+                last_error = '<no attempts>'
                 while time.monotonic() < deadline:
                     try:
                         with direct.open(base + '/health', timeout=2) as r:
                             if r.status == 200 and json.load(r).get('status') == 'ok':
                                 break
-                    except OSError:
+                    except OSError as exc:
+                        # ECONNREFUSED = nothing listening; ETIMEDOUT = SYN
+                        # blackholed. Recorded for CI forensics, not asserted.
+                        last_error = repr(exc)
                         time.sleep(0.2)
                 else:
                     alive = proc.poll() is None
@@ -122,7 +126,8 @@ class LauncherBootTests(unittest.TestCase):
                     self.fail('installed launcher never served /health '
                               f'(alive={alive}): '
                               + (err or '').strip()[-1000:]
-                              + ' | log tail: ' + started.strip()[-1000:])
+                              + ' | log tail: ' + started.strip()[-1000:]
+                              + ' | last poll error: ' + last_error[-300:])
                 with direct.open(base + '/setup/' + 'n' * 16,
                                  timeout=5) as r:
                     self.assertEqual(r.status, 200)
