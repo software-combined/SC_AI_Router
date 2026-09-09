@@ -100,7 +100,7 @@ def prepare_tools(payload):
     payload['tools'] = flattened
     ceiling = _quirk(payload, 'max_tools')
     if ceiling and len(flattened) > ceiling:
-        raise ValueError(f'{payload.get("model")} supports at most {ceiling} exposed tools. Restart Codex and start a fresh task to load the deferred tool catalog.')
+        raise ValueError(f'{payload.get("model")} supports at most {ceiling} exposed tools (this turn exposes {len(flattened)}). Switch to a model without the ceiling, or trim tools, then retry in the same thread.')
     for item in payload.get('input', []) if isinstance(payload.get('input'), list) else []:
         if item.get('type') == 'tool_search_call':
             item.pop('execution', None)
