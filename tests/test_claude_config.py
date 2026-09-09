@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tests._platform import unix_only
 from tests.test_install import install_mod
 
 claude_config = install_mod._claude_config
@@ -113,6 +114,7 @@ class ClaudeMergeTests(unittest.TestCase):
         doc = json.loads(out.read_text())
         self.assertNotIn('ANTHROPIC_BASE_URL', doc.get('env', {}))
 
+    @unix_only
     def test_uninstall_detaches_claude_only_attachment(self):
         # Plan 049: uninstall with only a Claude attachment restores its
         # settings instead of taking the service-only early return.

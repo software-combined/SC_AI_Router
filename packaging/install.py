@@ -660,8 +660,12 @@ def build_parser():
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
-    require_supported_platform()
     action = do_status if args.status else do_preflight if args.preflight else do_uninstall if args.uninstall else do_check_update if args.check_update else do_install
+    if not (args.status or args.preflight):
+        # Plan 057 Stage 1: refuse before any router home or bundle work.
+        # Read-only --status/--preflight run everywhere; everything else
+        # (install, update, rollback, uninstall) stays refused.
+        require_supported_platform()
     home = Path(args.home).expanduser()
     backend = platform_backend()
     # --check-update spawns the installer as a child, and that child takes the

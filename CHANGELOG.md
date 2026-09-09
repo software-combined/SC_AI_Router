@@ -2,6 +2,13 @@
 
 ## 0.6.10 (unreleased)
 
+- Tell the Windows truth sooner and more usefully: `--status` and
+  `--preflight` now run on Windows (read-only; install and update still
+  refuse before changing anything), and the owner-only key check
+  tolerates the OS principals every default profile inherits
+  (`NT AUTHORITY\SYSTEM`, `BUILTIN\Administrators`) while still
+  refusing broad groups and other users.
+
 - Attach Claude Code without touching Codex: new `--clients
   claude|both` merges only the two owned `env` settings into the
   user's `settings.json` with conflict refusal and receipt record,
