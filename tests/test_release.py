@@ -84,6 +84,26 @@ class ReleaseTests(unittest.TestCase):
             cwd=str(extract), capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertGreater(int(result.stdout.strip()), 0)
+        # The full runtime import closure must load from the extraction:
+        # handler, providers, setup, catalogue, and installer backends.
+        result = subprocess.run(
+            [sys.executable, '-c',
+             'from codex_router import router, providers, setup, catalogue;'
+             'from codex_router import registry, compaction, tool_adapter;'
+             'print(len(registry.MODELS))'],
+            cwd=str(extract), capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertGreater(int(result.stdout.strip()), 0)
+        # A deliberately incomplete extraction must fail its smoke with a
+        # specific missing dependency, proving the check is not vacuous.
+        missing = extract / 'codex_router' / 'providers.py'
+        missing.unlink()
+        result = subprocess.run(
+            [sys.executable, '-c',
+             'from codex_router import router'],
+            cwd=str(extract), capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('providers', result.stderr)
         # The extracted installer must reach its extracted updater helper
         # without checkout imports; omitting updater.py must fail the smoke.
         result = subprocess.run(

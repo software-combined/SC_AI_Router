@@ -164,6 +164,8 @@ def merge(catalog, roster=(), client='codex'):
     catalogue are appended as stubs so a fresh file still lists the
     approved picker. Existing rows gain missing schema defaults while
     retaining their model-specific values, repairing older bare stubs.
+    One exception: rows matching the exact 0.6.10.23 single-medium
+    placeholder signature get their two reasoning fields upgraded.
     Order is subscription rows in roster order, then verified OpenRouter
     rows A-Z by display name, then preview rows A-Z; values are never
     rewritten to achieve it. Retired subscription slugs are dropped.
@@ -180,6 +182,15 @@ def merge(catalog, roster=(), client='codex'):
               if (m['slug'] not in RETIRED_SLUGS or m['slug'] in active)
               and m['slug'] not in hidden]
     entries = {m['slug']: {**subscription_stub(m['slug']), **m} for m in models}
+    for slug, row in entries.items():
+        # Frozen 0.6.10.23 single-medium signature, exact match only.
+        if (slug in SUBSCRIPTION_REASONING
+                and row.get('default_reasoning_level') == 'medium'
+                and row.get('supported_reasoning_levels') == [
+                    {'effort': 'medium', 'description': 'Balanced.'}]):
+            fresh = subscription_stub(slug)
+            row['default_reasoning_level'] = fresh['default_reasoning_level']
+            row['supported_reasoning_levels'] = fresh['supported_reasoning_levels']
     for model in visible:
         entries[model.slug] = openrouter_entry(model)
     # Retired subscription rows never come back: a roster or catalogue that

@@ -6,7 +6,8 @@ import tempfile
 import unittest
 from dataclasses import replace
 from pathlib import Path
-from codex_router.catalogue import catalog_name, check, merge, openrouter_entry, subscription_stub
+from codex_router.catalogue import (SUBSCRIPTION_REASONING, catalog_name, check, merge,
+                                     openrouter_entry, subscription_stub)
 from codex_router.registry import MODELS, by_slug, models_for
 
 
@@ -127,6 +128,67 @@ class CatalogueFlagTests(unittest.TestCase):
                        roster=('gpt-6-astra', 'gpt-6-astra', 'gpt-5.6-luna'))
         slugs = [m['slug'] for m in merged['models']]
         self.assertEqual(slugs.count('gpt-6-astra'), 1)
+
+    def test_merge_repairs_legacy_single_medium_placeholders(self):
+        # Frozen 0.6.10.23 stub shape: default medium + one Balanced medium.
+        # Must upgrade to native levels, including Sol=low and Spark=high.
+        legacy = [{'slug': slug,
+                   'display_name': subscription_stub(slug)['display_name'],
+                   'default_reasoning_level': 'medium',
+                   'supported_reasoning_levels': [
+                       {'effort': 'medium', 'description': 'Balanced.'}]}
+                  for slug in SUBSCRIPTION_REASONING]
+        merged = merge({'models': [dict(m) for m in legacy]},
+                       roster=tuple(SUBSCRIPTION_REASONING))
+        for row in merged['models']:
+            if row['slug'] not in SUBSCRIPTION_REASONING:
+                continue
+            with self.subTest(slug=row['slug']):
+                fresh = subscription_stub(row['slug'])
+                self.assertEqual(row['default_reasoning_level'],
+                                 fresh['default_reasoning_level'])
+                self.assertEqual(row['supported_reasoning_levels'],
+                                 fresh['supported_reasoning_levels'])
+        by_slug = {m['slug']: m for m in merged['models']}
+        self.assertEqual(by_slug['gpt-5.6-sol']['default_reasoning_level'], 'low')
+        self.assertEqual(by_slug['gpt-5.3-codex-spark']['default_reasoning_level'], 'high')
+
+    def test_merge_repair_ignores_non_subscription_slugs(self):
+        other = {'slug': 'gpt-totally-new', 'display_name': 'New',
+                 'default_reasoning_level': 'medium',
+                 'supported_reasoning_levels': [
+                     {'effort': 'medium', 'description': 'Balanced.'}]}
+        merged = merge({'models': [dict(other)]}, roster=('gpt-totally-new',))
+        row = next(m for m in merged['models'] if m['slug'] == 'gpt-totally-new')
+        self.assertEqual(row['supported_reasoning_levels'],
+                         [{'effort': 'medium', 'description': 'Balanced.'}])
+
+    def test_merge_repair_preserves_custom_labels_and_rich_rows(self):
+        legacy = dict(subscription_stub('gpt-6-astra'),
+                      display_name='Mine', context_window=1000000,
+                      default_reasoning_level='medium',
+                      supported_reasoning_levels=[
+                          {'effort': 'medium', 'description': 'Balanced.'}])
+        rich = dict(subscription_stub('gpt-5.6-sol'),
+                    default_reasoning_level='low',
+                    supported_reasoning_levels=[
+                        {'effort': e, 'description': e} for e in ('low', 'high')])
+        custom_single = dict(subscription_stub('gpt-5.5'),
+                             supported_reasoning_levels=[
+                                 {'effort': 'medium', 'description': 'Mine only'}])
+        merged = merge({'models': [legacy, rich, custom_single]},
+                       roster=('gpt-6-astra', 'gpt-5.6-sol', 'gpt-5.5'))
+        by_slug = {m['slug']: m for m in merged['models']}
+        self.assertEqual(by_slug['gpt-6-astra']['display_name'], 'Mine')
+        self.assertEqual(by_slug['gpt-6-astra']['context_window'], 1000000)
+        self.assertEqual(len(by_slug['gpt-6-astra']['supported_reasoning_levels']), 6)
+        self.assertEqual(by_slug['gpt-5.6-sol']['supported_reasoning_levels'],
+                         rich['supported_reasoning_levels'])
+        self.assertEqual(by_slug['gpt-5.5']['supported_reasoning_levels'],
+                         custom_single['supported_reasoning_levels'])
+        again = merge({'models': merged['models']},
+                      roster=('gpt-6-astra', 'gpt-5.6-sol', 'gpt-5.5'))
+        self.assertEqual(again, merged)  # idempotent
 
     def test_alias_display_name_keeps_own_prefix(self):
         alias = replace(by_slug('~x-ai/grok-latest'),
