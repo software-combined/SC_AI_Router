@@ -110,12 +110,12 @@ Use a small Markdown table with columns: client, version, source checked, hook,
 protocol, auth/config ownership, offline evidence, runtime evidence, outcome,
 next gate. Do not store raw settings, token-bearing URLs or credentials.
 
-- [ ] IDE and CLI each have a dated, evidence-backed decision.
-- [ ] Custom tooling and model-service selection are distinct from inference hooks.
-- [ ] No unsupported protocol/provider identity is inferred.
-- [ ] Positive result has a scoped future slice; negative result states reopening evidence.
-- [ ] `git diff --check` exits 0 and only report/plan files changed.
-- [ ] Source, real-client, billing and publication status remain separate.
+- [x] IDE and CLI each have a dated, evidence-backed decision.
+- [x] Custom tooling and model-service selection are distinct from inference hooks.
+- [x] No unsupported protocol/provider identity is inferred.
+- [x] Positive result has a scoped future slice; negative result states reopening evidence.
+- [x] `git diff --check` exits 0 and only report/plan files changed.
+- [x] Source, real-client, billing and publication status remain separate.
 
 This spike adds no code tests. If committing its report, repository-required
 checks still apply: `python3.14 -m unittest discover -s tests -t .`,

@@ -258,7 +258,7 @@ independent implementations: the owner mapping prevents duplicate execution.
 | [062](062-protocol-and-upstream-boundaries.md) | TODO: protocol/transport boundaries | 060/061, with 066 protocol work reconciled before moving shared files |
 | [063](063-client-activation-and-subscription-policy.md) | TODO: client activation/subscription policy | 056/061/062; Codex/service-only first, then 051/053 |
 | [064](064-model-facts-and-client-projections.md) | TODO: model facts and client projections | 061; serialize shared files with 062; feeds 044/046 |
-| [065](065-kiro-client-compatibility-spike.md) | TODO: Kiro IDE/CLI compatibility spike | Independent, supported hooks only; a verified negative result completes spike |
+| [065](065-kiro-client-compatibility-spike.md) | DONE: negative spike, no verified Kiro inference hook (2026-09-10) | `docs/kiro-compatibility.md`; IDE and CLI separately decided; reopen only on dated official custom-endpoint evidence |
 | [066](066-mixed-provider-agent-instruction-delivery.md) | TODO: mixed-provider instruction delivery | Early containment/capture; real plaintext delivery remains separate from file-brief workaround |
 | [067](067-installer-updater-extraction.md) | TODO: scheduled-updater extraction | Before 056 grows install.py; skip if equivalent work has already integrated |
 
