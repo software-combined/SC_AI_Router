@@ -95,10 +95,12 @@ class WinAclCheckTests(unittest.TestCase):
 
     def test_os_aces_pass_but_broad_groups_are_refused(self):
         # Default profiles/temp dirs inherit OS ACEs; like root with POSIX
-        # 0600, SYSTEM/Administrators can read everything already, so they
-        # are not exposure. Broad pseudo-groups still refuse.
+        # 0600, SYSTEM/Administrators can read everything already, and OWNER
+        # RIGHTS (S-1-3-4) grants only the object's current owner, so none
+        # of them is exposure. Broad pseudo-groups still refuse.
         owned = ('C:\\keys\\openrouter.key NT AUTHORITY\\SYSTEM:(F)\n'
                  '   BUILTIN\\Administrators:(F)\n'
+                 '   OWNER RIGHTS:(F)\n'
                  '   CORP\\cyril:(F)\n'
                  'Successfully processed 1 files; Failed processing 0 files\n')
         run = _ok([(['icacls'], SimpleNamespace(returncode=0, stdout=owned, stderr='')),
