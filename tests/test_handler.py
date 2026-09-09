@@ -7,9 +7,13 @@ import http.client
 import json
 import os
 import pathlib
+import shutil
 import tempfile
 import unittest
+from unittest import mock
 from compression import zstd
+from codex_router import setup
+from codex_router.credentials import Credentials
 from codex_router.registry import by_slug
 from codex_router.router import _payload_has_image
 from tests.fakes import FakeUpstream, install_fake
@@ -291,6 +295,115 @@ class HandlerCharacterisationTests(unittest.TestCase):
                               'Authorization': 'Bearer test-token'})
         self.assertEqual(conn.getresponse().status, 401)
         self.assertEqual(recorded, [])
+
+    def _window_server(self, key_text=None):
+        # Keyless home (or the given stored key at 0600) plus a server
+        # whose credentials read only that home. Stubs open_key_window and
+        # returns (server, home, opened).
+        home = pathlib.Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, home, True)
+        if key_text is not None:
+            (home / 'openrouter.key').write_text(key_text)
+            os.chmod(home / 'openrouter.key', 0o600)
+        state = {'port': 0, 'token': 'test-token', 'openai_models': []}
+        server = _start_server(state, credentials=Credentials(state, home, env={}))
+        self.addCleanup(server.shutdown)
+        opened = []
+        def fake_open(srv, hm):
+            opened.append(hm)
+            return True
+        stub = mock.patch.object(setup, 'open_key_window', side_effect=fake_open)
+        self.addCleanup(stub.stop)
+        stub.start()
+        return server, home, opened
+
+    def test_keyless_request_opens_window_once_with_clear_message(self):
+        # Plan 055 Stage 3: no key file and no env key means LookupError;
+        # the request opens the setup page once and says so.
+        server, home, opened = self._window_server()
+        first = _post(server.server_port, '/test-token/responses',
+                      {'model': 'z-ai/glm-5.3', 'input': []})
+        self.assertEqual(first.status, 400)
+        body = json.loads(first.read())
+        self.assertIn('setup page', json.dumps(body))
+        second = _post(server.server_port, '/test-token/responses',
+                       {'model': 'z-ai/glm-5.3', 'input': []})
+        self.assertEqual(second.status, 400)
+        second.read()
+        self.assertEqual(opened, [home, home])
+
+    def test_confirmed_dead_openrouter_401_opens_window(self):
+        # Stored key rejected by OpenRouter itself: window opens with a
+        # rotation message. check_key is faked; no network is touched.
+        server, home, opened = self._window_server('sk-dead\n')
+        install_fake(self, lambda: FakeUpstream(401, b'{"error": {"code": 401}}', []))
+        def dead_key(key, _urlopen=None):
+            raise setup.KeyRejected('OpenRouter rejected the key', status=401)
+        with mock.patch.object(setup, 'check_key', side_effect=dead_key):
+            response = _post(server.server_port, '/test-token/responses',
+                             {'model': 'z-ai/glm-5.3', 'input': []})
+            self.assertEqual(response.status, 400)
+            self.assertIn('rejected', response.read().decode())
+        self.assertEqual(opened, [home])
+
+    def test_live_openrouter_401_opens_no_window(self):
+        # Upstream 401 but the stored key still validates (transient or
+        # hostile): the raw 401 passes through and no window opens.
+        server, home, opened = self._window_server('sk-live\n')
+        install_fake(self, lambda: FakeUpstream(401, b'{"error": "expired"}', []))
+        with mock.patch.object(setup, 'check_key', return_value=('k', 10, 0)):
+            response = _post(server.server_port, '/test-token/responses',
+                             {'model': 'z-ai/glm-5.3', 'input': []})
+            self.assertEqual(response.status, 401)
+            response.read()
+        self.assertEqual(opened, [])
+
+    def test_prepare_keyerror_opens_no_window(self):
+        # KeyError subclasses LookupError: a malformed-payload indexing bug
+        # in prepare must keep the payload-error mapping, never the window.
+        from unittest import mock as _mock
+        from codex_router import setup as _setup
+        server, home, opened = self._window_server('sk-live\n')
+        with _mock.patch.object(_setup, 'check_key', return_value=('k', 10, 0)):
+            with _mock.patch('codex_router.providers.OpenRouterProvider.prepare',
+                             side_effect=KeyError('fragments')):
+                response = _post(server.server_port, '/test-token/responses',
+                                 {'model': 'z-ai/glm-5.3', 'input': []})
+                body = response.read().decode()
+        self.assertEqual(opened, [])
+        self.assertNotIn('setup page', body)
+
+    def test_env_key_present_answers_raw_401_without_probe(self):
+        # The file is not the effective credential when the env key is set:
+        # no check_key probe, no window, raw 401 passes through.
+        from unittest import mock as _mock
+        from codex_router import setup as _setup
+        server, home, opened = self._window_server('sk-file\n')
+        server.credentials.env = {'OPENROUTER_API_KEY': 'sk-env'}
+        install_fake(self, lambda: FakeUpstream(401, b'{"error": "expired"}', []))
+        with _mock.patch.object(_setup, 'check_key',
+                                side_effect=AssertionError('must not probe')):
+            response = _post(server.server_port, '/test-token/responses',
+                             {'model': 'z-ai/glm-5.3', 'input': []})
+            self.assertEqual(response.status, 401)
+            response.read()
+        self.assertEqual(opened, [])
+
+    def test_pending_window_answers_raw_401_without_reprobe(self):
+        # A live nonce already arms the window: answer the raw 401 instead
+        # of paying a second check_key on every retry.
+        from unittest import mock as _mock
+        from codex_router import setup as _setup
+        server, home, opened = self._window_server('sk-dead\n')
+        server.state['setup'] = {'nonce': 'n' * 16, 'expires': 9_999_999_999}
+        install_fake(self, lambda: FakeUpstream(401, b'{"error": "expired"}', []))
+        with _mock.patch.object(_setup, 'check_key',
+                                side_effect=AssertionError('must not probe')):
+            response = _post(server.server_port, '/test-token/responses',
+                             {'model': 'z-ai/glm-5.3', 'input': []})
+            self.assertEqual(response.status, 401)
+            response.read()
+        self.assertEqual(opened, [])
 
     def test_bearer_with_wrong_token_is_403(self):
         server = self._server()

@@ -2,6 +2,12 @@
 
 ## 0.6.10 (unreleased)
 
+- Recover a missing or revoked key without hand-deleting files: a keyless
+  router boots, the first request opens the loopback setup page once per
+  live nonce with a clear message, and the page replaces a stored key
+  only after OpenRouter itself rejects it on 401/403 (offline proofs;
+  central issuance remains owner-gated).
+
 - Report missing install prerequisites before writing anything: new
   `--preflight` flag prints each missing item (Python 3.14, `gh`
   binary for the transitional feed route, Codex CLI unless `--client

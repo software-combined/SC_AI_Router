@@ -10,7 +10,7 @@ import time
 import traceback
 from compression import zstd
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from .credentials import Credentials
+from .credentials import Credentials, ENV_VAR as _CREDENTIALS_ENV_VAR
 from . import claude, errors, local_services, providers, setup, transport
 from .protocols import owned_paths, select as select_protocol
 from .errors import InvalidSize, PreparationError
@@ -219,7 +219,15 @@ class Handler(BaseHTTPRequestHandler):
             return self.context_error(str(exc), payload.get('stream') is True)
         except PreparationError as exc:
             return self.error(errors.preparation(str(exc)))
-        except (ValueError, KeyError, LookupError, OSError, zstd.ZstdError,
+        except LookupError as exc:
+            if isinstance(exc, KeyError):
+                # Malformed payload/tool-fragment indexing, not keylessness:
+                # keep the original payload-error mapping and open no window.
+                return self.error(errors.map_client_error(exc))
+            setup.open_key_window(self.server, self.server.credentials.home)
+            return self.error(errors.credential_problem(
+                '%s Open the key setup page to connect an OpenRouter key.' % exc))
+        except (ValueError, KeyError, OSError, zstd.ZstdError,
                 AttributeError, TypeError) as exc:
             err = errors.map_client_error(exc)
             if err.code == 'INTERNAL_ERROR':
@@ -241,6 +249,24 @@ class Handler(BaseHTTPRequestHandler):
         with self.server.lock:
             self.server.inflight += 1
         self.relay(provider, prepared, metrics, started)
+
+    def _stored_key_dead(self):
+        """True only when the stored key file itself fails check_key on 401/403."""
+        if self.server.credentials.env.get(_CREDENTIALS_ENV_VAR, '').strip():
+            return False  # The file is not the effective credential.
+        if setup.setup_pending(self.server.state):
+            return False  # A window is already open; answer the raw 401.
+        try:
+            stored = (self.server.credentials.home / 'openrouter.key').read_text().strip()
+        except OSError:
+            return False
+        if not stored:
+            return True
+        try:
+            setup.check_key(stored)
+        except (ValueError, OSError) as exc:
+            return isinstance(exc, setup.KeyRejected) and exc.status in (401, 403)
+        return False
 
     def read_body(self):
         size = int(self.headers.get('Content-Length', '-1'))
@@ -280,6 +306,13 @@ class Handler(BaseHTTPRequestHandler):
                 raw = response.read()
                 if prepared.provider == 'openrouter' and providers.is_context_error(raw):
                     return self.context_error(errors.context_window().message, metrics['stream'])
+                if (prepared.provider == 'openrouter'
+                        and response.status in (401, 403)
+                        and self._stored_key_dead()):
+                    setup.open_key_window(self.server, self.server.credentials.home)
+                    return self.error(errors.credential_problem(
+                        'The stored OpenRouter key was rejected. '
+                        'Open the key setup page to connect a new one.'))
                 described = providers.describe_failure(
                     None, {'status': response.status, 'body': raw},
                     {'model': metrics.get('model'), 'provider': prepared.provider,
