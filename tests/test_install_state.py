@@ -26,7 +26,7 @@ class InstallStateTests(unittest.TestCase):
         home = self._home()
         state = install_mod.ensure_state(home)
         self.assertEqual(state['openai_models'], install_mod.DEFAULT_OPENAI_MODELS)
-        self.assertEqual(len(state['openai_models']), 9)
+        self.assertEqual(len(state['openai_models']), 8)
         loaded = self._load(home / 'mixed-router-state.json')
         self.assertEqual(loaded['openai_models'], install_mod.DEFAULT_OPENAI_MODELS)
 
@@ -46,6 +46,18 @@ class InstallStateTests(unittest.TestCase):
         state = install_mod.ensure_state(home)
         self.assertEqual(state['openai_models'], ['x'])
         self.assertEqual((home / 'mixed-router-state.json').read_text(), before)
+
+
+    def test_existing_state_with_retired_slug_is_pruned(self):
+        home = self._home()
+        (home / 'mixed-router-state.json').write_text(
+            json.dumps({'port': 1, 'token': 't',
+                        'openai_models': ['gpt-6-astra', 'gpt-reserve',
+                                          'gpt-5.6-luna']}) + '\n')
+        state = install_mod.ensure_state(home)
+        self.assertEqual(state['openai_models'], ['gpt-6-astra', 'gpt-5.6-luna'])
+        self.assertEqual(self._load(home / 'mixed-router-state.json')['openai_models'],
+                         ['gpt-6-astra', 'gpt-5.6-luna'])
 
 
 if __name__ == '__main__':

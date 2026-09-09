@@ -1,7 +1,6 @@
 # Changelog
 
 ## 0.6.10 (unreleased)
-
 - Keep upstream prose and exception text out of diagnostics: rejected
   upstream turns now name a fixed category (tool-schema, tool-call, or
   request rejection) with the provider and offending tool instead of
@@ -14,6 +13,17 @@
   only checked the root `type`, so the tool sailed through unwrapped and
   xAI rejected the turn. Object-only unions stay native.
 
+- Order the picker for scanning: subscription rows in roster order, then
+  verified OpenRouter rows A-Z by display name, then preview rows A-Z, in
+  both the Codex catalogue merge and the Claude `GET /v1/models` listing.
+  Values are never rewritten to achieve the order.
+- Seed fresh installs with the native subscription reasoning levels per
+  model (e.g. Sol defaults low, Spark defaults high) instead of a single
+  medium placeholder, so the effort picker works on a new Mac the way it
+  does on an upgraded one. Existing catalogues are untouched.
+- Drop `gpt-reserve` from the default subscription roster and picker.
+  The next scheduled update evicts the row from the catalogue and prunes it
+  from preserved state, so routing stops authorizing it as well.
 - Default omitted OpenRouter output limits to at most 32,000 tokens, bounded
   by the provider ceiling and the headroom after Codex's 90% compaction
   threshold. Reserving half the window previously rejected long tasks well
