@@ -223,6 +223,15 @@ class SummarizerTests(unittest.TestCase):
             'moonshotai/kimi-k3', '/responses', payload, b'raw', {}, _stub_credentials())
         kept = json.loads(prepared.body)['input'][0]['content']
         self.assertEqual(len(kept), 2)
+        grok_payload = {'model': '~x-ai/grok-latest', 'input': [
+            {'type': 'message', 'role': 'user', 'content': [
+                {'type': 'input_text', 'text': 'look'},
+                {'type': 'input_image', 'image_url': 'data:image/png;base64,AAA'}]}]}
+        grok_prepared = providers.OpenRouterProvider().prepare(
+            '~x-ai/grok-latest', '/responses', grok_payload, b'raw', {}, _stub_credentials())
+        self.assertEqual(json.loads(grok_prepared.body)['input'][0]['content'],
+            [{'type': 'input_text', 'text': 'look'},
+             {'type': 'input_text', 'text': '[image omitted: this model runs text-only]'}])
 
     def test_text_only_models_pass_without_images(self):
         payload = {'model': 'z-ai/glm-5.3', 'input': [
