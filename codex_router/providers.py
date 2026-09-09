@@ -86,6 +86,14 @@ def _provider_reason(body):
     return provider, reason, tool
 
 
+def reject_opaque_agent_items(items):
+    """Fail closed on unreadable encrypted briefs before any dispatch."""
+    if comp.has_opaque_agent_item(items):
+        raise PreparationError(
+            'unsupported encrypted agent instructions; '
+            'resend the assignment as plain text')
+
+
 def describe_failure(exc, response, info):
     """Name an upstream failure for the client: (status, message) or None.
 
@@ -189,6 +197,10 @@ class OpenRouterProvider:
     def prepare(self, model, path, payload, raw_body, headers, credentials):
         if path not in ('/responses', '/responses/compact'):
             raise PreparationError('OpenRouter supports responses only')
+        # Contain before anything else: an opaque brief must never reach
+        # credential lookup or upstream dispatch, where a child would infer
+        # its assignment from inherited context instead.
+        reject_opaque_agent_items(payload.get('input', []))
         # Scrub before prepare_tools: fragments KeyError its indexing, and
         # tool_search_output items (released-tool discovery) are never scrubbed.
         payload['input'] = comp.scrub_tool_fragments(payload.get('input', []))

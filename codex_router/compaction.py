@@ -233,9 +233,36 @@ def _item_text(item):
         return 'reasoning: ' + _block_text(item.get('summary', ''))[:2000]
     if is_compaction_item(item):
         return compaction_text(item)
+    if kind == 'agent_message':
+        # Plaintext agent text survives compaction so follow-up scope is
+        # retained. Anything encrypted stays out: the preparation guard owns
+        # that rejection, and summaries must never launder opaque blocks.
+        if has_opaque_agent_item([item]):
+            return ''
+        author = item.get('author', 'agent')
+        return f'{author}: {_block_text(item.get("content", ""))}'.strip()
     return ''
 
 TRUNCATED_NOTE = '[truncated] '
+
+
+def has_opaque_agent_item(items):
+    """True when any agent item carries an unreadable encrypted block."""
+    if not isinstance(items, list):
+        return False
+    for item in items:
+        if not isinstance(item, dict) or item.get('type') != 'agent_message':
+            continue
+        if 'encrypted_content' in item:
+            return True
+        content = item.get('content')
+        blocks = content if isinstance(content, list) else [content]
+        for block in blocks:
+            if not isinstance(block, dict):
+                continue
+            if 'encrypted_content' in block or block.get('type') == 'encrypted_content':
+                return True
+    return False
 
 
 def transcript_for_summary(items):

@@ -1,6 +1,12 @@
 # Changelog
 
 ## 0.6.10 (unreleased)
+
+- Refuse unreadable encrypted agent briefs before dispatch: an
+  `agent_message` carrying an encrypted block now fails closed with a
+  content-free preparation error instead of forwarding opacity a child
+  would infer around. Plaintext agent labels survive compaction summaries.
+
 - Keep upstream prose and exception text out of diagnostics: rejected
   upstream turns now name a fixed category (tool-schema, tool-call, or
   request rejection) with the provider and offending tool instead of
