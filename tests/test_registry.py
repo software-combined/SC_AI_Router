@@ -1,4 +1,5 @@
 import json
+import re
 import unittest
 from codex_router.capabilities import CANONICAL_ORDER
 from codex_router.catalogue import OPENROUTER_TEMPLATE, openrouter_entry
@@ -89,7 +90,7 @@ class RegistryTests(unittest.TestCase):
         self.assertEqual({key: out['models'][0][key] for key in native}, native)
         self.assertTrue(CATALOGUE_FIELDS <= out['models'][0].keys())
         kimi = out['models'][slugs.index('moonshotai/kimi-k3')]
-        self.assertEqual(kimi['display_name'], 'Kimi K3 · OpenRouter')
+        self.assertEqual(kimi['display_name'], 'MoonshotAI: Kimi K3 · OpenRouter')
         self.assertEqual(kimi['priority'], 104)
         self.assertEqual(len(slugs), len(set(slugs)))
         self.assertEqual(len(slugs), 1 + len(models_for('codex')))
@@ -97,9 +98,36 @@ class RegistryTests(unittest.TestCase):
     def test_catalog_name_vendor_prefix_rule(self):
         from codex_router.catalogue import catalog_name
         deepseek = by_slug('deepseek/deepseek-v4-pro')
-        self.assertEqual(catalog_name(deepseek), 'DeepSeek V4 Pro 0423')
+        self.assertEqual(catalog_name(deepseek), 'DeepSeek: V4 Pro 0423')
         muse = by_slug('meta/muse-spark-1.3')
         self.assertEqual(catalog_name(muse), 'Meta: Muse Spark 1.3')
+
+    def test_display_names_follow_qualified_naming_convention(self):
+        # Picker labels must read '<Vendor>: <Model> <Version?>'; the vendor
+        # prefix always equals the row's vendor field, alias rows track with
+        # 'Latest' instead of a pinned snapshot, and pinned rows keep any
+        # version/snapshot token verbatim (AGENTS.md section 8).
+        for model in MODELS:
+            if model.provider != 'openrouter':
+                continue
+            with self.subTest(slug=model.slug):
+                short = model.display_name.removesuffix(' · OpenRouter')
+                self.assertTrue(model.display_name.endswith(' · OpenRouter'))
+                self.assertTrue(short.startswith(model.vendor + ': '),
+                                f'{model.slug}: prefix must equal vendor')
+                if re.search(r'\d{4}', short):
+                    self.assertNotRegex(short, r'^\S+: \d{4}$',
+                                        f'{model.slug}: snapshots keep model context')
+        alias_labels = {m.slug: m.display_name for m in MODELS
+                        if m.slug.startswith('~')}
+        self.assertTrue(alias_labels)
+        for slug, label in alias_labels.items():
+            with self.subTest(slug=slug):
+                self.assertIn('Latest', label)
+        pinned = {m.slug: m.display_name for m in MODELS
+                  if not m.slug.startswith('~')}
+        self.assertTrue(any(re.search(r'\(0902\)|0423|0813', label)
+                            for label in pinned.values()))
 
     def test_by_slug_and_openrouter_slugs(self):
         self.assertEqual(by_slug('moonshotai/kimi-k3').vendor, 'MoonshotAI')
