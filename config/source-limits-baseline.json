@@ -19,6 +19,6 @@
   "tests/test_setup.py": 301,
   "tests/test_tool_adapter.py": 384,
   "tests/test_update_channel.py": 335,
-  "codex_router/catalogue.py": 271,
-  "tests/test_catalogue.py": 356
+  "codex_router/catalogue.py": 282,
+  "tests/test_catalogue.py": 418
 }

@@ -30,6 +30,10 @@
 - Drop `gpt-reserve` from the default subscription roster and picker.
   The next scheduled update evicts the row from the catalogue and prunes it
   from preserved state, so routing stops authorizing it as well.
+- Repair subscription rows stuck on the 0.6.10.23 single-medium placeholder:
+  the next merge upgrades exactly that legacy signature to the native levels
+  per model and leaves richer and custom rows untouched. Updated machines
+  whose GPT rows showed only medium effort regain the full picker.
 - Default omitted OpenRouter output limits to at most 32,000 tokens, bounded
   by the provider ceiling and the headroom after Codex's 90% compaction
   threshold. Reserving half the window previously rejected long tasks well
