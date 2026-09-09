@@ -2,6 +2,12 @@
 
 ## 0.6.10 (unreleased)
 
+- Read installer state without touching it: new `--status [--json]`
+  prints installed version, service state, attached clients, and
+  key-present/usable booleans with no secret-bearing values. The
+  read-only preflight/status commands move to `packaging/diagnostics.py`,
+  bringing the installer back under its entrypoint size budget.
+
 - Recover a missing or revoked key without hand-deleting files: a keyless
   router boots, the first request opens the loopback setup page once per
   live nonce with a clear message, and the page replaces a stored key
