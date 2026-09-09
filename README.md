@@ -9,24 +9,23 @@ your machine.
 
 ## Requirements
 
-The Codex app and/or Claude Code, Python 3 (the installer finds or asks for a
-3.14 interpreter to run the router itself), and an OpenRouter API key
-for OpenRouter models. The router itself runs on macOS, Windows, and Linux;
-the managed installer provisions macOS `launchd` or Linux `systemd` user services.
+The Codex app and/or Claude Code, Python 3.14 (the installer finds it or
+tells you how to get it), GitHub CLI (`gh`) signed in with read access to
+the private router repository while updates ride the transitional GitHub
+feed, and an OpenRouter API key for OpenRouter models.
 
-### Arch Linux: install the ChatGPT desktop app first
+## Platform support
 
-The adapter routes the Codex picker, so it needs the ChatGPT desktop app
-(`codex-desktop`) installed and signed in before the router is useful:
+| Platform | Router | Managed installer |
+|---|---|---|
+| macOS | Supported | Supported (`launchd` user agent) |
+| Linux with a systemd user manager | Supported | Supported (`systemd` user units) |
+| Windows | Runs under development | Not supported yet: the installer refuses before changing anything |
 
-```sh
-yay -S codex-desktop-git   # provides `codex-desktop`
-```
-
-This is an AUR repack of OpenAI's official Linux build
-(`ilysenko/codex-desktop-linux`). Launch it once, sign in with ChatGPT,
-then install the router. The `openai-codex-bin` CLI package is optional
-and not required. (Use `paru -S codex-desktop-git` if you prefer paru.)
+Windows support lands with Plan 057; until its acceptance passes, do not run
+the installer on Windows. A Linux install needs a running systemd user
+manager: run it in the signed-in desktop session, not over a bare SSH shell
+without one.
 
 ### Linux: managed systemd user services
 
@@ -57,9 +56,29 @@ during the handover fail until the new process binds the port. The service allow
 The first update check runs five minutes after installation, then fifteen
 minutes after each check completes. Restart Codex after catalogue changes.
 
+### Arch Linux: install the ChatGPT desktop app first
+
+The adapter routes the Codex picker, so it needs the ChatGPT desktop app
+(`codex-desktop`) installed and signed in before the router is useful:
+
+```sh
+yay -S codex-desktop-git   # provides `codex-desktop`
+```
+
+This is an AUR repack of OpenAI's official Linux build
+(`ilysenko/codex-desktop-linux`). Launch it once, sign in with ChatGPT,
+then install the router. The `openai-codex-bin` CLI package is optional
+and not required. (Use `paru -S codex-desktop-git` if you prefer paru.)
+
 ## Install on macOS or Linux
 
-Build a versioned bundle and install it:
+Recipients install from the published release channel, not from a checkout:
+
+```sh
+python3 packaging/install.py
+```
+
+Maintainers build a versioned bundle and install from it:
 
 ```sh
 python3 packaging/release.py --out dist
@@ -69,7 +88,9 @@ python3 packaging/install.py --feed file://$PWD/dist/latest.json
 The installer asks for nothing interactively. It verifies the bundle,
 self-tests it, writes the service, and inserts the Codex config block.
 If no key is configured it creates an empty key file and tells you to
-paste the key in, then re-run. Restart Codex afterwards.
+paste the key in, then re-run. Restart Codex afterwards. `packaging/install.sh`
+is the same installer for POSIX shells; `packaging/install.ps1` is reserved
+for the future Windows backend and must not be used yet.
 
 ## Updating
 
@@ -142,8 +163,12 @@ bearer token, in place for you to delete.
 ## Security
 
 The router listens on loopback only. Each install generates its own
-token, the key file is owner-only, and logs carry request metadata,
-never keys or tokens. Subscription headers never accompany OpenRouter requests; the key travels only as a per-request `Bearer` header.
+token, and logs carry request metadata, never keys or tokens. Subscription headers never accompany OpenRouter requests; the key travels only as a per-request `Bearer` header.
+The key file is owner-only on macOS and Linux; on Windows the installer
+refuses before writing one, and Windows key protection lands with the
+Windows backend. Supervisor logs (`launchd.log`, `update.log`) rotate
+at service start (1 MB each, two backups); the structured `router.jsonl`
+rotates at 5 MB with three backups.
 
 ## Links
 
