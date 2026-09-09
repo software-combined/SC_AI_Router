@@ -151,7 +151,7 @@ class ClaudeIngressTests(unittest.TestCase):
             self.assertEqual(set(row), {'id', 'display_name'})
         listed = {row['id']: row['display_name'] for row in body['data']}
         self.assertEqual(
-            listed['claude/z-ai/glm-5.3-flash'], 'GLM 5.3 Flash \u00b7 OpenRouter')
+            listed['claude/z-ai/glm-5.3-flash'], 'Z.ai: GLM 5.3 Flash \u00b7 OpenRouter')
         self.assertIn('anthropic/claude-sonnet-latest', listed)
 
     def test_models_listing_ignores_discovery_query_string(self):
