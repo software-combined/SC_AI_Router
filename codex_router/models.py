@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from .apply_catalogue import write_guarded
 from .capabilities import CANONICAL_ORDER
-from .live_refresh import CODEX_MODALITIES
+from .model_metadata import CODEX_MODALITIES, project_modalities, qualify_name
 from .registry import load
 
 MODELS_URL = 'https://openrouter.ai/api/v1/models'
@@ -25,40 +25,11 @@ def fetch_live():
         return {model['id']: model for model in json.load(response)['data']}
 
 
-VENDOR_BY_SLUG_PREFIX = {
-    'anthropic': 'Anthropic', 'deepseek': 'DeepSeek', 'google': 'Google',
-    'meta': 'Meta', 'moonshotai': 'MoonshotAI', 'openai': 'OpenAI',
-    'qwen': 'Qwen', 'x-ai': 'SpaceXAI', 'z-ai': 'Z.ai',
-}
-
-
-def qualify_name(slug, live):
-    """Qualified label (<Vendor>: <Short>) for one live metadata entry.
-
-    Keeps any version/snapshot token verbatim, so a pinned row never
-    masquerades as a tracking row; drops one redundant leading vendor word
-    ("DeepSeek: DeepSeek V4 ..." -> "DeepSeek: V4 ..."). A live name without
-    a vendor prefix falls back to the registry VENDOR_BY_SLUG_PREFIX map.
-    """
-    name = live.get('name', slug)
-    vendor, sep, short = name.partition(':')
-    if sep:
-        vendor, short = vendor.strip(), short.strip()
-    else:
-        prefix = slug.split('/')[0].lstrip('~')
-        vendor = VENDOR_BY_SLUG_PREFIX.get(prefix, prefix.replace('-', ' ').title())
-        short = name
-    first, _, rest = short.strip().partition(' ')
-    if rest and first.rstrip('s').lower() == vendor.rstrip('s').lower().split()[-1]:
-        short = rest
-    return vendor, f'{vendor}: {short.strip()}'
-
-
 def derive_row(slug, live, rows):
     """Registry row for a new slug from its live metadata entry."""
     vendor, qualified = qualify_name(slug, live)
-    modalities = [m for m in CODEX_MODALITIES
-                  if m in live.get('architecture', {}).get('input_modalities', [])]
+    modalities = project_modalities(
+        live.get('architecture', {}).get('input_modalities', []))
     top = live.get('top_provider') or {}
     advertised = (live.get('reasoning') or {}).get('supported_efforts') or []
     reasoning = [lv for lv in CANONICAL_ORDER if lv in advertised]

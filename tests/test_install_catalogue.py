@@ -16,7 +16,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 from codex_router.catalogue import check
-from codex_router.registry import models_for
+from codex_router.clients import models_for
+from codex_router.registry import MODELS
 from tests.test_install import _ok_run, _patch_attrs, _static_fetch, install_mod
 
 _ROOT = Path(__file__).resolve().parents[1]
@@ -107,7 +108,7 @@ class InstallCatalogueTests(unittest.TestCase):
             self.assertTrue(any(_is_catalogue(cmd) and '--merge' in cmd for cmd in calls))
             catalog = json.loads((home / 'mixed-models.json').read_text())
             slugs = {m['slug'] for m in catalog['models']}
-            for model in models_for('codex'):
+            for model in models_for(MODELS, 'codex'):
                 if model.provider == 'openrouter':
                     self.assertIn(model.slug, slugs)
             for slug in ('openai/gpt-6-astra', 'openai/gpt-5.6-sol',
