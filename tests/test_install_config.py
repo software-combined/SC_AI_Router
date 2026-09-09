@@ -105,6 +105,30 @@ class InstallConfigTests(unittest.TestCase):
             state = json.loads((home / 'mixed-router-state.json').read_text())
             self.assertEqual(state.get('openai_mode'), 'none')
 
+    def test_update_preserves_picker_model_selection(self):
+        # Owner model lines live inside the managed block; an update must
+        # carry them forward, not reset the picker (0.6.7.21 dropped them).
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            config, _, _, _ = _install(self, tmp, home, '1.0.0')
+            picked = ('# BEGIN local mixed model picker\n'
+                      f'model_catalog_json = "{home}/mixed-models.json"\n'
+                      'model = "meta/muse-spark-1.3"\n'
+                      'model_reasoning_effort = "xhigh"\n'
+                      '# END local mixed model picker\n')
+            full = config.read_text()
+            start = full.index('# BEGIN local mixed model picker')
+            end = full.index('# END local mixed model picker') + len('# END local mixed model picker\n')
+            config.write_text(full[:start] + picked + full[end:])
+            receipt_path = home / 'activation.json'
+            receipt = json.loads(receipt_path.read_text())
+            receipt['inserted_block'] = picked
+            receipt_path.write_text(json.dumps(receipt) + '\n')
+            config, _, _, _ = _install(self, tmp, home, '1.0.1')
+            block = config.read_text()
+            self.assertIn('model = "meta/muse-spark-1.3"', block)
+            self.assertIn('model_reasoning_effort = "xhigh"', block)
+
     def test_explicit_flag_flips_mode(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
