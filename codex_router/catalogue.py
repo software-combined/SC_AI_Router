@@ -60,7 +60,9 @@ OPENROUTER_TEMPLATE = {
 }
 
 PREVIEW_PRIORITY_OFFSET = 100000  # preview entries sort after every verified model
-RETIRED_SLUGS = {'anthropic/claude-opus-5', 'anthropic/claude-fable-5.1'}
+RETIRED_SLUGS = {'anthropic/claude-opus-5', 'anthropic/claude-fable-5.1',
+                 'deepseek/deepseek-v4-flash',
+                 'deepseek/deepseek-v4-flash-0731'}  # superseded by the flash-latest alias
 
 # Picker labels for the subscription side, matching the live Codex picker.
 # Codex >=0.153.4 requires every catalogue row to carry display_name and the
@@ -103,10 +105,9 @@ BASE_INSTRUCTIONS = (Path(__file__).with_name('openrouter_base_instructions.txt'
 
 
 def catalog_name(model):
-    short = model.display_name.removesuffix(' · OpenRouter')
-    if short.startswith(model.vendor) or ': ' in short:
-        return short  # Already carries its own vendor-style prefix (aliases do).
-    return model.vendor + ': ' + short
+    # display_name is stored qualified (<Vendor>: <Model> <Version?>), so this
+    # is a pure suffix strip; bare legacy rows fail the registry test instead.
+    return model.display_name.removesuffix(' · OpenRouter')
 
 
 def openrouter_entry(model):

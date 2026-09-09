@@ -17,14 +17,37 @@ MODELS_URL = 'https://openrouter.ai/api/v1/models'
 CODEX_MODALITIES = ('text', 'image', 'audio')
 
 
+def refresh_display_name(row, live):
+    """Qualified label for a refresh; alias rows keep their tracking name.
+
+    A tilde alias (e.g. ~deepseek/...-latest) must keep the row's pinned
+    tracking label ("... Latest") and never adopt the alias target's
+    snapshot name ("... 0731"), so refreshes cannot reintroduce dated
+    labels. Plain rows re-qualify from live metadata, keeping any version
+    or snapshot token they advertise, but the vendor prefix stays pinned to
+    the row: an upstream rebrand must not rewrite the label out from under
+    the row's vendor field (such a rename is a registry edit, not a refresh).
+    """
+    alias = live.get('alias_target')
+    alias = alias.get('name') if isinstance(alias, dict) else None
+    if row['slug'].startswith('~'):
+        return row.get('display_name')
+    # Deferred: models.py imports CODEX_MODALITIES from this module.
+    from .models import qualify_name
+    name = alias or live.get('name')
+    if name:
+        vendor, qualified = qualify_name(row['slug'], {'name': name})
+        if vendor == row.get('vendor'):
+            return qualified + ' · OpenRouter'
+    return row.get('display_name')
+
+
 def derive(row, live):
     """Derived fields for one registry row from its live metadata entry."""
     live_modalities = live.get('architecture', {}).get('input_modalities', [])
     modalities = [m for m in CODEX_MODALITIES if m in live_modalities]
     top = live.get('top_provider') or {}
     advertised = (live.get('reasoning') or {}).get('supported_efforts')
-    alias = live.get('alias_target')
-    alias = alias.get('name') if isinstance(alias, dict) else None
     reasoning = list(row['reasoning'])
     if advertised:
         filtered = [lv for lv in CANONICAL_ORDER
@@ -35,7 +58,7 @@ def derive(row, live):
             'context_window': live.get('context_length', row['context_window']),
             'max_output_tokens': top.get('max_completion_tokens') or row['max_output_tokens'],
             'reasoning': reasoning,
-            'display_name': f'{alias} \xb7 OpenRouter' if alias else row.get('display_name')}
+            'display_name': refresh_display_name(row, live)}
 
 
 def refresh(rows, live_by_id):
