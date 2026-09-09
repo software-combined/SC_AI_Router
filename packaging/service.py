@@ -580,8 +580,18 @@ def feed_serial(home):
         raise SystemExit('feed serial file is corrupt')
 
 
-def check_serial(home, latest):
-    """Refuse feeds older than the last accepted one (replay protection)."""
+def check_serial(home, latest, pinned=False):
+    """Refuse feeds older than the last accepted one (replay protection).
+
+    A pinned `--feed` is exempt on both sides: it is operator-supplied for
+    this one run, so it is neither the unattended channel the guard protects
+    nor recorded afterwards. Without the exemption a locally built bundle
+    (`--build` defaults to 0) is refused as stale against whatever the real
+    feed last recorded, which is a trap that invites picking a build number
+    high enough to win -- and that number then freezes the real channel.
+    """
+    if pinned:
+        return 0
     serial = latest.get('serial', 0)
     if type(serial) is not int:
         raise SystemExit('feed has a bad serial')

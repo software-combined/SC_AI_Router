@@ -210,6 +210,9 @@ class InstallLifecycleTests(unittest.TestCase):
             home = Path(tmp) / 'home'
             _run_install(self, tmp, home, '1.0.0')
             _, calls, _, _ = _run_install(self, tmp, home, '1.0.1')
+            # Those installs pinned --feed, so they leave the release serial
+            # alone; seed one so the invariant below has something to protect.
+            (home / 'feed-serial').write_text('9\n')
             serial_before = (home / 'feed-serial').read_text()
             _patch_attrs(self, wait_version=lambda *args, **kwargs: True)
             args = install_mod.build_parser().parse_args(
@@ -376,8 +379,9 @@ class SafeUpdateTests(unittest.TestCase):
                          self_test=lambda *a: None,
                          write_catalogue=_fake_write_catalogue,
                          wait_version=lambda *a, **k: True)
-            args = install_mod.build_parser().parse_args(
-                ['--feed', 'file:///latest.json', '--home', str(home)])
+            # Unpinned: only that path records a serial, so only there does
+            # "aborted before the serial write" assert anything.
+            args = install_mod.build_parser().parse_args(['--home', str(home)])
             env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}
             with mock.patch.dict(os.environ, env):
                 with self.assertRaisesRegex(SystemExit, 'release identity mismatch'):
