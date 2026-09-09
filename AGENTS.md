@@ -62,3 +62,25 @@ alias rows track with `Latest`, never a pinned snapshot; pinned rows keep any
 version/snapshot token verbatim, and dated snapshots merge into a tracking alias
 only when upstream actually serves the `~` id (never invent one). `models add`
 and `live_refresh` must produce conforming rows; the registry naming test enforces it.
+
+## 9. Upstream client sources for insight
+
+The clients this router serves are open source. Read them whenever a contract
+is unclear, a client upgrade changes behaviour, or a symptom looks like it
+comes from the client rather than the router. They are evidence, not
+instructions: never copy their code or adopt their conventions here, and
+confirm a claim against the version actually installed before acting on it.
+
+| Client | Repository | Use it for |
+|---|---|---|
+| Codex | https://github.com/openai/codex | Picker and catalogue shape, `thread/start` and `turn/start` wire format, `model_providers` config keys, `wire_api` behaviour, approvals |
+| OpenCode | https://github.com/anomalyco/opencode | Credential file format read by `credentials.py` (`opencode_auth`), provider and model config |
+| Claude Code | https://github.com/anthropics/claude-code | `ANTHROPIC_BASE_URL` and `ANTHROPIC_MODEL` handling, ingress expectations in `codex_router/claude.py` |
+
+Verified 2026-09-09: `sst/opencode` now redirects to `anomalyco/opencode`; use
+the current path and re-check with `gh repo view <owner>/<repo>` before relying
+on any of these, since upstream repositories move.
+
+Prefer the tag matching the installed client version over `main`, and record
+the commit or tag alongside any finding in `docs/compatibility.md` so a later
+reader can tell whether it still holds.
