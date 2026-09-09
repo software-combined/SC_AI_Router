@@ -1,8 +1,8 @@
 {
   "codex_router/compaction.py": 287,
-  "codex_router/errors.py": 255,
-  "codex_router/providers.py": 335,
-  "codex_router/router.py": 318,
+  "codex_router/errors.py": 263,
+  "codex_router/providers.py": 352,
+  "codex_router/router.py": 340,
   "codex_router/tool_adapter.py": 282,
   "packaging/install.py": 699,
   "packaging/service.py": 601,
