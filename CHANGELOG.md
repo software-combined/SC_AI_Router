@@ -2,6 +2,9 @@
 
 ## 0.6.7 (unreleased)
 
+- Reject OpenRouter requests whose estimated input plus reserved output
+  would exceed the model's context window (409 with an actionable message)
+  instead of forwarding a doomed turn that the endpoint 400s outright.
 - Retry transient feed-fetch failures inside the scheduled update check
   (up to 4 attempts, 30s/60s/120s backoff) instead of waiting a full
   15-minute poll cycle; deterministic errors still fail fast.
