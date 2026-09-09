@@ -260,7 +260,7 @@ independent implementations: the owner mapping prevents duplicate execution.
 | [064](064-model-facts-and-client-projections.md) | TODO: model facts and client projections | 061; serialize shared files with 062; feeds 044/046 |
 | [065](065-kiro-client-compatibility-spike.md) | DONE: negative spike, no verified Kiro inference hook (2026-09-10) | `docs/kiro-compatibility.md`; IDE and CLI separately decided; reopen only on dated official custom-endpoint evidence |
 | [066](066-mixed-provider-agent-instruction-delivery.md) | TODO: mixed-provider instruction delivery | Early containment/capture; real plaintext delivery remains separate from file-brief workaround |
-| [067](067-installer-updater-extraction.md) | TODO: scheduled-updater extraction | Before 056 grows install.py; skip if equivalent work has already integrated |
+| [067](067-installer-updater-extraction.md) | DONE: updater extracted to `packaging/updater.py` (2026-09-10) | `8808349` on develop; 50 focused tests OK plus release-bundle omission smoke; 056 unblocked |
 
 ### Consolidated decisions and dependencies
 
