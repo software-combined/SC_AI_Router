@@ -11,6 +11,7 @@ import sys
 import tarfile
 import tempfile
 import unittest
+from tests._platform import unix_only
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -81,6 +82,7 @@ def _install(test, tmp, home, fake_fetch, fake_run, *extra_args):
     return Path(env['HOME']) / '.codex' / 'config.toml'
 
 
+@unix_only
 class InstallCatalogueTests(unittest.TestCase):
     def test_default_install_writes_static_catalog_line(self):
         # The router serves no /models, so the file pointer is the default.

@@ -15,6 +15,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
+from tests._platform import unix_only
 from tests.test_install import (
     _craft_bundle,
     _ok_run,
@@ -56,6 +57,7 @@ class RenderGuardTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             svc.render_plist('bin/python3.14', Path('/tmp/hm'), {'port': 18749})
 
+    @unix_only
     def test_render_plist_accepts_absolute(self):
         content = svc.render_plist('/opt/homebrew/bin/python3.14', Path('/tmp/hm'),
                                    {'port': 18749})
@@ -66,6 +68,7 @@ class RenderGuardTests(unittest.TestCase):
             svc.render_update_plist('python3.14', Path('/tmp/hm'))
 
 
+@unix_only
 class LegacyReloadTests(unittest.TestCase):
     """Legacy bare-python plist heals via targeted main-only reload."""
 
