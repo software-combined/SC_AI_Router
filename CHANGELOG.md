@@ -21,7 +21,8 @@
   compaction replays as a visible note rather than readable context.
   Image blocks do not carry over to text-only models, and a model
   tool-count ceiling (Grok, 350 tools) still rejects an over-ceiling
-  thread with a fresh-task message.
+  turn: switch to a model without the ceiling, or trim tools, then
+  retry in the same thread.
   The thread effort carries over, and an effort the new model does not
   support (for example carried max onto Contributor) is rejected with
   the allowed levels instead of failing opaquely upstream.
