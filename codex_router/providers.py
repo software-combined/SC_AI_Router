@@ -11,8 +11,9 @@ from .runtime import log_event
 from .discovered import remember
 from .tool_adapter import prepare_tools, snoop_response_identity, stream_events, ToolEvents
 
-HOP_HEADERS = {'host', 'connection', 'content-length', 'transfer-encoding',
-               'upgrade', 'keep-alive', 'proxy-authorization', 'proxy-authenticate', 'te', 'trailer'}
+# Transport leaves live in transport.py (Plan 062); these aliases keep
+# existing importers working until the protocol split completes.
+from .transport import HOP_HEADERS, Prepared, passthrough, relay_headers
 NATIVE_SERVICE_PATHS = {'/alpha/search', '/alpha/notes/v2/thread_hint', '/guardian', '/guardian-classifier'}
 
 
@@ -132,31 +133,8 @@ def describe_failure(exc, response, info):
     return None
 
 
-def relay_headers(response, send_header, model):
-    """Forward upstream headers, pinning openai-model to the requested slug.
-
-    Codex warns on any mismatch with the configured slug, so the upstream
-    model name never goes out on that header; /health reports the real one.
-    """
-    for key, value in response.getheaders():
-        if key.lower() in HOP_HEADERS or key.lower() in ('set-cookie', 'openai-model'):
-            continue
-        send_header(key, value)
-    if isinstance(model, str):
-        send_header('openai-model', model)
-
-
-class Prepared:
-    __slots__ = ('host', 'path', 'headers', 'body', 'tool_names', 'provider')
-
-    def __init__(self, host, path, headers, body, tool_names, provider):
-        self.host, self.path, self.headers = host, path, headers
-        self.body, self.tool_names, self.provider = body, tool_names, provider
-
-
 def _passthrough(response):
-    while chunk := response.read1(65536):
-        yield chunk
+    yield from passthrough(response)
 
 
 class SubscriptionProvider:
