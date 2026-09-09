@@ -194,6 +194,37 @@ class ToolAdapterTests(unittest.TestCase):
                 else:
                     self.assertEqual(tool['parameters'], union)
 
+    def test_object_root_union_with_scalar_branch_is_wrapped_for_grok(self):
+        # Reported 409: automation_update declares type object at root with a
+        # oneOf holding a non-object branch. xAI rejects it; wrap it.
+        params = {'type': 'object', 'properties': {},
+                  'oneOf': [{'type': 'object', 'properties': {'a': {'type': 'string'}}},
+                            {'type': 'string'}]}
+        payload = {'model': '~x-ai/grok-latest', 'tools': [
+            {'type': 'function', 'name': 'automation_update', 'description': 'D',
+             'parameters': params}]}
+        names = prepare_tools(payload)
+        tool = payload['tools'][0]
+        self.assertEqual(tool['parameters']['properties'], {'arguments_json': {'type': 'string'}})
+        self.assertIn(json.dumps(params), tool['description'])
+        self.assertEqual(names[(None, 'automation_update')], 'json_text_root')
+        for value in ({'a': 'x'}, 'plain'):
+            item = ToolEvents(names).item({'type': 'function_call', 'name': 'automation_update',
+                'arguments': json.dumps({'arguments_json': json.dumps(value)})})
+            self.assertEqual(json.loads(item['arguments']), value)
+
+    def test_object_only_union_root_stays_native_for_grok(self):
+        # xAI documents object-only unions as acceptable; keep them native.
+        params = {'type': 'object', 'properties': {},
+                  'oneOf': [{'type': 'object', 'properties': {'a': {'type': 'string'}}},
+                            {'type': 'object', 'properties': {'b': {'type': 'integer'}}}]}
+        payload = {'model': '~x-ai/grok-latest', 'tools': [
+            {'type': 'function', 'name': 'flex', 'description': 'Flex',
+             'parameters': params}]}
+        names = prepare_tools(payload)
+        self.assertEqual(payload['tools'][0]['parameters'], params)
+        self.assertNotIn((None, 'flex'), names)
+
     def test_recursive_schema_keeps_exact_arguments_and_native_contract(self):
         schema = {'type': 'object', 'properties': {'tree': {'$ref': '#/$defs/Node'}},
             '$defs': {'Node': {'type': 'object', 'properties': {'children': {'type': 'array', 'items': {'$ref': '#/$defs/Node'}}}}}}
