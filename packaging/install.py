@@ -310,7 +310,7 @@ def do_install(args, _fetch=fetch, _run=None):
             raise SystemExit(2)
     feed = args.feed or channel_feed(home)
     latest = json.loads(_fetch(feed).decode())
-    serial = check_serial(home, latest)
+    serial = check_serial(home, latest, pinned=bool(args.feed))
     if not newer(latest['version'], current_version(home)):
         print(f"up to date {current_version(home)}")
         return 0
@@ -484,7 +484,10 @@ def do_install(args, _fetch=fetch, _run=None):
     # names would leave the updater firing a missing file every 15 minutes.
     prune_releases(home, latest['version'], previous,
                    None if manager else loaded_updater_release(uid, home))
-    (home / 'feed-serial').write_text(str(serial) + '\n')
+    if not args.feed:
+        # One-shot rule, as for the feed URL: a pinned feed keeps its own
+        # serial, so recording it makes the real feed look stale for good.
+        (home / 'feed-serial').write_text(str(serial) + '\n')
     if manager:
         manager.start_updates()
     print(f"installed {latest['version']}; health ok; restart Codex to load the router")
@@ -558,7 +561,7 @@ def do_check_update(args, _fetch=fetch, _read_feed=None, _sleep=None):
         print(f"up to date {current_version(home)}")
         return 0
     latest = json.loads(body.decode())
-    check_serial(home, latest)
+    check_serial(home, latest, pinned=bool(args.feed))
     if not newer(latest['version'], current_version(home)):
         if etag:
             etag_path.write_text(etag + '\n')
