@@ -3,7 +3,7 @@
   "codex_router/errors.py": 263,
   "codex_router/providers.py": 352,
   "codex_router/router.py": 340,
-  "codex_router/tool_adapter.py": 282,
+  "codex_router/tool_adapter.py": 297,
   "packaging/install.py": 617,
   "packaging/service.py": 601,
   "tests/test_handler.py": 352,
@@ -13,6 +13,6 @@
   "tests/test_mixed_router.py": 366,
   "tests/test_probe_harness.py": 362,
   "tests/test_setup.py": 301,
-  "tests/test_tool_adapter.py": 353,
+  "tests/test_tool_adapter.py": 384,
   "tests/test_update_channel.py": 335
 }
