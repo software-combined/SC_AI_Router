@@ -2,6 +2,12 @@
 
 ## 0.6.10 (unreleased)
 
+- Wrap Grok tools whose object root carries an `anyOf`/`oneOf` union with a
+  non-object branch (reported 409: `automation_update` declares
+  `type: object` with a root `oneOf` including a scalar). The PR #25 guard
+  only checked the root `type`, so the tool sailed through unwrapped and
+  xAI rejected the turn. Object-only unions stay native.
+
 - Default omitted OpenRouter output limits to at most 32,000 tokens, bounded
   by the provider ceiling and the headroom after Codex's 90% compaction
   threshold. Reserving half the window previously rejected long tasks well
