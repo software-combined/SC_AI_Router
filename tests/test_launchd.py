@@ -16,6 +16,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tests._platform import unix_only
 from tests.fakes import LaunchdDomain
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -50,6 +51,7 @@ def _agents(tmp):
     return agents
 
 
+@unix_only
 class UnloadTests(unittest.TestCase):
     def test_waits_for_the_label_to_leave_the_domain(self):
         # bootout reports success on the first call; the label only disappears
@@ -69,6 +71,7 @@ class UnloadTests(unittest.TestCase):
                                         sleep=lambda *_: None))
 
 
+@unix_only
 class LoadTests(unittest.TestCase):
     def test_retries_a_bootstrap_that_lost_the_teardown_race(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -95,6 +98,7 @@ class LoadTests(unittest.TestCase):
                              'a loaded job must not be bootstrapped again')
 
 
+@unix_only
 class ReloadTests(unittest.TestCase):
     def test_never_bootstraps_while_the_old_job_is_still_loaded(self):
         # The defect in one assertion: a bootstrap issued against a label that
@@ -122,6 +126,7 @@ class ReloadTests(unittest.TestCase):
                              'a failed unload must not proceed to bootstrap')
 
 
+@unix_only
 class LoadedCommandTests(unittest.TestCase):
     def test_reads_the_whole_in_memory_command(self):
         # Reading argv[0] alone is what hid a changed launcher path: the
@@ -158,6 +163,7 @@ class LoadedCommandTests(unittest.TestCase):
                              'a rewritten plist must not change the loaded command')
 
 
+@unix_only
 class UpdateLauncherTests(unittest.TestCase):
     """The updater entry point must resolve `current` at exec time."""
 
@@ -245,6 +251,7 @@ class InterpreterIdentityTests(unittest.TestCase):
             self.assertFalse(install_mod.same_interpreter(None, str(real)))
 
 
+@unix_only
 class EnsureServingTests(unittest.TestCase):
     """The installer must never exit leaving no loaded router behind."""
 

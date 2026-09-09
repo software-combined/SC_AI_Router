@@ -93,6 +93,28 @@ class WinAclCheckTests(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, 'readable by'):
             winacl.check('C:\\keys\\openrouter.key', run=run)
 
+    def test_os_aces_pass_but_broad_groups_are_refused(self):
+        # Default profiles/temp dirs inherit OS ACEs; like root with POSIX
+        # 0600, SYSTEM/Administrators can read everything already, and OWNER
+        # RIGHTS (S-1-3-4) grants only the object's current owner, so none
+        # of them is exposure. Broad pseudo-groups still refuse.
+        owned = ('C:\\keys\\openrouter.key NT AUTHORITY\\SYSTEM:(F)\n'
+                 '   BUILTIN\\Administrators:(F)\n'
+                 '   OWNER RIGHTS:(F)\n'
+                 '   CORP\\cyril:(F)\n'
+                 'Successfully processed 1 files; Failed processing 0 files\n')
+        run = _ok([(['icacls'], SimpleNamespace(returncode=0, stdout=owned, stderr='')),
+                   (['whoami'], _ok_acl())])
+        winacl.check('C:\\keys\\openrouter.key', run=run)
+        wide = ('C:\\keys\\openrouter.key\n'
+                '   NT AUTHORITY\\Authenticated Users:(R)\n'
+                '   CORP\\cyril:(F)\n'
+                'Successfully processed 1 files; Failed processing 0 files\n')
+        run = _ok([(['icacls'], SimpleNamespace(returncode=0, stdout=wide, stderr='')),
+                   (['whoami'], _ok_acl())])
+        with self.assertRaisesRegex(SystemExit, 'readable by'):
+            winacl.check('C:\\keys\\openrouter.key', run=run)
+
     def test_icacls_failure_is_refused(self):
         run = _ok([(['icacls'], SimpleNamespace(returncode=1, stdout='', stderr='Access denied'))])
         with self.assertRaisesRegex(SystemExit, 'cannot verify'):

@@ -38,4 +38,13 @@ def check(path, run=None):
             continue
         if owner and (lowered == me or lowered == owner):
             continue
+        if lowered in ('nt authority\\system', 'builtin\\administrators',
+                       'owner rights'):
+            # The OS itself (SYSTEM/Administrators act as root does with
+            # POSIX 0600) and OWNER RIGHTS (S-1-3-4, rights scoped to the
+            # object's current owner, nobody else). The threat is other
+            # users, and every default profile/temp dir inherits these
+            # ACEs; refusing them would fail closed into unusable on every
+            # real machine.
+            continue
         raise SystemExit('%s is readable by %s; fix with icacls' % (path, account))
