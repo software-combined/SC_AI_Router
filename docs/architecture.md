@@ -12,7 +12,7 @@ registry / capabilities (leaves: model facts, stdlib + dataclasses only)
   |            |
 catalogue / models / live_refresh / apply_catalogue (client projections)
   |
-compaction / tool_adapter / discovered (request normalization)
+agent_handoffs / compaction / tool_adapter / discovered (request normalization)
   |
 providers (Responses adapters) + claude (Messages adapters)
   |
@@ -24,6 +24,9 @@ router (HTTP control: auth, body limits, drain/inflight, relay)
 ```
 
 Rules:
+
+`agent_handoffs.py` owns collaboration alias schemas and native-name restoration;
+`sse.py` owns shared event framing without provider-specific argument rewriting.
 
 1. `registry.py` imports stdlib only. Nothing in `codex_router/` may make it
    import a client, CLI, installer, or HTTP module. Client listing and config

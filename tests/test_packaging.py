@@ -12,6 +12,8 @@ FILES = [
          'codex_router/registry.py',
          'codex_router/credentials.py',
          'codex_router/tool_adapter.py',
+         'codex_router/agent_handoffs.py',
+         'codex_router/sse.py',
          'codex_router/capabilities.py',
          'codex_router/compaction.py',
 'codex_router/discovered.py',

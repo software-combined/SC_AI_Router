@@ -13,6 +13,7 @@ COMPACT_PROMPT = ('You are performing a CONTEXT CHECKPOINT COMPACTION. Create a 
     'tool results verbatim so the next model can repeat them exactly. Be concise and structured.')
 import base64
 import secrets
+from .agent_handoffs import plaintext_agent_message
 PREFIX = 'ocx1:'
 TRIGGER_TYPE = 'compaction_trigger'
 SUMMARY_PREFIX = ('Another language model started to solve this problem and '
@@ -107,6 +108,8 @@ def rewrite_input(items):
     for item in items:
         if is_compaction_item(item):
             rewritten.append(user_message_item(compaction_text(item)))
+        elif isinstance(item, dict) and item.get('type') == 'agent_message':
+            rewritten.append(plaintext_agent_message(item))
         else:
             rewritten.append(item)
     return rewritten
@@ -240,6 +243,8 @@ def _item_text(item):
         if has_opaque_agent_item([item]):
             return ''
         author = item.get('author', 'agent')
+        if item.get('recipient'):
+            author += f' to {item["recipient"]}'
         return f'{author}: {_block_text(item.get("content", ""))}'.strip()
     return ''
 

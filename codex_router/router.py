@@ -342,6 +342,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.close_connection = True
                 return
             metrics['upstream_headers_ms'] = round((time.monotonic() - started) * 1000, 1)
+            providers.validate_response(response, prepared)
             self.send_response(response.status)
             transport.relay_headers(response, self.send_header, metrics.get('model'))
             self.send_header('Connection', 'close')
