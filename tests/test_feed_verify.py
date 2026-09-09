@@ -4,6 +4,7 @@ keys are ephemeral, fetches are injected."""
 import tempfile
 import unittest
 from pathlib import Path
+from tests._platform import requires_posix_perms
 from unittest import mock
 
 from codex_router import feed_verify
@@ -70,6 +71,7 @@ class FeedGateTests(unittest.TestCase):
             with mock.patch.object(feed_verify, 'FEED_PUBLIC_KEY', pub):
                 self.assertEqual(feed_verify.checked_feed(body, sig.encode())['serial'], 7)
 
+    @requires_posix_perms
     def test_gen_key_writes_owner_only_seed(self):
         release_mod = _release_mod()
         with tempfile.TemporaryDirectory() as tmp:
