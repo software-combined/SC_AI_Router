@@ -10,10 +10,12 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from tests._platform import unix_only
 from tests.test_install import _install_mod
 from tests.test_release import _release_mod
 
 
+@unix_only
 class SystemdRuntimeTests(unittest.TestCase):
     def test_legacy_migration_scheduled_update_and_rollback(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -16,6 +16,7 @@ from types import SimpleNamespace
 from pathlib import Path
 from unittest import mock
 
+from tests._platform import unix_only
 from tests.test_install import (
     _craft_bundle,
     _ok_run,
@@ -59,6 +60,7 @@ def _install(test, tmp, home, version, *extra_args, feed='file:///latest.json'):
     return config, calls, args, env
 
 
+@unix_only
 class InstallConfigTests(unittest.TestCase):
     def test_default_install_writes_subscription_block_with_catalog(self):
         with tempfile.TemporaryDirectory() as tmp:

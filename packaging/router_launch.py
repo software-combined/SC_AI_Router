@@ -12,7 +12,7 @@ from pathlib import Path
 
 home = Path(__file__).resolve().parent
 try:
-    name = (home / 'current').read_text().strip().split('/')[-1]
+    name = (home / 'current').read_text(encoding='utf-8').strip().split('/')[-1]
 except (OSError, ValueError):
     raise SystemExit('router pointer file missing: reinstall the router')
 release = home / 'releases' / name

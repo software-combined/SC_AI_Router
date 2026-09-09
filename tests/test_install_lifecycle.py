@@ -17,6 +17,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
+from tests._platform import unix_only
 from tests.test_install import (
     _craft_bundle,
     _ok_run,
@@ -126,6 +127,7 @@ class InstallLifecycleTests(unittest.TestCase):
             self.assertEqual(install_mod.current_version(home), '0.0.0')
             self.assertIsNone(install_mod.current_release_dir(home))
 
+    @unix_only
     def test_swap_current_migrates_legacy_symlink(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
@@ -138,6 +140,7 @@ class InstallLifecycleTests(unittest.TestCase):
             self.assertFalse((home / 'current').is_symlink())
             self.assertEqual((home / 'current').read_text(), '0.3.0\n')
 
+    @unix_only
     def test_config_backup_holds_pre_replacement_content(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
@@ -173,6 +176,7 @@ class InstallLifecycleTests(unittest.TestCase):
                              'failed restore must not stop services')
             self.assertTrue(main_plist.exists())
 
+    @unix_only
     def test_uninstall_proceeds_when_restore_succeeds(self):
         with tempfile.TemporaryDirectory() as tmp:
             home, agents = _uninstall_home(tmp)
@@ -200,6 +204,7 @@ class InstallLifecycleTests(unittest.TestCase):
             self.assertFalse((agents / (install_mod.LABEL + '.plist')).exists())
             self.assertFalse((agents / (install_mod.UPDATE_LABEL + '.plist')).exists())
 
+    @unix_only
     def test_version_rolls_back_from_installed_release(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
@@ -228,6 +233,7 @@ class InstallLifecycleTests(unittest.TestCase):
             with self.assertRaisesRegex(SystemExit, 'not installed'):
                 install_mod.do_install(args, _fetch=_no_fetch)
 
+    @unix_only
     def test_version_rollback_restores_previous_on_health_failure(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
@@ -241,6 +247,7 @@ class InstallLifecycleTests(unittest.TestCase):
                     install_mod.do_install(args, _fetch=_no_fetch)
             self.assertEqual((home / 'current').read_text(), '1.0.1\n')
 
+    @unix_only
     def test_failed_first_install_retries_instead_of_up_to_date(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
@@ -384,6 +391,7 @@ class SafeUpdateTests(unittest.TestCase):
                        or 'bootout' in c or 'bootstrap' in c]
             self.assertFalse(signals, 'identity failure must not signal launchd')
 
+    @unix_only
     def test_busy_upgrade_defers_without_kill(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
@@ -408,6 +416,7 @@ class SafeUpdateTests(unittest.TestCase):
                      if c[:2] == ['launchctl', 'kill'] or 'bootout' in c]
             self.assertFalse(fresh, 'busy upgrade must not signal launchd')
 
+    @unix_only
     def test_failed_upgrade_rolls_back_with_term_not_bootout(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'

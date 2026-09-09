@@ -120,7 +120,7 @@ def _run_install(test, tmp, home, fake_fetch, fake_run):
             install_mod.do_install(args, _fetch=fake_fetch, _run=fake_run), 0)
     return args, env
 
-
+@unittest.skipIf(os.name == 'nt', 'Unix-only install/service layer')
 class InstallTests(unittest.TestCase):
     def test_checksum_mismatch_is_rejected(self):
         with self.assertRaises(SystemExit):
