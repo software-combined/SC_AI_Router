@@ -58,8 +58,12 @@ Rules:
 - `codex_router/catalogue.py` + `models.py` + `live_refresh.py` share client
   projection duties through `model_metadata.py` (pure normalization) and
   `clients/` (capability projection, picker visibility).
-- Client activation and receipts live in the installer config-block path
-  (Plan 063 extracts them per client).
+- Client activation lives in `packaging/codex_config.py`: the Codex block,
+  picker preservation, guidance, and receipts. `--client none` runs the
+  router lifecycle without touching client settings; absence of a client
+  selection in legacy state means Codex. Subscription policy is per client:
+  Responses follows `openai_mode`, Messages follows `anthropic_mode` when
+  set, else the legacy `openai_mode` fallback.
 
 ## Acceptance gates are distinct
 

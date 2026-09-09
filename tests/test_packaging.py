@@ -90,6 +90,7 @@ class PackagingTests(unittest.TestCase):
         for name in ('packaging/router_launch.py', 'packaging/update_launch.py',
                      'packaging/launchd.py', 'packaging/service.py',
                      'packaging/install.py', 'packaging/updater.py',
+                     'packaging/codex_config.py',
                      'packaging/platforms/__init__.py',
                      'packaging/platforms/darwin.py',
                      'packaging/platforms/linux.py'):

@@ -48,6 +48,8 @@ def load_state(path=STATE):
         raise SystemExit('Router state file is missing or mistyped keys: opencode_auth')
     if 'openai_mode' in state and state['openai_mode'] not in ('subscription', 'none'):
         raise SystemExit('openai_mode must be subscription or none')
+    if 'anthropic_mode' in state and state['anthropic_mode'] not in ('subscription', 'none'):
+        raise SystemExit('anthropic_mode must be subscription or none')
     try:
         Credentials(state, ROUTER_HOME).check()
     except (LookupError, PermissionError, ValueError, OSError) as exc:
