@@ -136,6 +136,26 @@ def _run_install(test, tmp, home, fake_fetch, fake_run):
             install_mod.do_install(args, _fetch=fake_fetch, _run=fake_run), 0)
     return args, env
 
+class PlatformRefusalTests(unittest.TestCase):
+    # Unskipped on purpose: the whole point is proving the refusal fires on
+    # Windows, the platform the Unix-only class above skips. No launchd,
+    # systemctl, getuid, or permission-bit surface is touched here.
+    def test_unsupported_platform_refuses_before_any_router_home(self):
+        # Plan 057 Stage 1: Windows must get one sentence, not a launchd
+        # traceback after a partial install.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            previous = install_mod.PLATFORM
+            install_mod.PLATFORM = 'win32'
+            try:
+                with self.assertRaisesRegex(SystemExit, 'not supported'):
+                    install_mod.main(['--feed', 'file:///latest.json',
+                                      '--home', str(home)])
+            finally:
+                install_mod.PLATFORM = previous
+            self.assertFalse(home.exists())
+
+
 @unittest.skipIf(os.name == 'nt', 'Unix-only install/service layer')
 class InstallTests(unittest.TestCase):
     def test_checksum_mismatch_is_rejected(self):
