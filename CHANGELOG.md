@@ -11,6 +11,20 @@
 - Route defined HTTP failures through one shared error catalog with stable
   codes (`codex_router/errors.py`, now in the deploy list); CLI/tool exits
   print `CODE: message` and logs record the same code.
+- Promise and prove mid-thread model switching in Codex: switching models
+  from the picker continues the same thread with history and tools
+  intact, since every turn routes on its own model. If one
+  model reports it is at capacity, switch to another and carry on.
+  Astra subscription history (encrypted reasoning blobs, compaction
+  items, tool calls/results) replays cleanly on Muse; blobs are
+  stripped, readable summaries and results are kept, and opaque native
+  compaction replays as a visible note rather than readable context.
+  Image blocks do not carry over to text-only models, and a model
+  tool-count ceiling (Grok, 350 tools) still rejects an over-ceiling
+  thread with a fresh-task message.
+  The thread effort carries over, and an effort the new model does not
+  support (for example carried max onto Contributor) is rejected with
+  the allowed levels instead of failing opaquely upstream.
 - Reject OpenRouter requests whose estimated input plus reserved output
   would exceed the model's context window (409 with an actionable message)
   instead of forwarding a doomed turn that the endpoint 400s outright.

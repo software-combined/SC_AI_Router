@@ -97,6 +97,34 @@ class RoutingTests(unittest.TestCase):
                                  dict(payload, model='z-ai/glm-5.3'))
             self.assertIn('input', json.loads(prepared.body))
 
+    def test_astra_history_replays_on_contributor_mid_thread(self):
+        # Picker switch: Astra blobs/compaction/tool history prepare cleanly
+        # on Contributor; carried xhigh passes, carried max fails closed.
+        items = [{'type': 'reasoning', 'encrypted_content': 'astra-blob',
+                  'summary': [{'type': 'text', 'text': 'ten-call cap'}]},
+                 {'type': 'compaction', 'encrypted_content': 'opaque'},
+                 {'type': 'function_call', 'call_id': 'c1', 'name': 'echo_probe',
+                  'arguments': '{"value": "probe"}'},
+                 {'type': 'function_call_output', 'call_id': 'c1', 'output': 'ok'}]
+        prepared = _prepared('meta/muse-spark-1.3-contributor', '/responses',
+                             {'model': 'meta/muse-spark-1.3-contributor',
+                              'input': items, 'reasoning': {'effort': 'xhigh'}})
+        data = json.loads(prepared.body)['input']
+        self.assertNotIn('astra-blob', json.dumps(data))
+        call = next(i for i in data if i.get('type') == 'function_call')
+        self.assertEqual((call['call_id'], call['name'],
+                          json.loads(call['arguments'])),
+                         ('c1', 'echo_probe', {'value': 'probe'}))
+        result = next(i for i in data if i.get('type') == 'function_call_output')
+        self.assertEqual((result['call_id'], result['output']), ('c1', 'ok'))
+        blob = json.dumps(data)
+        for keep in ('ten-call cap', 'cannot read'):
+            self.assertIn(keep, blob)
+        with self.assertRaisesRegex(ValueError, "does not support reasoning effort 'max'"):
+            _prepared('meta/muse-spark-1.3-contributor', '/responses',
+                      {'model': 'meta/muse-spark-1.3-contributor', 'input': [],
+                       'reasoning': {'effort': 'max'}})
+
 def _test_state(auth_path):
     return {'port': 0, 'token': 'test-token',
             'openai_models': [], 'opencode_auth': auth_path}

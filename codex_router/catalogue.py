@@ -117,7 +117,7 @@ def openrouter_entry(model):
                              if model.tier == 'preview' else model.display_name),
             'description': (('Preview, not yet verified with Codex. '
                              if model.tier == 'preview' else '')
-                            + 'OpenRouter billing. Choose before starting a fresh task. '
+                            + 'OpenRouter billing. Switch to this model mid-thread; history carries over. '
                             + 'OpenRouter: ' + catalog_name(model)),
             'default_reasoning_level': model.default_reasoning,
             'supported_reasoning_levels': [
