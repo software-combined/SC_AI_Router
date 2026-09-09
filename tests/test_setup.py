@@ -365,23 +365,25 @@ class SetupHandlerTests(unittest.TestCase):
     def test_setup_post_over_inherited_listener(self):
         # Production boots socket-activated (no server_bind, no server_port):
         # the setup POST must work there, not just on directly bound servers.
-        import socket as _socket
-        import threading as _threading
+        import socket
+        import threading
         from codex_router.router import Router
         home = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, home, True)
-        state = {'port': 0, 'token': 'test-token', 'openai_models': [],
-                 'setup': {'nonce': 'n' * 16, 'expires': 9_999_999_999}}
-        (home / 'mixed-router-state.json').write_text(json.dumps(state))
-        listener = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+        listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.addCleanup(listener.close)
         listener.bind(('127.0.0.1', 0))
         listener.listen(5)
         port = listener.getsockname()[1]
+        # Inherited fd must be for the configured port (production launchd
+        # declares SockServiceName = state port); foreign fds fall back.
+        state = _state(home, port=port,
+                       setup={'nonce': 'n' * 16, 'expires': 9_999_999_999})
+        (home / 'mixed-router-state.json').write_text(json.dumps(state))
         server = Router(dict(state), fileno=listener.fileno(),
                         credentials=Credentials(dict(state), home, env={}))
         self.addCleanup(server.server_close)
-        thread = _threading.Thread(target=server.serve_forever, daemon=True)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         self.addCleanup(server.shutdown)
         with mock.patch('urllib.request.urlopen', _key_ok()):
