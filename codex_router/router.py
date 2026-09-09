@@ -49,6 +49,22 @@ class Router(ThreadingHTTPServer):
         log_event('exit', inflight=self.inflight, forced=forced)
         os._exit(0)
 
+def _payload_has_image(body):
+    """True when the serialized request carries an input_image block; False on doubt."""
+    # ponytail: parse, don't substring-match; prose mentioning images must not count.
+    try:
+        payload = json.loads(body.decode() if isinstance(body, bytes) else '')
+    except (ValueError, UnicodeDecodeError, AttributeError):
+        return False
+    items = payload.get('input') if isinstance(payload, dict) else None
+    if not isinstance(items, list):
+        return False
+    return any(isinstance(item, dict) and isinstance(item.get('content'), list)
+               and any(isinstance(block, dict) and block.get('type') == 'input_image'
+                       for block in item['content'])
+               for item in items)
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
 
@@ -236,6 +252,28 @@ class Handler(BaseHTTPRequestHandler):
             retry_after = providers.upstream_retry_after(response, prepared, metrics)
             if retry_after is not None:
                 return self.retryable_reject(errors.upstream_rate_limited(), retry_after)
+            if response.status >= 400:
+                raw = response.read()
+                described = providers.describe_failure(
+                    None, {'status': response.status, 'body': raw},
+                    {'model': metrics.get('model'), 'provider': prepared.provider,
+                     'elapsed_ms': round((time.monotonic() - started) * 1000, 1),
+                     'timeout_s': 120,
+                     'has_image': _payload_has_image(prepared.body)})
+                if described is not None:
+                    status, message = described
+                    log_event('upstream_rejected', status=response.status,
+                              client_status=status, **metrics)
+                    return self.error(errors.upstream_described(message) if status == 502
+                                      else errors.preparation(message))
+                self.send_response(response.status)
+                providers.relay_headers(response, self.send_header, metrics.get('model'))
+                self.send_header('Connection', 'close')
+                self.end_headers()
+                self.wfile.write(raw)
+                self.wfile.flush()
+                self.close_connection = True
+                return
             metrics['upstream_headers_ms'] = round((time.monotonic() - started) * 1000, 1)
             self.send_response(response.status)
             providers.relay_headers(response, self.send_header, metrics.get('model'))
@@ -253,14 +291,26 @@ class Handler(BaseHTTPRequestHandler):
                 with self.server.lock:
                     self.server.served_models[metrics['model']] = metrics['served_model']
         except (OSError, http.client.HTTPException, ValueError, KeyError) as exc:
+            total_ms = round((time.monotonic() - started) * 1000, 1)
             log_event('transport_error',
                         status=response.status if response is not None else None,
                         **metrics, error_type=type(exc).__name__,
                         error_category=exc.msg if isinstance(exc, json.JSONDecodeError) else type(exc).__name__,
                         traceback=traceback.format_exc(limit=3)[-4000:],
-                        total_ms=round((time.monotonic() - started) * 1000, 1))
+                        total_ms=total_ms)
             if not sent:
-                self.error(errors.upstream_failed())
+                described = providers.describe_failure(
+                    exc, None,
+                    {'model': metrics.get('model'), 'provider': prepared.provider,
+                     'host': prepared.host, 'elapsed_ms': total_ms,
+                     'timeout_s': 120,
+                     'has_image': _payload_has_image(prepared.body)})
+                if described is not None:
+                    status, message = described
+                    self.error(errors.upstream_described(message) if status == 502
+                               else errors.preparation(message))
+                else:
+                    self.error(errors.upstream_failed())
         finally:
             with self.server.lock:
                 self.server.inflight -= 1

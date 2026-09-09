@@ -155,6 +155,60 @@ class OutputCapTests(unittest.TestCase):
                 self.assertNotIn('router-secret', str(exc))
 
 
+class FailureDescriptionTests(unittest.TestCase):
+    def test_stall_before_headers_names_model_and_timeout(self):
+        status, message = providers.describe_failure(
+            TimeoutError('timed out'), None,
+            {'model': '~x-ai/grok-latest', 'provider': 'openrouter',
+             'elapsed_ms': 120001.0, 'timeout_s': 120, 'has_image': False})
+        self.assertEqual(status, 502)
+        self.assertIn('~x-ai/grok-latest', message)
+        self.assertIn('120', message)
+        self.assertIn('shorter', message)
+
+    def test_grok_image_stall_suggests_text_only(self):
+        status, message = providers.describe_failure(
+            TimeoutError('timed out'), None,
+            {'model': '~x-ai/grok-latest', 'provider': 'openrouter',
+             'elapsed_ms': 120001.0, 'timeout_s': 120, 'has_image': True})
+        self.assertEqual(status, 502)
+        self.assertIn('text-only', message)
+
+    def test_dns_failure_names_host(self):
+        status, message = providers.describe_failure(
+            OSError('Name or service not known'), None,
+            {'model': 'z-ai/glm-5.3', 'provider': 'openrouter',
+             'host': 'openrouter.ai', 'elapsed_ms': 12.0, 'timeout_s': 120,
+             'has_image': False})
+        self.assertEqual(status, 502)
+        self.assertIn('openrouter.ai', message)
+
+    def test_nested_provider_400_becomes_actionable_409(self):
+        raw = ('{"code": "invalid-argument", "error": "Failed to start sampling: '
+               '[invalid_client_tool_schema] ns_abc_tool_update: tool parameter '
+               'root must be an object type"}')
+        body = json.dumps({'error': {'message': 'Provider returned error',
+                                     'metadata': {'raw': raw, 'provider_name': 'xAI'}}})
+        status, message = providers.describe_failure(
+            None, {'status': 400, 'body': body.encode()},
+            {'model': '~x-ai/grok-latest', 'provider': 'openrouter',
+             'elapsed_ms': 1831.8, 'timeout_s': 120, 'has_image': False})
+        self.assertEqual(status, 409)
+        self.assertIn('xAI', message)
+        self.assertIn('ns_abc_tool_update', message)
+        self.assertNotIn('arguments_json', message)
+
+    def test_unparseable_upstream_body_passes_through(self):
+        self.assertIsNone(providers.describe_failure(
+            None, {'status': 400, 'body': b'not json at all'},
+            {'model': 'z-ai/glm-5.3', 'provider': 'openrouter',
+             'elapsed_ms': 500.0, 'timeout_s': 120, 'has_image': False}))
+        self.assertIsNone(providers.describe_failure(
+            ValueError('odd shape'), None,
+            {'model': 'z-ai/glm-5.3', 'provider': 'openrouter',
+             'elapsed_ms': 500.0, 'timeout_s': 120, 'has_image': False}))
+
+
 class SummarizerTests(unittest.TestCase):
     def _summarize(self, model, seen):
         class FakeConn:

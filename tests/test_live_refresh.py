@@ -61,11 +61,11 @@ class LiveRefreshTests(unittest.TestCase):
                          'DeepSeek: V4 Flash 0731 \xb7 OpenRouter')
 
     def test_upstream_rebrand_does_not_rewrite_pinned_vendor(self):
-        row = _row(slug='deepseek/deepseek-v4-pro', vendor='DeepSeek',
-                   display_name='DeepSeek: V4 Pro 0423 \xb7 OpenRouter')
-        live = _live(name='NewCorp: DeepSeek V4 Pro 0423')
+        row = _row(slug='deepseek/deepseek-v4-pro-0813', vendor='DeepSeek',
+                   display_name='DeepSeek: V4 Pro 0813 \xb7 OpenRouter')
+        live = _live(name='NewCorp: DeepSeek V4 Pro 0813')
         self.assertEqual(derive(row, live)['display_name'],
-                         'DeepSeek: V4 Pro 0423 \xb7 OpenRouter')
+                         'DeepSeek: V4 Pro 0813 \xb7 OpenRouter')
 
     def test_display_name_untouched_without_alias(self):
         derived = derive(_row(display_name='Grok Latest \xb7 OpenRouter'), _live())

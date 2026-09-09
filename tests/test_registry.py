@@ -98,8 +98,8 @@ class RegistryTests(unittest.TestCase):
 
     def test_catalog_name_vendor_prefix_rule(self):
         from codex_router.catalogue import catalog_name
-        deepseek = by_slug('deepseek/deepseek-v4-pro')
-        self.assertEqual(catalog_name(deepseek), 'DeepSeek: V4 Pro 0423')
+        deepseek = by_slug('deepseek/deepseek-v4-pro-0813')
+        self.assertEqual(catalog_name(deepseek), 'DeepSeek: V4 Pro 0813')
         muse = by_slug('meta/muse-spark-1.3')
         self.assertEqual(catalog_name(muse), 'Meta: Muse Spark 1.3')
 
