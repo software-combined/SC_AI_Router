@@ -2,6 +2,12 @@
 
 ## 0.6.10 (unreleased)
 
+- Report missing install prerequisites before writing anything: new
+  `--preflight` flag prints each missing item (Python 3.14, `gh`
+  binary for the transitional feed route, Codex CLI unless `--client
+  none`) with its remedy and exits non-zero, without creating the
+  router home.
+
 - Harden Windows key protection in source: icacls owner-only enforcement
   with verify-after-write, a read-time ACL gate mirroring the POSIX check,
   and setup-window refusal on unprotectable keys (offline proofs only;
