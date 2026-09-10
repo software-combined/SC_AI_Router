@@ -2,6 +2,13 @@
 
 ## 0.6.11
 
+- Attribute router latency per phase instead of one cumulative number:
+  `request_completed` now carries `read_ms`, `prepare_ms`, `connect_ms`,
+  `send_ms`, `headers_ms`, `first_data_ms`, and `first_write_ms`, plus
+  fixed-category `response_kind`/`response_encoding`; failures record
+  the phases that completed. Cumulative fields keep their meanings.
+  This enables measurement; it claims no latency improvement.
+
 - Attribute context refusals and estimate the full billable request:
   the pre-flight estimate now counts serialized tools and instructions
   alongside input (image blocks excluded, matching the client counter),
