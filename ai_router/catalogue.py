@@ -64,7 +64,9 @@ OPENROUTER_TEMPLATE = {
 PREVIEW_PRIORITY_OFFSET = 100000  # preview entries sort after every verified model
 RETIRED_SLUGS = {'anthropic/claude-opus-5', 'anthropic/claude-fable-5.1',
                  'deepseek/deepseek-v4-pro', 'deepseek/deepseek-v4-flash',
-                 'deepseek/deepseek-v4-flash-0731'}  # pro-0423 retired 2026-09-09; flash rows superseded by the flash-latest alias
+                 'deepseek/deepseek-v4-flash-0731',
+                 '~deepseek/deepseek-v4-flash-latest',
+                 'deepseek/deepseek-v4-flash-vision-exp'}  # DeepSeek keeps Pro 0813 + V4.1 Flash; alias and Vision rows retired
 # Subscription roster entries withdrawn from the picker. merge() drops these
 # from roster, catalogue and state-derived seeding alike, so a scheduled
 # update repairs machines that still carry the row.
