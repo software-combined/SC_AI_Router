@@ -88,6 +88,57 @@ class EstimateTests(unittest.TestCase):
         self.assertEqual((budget['reserved'], budget['window']), (32000, 1048576))
 
 
+class EstimateParityTests(unittest.TestCase):
+    """Pin the counting sink against the previous json.dumps implementation."""
+
+    def _legacy(self, payload):
+        if not isinstance(payload, dict):
+            return 0
+        try:
+            items = payload.get('input', [])
+            if not isinstance(items, list):
+                items = []
+            total = len(json.dumps([context_budget._without_images(i)
+                                    for i in items])) // 4
+            if isinstance(payload.get('tools'), list):
+                total += len(json.dumps(payload['tools'])) // 4
+            if isinstance(payload.get('instructions'), str):
+                total += len(payload['instructions']) // 4
+            return total
+        except (ValueError, TypeError):
+            return 0
+
+    def _shapes(self):
+        img = {'type': 'input_image', 'image_url': 'data:image/png;base64,' + 'A' * 5000}
+        block = {'type': 'message', 'role': 'user', 'content': [
+            {'type': 'input_text', 'text': 'x' * 4000}, img]}
+        return {
+            'images excluded': {'input': [block]},
+            'tools included': {'input': [],
+                                'tools': [{'name': f'f{i}', 'description': 'd' * 200}
+                                          for i in range(9)]},
+            'instructions included': {'input': [], 'instructions': 'y' * 8000},
+            'malformed payload': {'input': 'not-a-list', 'tools': 'nope'},
+            # ensure_ascii escaping must count the same as the old string form
+            'non-ascii text and keys': {'input': [{'content': 'nac\u0308ive \U0001f600'}],
+                                        'instructions': '\u00e9' * 4000,
+                                        'tools': [{'n\u00e4me': 'x' * 100}]},
+            'numeric edge shapes': {'input': [{'content': None}, {'v': float('nan')},
+                                              {'v': 9007199254740993}],
+                                    'tools': [{'n': True}, {'n': -0.0}]},
+        }
+
+    def test_counting_sink_matches_legacy_counts(self):
+        for name, payload in self._shapes().items():
+            with self.subTest(shape=name):
+                self.assertEqual(context_budget.estimate(payload),
+                                   self._legacy(payload))
+        for payload in ('nope', 42, None):
+            with self.subTest(payload=repr(payload)):
+                self.assertEqual(context_budget.estimate(payload), 0)
+
+
+
 class ContextWireTests(unittest.TestCase):
     def setUp(self):
         self.server = _start_server(_test_state('unused'))

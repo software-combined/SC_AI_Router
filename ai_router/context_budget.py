@@ -8,6 +8,23 @@ text-only turns strip images before dispatch in any case.
 import json
 
 
+class _Counter:
+    """File-like sink that counts serialized chars without keeping the string."""
+
+    __slots__ = ('size',)
+    def __init__(self):
+        self.size = 0
+    def write(self, chunk):
+        self.size += len(chunk)
+
+
+def _dumped_len(obj):
+    """Length of the JSON serialization without materializing the string."""
+    counter = _Counter()
+    json.dump(obj, counter)
+    return counter.size
+
+
 def _without_images(item):
     if (isinstance(item, dict) and isinstance(item.get('content'), list)
             and any(isinstance(b, dict) and b.get('type') == 'input_image'
@@ -25,9 +42,9 @@ def estimate(payload):
         items = payload.get('input', [])
         if not isinstance(items, list):
             items = []
-        total = len(json.dumps([_without_images(i) for i in items])) // 4
+        total = _dumped_len([_without_images(i) for i in items]) // 4
         if isinstance(payload.get('tools'), list):
-            total += len(json.dumps(payload['tools'])) // 4
+            total += _dumped_len(payload['tools']) // 4
         if isinstance(payload.get('instructions'), str):
             total += len(payload['instructions']) // 4
         return total

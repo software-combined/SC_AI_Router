@@ -65,6 +65,25 @@ class IngressGuardTests(unittest.TestCase):
             self.assertEqual(json.loads(response.read())['error']['code'], 'BODY_TOO_LARGE')
         self.assertEqual(recorded, [])
 
+    def test_image_stall_hint_uses_the_pre_strip_snapshot(self):
+        # Plan 093 Step 2: has_image is snapshotted before prepare() strips
+        # images, so the Grok stall hint can still fire for an image turn.
+        def stall():
+            raise TimeoutError('timed out')
+        install_fake(self, stall)
+        server = self._server()
+        payload = {'model': '~x-ai/grok-latest', 'input': [
+            {'type': 'message', 'role': 'user', 'content': [
+                {'type': 'input_text', 'text': 'look'},
+                {'type': 'input_image', 'image_url': 'data:x'}]}]}
+        conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
+        conn.request('POST', '/test-token/responses', body=json.dumps(payload),
+                     headers={'Content-Type': 'application/json'})
+        response = conn.getresponse()
+        self.assertEqual(response.status, 502)
+        message = json.loads(response.read())['error']['message']
+        self.assertIn('retry text-only', message)
+
 
 if __name__ == '__main__':
     unittest.main()

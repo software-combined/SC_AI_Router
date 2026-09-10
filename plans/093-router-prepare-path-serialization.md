@@ -2,12 +2,13 @@
 
 > Planning only. Implement only under a later implementation instruction.
 > Drift check: `git diff --stat a985197..HEAD -- ai_router/context_budget.py ai_router/providers.py ai_router/claude.py ai_router/router.py tests/test_context_budget.py tests/test_claude_ingress.py`
+> Drift result 2026-09-11: only `ai_router/router.py` moved since `a985197` (Plan 090 ingress lifecycle + fallback split: `subscription_fallback.prepare`, owned-slot `_owned_post`, `timeout = 120`); all plan target lines intact.
 > Read changed code and preserve current behavior before edits.
 
 ## Status and first proof
 
 - Priority P2; effort S-M; risk LOW-MED; confidence HIGH; category perf; depends on none.
-- Planned at `a985197`, 2026-09-10.
+- Planned at `a985197`, 2026-09-10; implemented 2026-09-11.
 - First proof: an aliased Claude request is rewritten from the already-parsed payload; an OpenRouter
   request materializes one payload string instead of two; failure paths no longer re-parse the body.
 
@@ -22,12 +23,12 @@ Three independent avoidable costs on hot paths:
    estimate from the wire body is **rejected** because the 16 image-capable OpenRouter rows keep
    base64 image blocks, which would cause spurious fail-closed `context_length_exceeded` refusals.
 2. **Claude alias re-parse** — `ai_router/claude.py:109-116` decodes and re-parses `raw_body` even
-   though `ai_router/router.py:302` already parsed it (`payload` is passed into `prepare`).
-3. **Failure-path image parse** — `ai_router/router.py:341` and `:389` call `_payload_has_image(prepared.body)`,
+   though `ai_router/router.py:193` already parsed it (`payload` is passed into `prepare`).
+3. **Failure-path image parse** — `ai_router/router.py:343` and `:391` call `_payload_has_image(prepared.body)`,
    which JSON-decodes the whole (≤16 MB) outgoing body. At `:341` the failure has no exception, so
-   `providers.describe_failure` never reads `has_image` (`ai_router/providers.py:130-136`): the work
+   `providers.describe_failure` never reads `has_image` (`ai_router/providers.py:133-136`): the work
    is pure waste. Additionally, because `~x-ai` rows set `drop_images=True` and
-   `comp.note_images` rewrites images to text before serialization (`providers.py:225`), the
+   `comp.note_images` rewrites images to text before serialization (`providers.py:225`; now still `:225`), the
    "Grok image turns stall" hint can currently never fire on the serialized body.
 
 ## Current state (verified at a985197)
@@ -43,8 +44,8 @@ Three independent avoidable costs on hot paths:
 - `ai_router/claude.py:107-116`: `slug = resolve(model)`; when `slug != model` it re-parses
   `raw_body` and serializes a new dict; otherwise the body travels byte-identical.
 - `ai_router/router.py:61-74` `_payload_has_image(body)` parses bytes; called at `:341` (exc `None`)
-  and `:389` (may be a `TimeoutError`). `payload` from `read_body` is available at `:192` and is
-  mutated in place by `provider.prepare` at `:221`.
+  and `:389` (may be a `TimeoutError`). `payload` from `read_body` is available at `:193` and is
+  mutated in place by `subscription_fallback.prepare` at `:220`.
 - `ai_router/capabilities.py:80-90` `has_images(items)` already walks a parsed payload for
   `input_image` blocks — reuse that logic rather than adding a third walker.
 
@@ -86,8 +87,7 @@ byte-identical; a zstd-compressed aliased body is rewritten to plain JSON.
 Replace `_payload_has_image(body)` with `_payload_has_image(payload)` operating on the already-parsed
 dict (reuse `capabilities.has_images` semantics: walk `payload['input']` for `input_image` blocks).
 Compute `has_image = _payload_has_image(payload)` in `do_POST` immediately after `read_body` (before
-`provider.prepare` mutates the payload), carry it into both `describe_failure` info dicts at `:336-341`
-and `:384-389`, and delete the two serialized-body calls. This makes the hint reachable (pre-strip
+`provider.prepare` mutates the payload), carry it into both `describe_failure` info dicts at `:338` and `:386`, and delete the two serialized-body calls. This makes the hint reachable (pre-strip
 images) and cheap.
 
 **Verify**: update/extend a handler or providers test to assert the info passed to
@@ -107,11 +107,19 @@ images excluded, tools included, instructions included, malformed payload → 0.
 
 ## Done criteria
 
-- [ ] Aliased Claude requests no longer decode `raw_body`; direct slugs still byte-identical.
-- [ ] `_payload_has_image` takes a parsed payload; `:341`/`:389` no longer decode the body.
-- [ ] `context_budget.estimate` materializes no JSON strings; parity tests pass.
+- [x] Aliased Claude requests no longer decode `raw_body`; direct slugs still byte-identical.
+- [x] `_payload_has_image` takes a parsed payload; `:338`/`:386` no longer decode the body.
+- [x] `context_budget.estimate` materializes no JSON strings; parity tests pass.
 - [ ] Full suite, compile and limit gates pass; only in-scope files changed.
 - [ ] `plans/README.md` status row updated.
+
+## Implementation notes (2026-09-11)
+
+- `relay` takes `has_image=False` so the out-of-scope twin path in
+  `subscription_fallback.py` keeps working; it passes
+  `has_images(fallback.payload.get('input'))` for its own turn.
+- The stale byte-form `test_handler` expectation was ported to the payload
+  form per the plan (same True/False cases); no production expectation changed.
 
 ## STOP conditions
 

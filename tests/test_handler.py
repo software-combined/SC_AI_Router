@@ -182,16 +182,16 @@ class HandlerCharacterisationTests(unittest.TestCase):
         self.assertEqual(server.inflight, before)
 
     def test_payload_image_check_matches_blocks_not_prose(self):
-        block = json.dumps({'model': 'm', 'input': [
+        block = {'model': 'm', 'input': [
             {'type': 'message', 'role': 'user', 'content': [
                 {'type': 'input_text', 'text': 'look'},
-                {'type': 'input_image', 'image_url': 'data:x'}]}]}).encode()
+                {'type': 'input_image', 'image_url': 'data:x'}]}]}
         self.assertTrue(_payload_has_image(block))
-        prose = json.dumps({'model': 'm', 'input': [
+        prose = {'model': 'm', 'input': [
             {'type': 'message', 'role': 'user',
-             'content': 'tell me about "image" processing'}]}).encode()
+             'content': 'tell me about "image" processing'}]}
         self.assertFalse(_payload_has_image(prose))
-        self.assertFalse(_payload_has_image(b'not json'))
+        self.assertFalse(_payload_has_image('not a dict'))
         self.assertFalse(_payload_has_image(None))
 
     def test_upstream_stall_names_model_in_502(self):
