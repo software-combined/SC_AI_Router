@@ -272,25 +272,61 @@ class BetaChannelTests(unittest.TestCase):
         stack.enter_context(mock.patch.object(feed_mod, '_gh_run', func))
         return stack
 
-    def test_gh_binary_prefers_path_then_service_fallbacks(self):
+    def test_gh_binary_prefers_path_then_candidates(self):
         feed_mod = install_mod._svc._feed
         with mock.patch.object(feed_mod.shutil, 'which', lambda name: '/custom/gh'):
-            self.assertEqual(feed_mod._gh_binary(), '/custom/gh')
+            self.assertEqual(feed_mod.gh_binary(), '/custom/gh')
         with mock.patch.object(feed_mod.shutil, 'which', lambda name: None), \
-                mock.patch.object(feed_mod, 'GH_FALLBACKS', ('/nope', sys.executable)):
-            self.assertEqual(feed_mod._gh_binary(), sys.executable)
+                mock.patch.object(feed_mod, 'gh_candidates', return_value=('/nope', sys.executable)):
+            self.assertEqual(feed_mod.gh_binary(), sys.executable)
         with mock.patch.object(feed_mod.shutil, 'which', lambda name: None), \
-                mock.patch.object(feed_mod, 'GH_FALLBACKS', ('/nope',)):
-            self.assertIsNone(feed_mod._gh_binary())
+                mock.patch.object(feed_mod, 'gh_candidates', return_value=('/nope',)):
+            self.assertIsNone(feed_mod.gh_binary())
 
     def test_beta_no_token_fails_closed_without_any_gh(self):
         home = self._home()
         (home / 'channel').write_text('beta\n')
         feed_mod = install_mod._svc._feed
         with mock.patch.object(feed_mod.shutil, 'which', lambda name: None), \
-                mock.patch.object(feed_mod, 'GH_FALLBACKS', ('/nonexistent-gh',)):
+                mock.patch.object(feed_mod, 'gh_candidates', return_value=('/nonexistent-gh',)):
             with self.assertRaisesRegex(SystemExit, 'Cannot resolve beta'):
                 svc.channel_feed(home)
+
+    def test_gh_candidates_cover_posix_and_windows_roots(self):
+        feed_mod = install_mod._svc._feed
+        # POSIX paths always present, even with no Windows env vars set.
+        bare = feed_mod.gh_candidates(env={})
+        for path in ('/opt/homebrew/bin/gh', '/usr/local/bin/gh',
+                     '/usr/bin/gh', '/snap/bin/gh',
+                     '/home/linuxbrew/.linuxbrew/bin/gh'):
+            self.assertIn(path, bare)
+        self.assertEqual(bare, feed_mod.GH_POSIX_FALLBACKS)
+        # Each set Windows variable contributes exactly its install tail.
+        env = {'ProgramFiles': r'C:\Program Files',
+               'LOCALAPPDATA': r'C:\Users\op\AppData\Local',
+               'ProgramData': r'C:\ProgramData',
+               'USERPROFILE': r'C:\Users\op'}
+        found = feed_mod.gh_candidates(env=env)
+        self.assertEqual(found[:len(feed_mod.GH_POSIX_FALLBACKS)],
+                         feed_mod.GH_POSIX_FALLBACKS)
+        for var, tail in feed_mod.GH_WINDOWS_TAILS:
+            self.assertIn(str(Path(env[var]).joinpath(*tail)), found)
+        # A missing env var never raises and contributes nothing.
+        partial = feed_mod.gh_candidates(env={'ProgramFiles': r'C:\Program Files'})
+        self.assertEqual(len(partial), len(feed_mod.GH_POSIX_FALLBACKS) + 1)
+
+    def test_gh_binary_falls_back_to_a_real_file(self):
+        feed_mod = install_mod._svc._feed
+        with tempfile.TemporaryDirectory() as tmp:
+            fake = Path(tmp) / 'gh'
+            fake.write_text('#!/bin/sh\n')
+            with mock.patch.object(feed_mod.shutil, 'which', lambda name: None), \
+                    mock.patch.object(feed_mod, 'gh_candidates',
+                                      return_value=('/nope', str(fake))):
+                self.assertEqual(feed_mod.gh_binary(), str(fake))
+            with mock.patch.object(feed_mod.shutil, 'which', lambda name: None), \
+                    mock.patch.object(feed_mod, 'gh_candidates', return_value=('/nope',)):
+                self.assertIsNone(feed_mod.gh_binary())
 
     def test_beta_no_token_resolves_prerelease_asset_via_gh(self):
         home = self._home()
