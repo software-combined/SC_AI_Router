@@ -102,12 +102,15 @@ class Handler(BaseHTTPRequestHandler):
                 and '/setup/' not in self.path.split('?', 1)[0]):
             return None, False
         prefix = '/' + self.server.state['token']
+        token = self.server.state['token'].encode()
         candidate, sep, _ = self.path[1:].partition('/')
-        if sep and hmac.compare_digest(candidate, self.server.state['token']):
+        # Byte compares (Plan 136): compare_digest rejects non-ASCII str with
+        # TypeError, and latin-1 ingress input can carry bytes 0x80-0xFF.
+        if sep and hmac.compare_digest(candidate.encode('iso-8859-1'), token):
             return self.path[len(prefix):].removeprefix('/backend-api/codex'), True
         header = self.headers.get('Authorization', '')
         if header.startswith('Bearer ') and hmac.compare_digest(
-                header[len('Bearer '):], self.server.state['token']):
+                header[len('Bearer '):].encode('iso-8859-1'), token):
             return self.path.removeprefix('/backend-api/codex'), False
         return None, False
 

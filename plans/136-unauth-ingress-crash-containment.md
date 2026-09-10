@@ -8,6 +8,12 @@
 > **Drift check (run first)**: `git diff --stat 08aff1e..HEAD -- ai_router/router.py tests/test_ingress_guards.py config/source-limits-baseline.json`
 > If any in-scope file changed since this plan was written, compare the "Current
 > state" excerpts against the live code before proceeding; on a mismatch, STOP.
+>
+> **Drift reconciliation 2026-09-11**: `ai_router/router.py` moved only in `relay`
+> (Plan 096, landed before this plan executed); `authorized_path` and the
+> cited excerpt were unchanged, so the plan proceeded. The fix landed at 398
+> lines, not 396: a two-line comment records why the compares are byte-based.
+> Baseline synced to 398; the 400 cap still holds.
 
 ## Status
 
@@ -169,7 +175,7 @@ value in `config/source-limits-baseline.json` to the new exact line count (396
 with the edit above); the 400 hard cap still applies.
 
 **Verify**: `python3.14 -m unittest tests.test_ingress_guards -v` -> all pass;
-`wc -l ai_router/router.py` -> 396; `python3.14 tools/check_source_limits.py`
+`wc -l ai_router/router.py` -> 398 (396 + a two-line comment); `python3.14 tools/check_source_limits.py`
 -> exit 0.
 
 ### Step 3: manual reproduction and full gates

@@ -7,6 +7,7 @@ Reuses the handler helpers like tests/test_claude_ingress.py does.
 """
 import http.client
 import json
+import socket
 import unittest
 from unittest import mock
 from compression import zstd
@@ -63,6 +64,46 @@ class IngressGuardTests(unittest.TestCase):
             response = conn.getresponse()
             self.assertEqual(response.status, 413)
             self.assertEqual(json.loads(response.read())['error']['code'], 'BODY_TOO_LARGE')
+        self.assertEqual(recorded, [])
+
+    def _raw_request(self, port, request_bytes):
+        sock = socket.create_connection(('127.0.0.1', port), timeout=10)
+        self.addCleanup(sock.close)
+        sock.sendall(request_bytes)
+        data = b''
+        while b'\r\n\r\n' not in data:
+            chunk = sock.recv(4096)
+            if not chunk:
+                break
+            data += chunk
+        return data
+
+    def test_non_ascii_path_is_rejected_not_crashed(self):
+        recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
+        server = _start_server(_test_state('/nonexistent'))
+        self.addCleanup(server.shutdown)
+        raw = self._raw_request(
+            server.server_port, b'GET /\xff/x HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n')
+        self.assertIn(b'403', raw.split(b'\r\n', 1)[0])
+        # A real rejection, not merely a closed socket: the body carries the code.
+        self.assertIn(b'"code": "FORBIDDEN"', raw.replace(b'"code":"FORBIDDEN"',
+                                                         b'"code": "FORBIDDEN"'))
+        self.assertEqual(recorded, [])
+        # The handler thread is still alive: a valid request still answers.
+        conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
+        conn.request('GET', '/test-token/health')
+        self.assertEqual(conn.getresponse().status, 200)
+
+    def test_non_ascii_bearer_is_rejected_not_crashed(self):
+        recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
+        server = _start_server(_test_state('/nonexistent'))
+        self.addCleanup(server.shutdown)
+        raw = self._raw_request(
+            server.server_port,
+            b'POST /responses HTTP/1.1\r\nHost: 127.0.0.1\r\n'
+            b'Authorization: Bearer \xff\r\nContent-Length: 2\r\n\r\n{}')
+        self.assertIn(b'403', raw.split(b'\r\n', 1)[0])
+        self.assertIn(b'FORBIDDEN', raw)
         self.assertEqual(recorded, [])
 
     def test_image_stall_hint_uses_the_pre_strip_snapshot(self):

@@ -91,7 +91,7 @@ The report, its verifications and its rejected findings are in
 
 | Plan | Title | Status | Sequencing |
 |---|---|---|---|
-| [136](136-unauth-ingress-crash-containment.md) | Contain the unauthenticated ingress compare crash | TODO | P1; independent; a few lines in router.py (395 today) |
+| [136](136-unauth-ingress-crash-containment.md) | Contain the unauthenticated ingress compare crash | DONE: unauth ingress compare containment 2026-09-11 | P1; independent; a few lines in router.py (398 today) |
 | [137](137-loopback-host-header-validation.md) | Validate the Host header on loopback ingress | TODO | 090 landed; headroom confirmed |
 | [138](138-subscription-cookie-hygiene.md) | Drop Cookie on subscription passthrough and make the tests honest | TODO | independent |
 
