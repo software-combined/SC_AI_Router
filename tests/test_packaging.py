@@ -102,6 +102,43 @@ class PackagingTests(unittest.TestCase):
         version = (Path(__file__).resolve().parents[1] / 'packaging' / 'VERSION').read_text().strip()
         self.assertRegex(version, r'^\d+\.\d+\.\d+$')
 
+    def test_installer_surface_parses_as_python39(self):
+        # Plan 061: the installer runs on Python 3.9+ while the router
+        # needs 3.14. No 3.9 interpreter exists in CI, so pin the grammar
+        # instead: every installer-surface file must parse as 3.9 syntax.
+        # feature_version misses PEP 604 unions (`X | Y` parses as BinOp
+        # but raises at runtime on 3.9), so annotations get their own walk.
+        import ast
+        root = Path(__file__).resolve().parents[1]
+        surface = [
+            'packaging/install.py', 'packaging/service.py',
+            'packaging/launchd.py', 'packaging/router_launch.py',
+            'packaging/systemd.py', 'packaging/update_launch.py',
+            'packaging/updater.py', 'packaging/codex_config.py',
+            'packaging/claude_config.py', 'packaging/diagnostics.py',
+            'packaging/runtime_lock.py', 'packaging/platforms/__init__.py',
+            'packaging/platforms/darwin.py', 'packaging/platforms/linux.py',
+            'packaging/platforms/windows.py', 'codex_router/feed_verify.py',
+            'tools/disable.py', 'tools/global_instructions.py',
+        ]
+        for name in surface:
+            with self.subTest(name=name):
+                src = (root / name).read_text()
+                tree = ast.parse(src, filename=name, feature_version=(3, 9))
+                for node in ast.walk(tree):
+                    ann = None
+                    if isinstance(node, ast.arg):
+                        ann = node.annotation
+                    elif isinstance(node, (ast.FunctionDef,
+                                           ast.AsyncFunctionDef)):
+                        ann = node.returns
+                    elif isinstance(node, ast.AnnAssign):
+                        ann = node.annotation
+                    if (isinstance(ann, ast.BinOp)
+                            and isinstance(ann.op, ast.BitOr)):
+                        self.fail('%s:%s uses a PEP 604 union, '
+                                  'unavailable on Python 3.9' % (name, ann.lineno))
+
     def test_build_composes_full_version_and_manifest(self):
         import importlib.util
         root = Path(__file__).resolve().parents[1]
