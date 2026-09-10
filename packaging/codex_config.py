@@ -16,7 +16,9 @@ END = '# END local mixed model picker'
 
 def build_block(home, state, mode):
     """Managed Codex config block for this install and subscription mode."""
-    catalog_line = f'model_catalog_json = "{home}/mixed-models.json"\n'
+    # Forward slashes: a TOML basic string treats backslashes as escapes, so
+    # a native Windows path would make the whole config unreadable to Codex.
+    catalog_line = f'model_catalog_json = "{Path(home).as_posix()}/mixed-models.json"\n'
     block = ('# BEGIN local mixed model picker\n'
              f'openai_base_url = "http://127.0.0.1:{state["port"]}/{state["token"]}/backend-api/codex"\n'
              + catalog_line + '# END local mixed model picker\n')

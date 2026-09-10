@@ -206,6 +206,9 @@ class InstallLifecycleTests(unittest.TestCase):
             self.assertEqual(seen['env'].get('ROUTER_HOME'), str(home))
             self.assertFalse((agents / (install_mod.LABEL + '.plist')).exists())
             self.assertFalse((agents / (install_mod.UPDATE_LABEL + '.plist')).exists())
+            # A receipt outliving its restored settings makes the next
+            # install refuse guidance it finds missing rather than changed.
+            self.assertFalse((home / 'activation.json').exists())
 
     @unix_only
     def test_version_rolls_back_from_installed_release(self):

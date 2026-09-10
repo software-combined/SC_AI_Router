@@ -5,7 +5,9 @@ winacl.check refuses widened ACLs mirroring the POSIX gate. Fake icacls
 and whoami only; no Windows machine, no real ACL, no secrets.
 """
 import importlib.util
+import json
 import os
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -172,9 +174,12 @@ class WinProtectTests(unittest.TestCase):
                 backend.protect_file(target, run=fake_run)
             grants = [c for c in seen if '/grant:r' in c]
             self.assertEqual(len(grants), 2)
-            for grant in grants:
-                idx = grant.index('/grant:r')
-                self.assertEqual(grant[idx + 1], 'testuser:F')
+            # Parent: inheritable owner-only grant, so files the router
+            # writes beside the key later are born owner-only. File: plain.
+            self.assertEqual(grants[0][grants[0].index('/grant:r') + 1],
+                             'testuser:(OI)(CI)F')
+            self.assertEqual(grants[1][grants[1].index('/grant:r') + 1],
+                             'testuser:F')
 
     def test_protect_failure_leaves_no_silent_exposure(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -218,6 +223,67 @@ class WinBackendShapeTests(unittest.TestCase):
                     install_mod.ensure_credentials(home, {})
             self.assertFalse((home / 'openrouter.key').exists())
             self.assertEqual(len(calls), 1)
+
+    def test_protecting_the_home_hardens_it_in_place(self):
+        # Given the router home itself: one inheritable owner-only grant on
+        # the directory, verified, nothing created inside it.
+        seen = []
+        with tempfile.TemporaryDirectory() as tmp:
+            def fake_run(cmd, **kwargs):
+                seen.append(list(cmd))
+                if cmd[:1] == ['icacls'] and '/grant:r' in cmd:
+                    return SimpleNamespace(returncode=0, stdout='', stderr='')
+                if cmd[:1] == ['icacls']:
+                    return SimpleNamespace(
+                        returncode=0,
+                        stdout='%s CORP\\cyril:(OI)(CI)(F)\nSuccessfully processed 1 files\n' % cmd[1],
+                        stderr='')
+                return _ok_acl()
+            backend.protect_file(tmp, run=fake_run)
+        grants = [c for c in seen if '/grant:r' in c]
+        self.assertEqual([(c[1], c[c.index('/grant:r') + 1]) for c in grants],
+                         [(tmp, 'CORP\\cyril:(OI)(CI)F')])
+        self.assertEqual(len(seen), 4)  # whoami, grant, verify (icacls + whoami)
+
+    def test_install_hardens_the_home_before_minting_the_state_file(self):
+        # The state file carries the loopback token: it must be born inside
+        # an already-restricted home, then verified, before the backend runs.
+        from tests.test_install import _craft_bundle, _ok_run, _patch_attrs, install_mod
+        blob, latest = _craft_bundle('1.0.0')
+        events = []
+
+        class StubBackend:
+            def protect_secret(self, path):
+                events.append(('protect', Path(path).name,
+                               (Path(path) / 'mixed-router-state.json').exists()
+                               if Path(path).is_dir() else None))
+
+            def check(self, home):
+                pass
+
+            def install(self, *args):
+                events.append(('install',))
+
+            def start_updates(self, home):
+                pass
+
+            def pinned_release(self, home):
+                return None
+
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            fetch = lambda url: blob if url.endswith('.tar.gz') else json.dumps(latest).encode()  # noqa: E731
+            _patch_attrs(self, run=_ok_run, wait_version=lambda s, v: {'version': v},
+                         self_test=lambda *a: None, write_catalogue=lambda *a: None)
+            args = install_mod.build_parser().parse_args(
+                ['--home', str(home), '--client', 'none'])
+            with mock.patch.object(install_mod, 'platform_backend', return_value=StubBackend()), \
+                    mock.patch.object(install_mod, 'find_python', return_value=sys.executable), \
+                    mock.patch.dict(os.environ, {'OPENROUTER_API_KEY': 'env-key-for-test'}):
+                self.assertEqual(install_mod.do_install(args, _fetch=fetch), 0)
+        self.assertEqual(events, [('protect', 'home', False),
+                                  ('protect', 'mixed-router-state.json', None),
+                                  ('install',)])
 
 
 
