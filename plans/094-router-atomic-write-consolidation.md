@@ -89,8 +89,7 @@ caller needs it (state home already exists).
 - `codex_config.replace_config_block` → `atomic_write.replace_text(config_path, after)`, keeping the
   existing read/exists/mkdir/chmod flow (chmod on the final path remains for the pre-existing-file case).
 
-Load the helper with the same `spec_from_file_location` pattern used for `feed.py`
-(`service.py:36-43`) so `spec_from_file_location` loading and the 3.9 surface test both work.
+Load the helper with `service.load()` (Plan 123's single 3.9 loader) so no new `spec_from_file_location` copy is added.
 
 ### Step 3: bundle wiring (same commit as Step 1)
 

@@ -22,7 +22,7 @@ Retired-subscription knowledge is duplicated and unlinked:
 
 A future retirement needs both edits, and a missed one lets a retired slug linger in state or
 reappear in the picker. Packaging can import 3.9-safe `ai_router` leaves (precedent:
-`service.py:36-43` loads `feed.py` by spec), but **cannot** import `catalogue` or `registry`:
+`service.load()` (service.py:38-50) loads `feed.py` by spec), but **cannot** import `catalogue` or `registry`:
 `registry.py:29` uses `int | None` annotations without `from __future__`, so it is not 3.9-parseable.
 
 ## Current state (verified at a985197)
@@ -34,8 +34,8 @@ reappear in the picker. Packaging can import 3.9-safe `ai_router` leaves (preced
   and at `:211-215` it pops those slugs from merged entries and skips them when seeding from roster.
 - `packaging/service.py:609-621` `ensure_state`; the prune is the `elif 'gpt-reserve' in state['openai_models']`
   branch.
-- `packaging/service.py:36-43` shows the load path (no `sys.path` insert; the module is read
-  from disk and executed by spec):
+- `packaging/service.py:38-50` shows the house loader (`service.load(name, filename)`; no
+  `sys.path` insert, the module is read from disk and executed by spec):
   ```python
   import importlib.util  # noqa: E402
   _ld_spec = importlib.util.spec_from_file_location(
@@ -85,9 +85,9 @@ the explicit `python3.9` installer-surface parse list test if that list is expli
 - `ai_router/catalogue.py`: replace the literal with
   `from .retired_slugs import SUBSCRIPTION as RETIRED_SUBSCRIPTION_SLUGS` (keep the local name so
   existing importers/tests are unaffected).
-- `packaging/service.py`: beside the `feed.py` spec-load at `:36-43`, load the new leaf the same
-  way (`router_retired_slugs`) and bind `RETIRED_SUBSCRIPTION_SLUGS` from it; then change the
-  prune to iterate the set:
+- `packaging/service.py`: beside the `launchd.py`/`feed.py` spec-loads at `:52-53`, load the new leaf with the
+  same helper (`load('router_retired_slugs', ...)`) and bind `RETIRED_SUBSCRIPTION_SLUGS` from it;
+  then change the prune to iterate the set:
   ```python
   elif any(slug in state['openai_models'] for slug in RETIRED_SUBSCRIPTION_SLUGS):
       state['openai_models'] = [s for s in state['openai_models']

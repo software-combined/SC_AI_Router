@@ -69,7 +69,7 @@ plan 134) — only repo paths and runnable commands.
 4. Refresh stale facts: plan 094 and 101 `feed_token.py` → `feed.py` (drop the file-specific
    import bullet in 101 if it no longer applies — `feed.py`'s urllib imports are used); plan 094
    `152` → `156`; plan 102 `697`/`below 697` → `700`/`below 700` (it is now exactly at the cap);
-   plan 103 `680` → `671`. Also correct plan 100 (same stale citation): `packaging/service.py:39-41` is not a `sys.path` precedent — service.py has no `sys.path` insert; point at `packaging/install.py:22` or the loader at `service.py:36-43`. Plan 100's Step 2 anchor (its "after the existing `from ai_router import feed_verify` line" instruction) must be repointed to the spec-load pattern as well, plan 100:25's claim that `service.py:39-41` imports `feed_verify` is stale (the loader is at `:36-43`), and plan 094's `(service.py:25-28)` loader reference becomes `service.py:36-43`.
+   plan 103 `680` → `671`. Also correct plan 100 (same stale citation): `packaging/service.py:39-41` is not a `sys.path` precedent — service.py has no `sys.path` insert; point at `packaging/install.py:22` or the loader block (then `service.py:36-43`; since plan 123 it is `service.load()` at `service.py:38-50`). Plan 100's Step 2 anchor (its "after the existing `from ai_router import feed_verify` line" instruction) must be repointed to the spec-load pattern as well, plan 100:25's claim that `service.py:39-41` imports `feed_verify` is stale (the loader is at `:36-43`), and plan 094's `(service.py:25-28)` loader reference becomes `service.py:36-43`.
 5. Sanity re-read of each touched plan's drift check: run it against the current tree; it must
    exit 0 without changing anything.
 

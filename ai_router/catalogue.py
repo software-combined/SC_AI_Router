@@ -11,6 +11,7 @@ from .capabilities import catalogue_patch, describe
 from .clients.codex import capability_fields as codex_projection
 from .clients import models_for, visible_for
 from .registry import MODELS, picker_key
+from .subscription_roster import SUBSCRIPTION_SLUGS
 
 OPENROUTER_TEMPLATE = {
     'shell_type': 'unified_exec',
@@ -97,6 +98,14 @@ SUBSCRIPTION_DISPLAY_NAMES = {
     'gpt-5.3-codex-spark': 'GPT-5.3-Codex-Spark',
     'codex-auto-review': 'Codex Auto Review',
 }
+
+
+# Plan 123: the roster leaf owns the subscription slug set; these tables own
+# the per-slug presentation values. Fail closed at import when they disagree
+# so a half-added row can never ship; the coupling test pins the same set.
+if (set(SUBSCRIPTION_REASONING) != set(SUBSCRIPTION_SLUGS)
+        or set(SUBSCRIPTION_DISPLAY_NAMES) != set(SUBSCRIPTION_SLUGS)):
+    raise ValueError('subscription roster and catalogue tables disagree')
 
 
 def subscription_stub(slug):

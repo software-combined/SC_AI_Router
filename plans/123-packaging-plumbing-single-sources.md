@@ -40,9 +40,9 @@ Three mechanical duplications make every packaging change more expensive than it
 - `packaging/service.py:54` roster list; `ai_router/catalogue.py:80-100` reasoning/display tables
   keyed by slug strings.
 - Plan 100 creates `ai_router/retired_slugs.py` as the 3.9-safe leaf precedent.
-  Packaging loads such leaves with `spec_from_file_location` (`packaging/service.py:36-43`) or an
-  explicit `sys.path.insert` (`packaging/install.py:22`), never a bare package import from a module
-  the installed launchers spec-load.
+  Packaging loads such leaves with `spec_from_file_location` (`packaging/service.py:38-50`, now the
+  shared `load()` helper) or an explicit `sys.path.insert` (`packaging/install.py:22`), never a bare
+  package import from a module the installed launchers spec-load.
 
 ## Scope
 
@@ -86,7 +86,7 @@ any kind, the retired-slug leaf (plan 100).
    required file disappears.
 3. **Roster leaf.** Create `ai_router/subscription_roster.py` (3.9-safe, plain tuple of the eight
    slugs, no annotations that break 3.9). Load it in `packaging/service.py` the way service already
-   loads `launchd.py`/`feed.py` (`spec_from_file_location`, `service.py:36-43`; a module-level
+   loads `launchd.py`/`feed.py` (`service.load()`, `service.py:52-53`; a module-level
    package import would break the installed launchers, which spec-load service before any
    `sys.path` insert) and import it normally in `ai_router/catalogue.py` to key the reasoning/display tables (keep the tables' content
    identical). Add a coupling test asserting the roster, the service list, and the catalogue tables
