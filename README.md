@@ -239,6 +239,9 @@ rotates at 5 MB with three backups.
 Claude Code setup: `docs/claude-code.md`. Operator guide: `docs/operations.md`. Compatibility matrix:
 `docs/compatibility.md`. Adding a model: `docs/adding-a-model.md`.
 
+Monthly model allocation review: `model-allocation-review-process.md` (the process) and
+`model-allocation-suggestion.md` (its output, refreshed on the 1st of each month).
+
 ## Runtime files
 
 A manual install copies ONLY these files beside the private state
