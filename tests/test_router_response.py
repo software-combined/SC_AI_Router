@@ -46,6 +46,26 @@ class RouterResponseTests(unittest.TestCase):
         self.assertEqual(response.status, 400)
         body = json.loads(response.read())
         self.assertEqual(body['error']['code'], 'UNKNOWN_MODEL')
+        self.assertEqual(body['error'].get('candidates'), [])
+        self.assertEqual(recorded, [])
+
+    def test_bare_tilde_alias_names_canonical_candidate(self):
+        # Live 2026-09-10: discovery lists Opus without its `~`, so a
+        # parent can echo back an id Responses never owned. The 400 must
+        # name the requested id and offer the canonical slug, still 400
+        # (identity stays strict; selection never falls back).
+        recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
+        server = self._server()
+        response = _post(server.server_port, '/test-token/responses',
+                         {'model': 'anthropic/claude-opus-latest', 'input': []})
+        self.assertEqual(response.status, 400)
+        body = json.loads(response.read())
+        self.assertEqual(body['error']['code'], 'UNKNOWN_MODEL')
+        self.assertEqual(body['error']['model'], 'anthropic/claude-opus-latest')
+        self.assertEqual(body['error']['candidates'],
+                         ['~anthropic/claude-opus-latest'])
+        self.assertIn('~anthropic/claude-opus-latest',
+                      body['error']['message'])
         self.assertEqual(recorded, [])
 
     def test_openai_model_header_is_pinned_to_requested_model(self):

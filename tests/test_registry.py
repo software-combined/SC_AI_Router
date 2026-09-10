@@ -165,6 +165,16 @@ class RegistryTests(unittest.TestCase):
         self.assertTrue(visible_for(plain, 'codex'))
         self.assertFalse(visible_for(by_slug('openai/gpt-6-astra'), 'codex'))
 
+    def test_near_miss_offers_bare_tilde_alias_only(self):
+        from codex_router.registry import near_miss
+        self.assertEqual(near_miss('anthropic/claude-opus-latest'),
+                         '~anthropic/claude-opus-latest')
+        self.assertIsNone(near_miss('nobody/none'))
+        self.assertIsNone(near_miss('~anthropic/claude-opus-latest'))
+        self.assertIsNone(near_miss('z-ai/glm-5.3'))
+        self.assertIsNone(near_miss(None))
+        self.assertIsNone(near_miss(''))
+
     def test_models_for_matches_visibility_and_rejects_unknown_client(self):
         for client in ('codex', 'claude'):
             self.assertEqual({m.slug for m in models_for(MODELS, client)},

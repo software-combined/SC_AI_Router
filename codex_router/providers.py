@@ -6,8 +6,8 @@ from . import compaction as comp, local_services, agent_handoffs
 from .capabilities import (CANONICAL_ORDER, OPENROUTER_HOST, REASONING_LEVELS, check_effort,
                               check_images, input_modalities)
 from .context_budget import estimate as estimate_tokens
-from .errors import ContextWindowExceeded, PreparationError
-from .registry import by_slug
+from .errors import ContextWindowExceeded, PreparationError, UnknownModel
+from .registry import by_slug, near_miss
 from .runtime import log_event
 from .discovered import remember
 from .tool_adapter import prepare_tools, snoop_response_identity, stream_events, ToolEvents
@@ -383,4 +383,8 @@ def select(model, path, openai_models=(), openai_mode='subscription',
             return provider
     if openai_mode == 'none' and isinstance(model, str) and model in (openai_models or []):
         raise ValueError('Model is not available without a ChatGPT subscription')
-    raise ValueError('Model is not in the configured catalog')
+    guess = near_miss(model)
+    if guess is not None and allowset is not None and guess not in allowset:
+        guess = None  # never disclose a slug the portco policy excludes
+    raise UnknownModel(model if isinstance(model, str) else None,
+                       (guess,) if guess else ())

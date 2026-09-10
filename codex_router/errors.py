@@ -41,6 +41,16 @@ class InvalidSize(ValueError):
     """Request body rejected on size grounds; maps to 413."""
 
 
+class UnknownModel(ValueError):
+    """Catalog miss with the requested id and at most one tilde candidate."""
+
+    def __init__(self, model, candidates=()):
+        super().__init__('Model is not in the configured catalog'
+                         + (f': {model}' if model else ''))
+        self.model = model
+        self.candidates = tuple(candidates)
+
+
 def fail(code, message):
     """CLI/tool failure: SystemExit carrying CODE: message."""
     raise SystemExit(f'{code}: {message}')
@@ -159,10 +169,26 @@ def subscription_auth_required(claude=False):
     return PermissionError('Router subscription authentication required')
 
 
-def unknown_model(model):
-    return _error(400, 'UNKNOWN_MODEL',
-                  f'Model is not in the configured catalog: {model}'
-                  if model else 'Model is not in the configured catalog')
+class _UnknownModelError(RouterError):
+    """UNKNOWN_MODEL body also naming the id and its tilde candidate."""
+
+    def __init__(self, model, candidates=()):
+        listed = tuple(s for s in candidates if isinstance(s, str) and s)[:1]
+        hint = f" (did you mean '{listed[0]}'?)" if listed else ''
+        super().__init__(400, 'UNKNOWN_MODEL',
+                         f'Model is not in the configured catalog: {model}' + hint
+                         if model else 'Model is not in the configured catalog')
+        self.details = {'model': model, 'candidates': list(listed)} if model else {}
+
+    def body(self):
+        payload = super().body()
+        if self.details:
+            payload['error'].update(self.details)
+        return payload
+
+
+def unknown_model(model, candidates=()):
+    return _UnknownModelError(model, candidates)
 
 
 def subscription_required(model=None):
@@ -250,6 +276,8 @@ def map_client_error(exc):
                       'Invalid model, payload, or local authentication configuration')
     if isinstance(exc, LookupError):
         return credential_problem(str(exc))
+    if isinstance(exc, UnknownModel):
+        return unknown_model(exc.model, exc.candidates)
     if isinstance(exc, (ValueError, KeyError)):
         text = str(exc)
         lowered = text.lower()
