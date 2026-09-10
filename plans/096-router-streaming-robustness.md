@@ -3,6 +3,16 @@
 > Planning only. Implement only under a later implementation instruction.
 > Drift check: `git diff --stat a985197..HEAD -- ai_router/router.py ai_router/sse.py ai_router/tool_adapter.py tests/test_handler.py tests/test_tool_adapter.py`
 > Read changed code and preserve current behavior before edits.
+> Reconciliation 2026-09-11 (branch codex/router-plan-backlog-20260911, develop 1440645):
+> Plans 090/091/093 landed since a985197. `relay` is now `router.py:301` (was `:304`;
+> `sent = True` at `:360`, chunk loop `:361-367`, except at `:373`; `do_POST` ends
+> with the `self.relay(...)` call at `:266`, and the Step 2 traceback pattern lives
+> at `:247-252`). `sse.py` is 29 lines with `blocks` at `:4` (was `:4-16`) and no
+> cap. `describe_response` (`transport.py:76-90`) returns exactly `'sse'`, so STOP 1
+> does not apply. New relay/transport helpers live in `transport.py` (terminal-frame
+> emission needs `json`, which pure `errors.py` must not import; `router.py` stays at
+> 399/400). New tests live in `tests/test_stream_containment.py` (`test_handler.py`
+> is 491/500). `test_handler.py` tail is now the Handler.timeout test (`:469-490`).
 
 ## Status and first proof
 
@@ -50,8 +60,10 @@
 
 ## Scope
 
-**In scope**: `ai_router/sse.py`, `ai_router/router.py` (`relay` except-path only), `tests/test_handler.py`,
-`tests/test_tool_adapter.py`, `tests/test_agent_handoffs.py`.
+**In scope**: `ai_router/sse.py`, `ai_router/router.py` (`relay` except-path only),
+`ai_router/transport.py` (terminal-frame emission + traceback location helpers only),
+`tests/test_stream_containment.py` (new; `test_handler.py` is 491/500), `tests/test_tool_adapter.py`,
+`tests/test_agent_handoffs.py`.
 **Out of scope**: `snoop_response_identity`, `agent_handoffs` framing, response status/header logic,
 compaction, any retry or replay behavior.
 
@@ -94,8 +106,9 @@ In `relay`:
 - Keep the existing `transport_error` log for every caught mid-stream error, including those already
   caught today (`ValueError`, `OSError`) when `sent` is true.
 
-**Verify**: new `tests/test_handler.py` test with a `FakeUpstream` that emits `data: [1,2,3]\n\n`
-then closes: assert the response status is 200, the body ends with a `response.failed` data frame,
+**Verify**: new `tests/test_stream_containment.py` test with a `FakeUpstream` that emits
+`data: [1,2,3]\n\n` then closes (plus `tools` so the request routes through `stream_events`):
+assert the response status is 200, the body ends with a `response.failed` data frame,
 `log_event` was called with `transport_error`, and the process/thread survives. A second test with
 `sent` false keeps today's 502 mapping.
 
