@@ -129,6 +129,18 @@ window, and use per-request ratios, never ratios of unrelated
 percentiles. Paid direct-versus-router comparisons need separate
 explicit authority.
 
+## Stream identity observation (last-observed, not proof)
+
+Tool-free responses carry an optional identity observer: bytes forward
+immediately while a bounded copy is retained for a post-EOF parse
+(JSON, only when the whole body fit in 64 KiB) or complete-frame parse
+(SSE, tails over 64 KiB discarded unobserved). Oversized, malformed, or
+compressed-without-identity bodies leave the observation unavailable
+rather than blocking or fabricating one. `/health served_models` is
+therefore last-observed state per alias, never proof of the current
+served model; a new observation overwrites, an unobservable response
+leaves the prior entry intact.
+
 ## Per-user OpenRouter keys (IT issue and revoke)
 
 Owner decision 2026-09-09: IT issues one OpenRouter key per portco user;

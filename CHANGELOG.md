@@ -2,6 +2,12 @@
 
 ## 0.6.11
 
+- Forward stream bytes without waiting for identity inspection: the
+  tool-free observer now yields each piece as it arrives and parses at
+  most 64 KiB retained bytes (JSON, post-EOF) or complete SSE frames,
+  instead of buffering the body first. Oversized or malformed bodies
+  disable observation, never forwarding. No deployed latency claimed.
+
 - Attribute router latency per phase instead of one cumulative number:
   `request_completed` now carries `read_ms`, `prepare_ms`, `connect_ms`,
   `send_ms`, `headers_ms`, `first_data_ms`, and `first_write_ms`, plus
