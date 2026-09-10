@@ -30,6 +30,9 @@ class ToolAdapterTests(unittest.TestCase):
         raw = '{"limit":8.0,"text":"8.0","large":9007199254740993.0,"fraction":8.25}'
         self.assertEqual(integer_json(raw), '{"limit":8,"text":"8.0","large":9007199254740993,"fraction":8.25}')
         self.assertEqual(integer_json('{"value":1e8.0}'), '{"value":1e8.0}')
+        self.assertEqual(integer_json('{oops'), '{oops')
+        self.assertEqual(integer_json('{"text":"8.0"}'), '{"text":"8.0"}')
+        self.assertEqual(integer_json('{"large":9007199254740993.0}'), '{"large":9007199254740993}')
         adapter = ToolEvents({(None, SEARCH_NAME): 'search'})
         item = adapter.item({'type': 'function_call', 'name': SEARCH_NAME, 'arguments': '{"query":"echo_probe","limit":8.0}'})
         self.assertIs(type(item['arguments']['limit']), int)
@@ -165,6 +168,48 @@ class ToolAdapterTests(unittest.TestCase):
         event = {'type': 'response.function_call_arguments.delta', 'item_id': 'ordinary', 'delta': '{'}
         wire = b'data: ' + json.dumps(event).encode() + b'\n\n'
         self.assertEqual(json.loads(next(stream_events(io.BytesIO(wire), {(None, 'exec'): 'custom'}))[6:]), event)
+
+    def test_unmodified_delta_frame_passes_through_verbatim(self):
+        upstream = b'{"delta":"hi","type":"response.output_text.delta"}'
+        wire = b'data: ' + upstream + b'\n\n'
+        out = list(stream_events(io.BytesIO(wire), {}))
+        self.assertEqual(out, [b'data: ' + upstream + b'\n\n'])
+        self.assertEqual(json.loads(out[0][6:]), json.loads(upstream))
+
+    def test_mutated_function_call_frame_is_rewritten(self):
+        event = {'type': 'response.output_item.done',
+                 'item': {'type': 'function_call', 'name': 'unknown', 'arguments': '{"limit": 8.0}'}}
+        upstream = json.dumps(event, separators=(',', ':')).encode()
+        out = list(stream_events(io.BytesIO(b'data: ' + upstream + b'\n\n'), {}))
+        self.assertEqual(len(out), 1)
+        self.assertEqual(json.loads(out[0][6:])['item']['arguments'], '{"limit": 8}')
+        self.assertNotEqual(out[0], b'data: ' + upstream + b'\n\n')
+
+    def test_flag_resets_between_frames_in_one_stream(self):
+        # Plan 091: a changed frame must not make the next unmodified frame
+        # re-serialize; the reset happens per event, not per stream.
+        mutated = {'type': 'response.output_item.done',
+                   'item': {'type': 'function_call', 'name': 'unknown',
+                            'arguments': '{"limit": 8.0}'}}
+        plain = b'{"delta":"hi","type":"response.output_text.delta"}'
+        wire = (b'data: ' + json.dumps(mutated).encode() + b'\n\n'
+                + b'data: ' + plain + b'\n\n')
+        out = list(stream_events(io.BytesIO(wire), {}))
+        self.assertEqual(len(out), 2)
+        self.assertEqual(json.loads(out[0][6:])['item']['arguments'], '{"limit": 8}')
+        self.assertEqual(out[1], b'data: ' + plain + b'\n\n')
+
+    def test_tracked_arguments_done_is_suppressed(self):
+        names = {(None, 'exec'): 'custom'}
+        item = {'id': 'item1', 'type': 'function_call', 'name': 'exec',
+                'arguments': json.dumps({'input': 'hi'})}
+        added = {'type': 'response.output_item.added', 'item': {**item, 'arguments': ''}}
+        done = {'type': 'response.function_call_arguments.done', 'item_id': 'item1',
+                'arguments': item['arguments']}
+        wire = b''.join(b'data: ' + json.dumps(event).encode() + b'\n\n' for event in (added, done))
+        out = list(stream_events(io.BytesIO(wire), names))
+        self.assertEqual(len(out), 1)
+        self.assertEqual(json.loads(out[0][6:])['type'], 'response.output_item.added')
 
     def test_malformed_code_input_never_becomes_an_executable_item(self):
         event = {'type': 'response.output_item.done', 'item': {'type': 'function_call', 'name': 'exec',
