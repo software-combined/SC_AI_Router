@@ -197,5 +197,13 @@ class RegistryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             visible_for(by_slug('moonshotai/kimi-k3'), 'other')
 
+    def test_include_twins_reveals_openai_rows_in_codex_picker(self):
+        self.assertTrue(visible_for(by_slug('openai/gpt-6-astra'), 'codex',
+                                    include_twins=True))
+        twins = {m.slug for m in models_for(MODELS, 'codex', include_twins=True)
+                 if m.slug.startswith('openai/')}
+        self.assertEqual(twins, {'openai/gpt-6-astra', 'openai/gpt-5.6-sol',
+                                 'openai/gpt-5.6-terra', 'openai/gpt-5.6-luna'})
+
 if __name__ == '__main__':
     unittest.main()
