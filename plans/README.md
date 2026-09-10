@@ -221,8 +221,8 @@ sequencing, evidence and acceptance gates. Read individual plans for execution
 detail. Original source excerpts are dated: rebase their intent onto current
 source, never recreate an already integrated predecessor.
 
-Seven plans have delivered their principal source work, two designs are parked
-or superseded, and 25 plans or umbrella plans retain work. These are not 25
+Thirteen plans have delivered their principal source work, two designs are parked
+or superseded, and 20 plans or umbrella plans retain work. These are not 20
 independent implementations: the owner mapping prevents duplicate execution.
 
 | Plan | Current status | Remaining owner / next action |
@@ -237,31 +237,31 @@ independent implementations: the owner mapping prevents duplicate execution.
 | [041](041-codex-router-installer-and-auto-updater.md) | PARTIAL: versioned install/update/rollback source and owner-Mac layout exist | 050, 054, 057-059 own remaining operational/platform acceptance |
 | [042](042-codex-router-docs-and-release-hygiene.md) | Original docs rewrite delivered; current README inaccurate | 058 Stage 5 is the active correction owner, coupled with pinned docs tests |
 | [043](043-codex-router-no-subscription-mode.md) | PARTIAL: no-subscription CLI route exists | Desktop sign-in decision, isolated install and native-services tolerance proof |
-| [044](044-codex-router-full-capability-parity.md) | PARTIAL: capability plumbing/probe harness exists | 064 projection fix then approved per-model/client capability probes |
+| [044](044-codex-router-full-capability-parity.md) | PARTIAL: capability plumbing/probe harness exists | Approved per-model/client capability probes (paid matrix) |
 | [045](045-codex-router-continuous-release-and-seamless-restart.md) | PARTIAL: drain/socket/update source exists | 054 owns branch publishing and observed 15-minute update; 058 cross-OS acceptance |
 | [046](046-codex-router-model-onboarding-at-scale.md) | PARTIAL: model add/remove/check/preview exists | Manual unseen-model picker proof; hourly refresh follows authenticated update acceptance and its live-change gate |
 | [047](047-router-remediation-handover.md) | PARTIAL umbrella; source C/D fixes integrated | B recovery via 050; A delivery via 054; E/F/G replaced by 049/053/055-059 |
 | [048](048-router-managed-key-provisioning.md) | SUPERSEDED design; retain relevant acceptance requirements | 054/055 own onboarding, budgets, revocation, Business/Enterprise and person isolation; no old invitation service |
-| [049](049-agent-plugin-and-three-os-installation.md) | TODO umbrella: shared installer and Codex plugin | 063/059/056/057 foundations; 053 Claude plugin; 054/055 distribution; all three OS staff gates |
+| [049](049-agent-plugin-and-three-os-installation.md) | PARTIAL: source slices integrated (shared installer, Claude attach, receipts, status) | Plugin publication and three-OS staff-machine acceptance for Codex and Claude Code |
 | [050](050-router-service-recovery-and-update-readiness.md) | PARTIAL: healthy owner-Mac versioned service and both launchers observed | Fresh readback; real successful update + rollback evidence, no replay of old repair |
-| [051](051-claude-cli-and-desktop-gateway-setup.md) | TODO: separate Claude CLI and desktop setup | 063 activation seam; preserve native auth and independent discovery/restoration |
+| [051](051-claude-cli-and-desktop-gateway-setup.md) | PARTIAL: Claude attach/detach source exists; CLI and desktop not separately qualified | 051 owns the CLI/desktop contract; consumes the 053 package check; preserve native auth and independent discovery/restoration |
 | [052](052-claude-billing-probes-and-release-acceptance.md) | TODO: Claude tool and billing acceptance | 051 plus paid authority; CLI and desktop each tested |
-| [053](053-claude-code-private-plugin.md) | TODO: private Claude plugin | 063 then 051 client contract; local package before 054 publication and 052 acceptance |
+| [053](053-claude-code-private-plugin.md) | PARTIAL: root Claude plugin manifest and attach source integrated; package not published | 051 client contract; local package validation before 054 publication and 052 acceptance |
 | [054](054-group-distribution-private-feed-and-auto-update.md) | TODO: private distribution and identity onboarding | 067/056/059/063 source reused; AWS/DNS, Team decision, publisher and machine gates |
-| [055](055-central-key-federation-and-first-use-key-window.md) | TODO: central keys and first-use recovery | Stage 3 independently first; operator path then 054 Stage 4 for automated issuance |
-| [056](056-installer-platform-backends-refactor.md) | TODO: platform backends | After 067; own actual backend modules and shared OS CI |
-| [057](057-windows-install-and-service-support.md) | TODO: Windows support | Stage 1 refusal early; 056/059/063 for remaining source; named Win11 x64 and entry-policy proof for acceptance |
-| [058](058-recipient-readiness-for-windows-and-linux.md) | TODO: recipient preflight, native acceptance and README | Wrong-today docs now; native preflight before runtime download; consumes 056/057/059 |
-| [059](059-python-314-interpreter-provisioning.md) | TODO: private CPython 3.14 runtime | Single pinned lock/native wrappers, isolated bootstrap then 054 mirror; ongoing patch owner required |
-| [060](060-content-safe-router-diagnostics.md) | TODO: content-safe diagnostics | First small source fix; synthetic regression already reproduced |
+| [055](055-central-key-federation-and-first-use-key-window.md) | PARTIAL: Stage 3 first-use recovery integrated | Stages 1-2 owner-gated; Stage 4 depends on 054 per-install authority |
+| [056](056-installer-platform-backends-refactor.md) | DONE: platform backends extracted (source `5374530`, 2026-09-10) | CI macOS/Windows runners and cross-OS lifecycle acceptance remain (Stage 4) |
+| [057](057-windows-install-and-service-support.md) | PARTIAL: Stage 1 refusal, Stage 2 ACL, Stage 3 Windows backend integrated | Named Win11 x64 and entry-policy acceptance for Stages 4+ |
+| [058](058-recipient-readiness-for-windows-and-linux.md) | PARTIAL: Stage 1 preflight and Stage 5a README/log-retention corrections integrated | Native desktop acceptance on Linux/Windows and Stage 5b remain |
+| [059](059-python-314-interpreter-provisioning.md) | PARTIAL: Stage 1 pinned CPython 3.14 runtime lock integrated | Bootstrap/extraction wrappers (Stages 2+) and named patch-maintenance owner |
+| [060](060-content-safe-router-diagnostics.md) | DONE: content-safe diagnostics (source `408e2f3`, regression `test_safe_diagnostics`, 2026-09-10) | No further source action; live/paid acceptance separately gated |
 | [061](061-domain-rules-and-bundle-contracts.md) | DONE: domain map, boundary tests, bundle closure, 3.9 grammar gate (2026-09-10) | `3bed26d` + extraction follow-ons on develop; 062/064 unblocked under the rules |
 | [062](062-protocol-and-upstream-boundaries.md) | DONE: transport leaves + explicit protocol dispatch (2026-09-10) | `a40dcc7` on develop; 112 contract tests OK; 064 consumes the seam next |
 | [063](063-client-activation-and-subscription-policy.md) | DONE: Codex adapter extracted, service-only route, independent subscription modes (2026-09-10) | `f5cf136`+`b40f82e` on develop; 107 focused tests OK; 051/053 consume the seam next |
 | [064](064-model-facts-and-client-projections.md) | DONE: one metadata/projection owner each; claude.py move deferred to 051/053 (2026-09-10) | `0d0634f` on develop; 104 focused tests OK; step 4 note in plan |
 | [065](065-kiro-client-compatibility-spike.md) | DONE: negative spike, no verified Kiro inference hook (2026-09-10) | `docs/kiro-compatibility.md`; IDE and CLI separately decided; reopen only on dated official custom-endpoint evidence |
-| [066](066-mixed-provider-agent-instruction-delivery.md) | TODO: mixed-provider instruction delivery | Early containment/capture; real plaintext delivery remains separate from file-brief workaround |
+| [066](066-mixed-provider-agent-instruction-delivery.md) | PARTIAL: readable handoffs and plaintext-steering source integrated | Paid live Astra-to-Muse probe and native plaintext capture acceptance |
 | [067](067-installer-updater-extraction.md) | DONE: updater extracted to `packaging/updater.py` (2026-09-10) | `8808349` on develop; 50 focused tests OK plus release-bundle omission smoke; 056 unblocked |
-| [068](068-portco-model-policy.md) | TODO: per-portco model allowlists as resolved data | Amends 046/064/055; no groups on the machine; Stage 0 tests first, then grant/loader/picker/routing/refresh/docs |
+| [068](068-portco-model-policy.md) | DONE: per-portco model allowlists as resolved data (source `e328adc`, PR #50, 2026-09-10) | Refresh gate follows 046; delivery authority follows 054 Stage 4 |
 
 ### Consolidated decisions and dependencies
 
