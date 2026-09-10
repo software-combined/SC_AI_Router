@@ -38,6 +38,7 @@ FILES = [
           'ai_router/clients/__init__.py',
          'ai_router/clients/codex.py',
          'ai_router/transport.py',
+         'ai_router/subscription_fallback.py',
          'ai_router/protocols/__init__.py',
          'ai_router/protocols/responses.py',
          'ai_router/protocols/messages.py',

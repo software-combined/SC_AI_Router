@@ -50,6 +50,8 @@ def load_state(path=STATE):
         raise SystemExit('openai_mode must be subscription or none')
     if 'anthropic_mode' in state and state['anthropic_mode'] not in ('subscription', 'none'):
         raise SystemExit('anthropic_mode must be subscription or none')
+    if 'openai_helper_fallback' in state and not isinstance(state['openai_helper_fallback'], bool):
+        raise SystemExit('openai_helper_fallback must be true or false')
     try:
         Credentials(state, ROUTER_HOME).check()
     except (LookupError, PermissionError, ValueError, OSError) as exc:
