@@ -81,7 +81,7 @@ still required before prescribing a catalogue change.
 There is no router-owned decryption key or decoder for native agent blocks.
 Do not mistake `ocx1` compaction decoding for native agent decryption. Do not
 change all subscription models to v1 or create another user-visible task as
-an untested workaround. [Plan 066](066-mixed-provider-agent-instruction-delivery.md)
+an untested workaround. [Plan 066](119-mixed-provider-agent-instruction-delivery.md)
 owns the bounded implementation and acceptance work.
 
 ## Closeout

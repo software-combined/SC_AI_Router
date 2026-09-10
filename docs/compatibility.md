@@ -1,6 +1,6 @@
 # Compatibility
 
-## Windows lifecycle acceptance, 2026-09-10 (Plan 057 first proof)
+## Windows lifecycle acceptance, 2026-09-10 (Plan 116 first proof)
 
 Machine: Windows 11 Pro 10.0.26200 x64 staff laptop (AzureAD account, no
 elevation), Python 3.14.7 from python.org, Codex desktop `OpenAI.Codex`
@@ -46,7 +46,7 @@ Tested Codex desktop versions:
 | version | date | result |
 |---|---|---|
 | 0.153.4 | 2026-09-07 | probe baseline |
-| 0.153.4 | 2026-09-08 | no-subscription spike: custom provider (`scg_router`, no login) runs `thread/start` + `turn/start` to `/responses` with bearer auth; `model/list` unanswered in all login shapes; see Plan 043 Step 1 report |
+| 0.153.4 | 2026-09-08 | no-subscription spike: custom provider (`scg_router`, no login) runs `thread/start` + `turn/start` to `/responses` with bearer auth; `model/list` unanswered in all login shapes; see Plan 111 Step 1 report |
 | 0.153.4 (desktop 26.901.51231, Arch `codex-desktop-git`) | 2026-09-08 | contributor reported chat creation working after the catalogue schema fix. Review reproduced unhandled old stubs and invalid Linux service instructions. Version 0.6.7 repairs existing rows and adds the Linux installer backend; staff-machine acceptance of the new lifecycle remains pending |
 
 The contributor's follow-up machine report on 2026-09-09 explains the Linux
@@ -132,7 +132,7 @@ Isolated-router base round trip (`ai_router.candidate.verify`, Codex CLI
 | deepseek/deepseek-v4.1-flash | verified | 2026-09-10 | isolated base round trip PASS |
 | deepseek/deepseek-v4-pro-0813 | verified | 2026-09-10 | isolated base round trip PASS |
 
-## Claude desktop gateway discovery (Plan 073), 2026-09-10
+## Claude desktop gateway discovery (Plan 120), 2026-09-10
 
 Client: Claude.app `1.49585.0`, signed in; no `managed-settings.json` at
 the user or system location. Router `GET /v1/models` = 20 rows.
