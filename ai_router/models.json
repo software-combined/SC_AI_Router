@@ -525,39 +525,12 @@
     "apply_patch": "none",
     "experimental_tools": [],
     "web_search": false,
-    "tier": "preview"
+    "tier": "verified"
   },
   {
-    "slug": "~deepseek/deepseek-v4-flash-latest",
+    "slug": "deepseek/deepseek-v4.1-flash",
     "provider": "openrouter",
-    "display_name": "DeepSeek: V4 Flash Latest \u00b7 OpenRouter",
-    "vendor": "DeepSeek",
-    "reasoning": [
-      "low",
-      "high",
-      "max"
-    ],
-    "default_reasoning": "low",
-    "modalities": [
-      "text"
-    ],
-    "excluded_efforts": [],
-    "schema_mode": "native",
-    "max_tools": null,
-    "drop_images": false,
-    "context_window": 1310720,
-    "priority": 120,
-    "max_output_tokens": 393216,
-    "reasoning_summary": "none",
-    "apply_patch": "none",
-    "experimental_tools": [],
-    "web_search": false,
-    "tier": "preview"
-  },
-  {
-    "slug": "deepseek/deepseek-v4-flash-vision-exp",
-    "provider": "openrouter",
-    "display_name": "DeepSeek: V4 Flash Vision Exp \u00b7 OpenRouter",
+    "display_name": "DeepSeek: V4.1 Flash \u00b7 OpenRouter",
     "vendor": "DeepSeek",
     "reasoning": [
       "low",
@@ -574,12 +547,12 @@
     "max_tools": null,
     "drop_images": false,
     "context_window": 1048576,
-    "priority": 121,
+    "priority": 120,
     "max_output_tokens": 384000,
     "reasoning_summary": "none",
     "apply_patch": "none",
     "experimental_tools": [],
     "web_search": false,
-    "tier": "preview"
+    "tier": "verified"
   }
 ]

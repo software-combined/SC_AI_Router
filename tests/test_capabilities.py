@@ -9,12 +9,10 @@ class CapabilityTests(unittest.TestCase):
                          {m.slug for m in MODELS if m.provider == 'openrouter'})
 
     def test_text_only_set_matches_live_metadata(self):
-        for slug in ('z-ai/glm-5.3', 'deepseek/deepseek-v4-pro-0813',
-                     '~deepseek/deepseek-v4-flash-latest'):
+        for slug in ('z-ai/glm-5.3', 'deepseek/deepseek-v4-pro-0813'):
             self.assertEqual(input_modalities(slug), ['text'])
         for slug in OPENROUTER_MODELS - {'z-ai/glm-5.3',
-                                         'deepseek/deepseek-v4-pro-0813',
-                                         '~deepseek/deepseek-v4-flash-latest'}:
+                                         'deepseek/deepseek-v4-pro-0813'}:
             self.assertIn('image', input_modalities(slug))
 
     def test_reasoning_matches_live_acceptance(self):
@@ -23,7 +21,7 @@ class CapabilityTests(unittest.TestCase):
         self.assertEqual(reasoning_levels('~x-ai/grok-latest'), ['low', 'medium', 'high', 'xhigh'])
         self.assertEqual(reasoning_levels('deepseek/deepseek-v4-pro-0813'),
                          ['low', 'high', 'max'])
-        self.assertEqual(reasoning_levels('~deepseek/deepseek-v4-flash-latest'),
+        self.assertEqual(reasoning_levels('deepseek/deepseek-v4.1-flash'),
                          ['low', 'high', 'max'])
 
     def test_trial_values_proven_for_subagents_and_switching(self):

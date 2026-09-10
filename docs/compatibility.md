@@ -122,6 +122,16 @@ Other preview models (base round trip only):
 | anthropic/claude-opus-5 | preview | 2026-09-07 | base round trip |
 | anthropic/claude-fable-5.1 | preview | 2026-09-07 | base round trip |
 
+## DeepSeek two-row cut, 2026-09-10
+
+Isolated-router base round trip (`ai_router.candidate.verify`, Codex CLI
+0.153.1), OpenRouter key via OpenCode auth. Both passed:
+
+| model | tier | date | evidence |
+|---|---|---|---|
+| deepseek/deepseek-v4.1-flash | verified | 2026-09-10 | isolated base round trip PASS |
+| deepseek/deepseek-v4-pro-0813 | verified | 2026-09-10 | isolated base round trip PASS |
+
 ## Claude desktop gateway discovery (Plan 073), 2026-09-10
 
 Client: Claude.app `1.49585.0`, signed in; no `managed-settings.json` at
