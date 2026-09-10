@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Install global starter instructions once from the setup window: after the
+  key is stored, a Dev or General choice writes the matching full
+  `AGENTS.md` only when no global instructions file exists yet. Existing
+  files are never overwritten, and updates and uninstall leave them alone.
+
 - Rename the runtime package `codex_router` to `ai_router` (Plan 074): the
   router serves Codex, Claude Code, and OpenRouter side by side, and the old
   prefix misled readers into treating the Codex adapter as the whole router.
