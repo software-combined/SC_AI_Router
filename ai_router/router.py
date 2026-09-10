@@ -11,7 +11,7 @@ import traceback
 from compression import zstd
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from .credentials import Credentials, ENV_VAR as _CREDENTIALS_ENV_VAR
-from . import claude, errors, local_services, providers, setup, transport
+from . import claude, errors, local_services, providers, setup, subscription_fallback, transport
 from .protocols import owned_paths, select as select_protocol
 from .errors import InvalidSize, PreparationError
 from .providers import NATIVE_SERVICE_PATHS
@@ -218,8 +218,8 @@ class Handler(BaseHTTPRequestHandler):
                     with self.server.lock:
                         self.server.inflight -= 1
             try:
-                prepared = provider.prepare(model, path, payload, raw,
-                                            dict(self.headers), self.server.credentials)
+                prepared = subscription_fallback.prepare(provider, model, path, payload,
+                                                         raw, dict(self.headers), self.server)
             except local_services.LocalAnswer as exc:
                 return self.error(exc)
             if os.environ.get('ROUTER_DEBUG'):
@@ -320,7 +320,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self.error(exc)
             retry_after = providers.upstream_retry_after(response, prepared, metrics)
             if retry_after is not None:
-                return self.retryable_reject(errors.upstream_rate_limited(), retry_after)
+                return subscription_fallback.refused(self, prepared, retry_after, metrics, started)
             if response.status >= 400:
                 raw = response.read()
                 transport.note_first_data(metrics, headers_done)

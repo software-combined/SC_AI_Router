@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Thread titles, descriptions, summaries and title reconsiderations run as
+  helper turns on the subscription model. When the ChatGPT allowance is
+  exhausted upstream refuses every helper turn and the client stores a
+  slice of the prompt as the title instead. With the new
+  `openai_helper_fallback` state flag on (default off) the router answers
+  just those helper turns from the registry's OpenRouter twin row
+  (`openai/<slug>`) and logs `subscription_fallback`, so generated titles
+  survive an exhausted allowance; ordinary turns keep the existing 503.
+  A provisioned portco allowlist still gates the twin, and enabling the
+  flag bills the OpenRouter key for helper-shaped prompts.
+
 - The Codex picker groups OpenRouter rows by vendor A-Z, verified before
   preview inside each vendor; `models add` renumbers priorities into that
   order and the global "preview last" offset is gone, so Anthropic's four
