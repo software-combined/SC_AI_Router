@@ -568,6 +568,9 @@ def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None):
 def do_uninstall(args):
     _sync_seams()
     home = Path(args.home).expanduser()
+    if args.dry_run:
+        print(f'would uninstall services under {home}')
+        return 0
     backend = platform_backend()
     backend.check(home)
     # A missing receipt with a managed block still present means manual

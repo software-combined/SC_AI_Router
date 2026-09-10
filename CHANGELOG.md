@@ -13,6 +13,16 @@
   `AGENTS.md` only when no global instructions file exists yet. Existing
   files are never overwritten, and updates and uninstall leave them alone.
 
+- Bootstrap token hygiene: the feed token no longer appears on the curl
+  command line (curl reads it from an owner-only header file that is
+  removed when the bootstrap exits), and it is persisted only after the
+  first authenticated fetch succeeds, keeping the prior value in
+  `feed-token.previous` for the updater's one-time 403 retry.
+
+- `--uninstall --dry-run` now previews: it reports the target home and
+  exits before touching client settings or services, matching the other
+  dry-run actions. The scratch-home guard is unchanged.
+
 ## 0.6.13
 
 - Auto-update without repo access (Plan 054, source slice): the scheduled
