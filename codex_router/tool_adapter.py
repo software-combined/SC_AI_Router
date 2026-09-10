@@ -12,6 +12,9 @@ from .discovered import recall
 from .registry import by_slug
 from . import agent_handoffs, sse
 SEARCH_NAME = 'codex_client_tool_search'
+# Bytes retained per body for the post-EOF identity parse. Overflow drops
+# the observation, never the forwarded bytes.
+_OBSERVE_LIMIT = 64 * 1024
 
 def _quirk(payload, name):
     entry = by_slug(payload.get('model', ''))
@@ -244,29 +247,83 @@ class ToolEvents:
         return event
 
 def snoop_response_identity(response, notes):
-    """Yield a tool-free 200 response unchanged while recording its model."""
+    """Yield a tool-free 200 response unchanged while recording its model.
+
+    Forwarding stays immediate: bytes are yielded as they arrive and
+    identity is observed, never awaited. Non-SSE bodies stream through
+    read1 pieces while a bounded copy is retained for a post-EOF parse;
+    overflow (over 64 KiB seen) disables observation, never forwarding.
+    SSE bodies stream piece by piece with complete frames parsed for
+    identity; an over-long tail or unterminated trailing bytes are
+    discarded unobserved. Malformed observation data is nonfatal.
+    """
     if 'text/event-stream' not in response.getheader('Content-Type', ''):
-        raw = response.read()
-        try:
-            model = json.loads(raw).get('model')
-        except (ValueError, AttributeError):
-            model = None
-        if isinstance(model, str):
-            notes['served_model'] = model
-        yield raw
+        kept = bytearray()
+        seen = 0  # cumulative bytes; parse only when seen fits the bound
+        while piece := response.read1(65536):
+            yield piece
+            seen += len(piece)
+            if len(kept) < _OBSERVE_LIMIT:
+                kept += piece
+        if seen <= _OBSERVE_LIMIT:
+            try:
+                model = json.loads(kept).get('model')
+            except Exception:
+                model = None  # observation is best-effort; never fail bytes
+            if isinstance(model, str):
+                notes['served_model'] = model
         return
-    block = []
-    for line in response:
-        yield line
-        if line not in (b'\n', b'\r\n'):
-            block.append(line)
+    spare = b''
+    watching = True  # False once the tail exceeds the bound: keep yielding
+    # read1 is the codebase-wide stream primitive (transport.passthrough
+    # relies on it too); no line-iteration fallback, which would rebuffer.
+    while piece := response.read1(65536):
+        yield piece
+        if not watching:
             continue
-        data = b''.join(l[5:].lstrip() for l in block if l.startswith(b'data:')).strip()
-        block = []
+        spare, frames = _split_frames(spare + piece)
+        if len(spare) > _OBSERVE_LIMIT:
+            spare, watching = b'', False
+            continue
+        for frame in frames:
+            _observe_sse_frame(frame, notes)
+    # An unterminated tail is discarded like the canonical framer does;
+    # only complete frames may observe identity.
+
+
+def _split_frames(buf):
+    """Split blank-line-terminated SSE frames off buf.
+
+    Returns (spare, frames): frames are complete and parseable now;
+    spare is the incomplete tail held for the next piece.
+    """
+    frames = []
+    start = 0
+    while True:
+        nl = buf.find(b'\n', start)
+        if nl < 0:
+            break
+        end = nl + 1
+        if buf[start:end].strip():
+            start = end
+            continue
+        frames.append(buf[:end])
+        buf = buf[end:]
+        start = 0
+    return buf, frames
+
+
+def _observe_sse_frame(frame, notes):
+    """Record identity from one complete SSE frame; never raises."""
+    try:
+        data = b''.join(part[5:].lstrip() for part in
+                        frame.split(b'\n') if part.startswith(b'data:')).strip()
         if data and data != b'[DONE]':
             completed = _completed_model(data)
             if completed is not None:
                 notes['served_model'] = completed
+    except Exception:
+        pass  # observation is best-effort; never fail forwarded bytes
 
 
 def _completed_model(data):
@@ -277,7 +334,7 @@ def _completed_model(data):
             return None
         model = event['response']['model']
         return model if isinstance(model, str) else None
-    except (ValueError, KeyError, TypeError):
+    except Exception:
         return None
 
 

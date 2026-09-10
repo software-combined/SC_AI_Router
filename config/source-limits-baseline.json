@@ -8,7 +8,7 @@
   "codex_router/router.py": 400,
   "codex_router/setup.py": 365,
   "codex_router/sse.py": 29,
-  "codex_router/tool_adapter.py": 292,
+  "codex_router/tool_adapter.py": 349,
   "packaging/claude_config.py": 168,
   "packaging/codex_config.py": 150,
   "packaging/diagnostics.py": 176,
