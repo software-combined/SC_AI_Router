@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- DeepSeek keeps two pinned, verified rows: `deepseek/deepseek-v4.1-flash`
+  (newest Flash, image-capable) and `deepseek/deepseek-v4-pro-0813`
+  (newest Pro, text-only). The `~deepseek/deepseek-v4-flash-latest`
+  tracking alias and the `deepseek/deepseek-v4-flash-vision-exp` row are
+  retired via `RETIRED_SLUGS` so upgrades drop them from the picker.
+
 ## 0.6.13
 
 - Rename the runtime package `codex_router` to `ai_router` (Plan 074): the
