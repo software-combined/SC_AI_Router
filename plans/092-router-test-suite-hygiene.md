@@ -8,30 +8,39 @@
 
 - Priority P1; effort S; risk LOW; confidence HIGH; category tests; depends on none.
 - Planned at `a985197`, 2026-09-10.
+- Implemented 2026-09-11 in the shared backlog worktree: drift audit found the
+  cited line refs still accurate except the runtime-lock download legs (removed
+  by Step 3) and the guard tests (now in `tests/test_ingress_guards.py`, not
+  `tests/test_handler.py` — the handler file was 9 lines under the 500-line
+  HARD cap and the three tests did not fit; the new module reuses the handler
+  helpers exactly like `tests/test_claude_ingress.py` does).
 - First proof: `python3.14 -m unittest discover -s tests -t .` runs with no network access (no
   skipped pin test hiding a failure), the suite touches no real router home, and the three ingress
   guards are covered by failing-if-removed tests.
 
 ## Why this matters
 
-1. `tests/test_runtime_lock.py:92-161` downloads all four pinned CPython archives
+1. `tests/test_runtime_lock.py:92-161` (at planning time) downloads all four pinned CPython archives
    (~226 MB total) inside the default suite and `skipTest`s on `OSError` (`:122-123`). The repo
    rule is "no network calls in tests" (AGENTS.md §1); offline runs silently skip, so a stale pin
    passes green. `release.yml:26` is the only CI job that runs the suite, so the download happens
    on every local gate run and every release build.
-2. `tests/test_providers.py:259-271` (`test_compact_remembers_discovered_tools`) patches only
-   `summarize`; `compact` calls `remember` (`ai_router/providers.py:300`) which writes
+2. `tests/test_providers.py:259-271` (at planning time; `:260` at implementation)
+   (`test_compact_remembers_discovered_tools`) patches only
+   `summarize`; `compact` calls `remember` (`ai_router/providers.py:300,316`) which writes
    `~/.codex/mixed-model-router/discovered-tools/` and prunes the oldest entry above 16
-   (`ai_router/discovered.py:32-42,63-82`). Running the suite pollutes or evicts real operator state.
+   (`ai_router/discovered.py:32,63`). Running the suite pollutes or evicts real operator state.
 3. Three ingress guards have no tests: websocket 426 (`ai_router/router.py:159-161`),
    `Transfer-Encoding` rejection (`:291`), and the zstd decoded-too-large bound (`:294-301`).
 
-## Current state (verified at a985197)
+## Current state (verified at a985197; line refs re-checked 2026-09-11)
 
-- `tests/test_runtime_lock.py:92-103` holds the expected size/exec/licence table; `:112-116`
-  `urllib.request.urlopen(entry['url'], timeout=30)` capped read; `:117-121` re-raises `HTTPError`;
-  `:122-123` skips on `OSError`; `:124-161` asserts size, sha256, exec/licence members, and tar
-  member path safety.
+- `tests/test_runtime_lock.py:92-103` (at planning time) holds the expected size/exec/licence table;
+  `:112-116` `urllib.request.urlopen(entry['url'], timeout=30)` capped read; `:117-121` re-raises
+  `HTTPError`; `:122-123` skips on `OSError`; `:124-161` asserts size, sha256, exec/licence members,
+  and tar member path safety. Step 3 ports the byte-assertion legs verbatim into
+  `tools/verify_runtime_pins.py` and leaves the offline table/shape legs in the test (`:77-110`
+  after the edit).
 - `tests/test_tool_adapter.py:18-26` defines the isolation pattern:
   ```python
   def _isolated_home(test):
@@ -44,13 +53,17 @@
       test.addCleanup(patcher.stop)
       return tmp
   ```
-- `tests/test_handler.py:123-142` shows the raw-connection and `zstd.compress` patterns already in use.
+- `tests/test_handler.py:125,135` (at implementation; `:123-142` at planning time) shows the
+  raw-connection and `zstd.compress` patterns already in use.
 
 ## Scope
 
 **In scope**: `tests/test_runtime_lock.py`, `tests/test_providers.py`, `tests/test_handler.py`,
-new `tools/verify_runtime_pins.py`, `.github/workflows/release.yml`, `packaging/release.py` and
-`tests/test_packaging.py` only if their file lists are explicit.
+new `tests/test_ingress_guards.py` (split from the handler file: it sat 9 lines under the
+500-line HARD cap and the three guard tests did not fit; the new module reuses the handler
+helpers with no duplication), new `tools/verify_runtime_pins.py`,
+`.github/workflows/release.yml`, `config/source-limits-baseline.json` (providers pin 314),
+`packaging/release.py` and `tests/test_packaging.py` only if their file lists are explicit.
 **Out of scope**: `packaging/runtime.lock` content, `ai_router/router.py` behavior, the router
 runtime, any change to `tests/fakes.py`.
 
@@ -59,27 +72,30 @@ runtime, any change to `tests/fakes.py`.
 | Purpose | Command | Expected |
 |---|---|---|
 | Offline proof | `python3.14 -B -m unittest tests.test_runtime_lock` | pass with **no network**, zero skips |
-| Focused | `python3.14 -m unittest tests.test_providers tests.test_handler tests.test_runtime_lock` | pass |
+| Focused | `python3.14 -m unittest tests.test_providers tests.test_handler tests.test_ingress_guards tests.test_runtime_lock` | pass |
 | Full suite (offline) | `python3.14 -m unittest discover -s tests -t .` | exit 0, no downloads |
 | Compile | `python3.14 -m compileall -q ai_router tools tests packaging` | exit 0 |
-| Limits | `python3.14 tools/check_source_limits.py` | exit 0 (tools budget 400/700; new file fits) |
+| Limits | `python3.14 tools/check_source_limits.py` | exit 0 (tools budget 400/700; new files fit unlisted at 128/70 lines) |
 
 ## Steps
 
 ### Step 1: isolate the discovered-tools test (commit 1)
 
-In `tests/test_providers.py:259-271`, wrap the test body with the `_isolated_home` pattern. Reuse
-the existing helper by importing it (`from tests.test_tool_adapter import _isolated_home` — there is
-precedent for cross-test imports in this repo) or by moving it to `tests/fakes.py` and updating both
-callers; prefer the smallest diff that leaves one definition.
+In `tests/test_providers.py:260` (`:259-271` at planning time), wrap the test body with the
+`_isolated_home` pattern. Reuse the existing helper by importing it
+(`from tests.test_tool_adapter import _isolated_home` — there is precedent for cross-test imports
+in this repo) or by moving it to `tests/fakes.py` and updating both callers; prefer the smallest
+diff that leaves one definition.
 
 **Verify**: run the focused module; then `ls ~/.codex/mixed-model-router/discovered-tools/` before
 and after a run shows no new file (do not delete existing operator files).
 
 ### Step 2: cover the three ingress guards (commit 2)
 
-Add to `tests/test_handler.py`, following its existing helpers (`_start_server`, `_post`) and
-asserting both the status and that no upstream call is recorded:
+Add alongside `tests/test_handler.py` in `tests/test_ingress_guards.py` (see Scope: the handler
+file cannot take 43 more lines under the 500-line HARD cap), following its existing helpers
+(`_auth_file`, `_start_server`, `_test_state`) and asserting both the status and that no upstream
+call is recorded:
 
 - websocket 426: `GET` on an authenticated non-health path with `Upgrade: websocket` → 426
   (`WEBSOCKET_REJECTED`).
@@ -131,7 +147,8 @@ that, and only if the bundle list enumerates all tools explicitly, add it there.
 
 ## Maintenance notes
 
-- Pin updates now follow: edit `runtime.lock` and the expected table in `tools/verify_runtime_pins.py`,
+- Pin updates now follow: edit `runtime.lock`, the expected table in `tools/verify_runtime_pins.py`
+  (sizes and exec/licence paths), and the exec/licence table in `tests/test_runtime_lock.py`;
   run the tool with network, then release.
 - The suite must stay runnable on a fully offline machine; any future test needing bytes belongs in
   `tools/` behind an explicit invocation.

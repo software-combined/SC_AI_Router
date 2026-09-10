@@ -3,6 +3,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 from ai_router import providers
+from tests.test_tool_adapter import _isolated_home
 
 
 def _stub_credentials(key='router-secret'):
@@ -258,6 +259,7 @@ class SummarizerTests(unittest.TestCase):
 
     def test_compact_remembers_discovered_tools(self):
         from ai_router.tool_adapter import prepare_tools
+        _isolated_home(self)
         items = [{'type': 'message', 'role': 'user', 'content': 'do it'},
                  {'type': 'tool_search_output', 'call_id': 's1', 'status': 'completed',
                   'execution': 'client', 'tools': [

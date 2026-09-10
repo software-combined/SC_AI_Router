@@ -34,7 +34,7 @@
   "tests/test_mixed_router.py": 366,
   "tests/test_preflight.py": 74,
   "tests/test_probe_harness.py": 362,
-  "tests/test_providers.py": 314,
+  "tests/test_providers.py": 316,
   "tests/test_runtime.py": 221,
   "tests/test_safe_diagnostics.py": 89,
   "tests/test_setup.py": 453,
