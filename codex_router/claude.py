@@ -124,8 +124,14 @@ class ClaudeSubscriptionProvider:
         yield from transport.passthrough(response)
 
 
-def select(model, path, openai_mode='subscription', anthropic_mode=None):
+def select(model, path, openai_mode='subscription', anthropic_mode=None,
+           allowed=None):
     if _is_openrouter_slug(model):
+        # Plan 068: a portco allowlist gates routing, never just the picker.
+        # None means no policy provisioned (today's behavior). Aliases and
+        # bare Anthropic ids resolve to the registry slug before the check.
+        if allowed is not None and resolve(model) not in frozenset(allowed):
+            raise ValueError('Model is not in the configured catalog')
         return ClaudeOpenRouterProvider()
     # Independent subscription choice; missing mode reproduces the legacy
     # behavior of following openai_mode. Never widened by migration.

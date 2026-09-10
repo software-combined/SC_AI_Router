@@ -146,6 +146,18 @@ access on migration; unsets keep prior behavior.
 Replace the `openrouter.key` file contents. No restart is needed; the
 router reads the key per request.
 
+## Per-portco model policy
+
+Onboarding: add the user to the portco subgroup, resolve the slug subset
+centrally against the current `models.json` (a department list must stay
+within its portco list), and deliver `<home>/model-policy.json` (`0600`,
+atomic write) with `portco`, `department`, `allowed_models`, `version`,
+and `updated_at`. The router loads it at startup into
+`state['allowed_models']`; both protocol policies gate OpenRouter slugs
+on it, subscription rows unaffected. Offboarding: remove the user from
+the subgroup and delete their OpenRouter key by id; the policy file goes
+with the machine's decommissioning, never as a revocation control.
+
 ## Incidents
 
 Check `/health`, then `logs/launchd.log`, then
