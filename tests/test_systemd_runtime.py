@@ -23,7 +23,10 @@ class SystemdRuntimeTests(unittest.TestCase):
             self.home = root / 'router'
             self.commands = []
             env = {'HOME': str(root / 'user'), 'XDG_CONFIG_HOME': str(root / 'config'),
-                   'ROUTER_HOME': str(self.home), 'OPENROUTER_API_KEY': 'test-key'}
+                   'ROUTER_HOME': str(self.home), 'OPENROUTER_API_KEY': 'test-key',
+                   # Deliberate live run: HOME is faked hermetic and only
+                   # systemctl is stubbed, so main() may use this home.
+                   'ROUTER_LIVE_RUN': '1'}
             with mock.patch.dict(os.environ, env), contextlib.redirect_stdout(io.StringIO()):
                 try:
                     installer = self.prepare(_install_mod())

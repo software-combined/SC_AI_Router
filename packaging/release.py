@@ -26,6 +26,7 @@ def bundle_files(root):
         + sorted(p.relative_to(root).as_posix() for p in (root / 'tools').glob('*.py'))
         + ['packaging/VERSION', 'packaging/install.py', 'packaging/launchd.py',
            'packaging/router_launch.py', 'packaging/service.py',
+           'packaging/feed.py',
            'packaging/systemd.py', 'packaging/update_launch.py',
            'packaging/updater.py', 'packaging/codex_config.py',
            'packaging/claude_config.py',
@@ -34,7 +35,7 @@ def bundle_files(root):
            'packaging/runtime.lock', 'packaging/runtime_lock.py',
            'packaging/platforms/__init__.py',
            'packaging/platforms/darwin.py', 'packaging/platforms/linux.py',
-           'packaging/platforms/windows.py', 'packaging/feed_token.py',
+           'packaging/platforms/windows.py',
            'packaging/install.sh', 'packaging/install.ps1']
     )
 

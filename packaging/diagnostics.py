@@ -93,14 +93,17 @@ def do_preflight(args):
             missing.append('no Python 3.14 found: the managed install provisions '
                            'the pinned private runtime; otherwise install '
                            'Python 3.14 first')
-    feed = args.feed or FEED_URL
-    # Same route decision as fetch(): the private GitHub route needs the
-    # `gh` binary; anything else needs nothing beyond this machine.
-    # Prefix test only: github_asset() itself would spawn `gh`.
-    if feed.startswith(github_route_prefix) and shutil.which('gh') is None:
-        missing.append('GitHub CLI (gh) binary not found: install gh, sign it in '
-                       'with `gh auth login` as this user, or pass an explicit '
-                       '--feed bundle URL')
+    home = Path(args.home).expanduser()
+    feed = args.feed or _svc.channel_feed(home)
+    # Same route decision as fetch(): only the pre-migration GitHub route
+    # needs the `gh` binary; the token-gated feed needs nothing beyond this
+    # machine. Prefix test only: github_asset() itself would spawn `gh`.
+    if feed.startswith(github_route_prefix):
+        if _svc.feed_token(home) is None and shutil.which('gh') is None:
+            missing.append('GitHub CLI (gh) binary not found: install gh, sign it in '
+                           'with `gh auth login` as this user, or re-run the '
+                           'bootstrap from the Technology library to migrate '
+                           'this host to the token-gated feed')
     if (args.client or 'codex') == 'codex' and shutil.which('codex') is None:
         missing.append('Codex CLI not found: install Codex first, or pass '
                        '--client none for a service-only install')

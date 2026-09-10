@@ -402,10 +402,13 @@ class InstallTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             home.mkdir()
-            self.assertEqual(install_mod.channel_feed(home), install_mod.FEED_URL)
+            # No token yet: the host stays on the pre-migration GitHub route
+            # (see test_feed_migration.py); the token selects the origin.
+            (home / 'feed-token').write_text('tok-1\n')
             (home / 'channel').write_text('beta\n')
-            self.assertEqual(install_mod.channel_feed(home),
-                             'https://github.com/beta/latest.json')
+            self.assertEqual(
+                install_mod.channel_feed(home),
+                install_mod.FEED_URL.replace('/stable/', '/beta/'))
             self.assertEqual(
                 feed_verify.beta_feed_url('file:///stable/latest.json'),
                 'file:///beta/latest.json')

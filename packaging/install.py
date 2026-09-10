@@ -93,6 +93,7 @@ swap_current = _svc.swap_current
 current_release_dir = _svc.current_release_dir
 current_version = _svc.current_version
 write_plist = _svc.write_plist
+require_live_home = _svc.require_live_home
 # Patchable seams: tests override these on install_mod via _patch_attrs.
 run = _svc.run
 health = _svc.health
@@ -329,7 +330,7 @@ def do_install(args, _fetch=fetch, _run=None):
             print(f'No Python 3.14 found: {remedy}')
             raise SystemExit(2)
     feed = args.feed or channel_feed(home)
-    latest = json.loads(_fetch(feed).decode())
+    latest = json.loads(_svc.feed_read(_fetch, feed, home).decode())
     serial = check_serial(home, latest, pinned=bool(args.feed))
     if not newer(latest['version'], current_version(home)):
         print(f"up to date {current_version(home)}")
@@ -340,7 +341,7 @@ def do_install(args, _fetch=fetch, _run=None):
         return 0
     backend = platform_backend()
     backend.check(home)
-    tarball = _fetch(latest['url'])
+    tarball = _svc.feed_read(_fetch, latest['url'], home)
     if latest.get('sha256'):
         verify_sha256(tarball, latest['sha256'])
     manifest_doc = {'files': {}}
@@ -562,11 +563,7 @@ def prune_releases(home, *keep):
 MAX_VERSION_FAILURES = _updater.MAX_VERSION_FAILURES
 
 
-def _park(home, etag, etag_path, version):
-    return _updater._park(home, etag, etag_path, version)
-
-
-def do_check_update(args, _fetch=fetch, _read_feed=None, _sleep=None):
+def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None):
     return _updater.do_check_update(args, _fetch=_fetch, _read_feed=_read_feed,
                                     _sleep=_sleep)
 
@@ -682,6 +679,8 @@ def main(argv=None):
     # lock itself; holding it here would deadlock every scheduled update. A
     # dry run mutates nothing, so it takes no lock and creates no home.
     if args.status or args.preflight or args.check_update or args.dry_run:
+        if args.check_update or (args.uninstall and action is do_uninstall):
+            require_live_home(home, '--uninstall' if args.uninstall else '--check-update')
         return action(args)
     # Before the lock: a host with no service manager must be refused
     # without leaving a router home behind.
@@ -693,6 +692,7 @@ def main(argv=None):
             # the same service. Second one out: the winner has this covered.
             print('deferred: another router operation is in progress')
             return 0
+        require_live_home(home, 'this action')
         return action(args)
 
 
