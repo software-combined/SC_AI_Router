@@ -186,6 +186,7 @@ class LegacyReloadTests(unittest.TestCase):
             self.assertIn('NOT serving', out)
 
 
+@unix_only
 class HandoverTests(unittest.TestCase):
     """An ordinary upgrade hands over in place; it never bootouts."""
 

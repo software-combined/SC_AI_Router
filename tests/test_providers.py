@@ -32,7 +32,7 @@ class SelectTests(unittest.TestCase):
              'ChatGPT-Account-ID': 'acct'}, _stub_credentials())
         self.assertEqual(prepared.headers,
                          {'Authorization': 'Bearer router-secret',
-                          'Content-Type': 'application/json'})
+                          'Content-Type': 'application/json', 'Accept-Encoding': 'identity'})
 
     def test_subscription_prepare_forwards_bearer_and_strips_hop_headers(self):
         provider = providers.select('gpt-6-astra', '/responses', ['gpt-6-astra'])

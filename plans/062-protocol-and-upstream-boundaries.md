@@ -140,13 +140,13 @@ git diff --check
 
 ## Done criteria
 
-- [ ] Existing two protocols still pass body/stream/auth/status contracts.
-- [ ] Handler uses one explicit protocol selection path; providers are new
+- [x] Existing two protocols still pass body/stream/auth/status contracts.
+- [x] Handler uses one explicit protocol selection path; providers are new
       adapter classes, never new vendor branches in the HTTP handler.
-- [ ] Shared transport leaves do not import client/provider orchestration.
-- [ ] Compaction inflight handling, content-safe logs and credentials are preserved.
-- [ ] Packaged imports pass, old command entrypoints remain usable, size limits pass.
-- [ ] Review, commit, `develop` integration and worktree disposition are recorded.
+- [x] Shared transport leaves do not import client/provider orchestration.
+- [x] Compaction inflight handling, content-safe logs and credentials are preserved.
+- [x] Packaged imports pass, old command entrypoints remain usable, size limits pass.
+- [x] Review, commit, `develop` integration and worktree disposition are recorded.
 
 ## STOP conditions and maintenance
 

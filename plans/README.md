@@ -1,6 +1,6 @@
 # Implementation Plans
 
-Start with the [full router backlog and execution order](2026-09-09-router-roadmap.md)
+For the earlier backlog, start with the [router backlog and execution order](2026-09-09-router-roadmap.md)
 and the [complete executor prompt](2026-09-09-execute-all-router-plans.md).
 Reconciled at `96db57f`, 9 September 2026: platform Plans 056-059 and
 AGENTS.md section 9 are integrated; audit Plans 060-067 and this consolidation
@@ -214,7 +214,7 @@ registration.
   rejected because the existing 30-second non-blocking health call already
   supplies the required periodic trigger.
 
-## Router plans 034-067: reconciled 9 September 2026
+## Router plans 034-068: reconciled 9 September 2026, 068 added 10 September 2026
 
 The [roadmap](2026-09-09-router-roadmap.md) owns remaining requirements,
 sequencing, evidence and acceptance gates. Read individual plans for execution
@@ -254,13 +254,14 @@ independent implementations: the owner mapping prevents duplicate execution.
 | [058](058-recipient-readiness-for-windows-and-linux.md) | TODO: recipient preflight, native acceptance and README | Wrong-today docs now; native preflight before runtime download; consumes 056/057/059 |
 | [059](059-python-314-interpreter-provisioning.md) | TODO: private CPython 3.14 runtime | Single pinned lock/native wrappers, isolated bootstrap then 054 mirror; ongoing patch owner required |
 | [060](060-content-safe-router-diagnostics.md) | TODO: content-safe diagnostics | First small source fix; synthetic regression already reproduced |
-| [061](061-domain-rules-and-bundle-contracts.md) | TODO: domain rules and extracted-bundle checks | Before structural moves; preserve AGENTS.md section 9 |
-| [062](062-protocol-and-upstream-boundaries.md) | TODO: protocol/transport boundaries | 060/061, with 066 protocol work reconciled before moving shared files |
-| [063](063-client-activation-and-subscription-policy.md) | TODO: client activation/subscription policy | 056/061/062; Codex/service-only first, then 051/053 |
-| [064](064-model-facts-and-client-projections.md) | TODO: model facts and client projections | 061; serialize shared files with 062; feeds 044/046 |
-| [065](065-kiro-client-compatibility-spike.md) | TODO: Kiro IDE/CLI compatibility spike | Independent, supported hooks only; a verified negative result completes spike |
+| [061](061-domain-rules-and-bundle-contracts.md) | DONE: domain map, boundary tests, bundle closure, 3.9 grammar gate (2026-09-10) | `3bed26d` + extraction follow-ons on develop; 062/064 unblocked under the rules |
+| [062](062-protocol-and-upstream-boundaries.md) | DONE: transport leaves + explicit protocol dispatch (2026-09-10) | `a40dcc7` on develop; 112 contract tests OK; 064 consumes the seam next |
+| [063](063-client-activation-and-subscription-policy.md) | DONE: Codex adapter extracted, service-only route, independent subscription modes (2026-09-10) | `f5cf136`+`b40f82e` on develop; 107 focused tests OK; 051/053 consume the seam next |
+| [064](064-model-facts-and-client-projections.md) | DONE: one metadata/projection owner each; claude.py move deferred to 051/053 (2026-09-10) | `0d0634f` on develop; 104 focused tests OK; step 4 note in plan |
+| [065](065-kiro-client-compatibility-spike.md) | DONE: negative spike, no verified Kiro inference hook (2026-09-10) | `docs/kiro-compatibility.md`; IDE and CLI separately decided; reopen only on dated official custom-endpoint evidence |
 | [066](066-mixed-provider-agent-instruction-delivery.md) | TODO: mixed-provider instruction delivery | Early containment/capture; real plaintext delivery remains separate from file-brief workaround |
-| [067](067-installer-updater-extraction.md) | TODO: scheduled-updater extraction | Before 056 grows install.py; skip if equivalent work has already integrated |
+| [067](067-installer-updater-extraction.md) | DONE: updater extracted to `packaging/updater.py` (2026-09-10) | `8808349` on develop; 50 focused tests OK plus release-bundle omission smoke; 056 unblocked |
+| [068](068-portco-model-policy.md) | TODO: per-portco model allowlists as resolved data | Amends 046/064/055; no groups on the machine; Stage 0 tests first, then grant/loader/picker/routing/refresh/docs |
 
 ### Consolidated decisions and dependencies
 
@@ -319,3 +320,30 @@ source work while an external gate is pending.
   service, or unapproved hourly model hot-reload.
 - Retired Muse duplicate drafts are in [rejected-muse-retry](rejected-muse-retry/README.md);
   they are provenance, not active numbered plans.
+
+## Optimisation plans 068-072: 10 September 2026
+
+The [optimisation audit and adjudication](2026-09-10-router-optimisation-audit.md)
+records the evidence, limitations and the independent
+[Opus 5 high review](2026-09-10-opus-optimisation-review.md).
+All five are planning deliverables at source `83a5023`; no runtime optimisation
+has been implemented or deployed by this planning task.
+
+| Plan | Outcome | Priority / effort | Depends on | Status |
+|---|---|---|---|---|
+| [068](068-router-latency-measurement.md) | Separate body/preparation, connection, upstream wait and forwarding metrics | P1 / S-M | None | TODO |
+| [069](069-router-streaming-identity-inspection.md) | Preserve incremental forwarding during optional identity inspection | P1 / M | 068 for live attribution; offline regression independent | TODO |
+| [070](070-discovered-schema-deduplication.md) | Deduplicate cached schemas without changing effective tools | P2 / S | None | TODO |
+| [071](071-upstream-connection-reuse-experiment.md) | Measured go/no-go for connection reuse | P3 / S investigation | 068 evidence, 069 | TODO: investigation only |
+| [072](072-client-cancellation-investigation.md) | Establish material residual cancellation delay and a safe signal | P3 / S-M investigation | 068 evidence, 069 | TODO: investigation only |
+
+Recommended order: 068 then 069; 070 can proceed independently with separate
+write ownership. 071/072 can finish with NO-GO or EVIDENCE-UNAVAILABLE; they do
+not authorise runtime pooling, active cancellation or paid probes. Serialize
+future transport writers. Reuse Plan 060 privacy, Plan 062 domain boundaries and
+Plan 045 drain behavior; do not duplicate their implemented source work.
+
+Rejected directions: cross-request caching of served-model identity; an async
+rewrite without measured need; arbitrary schema eviction; automatic replay of
+paid POSTs; calling a socket reset a client disconnect without its I/O phase;
+or claiming absent upstream timeouts (the existing operation timeout is 120 s).

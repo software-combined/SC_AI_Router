@@ -6,6 +6,10 @@ from pathlib import Path
 ENV_VAR = 'OPENROUTER_API_KEY'
 KEY_FILE = 'openrouter.key'
 
+# Per-module flag so tests can drive the Windows branch without patching
+# global os.name (which pathlib itself reads).
+_ON_WINDOWS = os.name == 'nt'
+
 
 def default_home():
     """Router home, resolved at call time so tests can patch the env var."""
@@ -26,6 +30,12 @@ class Credentials:
         if key_file.exists():
             if os.name != 'nt' and key_file.stat().st_mode & 0o077:
                 raise PermissionError(f'{key_file} must be readable by the owner only (chmod 600)')
+            if _ON_WINDOWS:
+                from . import winacl as _winacl
+                try:
+                    _winacl.check(key_file)
+                except SystemExit as exc:
+                    raise PermissionError(str(exc))
             value = key_file.read_text().strip()
             if value:
                 return value

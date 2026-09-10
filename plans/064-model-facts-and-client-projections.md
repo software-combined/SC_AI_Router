@@ -130,6 +130,16 @@ rule. Keep command-facing compatibility exports in `catalogue.py`/`claude.py`;
 their import direction is correct. If an external supported caller of the
 registry visibility helpers is discovered, stop and define its migration first.
 
+> **Deferred 2026-09-10 at `d97482d`:** the `clients/claude.py` move did not
+> land. Picker visibility already lives in the client domain
+> (`clients/__init__.py:visible_for/models_for`, consumed by `catalogue.py`),
+> and the include-all Claude discovery list stays in `claude.py:models_listing`
+> with explicit tests pinning it (`test_claude_ingress.py:140-181`). Moving
+> that function now would churn `claude.py` shared with the 057/066 streams
+> for zero behavior change, and the mirror filter itself belongs to 051/053.
+> Reopen only with the 051/053 listing change, not as a behavior-preserving
+> move.
+
 Document the intentional distinction between current Claude discovery and the
 planned mirror filter. That filter belongs to the Claude activation/acceptance
 slice (051/053), which must update the actual listing tests and read back the
@@ -160,13 +170,13 @@ git diff --check
 
 ## Done criteria
 
-- [ ] Pure metadata normalization has no dependency on command/client modules.
-- [ ] Merge and apply agree for the same Model snapshot and preserve native rows.
-- [ ] Refresh never promotes capabilities/tiers or resets pinned quirks.
-- [ ] Client projections own listing shapes; current Claude list remains unchanged.
-- [ ] Picker hiding cannot alter canonical upstream routing or credential choice.
-- [ ] Extracted bundle imports/resources and required checks pass.
-- [ ] Review, `develop` integration and worktree disposition are recorded.
+- [x] Pure metadata normalization has no dependency on command/client modules.
+- [x] Merge and apply agree for the same Model snapshot and preserve native rows.
+- [x] Refresh never promotes capabilities/tiers or resets pinned quirks.
+- [x] Client projections own listing shapes; current Claude list remains unchanged.
+- [x] Picker hiding cannot alter canonical upstream routing or credential choice.
+- [x] Extracted bundle imports/resources and required checks pass.
+- [x] Review, `develop` integration and worktree disposition are recorded.
 
 ## STOP conditions and maintenance
 

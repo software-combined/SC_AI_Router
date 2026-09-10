@@ -2,17 +2,19 @@
 import http.client
 import json
 import re
-from . import compaction as comp, local_services
+from . import compaction as comp, local_services, agent_handoffs
 from .capabilities import (CANONICAL_ORDER, OPENROUTER_HOST, REASONING_LEVELS, check_effort,
                               check_images, input_modalities)
+from .context_budget import estimate as estimate_tokens
 from .errors import ContextWindowExceeded, PreparationError
 from .registry import by_slug
 from .runtime import log_event
 from .discovered import remember
 from .tool_adapter import prepare_tools, snoop_response_identity, stream_events, ToolEvents
 
-HOP_HEADERS = {'host', 'connection', 'content-length', 'transfer-encoding',
-               'upgrade', 'keep-alive', 'proxy-authorization', 'proxy-authenticate', 'te', 'trailer'}
+# Transport leaves live in transport.py (Plan 062); these aliases keep
+# existing importers working until the protocol split completes.
+from .transport import HOP_HEADERS, Prepared, passthrough, relay_headers
 NATIVE_SERVICE_PATHS = {'/alpha/search', '/alpha/notes/v2/thread_hint', '/guardian', '/guardian-classifier'}
 
 
@@ -94,6 +96,14 @@ def reject_opaque_agent_items(items):
             'resend the assignment as plain text')
 
 
+def validate_response(response, prepared):
+    """Check adapted Responses encoding before forwarding response headers."""
+    if prepared.provider in ('openai-subscription', 'openrouter') and prepared.tool_names:
+        encoding = response.getheader('Content-Encoding', '').strip().lower()
+        if encoding not in ('', 'identity'):
+            raise ValueError('unsupported plaintext handoff response encoding')
+
+
 def describe_failure(exc, response, info):
     """Name an upstream failure for the client: (status, message) or None.
 
@@ -132,31 +142,8 @@ def describe_failure(exc, response, info):
     return None
 
 
-def relay_headers(response, send_header, model):
-    """Forward upstream headers, pinning openai-model to the requested slug.
-
-    Codex warns on any mismatch with the configured slug, so the upstream
-    model name never goes out on that header; /health reports the real one.
-    """
-    for key, value in response.getheaders():
-        if key.lower() in HOP_HEADERS or key.lower() in ('set-cookie', 'openai-model'):
-            continue
-        send_header(key, value)
-    if isinstance(model, str):
-        send_header('openai-model', model)
-
-
-class Prepared:
-    __slots__ = ('host', 'path', 'headers', 'body', 'tool_names', 'provider')
-
-    def __init__(self, host, path, headers, body, tool_names, provider):
-        self.host, self.path, self.headers = host, path, headers
-        self.body, self.tool_names, self.provider = body, tool_names, provider
-
-
 def _passthrough(response):
-    while chunk := response.read1(65536):
-        yield chunk
+    yield from passthrough(response)
 
 
 class SubscriptionProvider:
@@ -177,10 +164,20 @@ class SubscriptionProvider:
         # The URL path token is the loopback auth; Codex >=0.153.4 omits the
         # subscription Authorization header, so forward client headers unchanged.
         fwd = {k: v for k, v in headers.items() if k.lower() not in HOP_HEADERS}
-        return Prepared(self.host, '/backend-api/codex' + path, fwd, raw_body, set(), self.name)
+        try:
+            names = agent_handoffs.add_plaintext_tools(payload) if path == '/responses' else set()
+        except ValueError as exc:
+            raise PreparationError(str(exc)) from exc
+        if names:
+            fwd = {k: v for k, v in fwd.items() if k.lower() not in ('content-encoding', 'accept-encoding')}
+            fwd['Accept-Encoding'] = 'identity'
+            raw_body = json.dumps(payload).encode()
+        return Prepared(self.host, '/backend-api/codex' + path, fwd, raw_body, names, self.name)
 
     def adapt(self, response, tool_names, notes=None):
-        if notes is not None and response.status == 200:
+        if tool_names and response.status == 200:
+            yield from agent_handoffs.adapt_response(response, tool_names, notes)
+        elif notes is not None and response.status == 200:
             yield from snoop_response_identity(response, notes)
         else:
             yield from _passthrough(response)
@@ -205,10 +202,11 @@ class OpenRouterProvider:
         # tool_search_output items (released-tool discovery) are never scrubbed.
         payload['input'] = comp.scrub_tool_fragments(payload.get('input', []))
         try:
+            agent_handoffs.add_plaintext_tools(payload)
             tool_names = prepare_tools(payload)
+            rewritten = comp.strip_reasoning_blobs(comp.rewrite_input(payload.get('input', [])))
         except ValueError as exc:
             raise PreparationError(str(exc))
-        rewritten = comp.strip_reasoning_blobs(comp.rewrite_input(payload.get('input', [])))
         try:
             check_images(model, rewritten)
         except ValueError as exc:
@@ -239,16 +237,20 @@ class OpenRouterProvider:
         if window:
             # Approximate input plus reserved output must fit. The typed
             # error lets the client mark context full and compact next turn.
-            used = len(json.dumps(payload.get('input', []))) // 4
+            used = estimate_tokens(payload)
             reserved = payload['max_output_tokens']
+            slug = model if isinstance(model, str) else str(getattr(entry, 'slug', model))
             if used + reserved > window:
-                raise ContextWindowExceeded(
+                exc = ContextWindowExceeded(
                     f'request needs ~{used + reserved} tokens '
                     f'(~{used} input + {reserved} reserved output) '
-                    f'but {(model if isinstance(model, str) else entry.slug)} allows {window}; compact or shorten the turn')
+                    f'but {slug} allows {window}; compact or shorten the turn')
+                exc.budget = {'model': slug, 'path': path, 'used': used,
+                              'reserved': reserved, 'window': window}
+                raise exc
         return Prepared(self.host, '/api/v1/responses',
                         {'Authorization': 'Bearer ' + credentials.openrouter_key(),
-                         'Content-Type': 'application/json'},
+                         'Content-Type': 'application/json', 'Accept-Encoding': 'identity'},
                         json.dumps(payload).encode(), tool_names, self.name)
 
     def adapt(self, response, tool_names, notes=None):

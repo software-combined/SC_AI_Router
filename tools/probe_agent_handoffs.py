@@ -1,0 +1,496 @@
+"""Isolated native-client handoff proof; live mode requires an explicit call cap.
+
+Children are scripted sinks. --live sends only the synthetic parent to the
+installed router, testing real schema acceptance and canonical replay.
+No request content, ciphertext, credentials or private URLs are printed.
+"""
+import argparse
+from compression import zstd
+import io
+import json
+import logging
+import os
+from pathlib import Path
+import queue
+import shutil
+import secrets
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+import urllib.request
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from codex_router.agent_handoffs import add_plaintext_tools, restore_event
+from codex_router.catalogue import openrouter_entry
+from codex_router.registry import by_slug
+
+PARENT = 'gpt-6-astra'
+CHILD = 'meta/muse-spark-1.3-contributor'
+MARKERS = ('SYNTH_066_INITIAL', 'SYNTH_066_FOLLOWUP', 'SYNTH_066_MESSAGE')
+ALL_MARKERS = (*MARKERS, 'SYNTH_NATIVE_CONTROL')
+
+
+def message(text, ident):
+    return {'type': 'message', 'id': 'msg_' + ident, 'role': 'assistant',
+            'content': [{'type': 'output_text', 'text': text}]}
+
+
+def frame_data(frame):
+    return b'\n'.join(line[5:].lstrip() for line in frame.splitlines() if line.startswith(b'data:'))
+
+
+def sse(items, ident):
+    response = {'id': 'resp_' + ident, 'status': 'in_progress', 'output': []}
+    events = [{'type': 'response.created', 'response': response}]
+    for index, item in enumerate(items):
+        for phase in ('added', 'done'):
+            events.append({'type': 'response.output_item.' + phase,
+                           'output_index': index, 'item': item})
+    events.append({'type': 'response.completed', 'response': {
+        **response, 'status': 'completed', 'output': items,
+        'usage': {'input_tokens': 1, 'output_tokens': 1, 'total_tokens': 2}}})
+    return b''.join(b'data: ' + json.dumps(e).encode() + b'\n\n' for e in events)
+
+
+class Probe:
+    def __init__(self, live, call_limit, live_children=False):
+        self.live, self.call_limit = live, call_limit
+        self.live_children = live_children
+        self.live_calls = self.parent_calls = 0
+        self.alias_call_ids = set()
+        self.lock = threading.Lock()
+        self.facts = {'markers': [], 'encrypted_child': False,
+                      'canonical_replay': False, 'alias_emitted': False, 'calls': [], 'child_shapes': [],
+                      'tool_failures': [], 'replies': []}
+        self.errors = []
+        self.upstream = None
+        if live:
+            home = Path.home() / '.codex/mixed-model-router'
+            state = json.loads((home / 'mixed-router-state.json').read_text())
+            self.upstream = (f'http://127.0.0.1:{state["port"]}/{state["token"]}'
+                             '/backend-api/codex/responses')
+
+    def scripted(self, body, ordinal):
+        if body.get('model') != PARENT:
+            agent_items = [i for i in body.get('input', []) if i.get('type') == 'agent_message']
+            self.facts['child_shapes'].append({'model': body.get('model'),
+                'blocks': [[b.get('type') for b in item.get('content', [])] for item in agent_items]})
+            text = '\n'.join(b.get('text', '') for item in agent_items
+                             for b in item.get('content', []) if b.get('type') == 'input_text')
+            for marker in MARKERS:
+                if marker in text and marker not in self.facts['markers']:
+                    self.facts['markers'].append(marker)
+            if body.get('model') == CHILD and any(b.get('type') == 'encrypted_content'
+                    for item in agent_items for b in item.get('content', [])):
+                raise ValueError('plaintext child received opaque content')
+            if body.get('model') != CHILD:
+                self.facts['encrypted_child'] |= any(
+                    b.get('type') == 'encrypted_content'
+                    for item in agent_items for b in item.get('content', []))
+            return sse([message(' '.join(m for m in MARKERS if m in text), str(ordinal))], str(ordinal))
+        step = self.parent_calls
+        self.parent_calls += 1
+        calls = [
+            ('spawn_agent', {'task_name': 'plain', 'model': CHILD, 'fork_turns': 'none', 'message': MARKERS[0]}),
+            ('followup_task', {'target': 'plain', 'message': MARKERS[1]}),
+            ('send_message', {'target': 'plain', 'message': MARKERS[2]}),
+            ('followup_task', {'target': 'plain', 'message': 'SYNTH_WAKE_READ_QUEUED_MESSAGE'}),
+            ('spawn_agent', {'task_name': 'native', 'model': 'gpt-5.6-sol', 'fork_turns': 'none', 'message': 'SYNTH_OPAQUE_CONTROL'}),
+        ]
+        if step >= len(calls):
+            return sse([message('SYNTH_DONE', str(ordinal))], str(ordinal))
+        name, arguments = calls[step]
+        item = {'type': 'function_call', 'namespace': 'collaboration_plaintext' if step < 4 else 'collaboration',
+                'name': name, 'id': 'fc_' + str(ordinal), 'call_id': 'call_' + str(ordinal),
+                'arguments': json.dumps(arguments)}
+        return sse([item], str(ordinal))
+
+    def respond(self, body, headers, ordinal, path='/responses'):
+        for item in body.get('input', []):
+            if item.get('type') == 'function_call' and item.get('namespace') == 'collaboration':
+                self.facts['canonical_replay'] |= item.get('call_id') in self.alias_call_ids
+            if item.get('type') == 'function_call_output':
+                output = item.get('output')
+                if isinstance(output, str) and ('error' in output.lower() or 'failed' in output.lower()):
+                    safe = 'tool_output_reported_failure'
+                    if safe not in self.facts['tool_failures']:
+                        self.facts['tool_failures'].append(safe)
+        # The probe exposes only collaboration, never file/shell/app tools.
+        # Structural turn log only: namespace names and tool counts, no payload.
+        offered = body.get('tools', []) if isinstance(body.get('tools'), list) else []
+        self.facts.setdefault('turns', []).append({
+            'model': body.get('model'),
+            'tool_namespaces': sorted({t.get('name') for t in offered if isinstance(t, dict)}),
+            'namespace_tools': {t.get('name'): [u.get('name') for u in t.get('tools', [])]
+                                for t in offered
+                                if isinstance(t, dict) and t.get('type') == 'namespace'},
+            'input_kinds': sorted({i.get('type') for i in body.get('input', [])
+                                   if isinstance(i, dict)}),
+        })
+        body['tools'] = [t for t in offered if t.get('name') == 'collaboration']
+        if self.live_children:
+            if body.get('model') != PARENT:
+                self.scripted(body, ordinal)  # Observe input shape only; discard scripted reply.
+            raw = self.forward(body, headers, path)
+            for frame in raw.split(b'\n\n'):
+                data = frame_data(frame)
+                if not data or data == b'[DONE]':
+                    continue
+                event = json.loads(data)
+                if event.get('type') != 'response.output_item.done':
+                    continue
+                item = event.get('item', {})
+                if item.get('type') == 'function_call':
+                    try:
+                        call_args = json.loads(item.get('arguments') or '{}')
+                    except ValueError:
+                        call_args = {}
+                    self.facts['calls'].append({
+                        'model': body.get('model'), 'namespace': item.get('namespace'),
+                        'name': item.get('name'),
+                        'encrypted_fields': ('absent' if item.get('encrypted_function_args', 'absent') == 'absent'
+                            else ('empty' if item.get('encrypted_function_args') == [] else 'nonempty')),
+                        'target': call_args.get('target'), 'task': call_args.get('task_name'),
+                        'child_model': call_args.get('model')})
+                if item.get('encrypted_function_args') == []:
+                    self.alias_call_ids.add(item.get('call_id'))
+                    self.facts['alias_emitted'] = True
+                if item.get('type') == 'function_call_output':
+                    if isinstance(item.get('output'), str) and 'collaboration_plaintext' in item.get('output'):
+                        self.facts.setdefault('steers', []).append(item.get('call_id'))
+                if body.get('model') != PARENT and item.get('type') == 'message':
+                    text = ''.join(b.get('text', '') for b in item.get('content', []))
+                    for marker in ALL_MARKERS:
+                        if marker in text and marker not in self.facts['replies']:
+                            self.facts['replies'].append(marker)
+            return raw
+        aliases = add_plaintext_tools(body)
+        if self.live and body.get('model') == PARENT:
+            raw = self.forward(body, headers)
+        else:
+            raw = self.scripted(body, ordinal)
+        frames = []
+        for frame in raw.replace(b'\r\n', b'\n').split(b'\n\n'):
+            data = frame_data(frame)
+            if not data or data == b'[DONE]':
+                frames.append(frame)
+                continue
+            event = json.loads(data)
+            if event.get('type') == 'response.output_item.done':
+                item = event.get('item', {})
+                if item.get('type') == 'function_call':
+                    fields = item.get('encrypted_function_args', 'absent')
+                    arguments = json.loads(item.get('arguments') or '{}')
+                    self.facts['calls'].append({'namespace': item.get('namespace'),
+                        'name': item.get('name'),
+                        'encrypted_fields': 'absent' if fields == 'absent' else ('empty' if fields == [] else 'nonempty'),
+                        'model': arguments.get('model'), 'fork_turns': arguments.get('fork_turns')})
+            restored = restore_event(event, aliases)
+            if restored is not event:
+                self.facts['alias_emitted'] = True
+                if isinstance(restored.get('item'), dict):
+                    self.alias_call_ids.add(restored['item'].get('call_id'))
+                frame = b'data: ' + json.dumps(restored).encode()
+            frames.append(frame)
+        return b'\n\n'.join(frames)
+
+    def forward(self, body, headers, path='/responses'):
+        with self.lock:
+            if self.live_calls >= self.call_limit:
+                raise ValueError('live call limit reached')
+            self.live_calls += 1
+        forward = {k: v for k, v in headers.items() if k.lower() not in (
+            'host', 'content-length', 'content-encoding', 'accept-encoding', 'connection')}
+        forward['Accept-Encoding'] = 'identity'
+        url = self.upstream + ('/compact' if path.endswith('/compact') else '')
+        request = urllib.request.Request(url, data=json.dumps(body).encode(),
+                                         headers=forward, method='POST')
+        with urllib.request.urlopen(request, timeout=120) as response:
+            if response.getheader('Content-Encoding', 'identity') != 'identity':
+                raise ValueError('unexpected live response encoding')
+            return response.read()
+
+
+def run(args):
+    if args.live and not 1 <= args.max_live_calls <= 24:
+        raise ValueError('--live requires --max-live-calls between 1 and 24')
+    if args.live_children and not args.live:
+        raise ValueError('--live-children requires --live')
+    probe = Probe(args.live, args.max_live_calls, args.live_children)
+    class Handler(BaseHTTPRequestHandler):
+        protocol_version = 'HTTP/1.1'
+
+        def log_message(self, *unused):
+            pass
+
+        def do_GET(self):
+            # Match the router's unsupported WebSocket route so Codex can
+            # fall back to Responses HTTP rather than fail HTTP/1.0 parsing.
+            self.send_response(404)
+            self.send_header('Content-Length', '0')
+            self.send_header('Connection', 'close')
+            self.end_headers()
+            self.close_connection = True
+
+        def do_POST(self):
+            try:
+                raw = self.rfile.read(int(self.headers.get('Content-Length', '0')))
+                if self.headers.get('Content-Encoding') == 'zstd':
+                    with zstd.ZstdFile(io.BytesIO(raw)) as stream:
+                        raw = stream.read()
+                body = json.loads(raw)
+                with probe.lock:
+                    self.server.ordinal += 1
+                    ordinal = self.server.ordinal
+                result = probe.respond(body, self.headers, ordinal, self.path)
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json' if self.path.endswith('/compact') else 'text/event-stream')
+            except Exception as exc:
+                known = ('live call limit reached', 'unexpected live response encoding',
+                         'plaintext child received opaque content', 'encrypted plaintext collaboration call',
+                         'unadvertised plaintext collaboration call')
+                reason = str(exc) if str(exc) in known else 'protocol_or_transport_failure'
+                probe.errors.append({'type': type(exc).__name__, 'status': getattr(exc, 'code', None), 'reason': reason})
+                result = b'{"error":{"message":"synthetic handoff probe failed"}}'
+                self.send_response(409 if isinstance(exc, ValueError) else 502)
+                self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(result)))
+            self.end_headers()
+            try:
+                self.wfile.write(result)
+            except OSError:
+                pass
+
+    with tempfile.TemporaryDirectory(prefix='agent-handoff-probe-') as temp:
+        root = Path(temp)
+        candidate = None
+        if args.live_children:
+            from codex_router.credentials import Credentials
+            from codex_router.router import Router
+            from codex_router.runtime import LOG
+            class Events(logging.Handler):
+                def emit(self, record):
+                    row = json.loads(record.getMessage())
+                    if row.get('event') in ('transport_error', 'request_rejected', 'preparation_error'):
+                        probe.errors.append({key: row.get(key) for key in
+                            ('event', 'status', 'code', 'error_type', 'location')})
+            LOG.addHandler(Events())
+            LOG.setLevel(logging.INFO)
+            home = Path.home() / '.codex/mixed-model-router'
+            state = json.loads((home / 'mixed-router-state.json').read_text())
+            candidate = Router({**state, 'port': 0, 'token': secrets.token_urlsafe(24)},
+                               credentials=Credentials(state, home))
+            threading.Thread(target=candidate.serve_forever, daemon=True).start()
+            probe.upstream = (f'http://127.0.0.1:{candidate.server_port}/'
+                f'{candidate.state["token"]}/backend-api/codex/responses')
+        server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+        server.ordinal = 0
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        child = openrouter_entry(by_slug(CHILD))
+        child['prefer_websockets'] = False
+        if PARENT.startswith('gpt-'):
+            # Subscription parents keep their live multi-agent contract.
+            # The installed catalogue serves Astra v2 but Luna v1 (Codex
+            # 0.153.4, 2026-09-10); forcing v2 would mask that difference.
+            # Plan 066 covers the v2 parent route; v1 parents stay fail-closed
+            # on opaque follow-ups and need their own plan if pursued.
+            # Isolated default must run without the installed catalogue.
+            try:
+                installed = (Path.home() / '.codex/mixed-model-router'
+                             / 'mixed-models.json').read_text()
+            except OSError:
+                installed = '{"models": []}'
+            live = {m.get('slug'): m.get('multi_agent_version')
+                    for m in json.loads(installed).get('models', [])}
+            parent = dict(child, slug=PARENT, display_name='Synthetic parent',
+                          multi_agent_version=live.get(PARENT, 'v2'))
+        else:
+            parent = openrouter_entry(by_slug(PARENT))
+        native = dict(parent, slug='gpt-5.6-sol')
+        catalog = root / 'catalog.json'
+        catalog.write_text(json.dumps({'models': [parent, child, native]}))
+        if args.live:
+            auth = root / 'auth.json'
+            auth.touch(mode=0o600)
+            shutil.copyfile(Path.home() / '.codex/auth.json', auth)
+        provider = 'openai' if args.live else 'probe'
+        config = {'model_provider': provider, 'model_catalog_json': str(catalog),
+            'project_doc_max_bytes': 0, 'approval_policy': 'never', 'sandbox_mode': 'read-only',
+            'features.multi_agent': True, 'features.multi_agent_v2': True,
+            'features.apps': False, 'features.memories': False, 'features.code_mode': False,
+            'features.shell_tool': False, 'web_search': 'disabled'}
+        base = f'http://127.0.0.1:{server.server_port}/v1'
+        if args.live:
+            config['openai_base_url'] = base
+        else:
+            config.update({'model_providers.probe.name': 'Synthetic loopback',
+                'model_providers.probe.base_url': base, 'model_providers.probe.wire_api': 'responses',
+                'model_providers.probe.requires_openai_auth': False,
+                'model_providers.probe.supports_websockets': False})
+        command = [args.codex, 'app-server', '--stdio']
+        for key, value in config.items():
+            command.extend(['-c', key + '=' + json.dumps(value)])
+        env = {k: v for k, v in os.environ.items() if not any(
+            word in k.upper() for word in ('API_KEY', 'TOKEN', 'SECRET', 'AUTH'))}
+        env['CODEX_HOME'] = temp
+        process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, text=True, cwd=temp, env=env)
+        events = queue.Queue()
+        def read_events():
+            for line in process.stdout:
+                try:
+                    events.put(json.loads(line))
+                except ValueError:
+                    pass
+        def drain_errors():
+            for _ in process.stderr:
+                pass
+        threading.Thread(target=read_events, daemon=True).start()
+        threading.Thread(target=drain_errors, daemon=True).start()
+        deadline = time.monotonic() + (600 if args.live else 40)
+        sequence = 0
+        def send(value):
+            process.stdin.write(json.dumps(value) + '\n')
+            process.stdin.flush()
+        def next_event():
+            event = events.get(timeout=max(.1, deadline - time.monotonic()))
+            params = event.get('params', {})
+            failure = params.get('error') if event.get('method') == 'error' else None
+            if event.get('method') == 'turn/completed' and params.get('turn', {}).get('status') == 'failed':
+                failure = params['turn'].get('error')
+            if failure:
+                safe = {'event': event.get('method'),
+                        'code': failure.get('codexErrorInfo') if isinstance(failure, dict) else None}
+                if safe not in probe.facts['tool_failures']:
+                    probe.facts['tool_failures'].append(safe)
+            return event
+        def rpc(method, params):
+            nonlocal sequence
+            sequence += 1
+            send({'id': sequence, 'method': method, 'params': params})
+            while True:
+                event = next_event()
+                if event.get('id') == sequence:
+                    if 'error' in event:
+                        raise ValueError('native RPC rejected ' + method)
+                    return event['result']
+        try:
+            rpc('initialize', {'clientInfo': {'name': 'agent_handoff_probe', 'version': '1.0'},
+                              'capabilities': {'experimentalApi': True}})
+            send({'method': 'initialized', 'params': {}})
+            thread = rpc('thread/start', {'model': PARENT, 'modelProvider': provider,
+                'cwd': temp, 'ephemeral': not args.lifecycle, 'approvalPolicy': 'never', 'sandbox': 'read-only',
+                'baseInstructions': 'Synthetic collaboration protocol test. No files or external tools.',
+                'developerInstructions': 'Use only the collaboration tools requested by the user.'})['thread']['id']
+            prompts = [
+                f'Use collaboration_plaintext.spawn_agent once to create plain on {CHILD}, '
+                f'fork_turns none, message "Reply exactly {MARKERS[0]}". Then finish this turn.',
+                'The plain child uses OpenRouter. Call collaboration_plaintext.followup_task '
+                f'once with target plain, message "Reply exactly {MARKERS[1]}". Then finish this turn.',
+                'The plain child uses OpenRouter. Call collaboration_plaintext.send_message '
+                f'once with target plain, message "Reply exactly {MARKERS[2]}". Then finish this turn.',
+                'Wake the plain OpenRouter child using collaboration_plaintext.followup_task '
+                'once with target plain and message "Reply with every SYNTH_066 marker from your assignments". Then finish.',
+                'Use original collaboration.spawn_agent once to create native on gpt-5.6-sol, '
+                'fork_turns none, message "Reply exactly SYNTH_NATIVE_CONTROL". Then finish this turn.',
+                'Without tools, reply SYNTH_REPLAY_TWO.'] if args.live else ['Synthetic test.']
+            if args.native_only:
+                prompts = prompts[-2:]
+            def turn(prompt_text):
+                answer = []
+                rpc('turn/start', {'threadId': thread, 'input': [{'type': 'text', 'text': prompt_text,
+                    'text_elements': []}], 'effort': 'low'})
+                while True:
+                    event = next_event()
+                    if event.get('method') == 'item/completed' and event.get('params', {}).get('threadId') == thread:
+                        item = event['params'].get('item', {})
+                        if item.get('type') == 'agentMessage':
+                            answer.append(item.get('text', ''))
+                    if event.get('method') == 'turn/completed' and event.get('params', {}).get('threadId') == thread:
+                        if event['params']['turn']['status'] != 'completed':
+                            raise ValueError('synthetic parent turn failed')
+                        break
+                return '\n'.join(answer)
+            for prompt_text in prompts:
+                turn(prompt_text)
+            expected_replies = {'SYNTH_NATIVE_CONTROL'} if args.native_only else set(ALL_MARKERS)
+            settle = min(deadline, time.monotonic() + (120 if args.live_children else 2))
+            while time.monotonic() < settle:
+                if args.live_children and expected_replies <= set(probe.facts['replies']):
+                    break
+                try:
+                    events.get(timeout=.1)
+                except queue.Empty:
+                    pass
+            if args.lifecycle:
+                if candidate is None or not expected_replies <= set(probe.facts['replies']):
+                    raise ValueError('lifecycle requires completed live children')
+                state, credentials = candidate.state, candidate.credentials
+                state['port'] = candidate.server_port
+                candidate.shutdown()
+                candidate.server_close()
+                candidate = Router(state, credentials=credentials)
+                threading.Thread(target=candidate.serve_forever, daemon=True).start()
+                turn('Without tools, reply SYNTH_AFTER_ROUTER_RESTART.')
+                probe.facts['router_restart'] = True
+                rpc('thread/resume', {'threadId': thread, 'model': PARENT,
+                    'modelProvider': provider, 'cwd': temp})
+                turn('Without tools, reply SYNTH_AFTER_RESUME.')
+                probe.facts['resume'] = True
+                rpc('thread/compact/start', {'threadId': thread})
+                while True:
+                    event = next_event()
+                    if event.get('method') == 'turn/completed' and event.get('params', {}).get('threadId') == thread:
+                        if event['params']['turn']['status'] != 'completed':
+                            raise ValueError('synthetic compaction failed')
+                        break
+                for _ in range(2):
+                    answer = turn('Without tools, repeat the three SYNTH_066 markers from the earlier child assignments.')
+                    if not all(marker in answer for marker in MARKERS):
+                        raise ValueError('post-compaction marker recall failed')
+                probe.facts['compaction_and_two_turns'] = True
+            print(json.dumps({'live_parent': args.live, 'scripted_children': not args.live_children,
+                'live_calls': probe.live_calls, **probe.facts, 'errors': probe.errors}), flush=True)
+            if args.native_only:
+                return 0 if (probe.facts['encrypted_child'] and not probe.errors
+                    and (not args.live_children or expected_replies <= set(probe.facts['replies']))) else 1
+            if (probe.errors or not probe.facts['alias_emitted']
+                    or (PARENT.startswith('gpt-') and not probe.facts['encrypted_child'])
+                    or not probe.facts['canonical_replay']):
+                return 1
+            if args.live_children and not set(ALL_MARKERS) <= set(probe.facts['replies']):
+                return 1
+            return 0 if set(probe.facts['markers']) == set(MARKERS) else 1
+        except Exception as exc:
+            print(json.dumps({'probe_error': type(exc).__name__, 'live_calls': probe.live_calls,
+                              'facts': probe.facts, 'errors': probe.errors}), flush=True)
+            return 1
+        finally:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+            server.shutdown()
+            server.server_close()
+            if candidate is not None:
+                candidate.shutdown()
+                candidate.server_close()
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--codex', default='/Applications/ChatGPT.app/Contents/Resources/codex')
+    parser.add_argument('--live', action='store_true')
+    parser.add_argument('--live-children', action='store_true')
+    parser.add_argument('--native-only', action='store_true')
+    parser.add_argument('--lifecycle', action='store_true')
+    parser.add_argument('--max-live-calls', type=int, default=0)
+    parser.add_argument('--parent', choices=('gpt-6-astra', 'gpt-5.6-luna', 'z-ai/glm-5.3-flash'), default=PARENT)
+    arguments = parser.parse_args()
+    PARENT = arguments.parent
+    raise SystemExit(run(arguments))

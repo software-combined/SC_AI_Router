@@ -1,6 +1,112 @@
 # Changelog
 
-## 0.6.10 (unreleased)
+## 0.6.11
+
+- Attribute context refusals and estimate the full billable request:
+  the pre-flight estimate now counts serialized tools and instructions
+  alongside input (image blocks excluded, matching the client counter),
+  and each `context_length_exceeded` rejection logs the model, path,
+  and `used`/`reserved`/`window` integers so the next incident needs
+  no by-traffic attribution.
+
+- Give the first-run key page an executive light-theme layout matching
+  SC_360 (single card, blue-600 primary control, slate hairlines,
+  labelled key field and described subscription choices, inline error
+  banner, detail list on the connected page). Style is inline only, so
+  the loopback page still fetches nothing; the form contract, statuses,
+  single-use nonce and owner-only key write are unchanged.
+
+- Tell the Windows truth sooner and more usefully: `--status` and
+  `--preflight` now run on Windows (read-only; install and update still
+  refuse before changing anything), and the owner-only key check
+  tolerates the OS principals every default profile inherits
+  (`NT AUTHORITY\SYSTEM`, `BUILTIN\Administrators`) while still
+  refusing broad groups and other users.
+
+- Steer parents back to readable handoffs: an encrypted handoff that cannot
+  arrive readably (OpenRouter-model spawn, or follow-up/message to an
+  OpenRouter-spawned child) is replaced with a targeted error naming the
+  exact `collaboration_plaintext` call to make instead, before history is
+  poisoned. Proven by a Luna v1 parent reaching a real Muse child end to
+  end after one steered retry (Codex 0.153.4).
+
+- Deliver readable agent handoffs to OpenRouter children without weakening
+  native encryption: new `collaboration_plaintext` aliases for the already
+  exposed spawn/message/follow-up tools, restored to native calls with
+  `encrypted_function_args: []` on JSON and SSE responses, plaintext agent
+  messages converted at the OpenRouter boundary with sender/recipient kept,
+  and opaque or mixed encrypted assignments rejected before credential
+  lookup. Proven Astra v2 parent to Muse child with scripted children
+  (installed router, Codex 0.153.4); v1 subscription parents stay
+  fail-closed and need their own plan.
+
+- Attach Claude Code without touching Codex: new `--clients
+  claude|both` merges only the two owned `env` settings into the
+  user's `settings.json` with conflict refusal and receipt record,
+  plus validated `scg-openrouter` plugin manifests and a shared
+  `manage-router` skill driving the canonical installer (offline
+  proofs; staff-surface acceptance still pending).
+
+- Read installer state without touching it: new `--status [--json]`
+  prints installed version, service state, attached clients, and
+  key-present/usable booleans with no secret-bearing values. The
+  read-only preflight/status commands move to `packaging/diagnostics.py`,
+  bringing the installer back under its entrypoint size budget.
+
+- Recover a missing or revoked key without hand-deleting files: a keyless
+  router boots, the first request opens the loopback setup page once per
+  live nonce with a clear message, and the page replaces a stored key
+  only after OpenRouter itself rejects it on 401/403 (offline proofs;
+  central issuance remains owner-gated).
+
+- Report missing install prerequisites before writing anything: new
+  `--preflight` flag prints each missing item (Python 3.14, `gh`
+  binary for the transitional feed route, Codex CLI unless `--client
+  none`) with its remedy and exits non-zero, without creating the
+  router home.
+
+- Harden Windows key protection in source: icacls owner-only enforcement
+  with verify-after-write, a read-time ACL gate mirroring the POSIX check,
+  and setup-window refusal on unprotectable keys (offline proofs only;
+  the installer still refuses Windows until backend acceptance).
+
+- Add the Windows Task Scheduler backend in source (Plan 057 Stage 3,
+  offline proofs only): per-user logon router task plus 15-minute updater
+  task, pythonw.exe router with python.exe updater, graceful /shutdown
+  restart, and registration readback that names group-policy refusals.
+  The backend is now wired: the installer routes Windows to it instead
+  of refusing. Staff rollout stays gated on real-machine acceptance.
+
+- Pin the private CPython 3.14 runtime: new `packaging/runtime.lock`
+  names one install-only distribution per qualified target with validation
+  and wrapper-table generation (Stage 1). All four targets now carry
+  reviewed pins (CPython 3.14.7, astral-sh build 20260814) with URLs and
+  SHA-256 digests verified against the downloaded archives.
+  Release builds validate the lock first.
+
+- Give each client explicit activation: new `packaging/codex_config.py`
+  owns the Codex block, picker preservation, guidance, and receipts; the
+  installer checks the remover's exit status instead of its wording.
+  `--client none` installs service-only without touching client settings,
+  and `--anthropic-mode` sets the Claude subscription choice independently
+  (unset follows the OpenAI mode as before).
+
+- Give model facts one owner each: pure metadata normalization moves to
+  `model_metadata.py`, the Codex capability projection is shared by merge
+  and apply (identical fields for the same snapshot, audio preserved where
+  advertised), and picker visibility moves to the client domain. No roster,
+  tier, or routing changes.
+
+- Tell the truth up front: the README names Windows installer support as
+  not-yet (the installer refuses before changing anything), lists GitHub
+  CLI access as a transitional requirement, moves Arch setup below the
+  generic Linux path, and qualifies key-file protection per platform.
+  Supervisor logs rotate at service start (1 MB each, two backups).
+
+- Separate HTTP transport from wire-protocol policy: shared `Prepared`,
+  hop-header, stream, and header-relay leaves move to `transport.py`, and
+  the handler dispatches through an explicit `protocols/` method/path
+  table instead of client-specific branches. On-wire behavior is unchanged.
 
 - Refuse unreadable encrypted agent briefs before dispatch: an
   `agent_message` carrying an encrypted block now fails closed with a

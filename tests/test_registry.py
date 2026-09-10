@@ -3,8 +3,8 @@ import re
 import unittest
 from codex_router.capabilities import CANONICAL_ORDER
 from codex_router.catalogue import OPENROUTER_TEMPLATE, openrouter_entry
-from codex_router.registry import (FIELDS, MODELS, Model, by_slug, load,
-    models_for, openrouter_slugs, visible_for)
+from codex_router.registry import (FIELDS, MODELS, Model, by_slug, load, openrouter_slugs)
+from codex_router.clients import models_for, visible_for
 
 CATALOGUE_FIELDS = set(OPENROUTER_TEMPLATE) | {'slug', 'display_name', 'description',
     'default_reasoning_level', 'supported_reasoning_levels', 'priority',
@@ -94,7 +94,7 @@ class RegistryTests(unittest.TestCase):
         self.assertEqual(kimi['display_name'], 'MoonshotAI: Kimi K3 · OpenRouter')
         self.assertEqual(kimi['priority'], 104)
         self.assertEqual(len(slugs), len(set(slugs)))
-        self.assertEqual(len(slugs), 1 + len(models_for('codex')))
+        self.assertEqual(len(slugs), 1 + len(models_for(MODELS, 'codex')))
 
     def test_catalog_name_vendor_prefix_rule(self):
         from codex_router.catalogue import catalog_name
@@ -167,10 +167,10 @@ class RegistryTests(unittest.TestCase):
 
     def test_models_for_matches_visibility_and_rejects_unknown_client(self):
         for client in ('codex', 'claude'):
-            self.assertEqual({m.slug for m in models_for(client)},
+            self.assertEqual({m.slug for m in models_for(MODELS, client)},
                              {m.slug for m in MODELS if visible_for(m, client)})
         with self.assertRaises(ValueError):
-            models_for('other')
+            models_for(MODELS, 'other')
         with self.assertRaises(ValueError):
             visible_for(by_slug('moonshotai/kimi-k3'), 'other')
 
