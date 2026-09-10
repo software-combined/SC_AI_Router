@@ -143,7 +143,7 @@ Run focused interpreter/bootstrap tests, then:
 
 ```sh
 python3.14 -m unittest discover -s tests -t .
-python3.14 -m compileall -q codex_router tools tests packaging
+python3.14 -m compileall -q ai_router tools tests packaging
 python3.14 tools/check_source_limits.py
 git diff --check
 ```

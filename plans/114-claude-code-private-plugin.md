@@ -119,7 +119,7 @@ Adapter commands must exit 0:
 ```sh
 claude plugin validate .
 python3.14 -m unittest discover -s tests -t .
-python3.14 -m compileall -q codex_router tools tests
+python3.14 -m compileall -q ai_router tools tests
 python3.14 tools/check_source_limits.py
 ```
 

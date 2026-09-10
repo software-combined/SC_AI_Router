@@ -63,7 +63,7 @@ below interleaves them.
 
 | Plan | Title | Status | Sequencing |
 |---|---|---|---|
-| [122](122-plan-hygiene-sweep.md) | Backlog hygiene: runnable drift checks, current paths and counts | TODO | before 094/101/102/103 |
+| [122](122-plan-hygiene-sweep.md) | Backlog hygiene: runnable drift checks, current paths and counts | DONE: backlog hygiene sweep 2026-09-11 | before 094/101/102/103 |
 | [123](123-packaging-plumbing-single-sources.md) | One 3.9 loader, one release inventory, one subscription roster | TODO | before 094; pairs with 100 |
 | [124](124-test-harness-consolidation.md) | Shared test harness; installer fixtures out of a test file | TODO | after 092 |
 | [125](125-runtime-shared-primitives.md) | Runtime primitives: path sets, image blocks, catalogue predicate, capability maps | TODO | after 090/091/093/096/101 |

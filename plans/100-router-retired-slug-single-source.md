@@ -22,7 +22,7 @@ Retired-subscription knowledge is duplicated and unlinked:
 
 A future retirement needs both edits, and a missed one lets a retired slug linger in state or
 reappear in the picker. Packaging can import 3.9-safe `ai_router` leaves (precedent:
-`service.py:39-41` imports `ai_router.feed_verify`), but **cannot** import `catalogue` or `registry`:
+`service.py:36-43` loads `feed.py` by spec), but **cannot** import `catalogue` or `registry`:
 `registry.py:29` uses `int | None` annotations without `from __future__`, so it is not 3.9-parseable.
 
 ## Current state (verified at a985197)
@@ -32,16 +32,23 @@ reappear in the picker. Packaging can import 3.9-safe `ai_router` leaves (preced
   RETIRED_SUBSCRIPTION_SLUGS = frozenset({'gpt-reserve'})
   ```
   and at `:211-215` it pops those slugs from merged entries and skips them when seeding from roster.
-- `packaging/service.py:610-621` `ensure_state`; the prune is the `elif 'gpt-reserve' in state['openai_models']`
+- `packaging/service.py:609-621` `ensure_state`; the prune is the `elif 'gpt-reserve' in state['openai_models']`
   branch.
-- `packaging/service.py:39-41` shows the load path:
+- `packaging/service.py:36-43` shows the load path (no `sys.path` insert; the module is read
+  from disk and executed by spec):
   ```python
-  import sys
-  sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-  from ai_router import feed_verify  # noqa: E402  (3.9-safe, no router import)
+  import importlib.util  # noqa: E402
+  _ld_spec = importlib.util.spec_from_file_location(
+      'router_launchd', Path(__file__).resolve().parent / 'launchd.py')
+  _launchd = importlib.util.module_from_spec(_ld_spec)
+  _ld_spec.loader.exec_module(_launchd)
+  _feed_spec = importlib.util.spec_from_file_location(
+      'router_feed', Path(__file__).resolve().parent / 'feed.py')
+  _feed = importlib.util.module_from_spec(_feed_spec)
+  _feed_spec.loader.exec_module(_feed)
   ```
 - Same-file sibling duplication worth one line in the PR description but **out of scope**:
-  `service.DEFAULT_OPENAI_MODELS` (`:58-60`) duplicates the subscription roster.
+  `service.DEFAULT_OPENAI_MODELS` (`:54-56`) duplicates the subscription roster.
 
 ## Scope
 
@@ -78,9 +85,9 @@ the explicit `python3.9` installer-surface parse list test if that list is expli
 - `ai_router/catalogue.py`: replace the literal with
   `from .retired_slugs import SUBSCRIPTION as RETIRED_SUBSCRIPTION_SLUGS` (keep the local name so
   existing importers/tests are unaffected).
-- `packaging/service.py`: after the existing `from ai_router import feed_verify` line,
-  `from ai_router.retired_slugs import SUBSCRIPTION as RETIRED_SUBSCRIPTION_SLUGS` (same `# noqa`
-  pattern) and change the prune to iterate the set:
+- `packaging/service.py`: beside the `feed.py` spec-load at `:36-43`, load the new leaf the same
+  way (`router_retired_slugs`) and bind `RETIRED_SUBSCRIPTION_SLUGS` from it; then change the
+  prune to iterate the set:
   ```python
   elif any(slug in state['openai_models'] for slug in RETIRED_SUBSCRIPTION_SLUGS):
       state['openai_models'] = [s for s in state['openai_models']

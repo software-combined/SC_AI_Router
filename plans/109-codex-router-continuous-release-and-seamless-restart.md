@@ -6,7 +6,7 @@
 > report. Do not improvise. When done, update the status row for this plan
 > in `plans/README.md`.
 >
-> **Drift check (run first)**: `git diff --stat 749a6b8d..HEAD -- <ROUTER_ROOT>`
+> **Drift check (run first)**: `git diff --stat b642de9..HEAD -- .github/workflows/release.yml packaging/ ai_router/__main__.py ai_router/router.py tests/test_install.py tests/test_lifecycle.py README.md docs/operations.md`
 > On any in-scope change, compare the "Current state" excerpts against the
 > live code first; on a mismatch, STOP.
 
@@ -17,11 +17,11 @@
 - **Risk**: MED (touches the service lifecycle on every machine; mitigated by drain, health check, rollback and a beta channel that Cyril's own machine follows first)
 - **Depends on**: Plan 110 (installer, releases, update agent). This plan supersedes Plan 110 Step 6 (update cadence) and Step 8 (release trigger); Plan 110's amendment note points here.
 - **Category**: dx / direction
-- **Planned at**: commit `749a6b8d`, 2026-09-07
+- **Planned at**: commit `749a6b8d`, 2026-09-07 (drift base refreshed to `b642de9`, 2026-09-11)
 
 ## Path convention
 
-Repository root post-Plan 034 (`codex_router/...`, `packaging/...`, `tests/...`).
+Repository root post-Plan 034 (`ai_router/...`, `packaging/...`, `tests/...`).
 
 ## Why this matters
 
@@ -48,7 +48,7 @@ Cyril's operating model is: push to `main`, everyone's router updates. Plan 110 
 
 ## Scope
 
-**In scope**: `.github/workflows/release.yml`, `packaging/VERSION` (becomes `MAJOR.MINOR`), `packaging/release.py` (version composition), `packaging/install.py` (update cadence, ETag, jitter, graceful restart, channel), `codex_router/__main__.py` and `codex_router/router.py` (signal handling, drain, socket activation), LaunchAgent templates inside `install.py`, `tests/test_install.py`, `tests/test_lifecycle.py` (new), `README.md` "Updating" section, `docs/operations.md` release section.
+**In scope**: `.github/workflows/release.yml`, `packaging/VERSION` (becomes `MAJOR.MINOR`), `packaging/release.py` (version composition), `packaging/install.py` (update cadence, ETag, jitter, graceful restart, channel), `ai_router/__main__.py` and `ai_router/router.py` (signal handling, drain, socket activation), LaunchAgent templates inside `install.py`, `tests/test_install.py`, `tests/test_lifecycle.py` (new), `README.md` "Updating" section, `docs/operations.md` release section.
 
 **Out of scope**: Windows lifecycle (Plan 110 phase 2), any change to request handling, the catalogue, credentials.
 
@@ -64,14 +64,14 @@ Cyril's operating model is: push to `main`, everyone's router updates. Plan 110 
 - `.github/workflows/release.yml`: `on: push: branches: [main, beta]`; top-level `permissions: contents: read`; `concurrency: {group: release-${{ github.ref }}, cancel-in-progress: false}`; one job, `timeout-minutes: 15`, job-scoped `permissions: contents: write`; steps: checkout and setup-python 3.14 (pinned SHAs), unit tests, `python packaging/release.py --out dist --build "$GITHUB_RUN_NUMBER" --sha "$GITHUB_SHA" --channel "$( [ "$GITHUB_REF_NAME" = main ] && echo stable || echo beta )"`, then create the tag and release: for `main`, `gh release create "v$VERSION" dist/*.tar.gz dist/latest.json --generate-notes --latest`; for `beta`, `gh release create "v$VERSION-beta" dist/*.tar.gz dist/latest-beta.json --prerelease --generate-notes` where `latest-beta.json` is the same document under the other name. The installer already compares 3-tuples, so `0.4.57` supersedes `0.4.56`.
 - Keep `CHANGELOG.md` as a human log per notable change; it is no longer a release gate (the commit log is).
 
-**Verify**: push a trivial docs change to `beta` (with Cyril's go-ahead): `gh release list --limit 1` shows `v0.4.<N>-beta` as a pre-release with two assets; `curl -sL https://github.com/software-combined/codex-model-router/releases/download/v0.4.<N>-beta/latest-beta.json` returns JSON with that version.
+**Verify**: push a trivial docs change to `beta` (with Cyril's go-ahead): `gh release list --limit 1` shows `v0.4.<N>-beta` as a pre-release with two assets; `curl -sL https://github.com/software-combined/SC_OpenRouter_adapter/releases/download/v0.4.<N>-beta/latest-beta.json` returns JSON with that version.
 
 ### Step 2: Fifteen-minute checks, ETag, jitter, channel
 
 In `install.py`:
 
 - The update agent plist uses `StartInterval 900` and `RunAtLoad true` instead of `StartCalendarInterval`.
-- `--check-update` reads `home/channel` (`stable` default; Cyril writes `beta` on his machine), picks `latest.json` or `latest-beta.json` at `https://github.com/software-combined/codex-model-router/releases/latest/download/<name>` for stable and the newest pre-release asset for beta (resolve via `https://api.github.com/repos/software-combined/codex-model-router/releases?per_page=5` and take the first `prerelease: true` entry; anonymous API access is enough for a public repository, 60 requests per hour per IP, well above one per 15 minutes).
+- `--check-update` reads `home/channel` (`stable` default; Cyril writes `beta` on his machine), picks `latest.json` or `latest-beta.json` at `https://github.com/software-combined/SC_OpenRouter_adapter/releases/latest/download/<name>` for stable and the newest pre-release asset for beta (resolve via `https://api.github.com/repos/software-combined/SC_OpenRouter_adapter/releases?per_page=5` and take the first `prerelease: true` entry; anonymous API access is enough for a public repository, 60 requests per hour per IP, well above one per 15 minutes).
 - Send `If-None-Match` with the ETag saved in `home/update-etag` and treat `304` as `up to date` without downloading. Sleep a random 0 to 120 seconds before the request so a hundred machines do not hit GitHub in the same second.
 - Everything else in `--check-update` is unchanged from Plan 110 (verify, self-test, wait idle, hand over to the downloaded installer).
 
@@ -79,7 +79,7 @@ In `install.py`:
 
 ### Step 3: Drain on `SIGTERM`
 
-In `codex_router/__main__.py` and `router.py`:
+In `ai_router/__main__.py` and `router.py`:
 
 - `Router` gains `self.draining = False` and `self.drain_deadline_s = 120` (the upstream timeout).
 - Install a `SIGTERM` handler in `__main__` that sets `server.draining = True`, logs `log_event('draining', inflight=server.inflight)`, and starts a thread that calls `server.shutdown()` (stops accepting), then waits until `server.inflight == 0` or the deadline passes, logs `log_event('exit', inflight=server.inflight, forced=<bool>)`, and calls `os._exit(0)` (daemon threads still streaming past the deadline are abandoned; that is the bounded worst case).
@@ -101,7 +101,7 @@ In `codex_router/__main__.py` and `router.py`:
 ```
 
   (the port comes from state).
-- `codex_router/activation.py` (about 30 lines): `def inherited_listener() -> int | None` uses `ctypes.CDLL(None).launch_activate_socket(b"Listeners", byref(fds_ptr), byref(count))`; returns the first fd when the call returns 0 and count is at least 1, else `None`. Never raises; logs `log_event('socket_activation', inherited=<bool>)`.
+- `ai_router/activation.py` (about 30 lines): `def inherited_listener() -> int | None` uses `ctypes.CDLL(None).launch_activate_socket(b"Listeners", byref(fds_ptr), byref(count))`; returns the first fd when the call returns 0 and count is at least 1, else `None`. Never raises; logs `log_event('socket_activation', inherited=<bool>)`.
 - `Router.__init__(state, fileno=None)`: when `fileno` is given, construct with `bind_and_activate=False`, set `self.socket = socket.socket(fileno=fileno)`, and skip `server_bind`/`server_activate`; otherwise bind as today with `allow_reuse_port = True`. **Superseded in part by Plan 090:** the fallback bind drops `allow_reuse_port` (single-listener enforcement); do not reintroduce it.
 - `__main__` passes `activation.inherited_listener()` to `Router`.
 - The updater's restart becomes: swap `current`, `launchctl kill TERM gui/<uid>/<label>`, then poll `/health` until `version` equals the new version (up to drain deadline plus 30 s). Because launchd holds the listening socket, connections that arrive during the gap wait in the backlog and are served by the new process. Rollback path unchanged (swap back, kill again, poll for the old version).

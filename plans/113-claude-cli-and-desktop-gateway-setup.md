@@ -19,8 +19,8 @@ for a reversible local setup proof.
 
 Repository: `software-combined/SC_OpenRouter_adapter`, local
 `~/Documents/Github/SC_Codex_openRouter_adapter`; Python 3.14+, stdlib only.
-Read `AGENTS.md`, `docs/claude-code.md`, `codex_router/claude.py`,
-`codex_router/router.py`, `tests/test_claude_ingress.py` and
+Read `AGENTS.md`, `docs/claude-code.md`, `ai_router/claude.py`,
+`ai_router/router.py`, `tests/test_claude_ingress.py` and
 `docs/compatibility.md`. Reuse existing alias resolution/provider selection
 and fake-upstream tests; do not add another provider path.
 
@@ -61,7 +61,7 @@ client-configuration helper if Plan 112 has landed one. Add a helper only for
 a reproduced setup defect, reusing Plan 112's ownership receipt design. Source
 work uses one owned worktree, current instructions, required review and
 `develop` -> PR -> `main`. Check drift with
-`git diff --stat 96a305a..HEAD -- codex_router packaging tools tests docs`.
+`git diff --stat 96a305a..HEAD -- ai_router packaging tools tests docs`.
 
 ## Steps and verification
 
@@ -111,7 +111,7 @@ regressions belong in `tests/test_claude_ingress.py`.
 ```sh
 python3.14 -m unittest tests.test_claude_ingress tests.test_install_config
 python3.14 -m unittest discover -s tests -t .
-python3.14 -m compileall -q codex_router tools tests
+python3.14 -m compileall -q ai_router tools tests
 python3.14 tools/check_source_limits.py
 ```
 

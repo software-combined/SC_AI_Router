@@ -8,7 +8,7 @@
 > audio/image cells cannot justify advertised support. Preserve provider facts
 > separately from proven client delivery; tier alone is not capability proof.
 
-> **Amended 2026-09-07**: there is no separate `live-capabilities.json` overlay. `live_refresh.py` rewrites the derived fields (`modalities`, `context_window`, `max_output_tokens`, `reasoning`) in place inside `codex_router/models.json` (Plan 038 as amended), and Plan 099's `models add` command uses the same derivation. Pinned fields (`excluded_efforts`, `schema_mode`, `max_tools`, the capability flags) are never overwritten by the refresh.
+> **Amended 2026-09-07**: there is no separate `live-capabilities.json` overlay. `live_refresh.py` rewrites the derived fields (`modalities`, `context_window`, `max_output_tokens`, `reasoning`) in place inside `ai_router/models.json` (Plan 038 as amended), and Plan 099's `models add` command uses the same derivation. Pinned fields (`excluded_efforts`, `schema_mode`, `max_tools`, the capability flags) are never overwritten by the refresh.
 
 > **Executor instructions**: Follow this plan step by step. Run every
 > verification command and confirm the expected result before moving to the
@@ -16,7 +16,7 @@
 > report. Do not improvise. When done, update the status row for this plan
 > in `plans/README.md`.
 >
-> **Drift check (run first)**: `git diff --stat 749a6b8d..HEAD -- <ROUTER_ROOT>`
+> **Drift check (run first)**: `git diff --stat b642de9..HEAD -- ai_router/registry.py ai_router/live_refresh.py ai_router/catalogue.py ai_router/providers.py ai_router/models.json tools/probe_codex_runtime.py tests/ docs/compatibility.md`
 > On any in-scope change, compare the "Current state" excerpts against the
 > live code first; on a mismatch, STOP.
 
@@ -27,11 +27,11 @@
 - **Risk**: MED (a capability that passes a probe can still misbehave in daily use; every enablement is per model and reversible in the registry)
 - **Depends on**: Plan 038 (registry and generated entries), Plan 037 (providers). Plan 039 makes the generated entries live.
 - **Category**: direction / correctness
-- **Planned at**: commit `749a6b8d`, 2026-09-07
+- **Planned at**: commit `749a6b8d`, 2026-09-07 (drift base refreshed to `b642de9`, 2026-09-11)
 
 ## Path convention
 
-Repository root post-Plan 034 (`codex_router/...`, `tools/...`, `tests/...`); pre-034 the flat names under `domains/ai-platform/codex-model-router/`.
+Repository root post-Plan 034 (`ai_router/...`, `tools/...`, `tests/...`); pre-034 the flat names under `domains/ai-platform/codex-model-router/`.
 
 ## Why this matters
 
@@ -63,14 +63,14 @@ The OpenRouter catalogue entries were pinned conservatively during the trial: te
 |---|---|---|
 | Tests | `python3.14 -m unittest discover -s tests -t . -v` | `OK` |
 | Live metadata snapshot | `curl -s https://openrouter.ai/api/v1/models -o /tmp/or-models.json` | file, 430-odd models |
-| Refresh overlay | `python3.14 -m codex_router.live_refresh /tmp/or-models.json` | prints one JSON line per registry model with the derived fields |
+| Refresh overlay | `python3.14 -m ai_router.live_refresh /tmp/or-models.json` | prints one JSON line per registry model with the derived fields |
 | Probe, one capability | `python3.14 tools/probe_codex_runtime.py <slug> --installed --image` (and `--audio`, `--reasoning-summary`, `--apply-patch`, `--web-search`, `--experimental-tools`) | `{"model": ..., "capability": "<name>", "result": "passed"}` |
 
 Probes are paid (a few cents each at low effort). Run them one model at a time on the author's machine at an idle moment.
 
 ## Scope
 
-**In scope**: `codex_router/registry.py` (new fields), new `codex_router/live-capabilities.json` (overlay written by the refresh tool, committed), new `codex_router/live_refresh.py` (replaces `update_reasoning_catalog.py`), `codex_router/catalogue.py` (entry uses the new fields), `codex_router/providers.py` (output cap), `tools/probe_codex_runtime.py` (capability flags), `tests/test_registry.py`, `tests/test_catalogue.py`, `tests/test_providers.py`, `docs/compatibility.md`.
+**In scope**: `ai_router/registry.py` (new fields), new `ai_router/live-capabilities.json` (overlay written by the refresh tool, committed), new `ai_router/live_refresh.py` (replaces `update_reasoning_catalog.py`), `ai_router/catalogue.py` (entry uses the new fields), `ai_router/providers.py` (output cap), `tools/probe_codex_runtime.py` (capability flags), `tests/test_registry.py`, `tests/test_catalogue.py`, `tests/test_providers.py`, `docs/compatibility.md`.
 
 **Out of scope**: `tool_mode`, `multi_agent_version`, `use_responses_lite`, `node_repl_*` (rejected or OpenAI-specific per prior evidence); video and file input (Codex cannot express them); image or audio output (all six models output text only); the Grok tool ceiling and Meta schema handling; anything touching OpenAI entries.
 
@@ -82,11 +82,11 @@ Probes are paid (a few cents each at low effort). Run them one model at a time o
 
 ### Step 1: Registry fields and the live overlay
 
-Extend `Model` in `registry.py` with `max_output_tokens: int = 32768`, `reasoning_summary: str = 'none'` (`'none'` or `'auto'`), `apply_patch: str = 'none'` (`'none'` or `'freeform'`), `experimental_tools: tuple = ()`, `web_search: bool = True`. At import, merge `codex_router/live-capabilities.json` over the pinned rows: for each slug present, the overlay may set `modalities`, `context_window`, `max_output_tokens`, and `reasoning` (already filtered by `excluded_efforts`). Pinned Python values win for everything else, and any overlay slug not in `MODELS` is ignored with a `SystemExit` at import naming the unknown slug (fail closed so a typo cannot hide a model).
+Extend `Model` in `registry.py` with `max_output_tokens: int = 32768`, `reasoning_summary: str = 'none'` (`'none'` or `'auto'`), `apply_patch: str = 'none'` (`'none'` or `'freeform'`), `experimental_tools: tuple = ()`, `web_search: bool = True`. At import, merge `ai_router/live-capabilities.json` over the pinned rows: for each slug present, the overlay may set `modalities`, `context_window`, `max_output_tokens`, and `reasoning` (already filtered by `excluded_efforts`). Pinned Python values win for everything else, and any overlay slug not in `MODELS` is ignored with a `SystemExit` at import naming the unknown slug (fail closed so a typo cannot hide a model).
 
 Create `live_refresh.py`: reads the OpenRouter models JSON (path argument, or fetches when `--fetch`), and for each registry model writes `modalities = [m for m in ('text', 'image', 'audio') if m in live input_modalities]` (this is the intersection with Codex's vocabulary), `context_window = context_length`, `max_output_tokens = top_provider.max_completion_tokens`, `reasoning = canonical order of supported_efforts minus excluded_efforts`, into the overlay with `write_guarded`. Print the derived fields per model. Delete `update_reasoning_catalog.py` and move its tests to `tests/test_live_refresh.py`.
 
-**Verify**: `python3.14 -m codex_router.live_refresh /tmp/or-models.json` prints six lines; the overlay shows `["text", "image", "audio"]` for both Muse entries, `["text", "image"]` for GLM Flash and Kimi and Grok, `["text"]` for GLM 5.3, and `max_output_tokens` 131072 for GLM Flash. Tests in `tests/test_live_refresh.py` cover the intersection rule and the unknown-slug refusal.
+**Verify**: `python3.14 -m ai_router.live_refresh /tmp/or-models.json` prints six lines; the overlay shows `["text", "image", "audio"]` for both Muse entries, `["text", "image"]` for GLM Flash and Kimi and Grok, `["text"]` for GLM 5.3, and `max_output_tokens` 131072 for GLM Flash. Tests in `tests/test_live_refresh.py` cover the intersection rule and the unknown-slug refusal.
 
 ### Step 2: Real output and context limits
 
@@ -136,7 +136,7 @@ Verification: full suite `OK`.
 ## Done criteria
 
 - [ ] Overlay file committed and reproducible from `live_refresh.py` against the same input. (Superseded by the 2026-09-07 amendment: no overlay file exists; `live_refresh` rewrites derived fields in place in `models.json`. Kept open as written.)
-- [x] `grep -n 32768 codex_router/providers.py` returns nothing. (Verified 2026-09-09: clean.)
+- [x] `grep -n 32768 ai_router/providers.py` returns nothing. (Verified 2026-09-09: clean.)
 - [ ] Matrix in `docs/compatibility.md` filled for all six models with dates and the Codex version.
 - [ ] Registry flags match the matrix (a reviewer can check row by row).
 - [ ] Both Muse entries advertise `audio` in `input_modalities` unless the audio probe reported `failed`. (2026-09-09: both Muse rows carry text,image,audio, matching the matrix; upstream audio leg rejected with `invalid_prompt`, client shape unproven live — stays open per plan rule until audio is removed or a passed probe is cited.)

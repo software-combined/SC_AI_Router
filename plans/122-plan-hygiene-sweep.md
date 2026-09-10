@@ -33,8 +33,11 @@ improvises; this sweep is the cheapest way to prevent that across the whole back
 
 ## Current state (verified at b642de9)
 
-- `rg -l 'codex_router/' plans/0*.md plans/1*.md` → 12 files.
+- `rg -l 'codex_router/' plans/0*.md plans/1*.md` → 12 files; 107, 112, 113, 115, 116, 117
+  and 119 also name `codex_router/` paths inside edit targets or commands.
 - `rg -l '<ROUTER_ROOT>' plans/*.md` → 099, 109, 110, 111, 118.
+- Scanning after this sweep also returns plans 122 and 134; those mentions are
+  intentional (this sweep's rule text and the compatibility-shim discussion).
 - `wc -l packaging/install.py` → 700; `packaging/service.py` → 671; `packaging/codex_config.py` → 156.
 - `packaging/release.py:103` names the bundle `ai-router-<version>.tar.gz`; `release.py:18` and
   `feed.py:22` use repository `SC_OpenRouter_adapter`.
@@ -51,7 +54,7 @@ plan 134) — only repo paths and runnable commands.
 
 | Purpose | Command | Expected |
 |---|---|---|
-| Stale scan | `rg -n 'codex_router/|<ROUTER_ROOT>|feed_token\.py' plans/0*.md plans/1*.md` | only intentional/historical hits remain |
+| Stale scan | `rg -n 'codex_router[./]|<ROUTER_ROOT>|feed_token\.py' plans/0*.md plans/1*.md` | only intentional/historical hits remain (dot-form module run commands are renamed too, not just `codex_router/`) |
 | Counts | `rg -n '697| 680 lines|152' plans/094*.md plans/102*.md plans/103*.md` | no stale counts |
 | Diff | `git diff --check` | exit 0 |
 

@@ -19,7 +19,7 @@ both in desktop Code before claiming app acceptance. Router health and
 Repository: `software-combined/SC_OpenRouter_adapter` (private), local
 `~/Documents/Github/SC_Codex_openRouter_adapter`; Python 3.14+, stdlib only.
 Read `AGENTS.md`, `docs/claude-code.md`, `docs/compatibility.md`,
-`docs/operations.md`, `codex_router/claude.py`, `codex_router/credentials.py`,
+`docs/operations.md`, `ai_router/claude.py`, `ai_router/credentials.py`,
 `tests/test_claude_ingress.py`, `tools/probe_codex_runtime.py`,
 `tests/test_probe_harness.py` and `.github/workflows/release.yml`. Reuse the
 existing synthetic-tool proof pattern, not Codex's wire protocol for Claude.
@@ -37,7 +37,7 @@ ingress blocker in the existing module and tests. No roster expansion,
 unproven model-tier promotion, content logging, fleet rollout or retry loop.
 Use one owned worktree and reconcile `codex/claude-finish` ownership first.
 Check drift with
-`git diff --stat 96a305a..HEAD -- codex_router tools tests docs .github packaging`.
+`git diff --stat 96a305a..HEAD -- ai_router tools tests docs .github packaging`.
 
 ## Steps
 
@@ -94,7 +94,7 @@ All commands must exit 0; run new harness tests directly if added:
 
 ```sh
 python3.14 -m unittest discover -s tests -t .
-python3.14 -m compileall -q codex_router tools tests
+python3.14 -m compileall -q ai_router tools tests
 python3.14 tools/check_source_limits.py
 ```
 

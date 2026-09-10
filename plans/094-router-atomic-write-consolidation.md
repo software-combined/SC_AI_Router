@@ -53,7 +53,7 @@ concurrent read-modify-write, which is explicitly out of scope here.
 lists and their tests; `tests/test_install_state.py` or a new `tests/test_atomic_write.py`.
 **Out of scope**: `claude_config.write_settings` / `claude_desktop_config.write_json` (their
 stale-tmp refusal is test-visible; do not change their semantics), `ai_router/setup.py`,
-`packaging/feed_token.py`, snapshot/rollback features, cross-process lost-update handling,
+`packaging/feed.py`, snapshot/rollback features, cross-process lost-update handling,
 `install_lock` semantics.
 
 ## Commands
@@ -64,7 +64,7 @@ stale-tmp refusal is test-visible; do not change their semantics), `ai_router/se
 | New module | `python3.14 -m unittest tests.test_atomic_write` | pass |
 | Full suite | `python3.14 -m unittest discover -s tests -t .` | exit 0 |
 | Compile | `python3.14 -m compileall -q ai_router tools tests packaging` | exit 0 |
-| Limits | `python3.14 tools/check_source_limits.py` | exit 0; update baseline if `service.py` (680) or `codex_config.py` (152) counts change |
+| Limits | `python3.14 tools/check_source_limits.py` | exit 0; update baseline if `service.py` (671) or `codex_config.py` (156) counts change |
 | 3.9 grammar | run the repo's installer-surface test | pass |
 
 ## Steps
@@ -89,8 +89,8 @@ caller needs it (state home already exists).
 - `codex_config.replace_config_block` → `atomic_write.replace_text(config_path, after)`, keeping the
   existing read/exists/mkdir/chmod flow (chmod on the final path remains for the pre-existing-file case).
 
-Load the helper with the same `spec_from_file_location` pattern used for `feed_token.py`
-(`service.py:25-28`) so `spec_from_file_location` loading and the 3.9 surface test both work.
+Load the helper with the same `spec_from_file_location` pattern used for `feed.py`
+(`service.py:36-43`) so `spec_from_file_location` loading and the 3.9 surface test both work.
 
 ### Step 3: bundle wiring (same commit as Step 1)
 
