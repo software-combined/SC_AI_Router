@@ -235,6 +235,36 @@ class InstallTests(unittest.TestCase):
                 _backend({'query': QUERY_LOCALISED}).restart(Path(tmp))
             posted.assert_called_once()
 
+    def test_localised_status_falls_back_to_the_health_probe(self):
+        # Non-English Status must not read a serving router as stopped.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            _state_file(home)
+            obj = _backend({'query': QUERY_LOCALISED})
+            with mock.patch.object(backend, '_health',
+                                   return_value={'status': 'ok'}):
+                self.assertTrue(obj._running('CodexMixedModelRouter', home))
+            with mock.patch.object(backend, '_health', return_value=None):
+                self.assertFalse(obj._running('CodexMixedModelRouter', home))
+
+    def test_explicit_creation_flags_survive_the_windowless_default(self):
+        with mock.patch.object(backend.subprocess, 'run',
+                               return_value=SimpleNamespace(returncode=0)) as ran:
+            backend._run(['whoami'], creationflags=1234)
+            self.assertEqual(ran.call_args.kwargs.get('creationflags'), 1234)
+            backend._run(['whoami'])
+            self.assertEqual(ran.call_args.kwargs.get('creationflags'),
+                             backend._NO_WINDOW['creationflags'])
+
+    def test_launcher_refuses_a_bare_invocation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            launcher = backend.write_task_launcher(home)
+            result = subprocess.run([sys.executable, str(launcher)],
+                                    capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('LOG and SCRIPT', result.stderr)
+
     def test_hung_router_is_ended_only_after_the_drain_deadline(self):
         with tempfile.TemporaryDirectory() as tmp:
             state, calls = {'query': QUERY_RUNNING}, []

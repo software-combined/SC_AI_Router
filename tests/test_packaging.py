@@ -31,6 +31,7 @@ FILES = [
          'ai_router/__init__.py',
          'ai_router/__main__.py',
          'ai_router/model_metadata.py',
+         'ai_router/model_refresh.py',
          'ai_router/winacl.py',
          'ai_router/context_budget.py',
           'ai_router/model_policy.py',
@@ -102,7 +103,9 @@ class PackagingTests(unittest.TestCase):
                      'packaging/runtime.lock', 'packaging/runtime_lock.py',
                      'packaging/platforms/__init__.py',
                      'packaging/platforms/darwin.py',
-                     'packaging/platforms/linux.py'):
+                     'packaging/platforms/linux.py',
+                     'packaging/feed_token.py',
+                     'packaging/install.sh', 'packaging/install.ps1'):
             self.assertIn(name, names, name)
 
     def test_version_is_semver(self):

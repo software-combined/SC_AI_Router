@@ -20,7 +20,7 @@ feed, and an OpenRouter API key for OpenRouter models.
 |---|---|---|
 | macOS | Supported | Supported (`launchd` user agent) |
 | Linux with a systemd user manager | Supported | Supported (`systemd` user units) |
-| Windows 11 x64 | Supported | Internal acceptance (per-user Scheduled Tasks): install, scheduled update, rollback and uninstall passed on a staff machine on 2026-09-10; sign-out/in re-launch pending. Staff rollout stays gated on Plan 058 |
+| Windows 11 x64 | Lifecycle-proven, pending sign-out/in | Per-user Scheduled Tasks: install, scheduled update, rollback and uninstall passed on a staff machine on 2026-09-10; sign-out/in re-launch pending. Staff rollout stays gated on Plan 058 |
 
 Windows support follows Plan 057; see the Windows section below and
 `docs/compatibility.md` for the acceptance record. A Linux install needs a
@@ -72,11 +72,21 @@ and not required. (Use `paru -S codex-desktop-git` if you prefer paru.)
 
 ## Install on macOS or Linux
 
-Recipients install from the published release channel, not from a checkout:
+Recipients install from the published release channel, not from a checkout.
+A maintainer hands you the release directory; install from its feed file
+so the installer verifies the published bundle instead of fetching the
+default feed:
 
 ```sh
-python3 packaging/install.py
+python3 packaging/install.py --feed file://$HANDOFF_DIR/latest.json
 ```
+
+The exact download location is named at publication time (Plan 054).
+Before installing on a machine that has run the router before, check for
+a stale feed pin or beta channel: `cat` the `feed` and `channel` files in
+the router home (a leftover `feed` file overrides the channel), see
+[Linux upgrade and verification](docs/linux-upgrade.md). `--preflight`
+checks install prerequisites but does not read those files.
 
 Maintainers build a versioned bundle and install from it:
 
@@ -100,12 +110,17 @@ which a stock profile resolves to the Microsoft Store stub), GitHub CLI
 signed in as this user, and the Codex desktop app. Run in your signed-in
 desktop session from PowerShell:
 
+From the same handed-off release directory, in your signed-in desktop
+session:
+
 ```powershell
-py -3 packaging/install.py
+py -3 packaging/install.py --feed file://$HANDOFF_DIR/latest.json
 ```
 
-or `packaging\install.ps1`. The installer registers two per-user Scheduled
-Tasks: `CodexMixedModelRouter` runs at your logon (plus a one-minute
+`packaging/install.ps1` is the same installer for PowerShell (it ships in
+release bundles built after this change; older bundles carry the installer
+only). The installer registers two per-user Scheduled Tasks: `CodexMixedModelRouter`
+runs at your logon (plus a one-minute
 recovery trigger) as the signed-in user with least privilege and no stored
 password, and `CodexMixedModelRouterUpdate` checks for releases every
 fifteen minutes. Both run `pythonw.exe`, so no console window appears, and
@@ -238,6 +253,7 @@ directory at an idle boundary:
 `ai_router/__init__.py`,
 `ai_router/__main__.py`,
 `ai_router/model_metadata.py`,
+`ai_router/model_refresh.py`,
 `ai_router/winacl.py`,
 `ai_router/context_budget.py`,
 `ai_router/model_policy.py`,
