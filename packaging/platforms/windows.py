@@ -32,8 +32,8 @@ UPDATE_TASK = ROUTER_TASK + 'Update'
 TASK_LAUNCHER = 'task_launch.py'  # written beside router_launch.py on install
 ROUTER_LOG = 'launchd.log'   # same supervisor log names as the other platforms
 UPDATE_LOG = 'update.log'
-# Covers the router's 120-second request drain plus start-up slack, as the
-# launchd ExitTimeOut (150) and systemd TimeoutStopSec (150) do.
+# Covers the router's 120-second request drain plus start-up slack; the
+# launchd ExitTimeOut and systemd TimeoutStopSec use 150 for the same drain.
 DRAIN_TIMEOUT_S = 180
 # Uninstall is an explicit operator action: it still asks the router to drain
 # first, but bounds the wait so removal never hangs on a stuck request.
@@ -115,6 +115,8 @@ import runpy
 import sys
 
 home = os.path.dirname(os.path.abspath(__file__))
+if len(sys.argv) != 3:
+    raise SystemExit('task launcher needs LOG and SCRIPT arguments')
 log, script = sys.argv[1], sys.argv[2]
 logs = os.path.join(home, 'logs')
 os.makedirs(logs, exist_ok=True)
@@ -127,6 +129,7 @@ except OSError:
 fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND)
 os.dup2(fd, 1)
 os.dup2(fd, 2)
+os.close(fd)
 sys.stdout = open(1, 'w', 1, 'utf-8', 'replace')
 sys.stderr = open(2, 'w', 1, 'utf-8', 'replace')
 sys.argv = [os.path.join(home, script), '--home=' + home]
@@ -181,7 +184,7 @@ def render_update_xml(python, home):
 
 
 def _run(cmd, **kwargs):
-    kwargs.update(_NO_WINDOW)
+    kwargs.setdefault('creationflags', _NO_WINDOW['creationflags'])
     return subprocess.run(cmd, **kwargs)
 
 
@@ -273,7 +276,7 @@ class Backend:
         self._sleep = time.sleep
 
     def _call(self, cmd, **kwargs):
-        kwargs.update(_NO_WINDOW)
+        kwargs.setdefault('creationflags', _NO_WINDOW['creationflags'])
         return self._run(cmd, **kwargs)
 
     def protect_secret(self, path):
@@ -316,11 +319,19 @@ class Backend:
                 state[key.strip().lower()] = value.strip()
         return state
 
-    def _running(self, name):
-        # English readback only; a localised Status line reads as not
-        # running, which is why the drain below never depends on it.
+    def _running(self, name, home):
+        # Status is localised: an unreadable line falls back to /health.
+        # The drain never depends on this alone (_drain posts first).
         state = self._task_state(name)
-        return bool(state) and 'running' in state.get('status', '').lower()
+        if state is None:
+            return False
+        if 'running' in state.get('status', '').lower():
+            return True
+        try:
+            probe = _health(self._state(home), timeout=2)
+        except (OSError, ValueError, KeyError):
+            return False
+        return probe is not None
 
     def _registered_and_running(self, name):
         state = self._task_state(name)
@@ -342,9 +353,9 @@ class Backend:
         self._register(UPDATE_TASK, render_update_xml(python, home), home)
         self._handover(home)
 
-    def _wait_stopped(self, name, timeout):
+    def _wait_stopped(self, name, timeout, home):
         deadline = time.monotonic() + timeout
-        while self._running(name):
+        while self._running(name, home):
             if time.monotonic() >= deadline:
                 return False
             self._sleep(1)
@@ -358,7 +369,7 @@ class Backend:
             _post_shutdown(self._state(home))
         except (OSError, ValueError, KeyError):
             pass
-        return self._wait_stopped(ROUTER_TASK, timeout)
+        return self._wait_stopped(ROUTER_TASK, timeout, home)
 
     def _handover(self, home):
         # The task supervises one instance (IgnoreNew), so a running router
@@ -368,7 +379,7 @@ class Backend:
         # drain deadline, which only a hung router reaches.
         if not self._drain(home, DRAIN_TIMEOUT_S):
             self._call(['schtasks', '/end', '/tn', ROUTER_TASK], capture_output=True)
-            self._wait_stopped(ROUTER_TASK, 10)
+            self._wait_stopped(ROUTER_TASK, 10, home)
         self._run_task(ROUTER_TASK)
 
     def restart(self, home):

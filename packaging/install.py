@@ -352,13 +352,15 @@ def do_install(args, _fetch=fetch, _run=None):
     (home / 'logs').mkdir(exist_ok=True)
     # --feed is one-shot: it selects this run's source only. Never pin it,
     # or one local test would freeze every future scheduled update on it.
+    minted_state = not (home / 'mixed-router-state.json').exists()
     state = ensure_state(home)
-    # The state file carries the loopback token: verify it explicitly, and
-    # like the key file never leave an unprotected copy behind on failure.
+    # The state file carries the loopback token: on failure unlink only a
+    # file this run minted, never a pre-existing live token.
     try:
         backend.protect_secret(home / 'mixed-router-state.json')
     except SystemExit:
-        (home / 'mixed-router-state.json').unlink(missing_ok=True)
+        if minted_state:
+            (home / 'mixed-router-state.json').unlink(missing_ok=True)
         raise
     # Absence in legacy state means Codex, not service-only.
     client = args.client or state.get('client', 'codex')

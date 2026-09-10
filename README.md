@@ -20,7 +20,7 @@ feed, and an OpenRouter API key for OpenRouter models.
 |---|---|---|
 | macOS | Supported | Supported (`launchd` user agent) |
 | Linux with a systemd user manager | Supported | Supported (`systemd` user units) |
-| Windows 11 x64 | Supported | Internal acceptance (per-user Scheduled Tasks): install, scheduled update, rollback and uninstall passed on a staff machine on 2026-09-10; sign-out/in re-launch pending. Staff rollout stays gated on Plan 058 |
+| Windows 11 x64 | Lifecycle-proven, pending sign-out/in | Per-user Scheduled Tasks: install, scheduled update, rollback and uninstall passed on a staff machine on 2026-09-10; sign-out/in re-launch pending. Staff rollout stays gated on Plan 058 |
 
 Windows support follows Plan 057; see the Windows section below and
 `docs/compatibility.md` for the acceptance record. A Linux install needs a
