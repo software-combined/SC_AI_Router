@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- No-subscription installs (`openai_mode: none`) now list the
+  OpenRouter-billed OpenAI rows (Astra, Sol, Terra, Luna) in the Codex
+  picker instead of the dead subscription slugs; mode flips in the setup
+  window refresh the picker file. Subscription installs are unchanged.
+
 - Models whose OpenRouter row carries no web-search capability no longer
   receive Codex's `web_search` server tool. OpenRouter cannot execute it
   for those models and aborted the stream with `Server tool request

@@ -15,7 +15,7 @@ from tests._platform import unix_only
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
-from ai_router.catalogue import check
+from ai_router.catalogue import check, read_openai_mode
 from ai_router.clients import models_for
 from ai_router.registry import MODELS
 from tests.test_install import _ok_run, _patch_attrs, _static_fetch, install_mod
@@ -124,6 +124,23 @@ class InstallCatalogueTests(unittest.TestCase):
             slugs = {m['slug'] for m in catalog['models']}
             for slug in install_mod.DEFAULT_OPENAI_MODELS:
                 self.assertIn(slug, slugs)
+
+    def test_none_mode_install_lists_twins_without_subscription_stubs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home, _, fake_fetch = _setup(self, tmp)[:3]
+            _install(self, tmp, home, fake_fetch, _recording_run([]),
+                     '--openai-mode', 'none')
+            catalog = json.loads((home / 'mixed-models.json').read_text())
+            slugs = {m['slug'] for m in catalog['models']}
+            for twin in ('openai/gpt-6-astra', 'openai/gpt-5.6-sol',
+                         'openai/gpt-5.6-terra', 'openai/gpt-5.6-luna'):
+                self.assertIn(twin, slugs)
+            self.assertNotIn('gpt-6-astra', slugs)
+            state = json.loads((home / 'mixed-router-state.json').read_text())
+            self.assertEqual(state.get('openai_mode'), 'none')
+            self.assertEqual(read_openai_mode(home / 'mixed-models.json'), 'none')
+            self.assertTrue(check(str(home / 'mixed-models.json'), 'codex',
+                                  include_twins=True))
 
     def test_catalogue_merge_failure_aborts_install(self):
         with tempfile.TemporaryDirectory() as tmp:
