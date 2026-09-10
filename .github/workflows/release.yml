@@ -24,6 +24,8 @@ jobs:
         with:
           python-version: "3.14"
       - run: python -m unittest discover -s tests -t .
+      - name: Verify runtime pins
+        run: python tools/verify_runtime_pins.py
       - name: Build bundle
         run: |
           case "$GITHUB_REF_NAME" in
