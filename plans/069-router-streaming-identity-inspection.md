@@ -7,7 +7,7 @@
 
 ## Status and first proof
 
-- TODO; P1; effort M; risk MED; confidence HIGH for synthetic mechanism.
+- DONE (source, 2026-09-10): immediate-forwarding observer implemented in `ef074bf` (PR #53); pull-based early-forwarding proof plus byte-identity; P1; effort M; risk MED; confidence HIGH for synthetic mechanism.
 - Planned at `83a5023`, 2026-09-10. Run after 068 for live attribution; the
   deterministic regression/fix can proceed independently of paid/live access.
 - First proof: first output bytes arrive before a fake upstream releases its

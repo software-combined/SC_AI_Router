@@ -7,7 +7,7 @@
 
 ## Status and first proof
 
-- TODO; P1; effort S-M; risk MED; confidence HIGH; category perf/diagnostics.
+- DONE (source, 2026-09-10): phase-separated metrics implemented in `d6f5c8b` (PR #51); deterministic fake-clock tests pin exact per-phase durations; P1; effort S-M; risk MED; confidence HIGH; category perf/diagnostics.
 - Planned at `83a5023`, 2026-09-10. No prerequisite implementation.
 - First proof: deterministic fake-clock tests separate read/prepare/connect/send/
   headers/forwarding intervals, while preserving response bytes and safe logs.

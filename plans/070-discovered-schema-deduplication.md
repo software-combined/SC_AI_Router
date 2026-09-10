@@ -6,7 +6,7 @@
 
 ## Status and first proof
 
-- TODO; P2; effort S; risk MED; confidence HIGH; category perf/memory.
+- DONE (source, 2026-09-10): wrapper-aware dedup implemented in `3ec24bc` (PR #54); repeated rediscovery retains one effective definition; P2; effort S; risk MED; confidence HIGH; category perf/memory.
 - Planned at `83a5023`, 2026-09-10. Independent of 068/069.
 - First proof: repeated compaction/rediscovery retains one effective definition
   per namespace/name, including after restart, with unchanged prepared tools.

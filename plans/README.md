@@ -326,14 +326,14 @@ source work while an external gate is pending.
 The [optimisation audit and adjudication](2026-09-10-router-optimisation-audit.md)
 records the evidence, limitations and the independent
 [Opus 5 high review](2026-09-10-opus-optimisation-review.md).
-All five are planning deliverables at source `83a5023`; no runtime optimisation
-has been implemented or deployed by this planning task.
+All five were planning deliverables defined at source `83a5023`; 068-070
+are now DONE at source (not deployed/live), 071/072 remain investigation-only.
 
 | Plan | Outcome | Priority / effort | Depends on | Status |
 |---|---|---|---|---|
-| [068](068-router-latency-measurement.md) | Separate body/preparation, connection, upstream wait and forwarding metrics | P1 / S-M | None | TODO |
-| [069](069-router-streaming-identity-inspection.md) | Preserve incremental forwarding during optional identity inspection | P1 / M | 068 for live attribution; offline regression independent | TODO |
-| [070](070-discovered-schema-deduplication.md) | Deduplicate cached schemas without changing effective tools | P2 / S | None | TODO |
+| [068](068-router-latency-measurement.md) | Separate body/preparation, connection, upstream wait and forwarding metrics | P1 / S-M | None | DONE (source `d6f5c8b`, PR #51) |
+| [069](069-router-streaming-identity-inspection.md) | Preserve incremental forwarding during optional identity inspection | P1 / M | 068 for live attribution; offline regression independent | DONE (source `ef074bf`, PR #53) |
+| [070](070-discovered-schema-deduplication.md) | Deduplicate cached schemas without changing effective tools | P2 / S | None | DONE (source `3ec24bc`, PR #54) |
 | [071](071-upstream-connection-reuse-experiment.md) | Measured go/no-go for connection reuse | P3 / S investigation | 068 evidence, 069 | TODO: investigation only |
 | [072](072-client-cancellation-investigation.md) | Establish material residual cancellation delay and a safe signal | P3 / S-M investigation | 068 evidence, 069 | TODO: investigation only |
 
