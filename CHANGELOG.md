@@ -57,8 +57,9 @@
 
 - Pin the private CPython 3.14 runtime: new `packaging/runtime.lock`
   names one install-only distribution per qualified target with validation
-  and wrapper-table generation (Stage 1). Entries ship unpinned by design;
-  provisioning refuses until review pins an immutable source and digest.
+  and wrapper-table generation (Stage 1). All four targets now carry
+  reviewed pins (CPython 3.14.7, astral-sh build 20260814) with URLs and
+  SHA-256 digests verified against the downloaded archives.
   Release builds validate the lock first.
 
 - Give each client explicit activation: new `packaging/codex_config.py`
