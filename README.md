@@ -72,11 +72,21 @@ and not required. (Use `paru -S codex-desktop-git` if you prefer paru.)
 
 ## Install on macOS or Linux
 
-Recipients install from the published release channel, not from a checkout:
+Recipients install from the published release channel, not from a checkout.
+A maintainer hands you the release directory; install from its feed file
+so the installer verifies the published bundle instead of fetching the
+default feed:
 
 ```sh
-python3 packaging/install.py
+python3 packaging/install.py --feed file://$HANDOFF_DIR/latest.json
 ```
+
+The exact download location is named at publication time (Plan 054).
+Before installing on a machine that has run the router before, check for
+a stale feed pin or beta channel: `cat` the `feed` and `channel` files in
+the router home (a leftover `feed` file overrides the channel), see
+[Linux upgrade and verification](docs/linux-upgrade.md). `--preflight`
+checks install prerequisites but does not read those files.
 
 Maintainers build a versioned bundle and install from it:
 
@@ -100,12 +110,17 @@ which a stock profile resolves to the Microsoft Store stub), GitHub CLI
 signed in as this user, and the Codex desktop app. Run in your signed-in
 desktop session from PowerShell:
 
+From the same handed-off release directory, in your signed-in desktop
+session:
+
 ```powershell
-py -3 packaging/install.py
+py -3 packaging/install.py --feed file://$HANDOFF_DIR/latest.json
 ```
 
-or `packaging\install.ps1`. The installer registers two per-user Scheduled
-Tasks: `CodexMixedModelRouter` runs at your logon (plus a one-minute
+`packaging/install.ps1` is the same installer for PowerShell (it ships in
+release bundles built after this change; older bundles carry the installer
+only). The installer registers two per-user Scheduled Tasks: `CodexMixedModelRouter`
+runs at your logon (plus a one-minute
 recovery trigger) as the signed-in user with least privilege and no stored
 password, and `CodexMixedModelRouterUpdate` checks for releases every
 fifteen minutes. Both run `pythonw.exe`, so no console window appears, and
