@@ -1,11 +1,13 @@
 # Implementation Plans
 
-The router backlog. Renumbered 2026-09-10: the live set is **090-121**, listed in
-recommended execution order. The pre-renumbering 034-089 series is archived:
-completed plans were removed from the tree (git history and the dated reports
-preserve them), parked decisions moved to `parked/`, and the old-to-new mapping is
-at the bottom of this file. Dated audit, roadmap and brief files at the top level
-are historical snapshots and keep the old numbering.
+The router backlog. Renumbered 2026-09-10: the live set is **090-134** — the core
+backlog **090-121** plus the refactor wave **122-134** added after the
+2026-09-11 four-lane refactoring/reorganisation audit. The recommended overall
+execution order is below the tables. The pre-renumbering 034-089 series is
+archived: completed plans were removed from the tree (git history and the dated
+reports preserve them), parked decisions moved to `parked/`, and the old-to-new
+mapping is at the bottom of this file. Dated audit, roadmap and brief files at the
+top level are historical snapshots and keep the old numbering.
 
 Executor rules for every plan:
 
@@ -53,6 +55,43 @@ Executor rules for every plan:
 | [120](120-claude-desktop-gateway-discovery-and-attach.md) | Claude desktop gateway: release and live picker proof | PARTIAL | extends 113 |
 | [121](121-claude-desktop-models-effort-and-connectors.md) | Claude desktop models, effort readout, and connectors (planning) | PLANNING | amends 113/120 |
 
+## Refactor wave (122-134)
+
+Added 2026-09-11 from the refactoring/reorganisation audit. Each plan depends on the core plans
+listed; the overall order below interleaves them.
+
+| Plan | Title | Status | Sequencing |
+|---|---|---|---|
+| [122](122-plan-hygiene-sweep.md) | Backlog hygiene: runnable drift checks, current paths and counts | TODO | before 094/101/102/103 |
+| [123](123-packaging-plumbing-single-sources.md) | One 3.9 loader, one release inventory, one subscription roster | TODO | before 094; pairs with 100 |
+| [124](124-test-harness-consolidation.md) | Shared test harness; installer fixtures out of a test file | TODO | after 092 |
+| [125](125-runtime-shared-primitives.md) | Runtime primitives: path sets, image blocks, catalogue predicate, capability maps | TODO | after 090/091/093/096/101 |
+| [126](126-error-taxonomy.md) | Typed error classification; drop the dead CLI error half | TODO | after 101 |
+| [127](127-providers-setup-module-splits.md) | Split upstream failure policy and setup pages out | TODO | after 101; before 128 |
+| [128](128-router-handler-decomposition.md) | Decompose router.py into ingress + relay | TODO | after 090/091/093/096 |
+| [129](129-tool-merge-unification.md) | One tool-definition merge rule | TODO | after 091/096/097 |
+| [130](130-installer-bundle-split.md) | packaging/bundle.py: real installer headroom | TODO | after 102/123 |
+| [131](131-service-state-writer-decomposition.md) | Service/state/writer decomposition | TODO | after 094/095/100/103/123; coordinate 106 |
+| [132](132-windows-backend-cleanup.md) | Windows backend cleanup | TODO | before/with 116; after 123 |
+| [133](133-probe-harness-consolidation.md) | One app-server probe harness | TODO | before 118/119 |
+| [134](134-repo-hygiene-feed-ci-docs.md) | feed_verify move, CI single owner, docs index, shim owner | TODO | after 101; before 106 (feed work) |
+
+## Recommended overall order
+
+Work top to bottom; stop at owner gates and report. Phases 0-2 are local; 3-5 are largely
+owner-gated.
+
+- **Phase 0 (prep):** 122, 123.
+- **Phase 1 (core backlog):** 090, 091, 092, 093, 094, 095, 096, 097, 098, 100, 101, 102, 103, 104.
+- **Phase 2 (refactor wave):** 124, 125, 126, 127, 129, 128, 130, 131, 134, 133, 132.
+- **Phase 3 (infrastructure, mostly owner-gated):** 105, 106, 107, 099, 108, 109, 110.
+- **Phase 4 (clients and OS acceptance, owner-gated):** 111, 112, 113, 114, 115, 116, 117.
+- **Phase 5 (paid probes and desktop, owner-gated):** 118, 119, 120, 121.
+
+Phase notes: 099 executes only after 106's feed is qualified; 134's feed_verify move lands before
+106 and its CI step after 101; 133 and 132 land before Phase 5 paid probes and Phase 4 Windows
+acceptance respectively.
+
 ## Dependency and coordination notes
 
 - 094 → 095 and 094 → 100 (the receipt and retired-slug work extend the atomic writer).
@@ -66,6 +105,11 @@ Executor rules for every plan:
   `models_url` after that.
 - 113 is the CLI/desktop contract; 114 (publication) and 115 (paid probes) follow it.
   120 and 121 extend 113.
+- Refactor wave: 122 and 123 land first; 124 follows 092; 125 follows the runtime edits
+  in 090/091/093/096; 126/127 follow 101; 128 follows 090/091/093/096 and 127; 130
+  follows 102; 131 follows 094/095/103 and coordinates 106.
+- Cross-wave: 131's writer changes should land before 106's feed work; 132 lands
+  before 116's real-machine acceptance; 133 lands before 118/119 paid probes.
 - References in older plans to numbers 034-089 are historical: completed numbers
   resolve in the removal log below; renumbered numbers resolve in the old→new map
   below; parked numbers resolve under `parked/`.
