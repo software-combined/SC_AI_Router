@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.14
 
 - DeepSeek keeps two pinned, verified rows: `deepseek/deepseek-v4.1-flash`
   (newest Flash, image-capable) and `deepseek/deepseek-v4-pro-0813`
