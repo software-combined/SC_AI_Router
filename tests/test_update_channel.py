@@ -229,7 +229,8 @@ class InstallLockTests(unittest.TestCase):
             buf = io.StringIO()
             with install_mod.install_lock(home) as held:
                 self.assertTrue(held, 'the test must actually hold the lock')
-                with mock.patch('time.sleep'), contextlib.redirect_stdout(buf):
+                with mock.patch('time.sleep'), contextlib.redirect_stdout(buf), \
+                        mock.patch.dict(os.environ, {'ROUTER_LIVE_RUN': '1'}):  # deliberate scratch-home run
                     rc = install_mod.main(
                         ['--check-update', '--home', str(home),
                          '--feed', 'file://' + str(feed_doc)])

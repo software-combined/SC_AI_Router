@@ -15,6 +15,38 @@
 
 ## 0.6.13
 
+- Auto-update without repo access (Plan 054, source slice): the scheduled
+  updater learns a feed token from `latest.json` and switches itself from
+  private GitHub Releases (gh) to the token-gated feed at
+  `dist.softwarecombined.com`, per host, with no manual step. Hosts without
+  a token keep the exact pre-migration route, so old and new installs
+  coexist; a host that is already current still migrates on its next poll,
+  because the token is learned after the serial check and before the
+  version comparison. Feed and token handling consolidate into
+  `packaging/feed.py`; feeds and bundles off the trusted origins are
+  refused, and refusal messages never echo a URL query string. The
+  CloudFront distribution, publish workflow, and library page remain
+  owner-gated.
+
+- Refuse mutating installer runs against a scratch `--home` unless
+  `ROUTER_LIVE_RUN=1`: service names are machine-wide, so a run pointed at
+  /tmp still bootstraps, bootouts, or TERMs the production jobs. Read-only
+  `--status`/`--preflight` stay exempt; `--uninstall` is refused with or
+  without `--dry-run`. A prior simulation against /tmp took down the
+  production router this way; the guard makes that shape refuse before any
+  service call.
+
+- Operator bootstrap for no-repo-access installs: `packaging/bootstrap.sh`
+  (macOS/Linux) and `packaging/bootstrap.ps1` (Windows) install a router
+  host from the Technology library page with `SCG_FEED_TOKEN`, resolving
+  the pinned Python runtime from `runtimes.json`, which `release.py` now
+  emits next to `latest.json`; `release.py --feed-token-file` embeds the
+  publish-time feed token, and `docs/operations.md` documents the flow.
+
+- Add `docs/agent-install-prompt.md`: a paste-to-agent prompt for the
+  Technology library page so users can have their agent run the bootstrap
+  and verify setup without repo access.
+
 - Rename the runtime package `codex_router` to `ai_router` (Plan 074): the
   router serves Codex, Claude Code, and OpenRouter side by side, and the old
   prefix misled readers into treating the Codex adapter as the whole router.

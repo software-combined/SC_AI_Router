@@ -10,6 +10,43 @@ only, builds the bundle, runs the suite, and publishes the release with
 about fifteen minutes. Never push to `main` directly for a release;
 a direct push runs checks but publishes nothing.
 
+## Update feed and repo-free auto-update
+
+Installed routers update themselves with no GitHub account, no repo
+access, and no `gh`. Each host resolves its feed through
+`packaging/feed.py`: hosts without `<home>/feed-token` poll the private
+GitHub Releases feed over `gh` exactly as before; the first feed that
+carries `feed_token` is persisted owner-only (previous value kept for
+one 403 retry) and every later poll uses
+`https://dist.softwarecombined.com/<channel>/latest.json` with the
+`X-SCG-Feed-Token` header. Persistence happens after the serial check
+but before the version comparison, so an already-current host still
+migrates. Feeds and bundles off the trusted origins are refused, and a
+double 403 names the Technology library bootstrap as the remedy without
+leaking token bytes. `update.log` records each install with its source
+(`cloudfront`, `github`, or `local`).
+
+First install for no-repo-access users comes from the gated Technology
+site library: `packaging/bootstrap.sh` (macOS/Linux) or
+`packaging/bootstrap.ps1` (Windows) with `SCG_FEED_TOKEN` from the
+library page. The bootstrap resolves the pinned runtime from
+`runtimes.json`, verifies runtime and bundle checksums, writes the feed
+token, and runs the bundle installer. The CloudFront distribution,
+branch-driven publish workflow, and library page are owner-gated; until
+they exist, releases publish to GitHub as today and carry no token.
+
+The library page also carries `docs/agent-install-prompt.md`: a
+paste-to-agent prompt so the user asks their own agent to run the
+bootstrap and verify setup. The prompt pins the production home, forbids
+printing secrets, and leaves client restarts to the user.
+
+Never run the installer against a scratch `--home` on a live machine:
+service names are machine-wide, so even a /tmp home bootstraps, bootouts,
+or TERMs the production jobs. `main()` refuses mutating actions on a
+non-production home unless `ROUTER_LIVE_RUN=1` is set; local feed
+experiments belong in a disposable session or VM with its own service
+manager. Direct `do_install` calls in tests must use the fake `run` seam.
+
 ## Global starter instructions
 
 The setup window offers a Dev or General starter after the key is stored and
