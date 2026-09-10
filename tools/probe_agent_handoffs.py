@@ -23,9 +23,9 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from codex_router.agent_handoffs import add_plaintext_tools, restore_event
-from codex_router.catalogue import openrouter_entry
-from codex_router.registry import by_slug
+from ai_router.agent_handoffs import add_plaintext_tools, restore_event
+from ai_router.catalogue import openrouter_entry
+from ai_router.registry import by_slug
 
 PARENT = 'gpt-6-astra'
 CHILD = 'meta/muse-spark-1.3-contributor'
@@ -268,9 +268,9 @@ def run(args):
         root = Path(temp)
         candidate = None
         if args.live_children:
-            from codex_router.credentials import Credentials
-            from codex_router.router import Router
-            from codex_router.runtime import LOG
+            from ai_router.credentials import Credentials
+            from ai_router.router import Router
+            from ai_router.runtime import LOG
             class Events(logging.Handler):
                 def emit(self, record):
                     row = json.loads(record.getMessage())

@@ -6,8 +6,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from codex_router import models as models_mod
-from codex_router.models import (cmd_add, cmd_check, cmd_list, cmd_remove, derive_row,
+from ai_router import models as models_mod
+from ai_router.models import (cmd_add, cmd_check, cmd_list, cmd_remove, derive_row,
                                  qualify_name)
 
 LIVE = {

@@ -15,9 +15,9 @@ from tests._platform import unix_only
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
-from codex_router.catalogue import check
-from codex_router.clients import models_for
-from codex_router.registry import MODELS
+from ai_router.catalogue import check
+from ai_router.clients import models_for
+from ai_router.registry import MODELS
 from tests.test_install import _ok_run, _patch_attrs, _static_fetch, install_mod
 
 _ROOT = Path(__file__).resolve().parents[1]
@@ -42,7 +42,7 @@ def _release_bundle(tmp):
 
 
 def _is_catalogue(cmd):
-    return 'codex_router.catalogue' in cmd
+    return 'ai_router.catalogue' in cmd
 
 
 def _recording_run(calls, fail_catalogue=False):

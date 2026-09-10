@@ -7,7 +7,7 @@ from pathlib import Path
 from tests._platform import requires_posix_perms
 from unittest import mock
 
-from codex_router import feed_verify
+from ai_router import feed_verify
 from tests.test_release import _release_mod
 
 # RFC 8032 section 7.1 TEST 1 (empty message). Cross-checked against the

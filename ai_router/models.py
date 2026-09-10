@@ -1,8 +1,8 @@
 """Onboard models with one command: derive the row, probe it, write the file.
 
-Usage: python3.14 -m codex_router.models add <slug> [--probe] [--dry-run]
+Usage: python3.14 -m ai_router.models add <slug> [--probe] [--dry-run]
            [--tier preview|verified]
-       python3.14 -m codex_router.models remove <slug> | check [--offline] | list
+       python3.14 -m ai_router.models remove <slug> | check [--offline] | list
 """
 import argparse
 import json

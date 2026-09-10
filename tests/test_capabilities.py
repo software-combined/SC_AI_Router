@@ -1,7 +1,7 @@
 import unittest
-from codex_router.capabilities import (OPENROUTER_MODELS, REASONING_LEVELS, catalogue_patch,
+from ai_router.capabilities import (OPENROUTER_MODELS, REASONING_LEVELS, catalogue_patch,
     describe, input_modalities, live_levels, reasoning_levels)
-from codex_router.registry import MODELS
+from ai_router.registry import MODELS
 
 class CapabilityTests(unittest.TestCase):
     def test_single_source_covers_registry_models(self):

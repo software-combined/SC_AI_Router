@@ -6,42 +6,42 @@ import unittest
 from pathlib import Path
 
 FILES = [
-         'codex_router/router.py',
-         'codex_router/providers.py',
-         'codex_router/claude.py',
-         'codex_router/registry.py',
-         'codex_router/credentials.py',
-         'codex_router/tool_adapter.py',
-         'codex_router/agent_handoffs.py',
-         'codex_router/sse.py',
-         'codex_router/capabilities.py',
-         'codex_router/compaction.py',
-'codex_router/discovered.py',
-'codex_router/errors.py',
-'codex_router/feed_verify.py',
-'codex_router/candidate.py',
-'codex_router/setup.py',
-         'codex_router/runtime.py',
-         'codex_router/catalogue.py',
-         'codex_router/local_services.py',
-         'codex_router/live_refresh.py',
-         'codex_router/models.py',
-         'codex_router/apply_catalogue.py',
-         'codex_router/activation.py',
-         'codex_router/__init__.py',
-         'codex_router/__main__.py',
-         'codex_router/model_metadata.py',
-         'codex_router/winacl.py',
-         'codex_router/context_budget.py',
-          'codex_router/model_policy.py',
-          'codex_router/clients/__init__.py',
-         'codex_router/clients/codex.py',
-         'codex_router/transport.py',
-         'codex_router/protocols/__init__.py',
-         'codex_router/protocols/responses.py',
-         'codex_router/protocols/messages.py',
-         'codex_router/models.json',
-         'codex_router/openrouter_base_instructions.txt',
+         'ai_router/router.py',
+         'ai_router/providers.py',
+         'ai_router/claude.py',
+         'ai_router/registry.py',
+         'ai_router/credentials.py',
+         'ai_router/tool_adapter.py',
+         'ai_router/agent_handoffs.py',
+         'ai_router/sse.py',
+         'ai_router/capabilities.py',
+         'ai_router/compaction.py',
+'ai_router/discovered.py',
+'ai_router/errors.py',
+'ai_router/feed_verify.py',
+'ai_router/candidate.py',
+'ai_router/setup.py',
+         'ai_router/runtime.py',
+         'ai_router/catalogue.py',
+         'ai_router/local_services.py',
+         'ai_router/live_refresh.py',
+         'ai_router/models.py',
+         'ai_router/apply_catalogue.py',
+         'ai_router/activation.py',
+         'ai_router/__init__.py',
+         'ai_router/__main__.py',
+         'ai_router/model_metadata.py',
+         'ai_router/winacl.py',
+         'ai_router/context_budget.py',
+          'ai_router/model_policy.py',
+          'ai_router/clients/__init__.py',
+         'ai_router/clients/codex.py',
+         'ai_router/transport.py',
+         'ai_router/protocols/__init__.py',
+         'ai_router/protocols/responses.py',
+         'ai_router/protocols/messages.py',
+         'ai_router/models.json',
+         'ai_router/openrouter_base_instructions.txt',
          'tools/probe_codex_runtime.py',
          'tools/global_instructions.py',
          'tools/disable.py',
@@ -58,13 +58,13 @@ class PackagingTests(unittest.TestCase):
         # A fresh copy-install following FILES must start: every package
         # module plus the data files read at import must be listed.
         root = Path(__file__).resolve().parents[1]
-        for path in sorted((root / 'codex_router').rglob('*.py')):
+        for path in sorted((root / 'ai_router').rglob('*.py')):
             if '__pycache__' in path.parts:
                 continue
             self.assertIn(path.relative_to(root).as_posix(), FILES,
                           'runtime module missing from deploy list')
-        for dep in ('codex_router/models.json',
-                    'codex_router/openrouter_base_instructions.txt'):
+        for dep in ('ai_router/models.json',
+                    'ai_router/openrouter_base_instructions.txt'):
             self.assertIn(dep, FILES, dep)
         for tool in ('tools/probe_codex_runtime.py', 'tools/disable.py'):
             self.assertIn(tool, FILES, tool)
@@ -72,7 +72,7 @@ class PackagingTests(unittest.TestCase):
     def test_readme_runtime_list_matches_files(self):
         import re
         readme = (Path(__file__).resolve().parents[1] / 'README.md').read_text()
-        listed = set(re.findall(r'`((?:codex_router|tools)/[^`]+)`', readme))
+        listed = set(re.findall(r'`((?:ai_router|tools)/[^`]+)`', readme))
         self.assertEqual(listed, set(FILES))
 
     def test_release_bundle_contains_deploy_list(self):
@@ -122,7 +122,7 @@ class PackagingTests(unittest.TestCase):
             'packaging/claude_config.py', 'packaging/diagnostics.py',
             'packaging/runtime_lock.py', 'packaging/platforms/__init__.py',
             'packaging/platforms/darwin.py', 'packaging/platforms/linux.py',
-            'packaging/platforms/windows.py', 'codex_router/feed_verify.py',
+            'packaging/platforms/windows.py', 'ai_router/feed_verify.py',
             'tools/disable.py', 'tools/global_instructions.py',
         ]
         for name in surface:
@@ -156,7 +156,7 @@ class PackagingTests(unittest.TestCase):
         release_mod.main(['--out', str(out), '--build', '57',
                           '--sha', 'abc123', '--channel', 'beta'])
         tarball = next(out.glob('*.tar.gz'))
-        self.assertEqual(tarball.name, f'codex-model-router-{base}.57.tar.gz')
+        self.assertEqual(tarball.name, f'ai-router-{base}.57.tar.gz')
         with tarfile.open(tarball, mode='r') as tar:
             manifest = json.loads(tar.extractfile('MANIFEST.json').read())
         self.assertEqual(manifest['version'], f'{base}.57')
@@ -167,7 +167,7 @@ class PackagingTests(unittest.TestCase):
             self.assertEqual(marker, f'{base}.57\n')
         latest = json.loads((out / 'latest.json').read_text())
         self.assertTrue(
-            latest['url'].endswith(f'/v{base}.57-beta/codex-model-router-{base}.57.tar.gz'),
+            latest['url'].endswith(f'/v{base}.57-beta/ai-router-{base}.57.tar.gz'),
             latest['url'])
 
     def test_default_channel_builds_stable_url(self):
@@ -183,7 +183,7 @@ class PackagingTests(unittest.TestCase):
         release_mod.main(['--out', str(out)])
         latest = json.loads((out / 'latest.json').read_text())
         self.assertTrue(
-            latest['url'].endswith(f'/v{base}.0/codex-model-router-{base}.0.tar.gz'),
+            latest['url'].endswith(f'/v{base}.0/ai-router-{base}.0.tar.gz'),
             latest['url'])
 
 if __name__ == '__main__':

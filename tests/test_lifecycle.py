@@ -14,9 +14,9 @@ import urllib.request
 from pathlib import Path
 from unittest import mock
 
-from codex_router import activation
-import codex_router.__main__ as router_main
-from codex_router.router import Router
+from ai_router import activation
+import ai_router.__main__ as router_main
+from ai_router.router import Router
 
 
 _ROOT = Path(__file__).resolve().parents[1]
@@ -83,7 +83,7 @@ class LauncherBootTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             release = home / 'releases' / '9.9.9'
-            shutil.copytree(_ROOT / 'codex_router', release / 'codex_router',
+            shutil.copytree(_ROOT / 'ai_router', release / 'ai_router',
                             ignore=shutil.ignore_patterns('__pycache__'))
             (home / 'current').write_text('9.9.9\n')
             shutil.copy(_ROOT / 'packaging' / 'router_launch.py',
@@ -175,7 +175,7 @@ class DrainTests(unittest.TestCase):
         self.addCleanup(server.server_close)
         server.inflight = 1
         exits = []
-        with mock.patch('codex_router.router.os._exit', side_effect=lambda c: exits.append(c)), \
+        with mock.patch('ai_router.router.os._exit', side_effect=lambda c: exits.append(c)), \
                 mock.patch.object(server, 'shutdown'):
             worker = threading.Thread(target=server.drain_and_exit, daemon=True)
             worker.start()
@@ -192,9 +192,9 @@ class DrainTests(unittest.TestCase):
         server.drain_deadline_s = 0.2
         server.inflight = 1
         events = []
-        with mock.patch('codex_router.router.os._exit'), \
+        with mock.patch('ai_router.router.os._exit'), \
                 mock.patch.object(server, 'shutdown'), \
-                mock.patch('codex_router.router.log_event',
+                mock.patch('ai_router.router.log_event',
                            side_effect=lambda e, **kw: events.append((e, kw))):
             server.drain_and_exit()
         forced = [kw for e, kw in events if e == 'exit']
@@ -231,7 +231,7 @@ class DrainTests(unittest.TestCase):
         exits = []
         worker = None
         try:
-            with mock.patch('codex_router.router.os._exit',
+            with mock.patch('ai_router.router.os._exit',
                             side_effect=lambda c: exits.append(c)):
                 worker = router_main._start_drain_thread(server)
                 self.assertFalse(worker.daemon)

@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def _load_winacl():
     spec = importlib.util.spec_from_file_location(
-        'router_winacl_under_test', ROOT / 'codex_router' / 'winacl.py')
+        'router_winacl_under_test', ROOT / 'ai_router' / 'winacl.py')
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod

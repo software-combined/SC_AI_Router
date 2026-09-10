@@ -30,7 +30,7 @@ Tested Codex desktop versions:
 
 The contributor's follow-up machine report on 2026-09-09 explains the Linux
 startup result: the running 0.6.2.0 bundle uses a `current` symlink and
-`python3.14 -m codex_router`. It does not use the current branch's pointer
+`python3.14 -m ai_router`. It does not use the current branch's pointer
 file and `router_launch.py`. The timer fires, but every reported update
 failed on an unsigned local feed; no successful automatic update or
 rollback was demonstrated. Version 0.6.7 addresses both the layout migration

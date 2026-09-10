@@ -1,6 +1,6 @@
 """Stable service entry point, installed at the router home root.
 
-The service plist points here instead of `python -m codex_router` so no
+The service plist points here instead of `python -m ai_router` so no
 symlink or per-release working directory is needed: the pointer file
 resolves the active release at exec time, and every supervisor restart
 follows updates without a plist rewrite. Not imported; executed with the
@@ -16,7 +16,12 @@ try:
 except (OSError, ValueError):
     raise SystemExit('router pointer file missing: reinstall the router')
 release = home / 'releases' / name
-if not (release / 'codex_router').is_dir():
+# Transition window: releases before the ai_router rename ship codex_router.
+for pkg in ('ai_router', 'codex_router'):
+    if (release / pkg).is_dir():
+        module = pkg
+        break
+else:
     raise SystemExit('router release missing: reinstall the router')
 try:
     import importlib.util as _ilu
@@ -28,4 +33,4 @@ try:
 except (OSError, ImportError, AttributeError):
     pass  # Rotation is hygiene; an older release without it still boots.
 sys.path.insert(0, str(release))
-runpy.run_module('codex_router', run_name='__main__')
+runpy.run_module(module, run_name='__main__')

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Rename the runtime package `codex_router` to `ai_router` (Plan 074): the
+  router serves Codex, Claude Code, and OpenRouter side by side, and the old
+  prefix misled readers into treating the Codex adapter as the whole router.
+  Distribution and bundle names become `ai-router`. Installed homes, service
+  labels, state/catalogue filenames, and the `codex_router` log name stay so
+  existing installs keep working; a thin `codex_router` alias re-exports
+  `ai_router` during the transition, and the launcher boots either package
+  layout. Client-specific modules (`clients/codex.py`, `claude.py`,
+  `codex_config.py`) keep their names.
+
 - Keep one effective discovered schema per tool through compaction: the
   discovered-tool store deduplicates by (namespace, name) before memory/disk
   writes and on recall, so repeated rediscovery no longer grows duplicate

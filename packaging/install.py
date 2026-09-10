@@ -162,7 +162,7 @@ def self_test(python, release_dir):
     # Bundle smoke: the runtime import closure must load from the extraction.
     # Full discover cannot run here: repo tests reference files outside the bundle.
     result = run([python, '-c',
-                       'from codex_router import catalogue, registry; assert registry.MODELS'],
+                       'from ai_router import catalogue, registry; assert registry.MODELS'],
                       cwd=str(release_dir), capture_output=True, text=True, timeout=120)
     if result.returncode != 0:
         raise SystemExit('bundle self-test failed')
@@ -227,7 +227,7 @@ def install_bundle(home, version, tarball, manifest_doc, python):
 
 def write_catalogue(home, release_dir, python):
     # Seed the picker file the config block points at; refresh owns it after.
-    result = run([python, '-m', 'codex_router.catalogue', '--merge', str(home / 'mixed-models.json')],
+    result = run([python, '-m', 'ai_router.catalogue', '--merge', str(home / 'mixed-models.json')],
                       cwd=str(release_dir), capture_output=True, text=True)
     if result.returncode != 0:
         raise SystemExit('catalogue merge failed')
@@ -399,7 +399,7 @@ def do_install(args, _fetch=fetch, _run=None):
     if args.setup:
         # First-run window: the router boots keyless on this single-use link
         # and the operator pastes one key there instead of into the terminal.
-        # TTL mirrors codex_router.setup.SETUP_TTL_S; kept literal so the
+        # TTL mirrors ai_router.setup.SETUP_TTL_S; kept literal so the
         # 3.9-compatible installer never imports the router package.
         state['setup'] = {'nonce': secrets.token_urlsafe(32),
                           'expires': int(time.time()) + 15 * 60}
@@ -414,7 +414,7 @@ def do_install(args, _fetch=fetch, _run=None):
     # No idle gate. A version swap is a pointer write plus a TERM: launchd
     # owns the listening socket, so new connections queue for the incoming
     # process while the outgoing one finishes the requests it already
-    # accepted (codex_router.router.drain_and_exit). Waiting for inflight to
+    # accepted (ai_router.router.drain_and_exit). Waiting for inflight to
     # reach zero delayed every update on a machine that is actually in use,
     # and bought nothing that the drain does not already guarantee.
     catalog_path = home / 'mixed-models.json'

@@ -21,8 +21,8 @@ from types import SimpleNamespace
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from codex_router.catalogue import openrouter_entry
-from codex_router.registry import by_slug
+from ai_router.catalogue import openrouter_entry
+from ai_router.registry import by_slug
 
 MODEL = 'meta/muse-spark-1.3-contributor'
 MARKER = 'CONTEXT_BUDGET_MARKER_719'
@@ -204,7 +204,7 @@ class Client:
 def run(binary, scenario, home):
     # Scope router caches as well as client state to the disposable directory.
     with mock.patch.dict(os.environ, {'ROUTER_HOME': str(home / 'router')}):
-        from codex_router.router import Router
+        from ai_router.router import Router
         upstream = Upstream(scenario)
         with mock.patch.object(http.client, 'HTTPSConnection', upstream.connection):
             server = Router({'port': 0, 'token': 'probe-token', 'openai_models': []},

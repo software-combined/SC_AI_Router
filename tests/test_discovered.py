@@ -7,8 +7,8 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
-from codex_router.compaction import PREFIX, SUMMARY_PREFIX, encode_summary
-from codex_router.discovered import _MEMORY, recall, remember, summaries_in
+from ai_router.compaction import PREFIX, SUMMARY_PREFIX, encode_summary
+from ai_router.discovered import _MEMORY, recall, remember, summaries_in
 
 
 def _home(test):
@@ -153,7 +153,7 @@ class DiscoveredStoreTests(unittest.TestCase):
         return {'type': 'namespace', 'name': 'probe', 'tools': tools}
 
     def _flattened(self, defs):
-        from codex_router.tool_adapter import tool_entries
+        from ai_router.tool_adapter import tool_entries
         return sorted((ns, tool.get('name')) for tool, ns in tool_entries(defs))
 
     def test_wrapped_namespaces_chain_across_compactions(self):
@@ -173,7 +173,7 @@ class DiscoveredStoreTests(unittest.TestCase):
                  'run two')
         defs = recall([_summary_message('run two')])
         self.assertEqual(self._flattened(defs), [('probe', 'echo')])
-        from codex_router.tool_adapter import tool_entries
+        from ai_router.tool_adapter import tool_entries
         params = [tool.get('parameters') for tool, _ in tool_entries(defs)]
         self.assertEqual(params, [{'type': 'object'}])
 

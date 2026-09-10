@@ -9,8 +9,8 @@ import logging
 import unittest
 from unittest import mock
 
-from codex_router import errors, providers
-from codex_router.runtime import LOG
+from ai_router import errors, providers
+from ai_router.runtime import LOG
 
 MARKER = 'SYNTH-CANARY-060-9f2c'
 
@@ -73,7 +73,7 @@ class SafeDiagnosticsTests(unittest.TestCase):
         # the client still gets its 409 body, but the marker must not reach
         # the structured log. Catches a reintroduction of reason=err.message.
         from types import SimpleNamespace
-        from codex_router.router import Handler
+        from ai_router.router import Handler
         handler = _captured(self)
         err = errors.preparation(f'bad turn mentioning {MARKER}')
         inst = Handler.__new__(Handler)

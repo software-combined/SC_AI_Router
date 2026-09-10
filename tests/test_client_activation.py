@@ -422,7 +422,7 @@ class SubscriptionModeTests(unittest.TestCase):
         self.assertNotIn('test-key', json.dumps(headers))
 
     def test_invalid_anthropic_mode_fails_closed(self):
-        from codex_router.runtime import load_state
+        from ai_router.runtime import load_state
         import tempfile
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'state.json'

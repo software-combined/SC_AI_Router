@@ -11,8 +11,8 @@ import unittest
 from tests.fakes import FakeUpstream, install_fake
 from tests.test_handler import _auth_file, _post
 from tests.test_mixed_router import _start_server, _test_state
-from codex_router import claude as claude_mod
-from codex_router.registry import MODELS
+from ai_router import claude as claude_mod
+from ai_router.registry import MODELS
 
 
 def _messages(model='z-ai/glm-5.3-flash'):
