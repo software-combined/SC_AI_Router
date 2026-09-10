@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Name the model id on catalog misses: `UNKNOWN_MODEL` now carries the
+  requested `model` plus a `candidates` list holding at most the exact
+  tilde-alias slug (e.g. bare `anthropic/claude-opus-latest` offers
+  `~anthropic/claude-opus-latest`), so a parent can retry once instead
+  of probing the catalog. Identity stays strict: nothing auto-routes,
+  and the hint never names a slug the portco allowlist excludes.
+
 ## 0.6.11
 
 - Attribute router latency per phase instead of one cumulative number:
