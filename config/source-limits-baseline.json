@@ -15,7 +15,7 @@
   "packaging/diagnostics.py": 176,
   "packaging/install.py": 700,
   "packaging/platforms/windows.py": 440,
-  "packaging/service.py": 637,
+  "packaging/service.py": 680,
   "tests/test_agent_containment.py": 94,
   "tests/test_agent_handoff_providers.py": 168,
   "tests/test_agent_handoffs.py": 118,
