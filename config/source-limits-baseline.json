@@ -50,7 +50,7 @@
   "ai_router/agents.py": 91,
   "tools/global_instructions.py": 38,
   "packaging/feed.py": 214,
-  "tests/test_feed_migration.py": 368,
+  "tests/test_feed_migration.py": 404,
   "packaging/release.py": 149,
   "tests/test_release.py": 161,
   "tests/test_install_state.py": 98,
