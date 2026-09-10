@@ -347,3 +347,13 @@ Rejected directions: cross-request caching of served-model identity; an async
 rewrite without measured need; arbitrary schema eviction; automatic replay of
 paid POSTs; calling a socket reset a client disconnect without its I/O phase;
 or claiming absent upstream timeouts (the existing operation timeout is 120 s).
+
+## Parked plan 073: 10 September 2026
+
+| Plan | Outcome | Priority / effort | Depends on | Status |
+|---|---|---|---|---|
+| [073](073-remote-support-companion.md) | Secure single-helper (Cyril only) remote support companion: pinned-signer allowlist, human accept per session, audit-only first | P3 / M then M-L; security risk HIGH | None; must not touch `codex_router/` | PARKED / NOT APPROVED |
+
+[073](073-remote-support-companion.md) is a planning deliverable only. It
+authorises no implementation, rollout, paid probes, or machine changes.
+Next action is an owner decision on its Slice 0 primitive spike, not code.
