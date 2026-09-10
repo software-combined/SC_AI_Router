@@ -2,8 +2,13 @@
 
 ## Unreleased
 
+- Keep one effective discovered schema per tool through compaction: the
+  discovered-tool store deduplicates by (namespace, name) before memory/disk
+  writes and on recall, so repeated rediscovery no longer grows duplicate
+  definitions; first full definition wins with stub completion preserved.
+
 - Name the model id on catalog misses: `UNKNOWN_MODEL` now carries the
-  requested `model` plus a `candidates` list holding at most the exact
+   requested `model` plus a `candidates` list holding at most the exact
   tilde-alias slug (e.g. bare `anthropic/claude-opus-latest` offers
   `~anthropic/claude-opus-latest`), so a parent can retry once instead
   of probing the catalog. Identity stays strict: nothing auto-routes,
