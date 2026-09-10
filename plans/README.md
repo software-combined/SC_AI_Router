@@ -1,408 +1,102 @@
 # Implementation Plans
 
-For the earlier backlog, start with the [router backlog and execution order](2026-09-09-router-roadmap.md)
-and the [complete executor prompt](2026-09-09-execute-all-router-plans.md).
-Reconciled at `96db57f`, 9 September 2026: platform Plans 056-059 and
-AGENTS.md section 9 are integrated; audit Plans 060-067 and this consolidation
-remain planning deliverables. No source refactor or rollout is implied.
+The router backlog. Renumbered 2026-09-10: the live set is **090-121**, listed in
+recommended execution order. The pre-renumbering 034-089 series is archived:
+completed plans were removed from the tree (git history and the dated reports
+preserve them), parked decisions moved to `parked/`, and the old-to-new mapping is
+at the bottom of this file. Dated audit, roadmap and brief files at the top level
+are historical snapshots and keep the old numbering.
 
-The inherited 001-033 material below belongs to the former SC_Infrastructure /
-SC_AI index. Those plan files are absent from this repository and are historical
-context, not work for the router executor. The router scope is 034-067.
+Executor rules for every plan:
 
-Plans 001-003 were generated on 2026-07-13. Plan 004 was added on 2026-07-14
-after read-only inspection of the active v0.2 OpenCode stream, the installed
-desktop/config surface, current OpenCode contracts, OpenRouter routing, and
-Artificial Analysis model evidence. Plan 005 was added on 2026-07-24 after
-read-only inspection of the current AWS and Entra identities, the authoritative
-Technology/IT documentation, Open WebUI, OpenRouter, and Amazon Bedrock
-AgentCore Gateway. Plan 005 was then reduced after adversarial architecture
-review to keep the first deployment focused on product validation rather than
-multi-company control-plane work.
-Plan 006 was added on 2026-08-02 after read-only review of the verified AWS n8n
-host, the existing host-sidecar and atomic transaction patterns, the Beacon
-worker runtime contract, and the blocking transport, quota, lifecycle, and
-rollback gates. It deliberately uses bounded disposable storage for the pilot
-instead of preempting the future company data-lake design.
-Plan 007 upgrades that private sidecar for the read-only full-period Last Yard
-revenue pilot. It adds the live Accounts baseline as a seventh read-only input,
-centralises the complete mount and environment identity, binds the corrected
-N8N worker image, and tracks deployment through local Finance-report proof.
-Its retained immutable ECR registry is live and drift-clean. The final worker
-image from N8N commit `5ca3252be` is running healthy on its continuously
-scanned Linux/amd64 child digest. A bounded authenticated diagnostic proved cap
-zero with zero provider calls. Integrated readback exposed only a stale literal
-n8n container name, so source now resolves the single peer through stable
-Compose project/service labels. The exact recovery passed semantic readback,
-proved zero provider calls, and finalized the journal. Ingress and workflow
-proofs remain open. Reviewed commits `11adf17`
-and `b894542` own
-one one-shot manual operator and its deterministic bundle: one executable, one
-Compose overlay, no Caddy/systemd/lifecycle path, and no automatic resume or
-rollback. Commits `ac59aec` and `de6d596` own the final readback-only
-continuation and operator contract; loose root shell steps and unbound operator
-files remain rejected. Xero remains read-only; cap zero dispatched no provider
-call.
-Plan 008 records the live Open WebUI configuration for centrally administered
-MCP servers, per-user delegated authentication, API keys, folders, model
-defaults, and runtime tuning. The application configuration is live; MCP server
-connections remain pending and are not baked into source.
-Plan 026 replaces the rejected Beacon host-side session lifecycle transaction
-with pruning through the worker's existing non-blocking health boundary and
-the existing immutable-image replacement path.
-Plan 011 defines the SCG AI Workplace direction and links one independently
-releasable implementation plan for each trust, tenancy, connector, usability,
-preview, generation, write-control, and scale slice. Plans 011-024 are source
-plans only; they do not alter the live Open WebUI task definition `:7`.
+- One writable worktree per session, based on `develop`, integrated back to `develop`.
+- Run the plan's drift check first; reconcile the cited lines or STOP as the plan says.
+- Verify with `python3.14 -m unittest discover -s tests -t .`,
+  `python3.14 -m compileall -q ai_router tools tests packaging`, and
+  `python3.14 tools/check_source_limits.py`; run the shared `pre-commit-review`
+  before every commit; update the plan's status row here when done.
 
-## MCP-00 reconciliation (2026-08-20)
+## Live backlog (execution order)
 
-The implementation baseline remains a pinned Open WebUI `v0.10.2` derivative
-with narrowly hash-guarded security patches. Plan 012's standalone v0.11.0 fork
-is parked. Plans 013-019 remain the infrastructure/security source sequence;
-Plan 015's Connection Centre UI is parked while its durable OAuth plumbing is
-retained. Plans 020-023 are parked, and Plan 024's branding/workspace-switcher
-UI is parked. No item in this reconciliation authorizes deployment or provider
-registration.
+| Plan | Title | Status | Sequencing |
+|---|---|---|---|
+| [090](090-router-ingress-lifecycle-hardening.md) | Ingress lifecycle: request timeout, drain accounting, single listener | TODO | supersedes 109's `allow_reuse_port` fallback |
+| [091](091-router-adaptation-stream-fast-path.md) | Adaptation fast path: no re-serialize when unchanged | TODO | — |
+| [092](092-router-test-suite-hygiene.md) | Offline test suite, isolated home, three guard tests | TODO | coordinate with 105 |
+| [093](093-router-prepare-path-serialization.md) | Prepare/failure path: no double serialization or re-parse | TODO | — |
+| [094](094-router-atomic-write-consolidation.md) | One atomic writer for installer state/config | TODO | — |
+| [095](095-router-activation-receipt-consolidation.md) | One writer for the activation receipt | TODO | depends 094 |
+| [096](096-router-streaming-robustness.md) | SSE frame cap and mid-stream error containment | TODO | — |
+| [097](097-router-discovered-lock-scope.md) | Narrow the discovered-recall lock scope | TODO | — |
+| [098](098-router-model-refresh-bindings.md) | Refresh-safe registry consumers | TODO | before 099 |
+| [099](099-codex-router-model-onboarding-at-scale.md) | Model onboarding: one-command add, data-driven dispatch, refresh wiring | PARTIAL | needs 098; refresh wiring awaits 106's qualified feed; then publish `models_url` |
+| [100](100-router-retired-slug-single-source.md) | Shared retired-subscription slug set | TODO | depends 094 |
+| [101](101-router-dead-code-and-lint-gate.md) | Delete dead code; add F401/F811 gate | TODO | before 102/103 |
+| [102](102-router-install-option-collapse.md) | Collapse installer option handling below the cap | TODO | serialize with 103 |
+| [103](103-router-darwin-backend-extraction.md) | Move launchd helpers out of service.py | TODO | serialize with 102; before 104 |
+| [104](104-router-docs-metadata-correction.md) | Version, architecture and README corrections | TODO | after 103; coordinates README with 117 |
+| [105](105-python-314-interpreter-provisioning.md) | Provision and maintain a private CPython 3.14 runtime | PARTIAL | Stage 1 in; hardening + maintenance owner left |
+| [106](106-group-distribution-private-feed-and-auto-update.md) | Group distribution, private feed and auto-update | PARTIAL | source slices in; infrastructure/authority left |
+| [107](107-central-key-federation-and-first-use-key-window.md) | Central per-user key federation and first-use key window | PARTIAL | Stage 4 depends 106; Stage 2 installer acceptance left |
+| [108](108-router-service-recovery-and-update-readiness.md) | Live router recovery and safe update readiness | PARTIAL | live update/rollback evidence; serialize with 109/110 |
+| [109](109-codex-router-continuous-release-and-seamless-restart.md) | Continuous release and seamless restart (live evidence) | PARTIAL | live restart evidence; settle the release-trigger conflict with 106 |
+| [110](110-codex-router-installer-and-auto-updater.md) | Versioned installer and auto-updater acceptance | PARTIAL | acceptance owned with 105/106/108/116/117 |
+| [111](111-codex-router-no-subscription-mode.md) | No-subscription mode for staff | PARTIAL | desktop sign-in + isolated install proof left |
+| [112](112-agent-plugin-and-three-os-installation.md) | Plugin and three-OS installation | PARTIAL | plugin publication + staff acceptance left |
+| [113](113-claude-cli-and-desktop-gateway-setup.md) | Claude CLI and desktop qualification | PARTIAL | CLI/desktop qualification left |
+| [114](114-claude-code-private-plugin.md) | Claude Code private plugin: validation and publication | PARTIAL | after 113; local validation then publication |
+| [115](115-claude-billing-probes-and-release-acceptance.md) | Claude billing and tool-execution probes | TODO | after 113; paid authority |
+| [116](116-windows-install-and-service-support.md) | Windows install and service support (acceptance) | PARTIAL | sign-out/in + later stages left |
+| [117](117-recipient-readiness-for-windows-and-linux.md) | Linux and Windows recipient readiness | PARTIAL | native desktop acceptance + Stage 5b left |
+| [118](118-codex-router-full-capability-parity.md) | Capability parity: paid per-model/client probes | PARTIAL | remaining paid per-model legs |
+| [119](119-mixed-provider-agent-instruction-delivery.md) | Mixed-provider agent instruction delivery | PARTIAL | paid live probe left |
+| [120](120-claude-desktop-gateway-discovery-and-attach.md) | Claude desktop gateway: release and live picker proof | PARTIAL | extends 113 |
+| [121](121-claude-desktop-models-effort-and-connectors.md) | Claude desktop models, effort readout, and connectors (planning) | PLANNING | amends 113/120 |
 
-## Execution order and status
+## Dependency and coordination notes
 
-| Plan | Title | Priority | Effort | Depends on | Status |
-|---|---|---:|---:|---|---|
-| 001 | Build the portfolio agent engineering setup starter | P1 | M | - | COMPLETE |
-| 002 | Stabilize the n8n worker lock lease for long production executions | P1 | S | - | COMPLETE |
-| 003 | Stabilize worker-side task-runner admission | P1 | S | 002 | COMPLETE |
-| 004 | Evaluate and route OpenCode models for the shared development setup | P1 | L | - | SUPERSEDED |
-| 005 | Pilot Open WebUI on AWS Fargate | P1 | M | Existing SCG AWS account and provider approval | LIVE PILOT |
-| 006 | Deploy the bounded Beacon Xero worker sidecar | P1 | L | Fixed AWS/SSM transport and live apply proof | COMPLETE |
-| 007 | Upgrade Beacon worker for the read-only Last Yard revenue pilot | P1 | M | 006 and N8N `0e9e1f9ea` | IN PROGRESS |
-| 008 | Open WebUI admin-configured MCP readiness, API keys, defaults and tuning | P1 | S | 005 (live pilot) | LIVE CONFIG; MCP SERVERS PENDING |
-| 009 | Single-account COMPLIANCE (WORM, 90d) Object Lock on Attio/Monday/NetSuite backup buckets | P1 | S | - | COMPLETE (live) |
-| 010 | Backup deploy/rollback gate v2 (fail-closed deploy-time guard, reviewed) | P1 | M | 009 | COMPLETE (lands with this commit) |
-| 011 | SCG AI Workplace roadmap and architecture index | P0 | M | 005 and 008 | COMPLETE (docs only) |
-| 012 | Private Open WebUI fork and v0.11.0 parity release | P0 | L | 011 | PARKED; v0.10.2 derivative retained |
-| 013 | Open WebUI trust baseline and admin-issued API keys | P0 | L | pinned v0.10.2 derivative | POLICY SOURCE IMPLEMENTED; admin grant/claim/rotation/revocation and legacy cutover pending; deployment gated |
-| 014 | Tenant and managed-connector manifest compiler | P0 | L | 013 | SOURCE COMPILER IMPLEMENTED; runtime registration/deploy pending |
-| 015 | Connection Centre and durable per-user OAuth | P0 | L | 014 | UI PARKED; source-only OAuth plumbing retained |
-| 016 | NetSuite delegated read pilot | P1 | M | 015 plumbing | MANIFEST SOURCE ONLY; registration/deploy pending |
-| 017 | Monday delegated read pilot | P1 | M | 015 plumbing; pilot after 016 | PENDING; no production manifest in this slice |
-| 018 | Attio delegated read pilot | P1 | M | 015 plumbing; pilot after 017 | PENDING; no production manifest in this slice |
-| 019 | Microsoft/SharePoint compatibility pilot | P1 | L | 015 plumbing; pilot after 018 | PENDING; no manifest in this slice |
-| 020 | Non-technical Projects, Skills, and assistant UX | P1 | L | 013 and 015 | PARKED |
-| 021 | Claude-style Work Product preview | P1 | L | 020 | PARKED |
-| 022 | Hardened NEURA Office generation pilot | P2 | L | 021 | PARKED |
-| 023 | Controlled connector writes | P2 | L | 013, 015, and one accepted read pilot | PARKED |
-| 024 | Tenant factory, workspace switcher, and branding gate | P1 | L | 014, 020, and 021 | IMPLEMENTATION PARKED; dedicated-plane design retained |
-| 025 | SCG multi-account landing zone + Central Immutable Backup | P1 | L | 009, 010 | IN PROGRESS (Phase 0 + Phase 1 steps 1–2 done; replication build-out + Phases 2–3 pending) |
-| 026 | Simplify Beacon worker session retention | P1 | S | 007 | DONE (`af4b262d`) |
-|027 | MCP platform architecture, centralisation and scaling |       P1 |      M | 005, 008, 014 | SOURCE PLAN ONLY (audit + target design; no deployment) |
-|028 | GitHub MCP as an Open WebUI managed connector |       P1 |      S | 027, 013/015 plumbing | SOURCE PLAN ONLY (candidate; not registered) |
-|029 | Google Workspace MCP as an Open WebUI connector |       P1 |    S/L | 027, 013/015 plumbing | SOURCE PLAN ONLY (first-party primary; self-host fallback spike-gated) |
-|030 | Xero MCP integration |       P1 | S/M–XL | 027, 006/007 reconciliation | SOURCE PLAN ONLY (decision plan; X3 interim then X1) |
-|031 | Compact managed-connector activity in Open WebUI chat |       P1 |    S/M | 033, final Microsoft OAuth handoff | FINAL LOCAL SOURCE + IMAGE/BROWSER EVIDENCE (`review-final2`); 993 PASS + 1 INTENTIONAL SKIP + 0 FAIL; FIVE INHERITED BEACON LIMIT BASELINES AND TWO PINNED-UPSTREAM SECRET HEURISTICS; FRESH REVIEW, COMMIT/INTEGRATION, PROMOTION/DEPLOYMENT/LIVE ACCEPTANCE PENDING |
-|032 | SC_AI v0.11.1 fork platform slice (build provenance, SBOM, migration qualification, maintenance-window deployment) |       P1 |      L | 011; SC_AI branch `codex/open-webui-v0111-claude-projects-20260828` | DESIGN ONLY — implementation BLOCKED at its own four-pass review (2026-08-30); eight-item worklist in the plan; deployment execution remains owner-gated |
-|033 | Open WebUI non-technical UX simplification |       P1 |      M | 005 (live pilot), 008 | FINAL LOCAL SOURCE + IMAGE/BROWSER EVIDENCE (`review-final2`); 993 PASS + 1 INTENTIONAL SKIP + 0 FAIL; FIVE INHERITED BEACON LIMIT BASELINES AND TWO PINNED-UPSTREAM SECRET HEURISTICS; FRESH REVIEW, COMMIT/INTEGRATION, PROMOTION/DEPLOYMENT/LIVE ACCEPTANCE PENDING |
+- 094 → 095 and 094 → 100 (the receipt and retired-slug work extend the atomic writer).
+- 098 must land before or with 099 (the refresh wiring consumes dynamic reads).
+- 101 before 102/103; serialize 102 and 103. 103 before 104.
+- 092 and 105 touch the same runtime-lock test area; fix the test (092) before or with
+  105 Stage 2.
+- 106 before 107 Stage 4. 108/109/110 share owner-Mac update/rollback acceptance —
+  serialize them; one writer per machine state.
+- 099's hourly refresh leg awaits 106's authenticated/versioned feed; publish
+  `models_url` after that.
+- 113 is the CLI/desktop contract; 114 (publication) and 115 (paid probes) follow it.
+  120 and 121 extend 113.
+- References in older plans to numbers 034-089 are historical: completed numbers
+  resolve in the removal log below; renumbered numbers resolve in the old→new map
+  below; parked numbers resolve under `parked/`.
 
-## Dependency notes
+## Parked (not approved; reopen only on the stated condition)
 
-- Plan 001 is one coherent delivery stream. Its canonical setup instruction,
-  templates, role starters, hook entries, policy checklist, and compact vault
-  starter ship together. Enforcement is implemented and proved by the consuming
-  setup agent in the target repository.
-- Plan 002 is an independent production-runtime stabilization. Source review and
-  tests completed before the separately gated host backup and rolling rollout.
-  Main and all ten workers read back the reviewed values. Natural AP execution
-  `111657` then completed successfully after 7m20s with no fatal queue-job
-  signature. A corrected container-name scan found separate task-runner
-  offer-expiry retries, which Plan 003 owns.
-- Plan 003 follows the lease stabilization because correct-container logs showed
-  that natural AP runs finish but still incur task-runner offer-expiry retries.
-  Worker capacity five was merged and rolled out, but execution `111785`
-  finished with five retries and disproved capacity as the root cause. The
-  follow-up restores the documented 15-second worker-runner idle lifecycle so
-  n8n's non-expiring launcher offer owns admission after AP's long native-node
-  phase. Worker execution concurrency and all workflow write controls remain
-  unchanged. The lifecycle rollout completed across all ten worker runner
-  sidecars, and natural execution `111842` finished with zero offer-expiry or
-  fatal queue signatures.
-- AP v1 supersession note (2026-07-30): workflow `DQRgnMDYERZ2SAOa`, referenced
-  by Plans 002 and 003 as their historical workload, is retired and has been
-  replaced operationally by AP v2. This retirement does not apply to the shared
-  `ap-triage-worker` or `n8n-ap-assistant-bot` runtime services captured under
-  `reference/compose/n8n-aws`; both remain current AP v2 dependencies and must
-  not be retired, disabled, or removed on the basis of the v1 workflow
-  retirement. The N8N repository and live n8n readback remain authoritative for
-  workflow ownership and runtime state.
-- Plan 004 is retained only as a historical design record. The source delivery
-  took a different path and is represented on `main` by `cb424e7` and
-  `3919cf5`; its named implementation worktree and branch no longer exist. Do
-  not execute the plan's obsolete worktree lifecycle, caps, paths, rollback, or
-  integration steps. A fresh plan from current `main` is required for the
-  remaining blinded evaluation, authenticated route/privacy checks,
-  cost-per-accepted-task evidence, interactive canary, and team rollout.
-- Plan 005 starts with one Software Combined workspace on one private ECS
-  Fargate task in the existing SCG AWS account. It tests Entra SSO, governed
-  chat, controlled file upload, private RAG, product value, cost, recovery, and
-  administration effort. SCIM, MCP server onboarding, web search, multiple
-  company keys, and the onboarding operator are separate post-pilot proofs.
-  Plan 008 records the live MCP-readiness configuration and pending centrally
-  administered server connections. Future shared-instance
-  company workspaces are soft access and cost partitions, not hard tenants;
-  portcos that need a real trust boundary receive a dedicated Fargate
-  deployment.
-- Plan 011 is the umbrella for Plans 012-024, but its roadmap does not reopen
-  any parked or pending slice. The retained source path is
-  pinned-v0.10.2-derivative -> 013-policy -> 014 -> 015-plumbing. Plan 013's
-  admin-issued API-key grant, claim, rotation, revocation, and legacy-cutover
-  lifecycle remains pending. Reusable
-  provider-neutral source profiles/contracts/compiler/tests now cover NetSuite,
-  monday, and Attio, while the production manifest and generated production
-  contract remain NetSuite-only. Connector Plans 016-019 are not currently
-  releasable; after explicit owner reopening their designs are technically
-  separable but must be piloted serially so each OAuth flow informs the next.
-  monday/Attio registration, verified
-  identities, live catalogue/schema readback, deployment approval, and two-user
-  acceptance remain pending. Plans 020-024 branch from that trusted base; no
-  slice authorizes a combined big-bang deployment.
-- Plan 006 keeps the Last Yard worker on the existing private n8n host as a
-  bounded exception to the Fargate default. The worker has one caller, needs
-  the existing Docker-private name, and requires a hard no-backup session
-  ceiling; a digest-pinned sidecar was historically the smallest deployable shape; the current sidecar uses disk-backed sessions and /tmp with no tmpfs.
-  It must move with n8n when the runtime becomes ECS/Fargate, and durable lake
-  storage remains a separate post-Finance-acceptance design.
-- Plan 026 keeps pruning with the worker that owns the session-store lock and
-  policy. It removes the unaccepted systemd installer and reuses Plan 007's
-  existing digest-bound healthy-worker replacement and rollback boundary.
+- `parked/039-codex-router-live-merged-catalogue.md` — live merged-catalogue route:
+  reopen only if a supported client fetch is proven.
+- `parked/073-remote-support-companion.md` — not approved.
 
-## Findings considered and rejected
+## Rejected drafts
 
-- Reusing the personal `~/.config/scg-agent-git-hooks` directory directly was
-  rejected because it is SCG/path-coupled and lacks deterministic secret scanning.
-- Claiming that the starter itself installs or proves three-model enforcement was
-  rejected; the target setup instruction requires a deterministic repo-native
-  implementation and disposable Git verification.
-- Automatic tool acquisition inside a commit hook was rejected because hooks must
-  not download mutable or unverified software during a commit.
-- Hard-coding a GPT-, GLM-, or Kimi-led stack from benchmark rankings was
-  rejected. Sol, Luna, GLM 5.2, Kimi K2.7 Code, MiniMax M3, and DeepSeek V4
-  Flash enter role-specific quality/safety gates before cost is revealed.
-- Selecting the lowest token price was rejected. The economic measure is billed
-  cost per accepted task, including retries, failed tests, review rework, and
-  human corrections.
-- Treating three different model vendors as a review invariant was rejected.
-  The safety contract is three independent read-only lanes bound to the exact
-  staged tree with honest model/effort receipts. Normal/elevated aliases share a
-  lane cap when the runtime cannot select effort per call.
-- A dedicated EBS session volume was rejected for the Beacon pilot because the
-  reports are intentionally retained on the operator's local machine, not on
-  the production host. EBS would add KMS, snapshot exclusion, attachment,
-  mount, backup, and recovery machinery while still requiring an independent
-  deletion process. Bounded tmpfs supplies the required physical byte ceiling
-  and disappears when the worker stops.
-- A public or Fargate worker endpoint was rejected for this slice because the
-  only caller is the existing EC2-hosted n8n service. It would create public or
-  VPC ingress, DNS, IAM, and service-discovery surfaces with no current user
-  value. The exception has an explicit reevaluation condition in Plan 006.
-- A separate systemd prune script, service, timer, lifecycle journal, CLI/SSM
-  action family, and rollback state machine were rejected for worker-session
-  retention. They duplicate deployment ownership, cannot delete while the
-  worker is stopped because they use `docker exec`, and introduced unresolved
-  pre-journal crash windows.
-- Extending the existing host deployment transaction to own those systemd
-  assets was rejected because it widens a proven single-overlay/image boundary
-  into a host package manager. A worker background-task framework was also
-  rejected because the existing 30-second non-blocking health call already
-  supplies the required periodic trigger.
+`rejected-muse-retry/` holds rejected retry drafts kept for provenance only.
+Never execute them; their filenames reuse the old number series (its `056-...`
+draft is unrelated to the removed router plan 056).
 
-## Router plans 034-068: reconciled 9 September 2026, 068 added 10 September 2026
+## Completed and removed (archived 2026-09-10)
 
-The [roadmap](2026-09-09-router-roadmap.md) owns remaining requirements,
-sequencing, evidence and acceptance gates. Read individual plans for execution
-detail. Original source excerpts are dated: rebase their intent onto current
-source, never recreate an already integrated predecessor.
+Removed after completion at source: 034, 035, 036, 037, 038, 040, 042, 047,
+048 (both files), 056, 060, 061, 062, 063, 064, 065, 067, 068 (both files),
+069, 070, 071 (both files), 072 (both files), 074. The dated reports record the
+results; git history holds the plan text.
 
-Thirteen plans have delivered their principal source work, two designs are parked
-or superseded, and 20 plans or umbrella plans retain work. These are not 20
-independent implementations: the owner mapping prevents duplicate execution.
+Note: 056's Stage 4 cross-OS CI runners were never built; that residual is
+subsumed by Plan 116 Stage 7, and the single-Ubuntu CI scope is a recorded cost
+decision (see `.github/workflows/check.yml`).
 
-| Plan | Current status | Remaining owner / next action |
-|---|---|---|
-| [034](034-codex-router-own-repository-and-governance.md) | Repository/package/CI delivered; governance incomplete | 054 owns branch-protection/publisher controls; verify target before changes |
-| [035](035-codex-router-startup-self-check-state-home-and-logging.md) | Startup/state/structured logging delivered | 060 owns content safety; 058 closes supervisor-log retention documentation |
-| [036](036-codex-router-handler-characterisation-tests.md) | DONE: handler characterization | Preserve tests through 062 |
-| [037](037-codex-router-provider-interface-and-handler-decomposition.md) | DONE: provider interface | 062 extends domain ownership without replaying original extraction |
-| [038](038-codex-router-single-model-registry.md) | DONE: registry | 064 owns projection consistency |
-| [039](039-codex-router-live-merged-catalogue.md) | PARKED: live catalogue route not proven | Keep static merged catalogue; reopen only on actual supported client fetch |
-| [040](040-codex-router-credential-lookup.md) | DONE: ordered credential lookup | 055/057 own new writer/recovery/ACL requirements |
-| [041](041-codex-router-installer-and-auto-updater.md) | PARTIAL: versioned install/update/rollback source and owner-Mac layout exist | 050, 054, 057-059 own remaining operational/platform acceptance |
-| [042](042-codex-router-docs-and-release-hygiene.md) | Original docs rewrite delivered; current README inaccurate | 058 Stage 5 is the active correction owner, coupled with pinned docs tests |
-| [043](043-codex-router-no-subscription-mode.md) | PARTIAL: no-subscription CLI route exists | Desktop sign-in decision, isolated install and native-services tolerance proof |
-| [044](044-codex-router-full-capability-parity.md) | PARTIAL: capability plumbing/probe harness exists | Approved per-model/client capability probes (paid matrix) |
-| [045](045-codex-router-continuous-release-and-seamless-restart.md) | PARTIAL: drain/socket/update source exists | 054 owns branch publishing and observed 15-minute update; 058 cross-OS acceptance |
-| [046](046-codex-router-model-onboarding-at-scale.md) | PARTIAL: model add/remove/check/preview exists | Manual unseen-model picker proof; hourly refresh follows authenticated update acceptance and its live-change gate |
-| [047](047-router-remediation-handover.md) | PARTIAL umbrella; source C/D fixes integrated | B recovery via 050; A delivery via 054; E/F/G replaced by 049/053/055-059 |
-| [048](048-router-managed-key-provisioning.md) | SUPERSEDED design; retain relevant acceptance requirements | 054/055 own onboarding, budgets, revocation, Business/Enterprise and person isolation; no old invitation service |
-| [049](049-agent-plugin-and-three-os-installation.md) | PARTIAL: source slices integrated (shared installer, Claude attach, receipts, status) | Plugin publication and three-OS staff-machine acceptance for Codex and Claude Code |
-| [050](050-router-service-recovery-and-update-readiness.md) | PARTIAL: healthy owner-Mac versioned service and both launchers observed | Fresh readback; real successful update + rollback evidence, no replay of old repair |
-| [051](051-claude-cli-and-desktop-gateway-setup.md) | PARTIAL: Claude attach/detach source exists; CLI and desktop not separately qualified | 051 owns the CLI/desktop contract; consumes the 053 package check; preserve native auth and independent discovery/restoration |
-| [052](052-claude-billing-probes-and-release-acceptance.md) | TODO: Claude tool and billing acceptance | 051 plus paid authority; CLI and desktop each tested |
-| [053](053-claude-code-private-plugin.md) | PARTIAL: root Claude plugin manifest and attach source integrated; package not published | 051 client contract; local package validation before 054 publication and 052 acceptance |
-| [054](054-group-distribution-private-feed-and-auto-update.md) | TODO: private distribution and identity onboarding | 067/056/059/063 source reused; AWS/DNS, Team decision, publisher and machine gates |
-| [055](055-central-key-federation-and-first-use-key-window.md) | PARTIAL: Stage 3 first-use recovery integrated | Stages 1-2 owner-gated; Stage 4 depends on 054 per-install authority |
-| [056](056-installer-platform-backends-refactor.md) | DONE: platform backends extracted (source `5374530`, 2026-09-10) | CI macOS/Windows runners and cross-OS lifecycle acceptance remain (Stage 4) |
-| [057](057-windows-install-and-service-support.md) | PARTIAL: Stage 1 refusal, Stage 2 ACL, Stage 3 Windows backend integrated | Named Win11 x64 and entry-policy acceptance for Stages 4+ |
-| [058](058-recipient-readiness-for-windows-and-linux.md) | PARTIAL: Stage 1 preflight and Stage 5a README/log-retention corrections integrated | Native desktop acceptance on Linux/Windows and Stage 5b remain |
-| [059](059-python-314-interpreter-provisioning.md) | PARTIAL: Stage 1 pinned CPython 3.14 runtime lock integrated | Bootstrap/extraction wrappers (Stages 2+) and named patch-maintenance owner |
-| [060](060-content-safe-router-diagnostics.md) | DONE: content-safe diagnostics (source `408e2f3`, regression `test_safe_diagnostics`, 2026-09-10) | No further source action; live/paid acceptance separately gated |
-| [061](061-domain-rules-and-bundle-contracts.md) | DONE: domain map, boundary tests, bundle closure, 3.9 grammar gate (2026-09-10) | `3bed26d` + extraction follow-ons on develop; 062/064 unblocked under the rules |
-| [062](062-protocol-and-upstream-boundaries.md) | DONE: transport leaves + explicit protocol dispatch (2026-09-10) | `a40dcc7` on develop; 112 contract tests OK; 064 consumes the seam next |
-| [063](063-client-activation-and-subscription-policy.md) | DONE: Codex adapter extracted, service-only route, independent subscription modes (2026-09-10) | `f5cf136`+`b40f82e` on develop; 107 focused tests OK; 051/053 consume the seam next |
-| [064](064-model-facts-and-client-projections.md) | DONE: one metadata/projection owner each; claude.py move deferred to 051/053 (2026-09-10) | `0d0634f` on develop; 104 focused tests OK; step 4 note in plan |
-| [065](065-kiro-client-compatibility-spike.md) | DONE: negative spike, no verified Kiro inference hook (2026-09-10) | `docs/kiro-compatibility.md`; IDE and CLI separately decided; reopen only on dated official custom-endpoint evidence |
-| [066](066-mixed-provider-agent-instruction-delivery.md) | PARTIAL: readable handoffs and plaintext-steering source integrated | Paid live Astra-to-Muse probe and native plaintext capture acceptance |
-| [067](067-installer-updater-extraction.md) | DONE: updater extracted to `packaging/updater.py` (2026-09-10) | `8808349` on develop; 50 focused tests OK plus release-bundle omission smoke; 056 unblocked |
-| [068](068-portco-model-policy.md) | DONE: per-portco model allowlists as resolved data (source `e328adc`, PR #50, 2026-09-10) | Refresh gate follows 046; delivery authority follows 054 Stage 4 |
+## Renumbering map (old → new, 2026-09-10)
 
-### Consolidated decisions and dependencies
-
-- Private relocatable CPython 3.14 is the target already selected in 049/054;
-  059 implements and maintains it. Do not install system packages as root.
-- Use one installer, platform manager family, runtime lock, bootstrap pair,
-  client receipt/status contract and release workflow. Local synthetic
-  artifacts unblock source work before AWS or staff-machine acceptance.
-- Installer writers serialize: 067 → 056 → 063, with 059/057 rebasing as needed.
-  061 protects extracted-bundle closure before adding nested modules.
-- 054 owns private S3/CloudFront at `dist.softwarecombined.com`, Entra/member/B2B
-  download access, branch-to-channel publishing, token rotation and the
-  publisher-control decision. 055 owns Management API keys, person budgets and
-  recovery. Shared feed access never authorizes key issuance.
-- 054 Stage 4 is included in the complete backlog because 055 Stage 4 depends
-  on its per-install identity; it is later-stage work, not a first-install gate.
-- A named Windows machine gates native acceptance, not offline source work.
-  Windows entry must work under the actual device policy without bypass.
-  A plugin invoking the same blocked script is not a proven remedy.
-- Preserve CLI/IDE-only no-subscription scope until desktop sign-in is checked.
-  Native Claude auth and Anthropic-via-OpenRouter are separate routes.
-- Read upstream Codex/OpenCode/Claude sources per AGENTS.md section 9, pinned
-  to commit/version; use official Kiro evidence under 065. No invented API.
-- Required reviews use the current on-disk model table and skill. The
-  file-brief audit workaround succeeded once, with served identity
-  `unverified`; direct encrypted mixed-provider briefs remain broken.
-
-### Open execution gates
-
-See the roadmap's gate register for exact scope: Windows and Linux/Arch staff
-targets, Windows entry policy, private-runtime maintenance owner, AWS/DNS/Entra
-authority, GitHub Team and repository-access changes, publication/cutover,
-paid client/billing probes and production per-user key operations. Plans and
-this index do not themselves authorize those actions. Continue independent
-source work while an external gate is pending.
-
-### Findings considered and rejected
-
-- A full rewrite, universal message format, dynamic plugin framework, renamed
-  homes/services, or duplicate installers: bounded existing seams suffice.
-- `router_launch.py` and `update_launch.py` are separate contracts, not
-  accidental duplicates. `opencode_auth` is an intentional credential fallback.
-- The installer Windows uninstall blocker is not the direct `disable.py`
-  service call: installer restore passes `ROUTER_RESTORE_ONLY=1`.
-  Standalone disable still needs the shared backend contract.
-- Systemd/container Linux lifecycle evidence is useful but not native desktop
-  or staff-machine acceptance; old Linux-uninstall memory is superseded.
-- Do not remove README's runtime-file list without updating its pinning test
-  and proving bundle closure. 058 owns the correction, 061 the artifact gate.
-- Native OpenRouter multi-agent v1 metadata does not prove plaintext delivery
-  from a v2 parent. 066 replaces that earlier assumption.
-- Do not promote Muse audio or any capability from metadata alone. 044
-  reconciles advertised capabilities with actual probe evidence after 064.
-- Kiro MCP/tool integration is not proof of custom inference support.
-- No new signing ceremony, request cap, inference proxy, old invitation
-  service, or unapproved hourly model hot-reload.
-- Retired Muse duplicate drafts are in [rejected-muse-retry](rejected-muse-retry/README.md);
-  they are provenance, not active numbered plans.
-
-## Optimisation plans 068-072: 10 September 2026
-
-The [optimisation audit and adjudication](2026-09-10-router-optimisation-audit.md)
-records the evidence, limitations and the independent
-[Opus 5 high review](2026-09-10-opus-optimisation-review.md).
-All five were planning deliverables defined at source `83a5023`; 068-070
-are now DONE at source (not deployed/live), 071/072 remain investigation-only.
-
-| Plan | Outcome | Priority / effort | Depends on | Status |
-|---|---|---|---|---|
-| [068](068-router-latency-measurement.md) | Separate body/preparation, connection, upstream wait and forwarding metrics | P1 / S-M | None | DONE (source `d6f5c8b`, PR #51) |
-| [069](069-router-streaming-identity-inspection.md) | Preserve incremental forwarding during optional identity inspection | P1 / M | 068 for live attribution; offline regression independent | DONE (source `ef074bf`, PR #53) |
-| [070](070-discovered-schema-deduplication.md) | Deduplicate cached schemas without changing effective tools | P2 / S | None | DONE (source `3ec24bc`, PR #54) |
-| [071](071-upstream-connection-reuse-experiment.md) | Measured go/no-go for connection reuse | P3 / S investigation | 068 evidence, 069 | DONE (investigation EVIDENCE-UNAVAILABLE, no-go) |
-| [072](072-client-cancellation-investigation.md) | Establish material residual cancellation delay and a safe signal | P3 / S-M investigation | 068 evidence, 069 | DONE (investigation NO-GO) |
-
-Recommended order: 068 then 069; 070 can proceed independently with separate
-write ownership. 071/072 can finish with NO-GO or EVIDENCE-UNAVAILABLE; they do
-not authorise runtime pooling, active cancellation or paid probes. Serialize
-future transport writers. Reuse Plan 060 privacy, Plan 062 domain boundaries and
-Plan 045 drain behavior; do not duplicate their implemented source work.
-
-Rejected directions: cross-request caching of served-model identity; an async
-rewrite without measured need; arbitrary schema eviction; automatic replay of
-paid POSTs; calling a socket reset a client disconnect without its I/O phase;
-or claiming absent upstream timeouts (the existing operation timeout is 120 s).
-
-## Parked plan 073: 10 September 2026
-
-| Plan | Outcome | Priority / effort | Depends on | Status |
-|---|---|---|---|---|
-| [073](073-remote-support-companion.md) | Secure single-helper (Cyril only) remote support companion: pinned-signer allowlist, human accept per session, audit-only first | P3 / M then M-L; security risk HIGH | None; must not touch `codex_router/` | PARKED / NOT APPROVED |
-
-[073](073-remote-support-companion.md) is a planning deliverable only. It
-authorises no implementation, rollout, paid probes, or machine changes.
-Next action is an owner decision on its Slice 0 primitive spike, not code.
-## Optimisation audit: Plans 076-089 (10 September 2026)
-
-Read-only audit at `a985197`: four audit lanes (performance, tech debt, scalability,
-tests/DX) plus three independent verification passes. Plans only; no source, live,
-paid, or billing action is authorised. The earlier 068-072 latency round is closed
-at HEAD and is not repeated here.
-
-| Plan | Title | Priority | Effort | Depends on | Status |
-|---|---|---|---|---|---|
-| [076](076-router-ingress-lifecycle-hardening.md) | Ingress lifecycle: request timeout, drain accounting, single listener | P1 | S-M | — | TODO |
-| [077](077-router-adaptation-stream-fast-path.md) | Adaptation fast path: no re-serialize when unchanged | P1 | S | — | TODO |
-| [078](078-router-prepare-path-serialization.md) | Prepare/failure path: no double serialization or re-parse | P2 | S-M | — | TODO |
-| [079](079-router-test-suite-hygiene.md) | Offline test suite, isolated home, three guard tests | P1 | S | — | TODO |
-| [080](080-router-atomic-write-consolidation.md) | One atomic writer for installer state/config | P1 | S-M | — | TODO |
-| [081](081-router-activation-receipt-consolidation.md) | One writer for the activation receipt | P2 | M | 080 | TODO |
-| [082](082-router-streaming-robustness.md) | SSE frame cap and mid-stream error containment | P2 | S-M | — | TODO |
-| [083](083-router-discovered-lock-scope.md) | Narrow the discovered-recall lock scope | P2 | S | — | TODO |
-| [084](084-router-model-refresh-bindings.md) | Refresh-safe registry consumers | P2 | S | — | TODO |
-| [085](085-router-dead-code-and-lint-gate.md) | Delete dead code; add F401/F811 gate | P2 | S | — | TODO |
-| [086](086-router-install-option-collapse.md) | Collapse installer option handling below the cap | P2 | M | — | TODO |
-| [087](087-router-darwin-backend-extraction.md) | Move launchd helpers out of service.py | P3 | M | — | TODO |
-| [088](088-router-docs-metadata-correction.md) | Version, architecture and README corrections | P3 | S | — | TODO |
-| [089](089-router-retired-slug-single-source.md) | Shared retired-subscription slug set | P3 | S | 080 | TODO |
-
-Dependency and coordination notes:
-
-- 080 must land before 081 and must share one writer/worktree; 081 extends the helper.
-- 080 must land before 089 (089 rewrites the same `ensure_state` prune; keep the atomic writer and the write-only-on-change behavior).
-- 085 lands before 086/087 to shrink the tree they refactor; serialize 086 and 087.
-- 084 must land before or with Plan 046 Step 3 (wiring `model_refresh.start()`).
-- 088 owns the two factual README corrections; Plan 058 Stage 5 owns the rest of
-  README. Update the 058 row when 088 integrates; never run both on the file at once.
-- 079's pin-verification tool is a prerequisite for any future decision to run the
-  suite in CI (today's CI test omission is a documented cost tradeoff).
-
-Findings considered and rejected (do not re-audit):
-
-- `_split_frames` remainder copies: bounded by the 64 KiB observation window.
-- Per-request `frozenset` rebuilds, credential re-read (deliberate rotation),
-  `/v1/models` re-sort, startup imports: sub-millisecond by measurement.
-- Discovered-cache disk-write atomicity and prune races: 16-entry bound, self-healing.
-- Router log growth: `RotatingFileHandler`, 5 MB x 3.
-- 16 MB body copies: transient and capped.
-- Cross-request served-model caching and compressed-identity buffering: owned by 069/070.
-- Connection pooling: closed by 071 (no-go).
-- Running the full unittest suite in CI: deliberate billed-minutes decision
-  (`check.yml:18-23`); revisit only after 079 makes the suite cheaper.
-- Retry-After reflection from upstream: TLS-authenticated upstream, below evidence bar.
-- Malformed `Content-Length`: already mapped by the enclosing handler.
+076→090, 077→091, 079→092, 078→093, 080→094, 081→095, 082→096, 083→097,
+084→098, 046→099, 089→100, 085→101, 086→102, 087→103, 088→104, 059→105,
+054→106, 055→107, 050→108, 045→109, 041→110, 043→111, 049→112, 051→113,
+053→114, 052→115, 057→116, 058→117, 044→118, 066→119, 073→120, 075→121.
+Parked without renumbering: 039, 073 (remote-support companion).
