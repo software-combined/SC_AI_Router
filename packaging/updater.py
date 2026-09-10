@@ -78,7 +78,7 @@ def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None):
     _fetch = _fetch or _svc.fetch
     sync_seams()
     import random
-    read_feed = _read_feed or (lambda url, etag: _svc.fetch_feed(url, etag, _fetch))
+    read_feed = _read_feed or (lambda url, etag: _svc.fetch_feed(url, etag, _fetch, home))
     sleep = _sleep or time.sleep
     home = Path(args.home).expanduser()
     feed = args.feed or _svc.channel_feed(home)

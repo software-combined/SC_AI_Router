@@ -100,6 +100,7 @@ class PackagingTests(unittest.TestCase):
                      'packaging/platforms/__init__.py',
                      'packaging/platforms/darwin.py',
                      'packaging/platforms/linux.py',
+                     'packaging/feed_token.py',
                      'packaging/install.sh', 'packaging/install.ps1'):
             self.assertIn(name, names, name)
 

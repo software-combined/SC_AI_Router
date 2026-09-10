@@ -21,6 +21,12 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+import importlib.util
+_feed_token_spec = importlib.util.spec_from_file_location(
+    'router_feed_token', Path(__file__).resolve().parent / 'feed_token.py')
+_feed_token = importlib.util.module_from_spec(_feed_token_spec)
+_feed_token_spec.loader.exec_module(_feed_token)
+
 try:                      # POSIX advisory locking
     import fcntl
 except ImportError:       # pragma: no cover - Windows
@@ -60,6 +66,12 @@ MIN_PYTHON = (3, 14)
 
 RELEASES_PREFIX = 'https://github.com/software-combined/SC_OpenRouter_adapter/releases/'
 
+# Plan 054: feeds and bundles are fetched only from these origins (plus
+# file:// in tests and local installs). The private CloudFront origin joins
+# this list when Stage 1 publishes; until then only GitHub Releases is live.
+TRUSTED_ORIGINS = (RELEASES_PREFIX,)
+FEED_TOKEN_HEADER = 'X-SCG-Feed-Token'
+
 
 def github_asset(url):
     if not url.startswith(RELEASES_PREFIX):
@@ -86,15 +98,33 @@ def github_asset(url):
     return result.stdout
 
 
-def fetch(url):
+def _trusted(url):
+    return url.startswith(TRUSTED_ORIGINS)
+
+
+def _token_request(url, home, headers=None, _urlopen=urllib.request.urlopen):
+    """GET with the feed token on trusted origins; never logged."""
+    headers = dict(headers or {})
+    if _trusted(url) and home is not None and FEED_TOKEN_HEADER not in headers:
+        token = _feed_token.current(home)
+        if token:
+            headers[FEED_TOKEN_HEADER] = token
+    req = urllib.request.Request(url, headers=headers)
+    with _urlopen(req, timeout=30) as response:
+        return response.status, response.read(), response.headers.get('ETag')
+
+
+def fetch(url, home=None):
     """Single network entry point; tests inject a fake."""
     if url.startswith('file://'):
         return Path(url[len('file://'):]).read_bytes()
     asset = github_asset(url)
     if asset is not None:
         return asset
-    with urllib.request.urlopen(url, timeout=30) as response:
-        return response.read()
+    if not _trusted(url):
+        raise SystemExit('refusing off-origin fetch: %s' % url.split('?')[0][:200])
+    _, body, _ = _token_request(url, home)
+    return body
 
 
 def run(cmd, **kwargs):
@@ -264,17 +294,29 @@ def wait_version(state, version, timeout=150, fetch_health=None):
     return None
 
 
-def fetch_feed(url, etag, _fetch=fetch):
+def fetch_feed(url, etag, _fetch=fetch, home=None, _urlopen=urllib.request.urlopen):
     """Read a feed document, revalidating with a saved ETag. Returns (status, body, etag)."""
     if url.startswith('file://') or url.startswith(RELEASES_PREFIX):
         return 200, _fetch(url), etag
-    req = urllib.request.Request(url, headers={'If-None-Match': etag} if etag else {})
+    if not _trusted(url):
+        raise SystemExit('refusing off-origin feed: %s' % url.split('?')[0][:200])
+    headers = {'If-None-Match': etag} if etag else {}
     try:
-        with urllib.request.urlopen(req, timeout=30) as response:
-            return response.status, response.read(), response.headers.get('ETag', etag)
+        status, body, new_etag = _token_request(url, home, headers, _urlopen)
+        return status, body, new_etag or etag
     except urllib.error.HTTPError as exc:
         if exc.code == 304:
             return 304, b'', etag
+        if exc.code == 403 and home is not None:
+            previous = _feed_token.previous(home)
+            if previous:
+                headers[FEED_TOKEN_HEADER] = previous
+                try:
+                    status, body, new_etag = _token_request(url, home, headers, _urlopen)
+                    Path(home, 'feed-token').write_text(previous)
+                    return status, body, new_etag or etag
+                except urllib.error.HTTPError:
+                    pass
         raise
 
 
@@ -634,4 +676,5 @@ def check_serial(home, latest, pinned=False):
     stored = feed_serial(home)
     if serial < stored:
         raise SystemExit(f'stale feed serial {serial} is older than {stored}')
+    _feed_token.persist(home, latest)
     return serial
