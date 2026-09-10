@@ -20,12 +20,12 @@ feed, and an OpenRouter API key for OpenRouter models.
 |---|---|---|
 | macOS | Supported | Supported (`launchd` user agent) |
 | Linux with a systemd user manager | Supported | Supported (`systemd` user units) |
-| Windows | Runs under development | Not supported yet: the installer refuses before changing anything |
+| Windows 11 x64 | Lifecycle-proven, pending sign-out/in | Per-user Scheduled Tasks: install, scheduled update, rollback and uninstall passed on a staff machine on 2026-09-10; sign-out/in re-launch pending. Staff rollout stays gated on Plan 117 |
 
-Windows support lands with Plan 057; until its acceptance passes, do not run
-the installer on Windows. A Linux install needs a running systemd user
-manager: run it in the signed-in desktop session, not over a bare SSH shell
-without one.
+Windows support follows Plan 116; see the Windows section below and
+`docs/compatibility.md` for the acceptance record. A Linux install needs a
+running systemd user manager: run it in the signed-in desktop session, not
+over a bare SSH shell without one.
 
 ### Linux: managed systemd user services
 
@@ -72,11 +72,21 @@ and not required. (Use `paru -S codex-desktop-git` if you prefer paru.)
 
 ## Install on macOS or Linux
 
-Recipients install from the published release channel, not from a checkout:
+Recipients install from the published release channel, not from a checkout.
+A maintainer hands you the release directory; install from its feed file
+so the installer verifies the published bundle instead of fetching the
+default feed:
 
 ```sh
-python3 packaging/install.py
+python3 packaging/install.py --feed file://$HANDOFF_DIR/latest.json
 ```
+
+The exact download location is named at publication time (Plan 106).
+Before installing on a machine that has run the router before, check for
+a stale feed pin or beta channel: `cat` the `feed` and `channel` files in
+the router home (a leftover `feed` file overrides the channel), see
+[Linux upgrade and verification](docs/linux-upgrade.md). `--preflight`
+checks install prerequisites but does not read those files.
 
 Maintainers build a versioned bundle and install from it:
 
@@ -89,8 +99,45 @@ The installer asks for nothing interactively. It verifies the bundle,
 self-tests it, writes the service, and inserts the Codex config block.
 If no key is configured it creates an empty key file and tells you to
 paste the key in, then re-run. Restart Codex afterwards. `packaging/install.sh`
-is the same installer for POSIX shells; `packaging/install.ps1` is reserved
-for the future Windows backend and must not be used yet.
+is the same installer for POSIX shells; `packaging/install.ps1` is the
+PowerShell wrapper for Windows below.
+
+## Install on Windows
+
+Requirements: Windows 11 x64, Python 3.14 from python.org (the installer
+finds it through the `py` launcher; never rely on the bare `python` alias,
+which a stock profile resolves to the Microsoft Store stub), GitHub CLI
+signed in as this user, and the Codex desktop app. Run in your signed-in
+desktop session from PowerShell:
+
+From the same handed-off release directory, in your signed-in desktop
+session:
+
+```powershell
+py -3 packaging/install.py --feed file://$HANDOFF_DIR/latest.json
+```
+
+`packaging/install.ps1` is the same installer for PowerShell (it ships in
+release bundles built after this change; older bundles carry the installer
+only). The installer registers two per-user Scheduled Tasks: `CodexMixedModelRouter`
+runs at your logon (plus a one-minute
+recovery trigger) as the signed-in user with least privilege and no stored
+password, and `CodexMixedModelRouterUpdate` checks for releases every
+fifteen minutes. Both run `pythonw.exe`, so no console window appears, and
+their output goes to `logs\launchd.log` and `logs\update.log` under the
+router home. The router home, key file and state file are restricted to the
+installing user with `icacls`, verified after every write; the key file is
+checked again at every read.
+
+```powershell
+schtasks /query /tn CodexMixedModelRouter /fo list /v
+icacls $env:USERPROFILE\.codex\mixed-model-router\openrouter.key
+```
+
+Windows has no socket activation: during an update the outgoing router
+drains, then the task relaunches into the new release, so a connection
+attempted in that window (about fifteen seconds) fails until the new process
+binds. Uninstall ends both tasks before deleting them.
 
 ## Updating
 
@@ -136,7 +183,8 @@ OpenRouter dashboard.
 ## Without a ChatGPT subscription
 
 Install with `--openai-mode none --setup`, paste one OpenRouter key into
-the setup window, and Codex uses a custom provider (`scg_router`) whose
+the setup window, pick a Dev or General starter for the global instructions,
+and Codex uses a custom provider (`scg_router`) whose
 `base_url` carries the per-install path token. No ChatGPT login is needed
 and no subscription traffic is sent: OpenAI models answer 400, native
 service paths answer 404 locally, and OpenRouter models work with tools,
@@ -164,10 +212,12 @@ bearer token, in place for you to delete.
 
 The router listens on loopback only. Each install generates its own
 token, and logs carry request metadata, never keys or tokens. Subscription headers never accompany OpenRouter requests; the key travels only as a per-request `Bearer` header.
-The key file is owner-only on macOS and Linux; on Windows the installer
-refuses before writing one, and Windows key protection lands with the
-Windows backend. Supervisor logs (`launchd.log`, `update.log`) rotate
-at service start (1 MB each, two backups); the structured `router.jsonl`
+The key file is owner-only on every platform: mode 600 on macOS and Linux,
+and on Windows an `icacls` grant to the installing user alone, applied to
+the router home before the key is written (so the state file holding the
+loopback token inherits it), with the key checked again at every read; a
+widened ACL makes the router refuse the key. Supervisor logs (`launchd.log`, `update.log`) rotate
+at service start (1 MB each, two backups on macOS and Linux, one on Windows); the structured `router.jsonl`
 rotates at 5 MB with three backups.
 
 ## Links
@@ -179,40 +229,45 @@ Claude Code setup: `docs/claude-code.md`. Operator guide: `docs/operations.md`. 
 
 A manual install copies ONLY these files beside the private state
 directory at an idle boundary:
-`codex_router/router.py`,
-`codex_router/providers.py`,
-`codex_router/claude.py`,
-`codex_router/registry.py`,
-`codex_router/credentials.py`,
-`codex_router/tool_adapter.py`,
-`codex_router/agent_handoffs.py`, `codex_router/sse.py`,
-`codex_router/capabilities.py`,
-`codex_router/compaction.py`,
-`codex_router/discovered.py`,
-`codex_router/errors.py`,
-`codex_router/feed_verify.py`,
-`codex_router/candidate.py`,
-`codex_router/setup.py`,
-`codex_router/runtime.py`,
-`codex_router/catalogue.py`,
-`codex_router/local_services.py`,
-`codex_router/live_refresh.py`,
-`codex_router/models.py`,
-`codex_router/apply_catalogue.py`,
-`codex_router/activation.py`,
-`codex_router/__init__.py`,
-`codex_router/__main__.py`,
-`codex_router/model_metadata.py`,
-`codex_router/winacl.py`,
-`codex_router/context_budget.py`,
-`codex_router/clients/__init__.py`,
-`codex_router/clients/codex.py`,
-`codex_router/transport.py`,
-`codex_router/protocols/__init__.py`,
-`codex_router/protocols/responses.py`,
-`codex_router/protocols/messages.py`,
-`codex_router/models.json`,
-`codex_router/openrouter_base_instructions.txt`,
+`ai_router/router.py`,
+`ai_router/providers.py`,
+`ai_router/claude.py`,
+`ai_router/registry.py`,
+`ai_router/credentials.py`,
+`ai_router/tool_adapter.py`,
+`ai_router/agent_handoffs.py`, `ai_router/sse.py`,
+`ai_router/capabilities.py`,
+`ai_router/compaction.py`,
+`ai_router/discovered.py`,
+`ai_router/errors.py`,
+`ai_router/feed_verify.py`,
+`ai_router/candidate.py`,
+`ai_router/setup.py`,
+`ai_router/runtime.py`,
+`ai_router/catalogue.py`,
+`ai_router/local_services.py`,
+`ai_router/live_refresh.py`,
+`ai_router/models.py`,
+`ai_router/apply_catalogue.py`,
+`ai_router/activation.py`,
+`ai_router/__init__.py`,
+`ai_router/__main__.py`,
+`ai_router/model_metadata.py`,
+`ai_router/model_refresh.py`,
+`ai_router/winacl.py`,
+`ai_router/context_budget.py`,
+`ai_router/model_policy.py`,
+`ai_router/clients/__init__.py`,
+`ai_router/clients/codex.py`,
+`ai_router/transport.py`,
+`ai_router/protocols/__init__.py`,
+`ai_router/protocols/responses.py`,
+`ai_router/protocols/messages.py`,
+`ai_router/models.json`,
+`ai_router/openrouter_base_instructions.txt`,
+`ai_router/agents.py`,
+`ai_router/agents_general.txt`,
+`ai_router/agents_dev.txt`,
 `tools/probe_codex_runtime.py`,
 `tools/global_instructions.py`,
 `tools/disable.py`. The installer also places `packaging/router_launch.py`

@@ -1,6 +1,6 @@
 """Derived-field refresh from live OpenRouter metadata (Plan 044)."""
 import unittest
-from codex_router.live_refresh import derive, refresh
+from ai_router.live_refresh import derive, refresh
 
 
 def _row(**over):

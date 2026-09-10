@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from codex_router import feed_verify
+from ai_router import feed_verify
 
 MIN_PYTHON = '3.14'
 REPO = 'software-combined/SC_OpenRouter_adapter'
@@ -20,19 +20,23 @@ REPO = 'software-combined/SC_OpenRouter_adapter'
 
 def bundle_files(root):
     return (
-        sorted(p.relative_to(root).as_posix() for p in (root / 'codex_router').rglob('*.py'))
-        + sorted(p.relative_to(root).as_posix() for p in (root / 'codex_router').glob('*.txt'))
-        + sorted(p.relative_to(root).as_posix() for p in (root / 'codex_router').glob('*.json'))
+        sorted(p.relative_to(root).as_posix() for p in (root / 'ai_router').rglob('*.py'))
+        + sorted(p.relative_to(root).as_posix() for p in (root / 'ai_router').glob('*.txt'))
+        + sorted(p.relative_to(root).as_posix() for p in (root / 'ai_router').glob('*.json'))
         + sorted(p.relative_to(root).as_posix() for p in (root / 'tools').glob('*.py'))
         + ['packaging/VERSION', 'packaging/install.py', 'packaging/launchd.py',
            'packaging/router_launch.py', 'packaging/service.py',
+           'packaging/feed.py',
            'packaging/systemd.py', 'packaging/update_launch.py',
            'packaging/updater.py', 'packaging/codex_config.py',
            'packaging/claude_config.py',
+           'packaging/claude_desktop_config.py',
            'packaging/diagnostics.py',
            'packaging/runtime.lock', 'packaging/runtime_lock.py',
            'packaging/platforms/__init__.py',
-           'packaging/platforms/darwin.py', 'packaging/platforms/linux.py']
+           'packaging/platforms/darwin.py', 'packaging/platforms/linux.py',
+           'packaging/platforms/windows.py',
+           'packaging/install.sh', 'packaging/install.ps1']
     )
 
 
@@ -43,6 +47,9 @@ def main(argv=None):
     parser.add_argument('--sha', default='')
     parser.add_argument('--channel', default='stable')
     parser.add_argument('--url-base')
+    parser.add_argument('--feed-token-file', metavar='FILE',
+                        help='read the feed read-token and embed it as latest.json feed_token '
+                             '(publish-time only; never commit the file)')
     parser.add_argument('--gen-key', metavar='OUT',
                         help='write a fresh 32-byte hex release signing seed (owner-only file) and exit')
     parser.add_argument('--sign', metavar='SEEDFILE',
@@ -93,7 +100,7 @@ def main(argv=None):
             info.mode = 0o644
             tar.addfile(info, io.BytesIO(data))
     tarball = gzip.compress(tar_buffer.getvalue(), mtime=0)
-    tarball_name = f'codex-model-router-{version}.tar.gz'
+    tarball_name = f'ai-router-{version}.tar.gz'
     (out_dir / tarball_name).write_bytes(tarball)
     tag = f'v{version}' if args.channel == 'stable' else f'v{version}-beta'
     base = args.url_base or f'https://github.com/{REPO}/releases/download/{tag}'
@@ -101,7 +108,24 @@ def main(argv=None):
               'sha256': hashlib.sha256(tarball).hexdigest(), 'min_python': MIN_PYTHON,
               'serial': args.build,
               'published': datetime.now(timezone.utc).isoformat(timespec='seconds')}
+    if args.feed_token_file:
+        try:
+            token = Path(args.feed_token_file).read_text().strip()
+        except OSError:
+            raise SystemExit('cannot read feed token file')
+        if not token:
+            raise SystemExit('feed token file is empty')
+        latest['feed_token'] = token
     (out_dir / 'latest.json').write_text(json.dumps(latest, indent=2) + '\n')
+    # The bootstrap resolves its runtime from this table, never from a
+    # hardcoded filename: pins land only through reviewed lock changes.
+    _lock_doc = _lock_mod.load()
+    _lock_table = {e['os'] + '/' + e['cpu']: {
+        'mirror': e['mirror'], 'sha256': e['sha256'], 'exec': e['exec']}
+        for e in _lock_doc['targets']}
+    (out_dir / 'runtimes.json').write_text(json.dumps(
+        {'cpython': _lock_doc['cpython'], 'targets': _lock_table},
+        indent=2) + '\n')
     if args.sign:
         try:
             seed = Path(args.sign).read_text().strip()

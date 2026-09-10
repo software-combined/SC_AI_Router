@@ -99,5 +99,18 @@ def by_slug(slug):
     return BY_SLUG.get(slug)
 
 
+def near_miss(model):
+    """Canonical slug for a bare tilde-alias id, else None. Pure.
+
+    Discovery lists tilde rows without their `~` (Claude ingress), so a
+    caller can echo back an id the Responses path never owned. Offer the
+    exact canonical slug only when the bare id is absent and `~`+bare is
+    present; never fuzzy-match, never route."""
+    if not isinstance(model, str) or not model or by_slug(model) is not None:
+        return None
+    candidate = '~' + model
+    return candidate if by_slug(candidate) is not None else None
+
+
 def openrouter_slugs():
     return frozenset(m.slug for m in MODELS if m.provider == 'openrouter')

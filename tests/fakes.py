@@ -1,7 +1,7 @@
 """Recording fake upstream for handler characterisation tests.
 
 Never opens a network connection. Patch target is
-http.client.HTTPSConnection as used by codex_router.router.
+http.client.HTTPSConnection as used by ai_router.router.
 """
 import http.client
 import json
@@ -158,6 +158,12 @@ def install_fake(test, responder):
     class FakeConn:
         def __init__(self, host, *args, **kwargs):
             self._host = host
+
+        def connect(self):
+            # Mirrors HTTPSConnection.connect(): establishes the upstream
+            # transport before request upload. Kept explicit so phase
+            # attribution can time connection separately from send.
+            pass
 
         def request(self, method, path, body=None, headers=None):
             recorded.append((self._host, method, path, body, headers))

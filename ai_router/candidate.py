@@ -60,7 +60,7 @@ class IsolatedRouter:
             stream.write(json.dumps(state, indent=2) + '\n')
         catalog = self.home / 'candidate-catalogue.json'
         merged = subprocess.run(
-            [sys.executable, '-m', 'codex_router.catalogue', '--merge', str(catalog)],
+            [sys.executable, '-m', 'ai_router.catalogue', '--merge', str(catalog)],
             cwd=str(ROOT), capture_output=True, text=True, timeout=120)
         if merged.returncode != 0:
             self.close()
@@ -70,7 +70,7 @@ class IsolatedRouter:
 
     def _spawn(self):
         self.process = subprocess.Popen(
-            [sys.executable, '-m', 'codex_router'],
+            [sys.executable, '-m', 'ai_router'],
             env={**os.environ, 'ROUTER_HOME': str(self.home)}, cwd=str(ROOT),
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         if not self._wait_healthy():

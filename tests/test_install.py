@@ -15,7 +15,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from codex_router import feed_verify
+from ai_router import feed_verify
 from tests.fakes import LAUNCHD, static_fetch as _static_fetch
 
 _ROOT = Path(__file__).resolve().parents[1]
@@ -308,13 +308,13 @@ class InstallTests(unittest.TestCase):
             version, _, blob, manifest = _real_bundle(tmp)
             extract = Path(tmp) / 'extracted'
             extract.mkdir()
-            with tarfile.open(Path(tmp) / 'feed' / f'codex-model-router-{version}.tar.gz',
+            with tarfile.open(Path(tmp) / 'feed' / f'ai-router-{version}.tar.gz',
                               mode='r') as tar:
                 tar.extractall(extract, filter='data')
             install_mod.self_test(sys.executable, extract)
             want = manifest['version']
             proc = subprocess.run(
-                [sys.executable, '-c', 'from codex_router.runtime import VERSION; print(VERSION)'],
+                [sys.executable, '-c', 'from ai_router.runtime import VERSION; print(VERSION)'],
                 cwd=str(extract), capture_output=True, text=True)
             self.assertEqual(proc.returncode, 0, proc.stderr)
             self.assertEqual(proc.stdout.strip(), want)
@@ -402,10 +402,13 @@ class InstallTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             home.mkdir()
-            self.assertEqual(install_mod.channel_feed(home), install_mod.FEED_URL)
+            # No token yet: the host stays on the pre-migration GitHub route
+            # (see test_feed_migration.py); the token selects the origin.
+            (home / 'feed-token').write_text('tok-1\n')
             (home / 'channel').write_text('beta\n')
-            self.assertEqual(install_mod.channel_feed(home),
-                             'https://github.com/beta/latest.json')
+            self.assertEqual(
+                install_mod.channel_feed(home),
+                install_mod.FEED_URL.replace('/stable/', '/beta/'))
             self.assertEqual(
                 feed_verify.beta_feed_url('file:///stable/latest.json'),
                 'file:///beta/latest.json')

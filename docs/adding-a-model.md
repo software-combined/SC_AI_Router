@@ -3,8 +3,8 @@
 One command derives the row from live OpenRouter metadata:
 
 ```sh
-python3.14 -m codex_router.models add <slug> --dry-run   # inspect first
-python3.14 -m codex_router.models add <slug> --probe     # verify, then write
+python3.14 -m ai_router.models add <slug> --dry-run   # inspect first
+python3.14 -m ai_router.models add <slug> --probe     # verify, then write
 ```
 
 Without `--probe` the row lands as `tier: preview`: it appears in the
@@ -14,21 +14,27 @@ Claude listing). With `--probe` the base
 tool round trip runs on the installed router; a pass writes
 `tier: verified`, anything else stays `preview` and appends a row to
 `docs/compatibility.md`. Validate with
-`python3.14 -m codex_router.models check` (`0 problems` required) and
-remove with `python3.14 -m codex_router.models remove <slug>`.
+`python3.14 -m ai_router.models check` (`0 problems` required) and
+remove with `python3.14 -m ai_router.models remove <slug>`.
 
 Preview models route exactly like verified ones; only the picker label
 and ordering differ. A model that needs behaviour the adapter does not
 have (a new quirk type) is a normal code change and release, not a data
 row.
 
-The 2026-09-08 roster uses only the Opus, Fable, Sonnet, and Haiku Latest
+To preview a per-portco subset in CI without touching runtime policy:
+`python3.14 -m ai_router.catalogue --allowed slug-a,slug-b --merge <file>`
+followed by the same `--allowed` with `--check`. Runtime enforcement
+reads `<home>/model-policy.json` alone; the flag never widens it.
+
+The current roster uses only the Opus, Fable, Sonnet, and Haiku Latest
 Claude aliases from the [OpenRouter model list](https://openrouter.ai/api/v1/models).
-The current DeepSeek rows are V4 Pro 0813 (pinned snapshot), V4 Flash Latest
-(tracking alias `~deepseek/deepseek-v4-flash-latest`), and V4 Flash Vision Exp
-(kept separate: the only image-capable DeepSeek row); the 0423 Pro slug remains
-available for existing tasks. Upstream serves no pro-latest id, so Pro keeps
-dated ids with clean display names instead of invented slugs. Tilde alias
+The current DeepSeek rows are V4.1 Flash (newest Flash, pinned snapshot,
+image-capable) and V4 Pro 0813 (newest Pro, pinned snapshot, text-only).
+Upstream serves no pro-latest id, so Pro keeps dated ids with clean display
+names instead of invented slugs. Rows land as `preview` until the isolated
+`--probe` round trip passes and the run is recorded in
+`docs/compatibility.md`. Tilde alias
 slugs are used only when upstream actually serves the `~`-prefixed id; never
 invent one. New entries are Preview, not runtime-verified.
 

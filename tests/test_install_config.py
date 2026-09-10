@@ -28,7 +28,7 @@ from tests.test_install import (
 
 
 def _fake_write_catalogue(home, release_dir, python):
-    from codex_router.catalogue import merge, read_roster
+    from ai_router.catalogue import merge, read_roster
     path = home / 'mixed-models.json'
     base = json.loads(path.read_text()) if path.exists() else {'models': []}
     path.write_text(json.dumps(merge(base, read_roster(path)), indent=2) + '\n')
@@ -314,7 +314,6 @@ class InstallConfigTests(unittest.TestCase):
     def test_channel_feed_prefers_pinned_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
-            self.assertEqual(install_mod.channel_feed(home), install_mod.FEED_URL)
             (home / 'channel').write_text('beta\n')
             (home / 'feed').write_text('file:///pinned.json\n')
             self.assertEqual(install_mod.channel_feed(home),

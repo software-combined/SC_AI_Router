@@ -15,7 +15,7 @@ import json
 
 from . import providers, transport
 from .capabilities import OPENROUTER_HOST
-from .errors import PreparationError
+from .errors import PreparationError, UnknownModel
 from .registry import MODELS, by_slug
 
 ANTHROPIC_HOST = 'api.anthropic.com'
@@ -49,8 +49,22 @@ def unalias(model):
     return model  # unknown: leave untouched for subscription passthrough
 
 
+# Tier words the desktop accepts in anthropic_family_tier (client 1.49585.0).
+FAMILY_TIERS = frozenset({'sonnet', 'opus', 'haiku', 'fable', 'mythos'})
+FAMILY_TIER_DEFAULT = 'sonnet'
+
+
+def family_tier(alias):
+    """Tier word one discovery id stands in for; sonnet unless it names one."""
+    if isinstance(alias, str) and alias.startswith('anthropic/claude-'):
+        word = alias.removeprefix('anthropic/claude-').split('-', 1)[0]
+        if word in FAMILY_TIERS:
+            return word
+    return FAMILY_TIER_DEFAULT
+
+
 def models_listing():
-    """Anthropic-style {data: [{id, display_name}]} for gateway discovery.
+    """Anthropic-style {data: [{id, display_name, anthropic_family_tier}]}.
 
     Verified rows first A-Z by display name, then preview rows A-Z."""
     ordered = sorted(MODELS, key=lambda m: (m.tier != 'verified',
@@ -59,7 +73,8 @@ def models_listing():
     for entry in ordered:
         alias = claude_alias(entry.slug)
         if alias is not None:
-            rows.append({'id': alias, 'display_name': entry.display_name})
+            rows.append({'id': alias, 'display_name': entry.display_name,
+                         'anthropic_family_tier': family_tier(alias)})
     return {'data': rows}
 
 
@@ -124,8 +139,15 @@ class ClaudeSubscriptionProvider:
         yield from transport.passthrough(response)
 
 
-def select(model, path, openai_mode='subscription', anthropic_mode=None):
+def select(model, path, openai_mode='subscription', anthropic_mode=None,
+           allowed=None):
     if _is_openrouter_slug(model):
+        # Plan 068: a portco allowlist gates routing, never just the picker.
+        # None means no policy provisioned (today's behavior). Aliases and
+        # bare Anthropic ids resolve to the registry slug before the check.
+        slug = resolve(model)
+        if allowed is not None and slug not in frozenset(allowed):
+            raise UnknownModel(slug, ())
         return ClaudeOpenRouterProvider()
     # Independent subscription choice; missing mode reproduces the legacy
     # behavior of following openai_mode. Never widened by migration.

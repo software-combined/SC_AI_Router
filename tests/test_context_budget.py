@@ -3,7 +3,7 @@ import json
 import unittest
 from types import SimpleNamespace
 
-from codex_router import context_budget, errors, providers
+from ai_router import context_budget, errors, providers
 from tests.fakes import FakeUpstream, install_fake
 from tests.test_handler import _post
 from tests.test_mixed_router import _start_server, _test_state

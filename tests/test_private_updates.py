@@ -12,7 +12,7 @@ PREFIX = 'https://github.com/software-combined/SC_OpenRouter_adapter/releases/'
 class PrivateUpdateTests(unittest.TestCase):
     def test_latest_feed_and_versioned_bundle_use_authenticated_cli(self):
         for suffix, tag in [('latest/download/latest.json', None),
-                            ('download/v0.6.7.19/codex-model-router-0.6.7.19.tar.gz', 'v0.6.7.19')]:
+                            ('download/v0.6.7.19/ai-router-0.6.7.19.tar.gz', 'v0.6.7.19')]:
             with self.subTest(tag=tag), mock.patch.object(svc.shutil, 'which', return_value='/usr/bin/gh'), \
                     mock.patch.object(svc, 'run', return_value=subprocess.CompletedProcess(
                         [], 0, b'asset bytes', b'')) as run, \

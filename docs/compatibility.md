@@ -1,5 +1,26 @@
 # Compatibility
 
+## Windows lifecycle acceptance, 2026-09-10 (Plan 116 first proof)
+
+Machine: Windows 11 Pro 10.0.26200 x64 staff laptop (AzureAD account, no
+elevation), Python 3.14.7 from python.org, Codex desktop `OpenAI.Codex`
+26.903.8094.0 (Store package; the `codex` CLI is not on PATH), GitHub CLI
+2.97.0. Bundles were built from the 0.6.12 source and served from local
+`file://` feeds; no paid model request was made and no Codex session was
+exercised, so this is lifecycle evidence only, not model or client
+acceptance.
+
+| step | result |
+|---|---|
+| `--preflight`, `--status`, `--dry-run` | read-only, no router home created |
+| first install | stops at the key gate (exit 3); key and state files `icacls` owner-only, home grant inheritable, inherited `CodexSandboxUsers` read access removed |
+| install with key present | `/health` reports the installed version in about four seconds; both tasks registered as Interactive-only, least privilege, `pythonw.exe`; Codex `config.toml` parses with a forward-slash catalogue path |
+| scheduled update | `CodexMixedModelRouterUpdate` run by hand installed the next bundle; health moved versions with about fourteen seconds of refused connections; updater output captured in `logs\update.log` |
+| rollback (`--version`) | previous release serving again in about two seconds |
+| uninstall | both tasks ended and deleted, no router process, port free, config block removed, activation receipt dropped, home left in place |
+| reinstall after uninstall | exit 0, Codex re-attached (fails with a stale receipt before this release) |
+| sign-out and sign-in | pending: the machine must be signed out after this session ends; verify with `schtasks /query /tn CodexMixedModelRouter` and `/health` |
+
 ## Token-budget protocol check, 2026-09-09
 
 `python3.14 tools/probe_context_budget.py` passed against Codex CLI 0.153.4
@@ -25,12 +46,12 @@ Tested Codex desktop versions:
 | version | date | result |
 |---|---|---|
 | 0.153.4 | 2026-09-07 | probe baseline |
-| 0.153.4 | 2026-09-08 | no-subscription spike: custom provider (`scg_router`, no login) runs `thread/start` + `turn/start` to `/responses` with bearer auth; `model/list` unanswered in all login shapes; see Plan 043 Step 1 report |
+| 0.153.4 | 2026-09-08 | no-subscription spike: custom provider (`scg_router`, no login) runs `thread/start` + `turn/start` to `/responses` with bearer auth; `model/list` unanswered in all login shapes; see Plan 111 Step 1 report |
 | 0.153.4 (desktop 26.901.51231, Arch `codex-desktop-git`) | 2026-09-08 | contributor reported chat creation working after the catalogue schema fix. Review reproduced unhandled old stubs and invalid Linux service instructions. Version 0.6.7 repairs existing rows and adds the Linux installer backend; staff-machine acceptance of the new lifecycle remains pending |
 
 The contributor's follow-up machine report on 2026-09-09 explains the Linux
 startup result: the running 0.6.2.0 bundle uses a `current` symlink and
-`python3.14 -m codex_router`. It does not use the current branch's pointer
+`python3.14 -m ai_router`. It does not use the current branch's pointer
 file and `router_launch.py`. The timer fires, but every reported update
 failed on an unsigned local feed; no successful automatic update or
 rollback was demonstrated. Version 0.6.7 addresses both the layout migration
@@ -100,3 +121,35 @@ Other preview models (base round trip only):
 |---|---|---|---|
 | anthropic/claude-opus-5 | preview | 2026-09-07 | base round trip |
 | anthropic/claude-fable-5.1 | preview | 2026-09-07 | base round trip |
+
+## DeepSeek two-row cut, 2026-09-10
+
+Isolated-router base round trip (`ai_router.candidate.verify`, Codex CLI
+0.153.1), OpenRouter key via OpenCode auth. Both passed:
+
+| model | tier | date | evidence |
+|---|---|---|---|
+| deepseek/deepseek-v4.1-flash | verified | 2026-09-10 | isolated base round trip PASS |
+| deepseek/deepseek-v4-pro-0813 | verified | 2026-09-10 | isolated base round trip PASS |
+
+## Claude desktop gateway discovery (Plan 120), 2026-09-10
+
+Client: Claude.app `1.49585.0`, signed in; no `managed-settings.json` at
+the user or system location. Router `GET /v1/models` = 20 rows.
+
+- Before (in-dialog "Test model discovery" against the real router):
+  **found 6 models**; the picker showed those 6, all `· OpenRouter`.
+- After (worktree source on a temporary `127.0.0.1:18999` listener,
+  fetched as `/v1/models?limit=1000`, kept by the client's own rule):
+  **20 served, 20 kept**. Listener stopped, port closed.
+- Root cause, read from the installed `app.asar` (evidence only, never
+  patched): a row is kept only when its id passes the Anthropic-name
+  check or declares a valid `anthropic_family_tier`
+  (`sonnet`, `opus`, `haiku`, `fable`, `mythos`); `isFamilyDefault`
+  breaks tier ties. Effort options come from a per-native-model table,
+  so gateway rows show no effort picker on this version; `thinking`
+  still travels byte-identical.
+- Pending: fresh-session picker count of 20 and detach/reattach
+  readback through `install.py --desktop`. Both wait on release plus
+  deploy of this source to the live router and an app relaunch, then
+  this entry gets the observed picker count.

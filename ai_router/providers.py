@@ -6,8 +6,8 @@ from . import compaction as comp, local_services, agent_handoffs
 from .capabilities import (CANONICAL_ORDER, OPENROUTER_HOST, REASONING_LEVELS, check_effort,
                               check_images, input_modalities)
 from .context_budget import estimate as estimate_tokens
-from .errors import ContextWindowExceeded, PreparationError
-from .registry import by_slug
+from .errors import ContextWindowExceeded, PreparationError, UnknownModel
+from .registry import by_slug, near_miss
 from .runtime import log_event
 from .discovered import remember
 from .tool_adapter import prepare_tools, snoop_response_identity, stream_events, ToolEvents
@@ -150,7 +150,9 @@ class SubscriptionProvider:
     name = 'openai-subscription'
     host = 'chatgpt.com'
 
-    def owns(self, model, path, openai_models, openai_mode='subscription'):
+    def owns(self, model, path, openai_models, openai_mode='subscription',
+             allowed=None):
+        del allowed  # Subscription rows are never allowlisted.
         if openai_mode == 'none':
             return False
         if path in NATIVE_SERVICE_PATHS:
@@ -187,9 +189,16 @@ class OpenRouterProvider:
     name = 'openrouter'
     host = OPENROUTER_HOST
 
-    def owns(self, model, path, openai_models, openai_mode='subscription'):
+    def owns(self, model, path, openai_models, openai_mode='subscription',
+             allowed=None):
         entry = by_slug(model) if isinstance(model, str) else None
-        return entry is not None and entry.provider == 'openrouter' and path not in NATIVE_SERVICE_PATHS
+        if (entry is None or entry.provider != 'openrouter'
+                or path in NATIVE_SERVICE_PATHS):
+            return False
+        # Plan 068: a portco allowlist gates routing, never just the picker.
+        # None means no policy provisioned (today's behavior); subscription
+        # rows are unaffected by any list.
+        return allowed is None or model in allowed
 
     def prepare(self, model, path, payload, raw_body, headers, credentials):
         if path not in ('/responses', '/responses/compact'):
@@ -337,7 +346,9 @@ class LocalServicesProvider:
     name = 'local-services'
     host = None
 
-    def owns(self, model, path, openai_models, openai_mode='subscription'):
+    def owns(self, model, path, openai_models, openai_mode='subscription',
+             allowed=None):
+        del allowed  # Native service paths are never allowlisted.
         return openai_mode == 'none' and path in NATIVE_SERVICE_PATHS
 
     def prepare(self, model, path, payload, raw_body, headers, credentials):
@@ -363,10 +374,17 @@ def compaction_call(provider, model, path, payload):
     return None
 
 
-def select(model, path, openai_models=(), openai_mode='subscription'):
+def select(model, path, openai_models=(), openai_mode='subscription',
+           allowed=None):
+    allowset = None if allowed is None else frozenset(allowed)
     for provider in PROVIDERS:
-        if provider.owns(model, path, openai_models, openai_mode):
+        if provider.owns(model, path, openai_models, openai_mode,
+                         allowed=allowset):
             return provider
     if openai_mode == 'none' and isinstance(model, str) and model in (openai_models or []):
         raise ValueError('Model is not available without a ChatGPT subscription')
-    raise ValueError('Model is not in the configured catalog')
+    guess = near_miss(model)
+    if guess is not None and allowset is not None and guess not in allowset:
+        guess = None  # never disclose a slug the portco policy excludes
+    raise UnknownModel(model if isinstance(model, str) else None,
+                       (guess,) if guess else ())

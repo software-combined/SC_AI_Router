@@ -6,10 +6,10 @@ import tempfile
 import unittest
 from dataclasses import replace
 from pathlib import Path
-from codex_router.catalogue import (SUBSCRIPTION_REASONING, catalog_name, check, merge,
+from ai_router.catalogue import (SUBSCRIPTION_REASONING, catalog_name, check, merge,
                                      openrouter_entry, subscription_stub)
-from codex_router.registry import MODELS, by_slug
-from codex_router.clients import models_for
+from ai_router.registry import MODELS, by_slug
+from ai_router.clients import models_for
 
 
 class CatalogueFlagTests(unittest.TestCase):
@@ -55,7 +55,7 @@ class CatalogueFlagTests(unittest.TestCase):
 
 
     def test_instructions_live_in_model_messages_template(self):
-        from codex_router.catalogue import BASE_INSTRUCTIONS
+        from ai_router.catalogue import BASE_INSTRUCTIONS
         entry = openrouter_entry(by_slug('z-ai/glm-5.3-flash'))
         self.assertNotIn('base_instructions', entry)
         self.assertEqual(entry['model_messages'],
@@ -87,7 +87,7 @@ class CatalogueFlagTests(unittest.TestCase):
                          sorted([names[s] for s in preview], key=str.casefold))
 
     def test_merge_keeps_custom_subscription_row_values_when_reordering(self):
-        from codex_router.catalogue import subscription_stub
+        from ai_router.catalogue import subscription_stub
         custom = dict(subscription_stub('gpt-6-astra'), display_name='Mine',
                       context_window=1000000)
         merged = merge({'models': [dict(custom)]}, roster=('gpt-6-astra',))
@@ -98,7 +98,7 @@ class CatalogueFlagTests(unittest.TestCase):
         self.assertEqual(slugs[0], 'gpt-6-astra')
 
     def test_subscription_stubs_carry_native_reasoning_levels(self):
-        from codex_router.catalogue import SUBSCRIPTION_REASONING, subscription_stub
+        from ai_router.catalogue import SUBSCRIPTION_REASONING, subscription_stub
         self.assertNotIn('gpt-reserve', SUBSCRIPTION_REASONING)
         want = {'gpt-6-astra': ('medium', 6), 'gpt-5.6-sol': ('low', 6),
                 'gpt-5.6-terra': ('medium', 6), 'gpt-5.6-luna': ('medium', 5),
@@ -274,14 +274,14 @@ class CatalogueFlagTests(unittest.TestCase):
                                    ('claude', '~anthropic/claude-sonnet-latest')):
                 target = Path(tmp) / f'{client}.json'
                 proc = subprocess.run(
-                    [sys.executable, '-m', 'codex_router.catalogue',
+                    [sys.executable, '-m', 'ai_router.catalogue',
                      '--client', client, '--merge', str(target)],
                     capture_output=True, text=True)
                 self.assertEqual(proc.returncode, 0, proc.stderr)
                 self.assertNotIn(hidden, {m['slug'] for m in
                                           json.loads(target.read_text())['models']})
                 proc = subprocess.run(
-                    [sys.executable, '-m', 'codex_router.catalogue',
+                    [sys.executable, '-m', 'ai_router.catalogue',
                      '--client', client, '--check', str(target)],
                     capture_output=True, text=True)
                 self.assertEqual(proc.returncode, 0, proc.stderr)
@@ -385,7 +385,7 @@ class CatalogueRosterTests(unittest.TestCase):
         self.assertEqual(len(slugs), len(set(slugs)))
 
     def test_read_roster_from_sibling_state(self):
-        from codex_router.catalogue import read_roster
+        from ai_router.catalogue import read_roster
         with tempfile.TemporaryDirectory() as tmp:
             catalog = Path(tmp) / 'mixed-models.json'
             self.assertEqual(read_roster(catalog), ())
@@ -395,7 +395,7 @@ class CatalogueRosterTests(unittest.TestCase):
             self.assertEqual(read_roster(catalog), ('gpt-6-astra',))
 
     def test_read_roster_rejects_non_object_state(self):
-        from codex_router.catalogue import read_roster
+        from ai_router.catalogue import read_roster
         with tempfile.TemporaryDirectory() as tmp:
             (Path(tmp) / 'mixed-router-state.json').write_text('[1, 2]\n')
             self.assertEqual(read_roster(Path(tmp) / 'mixed-models.json'), ())
@@ -408,7 +408,7 @@ class CatalogueRosterTests(unittest.TestCase):
                             'openai_models': ['gpt-6-astra']}) + '\n')
             target = home / 'mixed-models.json'
             proc = subprocess.run(
-                [sys.executable, '-m', 'codex_router.catalogue', '--merge', str(target)],
+                [sys.executable, '-m', 'ai_router.catalogue', '--merge', str(target)],
                 capture_output=True, text=True)
             self.assertEqual(proc.returncode, 0, proc.stderr)
             slugs = {m['slug'] for m in json.loads(target.read_text())['models']}

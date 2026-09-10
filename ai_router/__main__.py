@@ -1,4 +1,4 @@
-"""Run the router: python3.14 -m codex_router"""
+"""Run the router: python3.14 -m ai_router"""
 import signal
 import threading
 from . import activation

@@ -1,7 +1,7 @@
 """Generate OpenRouter catalogue entries from the registry.
 
 Every non-model-specific field lives in OPENROUTER_TEMPLATE. Per-model
-values come from codex_router/registry.py rows. Pure: no network, no
+values come from ai_router/registry.py rows. Pure: no network, no
 state; the instructions text is read once at import.
 """
 import json
@@ -64,7 +64,9 @@ OPENROUTER_TEMPLATE = {
 PREVIEW_PRIORITY_OFFSET = 100000  # preview entries sort after every verified model
 RETIRED_SLUGS = {'anthropic/claude-opus-5', 'anthropic/claude-fable-5.1',
                  'deepseek/deepseek-v4-pro', 'deepseek/deepseek-v4-flash',
-                 'deepseek/deepseek-v4-flash-0731'}  # pro-0423 retired 2026-09-09; flash rows superseded by the flash-latest alias
+                 'deepseek/deepseek-v4-flash-0731',
+                 '~deepseek/deepseek-v4-flash-latest',
+                 'deepseek/deepseek-v4-flash-vision-exp'}  # DeepSeek keeps Pro 0813 + V4.1 Flash; alias and Vision rows retired
 # Subscription roster entries withdrawn from the picker. merge() drops these
 # from roster, catalogue and state-derived seeding alike, so a scheduled
 # update repairs machines that still carry the row.
@@ -156,7 +158,7 @@ def openrouter_entry(model):
             'web_search_tool_type': 'text_and_image' if model.web_search else 'text'}
 
 
-def merge(catalog, roster=(), client='codex'):
+def merge(catalog, roster=(), client='codex', allowed=None):
     """Merge registry OpenRouter entries, dropping explicitly retired picker rows.
 
     Only models_for(client) OpenRouter entries are emitted: the Codex
@@ -175,10 +177,19 @@ def merge(catalog, roster=(), client='codex'):
     OpenRouter-billed Anthropic rows. Plan 039's live /models remains
     the proper replacement for this fallback. Routing never consults
     this filter.
+    `allowed` is an optional portco allowlist of registry slugs (Plan 068):
+    None preserves today's behavior exactly; a list drops visible
+    OpenRouter rows not in the list like hidden rows. Subscription rows
+    are unaffected.
     """
-    visible = [m for m in models_for(MODELS, client) if m.provider == 'openrouter']
+    allowset = None if allowed is None else frozenset(allowed)
+    visible = [m for m in models_for(MODELS, client)
+               if m.provider == 'openrouter'
+               and (allowset is None or m.slug in allowset)]
     hidden = {m.slug for m in MODELS
-              if m.provider == 'openrouter' and not visible_for(m, client)}
+              if m.provider == 'openrouter'
+              and (not visible_for(m, client)
+                   or (allowset is not None and m.slug not in allowset))}
     active = {m.slug for m in MODELS}
     models = [m for m in catalog.get('models', [])
               if (m['slug'] not in RETIRED_SLUGS or m['slug'] in active)
@@ -232,7 +243,7 @@ def _same(old, new, key):
     return old.get(key) == new.get(key)
 
 
-def check(path, client='codex'):
+def check(path, client='codex', allowed=None):
     catalog = json.loads(Path(path).read_text())
     existing = {m['slug']: m for m in catalog.get('models', [])}
     for slug, row in existing.items():
@@ -240,13 +251,18 @@ def check(path, client='codex'):
         if missing:
             print(f'{slug}: missing schema fields: {", ".join(sorted(missing))}')
             return False
+    allowset = None if allowed is None else frozenset(allowed)
     identical, total = 0, 0
     for model in (m for m in MODELS
-                  if m.provider == 'openrouter' and not visible_for(m, client)):
+                  if m.provider == 'openrouter'
+                  and (not visible_for(m, client)
+                       or (allowset is not None and m.slug not in allowset))):
         if model.slug in existing:
             print(f'{model.slug}: hidden from the {client} picker but present')
             return False
-    for model in (m for m in models_for(MODELS, client) if m.provider == 'openrouter'):
+    for model in (m for m in models_for(MODELS, client)
+                  if m.provider == 'openrouter'
+                  and (allowset is None or m.slug in allowset)):
         total += 1
         old = existing.get(model.slug)
         if old is None:
@@ -262,8 +278,8 @@ def check(path, client='codex'):
     return identical == total
 
 
-USAGE = ('usage: python3.14 -m codex_router.catalogue '
-         '[--client codex|claude] --check|--merge <catalogue>')
+USAGE = ('usage: python3.14 -m ai_router.catalogue '
+         '[--client codex|claude] [--allowed slug,...] --check|--merge <catalogue>')
 
 
 if __name__ == '__main__':
@@ -274,11 +290,20 @@ if __name__ == '__main__':
             raise SystemExit(USAGE)
         client = args[1]
         args = args[2:]
+    allowed = None
+    if args[:1] == ['--allowed']:
+        # Tool/CI-only: pins a portco subset for merge and check. Never
+        # widens the stored file policy at runtime; the effective set
+        # comes from model-policy.json alone.
+        if len(args) < 2 or not args[1].strip():
+            raise SystemExit(USAGE)
+        allowed = tuple(s.strip() for s in args[1].split(',') if s.strip())
+        args = args[2:]
     if args[:1] == ['--merge'] and len(args) == 2:
         path = Path(args[1])
         base = json.loads(path.read_text()) if path.exists() else {'models': []}
-        path.write_text(json.dumps(merge(base, read_roster(path), client), indent=2) + '\n')
+        path.write_text(json.dumps(merge(base, read_roster(path), client, allowed), indent=2) + '\n')
     elif args[:1] == ['--check'] and len(args) == 2:
-        sys.exit(0 if check(args[1], client) else 1)
+        sys.exit(0 if check(args[1], client, allowed) else 1)
     else:
         raise SystemExit(USAGE)

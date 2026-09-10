@@ -12,7 +12,8 @@ class _Policy:
 
     def select_provider(self, model, path, state, mode):
         return providers.select(
-            model, path, state.get('openai_models', []), mode)
+            model, path, state.get('openai_models', []), mode,
+            allowed=state.get('allowed_models'))
 
     def compaction_call(self, provider, model, path, payload):
         return providers.compaction_call(provider, model, path, payload)
