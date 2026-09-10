@@ -7,7 +7,6 @@ import os
 import socket
 import threading
 import time
-import traceback
 from compression import zstd
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from .credentials import Credentials, ENV_VAR as _CREDENTIALS_ENV_VAR
@@ -244,12 +243,9 @@ class Handler(BaseHTTPRequestHandler):
                 AttributeError, TypeError) as exc:
             err = errors.map_client_error(exc)
             if err.code == 'INTERNAL_ERROR':
-                frames = traceback.extract_tb(exc.__traceback__, limit=3)
-                location = ';'.join(
-                    f'{frame.filename.split("/")[-1]}:{frame.lineno}:{frame.name}'
-                    for frame in frames)
                 log_event('request_failed', code=err.code,
-                          error_type=type(exc).__name__, location=location)
+                          error_type=type(exc).__name__,
+                          location=transport.describe_location(exc))
             return self.error(err)
         _reasoning = payload.get('reasoning')
         prepare_done = time.monotonic()
@@ -370,14 +366,18 @@ class Handler(BaseHTTPRequestHandler):
             if metrics.get('served_model'):
                 with self.server.lock:
                     self.server.served_models[metrics['model']] = metrics['served_model']
-        except (OSError, http.client.HTTPException, ValueError, KeyError) as exc:
+        except (OSError, http.client.HTTPException, ValueError, KeyError,
+                TypeError, AttributeError) as exc:
             total_ms = round((time.monotonic() - started) * 1000, 1)
             log_event('transport_error',
                         status=response.status if response is not None else None,
                         **metrics, error_type=type(exc).__name__,
                         error_category=exc.msg if isinstance(exc, json.JSONDecodeError) else type(exc).__name__,
+                        location=transport.describe_location(exc),
                         total_ms=total_ms)
-            if not sent:
+            if sent:  # best-effort terminal frame on Responses SSE
+                transport.emit_terminal_failure(self.wfile, metrics, prepared.provider)
+            else:
                 described = providers.describe_failure(
                     exc, None,
                     {'model': metrics.get('model'), 'provider': prepared.provider,
