@@ -42,7 +42,7 @@ _SEAM_NAMES = {'feed_url': 'FEED_URL', 'route_prefix': 'github_route_prefix',
 
 
 _winacl_spec = importlib.util.spec_from_file_location(
-    'router_winacl', Path(__file__).resolve().parents[1] / 'codex_router' / 'winacl.py')
+    'router_winacl', Path(__file__).resolve().parents[1] / 'ai_router' / 'winacl.py')
 _winacl = importlib.util.module_from_spec(_winacl_spec)
 _winacl_spec.loader.exec_module(_winacl)
 

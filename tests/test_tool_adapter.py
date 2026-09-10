@@ -6,10 +6,10 @@ import tempfile
 from pathlib import Path
 import unittest
 from unittest import mock
-from codex_router.compaction import SUMMARY_PREFIX
-from codex_router.discovered import _MEMORY, remember
-from codex_router.capabilities import has_recursive_refs
-from codex_router.tool_adapter import (
+from ai_router.compaction import SUMMARY_PREFIX
+from ai_router.discovered import _MEMORY, remember
+from ai_router.capabilities import has_recursive_refs
+from ai_router.tool_adapter import (
     prepare_tools, snoop_response_identity, stream_events, ToolEvents,
     SEARCH_NAME, integer_json)
 from tests.fakes import FakeUpstream

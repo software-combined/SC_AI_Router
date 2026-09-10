@@ -5,8 +5,8 @@ from pathlib import Path
 
 # packaging/ holds entrypoints (installer, service helpers), so it takes the
 # entrypoint budget from AGENTS.md rather than the module one.
-SOFT = {'codex_router': 250, 'tools': 400, 'tests': 300, 'packaging': 400}
-HARD = {'codex_router': 400, 'tools': 700, 'tests': 500, 'packaging': 700}
+SOFT = {'ai_router': 250, 'tools': 400, 'tests': 300, 'packaging': 400}
+HARD = {'ai_router': 400, 'tools': 700, 'tests': 500, 'packaging': 700}
 
 def main():
     root = Path(__file__).resolve().parents[1]

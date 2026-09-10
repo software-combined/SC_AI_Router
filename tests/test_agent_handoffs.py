@@ -2,7 +2,7 @@
 from copy import deepcopy
 import unittest
 
-from codex_router import agent_handoffs as handoffs
+from ai_router import agent_handoffs as handoffs
 
 
 def native_tools(*names):

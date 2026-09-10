@@ -3,8 +3,10 @@ import os
 import tempfile
 from pathlib import Path
 
-BEGIN = '<!-- BEGIN codex-model-router subagent rules -->'
-END = '<!-- END codex-model-router subagent rules -->'
+BEGIN = '<!-- BEGIN ai-router subagent rules -->'
+LEGACY_BEGIN = '<!-- BEGIN codex-model-router subagent rules -->'
+END = '<!-- END ai-router subagent rules -->'
+LEGACY_END = '<!-- END codex-model-router subagent rules -->'
 BLOCK = f'''{BEGIN}
 ## Subagents and tool discovery
 
@@ -31,6 +33,12 @@ def prepare(codex_home, previous=None):
         after = before  # Recover a completed write if receipt creation was interrupted.
     elif BEGIN in before or END in before:
         raise SystemExit('Unowned global subagent rules; leaving instructions untouched.')
+    elif LEGACY_BEGIN in before or LEGACY_END in before:
+        # An older release wrote the legacy marker; adopt it in place so a
+        # reinstall does not stack a second block beside the old one.
+        legacy = before[before.index(LEGACY_BEGIN):
+                        before.index(LEGACY_END) + len(LEGACY_END)]
+        after = before.replace(legacy, BLOCK, 1)
     else:
         after = BLOCK + before
     return path, before, after, {'path': str(path), 'block': BLOCK}
@@ -58,8 +66,18 @@ def restore(receipt):
         return
     path = Path(receipt['path'])
     before = path.read_text() if path.exists() else ''
-    if receipt['block'] not in before and BEGIN not in before and END not in before:
+    legacy_present = ('codex-model-router subagent rules' in before
+                      and BEGIN not in before and receipt['block'] not in before)
+    if receipt['block'] not in before and BEGIN not in before and END not in before \
+            and not legacy_present:
         return  # A previous restore or the owner already removed the complete block.
+    if legacy_present:
+        # Older release still installed: remove its block, nothing else.
+        legacy = before[before.index('<!-- BEGIN codex-model-router subagent rules -->'):
+                        before.index('<!-- END codex-model-router subagent rules -->')
+                        + len('<!-- END codex-model-router subagent rules -->')]
+        write(path, before, before.replace(legacy, '', 1))
+        return
     if before.count(receipt['block']) != 1:
         raise SystemExit('Global subagent rules changed; leaving instructions untouched.')
     write(path, before, before.replace(receipt['block'], '', 1))

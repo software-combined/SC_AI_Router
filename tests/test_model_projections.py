@@ -7,8 +7,8 @@ are preserved. No upstream fetch, model file write, or candidate probe.
 """
 import unittest
 
-from codex_router import apply_catalogue, catalogue
-from codex_router.registry import by_slug
+from ai_router import apply_catalogue, catalogue
+from ai_router.registry import by_slug
 
 
 def _snapshot(slug='meta/muse-spark-1.3'):

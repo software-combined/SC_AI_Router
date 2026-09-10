@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest import mock
 
 from tests._platform import unix_only
-from codex_router.catalogue import merge
+from ai_router.catalogue import merge
 from tests.test_install_config import _install
 from tools.global_instructions import BLOCK, prepare, restore, write
 from tools import global_instructions

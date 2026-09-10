@@ -8,9 +8,9 @@ Absent policy on a never-provisioned install equals today's output.
 import os
 import unittest
 from unittest import mock
-from codex_router.catalogue import merge
-from codex_router import providers
-from codex_router import model_policy
+from ai_router.catalogue import merge
+from ai_router import providers
+from ai_router import model_policy
 
 ALLOWED = ('z-ai/glm-5.3-flash', 'moonshotai/kimi-k3')
 
@@ -40,7 +40,7 @@ class ModelPolicyTests(unittest.TestCase):
         # The near-miss hint must not disclose a slug the portco policy
         # excludes: a bare id for an allowlisted-out tilde row rejects
         # with an empty candidate list.
-        from codex_router.errors import UnknownModel
+        from ai_router.errors import UnknownModel
         with self.assertRaises(UnknownModel) as caught:
             providers.select('anthropic/claude-opus-latest', '/responses', (),
                              'subscription', allowed=ALLOWED)
@@ -115,8 +115,8 @@ class ModelPolicyTests(unittest.TestCase):
         import json
         import tempfile
         from pathlib import Path
-        import codex_router.model_policy as policy_mod
-        import codex_router.winacl as winacl_mod
+        import ai_router.model_policy as policy_mod
+        import ai_router.winacl as winacl_mod
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
             (home / 'model-policy.json').write_text(json.dumps(
@@ -152,7 +152,7 @@ class ModelPolicyTests(unittest.TestCase):
         import tempfile
         from pathlib import Path
         from unittest import mock
-        from codex_router.runtime import load_state
+        from ai_router.runtime import load_state
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
             auth = home / 'auth.json'
@@ -174,7 +174,7 @@ class ModelPolicyTests(unittest.TestCase):
             self.assertNotIn('allowed_models', plain)
 
     def test_protocol_threading_rejects_disallowed_model(self):
-        from codex_router.protocols import responses, messages
+        from ai_router.protocols import responses, messages
         state = {'openai_models': ['gpt-6-astra'],
                  'allowed_models': list(ALLOWED)}
         with self.assertRaisesRegex(ValueError, 'not in the configured catalog'):
@@ -207,7 +207,7 @@ class ModelPolicyTests(unittest.TestCase):
             target = Path(tmp) / 'catalogue.json'
             target.write_text('{"models": []}')
             result = subprocess.run(
-                [sys.executable, '-m', 'codex_router.catalogue',
+                [sys.executable, '-m', 'ai_router.catalogue',
                  '--allowed', ','.join(ALLOWED), '--merge', str(target)],
                 capture_output=True, text=True, cwd=str(Path('.').resolve()))
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -216,7 +216,7 @@ class ModelPolicyTests(unittest.TestCase):
             self.assertIn('z-ai/glm-5.3-flash', slugs)
             self.assertNotIn('meta/muse-spark-1.3', slugs)
             check = subprocess.run(
-                [sys.executable, '-m', 'codex_router.catalogue',
+                [sys.executable, '-m', 'ai_router.catalogue',
                  '--allowed', ','.join(ALLOWED), '--check', str(target)],
                 capture_output=True, text=True, cwd=str(Path('.').resolve()))
             self.assertEqual(check.returncode, 0, check.stderr + check.stdout)

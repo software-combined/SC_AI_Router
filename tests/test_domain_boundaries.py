@@ -18,9 +18,9 @@ def _imports_of(path):
     def _add(dotted):
         parts = dotted.split('.')
         found.add(parts[0])
-        # Map the package prefix to the submodule: `from codex_router import
-        # router` and `import codex_router.router` both mean a router import.
-        if parts[0] == 'codex_router' and len(parts) > 1:
+        # Map the package prefix to the submodule: `from ai_router import
+        # router` and `import ai_router.router` both mean a router import.
+        if parts[0] == 'ai_router' and len(parts) > 1:
             found.add(parts[1])
 
     for node in ast.walk(tree):
@@ -37,8 +37,8 @@ def _imports_of(path):
                         found.add(alias.name.split('.')[0])
             elif node.module:
                 _add(node.module)
-                if node.module.split('.')[0] == 'codex_router':
-                    # `from codex_router import router` imports router.
+                if node.module.split('.')[0] == 'ai_router':
+                    # `from ai_router import router` imports router.
                     for alias in node.names:
                         found.add(alias.name.split('.')[0])
     return found
@@ -55,17 +55,17 @@ def _check_rules(rules, root=ROOT):
 
 # module -> local top-level names it must never import
 RULES = {
-    'codex_router/registry.py': ('router', 'providers', 'catalogue', 'models',
+    'ai_router/registry.py': ('router', 'providers', 'catalogue', 'models',
                                  'claude', 'setup', 'activation'),
-    'codex_router/capabilities.py': ('router', 'providers', 'claude', 'setup'),
-    'codex_router/compaction.py': ('router', 'providers'),
-    'codex_router/tool_adapter.py': ('router', 'providers'),
-    'codex_router/providers.py': ('router', 'claude'),
-    'codex_router/transport.py': ('router', 'providers', 'claude', 'registry',
+    'ai_router/capabilities.py': ('router', 'providers', 'claude', 'setup'),
+    'ai_router/compaction.py': ('router', 'providers'),
+    'ai_router/tool_adapter.py': ('router', 'providers'),
+    'ai_router/providers.py': ('router', 'claude'),
+    'ai_router/transport.py': ('router', 'providers', 'claude', 'registry',
                                   'catalogue', 'models', 'setup'),
-    'codex_router/protocols/__init__.py': ('router',),
-    'codex_router/protocols/responses.py': ('router',),
-    'codex_router/protocols/messages.py': ('router', 'providers'),
+    'ai_router/protocols/__init__.py': ('router',),
+    'ai_router/protocols/responses.py': ('router',),
+    'ai_router/protocols/messages.py': ('router', 'providers'),
 }
 
 
@@ -89,7 +89,7 @@ class DomainBoundaryTests(unittest.TestCase):
             (root / 'rel.py').write_text('from .providers import prepare_tools\n')
             self.assertEqual(_check_rules({'rel.py': ('providers',)}, root=root),
                              ['rel.py imports providers'])
-            (root / 'abs.py').write_text('from codex_router import providers\n')
+            (root / 'abs.py').write_text('from ai_router import providers\n')
             self.assertEqual(_check_rules({'abs.py': ('providers',)}, root=root),
                              ['abs.py imports providers'])
 

@@ -57,7 +57,7 @@ def main(argv=None):
     elif len(argv) == 1:
         live = {model['id']: model for model in json.loads(Path(argv[0]).read_text())['data']}
     else:
-        raise SystemExit('usage: python3.14 -m codex_router.live_refresh FILE|--fetch')
+        raise SystemExit('usage: python3.14 -m ai_router.live_refresh FILE|--fetch')
     path = Path(__file__).with_name('models.json')
     before = path.read_text()
     write_guarded(path, before, json.dumps(refresh(json.loads(before), live), indent=2) + '\n')

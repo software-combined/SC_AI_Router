@@ -1,6 +1,6 @@
 import unittest
 import base64
-from codex_router.compaction import (PREFIX, TRANSCRIPT_BUDGET, build_compact_v1_output,
+from ai_router.compaction import (PREFIX, TRANSCRIPT_BUDGET, build_compact_v1_output,
     compaction_text, decode_summary, encode_summary, extract_summary, extract_user_messages,
     has_compaction_trigger, note_images, rewrite_input, scrub_tool_fragments, strip_images,
     transcript_for_summary, v2_compaction_item, OPAQUE_NOTE)
@@ -227,7 +227,7 @@ class ReasoningAndShapeTests(unittest.TestCase):
         self.assertIn('result CODE-1', text)
 
     def test_prompt_demands_verbatim_values(self):
-        from codex_router.compaction import COMPACT_PROMPT
+        from ai_router.compaction import COMPACT_PROMPT
         self.assertIn('verbatim', COMPACT_PROMPT)
 
 if __name__ == '__main__':

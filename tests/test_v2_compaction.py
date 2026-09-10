@@ -14,9 +14,9 @@ import shutil
 import tempfile
 import unittest
 from unittest import mock
-from codex_router.compaction import decode_summary, encode_summary
-from codex_router.discovered import _MEMORY
-from codex_router.providers import (
+from ai_router.compaction import decode_summary, encode_summary
+from ai_router.discovered import _MEMORY
+from ai_router.providers import (
     OpenRouterProvider, PreparationError, SubscriptionProvider, compaction_call)
 from tests.fakes import FakeUpstream, install_fake
 from tests.test_mixed_router import _start_server, _test_state
@@ -77,7 +77,7 @@ class CompactTriggerProviderTests(unittest.TestCase):
             'input': [{'type': 'tool_search_output', 'call_id': 's', 'tools': [tool]},
                       {'type': 'message', 'role': 'user', 'content': 'do it'},
                       {'type': 'compaction_trigger'}]}, 'key')
-        from codex_router.discovered import recall
+        from ai_router.discovered import recall
         defs = recall([{'type': 'compaction',
                         'encrypted_content': encode_summary('handoff done')}])
         self.assertEqual([t['name'] for t in defs], ['echo'])

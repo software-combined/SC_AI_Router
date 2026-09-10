@@ -16,7 +16,7 @@ import time
 import unittest
 from unittest import mock
 
-from codex_router.runtime import LOG
+from ai_router.runtime import LOG
 from tests.fakes import FakeUpstream, install_fake
 from tests.test_handler import _auth_file, _post
 from tests.test_mixed_router import _start_server, _test_state
@@ -75,7 +75,7 @@ class LatencyMetricTests(unittest.TestCase):
         server = self._server()
         ticks = (1000 + i * 0.005 for i in itertools.count())
         real_clock = time.monotonic
-        with mock.patch('codex_router.router.time.monotonic',
+        with mock.patch('ai_router.router.time.monotonic',
                         side_effect=lambda: next(ticks)):
             response = _post(server.server_port, '/test-token/responses',
                              {'model': 'z-ai/glm-5.3', 'input': []})
@@ -107,7 +107,7 @@ class LatencyMetricTests(unittest.TestCase):
         self.assertIn('total_ms', event)
 
     def test_response_shape_uses_fixed_categories(self):
-        from codex_router.transport import describe_response
+        from ai_router.transport import describe_response
         from tests.fakes import FakeUpstream
         kind, encoding = describe_response(
             FakeUpstream(200, b'{}', [('Content-Type', 'text/event-stream')]))
@@ -155,7 +155,7 @@ class LatencyMetricTests(unittest.TestCase):
             server = self._server()
             ticks = (2000 + i * 0.005 for i in itertools.count())
             real_clock = time.monotonic
-            with mock.patch('codex_router.router.time.monotonic',
+            with mock.patch('ai_router.router.time.monotonic',
                             side_effect=lambda: next(ticks)):
                 response = _post(server.server_port, '/test-token/responses',
                                  {'model': 'z-ai/glm-5.3', 'input': []})
@@ -187,7 +187,7 @@ class LatencyMetricTests(unittest.TestCase):
             server = self._server()
             ticks = (3000 + i * 0.005 for i in itertools.count())
             real_clock = time.monotonic
-            with mock.patch('codex_router.router.time.monotonic',
+            with mock.patch('ai_router.router.time.monotonic',
                             side_effect=lambda: next(ticks)):
                 response = _post(server.server_port, '/test-token/responses',
                                  {'model': 'z-ai/glm-5.3', 'input': []})

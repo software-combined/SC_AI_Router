@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from codex_router.catalogue import check, merge
+from ai_router.catalogue import check, merge
 from tests import test_catalogue
 
 
@@ -25,7 +25,7 @@ class CatalogueUpgradeTests(unittest.TestCase):
                  'supported_reasoning_levels': [{'effort': 'high', 'description': 'Native'}],
                  'model_messages': {'instructions_template': 'Native instructions'}}]}))
             proc = subprocess.run(
-                [sys.executable, '-m', 'codex_router.catalogue', '--merge', str(path)],
+                [sys.executable, '-m', 'ai_router.catalogue', '--merge', str(path)],
                 capture_output=True, text=True)
             self.assertEqual(proc.returncode, 0, proc.stderr)
             catalog = json.loads(path.read_text())

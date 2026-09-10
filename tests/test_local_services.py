@@ -1,6 +1,6 @@
 import json
 import unittest
-from codex_router import local_services
+from ai_router import local_services
 
 
 class LocalServicesTests(unittest.TestCase):

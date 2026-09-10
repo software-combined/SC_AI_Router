@@ -3,10 +3,10 @@ import json
 import unittest
 from types import SimpleNamespace
 
-from codex_router.apply_catalogue import apply
-from codex_router.catalogue import RETIRED_SLUGS, merge
-from codex_router.providers import OpenRouterProvider, PreparationError, select
-from codex_router.registry import by_slug
+from ai_router.apply_catalogue import apply
+from ai_router.catalogue import RETIRED_SLUGS, merge
+from ai_router.providers import OpenRouterProvider, PreparationError, select
+from ai_router.registry import by_slug
 
 LATEST_DEEPSEEK = (('deepseek/deepseek-v4-pro-0813', 1048576, 384000, ('text',)),
                    ('~deepseek/deepseek-v4-flash-latest', 1310720, 393216, ('text',)),

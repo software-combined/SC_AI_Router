@@ -28,7 +28,7 @@ Rules:
 `agent_handoffs.py` owns collaboration alias schemas and native-name restoration;
 `sse.py` owns shared event framing without provider-specific argument rewriting.
 
-1. `registry.py` imports stdlib only. Nothing in `codex_router/` may make it
+1. `registry.py` imports stdlib only. Nothing in `ai_router/` may make it
    import a client, CLI, installer, or HTTP module. Client listing and config
    modules consume it; never the reverse.
 2. HTTP transport (`router.py`) owns loopback auth, body limits,
@@ -54,11 +54,11 @@ Rules:
   `systemd_manager()` two-valued flag (Plan 056 extracts `packaging/platforms/`).
 - `packaging/service.py` mixes launchd/plist/feed/state helpers (Plan 056
   re-homes the launchd half with the darwin backend).
-- `codex_router/providers.py` keeps Responses shaping plus failure
+- `ai_router/providers.py` keeps Responses shaping plus failure
   description; shared transport lives in `transport.py` and dispatch in
   `protocols/` (Plan 062 landed the split; full protocol file moves remain
   open).
-- `codex_router/catalogue.py` + `models.py` + `live_refresh.py` share client
+- `ai_router/catalogue.py` + `models.py` + `live_refresh.py` share client
   projection duties through `model_metadata.py` (pure normalization) and
   `clients/` (capability projection, picker visibility).
 - Client activation lives in `packaging/codex_config.py`: the Codex block,

@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
-from codex_router.credentials import Credentials, ENV_VAR
+from ai_router.credentials import Credentials, ENV_VAR
 
 needs_posix = unittest.skipIf(os.name == 'nt', 'POSIX permission bits only')
 
@@ -49,8 +49,8 @@ class CredentialLookupTests(unittest.TestCase):
     def test_windows_widened_acl_is_refused(self):
         # The read path keeps the POSIX PermissionError contract so the
         # request handler maps it to 401 CREDENTIAL_PERMISSION.
-        import codex_router.credentials as cred_mod
-        import codex_router.winacl as winacl_mod
+        import ai_router.credentials as cred_mod
+        import ai_router.winacl as winacl_mod
         self._key_file('k-file\n')
         with mock.patch.object(cred_mod, '_ON_WINDOWS', True), \
                 mock.patch.object(winacl_mod, 'check',
@@ -88,7 +88,7 @@ class CredentialLookupTests(unittest.TestCase):
         self.assertTrue(self.creds().check())
 
     def test_default_home_follows_env_at_call_time(self):
-        import codex_router.credentials as cred_mod
+        import ai_router.credentials as cred_mod
         with tempfile.TemporaryDirectory() as tmp:
             with mock.patch.dict(os.environ, {'ROUTER_HOME': tmp}):
                 self.assertEqual(cred_mod.default_home(), Path(tmp))
