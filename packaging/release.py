@@ -34,7 +34,8 @@ def bundle_files(root):
            'packaging/runtime.lock', 'packaging/runtime_lock.py',
            'packaging/platforms/__init__.py',
            'packaging/platforms/darwin.py', 'packaging/platforms/linux.py',
-           'packaging/platforms/windows.py']
+           'packaging/platforms/windows.py',
+           'packaging/install.sh', 'packaging/install.ps1']
     )
 
 

@@ -99,7 +99,8 @@ class PackagingTests(unittest.TestCase):
                      'packaging/runtime.lock', 'packaging/runtime_lock.py',
                      'packaging/platforms/__init__.py',
                      'packaging/platforms/darwin.py',
-                     'packaging/platforms/linux.py'):
+                     'packaging/platforms/linux.py',
+                     'packaging/install.sh', 'packaging/install.ps1'):
             self.assertIn(name, names, name)
 
     def test_version_is_semver(self):
