@@ -1,8 +1,10 @@
 # Implementation Plans
 
-The router backlog. Renumbered 2026-09-10: the live set is **090-135** — the core
+The router backlog. Renumbered 2026-09-10: the live set is **090-138** — the core
 backlog **090-121**, the refactor wave **122-134** from the 2026-09-11 four-lane
-refactoring/reorganisation audit, and the new-model prompt plan **135**. The
+refactoring/reorganisation audit, the new-model prompt plan **135**, and the
+security wave **136-138** from the 2026-09-11 router external security audit
+(`2026-09-11-router-external-security-audit.md`). The
 recommended overall execution order is below the tables. The pre-renumbering 034-089 series is
 archived: completed plans were removed from the tree (git history and the dated
 reports preserve them), parked decisions moved to `parked/`, and the old-to-new
@@ -78,6 +80,19 @@ below interleaves them.
 | [134](134-repo-hygiene-feed-ci-docs.md) | feed_verify move, CI single owner, docs index, shim owner | TODO | after 101; before 106 (feed work) |
 | [135](135-new-model-prompt.md) | New-model prompt: notify + one-click Codex restart only when new models appear | TODO | after 128/131; hooks into 099; coordinate 106 |
 
+## Security wave (136-138)
+
+Added 2026-09-11 from the three-model external security audit of the loopback
+router's exposure surface (Kimi K3 `max`, GLM 5.3 `max`, Qwen 3.8 Max `xhigh`).
+The report, its verifications and its rejected findings are in
+`2026-09-11-router-external-security-audit.md`.
+
+| Plan | Title | Status | Sequencing |
+|---|---|---|---|
+| [136](136-unauth-ingress-crash-containment.md) | Contain the unauthenticated ingress compare crash | TODO | P1; independent; a few lines in router.py (395 today) |
+| [137](137-loopback-host-header-validation.md) | Validate the Host header on loopback ingress | TODO | 090 landed; headroom confirmed |
+| [138](138-subscription-cookie-hygiene.md) | Drop Cookie on subscription passthrough and make the tests honest | TODO | independent |
+
 ## Recommended overall order
 
 Work top to bottom; stop at owner gates and report. Phases 0-2 are local; 3-5 are largely
@@ -93,7 +108,8 @@ owner-gated.
 Phase notes: 099 executes only after 106's feed is qualified; 134's feed_verify move lands before
 106 and its CI step after 101; 133 and 132 land before Phase 5 paid probes and Phase 4 Windows
 acceptance respectively; 135 exposes the pending-model hook that 099's refresh wiring calls once
-it lands, and needs no owner gate itself.
+it lands, and needs no owner gate itself. The security wave rides Phase 1: 136 and 138 are
+independent, and 137 proceeds now that 090 has landed.
 
 ## Dependency and coordination notes
 
@@ -113,6 +129,12 @@ it lands, and needs no owner gate itself.
   follows 102; 131 follows 094/095/103 and coordinates 106.
 - Cross-wave: 131's writer changes should land before 106's feed work; 132 lands
   before 116's real-machine acceptance; 133 lands before 118/119 paid probes.
+- Security wave: 090 landed at `02e8e6e` and left `ai_router/router.py` at 395
+  lines, so 136 and 137 both fit under the 400 hard cap (sync the baseline
+  entry in each). Execute 136 before 137 and serialize them: both edit
+  `authorized_path`, `tests/test_ingress_guards.py` and the router baseline
+  entry, so the second to land re-syncs the count after the first. 138 touches
+  transport and tests only.
 - 135 follows 128 (router cap), 131 (state/writer rules) and 127 (page split); its
   pending-model check is the hook 099's refresh wiring must call; coordinate 106.
   It starts with a client-behaviour spike: if Codex re-reads the catalogue without a
