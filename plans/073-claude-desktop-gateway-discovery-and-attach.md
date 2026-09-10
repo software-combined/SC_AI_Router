@@ -7,7 +7,7 @@
 > acceptance, managed-policy change or org change is authorised by this
 > document. Each is a separate owner gate listed below.
 
-> Drift check: `git diff --stat e043920..HEAD -- codex_router/claude.py packaging/install.py packaging/claude_config.py tests/test_claude_ingress.py tests/test_install_config.py docs/claude-code.md docs/compatibility.md`
+> Drift check: `git diff --stat e043920..HEAD -- ai_router/claude.py packaging/install.py packaging/claude_config.py tests/test_claude_ingress.py tests/test_install_config.py docs/claude-code.md docs/compatibility.md`
 > Compare the "Verified current state" excerpts against live code and the
 > installed client first; on a mismatch, STOP.
 
@@ -79,7 +79,7 @@ Accepted tier words are `sonnet`, `opus`, `haiku`, `fable`, `mythos`;
 `isFamilyDefault` breaks ties, and a bare tier alias in a Code session
 resolves through that field.
 
-`codex_router/claude.py:models_listing()` currently emits `{id, display_name}`
+`ai_router/claude.py:models_listing()` currently emits `{id, display_name}`
 only, which is why 14 of 20 rows are dropped. This was proved, not inferred:
 a temporary local listener on `127.0.0.1:18999` served the router's own 20
 rows with `anthropic_family_tier` added, and the same dialog reported
