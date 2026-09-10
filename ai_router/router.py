@@ -32,7 +32,6 @@ class Router(ThreadingHTTPServer):
             sock.close()
             sock = None
         if sock is None:
-            self.allow_reuse_port = True
             super().__init__(('127.0.0.1', state['port']), Handler)
         else:
             super().__init__(('127.0.0.1', state['port']), Handler,
@@ -76,6 +75,7 @@ def _payload_has_image(body):
 
 class Handler(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
+    timeout = 120
 
     def log_message(self, *args):
         pass  # Request URLs and upstream credentials must never enter access logs.
@@ -185,6 +185,16 @@ class Handler(BaseHTTPRequestHandler):
             if path.startswith('/setup/'):
                 return setup.serve(self, path[len('/setup/'):], True)
             return self.error(errors.unsupported_route())
+        # One slot spans read_body, prepare and relay; rejects above return first.
+        with self.server.lock:
+            self.server.inflight += 1
+        try:
+            return self._owned_post(path, via_path, started)
+        finally:
+            with self.server.lock:
+                self.server.inflight -= 1
+
+    def _owned_post(self, path, via_path, started):
         self.connection.settimeout(120)
         try:
             raw, payload, size = self.read_body()
@@ -202,21 +212,15 @@ class Handler(BaseHTTPRequestHandler):
             compact_call = policy.compaction_call(provider, model, path, payload)
             if compact_call is not None:
                 # Compact before prepare(): a rejected effort must not block it.
-                # Hold an inflight slot so drain waits for mid-compaction
-                # releases. Key lookup stays outside the try so credential
+                # Key lookup stays outside the send try so credential
                 # errors keep 401/400, not 502.
                 key = self.server.credentials.openrouter_key()
-                with self.server.lock:
-                    self.server.inflight += 1
                 try:
                     return self.send_json(200, {'output': compact_call(key)})
                 except PreparationError as exc:
                     return self.error(errors.preparation(str(exc)))
                 except (OSError, http.client.HTTPException):
                     return self.error(errors.compaction_unavailable())
-                finally:
-                    with self.server.lock:
-                        self.server.inflight -= 1
             try:
                 prepared = subscription_fallback.prepare(provider, model, path, payload,
                                                          raw, dict(self.headers), self.server)
@@ -264,8 +268,6 @@ class Handler(BaseHTTPRequestHandler):
                    'read_ms': round((read_done - started) * 1000, 1),
                    'prepare_ms': round((prepare_done - read_done) * 1000, 1)}
         log_event('request_started', **metrics)
-        with self.server.lock:
-            self.server.inflight += 1
         self.relay(provider, prepared, metrics, started)
 
     def _stored_key_dead(self):
@@ -394,7 +396,5 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     self.error(errors.upstream_failed())
         finally:
-            with self.server.lock:
-                self.server.inflight -= 1
             conn.close()
             self.close_connection = True
