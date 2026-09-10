@@ -106,14 +106,11 @@ class ClaudeOpenRouterProvider:
         body = raw_body
         slug = resolve(model)
         # resolve() only returns a different string for a known registry slug.
-        if isinstance(model, str) and slug != model:
-            try:
-                obj = json.loads(raw_body.decode())
-            except (ValueError, UnicodeDecodeError):
-                obj = None
-            if isinstance(obj, dict):
-                obj['model'] = slug
-                body = json.dumps(obj).encode()
+        # payload is the parsed form of this same body, so rewrite the alias
+        # there instead of decoding raw_body again.
+        if isinstance(model, str) and slug != model and isinstance(payload, dict):
+            payload['model'] = slug
+            body = json.dumps(payload).encode()
         return transport.Prepared(
             OPENROUTER_HOST, ANTHROPIC_PREFIX + path,
             {'Authorization': 'Bearer ' + credentials.openrouter_key(),

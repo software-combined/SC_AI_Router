@@ -17,6 +17,7 @@ prompt to OpenRouter.
 import json
 
 from . import errors
+from .capabilities import has_images
 from .providers import OpenRouterProvider
 from .registry import by_slug
 from .runtime import log_event
@@ -121,4 +122,5 @@ def refused(handler, prepared, retry_after, metrics, started):
                         path=fallback.path, helper_fallback=True)
     # The owned-request slot still covers this hand-off; relay no longer
     # takes or releases a slot of its own.
-    return handler.relay(OpenRouterProvider(), twin, twin_metrics, started)
+    return handler.relay(OpenRouterProvider(), twin, twin_metrics, started,
+                         has_images(fallback.payload.get('input')))

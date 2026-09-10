@@ -11,7 +11,7 @@ import traceback
 from compression import zstd
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from .credentials import Credentials, ENV_VAR as _CREDENTIALS_ENV_VAR
-from . import claude, errors, local_services, providers, setup, subscription_fallback, transport
+from . import capabilities, claude, errors, local_services, providers, setup, subscription_fallback, transport
 from .protocols import owned_paths, select as select_protocol
 from .errors import InvalidSize, PreparationError
 from .providers import NATIVE_SERVICE_PATHS
@@ -57,20 +57,13 @@ class Router(ThreadingHTTPServer):
         log_event('exit', inflight=self.inflight, forced=forced)
         os._exit(0)
 
-def _payload_has_image(body):
-    """True when the serialized request carries an input_image block; False on doubt."""
-    # ponytail: parse, don't substring-match; prose mentioning images must not count.
-    try:
-        payload = json.loads(body.decode() if isinstance(body, bytes) else '')
-    except (ValueError, UnicodeDecodeError, AttributeError):
+def _payload_has_image(payload):
+    """True when the parsed turn carries an input_image block; False on doubt."""
+    # ponytail: walk the parsed payload, don't substring-match or re-parse the body;
+    # prose mentioning images must not count.
+    if not isinstance(payload, dict):
         return False
-    items = payload.get('input') if isinstance(payload, dict) else None
-    if not isinstance(items, list):
-        return False
-    return any(isinstance(item, dict) and isinstance(item.get('content'), list)
-               and any(isinstance(block, dict) and block.get('type') == 'input_image'
-                       for block in item['content'])
-               for item in items)
+    return capabilities.has_images(payload.get('input'))
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -199,6 +192,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             raw, payload, size = self.read_body()
             read_done = time.monotonic()
+            # Snapshot before provider.prepare mutates or strips the payload.
+            has_image = _payload_has_image(payload)
             model = payload.get('model')
             if not isinstance(model, str) and path not in NATIVE_SERVICE_PATHS:
                 return self.error(errors.missing_model())
@@ -268,7 +263,7 @@ class Handler(BaseHTTPRequestHandler):
                    'read_ms': round((read_done - started) * 1000, 1),
                    'prepare_ms': round((prepare_done - read_done) * 1000, 1)}
         log_event('request_started', **metrics)
-        self.relay(provider, prepared, metrics, started)
+        self.relay(provider, prepared, metrics, started, has_image)
 
     def _stored_key_dead(self):
         """True only when the stored key file itself fails check_key on 401/403."""
@@ -303,7 +298,7 @@ class Handler(BaseHTTPRequestHandler):
             raise InvalidSize('Decoded request is too large')
         return body, json.loads(decoded), size
 
-    def relay(self, provider, prepared, metrics, started):
+    def relay(self, provider, prepared, metrics, started, has_image=False):
         conn = http.client.HTTPSConnection(prepared.host, timeout=120)
         sent = False
         response = None
@@ -340,7 +335,7 @@ class Handler(BaseHTTPRequestHandler):
                     {'model': metrics.get('model'), 'provider': prepared.provider,
                      'elapsed_ms': round((time.monotonic() - started) * 1000, 1),
                      'timeout_s': 120,
-                     'has_image': _payload_has_image(prepared.body)})
+                     'has_image': has_image})
                 if described is not None:
                     status, message = described
                     log_event('upstream_rejected', status=response.status,
@@ -388,7 +383,7 @@ class Handler(BaseHTTPRequestHandler):
                     {'model': metrics.get('model'), 'provider': prepared.provider,
                      'host': prepared.host, 'elapsed_ms': total_ms,
                      'timeout_s': 120,
-                     'has_image': _payload_has_image(prepared.body)})
+                     'has_image': has_image})
                 if described is not None:
                     status, message = described
                     self.error(errors.upstream_described(message) if status == 502
