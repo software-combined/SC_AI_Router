@@ -2,6 +2,13 @@
 
 ## 0.6.10 (unreleased)
 
+- Attribute context refusals and estimate the full billable request:
+  the pre-flight estimate now counts serialized tools and instructions
+  alongside input (image blocks excluded, matching the client counter),
+  and each `context_length_exceeded` rejection logs the model, path,
+  and `used`/`reserved`/`window` integers so the next incident needs
+  no by-traffic attribution.
+
 - Give the first-run key page an executive light-theme layout matching
   SC_360 (single card, blue-600 primary control, slate hairlines,
   labelled key field and described subscription choices, inline error
