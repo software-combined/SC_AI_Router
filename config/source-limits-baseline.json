@@ -36,10 +36,7 @@
   "packaging/codex_config.py": 150,
   "codex_router/agent_handoffs.py": 139,
   "codex_router/sse.py": 29,
-<<<<<<< HEAD
-=======
   "tools/probe_agent_handoffs.py": 470,
->>>>>>> 2fd6d40 (test: add Plan 066 handoff probe with live evidence record)
   "tests/test_agent_handoffs.py": 118,
   "tests/test_agent_handoff_providers.py": 168
 }
