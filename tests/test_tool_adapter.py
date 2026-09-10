@@ -98,6 +98,28 @@ class ToolAdapterTests(unittest.TestCase):
             'arguments': '{"input":"hi"}'})
         self.assertEqual((item['type'], item['input']), ('custom_tool_call', 'hi'))
 
+    def test_web_search_tool_dropped_without_upstream_capability(self):
+        # 2026-09-10: deepseek-v4.1-flash streams aborted with OpenRouter's
+        # 'Server tool request failed' while Codex's web_search server tool
+        # rode along; the registry row carries no web-search capability.
+        payload = {'model': 'deepseek/deepseek-v4.1-flash', 'tools': [
+            {'type': 'web_search', 'external_web_access': False},
+            {'type': 'function', 'name': 'exec', 'parameters': {'type': 'object'}}]}
+        prepare_tools(payload)
+        self.assertEqual([tool['type'] for tool in payload['tools']], ['function'])
+
+    def test_web_search_tool_kept_when_upstream_supports_it(self):
+        payload = {'model': 'meta/muse-spark-1.3-contributor', 'tools': [
+            {'type': 'web_search', 'external_web_access': False}]}
+        prepare_tools(payload)
+        self.assertEqual([tool['type'] for tool in payload['tools']], ['web_search'])
+
+    def test_web_search_tool_kept_for_unknown_models(self):
+        payload = {'model': 'no/such-model', 'tools': [
+            {'type': 'web_search', 'external_web_access': False}]}
+        prepare_tools(payload)
+        self.assertEqual([tool['type'] for tool in payload['tools']], ['web_search'])
+
     def test_grok_released_tool_survives_the_ceiling_cut(self):
         released = {'type': 'namespace', 'name': 'probe', 'tools': [
             {'type': 'function', 'name': 'echo', 'description': 'Echo',

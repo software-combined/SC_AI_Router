@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Models whose OpenRouter row carries no web-search capability no longer
+  receive Codex's `web_search` server tool. OpenRouter cannot execute it
+  for those models and aborted the stream with `Server tool request
+  failed`, killing the turn a few seconds in; the affected rows (DeepSeek
+  V4.1 Flash and V4 Pro 0813) keep their client-side tools.
+
 - Thread titles, descriptions, summaries and title reconsiderations run as
   helper turns on the subscription model. When the ChatGPT allowance is
   exhausted upstream refuses every helper turn and the client stores a
