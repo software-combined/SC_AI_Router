@@ -3,7 +3,7 @@ import json
 import unittest
 from types import SimpleNamespace
 
-from codex_router import errors, providers
+from codex_router import context_budget, errors, providers
 from tests.fakes import FakeUpstream, install_fake
 from tests.test_handler import _post
 from tests.test_mixed_router import _start_server, _test_state
@@ -50,6 +50,42 @@ class ContextBudgetTests(unittest.TestCase):
         with self.assertRaises(errors.ContextWindowExceeded) as caught:
             self.prepare(request_with_estimate(1048576))
         self.assertIn('~1048576 input', str(caught.exception))
+
+
+class EstimateTests(unittest.TestCase):
+    def test_counts_tools_and_instructions(self):
+        payload = {'model': MODEL, 'input': [{'content': 'x' * 4000}],
+                   'instructions': 'y' * 8000,
+                   'tools': [{'name': f'f{i}', 'description': 'd' * 200}
+                             for i in range(92)]}
+        input_only = len(json.dumps(payload['input'])) // 4
+        self.assertGreater(context_budget.estimate(payload), input_only * 2)
+
+    def test_excludes_image_payloads(self):
+        img = 'data:image/png;base64,' + 'A' * 500000
+        with_images = context_budget.estimate(
+            {'input': [{'content': [{'type': 'input_text', 'text': 'see this'},
+                                    {'type': 'input_image', 'image_url': img}]}]})
+        self.assertLess(with_images, 1000)
+
+    def test_mixed_text_and_image_counts_text_only(self):
+        img = 'data:image/png;base64,' + 'A' * 500000
+        mixed = context_budget.estimate(
+            {'input': [{'content': [{'type': 'input_text',
+                                     'text': 'x' * 4000},
+                                    {'type': 'input_image',
+                                     'image_url': img}]}]})
+        self.assertGreater(mixed, 900)
+        self.assertLess(mixed, 2000)
+
+    def test_refusal_record_carries_model_and_estimate(self):
+        prepare = ContextBudgetTests().prepare
+        with self.assertRaises(errors.ContextWindowExceeded) as caught:
+            prepare(request_with_estimate(1048576))
+        budget = caught.exception.budget
+        self.assertEqual((budget['model'], budget['path']), (MODEL, '/responses'))
+        self.assertGreater(budget['used'], 1000000)
+        self.assertEqual((budget['reserved'], budget['window']), (32000, 1048576))
 
 
 class ContextWireTests(unittest.TestCase):
