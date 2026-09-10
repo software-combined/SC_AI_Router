@@ -19,6 +19,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import importlib.util
+# Bootstrap loader (Plan 123 exception): service must be spec-loaded before
+# service.load() exists, and this module stays usable when loaded directly.
 _spec = importlib.util.spec_from_file_location(
     'packaging.service',
     Path(__file__).resolve().parent / 'service.py')

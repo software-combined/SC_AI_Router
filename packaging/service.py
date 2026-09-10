@@ -33,14 +33,26 @@ except ImportError:       # pragma: no cover - POSIX
 import sys
 
 import importlib.util  # noqa: E402
-_ld_spec = importlib.util.spec_from_file_location(
-    'router_launchd', Path(__file__).resolve().parent / 'launchd.py')
-_launchd = importlib.util.module_from_spec(_ld_spec)
-_ld_spec.loader.exec_module(_launchd)
-_feed_spec = importlib.util.spec_from_file_location(
-    'router_feed', Path(__file__).resolve().parent / 'feed.py')
-_feed = importlib.util.module_from_spec(_feed_spec)
-_feed_spec.loader.exec_module(_feed)
+
+
+def load(name, filename):
+    """Load one sibling module from its file path (Plan 123).
+
+    The single 3.9-safe loader for every packaging module: the
+    spec-from-file + module_from_spec + exec_module sequence.
+    Callers resolve `filename` against their own __file__ so relocated
+    (installed) trees keep working.
+    """
+    spec = importlib.util.spec_from_file_location(name, filename)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_launchd = load('router_launchd', Path(__file__).resolve().parent / 'launchd.py')
+_feed = load('router_feed', Path(__file__).resolve().parent / 'feed.py')
+_roster = load('router_subscription_roster',
+               Path(__file__).resolve().parents[1] / 'ai_router' / 'subscription_roster.py')
 
 # Patchable seam so tests never sleep through a real launchd settle window.
 _sleep = time.sleep
@@ -49,11 +61,12 @@ UNLOAD_TIMEOUT_S = 180
 LOAD_TIMEOUT_S = 60
 
 # Subscription-side roster for the combined picker: bare slugs that route on
-# the ChatGPT subscription. Matches the live picker and state file; the
-# OpenRouter-side roster lives in ai_router/models.json instead.
-DEFAULT_OPENAI_MODELS = ['gpt-6-astra', 'gpt-5.6-sol',
-                         'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5',
-                         'gpt-5.4-mini', 'gpt-5.3-codex-spark', 'codex-auto-review']
+# the ChatGPT subscription. Single-sourced from ai_router/subscription_roster.py
+# (spec-loaded above: a package import would break the installed launchers,
+# which spec-load this module before any sys.path insert). Matches the live
+# picker and state file; the OpenRouter-side roster lives in
+# ai_router/models.json instead.
+DEFAULT_OPENAI_MODELS = list(_roster.SUBSCRIPTION_SLUGS)
 
 LABEL = 'com.local.codex-mixed-model-router'
 UPDATE_LABEL = LABEL + '.update'
