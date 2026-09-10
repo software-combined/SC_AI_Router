@@ -1,9 +1,9 @@
 # Implementation Plans
 
-The router backlog. Renumbered 2026-09-10: the live set is **090-134** — the core
-backlog **090-121** plus the refactor wave **122-134** added after the
-2026-09-11 four-lane refactoring/reorganisation audit. The recommended overall
-execution order is below the tables. The pre-renumbering 034-089 series is
+The router backlog. Renumbered 2026-09-10: the live set is **090-135** — the core
+backlog **090-121**, the refactor wave **122-134** from the 2026-09-11 four-lane
+refactoring/reorganisation audit, and the new-model prompt plan **135**. The
+recommended overall execution order is below the tables. The pre-renumbering 034-089 series is
 archived: completed plans were removed from the tree (git history and the dated
 reports preserve them), parked decisions moved to `parked/`, and the old-to-new
 mapping is at the bottom of this file. Dated audit, roadmap and brief files at the
@@ -55,10 +55,11 @@ Executor rules for every plan:
 | [120](120-claude-desktop-gateway-discovery-and-attach.md) | Claude desktop gateway: release and live picker proof | PARTIAL | extends 113 |
 | [121](121-claude-desktop-models-effort-and-connectors.md) | Claude desktop models, effort readout, and connectors (planning) | PLANNING | amends 113/120 |
 
-## Refactor wave (122-134)
+## Refactor and feature wave (122-135)
 
-Added 2026-09-11 from the refactoring/reorganisation audit. Each plan depends on the core plans
-listed; the overall order below interleaves them.
+Added 2026-09-11: 122-134 from the refactoring/reorganisation audit, 135 from the
+update-prompt request. Each plan depends on the core plans listed; the overall order
+below interleaves them.
 
 | Plan | Title | Status | Sequencing |
 |---|---|---|---|
@@ -75,6 +76,7 @@ listed; the overall order below interleaves them.
 | [132](132-windows-backend-cleanup.md) | Windows backend cleanup | TODO | before/with 116; after 123 |
 | [133](133-probe-harness-consolidation.md) | One app-server probe harness | TODO | before 118/119 |
 | [134](134-repo-hygiene-feed-ci-docs.md) | feed_verify move, CI single owner, docs index, shim owner | TODO | after 101; before 106 (feed work) |
+| [135](135-new-model-prompt.md) | New-model prompt: notify + one-click Codex restart only when new models appear | TODO | after 128/131; hooks into 099; coordinate 106 |
 
 ## Recommended overall order
 
@@ -83,14 +85,15 @@ owner-gated.
 
 - **Phase 0 (prep):** 122, 123.
 - **Phase 1 (core backlog):** 090, 091, 092, 093, 094, 095, 096, 097, 098, 100, 101, 102, 103, 104.
-- **Phase 2 (refactor wave):** 124, 125, 126, 127, 129, 128, 130, 131, 134, 133, 132.
+- **Phase 2 (refactor and feature wave):** 124, 125, 126, 127, 129, 128, 130, 131, 135, 134, 133, 132.
 - **Phase 3 (infrastructure, mostly owner-gated):** 105, 106, 107, 099, 108, 109, 110.
 - **Phase 4 (clients and OS acceptance, owner-gated):** 111, 112, 113, 114, 115, 116, 117.
 - **Phase 5 (paid probes and desktop, owner-gated):** 118, 119, 120, 121.
 
 Phase notes: 099 executes only after 106's feed is qualified; 134's feed_verify move lands before
 106 and its CI step after 101; 133 and 132 land before Phase 5 paid probes and Phase 4 Windows
-acceptance respectively.
+acceptance respectively; 135 exposes the pending-model hook that 099's refresh wiring calls once
+it lands, and needs no owner gate itself.
 
 ## Dependency and coordination notes
 
@@ -110,6 +113,10 @@ acceptance respectively.
   follows 102; 131 follows 094/095/103 and coordinates 106.
 - Cross-wave: 131's writer changes should land before 106's feed work; 132 lands
   before 116's real-machine acceptance; 133 lands before 118/119 paid probes.
+- 135 follows 128 (router cap), 131 (state/writer rules) and 127 (page split); its
+  pending-model check is the hook 099's refresh wiring must call; coordinate 106.
+  It starts with a client-behaviour spike: if Codex re-reads the catalogue without a
+  restart, the owner re-scopes it before any implementation.
 - References in older plans to numbers 034-089 are historical: completed numbers
   resolve in the removal log below; renumbered numbers resolve in the old→new map
   below; parked numbers resolve under `parked/`.
