@@ -46,13 +46,11 @@ def _row(slug='a/b', priority=100):
 
 
 class DeriveTests(unittest.TestCase):
-    def test_name_split_modalities_priority_and_default(self):
-        rows = [_row('a/b', 100), _row('c/d', 101)]
-        row = derive_row('qwen/qwen4-coder', LIVE['qwen/qwen4-coder'], rows)
+    def test_name_split_modalities_and_default(self):
+        row = derive_row('qwen/qwen4-coder', LIVE['qwen/qwen4-coder'])
         self.assertEqual(row['display_name'], 'Qwen: Qwen4 Coder \u00b7 OpenRouter')
         self.assertEqual(row['vendor'], 'Qwen')
         self.assertEqual(row['modalities'], ['text', 'image'])
-        self.assertEqual(row['priority'], 102)
         self.assertEqual(row['default_reasoning'], 'low')
         self.assertEqual(row['reasoning'], ['low', 'high', 'max'])
         self.assertEqual(row['tier'], 'preview')
@@ -60,13 +58,12 @@ class DeriveTests(unittest.TestCase):
         self.assertEqual(row['max_output_tokens'], 65536)
 
     def test_name_without_vendor_and_lowest_default(self):
-        row = derive_row('plain/model', LIVE['plain/model'], [])
+        row = derive_row('plain/model', LIVE['plain/model'])
         self.assertEqual(row['display_name'], 'Plain: No Vendor Here \u00b7 OpenRouter')
         self.assertEqual(row['vendor'], 'Plain')
         self.assertEqual(row['default_reasoning'], 'medium')
         self.assertEqual(row['modalities'], ['text'])
         self.assertFalse(row['web_search'])
-        self.assertEqual(row['priority'], 101)
 
     def test_qualify_name_keeps_snapshots_and_dedupes_vendor(self):
         vendor, label = qualify_name(
@@ -81,13 +78,13 @@ class DeriveTests(unittest.TestCase):
     def test_empty_reasoning_refused(self):
         live = dict(LIVE['plain/model'], reasoning={'supported_efforts': []})
         with self.assertRaises(SystemExit):
-            derive_row('plain/model', live, [])
+            derive_row('plain/model', live)
 
     def test_models_without_effort_control_use_none(self):
         for metadata in (None, {'mandatory': False}):
             with self.subTest(reasoning=metadata):
                 live = dict(LIVE['plain/model'], reasoning=metadata)
-                row = derive_row('plain/model', live, [])
+                row = derive_row('plain/model', live)
                 self.assertEqual(row['reasoning'], ['none'])
                 self.assertEqual(row['default_reasoning'], 'none')
                 self.assertEqual(row['tier'], 'preview')
@@ -98,7 +95,7 @@ class DeriveTests(unittest.TestCase):
             with self.subTest(reasoning=metadata):
                 live = dict(LIVE['plain/model'], reasoning=metadata)
                 with self.assertRaises(SystemExit):
-                    derive_row('plain/model', live, [])
+                    derive_row('plain/model', live)
 
 
 class AddTests(unittest.TestCase):
@@ -121,6 +118,17 @@ class AddTests(unittest.TestCase):
             row = cmd_add(path, 'qwen/qwen4-coder', LIVE, dry_run=True)
             self.assertEqual(path.read_text(), before)
             self.assertEqual(row['slug'], 'qwen/qwen4-coder')
+
+    def test_add_renumbers_into_picker_order(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            seed = {**_row('z-ai/glm-5.3', 100), 'vendor': 'Z.ai',
+                    'display_name': 'Z.ai: GLM 5.3 \u00b7 OpenRouter'}
+            path = _seeded(tmp, [seed])
+            cmd_add(path, 'qwen/qwen4-coder', LIVE)
+            rows = json.loads(path.read_text())
+            self.assertEqual([row['slug'] for row in rows],
+                             ['qwen/qwen4-coder', 'z-ai/glm-5.3'])
+            self.assertEqual([row['priority'] for row in rows], [100, 101])
 
     def test_probe_activates_preview_before_verifying(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -221,6 +229,15 @@ class CheckTests(unittest.TestCase):
                 rc = cmd_check(path, None)
             self.assertEqual(rc, 0)
             self.assertIn('0 problems', buf.getvalue())
+
+    def test_out_of_order_priorities_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = _seeded(tmp, [_row('b/b', 100), _row('a/a', 101)])
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                rc = cmd_check(path, None)
+            self.assertEqual(rc, 1)
+            self.assertIn('priorities not in picker order', buf.getvalue())
 
 
 class ListTests(unittest.TestCase):

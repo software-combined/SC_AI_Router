@@ -8,7 +8,7 @@ from dataclasses import replace
 from pathlib import Path
 from ai_router.catalogue import (SUBSCRIPTION_REASONING, catalog_name, check, merge,
                                      openrouter_entry, subscription_stub)
-from ai_router.registry import MODELS, by_slug
+from ai_router.registry import MODELS, by_slug, picker_key
 from ai_router.clients import models_for
 
 
@@ -45,9 +45,7 @@ class CatalogueFlagTests(unittest.TestCase):
         self.assertTrue(entry['display_name'].endswith(' · Preview'))
         self.assertTrue(entry['description'].startswith(
             'Preview, not yet verified with Codex. '))
-        verified_top = max(openrouter_entry(m)['priority']
-                           for m in MODELS if m.tier == 'verified')
-        self.assertGreater(entry['priority'], verified_top)
+        self.assertEqual(entry['priority'], preview.priority)  # no global offset
         plain = openrouter_entry(by_slug('z-ai/glm-5.3-flash'))
         self.assertFalse(plain['display_name'].endswith('Preview'))
         self.assertEqual(entry['slug'], plain['slug'])
@@ -67,24 +65,23 @@ class CatalogueFlagTests(unittest.TestCase):
             self.assertNotIn('base_instructions', item)
             self.assertIn('instructions_template', item['model_messages'])
 
-    def test_merge_orders_subscriptions_then_verified_then_preview_az(self):
+    def test_merge_orders_subscriptions_then_vendor_groups(self):
         from tests.test_install import install_mod
         roster = list(install_mod.DEFAULT_OPENAI_MODELS)
         merged = merge({'models': []}, roster=tuple(roster))
         slugs = [m['slug'] for m in merged['models']]
         self.assertEqual(slugs[:len(roster)], roster)
-        shown = slugs[len(roster):]
-        by_slug_map = {m.slug: m for m in models_for(MODELS, 'codex')}
-        self.assertEqual(len(shown), len([m for m in models_for(MODELS, 'codex')
-                                          if m.provider == 'openrouter']))
-        verified = [s for s in shown if by_slug_map[s].tier == 'verified']
-        preview = [s for s in shown if by_slug_map[s].tier == 'preview']
-        self.assertEqual(shown, verified + preview)
-        names = {m['slug']: m['display_name'] for m in merged['models']}
-        self.assertEqual([names[s] for s in verified],
-                         sorted([names[s] for s in verified], key=str.casefold))
-        self.assertEqual([names[s] for s in preview],
-                         sorted([names[s] for s in preview], key=str.casefold))
+        registry = {m.slug: m for m in models_for(MODELS, 'codex')}
+        rows = merged['models'][len(roster):]
+        self.assertEqual(len(rows), len([m for m in registry.values()
+                                         if m.provider == 'openrouter']))
+        # Codex lists the picker by ascending priority: vendors A-Z, verified
+        # before preview inside a vendor, and the file order must match.
+        ordered = [registry[row['slug']] for row in rows]
+        self.assertEqual(ordered, sorted(ordered, key=lambda m: picker_key(
+            m.vendor, m.tier, m.display_name, m.slug)))
+        priorities = [row['priority'] for row in rows]
+        self.assertEqual(priorities, sorted(priorities))
 
     def test_merge_keeps_custom_subscription_row_values_when_reordering(self):
         from ai_router.catalogue import subscription_stub

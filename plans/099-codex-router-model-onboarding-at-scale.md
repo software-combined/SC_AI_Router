@@ -74,6 +74,11 @@ Add field `tier` to every row: `verified` (all current six) or `preview`. `regis
 
 **Verify**: `tests/test_registry.py::test_tier_required_and_validated`, `tests/test_catalogue.py::test_preview_entry_is_labelled`.
 
+> 2026-09-11: the global "priority after all verified models" rule is
+> superseded. The picker groups vendors A-Z, verified before preview
+> inside each vendor, and registry priorities carry that order
+> (`registry.picker_key`, renumbered by `models add`).
+
 ### Step 2: The `models` command
 
 Create `codex_router/models.py` with subcommands:
