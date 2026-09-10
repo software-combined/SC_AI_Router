@@ -10,6 +10,15 @@
 > and 064 (client projections). Supersedes the stale parts of 120 noted
 > below; it does not rewrite that plan's history.
 
+> **Amended 2026-09-11** (`1440645`) after review
+> `2026-09-11-claude-router-development-branch-review.md`. Sequencing
+> changes: the allowlist (Step 5) and status (Step 6) fixes are release
+> blockers and run before the `description` projection (Step 2), which is
+> useful but cosmetic. Step 4 is rewritten around native desktop
+> provisioning plus separate CLI integration, tool-search qualification and
+> marketplace packaging checks. The connector and effort findings in the
+> audits below stand.
+
 ## Status and outcome
 
 - Priority P1; effort M; risk LOW (docs plus small projections with
@@ -93,20 +102,25 @@ confusing names, and this plan uses them exactly:
 1. **Doc corrections (no source).** Fix the verified overclaims: wire
    `is_family_default` vs internal `isFamilyDefault` naming; CLI discovery
    credential precondition; desktop subscription-passthrough sentence (fix
-   the PLAN's line 117-118, user docs already avoid it); toggle counts
+   Plan 113 Step 4's passthrough sentence, user docs already avoid it); toggle counts
    270 vs exactly 2. Correct the "bare sonnet resolves" line the same way.
    Verify by `git diff --check` and a second pair of eyes on each claim.
 2. **`description` projection.** Emit a short (<=100 char, client-truncated)
    `description` per discovery row derived from the registry row, next to
    the tier projection. CLI rows stop reading "From gateway". Cover in
-   `tests/test_claude_ingress.py` (key set becomes four keys, truncation
-   bound). Then the repo gates: full unittest discovery, `compileall`,
+   `tests/test_claude_ingress.py`: every row carries `id`, `display_name`,
+   `anthropic_family_tier` and `description`, plus `is_family_default` on the
+   four rows Step 3 flags (only that row shape varies), and the truncation
+   bound holds. Then the repo gates: full unittest discovery, `compileall`,
    `check_source_limits.py`, then `pre-commit-review`.
 3. **`is_family_default` on the four Anthropic alias rows.** Bare-tier alias
    resolution becomes explicit instead of first-listed-wins. Registry stays
    the fact owner; projection only. Update the exact row-key test. Verify in
    the live readback that the alias resolves to the flagged row.
-4. **Connector strategy: plugin first, self-host second, copy never.**
+4. **Connector strategy: native surface first, plugin for CLI, copy never.**
+   **Rewritten 2026-09-11:** see the connector amendment below. The shapes
+   below describe the CLI/Code surface and no longer stand alone as the
+   desktop plan.
    - (a) Publish the MCP servers users need as a **Claude Code plugin**
      through a managed marketplace: plugin-bundled servers load like
      user-configured ones, install/uninstall is one `/plugin` action, and
@@ -158,6 +172,10 @@ confusing names, and this plan uses them exactly:
 - [ ] Plugin route proven for at least one server; managed/desktop forms
   documented with shapes; no toggle copying anywhere.
 - [ ] Allowlist reaches the listing; status readback is value-based.
+- [ ] Tool search recorded as a client-build/route/model capability with the
+  measurement above, or left off for the shared profile.
+- [ ] Marketplace packaging check recorded (install from the cached package
+  or pinned archive, not from a catalogue row alone).
 - [ ] Fresh-session picker count plus installer detach/reattach recorded
   with client version; sign-in intact.
 - [ ] Repo gates and review pass; no worktree left behind.
@@ -167,3 +185,70 @@ real gateway credential, secret output, a discovery count that changes
 without a configuration change, or a client upgrade that invalidates the
 filter findings. Do not patch client binaries; the asar is evidence only.
 Paid tool round trips and billing remain Plan 115.
+
+## Amendment (2026-09-11)
+
+Review `2026-09-11-claude-router-development-branch-review.md`, sections
+"Recommended MCP design" and "Amend the existing plans". The audits' model,
+effort and connector findings above stand; this section fixes the ordering
+and the MCP design.
+
+### Sequencing
+
+The release blockers run before the cosmetic projection. Execute in this
+order: Step 1 (doc corrections), Step 5 (allowlist reaches the listing),
+Step 6 (value-based status readback), Step 3 (`is_family_default`), Step 2
+(`description`), Step 4 (connectors as rewritten below), Step 7 (owner-gated
+live readback). Rationale: a description change cannot fix routing, and a
+picker that lists models the router will refuse is worse than a plain one.
+Step 5 also pairs with Plan 115's route-policy rule: an unknown
+gateway-namespace id fails as an error instead of falling through to the
+subscription route, and discovery must apply the same allowlist as routing.
+
+### Connector design (replaces the desktop half of Step 4)
+
+- Keep inference and tools separate. The router routes inference; the native
+  client connects to tools; this repository owns the setup and distribution
+  layer. Never make the router execute CRM, finance or Microsoft 365 tools.
+- Maintain one small approved connector catalogue only where it removes
+  duplicated deployment work: endpoint/transport, owner, auth method,
+  permitted surfaces, default tool policy, version requirements. Credentials
+  and OAuth state never live in it. Generate client-specific declarations
+  instead of pretending one schema fits every client.
+- Desktop is a native deployment target. Use the desktop configuration
+  surface for desktop deployments (its own `managedMcpServers` array, or the
+  supported dialog/export path) and the Code surface for CLI deployments.
+  Keep the existing router-management plugin focused on setup and
+  diagnostics; add a separate optional workflow/connector bundle only when
+  grouping tools and instructions materially helps users.
+- For the first staff-facing version, provision a small managed connector set
+  with per-user authentication. Preserve existing profiles; recreate approved
+  definitions through supported native configuration; let the destination
+  client perform its own sign-in. Never copy OAuth caches, and never infer
+  credentials from tool toggle ids.
+- Marketplace packaging checks before sharing distribution: desktop's
+  documented git marketplace flow does not fetch plugin sources located in
+  another repository, and a catalogue entry can appear without the plugin
+  installing. Prefer an automatically built deployment package or an
+  authenticated, digest-pinned archive; canonical source stays in this
+  repository; ordinary staff never clone private source repositories; never
+  repurpose OpenRouter keys or loopback path tokens as download credentials.
+- Qualify tool search rather than enabling it. CLI custom-gateway and desktop
+  gateway deployments have different controls: desktop documents
+  `toolSearchEnabled`, and an ordinary `ENABLE_TOOL_SEARCH=true` environment
+  setting does not override its gateway suppression. Treat deferred tool
+  search as a client-build, route and model capability, never a global
+  switch; it needs the forwarded protocol headers (Plan 115's F8 contract)
+  and deferred-tool request content. Where unsupported, use a small
+  role-based connector set instead of loading every possible tool into every
+  session. Measure startup context, time to first useful tool result and task
+  success against a realistic inventory. Never silently strip deferred tool
+  references.
+- Two pilots, separate qualification cases: a standard remote MCP
+  integration (GitHub has documented hosted and bundled desktop routes) and
+  Microsoft 365, which has its own desktop setup and approval prerequisites
+  and is not the old first-party connector copied into another profile.
+  Require delegated user access, limited scopes and explicit approval for
+  consequential writes; keep portfolio identities separated. Model
+  eligibility reflects the data a connected tool can return, not only the
+  lowest token price.

@@ -3,6 +3,15 @@
 > Planning only. Client settings, login and running sessions are unchanged.
 > Paid inference requires a separately approved Plan 115 run.
 
+> **Amended 2026-09-11** (`1440645`) after review
+> `2026-09-11-claude-router-development-branch-review.md` (F2, F3, F5, F8, F9).
+> Superseded in place below: Step 2's credential precondition and Step 3's
+> `[1m]` suspicion; Plan 121 Step 1 owns the corrected wording. The
+> amendment section at the end adds the per-surface setup invocation, the
+> single canonical Anthropic billing policy, and the first-run key-window
+> requirement. Client attach/repair/detach mechanics are Plans 112/114's; paid
+> acceptance stays Plan 115's.
+
 Priority P1; effort M; risk HIGH (authentication and client configuration).
 Planned 2026-09-09 at `96a305abbd381a2f4fb336d65bcc5078a016bf25`.
 
@@ -72,19 +81,24 @@ work uses one owned worktree, current instructions, required review and
    not settings to erase silently.
 2. **Prove CLI discovery.** Start a fresh environment with the private loopback
    base and `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=true`; leave
-   `ANTHROPIC_API_KEY` and `ANTHROPIC_AUTH_TOKEN` absent. Never give the client
-   the router's OpenRouter key. Confirm `/status` retains native login, the
+   `ANTHROPIC_API_KEY` and `ANTHROPIC_AUTH_TOKEN` absent. **Superseded
+   2026-09-11:** this credential precondition was documented backwards (the
+   discovery fetch needs a credential present, and `ANTHROPIC_AUTH_TOKEN`
+   changes which credential the listing sends); the verified statement is
+   Plan 121 Step 1's. The rule that survives: never give the client the
+   router's OpenRouter key. Confirm `/status` retains native login, the
    cache refreshes and `/model` lists registry aliases plus subscription
    options. Cache existence alone is insufficient. Output only redacted
    discovery diagnostics; do not expose raw debug logs.
 3. **Persist the proven CLI values.** Merge only those two owned `env` values
    into effective user settings (`CLAUDE_CONFIG_DIR` when set). Preserve a
    private before-image and exact ownership record, with atomic replacement
-   and private permissions. Check the observed `[1m]` default against current
-   model/client syntax. If still invalid, remove only that stale field to
-   restore the native default, retaining its prior value privately; preserve
-   any valid user preference. Verify again in a fresh CLI session. Detach
-   restores only owned unchanged values and stops on conflicting hand-edits.
+   and private permissions. **Superseded 2026-09-11:** the `[1m]` suspicion was
+   wrong; it is valid client shorthand, stripped client-side, and the router
+   never sees it. Do not remove that field; Plan 121 Step 1 corrects the
+   record. Verify again in a fresh CLI session. Detach restores only owned
+   unchanged values and stops on conflicting hand-edits; the three-way
+   ownership rule in Plan 114's amendment section strengthens this.
 4. **Qualify desktop separately.** Inspect Help -> Troubleshooting -> Enable
    Developer Mode, then Developer -> Configure Third-Party Inference where
    available, or the administrator-supplied configuration. Record supported
@@ -121,7 +135,52 @@ python3.14 tools/check_source_limits.py
 - [ ] Docs distinguish configured, restarted, discovered and probed states.
 - [ ] Source changes pass review, commit/integration and integrated checks;
   owned merged worktrees/branches are cleaned; plan/index status updated.
+- [ ] Each promised surface has one literal setup invocation that configures
+  only that surface (amendment below).
+- [ ] One canonical Anthropic billing policy is in force and reported by
+  `--status` (amendment below).
 
 Stop for managed-policy conflict, missing safe desktop auth mode, auth loss,
 secret output or unexplained discovery drift. Do not patch client binaries.
 Reusable plugin setup remains Plan 112/114's work.
+
+## Amendment (2026-09-11)
+
+Review findings F2, F3, F5, F8 and F9 in
+`2026-09-11-claude-router-development-branch-review.md`. These add scope to
+this plan; the superseded marks above remove scope.
+
+1. **Per-surface setup invocation.** Today the shared
+   `skills/manage-router/SKILL.md` setup example (`install.py --setup`) omits
+   `--clients` and therefore attaches Codex; `packaging/diagnostics.py:109`
+   preflights `(args.client or 'codex')` rather than the selected clients; and
+   the installer resolves `--clients` after the same-version early return at
+   `packaging/install.py:326`. Claude-only and Claude-desktop setup must be
+   reachable from a clean machine with no Codex installed, through literal
+   commands recorded in the skill and exercised in tests. F1's lifecycle
+   mechanics (same-version attach and repair) are Plans 112/114's; this plan owns
+   the qualification evidence that the shipped command string configures the
+   named surface and no other.
+2. **One canonical Anthropic billing policy.** `claude_mode` is stored and
+   checked by the installer, while the Messages policy passes only
+   `anthropic_mode` (`ai_router/protocols/messages.py:15`), so runtime routing
+   follows the OpenAI mode when the Anthropic override is absent. Keep
+   attachment presence, subscription-passthrough permission and desktop
+   profile selection as separate concepts, define one canonical owner for the
+   billing policy, migrate legacy state explicitly, and show the effective
+   policy in `--status`. `claude_mode=none` must not silently block attachment
+   where the supported client can run OpenRouter-only; that path is enabled
+   only once client authentication requirements are qualified.
+3. **First-run requirements.** The `clients == 'claude'` branch returns before
+   the `--setup` key window is printed or opened
+   (`packaging/install.py:481-507`), so the first-run promise and the Claude
+   attach cannot both be met today. Credential onboarding completes before any
+   client-specific return; the post-failure key-recovery path is validated
+   separately and is not evidence of first-run success.
+4. **Protocol and discovery contract (F8, F9).** Feature and version headers
+   are not forwarded to OpenRouter, so the "byte-identical" claim holds only
+   for direct registry slugs, and discovery does not apply the routing
+   allowlist. The implementable contract, its tests and the live probe leg are
+   Plan 115's (ingress compatibility) and Plan 121 Step 5 (listing policy);
+   this plan records which client features were verified against each upstream
+   and must not enable a dependent client feature before that proof.

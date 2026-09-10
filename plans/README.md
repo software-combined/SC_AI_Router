@@ -4,7 +4,9 @@ The router backlog. Renumbered 2026-09-10: the live set is **090-138** — the c
 backlog **090-121**, the refactor wave **122-134** from the 2026-09-11 four-lane
 refactoring/reorganisation audit, the new-model prompt plan **135**, and the
 security wave **136-138** from the 2026-09-11 router external security audit
-(`2026-09-11-router-external-security-audit.md`). The
+(`2026-09-11-router-external-security-audit.md`), plus the amended Claude
+plans 113-115 and 120-121 from the 2026-09-11 Claude router
+development-branch review (`2026-09-11-claude-router-development-branch-review.md`). The
 recommended overall execution order is below the tables. The pre-renumbering 034-089 series is
 archived: completed plans were removed from the tree (git history and the dated
 reports preserve them), parked decisions moved to `parked/`, and the old-to-new
@@ -47,15 +49,15 @@ Executor rules for every plan:
 | [110](110-codex-router-installer-and-auto-updater.md) | Versioned installer and auto-updater acceptance | PARTIAL | acceptance owned with 105/106/108/116/117 |
 | [111](111-codex-router-no-subscription-mode.md) | No-subscription mode for staff | PARTIAL | desktop sign-in + isolated install proof left |
 | [112](112-agent-plugin-and-three-os-installation.md) | Plugin and three-OS installation | PARTIAL | plugin publication + staff acceptance left |
-| [113](113-claude-cli-and-desktop-gateway-setup.md) | Claude CLI and desktop qualification | PARTIAL | CLI/desktop qualification left |
-| [114](114-claude-code-private-plugin.md) | Claude Code private plugin: validation and publication | PARTIAL | after 113; local validation then publication |
-| [115](115-claude-billing-probes-and-release-acceptance.md) | Claude billing and tool-execution probes | TODO | after 113; paid authority |
+| [113](113-claude-cli-and-desktop-gateway-setup.md) | Claude CLI and desktop qualification | PARTIAL | CLI/desktop qualification left; amended 2026-09-11 (per-surface setup, billing policy F5, superseded claims) |
+| [114](114-claude-code-private-plugin.md) | Claude Code private plugin: validation and publication | PARTIAL | after 113; local validation then publication; amended 2026-09-11 (same-version attach/repair F1, preflight F2, key window F3, restore F4, desktop distribution W4) |
+| [115](115-claude-billing-probes-and-release-acceptance.md) | Claude billing and tool-execution probes | TODO | after 113; paid authority; amended 2026-09-11 (per-surface routes, real MCP proof, ingress contract F8/F9) |
 | [116](116-windows-install-and-service-support.md) | Windows install and service support (acceptance) | PARTIAL | sign-out/in + later stages left |
 | [117](117-recipient-readiness-for-windows-and-linux.md) | Linux and Windows recipient readiness | PARTIAL | native desktop acceptance + Stage 5b left |
 | [118](118-codex-router-full-capability-parity.md) | Capability parity: paid per-model/client probes | PARTIAL | remaining paid per-model legs |
 | [119](119-mixed-provider-agent-instruction-delivery.md) | Mixed-provider agent instruction delivery | PARTIAL | paid live probe left |
-| [120](120-claude-desktop-gateway-discovery-and-attach.md) | Claude desktop gateway: release and live picker proof | PARTIAL | extends 113 |
-| [121](121-claude-desktop-models-effort-and-connectors.md) | Claude desktop models, effort readout, and connectors (planning) | PLANNING | amends 113/120 |
+| [120](120-claude-desktop-gateway-discovery-and-attach.md) | Claude desktop gateway: release and live picker proof | PARTIAL | extends 113; source merged (PR 56); amended 2026-09-11 (safe lifecycle F4/F7, no promotion of the listener probe) |
+| [121](121-claude-desktop-models-effort-and-connectors.md) | Claude desktop models, effort readout, and connectors (planning) | PLANNING | amends 113/120; amended 2026-09-11 (blockers before descriptions, connector/tool-search/marketplace rewrite) |
 
 ## Refactor and feature wave (122-135)
 
@@ -124,6 +126,10 @@ independent, and 137 proceeds now that 090 has landed.
   `models_url` after that.
 - 113 is the CLI/desktop contract; 114 (publication) and 115 (paid probes) follow it.
   120 and 121 extend 113.
+- 113-115 and 120-121 were amended 2026-09-11 by
+  `2026-09-11-claude-router-development-branch-review.md`. The installer
+  lifecycle fixes F1-F4 are specified in 112's installer contract and accepted
+  by 114 whichever plan executes them; do not run both writers at once.
 - Refactor wave: 122 and 123 land first; 124 follows 092; 125 follows the runtime edits
   in 090/091/093/096; 126/127 follow 101; 128 follows 090/091/093/096 and 127; 130
   follows 102; 131 follows 094/095/103 and coordinates 106.
