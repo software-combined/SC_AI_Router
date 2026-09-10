@@ -119,13 +119,17 @@ class Handler(BaseHTTPRequestHandler):
             return self.path.removeprefix('/backend-api/codex'), False
         return None, False
 
-    def context_error(self, message, streaming):
+    def context_error(self, message, streaming, budget=None):
         err = errors.context_window(message)
+        fields = dict(budget) if isinstance(budget, dict) else {}
         if not streaming:
+            if fields:
+                log_event('request_rejected', status=err.status,
+                          code=err.code, **fields)
             return self.error(err)
         # Codex recognizes context_length_exceeded inside response.failed;
         # a plain HTTP 400/409 does not mark its context full for recovery.
-        log_event('request_rejected', status=200, code=err.code)
+        log_event('request_rejected', status=200, code=err.code, **fields)
         body = ('event: response.failed\ndata: ' + json.dumps(
             {'type': 'response.failed', 'response': err.body()}) + '\n\n').encode()
         self.send_response(200)
@@ -224,7 +228,8 @@ class Handler(BaseHTTPRequestHandler):
         except InvalidSize as exc:
             return self.error(errors.invalid_size(str(exc)))
         except errors.ContextWindowExceeded as exc:
-            return self.context_error(str(exc), payload.get('stream') is True)
+            return self.context_error(str(exc), payload.get('stream') is True,
+                                      getattr(exc, 'budget', None))
         except PreparationError as exc:
             return self.error(errors.preparation(str(exc)))
         except LookupError as exc:
