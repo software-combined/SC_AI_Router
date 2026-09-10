@@ -33,7 +33,6 @@
   gateway profile with the same ownership receipt discipline as the
   Claude Code CLI attach, and refuses when `claude_mode` is `none`.
 
-
 ## 0.6.12
 
 - Make the Windows installer work end to end (Plan 057 Stages 3, 4 and

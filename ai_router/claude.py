@@ -57,7 +57,7 @@ FAMILY_TIER_DEFAULT = 'sonnet'
 def family_tier(alias):
     """Tier word one discovery id stands in for; sonnet unless it names one."""
     if isinstance(alias, str) and alias.startswith('anthropic/claude-'):
-        word = alias[len('anthropic/claude-'):].split('-', 1)[0]
+        word = alias.removeprefix('anthropic/claude-').split('-', 1)[0]
         if word in FAMILY_TIERS:
             return word
     return FAMILY_TIER_DEFAULT
