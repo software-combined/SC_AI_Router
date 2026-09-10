@@ -1,0 +1,53 @@
+#!/bin/sh
+# First-install bootstrap for hosts without repo access (Plan 054 T).
+# POSIX sh + curl/python3/tar/shasum only: resolves the pinned CPython
+# runtime from runtimes.json, verifies every download by SHA-256, writes
+# the feed token owner-only, then runs the verified bundle installer.
+# Usage (token from the Technology library page):
+#   SCG_FEED_TOKEN=<token> sh bootstrap.sh [--channel=beta]
+set -eu
+FEED_ORIGIN="${FEED_ORIGIN:-https://dist.softwarecombined.com}"
+CHANNEL="stable"
+HOME_DIR="${ROUTER_HOME:-$HOME/.codex/mixed-model-router}"
+TOKEN="${SCG_FEED_TOKEN:-}"
+for arg in "$@"; do
+  case "$arg" in
+    --channel=*) CHANNEL="${arg#--channel=}" ;;
+    *) echo "usage: SCG_FEED_TOKEN=<token> sh bootstrap.sh [--channel=beta]" >&2; exit 2 ;;
+  esac
+done
+if [ -z "$TOKEN" ]; then
+  echo "error: set SCG_FEED_TOKEN from the Technology library page" >&2
+  exit 2
+fi
+OS="$(uname -s)"; ARCH="$(uname -m)"
+case "$OS" in Darwin) OS=darwin ;; Linux) OS=linux ;; esac
+case "$ARCH" in arm64|aarch64) ARCH=arm64 ;; x86_64|amd64) ARCH=x86_64 ;; esac
+mkdir -p "$HOME_DIR"
+chmod 700 "$HOME_DIR"
+printf '%s\n' "$TOKEN" > "$HOME_DIR/feed-token.tmp"
+chmod 600 "$HOME_DIR/feed-token.tmp"
+mv "$HOME_DIR/feed-token.tmp" "$HOME_DIR/feed-token"
+dl() {
+  curl -fsSL -H "X-SCG-Feed-Token: $TOKEN" "$FEED_ORIGIN/$1" -o "$2"
+}
+dl "runtimes.json" "$HOME_DIR/runtimes.json"
+TARGET="$OS/$ARCH"
+export HOME_DIR TARGET
+RT="$(python3 -c "import json,os;t=json.load(open(os.environ['HOME_DIR']+'/runtimes.json'))['targets'][os.environ['TARGET']];print(t['mirror'],t['sha256'],t['exec'])")"
+set -- $RT; MIRROR="$1"; RSHA="$2"; REXEC="$3"
+dl "$MIRROR" "$HOME_DIR/runtime.tar.gz"
+echo "$RSHA  $HOME_DIR/runtime.tar.gz" | shasum -a 256 -c -
+mkdir -p "$HOME_DIR/runtime"
+tar -xzf "$HOME_DIR/runtime.tar.gz" -C "$HOME_DIR/runtime"
+PY="$HOME_DIR/runtime/$REXEC"
+"$PY" -c "import compression.zstd; print('runtime ok')"
+dl "$CHANNEL/latest.json" "$HOME_DIR/latest.json"
+set -- $(python3 -c "import json,os;d=json.load(open(os.environ['HOME_DIR']+'/latest.json'));print(d['url'],d['sha256'])")
+URL="$1"; SHA="$2"
+ASSET="${URL##*/}"
+dl "bundles/$ASSET" "$HOME_DIR/bundle.tar.gz"
+echo "$SHA  $HOME_DIR/bundle.tar.gz" | shasum -a 256 -c -
+mkdir -p "$HOME_DIR/bootstrap"
+tar -xzf "$HOME_DIR/bundle.tar.gz" -C "$HOME_DIR/bootstrap"
+exec "$PY" "$HOME_DIR/bootstrap/packaging/install.py" --home "$HOME_DIR"
