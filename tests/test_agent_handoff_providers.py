@@ -164,5 +164,49 @@ class NativeStreamTests(unittest.TestCase):
                 list(agent_handoffs.adapt_response(Response(raw, 'text/event-stream'), {'send_message'}))
 
 
+class SteerWiringTests(unittest.TestCase):
+    def test_subscription_steers_doomed_wake_followup(self):
+        spawn = {'type': 'function_call', 'namespace': 'collaboration',
+                 'name': 'spawn_agent', 'id': 'fc_hist', 'call_id': 'call_hist',
+                 'arguments': json.dumps({'task_name': 'plain',
+                     'model': 'meta/muse-spark-1.3-contributor'}),
+                 'encrypted_function_args': []}
+        credentials = Mock()
+        payload = {'model': 'gpt-5.6-luna', 'tools': native_tools('followup_task'),
+                   'input': [spawn]}
+        prepared = providers.SubscriptionProvider().prepare(
+            payload['model'], '/responses', payload, b'', {}, credentials)
+        self.assertEqual(prepared.tool_names.spawn_models,
+                         {'plain': 'meta/muse-spark-1.3-contributor'})
+        wake = {'type': 'function_call', 'namespace': 'collaboration',
+                'name': 'followup_task', 'id': 'fc_wake', 'call_id': 'call_wake',
+                'arguments': json.dumps({'target': 'plain', 'message': 'SYNTH_WAKE'})}
+        event = {'type': 'response.output_item.done', 'item': wake}
+        raw = b'data: ' + json.dumps(event).encode() + b'\n\n'
+        result = b''.join(providers.SubscriptionProvider().adapt(
+            Response(raw, 'text/event-stream'), prepared.tool_names))
+        item = json.loads(result[6:])['item']
+        self.assertEqual(item['type'], 'function_call_output')
+        self.assertEqual(item['call_id'], 'call_wake')
+        self.assertIn('collaboration_plaintext.followup_task', item['output'])
+        self.assertNotIn('SYNTH_WAKE', item['output'])
+        credentials.openrouter_key.assert_not_called()
+
+    def test_subscription_leaves_native_followup_alone(self):
+        credentials = Mock()
+        payload = {'model': 'gpt-5.6-luna', 'tools': native_tools('followup_task'),
+                   'input': []}
+        prepared = providers.SubscriptionProvider().prepare(
+            payload['model'], '/responses', payload, b'', {}, credentials)
+        call = {'type': 'function_call', 'namespace': 'collaboration',
+                'name': 'followup_task', 'id': 'fc_n', 'call_id': 'call_n',
+                'arguments': json.dumps({'target': 'native', 'message': 'SYNTH_OPAQUE'})}
+        event = {'type': 'response.output_item.done', 'item': call}
+        raw = b'data: ' + json.dumps(event).encode() + b'\n\n'
+        result = b''.join(providers.SubscriptionProvider().adapt(
+            Response(raw, 'text/event-stream'), prepared.tool_names))
+        self.assertEqual(json.loads(result[6:])['item'], call)
+
+
 if __name__ == '__main__':
     unittest.main()

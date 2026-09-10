@@ -119,7 +119,18 @@ class Probe:
                     if safe not in self.facts['tool_failures']:
                         self.facts['tool_failures'].append(safe)
         # The probe exposes only collaboration, never file/shell/app tools.
-        body['tools'] = [t for t in body.get('tools', []) if t.get('name') == 'collaboration']
+        # Structural turn log only: namespace names and tool counts, no payload.
+        offered = body.get('tools', []) if isinstance(body.get('tools'), list) else []
+        self.facts.setdefault('turns', []).append({
+            'model': body.get('model'),
+            'tool_namespaces': sorted({t.get('name') for t in offered if isinstance(t, dict)}),
+            'namespace_tools': {t.get('name'): [u.get('name') for u in t.get('tools', [])]
+                                for t in offered
+                                if isinstance(t, dict) and t.get('type') == 'namespace'},
+            'input_kinds': sorted({i.get('type') for i in body.get('input', [])
+                                   if isinstance(i, dict)}),
+        })
+        body['tools'] = [t for t in offered if t.get('name') == 'collaboration']
         if self.live_children:
             if body.get('model') != PARENT:
                 self.scripted(body, ordinal)  # Observe input shape only; discard scripted reply.
@@ -132,9 +143,24 @@ class Probe:
                 if event.get('type') != 'response.output_item.done':
                     continue
                 item = event.get('item', {})
-                if item.get('type') == 'function_call' and item.get('encrypted_function_args') == []:
+                if item.get('type') == 'function_call':
+                    try:
+                        call_args = json.loads(item.get('arguments') or '{}')
+                    except ValueError:
+                        call_args = {}
+                    self.facts['calls'].append({
+                        'model': body.get('model'), 'namespace': item.get('namespace'),
+                        'name': item.get('name'),
+                        'encrypted_fields': ('absent' if item.get('encrypted_function_args', 'absent') == 'absent'
+                            else ('empty' if item.get('encrypted_function_args') == [] else 'nonempty')),
+                        'target': call_args.get('target'), 'task': call_args.get('task_name'),
+                        'child_model': call_args.get('model')})
+                if item.get('encrypted_function_args') == []:
                     self.alias_call_ids.add(item.get('call_id'))
                     self.facts['alias_emitted'] = True
+                if item.get('type') == 'function_call_output':
+                    if isinstance(item.get('output'), str) and 'collaboration_plaintext' in item.get('output'):
+                        self.facts.setdefault('steers', []).append(item.get('call_id'))
                 if body.get('model') != PARENT and item.get('type') == 'message':
                     text = ''.join(b.get('text', '') for b in item.get('content', []))
                     for marker in ALL_MARKERS:

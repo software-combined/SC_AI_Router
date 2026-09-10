@@ -56,15 +56,26 @@ until final reconciliation. No other worktree is adopted.
   gpt-5.6-sol child kept input_text plus encrypted_content; alias emitted;
   canonical replay true; no probe errors. One expected WebSocket 404
   fallback in tool_failures.
-- Luna v1 parent with scripted children (same setup, 12 parent calls):
-  exit 1, fail-closed as designed. The wake follow-up used encrypted
-  collaboration instead of the plaintext alias, so downstream child turns
-  carried encrypted_content and the probe rejected them (6 opaque-content
-  rejections, plus 409/other turn entries). The installed catalogue serves
-  Luna as multi_agent v1 versus Astra v2; Plan 066 covers the v2 route.
-  v1 parents need their own plan if pursued.
-- Focused suites: 28 tests pass (agent handoffs, handoff providers,
-  containment). Full suite: 623 tests pass (2026-09-10, final source).
+- Luna v1 parent with scripted children (same setup, 12-13 parent calls):
+  exit 1 without the steer, fail-closed as designed. Luna used the alias
+  for early turns then emitted a native encrypted followup/send_message;
+  downstream child turns carried encrypted_content and were rejected.
+  Real native shapes observed: task_name is bare ('synth_agent') while
+  targets are author-prefixed paths ('/root/synth_agent'); history echoes
+  restored alias calls with encrypted_function_args [] but native encrypted
+  calls omit the field.
+- Luna v1 fix (this worktree): adapt-time steer replaces a provably
+  undeliverable encrypted handoff with a targeted error output naming the
+  exact alias call. Fires for encrypted spawns naming an OpenRouter model
+  and encrypted followup/send_message to a child whose spawn names an
+  OpenRouter model (exact task match, else unique path suffix; ambiguous
+  suffixes pass through to the downstream guards). Final Luna lifecycle
+  through candidate code (2026-09-10, 15 live calls, low effort): exit 0.
+  All three markers delivered to and returned by the real Muse child;
+  native control intact; one steer fired and Luna complied with the alias;
+  alias emitted; canonical replay true; no errors.
+- Focused suites: 36 tests pass (agent handoffs, handoff providers,
+  containment). Full suite: 645 tests pass (2026-09-10, final source).
 - Final-source Astra lifecycle through candidate code (2026-09-10, 20 live
   calls, low effort): exit 0. All three markers delivered to and returned
   by the real Muse child; native child kept encrypted content and returned

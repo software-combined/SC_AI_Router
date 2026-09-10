@@ -34,9 +34,9 @@
   "packaging/claude_config.py": 168,
   "tests/test_claude_config.py": 144,
   "packaging/codex_config.py": 150,
-  "codex_router/agent_handoffs.py": 139,
+  "codex_router/agent_handoffs.py": 271,
   "codex_router/sse.py": 29,
-  "tools/probe_agent_handoffs.py": 470,
+  "tools/probe_agent_handoffs.py": 496,
   "tests/test_agent_handoffs.py": 118,
   "tests/test_agent_handoff_providers.py": 168
 }
