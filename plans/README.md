@@ -26,7 +26,7 @@ Executor rules for every plan:
 | [091](091-router-adaptation-stream-fast-path.md) | Adaptation fast path: no re-serialize when unchanged | DONE: adaptation fast path 2026-09-11 | — |
 | [092](092-router-test-suite-hygiene.md) | Offline test suite, isolated home, three guard tests | DONE: offline test suite + ingress guard tests 2026-09-11 | coordinate with 105 |
 | [093](093-router-prepare-path-serialization.md) | Prepare/failure path: no double serialization or re-parse | DONE: prepare-path serialization 2026-09-11 | — |
-| [094](094-router-atomic-write-consolidation.md) | One atomic writer for installer state/config | TODO | — |
+| [094](094-router-atomic-write-consolidation.md) | One atomic writer for installer state/config | DONE: atomic writer consolidation 2026-09-11 | — |
 | [095](095-router-activation-receipt-consolidation.md) | One writer for the activation receipt | TODO | depends 094 |
 | [096](096-router-streaming-robustness.md) | SSE frame cap and mid-stream error containment | TODO | — |
 | [097](097-router-discovered-lock-scope.md) | Narrow the discovered-recall lock scope | TODO | — |

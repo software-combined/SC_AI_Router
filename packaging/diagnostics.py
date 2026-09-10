@@ -30,6 +30,10 @@ _svc = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_svc)
 _codex_config = _svc.load(
     'router_codex_config', Path(__file__).resolve().parent / 'codex_config.py')
+# Same injection as install.py: this copy is read-only by contract today, but a
+# future write path must not hit the un-injected guard (Plan 094).
+_codex_config._atomic_write = _svc.load(
+    'router_atomic_write', Path(__file__).resolve().parent / 'atomic_write.py')
 
 find_python = _svc.find_python
 health = _svc.health

@@ -53,6 +53,8 @@ _launchd = load('router_launchd', Path(__file__).resolve().parent / 'launchd.py'
 _feed = load('router_feed', Path(__file__).resolve().parent / 'feed.py')
 _roster = load('router_subscription_roster',
                Path(__file__).resolve().parents[1] / 'ai_router' / 'subscription_roster.py')
+_atomic_write = load('router_atomic_write',
+                     Path(__file__).resolve().parent / 'atomic_write.py')
 
 # Patchable seam so tests never sleep through a real launchd settle window.
 _sleep = time.sleep
@@ -614,9 +616,7 @@ def install_launcher(home, release_dir):
 
 
 def _write_state(home, state):
-    fd = os.open(home / 'mixed-router-state.json', os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, 'w') as stream:
-        stream.write(json.dumps(state, indent=2) + '\n')
+    _atomic_write.replace_text(home / 'mixed-router-state.json', json.dumps(state, indent=2) + '\n')
 
 
 def ensure_state(home):
@@ -625,11 +625,11 @@ def ensure_state(home):
         state = json.loads(path.read_text())
         if not isinstance(state.get('openai_models'), list):
             state['openai_models'] = list(DEFAULT_OPENAI_MODELS)
-            path.write_text(json.dumps(state, indent=2) + '\n')
+            _atomic_write.replace_text(path, json.dumps(state, indent=2) + '\n')
         elif 'gpt-reserve' in state['openai_models']:
             # Retired slug: prune so routing stops authorizing it on update.
             state['openai_models'].remove('gpt-reserve')
-            path.write_text(json.dumps(state, indent=2) + '\n')
+            _atomic_write.replace_text(path, json.dumps(state, indent=2) + '\n')
         return state
     port = 18749
     probe = socket.socket()
