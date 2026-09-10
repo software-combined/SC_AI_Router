@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.13
 
 - Rename the runtime package `codex_router` to `ai_router` (Plan 074): the
   router serves Codex, Claude Code, and OpenRouter side by side, and the old
