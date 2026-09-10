@@ -241,5 +241,88 @@ class LiveHomeGuardTests(unittest.TestCase):
             self.assertEqual(rc, 0)
 
 
+class BetaChannelTests(unittest.TestCase):
+    def _home(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        home = Path(tmp.name) / 'home'
+        home.mkdir(parents=True)
+        return home
+
+    def _patch_gh(self, func):
+        feed_mod = install_mod._svc._feed
+        return mock.patch.object(feed_mod, '_gh_run', func)
+
+    def test_beta_no_token_resolves_prerelease_asset_via_gh(self):
+        home = self._home()
+        (home / 'channel').write_text('beta\n')
+        seen = []
+
+        def fake_run(cmd, **kwargs):
+            seen.append(cmd)
+            return type('R', (), {'returncode': 0,
+                                  'stdout': 'v0.6.14.29-beta\n',
+                                  'stderr': ''})()
+
+        with self._patch_gh(fake_run):
+            url = svc.channel_feed(home)
+        self.assertEqual(seen[0][:4], ['gh', 'release', 'list', '--repo'])
+        self.assertTrue(url.endswith(
+            '/releases/download/v0.6.14.29-beta/latest-beta.json'))
+
+    def test_beta_no_token_fails_closed_on_gh_error(self):
+        home = self._home()
+        (home / 'channel').write_text('beta\n')
+
+        def raising_gh(exc):
+            def _gh(*a, **k):
+                raise exc
+            return _gh
+
+        cases = (
+            ('nonzero', type('R', (), {'returncode': 2,
+                                       'stdout': '', 'stderr': 'nope'})()),
+            ('empty', type('R', (), {'returncode': 0,
+                                     'stdout': '\n', 'stderr': ''})()),
+            ('missing-gh', FileNotFoundError(2, 'gh')),
+        )
+        for name, outcome in cases:
+            if isinstance(outcome, BaseException):
+                gh = raising_gh(outcome)
+            else:
+                gh = lambda *a, **k: outcome  # noqa: E731
+            with self.subTest(name=name), self._patch_gh(gh):
+                with self.assertRaisesRegex(SystemExit, 'Cannot resolve beta'):
+                    svc.channel_feed(home)
+
+    def test_beta_no_token_rejects_malformed_tag(self):
+        home = self._home()
+        (home / 'channel').write_text('beta\n')
+        for bad in ('a/b', 'a?b', 'a#b', 'a b'):
+            result = type('R', (), {'returncode': 0, 'stdout': bad + '\n',
+                                    'stderr': ''})()
+            with self.subTest(tag=bad), self._patch_gh(lambda *a, **k: result):
+                with self.assertRaisesRegex(SystemExit, 'malformed beta release'):
+                    svc.channel_feed(home)
+
+    def test_beta_no_token_takes_first_prerelease_behind_stable(self):
+        home = self._home()
+        (home / 'channel').write_text('beta\n')
+        result = type('R', (), {'returncode': 0,
+                                'stdout': 'v0.6.14.29-beta\nv0.6.13.28\n',
+                                'stderr': ''})()
+        with self._patch_gh(lambda *a, **k: result):
+            url = svc.channel_feed(home)
+        self.assertTrue(url.endswith(
+            '/releases/download/v0.6.14.29-beta/latest-beta.json'))
+
+    def test_beta_token_stays_on_cloudfront_beta_path(self):
+        home = self._home()
+        svc.persist_feed_token(home, {'feed_token': 'tok-1'})
+        (home / 'channel').write_text('beta\n')
+        self.assertEqual(svc.channel_feed(home),
+                         'https://dist.softwarecombined.com/beta/latest.json')
+
+
 if __name__ == '__main__':
     unittest.main()
