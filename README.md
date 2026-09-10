@@ -167,10 +167,12 @@ carries over; an effort the new model does not support is rejected with
 the allowed levels (change effort before switching). Models labelled
 Preview in the picker are not yet verified: they work, but report
 anything odd.
-OpenRouter-billed GPT rows stay out of the Codex picker so the
-subscription GPT rows stand alone; requesting one directly still routes
-to OpenRouter. The Claude listing will apply the mirror rule to
-OpenRouter-billed Anthropic rows when it lands.
+With a ChatGPT subscription, OpenRouter-billed GPT rows stay out of
+the Codex picker so the subscription GPT rows stand alone; requesting
+one directly still routes to OpenRouter. In no-subscription mode
+(`openai_mode: none`) the picker lists the OpenRouter-billed Astra, Sol,
+Terra and Luna rows instead. The Claude listing will apply the mirror
+rule to OpenRouter-billed Anthropic rows when it lands.
 In Claude Code, point `ANTHROPIC_BASE_URL` at the router and choose
 the model with `ANTHROPIC_MODEL`; see `docs/claude-code.md`.
 
@@ -197,11 +199,12 @@ Install with `--openai-mode none --setup`, paste one OpenRouter key into
 the setup window, pick a Dev or General starter for the global instructions,
 and Codex uses a custom provider (`scg_router`) whose
 `base_url` carries the per-install path token. No ChatGPT login is needed
-and no subscription traffic is sent: OpenAI models answer 400, native
-service paths answer 404 locally, and OpenRouter models work with tools,
-compaction, and web search where the model supports it. Server-side thread
-titles and the approvals reviewer are unavailable; the installer writes
-`approvals_reviewer = "user"` inside the marked block.
+and no subscription traffic is sent: Astra, Sol, Terra and Luna are served
+from OpenRouter in the picker, a directly requested subscription id still
+answers 400, native service paths answer 404 locally, and OpenRouter models
+work with tools, compaction, and web search where the model supports it.
+Server-side thread titles and the approvals reviewer are unavailable; the
+installer writes `approvals_reviewer = "user"` inside the marked block.
 
 ## Troubleshooting
 
