@@ -112,5 +112,13 @@ def near_miss(model):
     return candidate if by_slug(candidate) is not None else None
 
 
+def picker_key(vendor, tier, display_name, slug):
+    """Vendor-grouped picker order: vendor A-Z, verified before preview.
+
+    Codex lists the picker by ascending priority, so registry priorities
+    must ascend in this order; merge emits file rows in it as well."""
+    return (vendor.casefold(), tier != 'verified', display_name.casefold(), slug)
+
+
 def openrouter_slugs():
     return frozenset(m.slug for m in MODELS if m.provider == 'openrouter')

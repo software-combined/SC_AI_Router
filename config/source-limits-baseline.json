@@ -19,7 +19,7 @@
   "tests/test_agent_containment.py": 94,
   "tests/test_agent_handoff_providers.py": 168,
   "tests/test_agent_handoffs.py": 118,
-  "tests/test_catalogue.py": 419,
+  "tests/test_catalogue.py": 416,
   "tests/test_claude_config.py": 144,
   "tests/test_claude_desktop_config.py": 259,
   "tests/test_client_activation.py": 437,

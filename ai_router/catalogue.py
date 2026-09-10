@@ -10,7 +10,7 @@ from pathlib import Path
 from .capabilities import catalogue_patch, describe
 from .clients.codex import capability_fields as codex_projection
 from .clients import models_for, visible_for
-from .registry import MODELS
+from .registry import MODELS, picker_key
 
 OPENROUTER_TEMPLATE = {
     'shell_type': 'unified_exec',
@@ -61,7 +61,6 @@ OPENROUTER_TEMPLATE = {
     'auto_review_model_override': None,
 }
 
-PREVIEW_PRIORITY_OFFSET = 100000  # preview entries sort after every verified model
 RETIRED_SLUGS = {'anthropic/claude-opus-5', 'anthropic/claude-fable-5.1',
                  'deepseek/deepseek-v4-pro', 'deepseek/deepseek-v4-flash',
                  'deepseek/deepseek-v4-flash-0731',
@@ -144,8 +143,7 @@ def openrouter_entry(model):
                             + 'OpenRouter: ' + catalog_name(model)),
             'default_reasoning_level': model.default_reasoning,
             'supported_reasoning_levels': projected['supported_reasoning_levels'],
-            'priority': (model.priority + PREVIEW_PRIORITY_OFFSET
-                           if model.tier == 'preview' else model.priority),
+            'priority': model.priority,
             'context_window': model.context_window,
             'max_context_window': model.context_window,
             'model_messages': {'instructions_template': BASE_INSTRUCTIONS},
@@ -170,9 +168,11 @@ def merge(catalog, roster=(), client='codex', allowed=None):
     retaining their model-specific values, repairing older bare stubs.
     One exception: rows matching the exact 0.6.10.23 single-medium
     placeholder signature get their two reasoning fields upgraded.
-    Order is subscription rows in roster order, then verified OpenRouter
-    rows A-Z by display name, then preview rows A-Z; values are never
-    rewritten to achieve it. Retired subscription slugs are dropped.
+    Order is subscription rows in roster order, then OpenRouter rows
+    grouped by vendor A-Z, verified before preview inside a vendor and
+    label A-Z inside a tier. Registry priorities ascend in the same order,
+    because Codex lists the picker by ascending priority. Retired
+    subscription slugs are dropped.
     The future Claude listing reuses models_for('claude') to omit
     OpenRouter-billed Anthropic rows. Plan 039's live /models remains
     the proper replacement for this fallback. Routing never consults
@@ -219,7 +219,7 @@ def merge(catalog, roster=(), client='codex', allowed=None):
              if m['slug'] in entries and m['slug'] not in shown and m['slug'] not in subs]
     def rank(slug):
         model = next(m for m in visible if m.slug == slug)
-        return (model.tier != 'verified', model.display_name.casefold(), slug)
+        return picker_key(model.vendor, model.tier, model.display_name, model.slug)
     catalog['models'] = [entries[s] for s in subs + sorted(shown, key=rank)]
     return catalog
 

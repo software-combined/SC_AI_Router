@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- The Codex picker groups OpenRouter rows by vendor A-Z, verified before
+  preview inside each vendor; `models add` renumbers priorities into that
+  order and the global "preview last" offset is gone, so Anthropic's four
+  rows sit together again.
+
 - DeepSeek keeps two pinned, verified rows: `deepseek/deepseek-v4.1-flash`
   (newest Flash, image-capable) and `deepseek/deepseek-v4-pro-0813`
   (newest Pro, text-only). The `~deepseek/deepseek-v4-flash-latest`
