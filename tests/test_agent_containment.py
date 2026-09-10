@@ -9,7 +9,7 @@ import json
 import unittest
 from types import SimpleNamespace
 
-from codex_router import providers
+from ai_router import providers
 
 MARKER = 'SYNTH-OPAQUE-066-4b1d'
 
@@ -77,14 +77,14 @@ class AgentContainmentTests(unittest.TestCase):
 
 class AgentSummaryTests(unittest.TestCase):
     def test_plaintext_agent_label_survives_summary_input(self):
-        from codex_router import compaction as comp
+        from ai_router import compaction as comp
         items = [{'type': 'agent_message', 'author': '/root',
                   'content': [{'type': 'input_text', 'text': 'review the router'}]}]
         summary = comp.transcript_for_summary(items)
         self.assertIn('review the router', summary)
 
     def test_opaque_agent_item_contributes_no_summary_text(self):
-        from codex_router import compaction as comp
+        from ai_router import compaction as comp
         summary = comp.transcript_for_summary([_opaque_item()])
         self.assertNotIn(MARKER, summary)
         self.assertNotIn('network domain', summary)

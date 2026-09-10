@@ -11,8 +11,8 @@ import unittest
 from tests.fakes import FakeUpstream, install_fake
 from tests.test_handler import _auth_file, _post
 from tests.test_mixed_router import _start_server, _test_state
-from codex_router import claude as claude_mod
-from codex_router.registry import MODELS
+from ai_router import claude as claude_mod
+from ai_router.registry import MODELS
 
 
 def _messages(model='z-ai/glm-5.3-flash'):
@@ -148,11 +148,30 @@ class ClaudeIngressTests(unittest.TestCase):
                 if m.provider == 'openrouter'}
         self.assertEqual(set(ids), want)
         for row in body['data']:
-            self.assertEqual(set(row), {'id', 'display_name'})
+            self.assertEqual(set(row),
+                             {'id', 'display_name', 'anthropic_family_tier'})
         listed = {row['id']: row['display_name'] for row in body['data']}
         self.assertEqual(
             listed['claude/z-ai/glm-5.3-flash'], 'Z.ai: GLM 5.3 Flash \u00b7 OpenRouter')
         self.assertIn('anthropic/claude-sonnet-latest', listed)
+
+    def test_models_listing_projects_desktop_family_tier(self):
+        # Desktop 1.49585.0 drops rows whose id looks non-Anthropic unless
+        # the row declares a valid anthropic_family_tier. Anthropic aliases
+        # keep their own tier word; every other row stands in for sonnet.
+        server = self._server()
+        response = _get(server.server_port, '/test-token/v1/models')
+        body = json.loads(response.read())
+        tiers = {row['id']: row['anthropic_family_tier'] for row in body['data']}
+        self.assertTrue(tiers)
+        self.assertTrue(all(t in claude_mod.FAMILY_TIERS for t in tiers.values()))
+        self.assertEqual(tiers['anthropic/claude-sonnet-latest'], 'sonnet')
+        self.assertEqual(tiers['anthropic/claude-opus-latest'], 'opus')
+        self.assertEqual(tiers['anthropic/claude-haiku-latest'], 'haiku')
+        self.assertEqual(tiers['anthropic/claude-fable-latest'], 'fable')
+        for row_id, tier in tiers.items():
+            if not row_id.startswith('anthropic/claude-'):
+                self.assertEqual(tier, 'sonnet')
 
     def test_models_listing_orders_verified_then_preview_az(self):
         # Reorder-only: verified A-Z, then preview A-Z; ids and labels untouched.

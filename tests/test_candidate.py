@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
-from codex_router import candidate
+from ai_router import candidate
 
 
 class VerifySequenceTests(unittest.TestCase):

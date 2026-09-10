@@ -152,6 +152,8 @@ def detach(home, receipts, settings_path_override=None, env=None):
     """Restore Claude settings to pre-attach values; forget the attachment."""
     receipt = receipts.read_receipt(home)
     entry = receipt.get('clients', {}).get('claude', {})
+    if settings_path_override is None and env is None and not entry:
+        return  # never attached: never touch hand-managed settings
     if settings_path_override is not None:
         path = Path(settings_path_override)
     elif isinstance(entry, dict) and entry.get('config_path'):

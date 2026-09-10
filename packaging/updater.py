@@ -75,13 +75,17 @@ def _park(home, etag, etag_path, version):
 
 def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None):
     """Run one scheduled-update pass; behavior matches the pre-split code."""
-    _fetch = _fetch or _svc.fetch
     sync_seams()
     import random
-    read_feed = _read_feed or (lambda url, etag: _svc.fetch_feed(url, etag, _fetch))
-    sleep = _sleep or time.sleep
     home = Path(args.home).expanduser()
     feed = args.feed or _svc.channel_feed(home)
+    # The default home-bound fetch sends the stored feed token to the feed
+    # origin; bundle fetches below reuse it, so a migrated host never needs
+    # gh. An injected fake keeps its one-argument shape all the way down.
+    injected = _fetch
+    _fetch = injected or (lambda url: _svc.fetch(url, home))
+    read_feed = _read_feed or (lambda url, etag: _svc.fetch_feed(url, etag, injected, home=home))
+    sleep = _sleep or time.sleep
     sleep(random.uniform(0, 120))
     etag_path = home / 'update-etag'
     etag = etag_path.read_text().strip() if etag_path.exists() else None
@@ -102,7 +106,12 @@ def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None):
         print(f"up to date {_svc.current_version(home)}")
         return 0
     latest = json.loads(body.decode())
+    # check_serial persists the feed token after the serial check but
+    # before the version comparison, so a host that is already current
+    # still migrates: its next poll resolves CloudFront.
     _svc.check_serial(home, latest, pinned=bool(args.feed))
+    if not _svc.trusted_origin(latest.get('url', '')):
+        raise SystemExit('feed points off the trusted update origin; refusing')
     if not newer(latest['version'], _svc.current_version(home)):
         if etag:
             etag_path.write_text(etag + '\n')
@@ -150,7 +159,8 @@ def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None):
     (home / 'logs').mkdir(exist_ok=True)
     with open(home / 'logs' / 'update.log', 'a') as stream:
         stream.write(json.dumps({'at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
-                                 'version': latest['version']}) + '\n')
+                                 'version': latest['version'],
+                                 'source': _svc.feed_source(feed)}) + '\n')
     if etag:
         etag_path.write_text(etag + '\n')
     print(f"installed {latest['version']}")

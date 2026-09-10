@@ -14,4 +14,4 @@ source plus package structure, governance and CI.
 
 Repository visibility is private (operator decision 2026-09-07), so the
 auto-updater release feed must be an S3 plus CloudFront bucket provisioned
-from SC_Infrastructure; Plan 041 uses that feed instead of GitHub Releases.
+from SC_Infrastructure; Plan 110 uses that feed instead of GitHub Releases.

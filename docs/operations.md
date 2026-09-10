@@ -10,14 +10,52 @@ only, builds the bundle, runs the suite, and publishes the release with
 about fifteen minutes. Never push to `main` directly for a release;
 a direct push runs checks but publishes nothing.
 
-## Global subagent guidance
+## Update feed and repo-free auto-update
 
-The installer adds one managed subagent-discovery block to the active global
-Codex `AGENTS.md` (or non-empty `AGENTS.override.md`) beside `config.toml`.
-It preserves existing content and symlinks; updates replace only that block,
-and uninstall removes it. If its text or active file changed, installation
-stops for review. Start a fresh Codex task to load the rule. It applies across
-models without duplicating text in the catalogue and grants no new permission.
+Installed routers update themselves with no GitHub account, no repo
+access, and no `gh`. Each host resolves its feed through
+`packaging/feed.py`: hosts without `<home>/feed-token` poll the private
+GitHub Releases feed over `gh` exactly as before; the first feed that
+carries `feed_token` is persisted owner-only (previous value kept for
+one 403 retry) and every later poll uses
+`https://dist.softwarecombined.com/<channel>/latest.json` with the
+`X-SCG-Feed-Token` header. Persistence happens after the serial check
+but before the version comparison, so an already-current host still
+migrates. Feeds and bundles off the trusted origins are refused, and a
+double 403 names the Technology library bootstrap as the remedy without
+leaking token bytes. `update.log` records each install with its source
+(`cloudfront`, `github`, or `local`).
+
+First install for no-repo-access users comes from the gated Technology
+site library: `packaging/bootstrap.sh` (macOS/Linux) or
+`packaging/bootstrap.ps1` (Windows) with `SCG_FEED_TOKEN` from the
+library page. The bootstrap resolves the pinned runtime from
+`runtimes.json`, verifies runtime and bundle checksums, writes the feed
+token, and runs the bundle installer. The CloudFront distribution,
+branch-driven publish workflow, and library page are owner-gated; until
+they exist, releases publish to GitHub as today and carry no token.
+
+The library page also carries `docs/agent-install-prompt.md`: a
+paste-to-agent prompt so the user asks their own agent to run the
+bootstrap and verify setup. The prompt pins the production home, forbids
+printing secrets, and leaves client restarts to the user.
+
+Never run the installer against a scratch `--home` on a live machine:
+service names are machine-wide, so even a /tmp home bootstraps, bootouts,
+or TERMs the production jobs. `main()` refuses mutating actions on a
+non-production home unless `ROUTER_LIVE_RUN=1` is set; local feed
+experiments belong in a disposable session or VM with its own service
+manager. Direct `do_install` calls in tests must use the fake `run` seam.
+
+## Global starter instructions
+
+The setup window offers a Dev or General starter after the key is stored and
+installs the chosen one as the full global `AGENTS.md` (or non-empty
+`AGENTS.override.md`) beside `config.toml`, exactly once. An existing file is
+never overwritten; updates and uninstall leave global instructions alone, so
+the owner's edits always win. Start a fresh Codex task to load the file. It
+applies across models without duplicating text in the catalogue and grants no
+new permission.
 
 ## How to test first
 
@@ -102,6 +140,45 @@ confirm discovery, one exact callback, and the marker in the final
 answer. If the app-server protocol changed, probes fail before any
 user task does; do not ship model changes until the base probe passes.
 
+## Latency phase fields (aggregate-only comparison recipe)
+
+`request_completed` carries per-phase durations in milliseconds plus the
+long-standing cumulative fields (`local_prepare_ms`,
+`upstream_headers_ms`, `first_chunk_ms`, `total_ms`), whose meanings are
+unchanged:
+
+| Field | Meaning |
+|---|---|
+| `read_ms` | Socket read plus body decode |
+| `prepare_ms` | Provider selection plus body preparation |
+| `connect_ms` | Upstream connection establishment (`connect()`) |
+| `send_ms` | Request upload (`request()`) |
+| `headers_ms` | Wait for upstream response headers (`getresponse()`) |
+| `first_data_ms` | First upstream read-return inside adaptation (not provider TTFB on buffering paths) |
+| `first_write_ms` | First successful downstream write (forwarding delay, not network TTFB) |
+| `response_kind` | `sse`, `json`, or `other` (fixed values only) |
+| `response_encoding` | `identity`, `gzip`, `deflate`, `br`, `zstd`, or `other` (fixed values only) |
+
+`transport_error` carries the phases that completed before the failure;
+absent later phases mean the request never got that far. To compare
+builds, group by version/provider/model/stream/encoding over approved
+existing logs, include failed/aborted counts with sample size and time
+window, and use per-request ratios, never ratios of unrelated
+percentiles. Paid direct-versus-router comparisons need separate
+explicit authority.
+
+## Stream identity observation (last-observed, not proof)
+
+Tool-free responses carry an optional identity observer: bytes forward
+immediately while a bounded copy is retained for a post-EOF parse
+(JSON, only when the whole body fit in 64 KiB) or complete-frame parse
+(SSE, tails over 64 KiB discarded unobserved). Oversized, malformed, or
+compressed-without-identity bodies leave the observation unavailable
+rather than blocking or fabricating one. `/health served_models` is
+therefore last-observed state per alias, never proof of the current
+served model; a new observation overwrites, an unobservable response
+leaves the prior entry intact.
+
 ## Per-user OpenRouter keys (IT issue and revoke)
 
 Owner decision 2026-09-09: IT issues one OpenRouter key per portco user;
@@ -146,11 +223,49 @@ access on migration; unsets keep prior behavior.
 Replace the `openrouter.key` file contents. No restart is needed; the
 router reads the key per request.
 
+## Per-portco model policy
+
+Onboarding: add the user to the portco subgroup, resolve the slug subset
+centrally against the current `models.json` (a department list must stay
+within its portco list), and deliver `<home>/model-policy.json` (`0600`,
+atomic write) with `portco`, `department`, `allowed_models`, `version`,
+and `updated_at`. The router loads it at startup into
+`state['allowed_models']`; both protocol policies gate OpenRouter slugs
+on it, subscription rows unaffected. Offboarding: remove the user from
+the subgroup and delete their OpenRouter key by id; the policy file goes
+with the machine's decommissioning, never as a revocation control.
+
+## Windows (Task Scheduler)
+
+The Windows backend (`packaging/platforms/windows.py`) registers two
+per-user tasks, `CodexMixedModelRouter` and `CodexMixedModelRouterUpdate`,
+from XML it writes to `logs\*.task.xml`. Facts the design rests on, all
+verified on Windows 11 on 2026-09-10: a logon trigger must name the
+installing user (an unscoped one needs elevation and fails with "Access is
+denied"); a repeating trigger needs a `StartBoundary`; `schtasks /delete`
+leaves a running instance alive, so uninstall ends the tasks first;
+re-registering a running task keeps its instance, so the updater can refresh
+its own definition; and an interactive-token console task shows its window,
+so both tasks run `pythonw.exe` through `task_launch.py` in the router home
+(rewritten on every install), which appends stdout and stderr to
+`logs\launchd.log` and `logs\update.log` (rotated at 1 MB, one backup). Every console child (`schtasks`, `icacls`, `whoami`, `python`,
+`gh`) is spawned without a window.
+
+Restart and update: the task allows one instance (`IgnoreNew`), so a
+handover posts the authenticated `/shutdown`, waits for the instance to
+leave the Running state (up to 180 seconds), then runs the task again; a
+process still alive after that deadline is ended. `schtasks /query /tn
+CodexMixedModelRouter /fo list /v` shows status, last run and last result
+(`267009` means running). Key protection: the router home carries an
+inheritable owner-only grant and the key and state files a plain one; a
+widened ACL makes the router refuse the key at read time.
+
 ## Incidents
 
 Check `/health`, then `logs/launchd.log`, then
-`launchctl print` for the router agent. Roll back by re-running the
-installer with `--version` pointing at the previous release.
+`launchctl print` for the router agent (`schtasks /query` on Windows). Roll
+back by re-running the installer with `--version` pointing at the previous
+release.
 
 ## Decision log
 

@@ -5,7 +5,7 @@ import json
 import unittest
 from unittest.mock import Mock
 
-from codex_router import agent_handoffs, compaction, providers
+from ai_router import agent_handoffs, compaction, providers
 from tests.test_agent_handoffs import alias_call, native_tools
 
 

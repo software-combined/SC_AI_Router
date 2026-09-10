@@ -1,6 +1,138 @@
 # Changelog
 
+## 0.6.14
+
+- DeepSeek keeps two pinned, verified rows: `deepseek/deepseek-v4.1-flash`
+  (newest Flash, image-capable) and `deepseek/deepseek-v4-pro-0813`
+  (newest Pro, text-only). The `~deepseek/deepseek-v4-flash-latest`
+  tracking alias and the `deepseek/deepseek-v4-flash-vision-exp` row are
+  retired via `RETIRED_SLUGS` so upgrades drop them from the picker.
+
+- Install global starter instructions once from the setup window: after the
+  key is stored, a Dev or General choice writes the matching full
+  `AGENTS.md` only when no global instructions file exists yet. Existing
+  files are never overwritten, and updates and uninstall leave them alone.
+
+- Bootstrap token hygiene: the feed token no longer appears on the curl
+  command line (curl reads it from an owner-only header file that is
+  removed when the bootstrap exits), and it is persisted only after the
+  first authenticated fetch succeeds, keeping the prior value in
+  `feed-token.previous` for the updater's one-time 403 retry.
+
+- `--uninstall --dry-run` now previews: it reports the target home and
+  exits before touching client settings or services, matching the other
+  dry-run actions. The scratch-home guard is unchanged.
+
+## 0.6.13
+
+- Auto-update without repo access (Plan 054, source slice): the scheduled
+  updater learns a feed token from `latest.json` and switches itself from
+  private GitHub Releases (gh) to the token-gated feed at
+  `dist.softwarecombined.com`, per host, with no manual step. Hosts without
+  a token keep the exact pre-migration route, so old and new installs
+  coexist; a host that is already current still migrates on its next poll,
+  because the token is learned after the serial check and before the
+  version comparison. Feed and token handling consolidate into
+  `packaging/feed.py`; feeds and bundles off the trusted origins are
+  refused, and refusal messages never echo a URL query string. The
+  CloudFront distribution, publish workflow, and library page remain
+  owner-gated.
+
+- Refuse mutating installer runs against a scratch `--home` unless
+  `ROUTER_LIVE_RUN=1`: service names are machine-wide, so a run pointed at
+  /tmp still bootstraps, bootouts, or TERMs the production jobs. Read-only
+  `--status`/`--preflight` stay exempt; `--uninstall` is refused with or
+  without `--dry-run`. A prior simulation against /tmp took down the
+  production router this way; the guard makes that shape refuse before any
+  service call.
+
+- Operator bootstrap for no-repo-access installs: `packaging/bootstrap.sh`
+  (macOS/Linux) and `packaging/bootstrap.ps1` (Windows) install a router
+  host from the Technology library page with `SCG_FEED_TOKEN`, resolving
+  the pinned Python runtime from `runtimes.json`, which `release.py` now
+  emits next to `latest.json`; `release.py --feed-token-file` embeds the
+  publish-time feed token, and `docs/operations.md` documents the flow.
+
+- Add `docs/agent-install-prompt.md`: a paste-to-agent prompt for the
+  Technology library page so users can have their agent run the bootstrap
+  and verify setup without repo access.
+
+- Rename the runtime package `codex_router` to `ai_router` (Plan 074): the
+  router serves Codex, Claude Code, and OpenRouter side by side, and the old
+  prefix misled readers into treating the Codex adapter as the whole router.
+  Distribution and bundle names become `ai-router`. Installed homes, service
+  labels, state/catalogue filenames, and the `codex_router` log name stay so
+  existing installs keep working; a thin `codex_router` alias re-exports
+  `ai_router` during the transition, and the launcher boots either package
+  layout. Client-specific modules (`clients/codex.py`, `claude.py`,
+  `codex_config.py`) keep their names.
+
+- Keep one effective discovered schema per tool through compaction: the
+  discovered-tool store deduplicates by (namespace, name) before memory/disk
+  writes and on recall, so repeated rediscovery no longer grows duplicate
+  definitions; first full definition wins with stub completion preserved.
+
+- Name the model id on catalog misses: `UNKNOWN_MODEL` now carries the
+   requested `model` plus a `candidates` list holding at most the exact
+  tilde-alias slug (e.g. bare `anthropic/claude-opus-latest` offers
+  `~anthropic/claude-opus-latest`), so a parent can retry once instead
+  of probing the catalog. Identity stays strict: nothing auto-routes,
+  and the hint never names a slug the portco allowlist excludes.
+
+- List every OpenRouter row in the Claude desktop third-party gateway
+  picker: `GET /v1/models` rows now project `anthropic_family_tier`
+  (`sonnet` for non-Anthropic rows, each Anthropic alias's own tier
+  word), which the desktop requires for non-Anthropic-looking ids. No
+  registry field is added and ordering and labels are untouched.
+  `packaging/install.py --desktop` attaches and detaches the desktop
+  gateway profile with the same ownership receipt discipline as the
+  Claude Code CLI attach, and refuses when `claude_mode` is `none`.
+
+## 0.6.12
+
+- Make the Windows installer work end to end (Plan 057 Stages 3, 4 and
+  the first real-machine proof, Windows 11 2026-09-10): the router task's
+  logon trigger is scoped to the installing user (an unscoped one needs
+  elevation) and its recovery trigger carries the `StartBoundary` Task
+  Scheduler requires; an update or restart drains the running router through
+  `/shutdown` and waits for the instance to end before relaunching, since
+  `IgnoreNew` made the old `/run` a no-op; uninstall ends both tasks before
+  deleting them (a deleted task leaves its process running); both tasks run
+  `pythonw.exe` through a home-root `task_launch.py` (written on every
+  install) that routes stdout/stderr to `logs\launchd.log` and
+  `logs\update.log`, and every console child is spawned windowless.
+- `stop` on a never-registered task no longer masks the real failure, and
+  the installer prints why a backend refused before it rolls back.
+- Ship `packaging/platforms/windows.py` in the release bundle: without it
+  every scheduled update and rollback on an installed Windows router failed
+  to load the backend.
+- Write the Codex catalogue path with forward slashes: a native Windows
+  path in the TOML block made `config.toml` unreadable to Codex.
+- Protect `mixed-router-state.json` (loopback token) and the router home
+  itself on Windows with the key's owner-only `icacls` grant, inheritable so
+  every file the router writes later is born owner-only; grants name the
+  account as `whoami` reports it.
+- `install.ps1` runs the installer through the `py` launcher instead of the
+  bare `python` alias, which opens the Microsoft Store on a stock profile;
+  the no-interpreter message names the Windows remedy instead of Homebrew.
+- Uninstall drops the Codex activation receipt after restoring the config
+  (all platforms): a stale receipt made the next install refuse the
+  subagent guidance it found missing and exit 1 with the service running.
+
 ## 0.6.11
+
+- Forward stream bytes without waiting for identity inspection: the
+  tool-free observer now yields each piece as it arrives and parses at
+  most 64 KiB retained bytes (JSON, post-EOF) or complete SSE frames,
+  instead of buffering the body first. Oversized or malformed bodies
+  disable observation, never forwarding. No deployed latency claimed.
+
+- Attribute router latency per phase instead of one cumulative number:
+  `request_completed` now carries `read_ms`, `prepare_ms`, `connect_ms`,
+  `send_ms`, `headers_ms`, `first_data_ms`, and `first_write_ms`, plus
+  fixed-category `response_kind`/`response_encoding`; failures record
+  the phases that completed. Cumulative fields keep their meanings.
+  This enables measurement; it claims no latency improvement.
 
 - Attribute context refusals and estimate the full billable request:
   the pre-flight estimate now counts serialized tools and instructions
@@ -8,6 +140,15 @@
   and each `context_length_exceeded` rejection logs the model, path,
   and `used`/`reserved`/`window` integers so the next incident needs
   no by-traffic attribution.
+
+- Enforce per-portco model allowlists as resolved data (Plan 068, source
+  only): `<home>/model-policy.json` (`0600`, atomic write) carries the
+  centrally resolved slug subset; the picker (`merge`/`check` plus the
+  `--allowed` CI flag) and both protocol routers reject non-listed
+  OpenRouter slugs with the existing closed error while subscription
+  rows are unaffected. Absent file means all approved models; malformed
+  files fail closed to an empty OpenRouter set. Central grant schema,
+  refresh delivery, and per-install issuance stay gated on Plan 054 Stage 4.
 
 - Give the first-run key page an executive light-theme layout matching
   SC_360 (single card, blue-600 primary control, slate hairlines,

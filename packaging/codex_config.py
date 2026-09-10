@@ -1,9 +1,9 @@
 """Codex client activation adapter (Plan 063). Python 3.9-safe helper.
 
-Owns Codex block generation, selected-model preservation, guidance, and
-activation receipt handling. Loaded through the installer's explicit
-file-import pattern and shipped in the release bundle. No
-runtime/protocol import from this helper.
+Owns Codex block generation, selected-model preservation, and activation
+receipt handling. Loaded through the installer's explicit file-import
+pattern and shipped in the release bundle. No runtime/protocol import
+from this helper.
 """
 import hashlib
 import json
@@ -16,21 +16,23 @@ END = '# END local mixed model picker'
 
 def build_block(home, state, mode):
     """Managed Codex config block for this install and subscription mode."""
-    catalog_line = f'model_catalog_json = "{home}/mixed-models.json"\n'
-    block = ('# BEGIN local mixed model picker\n'
-             f'openai_base_url = "http://127.0.0.1:{state["port"]}/{state["token"]}/backend-api/codex"\n'
-             + catalog_line + '# END local mixed model picker\n')
+    # Forward slashes: a TOML basic string treats backslashes as escapes, so
+    # a native Windows path would make the whole config unreadable to Codex.
+    catalog_line = f'model_catalog_json = "{Path(home).as_posix()}/mixed-models.json"\n'
+    url = f'http://127.0.0.1:{state["port"]}/{state["token"]}/backend-api/codex'
     if mode == 'none':
-        block = ('# BEGIN local mixed model picker\n'
-                 'model_provider = "scg_router"\n'
-                 + catalog_line +
-                 'approvals_reviewer = "user"\n'
-                 '[model_providers.scg_router]\n'
-                 'name = "SC router"\n'
-                 f'base_url = "http://127.0.0.1:{state["port"]}/{state["token"]}/backend-api/codex"\n'
-                 'wire_api = "responses"\n'
-                 + '# END local mixed model picker\n')
-    return block
+        return (BEGIN + '\n'
+                'model_provider = "scg_router"\n'
+                + catalog_line +
+                'approvals_reviewer = "user"\n'
+                '[model_providers.scg_router]\n'
+                'name = "SC router"\n'
+                f'base_url = "{url}"\n'
+                'wire_api = "responses"\n'
+                + END + '\n')
+    return (BEGIN + '\n'
+            f'openai_base_url = "{url}"\n'
+            + catalog_line + END + '\n')
 
 
 def preserve_picker_selection(config_path, previous_block, block):
@@ -112,10 +114,14 @@ def write_receipt(home, config_path, block, rules_receipt, mode, before='', clie
     """Record one client attachment; existing attachments are preserved."""
     receipt_path = Path(home) / 'activation.json'
     doc = read_receipt(home) or {'version': RECEIPT_VERSION, 'clients': {}}
-    doc.setdefault('clients', {})[client] = {
-        'config_path': str(config_path), 'inserted_block': block,
-        'global_instructions': rules_receipt, 'openai_mode': mode,
-        'previous_sha256': hashlib.sha256(before.encode()).hexdigest()}
+    entry = {'config_path': str(config_path), 'inserted_block': block,
+             'openai_mode': mode,
+             'previous_sha256': hashlib.sha256(before.encode()).hexdigest()}
+    if rules_receipt:
+        # Legacy installs recorded the managed global-instructions block;
+        # install-once starters record nothing, so the key stays absent.
+        entry['global_instructions'] = rules_receipt
+    doc.setdefault('clients', {})[client] = entry
     receipt_path.write_text(json.dumps(doc, indent=2) + '\n')
     try:
         os.chmod(receipt_path, 0o600)

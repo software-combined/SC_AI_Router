@@ -9,8 +9,8 @@ import unittest
 from datetime import datetime
 from pathlib import Path
 from unittest import mock
-from codex_router.credentials import Credentials
-from codex_router.runtime import LOG, load_state
+from ai_router.credentials import Credentials
+from ai_router.runtime import LOG, load_state
 from tests.fakes import FakeUpstream, install_fake
 from tests.test_mixed_router import _start_auth_server, _start_server, _test_state
 
@@ -68,7 +68,7 @@ class LoadStateTests(unittest.TestCase):
                 # otherwise satisfies the lookup before opencode_auth is read.
                 home = Path(tempfile.mkdtemp())
                 self.addCleanup(shutil.rmtree, str(home), True)
-                with mock.patch('codex_router.runtime.ROUTER_HOME', home), \
+                with mock.patch('ai_router.runtime.ROUTER_HOME', home), \
                         mock.patch.dict(os.environ, clear=True):
                     with self.assertRaises(SystemExit) as ctx:
                         load_state(Path(path))
@@ -86,7 +86,7 @@ class LoadStateTests(unittest.TestCase):
             os.environ.pop('OPENROUTER_API_KEY', None)
             home = Path(tempfile.mkdtemp())
             self.addCleanup(shutil.rmtree, str(home), True)
-            with mock.patch('codex_router.runtime.ROUTER_HOME', home):
+            with mock.patch('ai_router.runtime.ROUTER_HOME', home):
                 with self.assertRaises(SystemExit) as ctx:
                     load_state(Path(path))
                 self.assertIn('OpenRouter credential problem', str(ctx.exception))

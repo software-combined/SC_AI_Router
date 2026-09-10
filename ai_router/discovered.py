@@ -1,0 +1,219 @@
+"""Discovered tool schemas keyed by compaction summary, memory plus disk.
+
+A compacted thread replays only its summary, so per-turn rederivation loses
+schemas after repeated compaction; memory alone loses them on restart. The
+key is the raw summary text: V1 user messages carry it after SUMMARY_PREFIX
+and V2 compaction items carry it inside the ocx1 envelope, so both legs and
+every later compaction of the same thread resolve to one entry.
+"""
+import hashlib
+import json
+import os
+import threading
+from copy import deepcopy
+from pathlib import Path
+from .compaction import SUMMARY_PREFIX, decode_summary
+
+_MEMORY, _LOCK, _MAX = {}, threading.Lock(), 16
+
+
+def _home():
+    return Path(os.environ.get('ROUTER_HOME', Path.home() / '.codex' / 'mixed-model-router'))
+
+
+def _store_dir():
+    return _home() / 'discovered-tools'
+
+
+def _key(summary):
+    return hashlib.sha256(summary.encode()).hexdigest()
+
+
+def _write_disk(key, defs):
+    try:
+        directory = _store_dir()
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / (key + '.json')
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, 'w') as stream:
+            stream.write(json.dumps(defs))
+        _stamp_and_prune(directory, path, _MAX)
+    except OSError:
+        pass  # The memory entry still serves this process.
+
+
+def _stamp_after(path, latest):
+    """Set path's mtime strictly past `latest`, surviving filesystem rounding.
+
+    Windows FILETIME has 100 ns granularity and truncates the written value on
+    readback, so a +1 ns bump ties with the sibling instead of ordering after
+    it. Step past `latest`, confirm the stored value actually moved, and widen
+    the step for any filesystem that rounds harder."""
+    step = 1000
+    for _ in range(20):
+        target = latest + step
+        os.utime(path, ns=(target, target))
+        stored = path.stat().st_mtime_ns
+        if stored > latest:
+            return stored
+        step *= 8
+    return latest + step  # unreachable in practice; keep strict ordering
+
+
+def _stamp_and_prune(directory, newest, limit):
+    """Order by insertion, not the clock: stamp the new file past every
+    sibling so rapid successive compactions still evict oldest-first."""
+    try:
+        entries = [(p.stat().st_mtime_ns, p) for p in directory.glob('*.json')]
+    except OSError:
+        return
+    try:
+        latest = max(ns for ns, p in entries if p != newest)
+        stamped = _stamp_after(newest, latest)
+        entries = [(stamped if p == newest else ns, p) for ns, p in entries]
+    except (OSError, ValueError):
+        pass
+    entries.sort()
+    if len(entries) > limit:
+        for _, path in entries[:-limit]:
+            try:
+                path.unlink()
+            except OSError:
+                pass
+
+
+def _read_disk(key):
+    try:
+        return json.loads((_store_dir() / (key + '.json')).read_text())
+    except (OSError, ValueError):
+        return None
+
+
+def summaries_in(items):
+    """Raw summary texts replayed in this input, V1 messages and V2 items."""
+    found = []
+    for item in items if isinstance(items, list) else []:
+        if not isinstance(item, dict):
+            continue
+        if (item.get('type') in (None, 'message') and item.get('role') == 'user'):
+            content = item.get('content')
+            if isinstance(content, str):
+                texts = [content]
+            elif isinstance(content, list):
+                texts = [b.get('text', '') for b in content
+                         if isinstance(b, dict) and isinstance(b.get('text'), str)]
+            else:
+                texts = []
+            for text in texts:
+                if isinstance(text, str) and text.startswith(SUMMARY_PREFIX):
+                    found.append(text[len(SUMMARY_PREFIX):].lstrip('\n'))
+        elif item.get('type') == 'compaction':
+            decoded = decode_summary(item.get('encrypted_content'))
+            if decoded:
+                found.append(decoded)
+    return found
+
+
+def _merge_entry(merged, tool):
+    """Fold one stored row into merged, keyed by (namespace, name)."""
+    key = (tool.get('namespace'), tool.get('name'))
+    if key not in merged:
+        merged[key] = tool
+    elif (merged[key].get('parameters') is None
+            and tool.get('parameters') is not None):
+        merged[key] = tool
+
+
+def _dedup(defs):
+    """One effective definition per (namespace, name) within one row shape.
+
+    Flat rows and wrapper-held tools dedup independently; a flat row and
+    a wrapper holding the same logical tool both survive (pre-existing
+    mixed representation, harmless downstream).
+    First occurrence wins.
+
+    Fresh entries precede recalled ones in the input order, so the first
+    full definition stands; a later entry supersedes an earlier one only
+    to complete a stub that lacks parameters, mirroring prepare_tools.
+    Namespace wrappers merge by their inner tools, never as one atomic
+    row: two wrappers for the same namespace combine their tools instead
+    of the newer wrapper discarding the older one."""
+    merged = {}
+    wrappers = {}
+    order = []
+    for tool in defs:
+        if not isinstance(tool, dict):
+            continue
+        if tool.get('type') == 'namespace' and isinstance(tool.get('tools'), list):
+            name = tool.get('name')
+            if name not in wrappers:
+                wrappers[name] = dict(tool, tools=[])
+                order.append(('wrapper', name))
+            for inner in tool.get('tools'):
+                if not isinstance(inner, dict):
+                    continue
+                namespaced = dict(inner, namespace=tool.get('name'))
+                key = (namespaced.get('namespace'), namespaced.get('name'))
+                if key not in merged:
+                    merged[key] = namespaced
+                    wrappers[name]['tools'].append(namespaced)
+                elif (merged[key].get('parameters') is None
+                        and namespaced.get('parameters') is not None):
+                    merged[key] = namespaced
+                    wrapped = wrappers[name]['tools']
+                    for i, existing in enumerate(wrapped):
+                        if (existing.get('namespace'), existing.get('name')) == key:
+                            wrapped[i] = namespaced
+            continue
+        _merge_entry(merged, tool)
+        key = (tool.get('namespace'), tool.get('name'))
+        if key not in order:
+            order.append(key)
+    out = []
+    for entry in order:
+        if entry[0] == 'wrapper':
+            wrapper = wrappers[entry[1]]
+            if wrapper['tools']:
+                out.append(wrapper)
+        else:
+            out.append(merged[entry])
+    return out
+
+
+def remember(items, summary):
+    """Store tool_search_output schemas under this compaction summary."""
+    if not isinstance(summary, str) or not summary.strip():
+        return
+    defs = []
+    for item in items if isinstance(items, list) else []:
+        if (isinstance(item, dict) and item.get('type') == 'tool_search_output'
+                and isinstance(item.get('tools'), list)):
+            defs.extend(deepcopy(item['tools']))
+    defs.extend(recall(items))
+    defs = _dedup(defs)
+    if not defs:
+        return
+    key = _key(summary.strip())
+    with _LOCK:
+        _MEMORY[key] = deepcopy(defs)
+        if len(_MEMORY) > _MAX:
+            _MEMORY.pop(next(iter(_MEMORY)))
+    _write_disk(key, defs)
+
+
+def recall(items):
+    """Schemas for summaries replayed in this input, memory then disk."""
+    found = []
+    with _LOCK:
+        for summary in summaries_in(items):
+            key = _key(summary)
+            defs = _MEMORY.get(key)
+            if defs is None:
+                defs = _read_disk(key)
+                if defs is not None:
+                    _MEMORY[key] = deepcopy(defs)
+            if defs:
+                # Legacy disk entries may already hold duplicates; apply
+                # the same normalisation on recall without rewriting files.
+                found.extend(deepcopy(_dedup(defs)))
+    return found

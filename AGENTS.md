@@ -40,7 +40,7 @@ per-install. Subscription headers never accompany OpenRouter requests.
 ## 5. Verification before commit
 
 Run `python3.14 -m unittest discover -s tests -t .`,
-`python3.14 -m compileall -q codex_router tools tests packaging`, and
+`python3.14 -m compileall -q ai_router tools tests packaging`, and
 `python3.14 tools/check_source_limits.py`, then the shared
 `pre-commit-review` skill. Commit subjects use `<type>: <short summary>`
 with type `feat`, `fix`, `refactor`, `test`, `chore` or `docs`.
@@ -81,7 +81,7 @@ confirm a claim against the version actually installed before acting on it.
 |---|---|---|
 | Codex | https://github.com/openai/codex | Picker and catalogue shape, `thread/start` and `turn/start` wire format, `model_providers` config keys, `wire_api` behaviour, approvals |
 | OpenCode | https://github.com/anomalyco/opencode | Credential file format read by `credentials.py` (`opencode_auth`), provider and model config |
-| Claude Code | https://github.com/anthropics/claude-code | `ANTHROPIC_BASE_URL` and `ANTHROPIC_MODEL` handling, ingress expectations in `codex_router/claude.py` |
+| Claude Code | https://github.com/anthropics/claude-code | `ANTHROPIC_BASE_URL` and `ANTHROPIC_MODEL` handling, ingress expectations in `ai_router/claude.py` |
 
 Verified 2026-09-09: `sst/opencode` now redirects to `anomalyco/opencode`; use
 the current path and re-check with `gh repo view <owner>/<repo>` before relying

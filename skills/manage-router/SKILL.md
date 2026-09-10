@@ -29,7 +29,8 @@ this skill never edits client settings or router state by hand.
 - Setup: `python3 packaging/install.py --setup --home <home>` for the
   invoking client; add `--clients both` only when both were requested.
   Collect subscription modes first (`--openai-mode`, `--claude-mode`);
-  the key window collects the key only and never changes routing.
+  the key window collects the key and a Dev/General starter choice; it installs
+  the starter only when no global instructions file exists and never changes routing.
 - Status: `python3 packaging/install.py --status --json --home <home>`.
   Health alone is not successful setup; a model round trip proves it.
 - Update: `python3 packaging/install.py --check-update --home <home>`.

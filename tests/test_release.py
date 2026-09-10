@@ -5,6 +5,7 @@ import subprocess
 import sys
 import importlib.util
 import tarfile
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -27,7 +28,9 @@ class ReleaseTests(unittest.TestCase):
         self.addCleanup(shutil.rmtree, str(out), True)
         release_mod.main(['--out', str(out), '--url-base', 'file:///tmp/feed'])
         files = list(out.iterdir())
-        self.assertEqual(len(files), 2)
+        self.assertEqual({p.name for p in files},
+                         {next(p for p in files if p.suffix == '.gz').name,
+                          'latest.json', 'runtimes.json'})
         tarball = next(p for p in files if p.suffix == '.gz')
         latest = json.loads((out / 'latest.json').read_text())
         self.assertEqual(latest['sha256'], hashlib.sha256(tarball.read_bytes()).hexdigest())
@@ -61,6 +64,30 @@ class ReleaseTests(unittest.TestCase):
         self.assertFalse([n for n in names if '__pycache__' in n or n.endswith('.pyc')])
         self.assertIn('MANIFEST.json', names)
 
+    def test_release_embeds_feed_token_from_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            token_file = Path(tmp) / 'token'
+            token_file.write_text('tok-secret\n')
+            out = Path(tmp) / 'out'
+            release_mod.main(['--out', str(out), '--feed-token-file', str(token_file)])
+            latest = json.loads((out / 'latest.json').read_text())
+            self.assertEqual(latest['feed_token'], 'tok-secret')
+            out2 = Path(tmp) / 'out2'
+            release_mod.main(['--out', str(out2)])
+            self.assertNotIn('feed_token', json.loads((out2 / 'latest.json').read_text()))
+
+    def test_runtimes_json_matches_runtime_lock(self):
+        out = _ROOT / 'dist-test-runtimes'
+        self.addCleanup(shutil.rmtree, str(out), True)
+        release_mod.main(['--out', str(out)])
+        runtimes = json.loads((out / 'runtimes.json').read_text())
+        lock = json.loads((_ROOT / 'packaging' / 'runtime.lock').read_text())
+        self.assertEqual(runtimes['cpython'], lock['cpython'])
+        self.assertEqual(
+            runtimes['targets'],
+            {e['os'] + '/' + e['cpu']: {'mirror': e['mirror'], 'sha256': e['sha256'],
+                                        'exec': e['exec']} for e in lock['targets']})
+
     def test_bundle_covers_runtime_import_closure(self):
         out = _ROOT / 'dist-test-closure'
         self.addCleanup(shutil.rmtree, str(out), True)
@@ -68,10 +95,11 @@ class ReleaseTests(unittest.TestCase):
         tarball = next(iter(out.glob('*.tar.gz')))
         with tarfile.open(tarball, mode='r') as tar:
             names = tar.getnames()
-        for dep in ('codex_router/models.json',
-                    'codex_router/openrouter_base_instructions.txt',
+        for dep in ('ai_router/models.json',
+                    'ai_router/openrouter_base_instructions.txt',
                     'packaging/router_launch.py',
                     'packaging/service.py',
+                    'packaging/feed.py',
                     'packaging/updater.py',
                     'packaging/codex_config.py',
                     'packaging/claude_config.py',
@@ -79,7 +107,8 @@ class ReleaseTests(unittest.TestCase):
                      'packaging/runtime.lock', 'packaging/runtime_lock.py',
                     'packaging/platforms/__init__.py',
                     'packaging/platforms/darwin.py',
-                    'packaging/platforms/linux.py'):
+                    'packaging/platforms/linux.py',
+                    'packaging/platforms/windows.py'):
             self.assertIn(dep, names, dep)
         extract = out / 'extracted'
         extract.mkdir()
@@ -87,7 +116,7 @@ class ReleaseTests(unittest.TestCase):
             tar.extractall(extract, filter='data')
         result = subprocess.run(
             [sys.executable, '-c',
-             'from codex_router.registry import MODELS; print(len(MODELS))'],
+             'from ai_router.registry import MODELS; print(len(MODELS))'],
             cwd=str(extract), capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertGreater(int(result.stdout.strip()), 0)
@@ -95,19 +124,19 @@ class ReleaseTests(unittest.TestCase):
         # handler, providers, setup, catalogue, and installer backends.
         result = subprocess.run(
             [sys.executable, '-c',
-             'from codex_router import router, providers, setup, catalogue;'
-             'from codex_router import registry, compaction, tool_adapter;'
+             'from ai_router import router, providers, setup, catalogue;'
+             'from ai_router import registry, compaction, tool_adapter;'
              'print(len(registry.MODELS))'],
             cwd=str(extract), capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertGreater(int(result.stdout.strip()), 0)
         # A deliberately incomplete extraction must fail its smoke with a
         # specific missing dependency, proving the check is not vacuous.
-        missing = extract / 'codex_router' / 'providers.py'
+        missing = extract / 'ai_router' / 'providers.py'
         missing.unlink()
         result = subprocess.run(
             [sys.executable, '-c',
-             'from codex_router import router'],
+             'from ai_router import router'],
             cwd=str(extract), capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('providers', result.stderr)

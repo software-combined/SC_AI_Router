@@ -2,7 +2,7 @@ import json
 import unittest
 from types import SimpleNamespace
 from unittest import mock
-from codex_router import providers
+from ai_router import providers
 
 
 def _stub_credentials(key='router-secret'):
@@ -20,6 +20,19 @@ class SelectTests(unittest.TestCase):
     def test_select_rejects_unknown_model(self):
         with self.assertRaisesRegex(ValueError, 'not in the configured catalog'):
             providers.select('unknown/model', '/responses', ['gpt-6-astra'])
+
+    def test_select_unknown_carries_id_and_tilde_candidate(self):
+        from ai_router.errors import UnknownModel
+        with self.assertRaises(UnknownModel) as caught:
+            providers.select('anthropic/claude-opus-latest', '/responses',
+                             ['gpt-6-astra'])
+        self.assertEqual(caught.exception.model,
+                         'anthropic/claude-opus-latest')
+        self.assertEqual(caught.exception.candidates,
+                         ('~anthropic/claude-opus-latest',))
+        with self.assertRaises(UnknownModel) as caught:
+            providers.select('unknown/model', '/responses', ['gpt-6-astra'])
+        self.assertEqual(caught.exception.candidates, ())
 
     def test_openrouter_prepare_emits_router_key_only(self):
         # Picker visibility never gates routing: hidden GPT slugs still route.
@@ -66,7 +79,7 @@ class OutputCapTests(unittest.TestCase):
         # Regression: a 943718 reservation on a 1048576 window leaves ~105k
         # for input, so a ~105k-input request blows the context. The router
         # must reserve at most half the window for output.
-        from codex_router.registry import by_slug
+        from ai_router.registry import by_slug
         provider = providers.OpenRouterProvider()
         entry = by_slug('meta/muse-spark-1.3-contributor')
         payload = {'model': 'meta/muse-spark-1.3-contributor', 'input': []}
@@ -87,7 +100,7 @@ class OutputCapTests(unittest.TestCase):
         # explicit reservation against a 1048576 window (~1050400 total).
         # Reject before forwarding, using the context-specific error so
         # Codex can distinguish exhaustion from other preparation failures.
-        from codex_router.registry import by_slug
+        from ai_router.registry import by_slug
         provider = providers.OpenRouterProvider()
         entry = by_slug('meta/muse-spark-1.3-contributor')
         payload = {'model': 'meta/muse-spark-1.3-contributor',
@@ -99,7 +112,7 @@ class OutputCapTests(unittest.TestCase):
                              _stub_credentials())
 
     def test_request_within_context_window_still_passes(self):
-        from codex_router.registry import by_slug
+        from ai_router.registry import by_slug
         provider = providers.OpenRouterProvider()
         entry = by_slug('meta/muse-spark-1.3-contributor')
         payload = {'model': 'meta/muse-spark-1.3-contributor',
@@ -113,7 +126,7 @@ class OutputCapTests(unittest.TestCase):
     def test_request_exactly_at_window_passes(self):
         # Strict > pins the boundary: estimate + reserve == window forwards.
         import json as _json
-        from codex_router.registry import by_slug
+        from ai_router.registry import by_slug
         provider = providers.OpenRouterProvider()
         entry = by_slug('meta/muse-spark-1.3-contributor')
         reserved = entry.context_window // 2
@@ -142,7 +155,7 @@ class OutputCapTests(unittest.TestCase):
 
     def test_non_list_input_never_escapes_as_500(self):
         # Wire input of any JSON shape is measured, never a TypeError leak.
-        from codex_router.registry import by_slug
+        from ai_router.registry import by_slug
         provider = providers.OpenRouterProvider()
         entry = by_slug('meta/muse-spark-1.3-contributor')
         for shape in ('do the task', {'text': 'do the task'}, None):
@@ -228,7 +241,7 @@ class SummarizerTests(unittest.TestCase):
             return providers.OpenRouterProvider().summarize(model, 'key', [])
 
     def test_summarizer_pins_lowest_supported_effort(self):
-        for model, effort in (('~deepseek/deepseek-v4-flash-latest', 'low'),
+        for model, effort in (('deepseek/deepseek-v4.1-flash', 'low'),
                               ('z-ai/glm-5.3', 'low')):
             with self.subTest(model=model):
                 seen = {}
@@ -244,7 +257,7 @@ class SummarizerTests(unittest.TestCase):
         self.assertNotIn('reasoning', seen)
 
     def test_compact_remembers_discovered_tools(self):
-        from codex_router.tool_adapter import prepare_tools
+        from ai_router.tool_adapter import prepare_tools
         items = [{'type': 'message', 'role': 'user', 'content': 'do it'},
                  {'type': 'tool_search_output', 'call_id': 's1', 'status': 'completed',
                   'execution': 'client', 'tools': [
