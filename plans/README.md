@@ -23,7 +23,7 @@ Executor rules for every plan:
 | Plan | Title | Status | Sequencing |
 |---|---|---|---|
 | [090](090-router-ingress-lifecycle-hardening.md) | Ingress lifecycle: request timeout, drain accounting, single listener | DONE: ingress lifecycle hardening 2026-09-11 | supersedes 109's `allow_reuse_port` fallback |
-| [091](091-router-adaptation-stream-fast-path.md) | Adaptation fast path: no re-serialize when unchanged | TODO | — |
+| [091](091-router-adaptation-stream-fast-path.md) | Adaptation fast path: no re-serialize when unchanged | DONE: adaptation fast path 2026-09-11 | — |
 | [092](092-router-test-suite-hygiene.md) | Offline test suite, isolated home, three guard tests | TODO | coordinate with 105 |
 | [093](093-router-prepare-path-serialization.md) | Prepare/failure path: no double serialization or re-parse | TODO | — |
 | [094](094-router-atomic-write-consolidation.md) | One atomic writer for installer state/config | TODO | — |
