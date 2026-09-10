@@ -163,6 +163,23 @@ class DesktopMergeTests(unittest.TestCase):
                 desktop_config.detach(home, install_mod._codex_config)
             self.assertFalse((home / 'activation.json').exists())
 
+    def test_attach_preserves_prior_codex_entry(self):
+        # Plan 095: the shared writer must not disturb other attachments;
+        # the Codex entry survives a desktop attach byte-for-byte.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            home.mkdir()
+            data_dir = _profile(tmp)
+            receipts = install_mod._codex_config
+            receipts.write_receipt(home, '/c/config.toml', 'block-codex',
+                                   None, 'subscription', '')
+            before = json.loads((home / 'activation.json').read_text())['clients']['codex']
+            desktop_config.attach(home, _state(), receipts, data_dir_override=data_dir)
+            doc = json.loads((home / 'activation.json').read_text())
+            self.assertEqual(doc['version'], receipts.RECEIPT_VERSION)
+            self.assertEqual(doc['clients']['codex'], before)
+            self.assertIn('claude-desktop', doc['clients'])
+
     def test_data_dir_honors_env_override(self):
         with tempfile.TemporaryDirectory() as tmp:
             data_dir = _profile(tmp)

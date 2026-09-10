@@ -139,15 +139,6 @@ def restore_entry(path, previous):
     write_json(path, doc)
 
 
-def _snapshot(text):
-    """Prior-values dict from a receipt snapshot; {} when not a JSON object."""
-    try:
-        previous = json.loads(text)
-    except ValueError:
-        return {}
-    return previous if isinstance(previous, dict) else {}
-
-
 def attach(home, state, receipts, data_dir_override=None, env=None):
     """Attach the desktop gateway without touching first-party state.
 
@@ -177,26 +168,19 @@ def attach(home, state, receipts, data_dir_override=None, env=None):
         cfg['deploymentMode'] = '3p'
         write_json(cfg_path if cfg_path is not None
                    else data_dir / 'claude_desktop_config.json', cfg)
-    receipt = receipts.read_receipt(home)
-    clients = receipt.setdefault('clients', {})
-    existing = clients.get(CLIENT_KEY, {})
+    existing = receipts.read_receipt(home).get('clients', {}).get(CLIENT_KEY, {})
     if (not changed and not mode_changed and isinstance(existing, dict)
             and 'inserted_block' in existing):
         # Re-attach with identical values: keep the original pre-attach
         # snapshot so a later detach restores it instead of our own values.
-        previous = _snapshot(existing['inserted_block'])
+        previous = receipts.parse_snapshot(existing['inserted_block'])
         previous_mode = previous.get('deploymentMode', previous_mode)
     snapshot = dict(previous)
     snapshot['deploymentMode'] = previous_mode
-    clients[CLIENT_KEY] = {'config_path': str(entry_path),
-                           'inserted_block': json.dumps(snapshot, sort_keys=True),
-                           'claude_mode': state.get('claude_mode', 'subscription')}
-    receipt['version'] = receipts.RECEIPT_VERSION
-    (Path(home) / 'activation.json').write_text(json.dumps(receipt, indent=2) + '\n')
-    try:
-        os.chmod(Path(home) / 'activation.json', 0o600)
-    except OSError:
-        pass
+    entry = {'config_path': str(entry_path),
+             'inserted_block': json.dumps(snapshot, sort_keys=True),
+             'claude_mode': state.get('claude_mode', 'subscription')}
+    receipts.write_client_receipt(home, CLIENT_KEY, entry)
     return entry_path
 
 
@@ -215,7 +199,7 @@ def detach(home, receipts, data_dir_override=None, env=None):
     else:
         data_dir = user_data_dir(env)
         path = applied_entry_path(data_dir)
-    previous = _snapshot(entry.get('inserted_block', '{}'))
+    previous = receipts.parse_snapshot(entry.get('inserted_block', '{}'))
     restore_entry(path, previous)
     old_mode = previous.get('deploymentMode')
     if data_dir is not None:
