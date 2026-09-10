@@ -12,17 +12,36 @@
   layout. Client-specific modules (`clients/codex.py`, `claude.py`,
   `codex_config.py`) keep their names.
 
-- Keep one effective discovered schema per tool through compaction: the
-  discovered-tool store deduplicates by (namespace, name) before memory/disk
-  writes and on recall, so repeated rediscovery no longer grows duplicate
-  definitions; first full definition wins with stub completion preserved.
+## 0.6.12
 
-- Name the model id on catalog misses: `UNKNOWN_MODEL` now carries the
-   requested `model` plus a `candidates` list holding at most the exact
-  tilde-alias slug (e.g. bare `anthropic/claude-opus-latest` offers
-  `~anthropic/claude-opus-latest`), so a parent can retry once instead
-  of probing the catalog. Identity stays strict: nothing auto-routes,
-  and the hint never names a slug the portco allowlist excludes.
+- Make the Windows installer work end to end (Plan 057 Stages 3, 4 and
+  the first real-machine proof, Windows 11 2026-09-10): the router task's
+  logon trigger is scoped to the installing user (an unscoped one needs
+  elevation) and its recovery trigger carries the `StartBoundary` Task
+  Scheduler requires; an update or restart drains the running router through
+  `/shutdown` and waits for the instance to end before relaunching, since
+  `IgnoreNew` made the old `/run` a no-op; uninstall ends both tasks before
+  deleting them (a deleted task leaves its process running); both tasks run
+  `pythonw.exe` through a home-root `task_launch.py` (written on every
+  install) that routes stdout/stderr to `logs\launchd.log` and
+  `logs\update.log`, and every console child is spawned windowless. `stop` on a never-registered task no longer masks the
+  real failure, and the installer prints why a backend refused before it
+  rolls back.
+- Ship `packaging/platforms/windows.py` in the release bundle: without it
+  every scheduled update and rollback on an installed Windows router failed
+  to load the backend.
+- Write the Codex catalogue path with forward slashes: a native Windows
+  path in the TOML block made `config.toml` unreadable to Codex.
+- Protect `mixed-router-state.json` (loopback token) and the router home
+  itself on Windows with the key's owner-only `icacls` grant, inheritable so
+  every file the router writes later is born owner-only; grants name the
+  account as `whoami` reports it.
+- `install.ps1` runs the installer through the `py` launcher instead of the
+  bare `python` alias, which opens the Microsoft Store on a stock profile;
+  the no-interpreter message names the Windows remedy instead of Homebrew.
+- Uninstall drops the Codex activation receipt after restoring the config
+  (all platforms): a stale receipt made the next install refuse the
+  subagent guidance it found missing and exit 1 with the service running.
 
 ## 0.6.11
 

@@ -253,15 +253,8 @@ def _restore_owned_config(home):
         print((result.stderr or '')[-2000:])
         raise SystemExit('configuration restore failed; refusing the client change')
     # The remover restores files but keeps the receipt; a detached client
-    # must not leave a claim to settings it no longer owns. Sibling client
-    # attachments are preserved; the file goes only when none remain.
+    # must not leave a claim to settings it no longer owns.
     _codex_config.drop_client(home, 'codex')
-    if _codex_config.read_receipt(home).get('clients', {}):
-        return
-    try:
-        (Path(home) / 'activation.json').unlink()
-    except OSError:
-        pass
 
 
 def do_rollback(args):
@@ -327,7 +320,9 @@ def do_install(args, _fetch=fetch, _run=None):
             run(['brew', 'install', 'python@3.14'], check=True)
             python = find_python(args.python)
         if python is None:
-            print('No Python 3.14 found: brew install python@3.14')
+            remedy = ('install Python 3.14 from python.org (py -V:3.14) or pass --python'
+                      if PLATFORM == 'win32' else 'brew install python@3.14')
+            print(f'No Python 3.14 found: {remedy}')
             raise SystemExit(2)
     feed = args.feed or channel_feed(home)
     latest = json.loads(_fetch(feed).decode())
@@ -351,10 +346,20 @@ def do_install(args, _fetch=fetch, _run=None):
         except KeyError:
             raise SystemExit('bundle has no MANIFEST.json')
     home.mkdir(mode=0o700, parents=True, exist_ok=True)
+    # Plan 057 Stage 2: harden the home before any token or key is minted
+    # inside it (never widen-then-narrow); POSIX no-op, mode 0700 owns it.
+    backend.protect_secret(home)
     (home / 'logs').mkdir(exist_ok=True)
     # --feed is one-shot: it selects this run's source only. Never pin it,
     # or one local test would freeze every future scheduled update on it.
     state = ensure_state(home)
+    # The state file carries the loopback token: verify it explicitly, and
+    # like the key file never leave an unprotected copy behind on failure.
+    try:
+        backend.protect_secret(home / 'mixed-router-state.json')
+    except SystemExit:
+        (home / 'mixed-router-state.json').unlink(missing_ok=True)
+        raise
     # Absence in legacy state means Codex, not service-only.
     client = args.client or state.get('client', 'codex')
     if client not in ('codex', 'none'):
@@ -423,9 +428,12 @@ def do_install(args, _fetch=fetch, _run=None):
     try:
         backend.install(python, home, state, current_release_dir(home), previous)
         healthy = wait_version(state, latest['version'])
-    except (OSError, subprocess.CalledProcessError, SystemExit):
+    except (OSError, subprocess.CalledProcessError, SystemExit) as exc:
         # SystemExit is caught on purpose: reload and launcher failures raise it,
         # and letting it through here skipped the rollback below entirely.
+        # Say why before rolling back: a backend refusal (task registration,
+        # group policy) is otherwise indistinguishable from a health timeout.
+        print(f'service start failed: {exc}')
         healthy = False
     if not healthy:
         if before_catalog is None:
@@ -599,6 +607,9 @@ def do_uninstall(args):
                 print((result.stderr or '')[-2000:])
                 raise SystemExit('configuration restore failed; '
                                  'services left running for manual review')
+            # As on a client switch: a stale receipt makes the next install
+            # refuse guidance it finds missing rather than changed.
+            _codex_config.drop_client(home, 'codex')
     if _codex_config.read_receipt(home).get('clients', {}).get('claude'):
         detach_claude(home)
     backend.uninstall(home)

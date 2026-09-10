@@ -32,7 +32,8 @@ def bundle_files(root):
            'packaging/diagnostics.py',
            'packaging/runtime.lock', 'packaging/runtime_lock.py',
            'packaging/platforms/__init__.py',
-           'packaging/platforms/darwin.py', 'packaging/platforms/linux.py']
+           'packaging/platforms/darwin.py', 'packaging/platforms/linux.py',
+           'packaging/platforms/windows.py']
     )
 
 

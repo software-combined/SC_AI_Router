@@ -9,6 +9,9 @@ import subprocess
 
 
 def _run(cmd, **kwargs):
+    # The router runs under pythonw.exe (no console): without this flag every
+    # icacls/whoami probe would open a console window on the desktop.
+    kwargs.setdefault('creationflags', getattr(subprocess, 'CREATE_NO_WINDOW', 0))
     return subprocess.run(cmd, **kwargs)
 
 
