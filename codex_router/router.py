@@ -188,6 +188,7 @@ class Handler(BaseHTTPRequestHandler):
         self.connection.settimeout(120)
         try:
             raw, payload, size = self.read_body()
+            read_done = time.monotonic()
             model = payload.get('model')
             if not isinstance(model, str) and path not in NATIVE_SERVICE_PATHS:
                 return self.error(errors.missing_model())
@@ -252,12 +253,16 @@ class Handler(BaseHTTPRequestHandler):
                           error_type=type(exc).__name__, location=location)
             return self.error(err)
         _reasoning = payload.get('reasoning')
+        prepare_done = time.monotonic()
         metrics = {'provider': prepared.provider,
                    'model': model, 'path': path, 'request_bytes': size,
                    'stream': payload.get('stream') is True,
                    'reasoning_effort': _reasoning.get('effort') if isinstance(_reasoning, dict) else None,
                    'tool_definitions': len(payload.get('tools', [])),
-                   'local_prepare_ms': round((time.monotonic() - started) * 1000, 1)}
+                   'local_prepare_ms': round((time.monotonic() - started) * 1000, 1),
+                   # Per-phase detail; cumulative fields keep their meaning.
+                   'read_ms': round((read_done - started) * 1000, 1),
+                   'prepare_ms': round((prepare_done - read_done) * 1000, 1)}
         log_event('request_started', **metrics)
         with self.server.lock:
             self.server.inflight += 1
@@ -301,8 +306,9 @@ class Handler(BaseHTTPRequestHandler):
         sent = False
         response = None
         try:
-            conn.request('POST', prepared.path, body=prepared.body, headers=prepared.headers)
-            response = conn.getresponse()
+            # Phases land inside post_with_phases even on failure.
+            response, headers_done = transport.post_with_phases(
+                conn, prepared, metrics)
             if (prepared.provider == 'openai-subscription' and metrics['path'] in NATIVE_SERVICE_PATHS
                     and response.status in (401, 403)):
                 response.read()
@@ -317,6 +323,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.retryable_reject(errors.upstream_rate_limited(), retry_after)
             if response.status >= 400:
                 raw = response.read()
+                transport.note_first_data(metrics, headers_done)
                 if prepared.provider == 'openrouter' and providers.is_context_error(raw):
                     return self.context_error(errors.context_window().message, metrics['stream'])
                 if (prepared.provider == 'openrouter'
@@ -347,6 +354,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.close_connection = True
                 return
             metrics['upstream_headers_ms'] = round((time.monotonic() - started) * 1000, 1)
+            metrics['response_kind'], metrics['response_encoding'] = transport.describe_response(response)
             providers.validate_response(response, prepared)
             self.send_response(response.status)
             transport.relay_headers(response, self.send_header, metrics.get('model'))
@@ -356,8 +364,10 @@ class Handler(BaseHTTPRequestHandler):
             for chunk in provider.adapt(response, prepared.tool_names, metrics):
                 if 'first_chunk_ms' not in metrics:
                     metrics['first_chunk_ms'] = round((time.monotonic() - started) * 1000, 1)
+                transport.note_first_data(metrics, headers_done)
                 self.wfile.write(chunk)
                 self.wfile.flush()
+                transport.note_first_write(metrics, headers_done)
             log_event('request_completed', **metrics, status=response.status,
                         total_ms=round((time.monotonic() - started) * 1000, 1))
             if metrics.get('served_model'):

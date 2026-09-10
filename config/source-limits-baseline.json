@@ -5,7 +5,7 @@
   "codex_router/context_budget.py": 35,
   "codex_router/errors.py": 265,
   "codex_router/providers.py": 386,
-  "codex_router/router.py": 390,
+  "codex_router/router.py": 400,
   "codex_router/setup.py": 365,
   "codex_router/sse.py": 29,
   "codex_router/tool_adapter.py": 292,
