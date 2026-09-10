@@ -74,9 +74,9 @@ class DeriveTests(unittest.TestCase):
             {'name': 'DeepSeek: DeepSeek V4 Pro 0813'})
         self.assertEqual((vendor, label), ('DeepSeek', 'DeepSeek: V4 Pro 0813'))
         vendor, label = qualify_name(
-            '~deepseek/deepseek-v4-flash-latest',
-            {'name': 'DeepSeek V4 Flash Latest'})
-        self.assertEqual((vendor, label), ('DeepSeek', 'DeepSeek: V4 Flash Latest'))
+            'deepseek/deepseek-v4.1-flash',
+            {'name': 'DeepSeek: DeepSeek V4.1 Flash'})
+        self.assertEqual((vendor, label), ('DeepSeek', 'DeepSeek: V4.1 Flash'))
 
     def test_empty_reasoning_refused(self):
         live = dict(LIVE['plain/model'], reasoning={'supported_efforts': []})
