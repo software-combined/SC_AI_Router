@@ -2,6 +2,13 @@
 
 ## 0.6.10 (unreleased)
 
+- Give the first-run key page an executive light-theme layout matching
+  SC_360 (single card, blue-600 primary control, slate hairlines,
+  labelled key field and described subscription choices, inline error
+  banner, detail list on the connected page). Style is inline only, so
+  the loopback page still fetches nothing; the form contract, statuses,
+  single-use nonce and owner-only key write are unchanged.
+
 - Tell the Windows truth sooner and more usefully: `--status` and
   `--preflight` now run on Windows (read-only; install and update still
   refuse before changing anything), and the owner-only key check
