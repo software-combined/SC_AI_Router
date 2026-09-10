@@ -290,7 +290,6 @@ class SocketActivationTests(unittest.TestCase):
     def test_stuck_activation_ipc_falls_back_within_bound(self):
         # A launch_activate_socket that never returns must not wedge boot:
         # the router binds its configured port instead of going deaf.
-        # the router binds its configured port instead of going deaf.
         with mock.patch('ctypes.CDLL',
                         side_effect=lambda name: time.sleep(60)), \
                 mock.patch.object(activation, 'ACTIVATION_WAIT_S', 0.2):
