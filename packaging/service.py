@@ -21,12 +21,6 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-import importlib.util
-_feed_token_spec = importlib.util.spec_from_file_location(
-    'router_feed_token', Path(__file__).resolve().parent / 'feed_token.py')
-_feed_token = importlib.util.module_from_spec(_feed_token_spec)
-_feed_token_spec.loader.exec_module(_feed_token)
-
 try:                      # POSIX advisory locking
     import fcntl
 except ImportError:       # pragma: no cover - Windows
@@ -37,14 +31,16 @@ except ImportError:       # pragma: no cover - POSIX
     msvcrt = None
 
 import sys
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from ai_router import feed_verify  # noqa: E402  (3.9-safe, no router import)
 
 import importlib.util  # noqa: E402
 _ld_spec = importlib.util.spec_from_file_location(
     'router_launchd', Path(__file__).resolve().parent / 'launchd.py')
 _launchd = importlib.util.module_from_spec(_ld_spec)
 _ld_spec.loader.exec_module(_launchd)
+_feed_spec = importlib.util.spec_from_file_location(
+    'router_feed', Path(__file__).resolve().parent / 'feed.py')
+_feed = importlib.util.module_from_spec(_feed_spec)
+_feed_spec.loader.exec_module(_feed)
 
 # Patchable seam so tests never sleep through a real launchd settle window.
 _sleep = time.sleep
@@ -61,70 +57,65 @@ DEFAULT_OPENAI_MODELS = ['gpt-6-astra', 'gpt-5.6-sol',
 
 LABEL = 'com.local.codex-mixed-model-router'
 UPDATE_LABEL = LABEL + '.update'
-FEED_URL = 'https://github.com/software-combined/SC_OpenRouter_adapter/releases/latest/download/latest.json'
+FEED_URL = _feed.FEED_URL
 MIN_PYTHON = (3, 14)
 
-RELEASES_PREFIX = 'https://github.com/software-combined/SC_OpenRouter_adapter/releases/'
-
-# Plan 054: feeds and bundles are fetched only from these origins (plus
-# file:// in tests and local installs). The private CloudFront origin joins
-# this list when Stage 1 publishes; until then only GitHub Releases is live.
-TRUSTED_ORIGINS = (RELEASES_PREFIX,)
-FEED_TOKEN_HEADER = 'X-SCG-Feed-Token'
+# Feed routing lives in feed.py; these are the names its callers read here.
+RELEASES_PREFIX = _feed.RELEASES_PREFIX
+feed_token = _feed.feed_token
+persist_feed_token = _feed.persist_feed_token
+trusted_origin = _feed.trusted_origin
+channel_feed = _feed.channel_feed
+feed_source = _feed.feed_source
 
 
 def github_asset(url):
-    if not url.startswith(RELEASES_PREFIX):
+    route = _feed.github_route_parts(url)
+    if route is None:
         return None
-    parts = url[len(RELEASES_PREFIX):].split('/')
-    if len(parts) != 3 or not ((parts[0] == 'latest' and parts[1] == 'download')
-                               or parts[0] == 'download'):
-        raise SystemExit('unsupported router GitHub release URL')
-    tag = None if parts[0] == 'latest' else parts[1]
-    asset = parts[2]
-    if not asset or any(c in asset for c in '?*[]'):
-        raise SystemExit('invalid router release asset name')
+    tag, asset = route
     gh = shutil.which('gh') or next((p for p in (
         '/opt/homebrew/bin/gh', '/usr/local/bin/gh', '/usr/bin/gh') if Path(p).is_file()), None)
     if gh is None:
         raise SystemExit('Private router updates require GitHub CLI (gh), signed in as this user.')
-    cmd = [gh, 'release', 'download', '--repo', 'software-combined/SC_OpenRouter_adapter',
-           '--pattern', asset, '--output', '-']
-    if tag is not None:
-        cmd += ['--', tag]
-    result = run(cmd, capture_output=True, timeout=120)
+    result = run(_feed.github_command(gh, tag, asset), capture_output=True, timeout=120)
     if result.returncode:
         raise SystemExit('Cannot read private router release; check gh auth status and repository access.')
     return result.stdout
 
 
-def _trusted(url):
-    return url.startswith(TRUSTED_ORIGINS)
-
-
-def _token_request(url, home, headers=None, _urlopen=urllib.request.urlopen):
-    """GET with the feed token on trusted origins; never logged."""
-    headers = dict(headers or {})
-    if _trusted(url) and home is not None and FEED_TOKEN_HEADER not in headers:
-        token = _feed_token.current(home)
-        if token:
-            headers[FEED_TOKEN_HEADER] = token
-    req = urllib.request.Request(url, headers=headers)
-    with _urlopen(req, timeout=30) as response:
-        return response.status, response.read(), response.headers.get('ETag')
-
-
 def fetch(url, home=None):
-    """Single network entry point; tests inject a fake."""
+    """Single network entry point; tests inject a fake.
+
+    The token header goes only to the feed origin. GitHub asset URLs keep
+    the gh path; anything off the trusted origins is refused before fetch
+    so a compromised feed cannot redirect a host elsewhere.
+    """
     if url.startswith('file://'):
         return Path(url[len('file://'):]).read_bytes()
+    if not _feed.trusted_origin(url):
+        raise SystemExit('refusing untrusted feed URL: %s' % _feed._safe_url(url))
     asset = github_asset(url)
     if asset is not None:
         return asset
-    if not _trusted(url):
-        raise SystemExit('refusing off-origin fetch: %s' % url.split('?')[0][:200])
-    _, body, _ = _token_request(url, home)
-    return body
+    headers = _feed.feed_headers(home) if url.startswith(_feed.FEED_ORIGIN + '/') else {}
+    req = urllib.request.Request(url, headers=headers) if headers else url
+    with urllib.request.urlopen(req, timeout=30) as response:
+        return response.read()
+
+
+def feed_read(fetcher, url, home):
+    """Fetch one feed/bundle URL, home-bound when the fetcher allows it.
+
+    The default fetch sends the stored feed token to the feed origin;
+    injected test fakes keep their one-argument shape.
+    """
+    if fetcher is fetch and not trusted_origin(url):
+        raise SystemExit('feed points off the trusted update origin; refusing')
+    try:
+        return fetcher(url, home)
+    except TypeError:
+        return fetcher(url)
 
 
 def run(cmd, **kwargs):
@@ -294,34 +285,42 @@ def wait_version(state, version, timeout=150, fetch_health=None):
     return None
 
 
-def fetch_feed(url, etag, _fetch=fetch, home=None, _urlopen=urllib.request.urlopen):
-    """Read a feed document, revalidating with a saved ETag. Returns (status, body, etag)."""
+def fetch_feed(url, etag, _fetch=None, home=None):
+    """Read a feed document, revalidating with a saved ETag.
+
+    Returns (status, body, etag). The default fetch sends the stored feed
+    token to the feed origin; injected fakes keep their old one-argument
+    shape and bypass the header path.
+    """
+    if _fetch is None:
+        return _feed.live_feed(url, etag, home, fetch)
     if url.startswith('file://') or url.startswith(RELEASES_PREFIX):
         return 200, _fetch(url), etag
-    if not _trusted(url):
-        raise SystemExit('refusing off-origin feed: %s' % url.split('?')[0][:200])
-    headers = {'If-None-Match': etag} if etag else {}
+    req = urllib.request.Request(url, headers={'If-None-Match': etag} if etag else {})
     try:
-        status, body, new_etag = _token_request(url, home, headers, _urlopen)
-        return status, body, new_etag or etag
+        with urllib.request.urlopen(req, timeout=30) as response:
+            return response.status, response.read(), response.headers.get('ETag', etag)
     except urllib.error.HTTPError as exc:
         if exc.code == 304:
             return 304, b'', etag
-        if exc.code == 403 and home is not None:
-            previous = _feed_token.previous(home)
-            if previous:
-                headers[FEED_TOKEN_HEADER] = previous
-                try:
-                    status, body, new_etag = _token_request(url, home, headers, _urlopen)
-                    Path(home, 'feed-token').write_text(previous)
-                    return status, body, new_etag or etag
-                except urllib.error.HTTPError:
-                    pass
         raise
 
 
 def _agents(agents=None):
     return Path(agents) if agents else Path.home() / 'Library' / 'LaunchAgents'
+
+
+def require_live_home(home, action):
+    """Refuse service mutations against a scratch router home.
+
+    Service names are machine-wide (launchd labels, systemd units,
+    Scheduled Tasks): a run against a scratch --home still mutates the
+    production jobs. Mutating entry points refuse unless ROUTER_LIVE_RUN=1.
+    """
+    prod = Path('~/.codex/mixed-model-router').expanduser().resolve()
+    if Path(home).expanduser().resolve() == prod or os.environ.get('ROUTER_LIVE_RUN') == '1':
+        return
+    raise SystemExit(f'refusing {action} against scratch home {home}; use {prod} or ROUTER_LIVE_RUN=1')
 
 
 @contextlib.contextmanager
@@ -636,18 +635,6 @@ def ensure_state(home):
     return state
 
 
-def channel_feed(home):
-    # A --feed pin file from an older install wins over the channel file, so
-    # scheduled updates keep following it. Delete the file to return to
-    # channel resolution; new installs never write it (one-shot --feed).
-    if (home / 'feed').exists():
-        return (home / 'feed').read_text().strip()
-    channel = (home / 'channel').read_text().strip() if (home / 'channel').exists() else 'stable'
-    if channel == 'beta':
-        return feed_verify.beta_feed_url(FEED_URL)
-    return FEED_URL
-
-
 def feed_serial(home):
     """Last accepted feed serial; 0 when no serialed release was installed."""
     try:
@@ -676,5 +663,9 @@ def check_serial(home, latest, pinned=False):
     stored = feed_serial(home)
     if serial < stored:
         raise SystemExit(f'stale feed serial {serial} is older than {stored}')
-    _feed_token.persist(home, latest)
+    # Learn the feed token after the serial check but before the version
+    # comparison, so a host that is already current still migrates: its
+    # next poll resolves the token-gated origin. A feed without a token
+    # leaves the host on its existing route untouched.
+    persist_feed_token(home, latest)
     return serial
