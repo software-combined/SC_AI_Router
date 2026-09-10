@@ -71,6 +71,20 @@ class SetupUnitTests(unittest.TestCase):
         self.assertIn(b'<form', body)
         self.assertIn(b'n' * 16, body)
 
+    def test_form_wiring_survives_restyle(self):
+        # The page markup is styled; these attributes are the contract the
+        # browser POST depends on, so a later restyle must not drop one.
+        body = setup._form('n' * 16).decode()
+        self.assertIn('<form method="post" action="./' + 'n' * 16 + '">', body)
+        self.assertIn('type="password" name="key" autocomplete="off"', body)
+        self.assertIn('<input type="radio" name="mode" value="subscription" checked>', body)
+        self.assertIn('<input type="radio" name="mode" value="none">', body)
+        self.assertIn('<button type="submit">', body)
+        # Inline style only: a loopback page must not fetch an external asset.
+        self.assertIn('<style>', body)
+        self.assertNotIn('<link', body)
+        self.assertNotIn('<script', body)
+
     def test_unknown_link_is_404(self):
         home = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, home, True)
