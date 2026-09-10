@@ -137,33 +137,34 @@ def _run_install(test, tmp, home, fake_fetch, fake_run):
     return args, env
 
 class PlatformRefusalTests(unittest.TestCase):
-    # Unskipped on purpose: the whole point is proving the refusal fires on
-    # Windows, the platform the Unix-only class above skips. No launchd,
-    # systemctl, getuid, or permission-bit surface is touched here.
-    def _win32_home(self):
+    # Unskipped on purpose: unknown platforms must refuse before any
+    # router home exists, while win32 routes to the Windows backend.
+    # No launchd, systemctl, getuid, or permission-bit surface here.
+    def _patched_home(self, platform):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
-        previous, install_mod.PLATFORM = install_mod.PLATFORM, 'win32'
+        previous, install_mod.PLATFORM = install_mod.PLATFORM, platform
         self.addCleanup(setattr, install_mod, 'PLATFORM', previous)
         return Path(tmp.name) / 'home'
 
     def test_unsupported_platform_refuses_before_any_router_home(self):
-        # Plan 057 Stage 1: Windows must get one sentence, not a launchd
-        # traceback after a partial install.
-        home = self._win32_home()
+        home = self._patched_home('plan9')
         with self.assertRaisesRegex(SystemExit, 'not supported'):
             install_mod.main(['--feed', 'file:///latest.json', '--home', str(home)])
         self.assertFalse(home.exists())
 
     def test_status_runs_read_only_on_unsupported_platform(self):
-        # --status never writes, so it stays available where install is
-        # refused (Windows until Plan 057); the bundle smoke depends on it.
-        home = self._win32_home()
+        home = self._patched_home('plan9')
         with contextlib.redirect_stdout(buf := io.StringIO()):
             rc = install_mod.main(['--status', '--json', '--home', str(home)])
         self.assertEqual(rc, 0)
         self.assertFalse(json.loads(buf.getvalue())['installed'])
         self.assertFalse(home.exists())
+
+    def test_win32_selects_the_windows_backend(self):
+        self._patched_home('win32')
+        install_mod.require_supported_platform()
+        self.assertEqual(install_mod.platform_backend().name, 'windows')
 
 
 @unittest.skipIf(os.name == 'nt', 'Unix-only install/service layer')
