@@ -23,6 +23,17 @@
   production router this way; the guard makes that shape refuse before any
   service call.
 
+- Operator bootstrap for no-repo-access installs: `packaging/bootstrap.sh`
+  (macOS/Linux) and `packaging/bootstrap.ps1` (Windows) install a router
+  host from the Technology library page with `SCG_FEED_TOKEN`, resolving
+  the pinned Python runtime from `runtimes.json`, which `release.py` now
+  emits next to `latest.json`; `release.py --feed-token-file` embeds the
+  publish-time feed token, and `docs/operations.md` documents the flow.
+
+- Add `docs/agent-install-prompt.md`: a paste-to-agent prompt for the
+  Technology library page so users can have their agent run the bootstrap
+  and verify setup without repo access.
+
 - Rename the runtime package `codex_router` to `ai_router` (Plan 074): the
   router serves Codex, Claude Code, and OpenRouter side by side, and the old
   prefix misled readers into treating the Codex adapter as the whole router.
