@@ -119,8 +119,6 @@ def refused(handler, prepared, retry_after, metrics, started):
     twin_metrics = {k: metrics[k] for k in fields if k in metrics}
     twin_metrics.update(provider='openrouter', model=fallback.slug,
                         path=fallback.path, helper_fallback=True)
-    with handler.server.lock:
-        # The refusing relay still holds its own slot; hold a second so drain
-        # waits for this hand-off, and let its own finally release it.
-        handler.server.inflight += 1
+    # The owned-request slot still covers this hand-off; relay no longer
+    # takes or releases a slot of its own.
     return handler.relay(OpenRouterProvider(), twin, twin_metrics, started)
