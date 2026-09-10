@@ -21,6 +21,19 @@ class SelectTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'not in the configured catalog'):
             providers.select('unknown/model', '/responses', ['gpt-6-astra'])
 
+    def test_select_unknown_carries_id_and_tilde_candidate(self):
+        from codex_router.errors import UnknownModel
+        with self.assertRaises(UnknownModel) as caught:
+            providers.select('anthropic/claude-opus-latest', '/responses',
+                             ['gpt-6-astra'])
+        self.assertEqual(caught.exception.model,
+                         'anthropic/claude-opus-latest')
+        self.assertEqual(caught.exception.candidates,
+                         ('~anthropic/claude-opus-latest',))
+        with self.assertRaises(UnknownModel) as caught:
+            providers.select('unknown/model', '/responses', ['gpt-6-astra'])
+        self.assertEqual(caught.exception.candidates, ())
+
     def test_openrouter_prepare_emits_router_key_only(self):
         # Picker visibility never gates routing: hidden GPT slugs still route.
         hidden = providers.select('openai/gpt-6-astra', '/responses', [])

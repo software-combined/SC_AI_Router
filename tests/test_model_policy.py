@@ -36,6 +36,18 @@ class ModelPolicyTests(unittest.TestCase):
             providers.select('meta/muse-spark-1.3', '/responses', (),
                              'subscription', allowed=ALLOWED)
 
+    def test_disallowed_reject_leaks_no_candidate(self):
+        # The near-miss hint must not disclose a slug the portco policy
+        # excludes: a bare id for an allowlisted-out tilde row rejects
+        # with an empty candidate list.
+        from codex_router.errors import UnknownModel
+        with self.assertRaises(UnknownModel) as caught:
+            providers.select('anthropic/claude-opus-latest', '/responses', (),
+                             'subscription', allowed=ALLOWED)
+        self.assertEqual(caught.exception.candidates, ())
+        self.assertIn('not in the configured catalog',
+                      str(caught.exception))
+
     def test_allowed_openrouter_slug_still_routes(self):
         provider = providers.select('z-ai/glm-5.3-flash', '/responses', (),
                                     'subscription', allowed=ALLOWED)
