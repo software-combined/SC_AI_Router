@@ -3,6 +3,7 @@ from copy import deepcopy
 import json
 
 from . import sse
+from .registry import by_slug
 
 NATIVE_NAMESPACE = 'collaboration'
 PLAINTEXT_NAMESPACE = 'collaboration_plaintext'
@@ -11,10 +12,70 @@ HANDOFF_TOOLS = frozenset(('spawn_agent', 'send_message', 'followup_task'))
 
 class AliasTools(frozenset):
     """Advertised names plus the request's response framing, scoped to one call."""
-    def __new__(cls, names, stream=False):
+    def __new__(cls, names, stream=False, spawn_models=None):
         value = super().__new__(cls, names)
         value.stream = stream
+        value.spawn_models = dict(spawn_models or {})
         return value
+
+
+def _arguments(item):
+    """Parse function-call arguments leniently; {} when absent or malformed."""
+    raw = item.get('arguments')
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except ValueError:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return {}
+
+
+def _spawn_model(spawns, target):
+    """Resolve a followup/send target to its spawn model, or None.
+
+    Targets are child paths (e.g. '/root/synth_agent') while spawns record
+    bare task names ('synth_agent'). Match exact names first, then a unique
+    path suffix; ambiguous suffixes resolve to None so native handoffs keep
+    current behavior and the downstream guards stay the backstop. Pure.
+    """
+    if not isinstance(target, str) or not target:
+        return None
+    if target in spawns:
+        return spawns[target]
+    suffix = target.rsplit('/', 1)[-1]
+    matches = [model for task, model in spawns.items() if suffix == task]
+    if len(matches) != 1:
+        return None
+    return matches[0]
+
+
+def spawn_models(items):
+    """Map this thread's spawn task names to their requested models.
+
+    Read from the request's own input history; keeps no state. Both alias
+    and native spawns are recorded: what matters for steering is where the
+    child runs, not which namespace created it. An encrypted handoff to a
+    child whose spawn names an OpenRouter model cannot arrive readably, no
+    matter which tool created the child. Pure.
+    """
+    models = {}
+    if not isinstance(items, list):
+        return models
+    for item in items:
+        if not isinstance(item, dict) or item.get('type') != 'function_call':
+            continue
+        if item.get('namespace') not in (NATIVE_NAMESPACE, PLAINTEXT_NAMESPACE):
+            continue
+        if item.get('name') != 'spawn_agent':
+            continue
+        args = _arguments(item)
+        task, model = args.get('task_name'), args.get('model')
+        if isinstance(task, str) and task and isinstance(model, str) and model:
+            models[task] = model
+    return models
 
 
 def add_plaintext_tools(payload):
@@ -46,6 +107,7 @@ def add_plaintext_tools(payload):
                 'encrypted inherited history cannot be translated.')
             aliases.append(alias)
     names = {tool['name'] for tool in aliases}
+    children = spawn_models(payload.get('input', []))
     if len(names) != len(aliases):
         raise ValueError('duplicate native collaboration tool')
     if aliases:
@@ -55,7 +117,7 @@ def add_plaintext_tools(payload):
                 'history because Codex executes the native tool; that does not change '
                 'the need to choose collaboration_plaintext for the next message.'),
             'tools': aliases}]
-    return AliasTools(names, payload.get('stream') is True)
+    return AliasTools(names, payload.get('stream') is True, children)
 
 
 def restore_item(item, names):
@@ -96,6 +158,76 @@ def restore_response(response, names):
     return response
 
 
+def steer_plaintext(item, names):
+    """Replace a provably undeliverable encrypted handoff with a steer output.
+
+    Fires only when the emitted native call cannot reach its child readably:
+    an encrypted spawn_agent naming an OpenRouter model, or an encrypted
+    followup_task/send_message targeting a child this thread spawned onto an
+    OpenRouter model. Everything else returns untouched, so native encrypted
+    handoffs and unknown targets keep current behavior and the downstream
+    guards remain the backstop. The steer names the exact alias call to make
+    instead; no payload, ciphertext, or history is quoted. Pure.
+    """
+    if item.get('type') != 'function_call':
+        return item
+    if item.get('namespace') != NATIVE_NAMESPACE or item.get('name') not in HANDOFF_TOOLS:
+        return item
+    if item.get('encrypted_function_args', 'absent') == []:
+        return item  # alias-originated plaintext, already readable
+    args = _arguments(item)
+    spawns = getattr(names, 'spawn_models', {})
+    if item.get('name') == 'spawn_agent':
+        model = args.get('model')
+        entry = by_slug(model) if isinstance(model, str) else None
+        if entry is None or entry.provider != 'openrouter':
+            return item
+        detail = ('spawn via collaboration_plaintext.spawn_agent '
+                  'for OpenRouter models')
+    else:
+        target = args.get('target')
+        model = _spawn_model(spawns, target)
+        entry = by_slug(model) if isinstance(model, str) else None
+        if entry is None or entry.provider != 'openrouter':
+            return item
+        detail = ('call collaboration_plaintext.' + item['name']
+                  + " with target '" + target + "'")
+    call_id = item.get('call_id')
+    output = {'type': 'function_call_output', 'output':
+              'That handoff cannot be delivered readably; ' + detail
+              + ' and resend the message as plain text.'}
+    if isinstance(call_id, str):
+        output['call_id'] = call_id
+    return output
+
+
+def steer_response(response, names):
+    output = response.get('output')
+    if not isinstance(output, list):
+        return response
+    steered = [steer_plaintext(item, names) if isinstance(item, dict) else item
+               for item in output]
+    if any(a is not b for a, b in zip(output, steered)):
+        return {**response, 'output': steered}
+    return response
+
+
+def steer_event(event, names):
+    mapped = event
+    if event.get('type') in ('response.output_item.added', 'response.output_item.done'):
+        item = event.get('item')
+        if isinstance(item, dict):
+            steered = steer_plaintext(item, names)
+            if steered is not item:
+                mapped = {**mapped, 'item': steered}
+    response = event.get('response')
+    if isinstance(response, dict):
+        steered = steer_response(response, names)
+        if steered is not response:
+            mapped = {**mapped, 'response': steered}
+    return mapped
+
+
 def _readable_block(block):
     """A plaintext input_text block with no encrypted sidecar."""
     return (isinstance(block, dict) and block.get('type') == 'input_text'
@@ -121,7 +253,7 @@ def adapt_response(response, names, notes=None):
     if not getattr(names, 'stream', False) and 'text/event-stream' not in response.getheader('Content-Type', ''):
         raw = response.read()
         result = json.loads(raw)
-        restored = restore_response(result, names)
+        restored = steer_response(restore_response(result, names), names)
         if notes is not None and isinstance(result.get('model'), str):
             notes['served_model'] = result['model']
         yield json.dumps(restored).encode() if restored is not result else raw
@@ -131,7 +263,7 @@ def adapt_response(response, names, notes=None):
             yield frame
             continue
         event = json.loads(data)
-        restored = restore_event(event, names)
+        restored = steer_event(restore_event(event, names), names)
         if event.get('type') == 'response.completed' and notes is not None:
             model = event.get('response', {}).get('model')
             if isinstance(model, str):

@@ -9,6 +9,13 @@
   (`NT AUTHORITY\SYSTEM`, `BUILTIN\Administrators`) while still
   refusing broad groups and other users.
 
+- Steer parents back to readable handoffs: an encrypted handoff that cannot
+  arrive readably (OpenRouter-model spawn, or follow-up/message to an
+  OpenRouter-spawned child) is replaced with a targeted error naming the
+  exact `collaboration_plaintext` call to make instead, before history is
+  poisoned. Proven by a Luna v1 parent reaching a real Muse child end to
+  end after one steered retry (Codex 0.153.4).
+
 - Deliver readable agent handoffs to OpenRouter children without weakening
   native encryption: new `collaboration_plaintext` aliases for the already
   exposed spawn/message/follow-up tools, restored to native calls with

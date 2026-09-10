@@ -114,5 +114,96 @@ class PlaintextMessageTests(unittest.TestCase):
                 handoffs.plaintext_agent_message({**base, 'content': content})
 
 
+def encrypted_call(**changes):
+    base = {'type': 'function_call', 'namespace': 'collaboration',
+            'name': 'followup_task', 'arguments': '{"target":"plain","message":"synthetic"}',
+            'id': 'fc_synthetic', 'call_id': 'call_synthetic'}
+    base.update(changes)
+    return base
+
+
+def spawn_history(task, model, **fields):
+    return {'type': 'function_call', 'namespace': 'collaboration',
+            'name': 'spawn_agent',
+            'arguments': '{"task_name":"%s","model":"%s"}' % (task, model),
+            'id': 'fc_hist', 'call_id': 'call_hist', **fields}
+
+
+class PlaintextSteerTests(unittest.TestCase):
+    def test_spawn_history_maps_every_spawned_child_to_its_model(self):
+        items = [spawn_history('plain', 'meta/muse-spark-1.3-contributor',
+                               encrypted_function_args=[]),
+                 spawn_history('native', 'gpt-5.6-sol'),
+                 {'type': 'message', 'role': 'user', 'content': 'synthetic'}]
+        self.assertEqual(handoffs.spawn_models(items),
+                         {'plain': 'meta/muse-spark-1.3-contributor',
+                          'native': 'gpt-5.6-sol'})
+        self.assertEqual(handoffs.spawn_models('not-a-list'), {})
+        bad = [spawn_history('bad', 'm', arguments='{broken')]
+        self.assertEqual(handoffs.spawn_models(bad), {})
+
+    def test_encrypted_followup_to_plaintext_child_is_steered(self):
+        names = handoffs.AliasTools({'followup_task'},
+            spawn_models={'plain': 'meta/muse-spark-1.3-contributor'})
+        result = handoffs.steer_plaintext(encrypted_call(), names)
+        self.assertEqual(result['type'], 'function_call_output')
+        self.assertEqual(result['call_id'], 'call_synthetic')
+        self.assertIn('collaboration_plaintext.followup_task', result['output'])
+        self.assertIn('plain', result['output'])
+        self.assertNotIn('synthetic', result['output'])
+
+    def test_native_followups_and_unknown_targets_pass_through(self):
+        names = handoffs.AliasTools({'followup_task'},
+            spawn_models={'plain': 'meta/muse-spark-1.3-contributor'})
+        native_spawn = encrypted_call(name='spawn_agent',
+            arguments='{"task_name":"n","model":"gpt-5.6-sol"}')
+        self.assertIs(handoffs.steer_plaintext(native_spawn, names), native_spawn)
+        strange = encrypted_call(arguments='{"target":"other","message":"synthetic"}')
+        self.assertIs(handoffs.steer_plaintext(strange, names), strange)
+        alias = alias_call()
+        restored = handoffs.restore_item(alias, {'send_message'})
+        self.assertIs(handoffs.steer_plaintext(restored, names), restored)
+
+    def test_encrypted_openrouter_spawn_is_steered(self):
+        names = handoffs.AliasTools({'spawn_agent'})
+        openrouter = encrypted_call(name='spawn_agent',
+            arguments='{"task_name":"x","model":"meta/muse-spark-1.3-contributor"}')
+        result = handoffs.steer_response({'output': [openrouter]}, names)
+        self.assertEqual(result['output'][0]['type'], 'function_call_output')
+        self.assertIn('collaboration_plaintext.spawn_agent',
+                      result['output'][0]['output'])
+        self.assertEqual(result['output'][0]['call_id'], 'call_synthetic')
+
+    def test_path_targets_resolve_by_unique_suffix(self):
+        names = handoffs.AliasTools(
+            {'followup_task'},
+            spawn_models={'synth_agent': 'meta/muse-spark-1.3-contributor'})
+        rooted = encrypted_call(arguments='{"target":"/root/synth_agent","message":"x"}')
+        result = handoffs.steer_plaintext(rooted, names)
+        self.assertEqual(result['type'], 'function_call_output')
+        self.assertIn('/root/synth_agent', result['output'])
+        ambiguous = handoffs.AliasTools(
+            {'followup_task'},
+            spawn_models={'a/synth_agent': 'meta/muse-spark-1.3-contributor',
+                          'b/synth_agent': 'gpt-5.6-sol'})
+        # Suffix matches two tasks: no steer, downstream guards stay backstop.
+        vaguer = encrypted_call(arguments='{"target":"/root/synth_agent","message":"x"}')
+        self.assertIs(handoffs.steer_plaintext(vaguer, ambiguous), vaguer)
+
+    def test_completed_responses_steer_only_doomed_items(self):
+        names = handoffs.AliasTools({'followup_task'},
+            spawn_models={'plain': 'meta/muse-spark-1.3-contributor'})
+        native = encrypted_call(arguments='{"target":"native","message":"synthetic"}')
+        response = {'output': [native, encrypted_call()]}
+        result = handoffs.steer_response(response, names)
+        self.assertIs(result['output'][0], native)
+        self.assertEqual(result['output'][1]['type'], 'function_call_output')
+        event = {'type': 'response.output_item.done', 'item': encrypted_call()}
+        self.assertEqual(handoffs.steer_event(event, names)['item']['type'],
+                         'function_call_output')
+        other = {'type': 'response.created', 'response': {}}
+        self.assertIs(handoffs.steer_event(other, names), other)
+
+
 if __name__ == '__main__':
     unittest.main()
