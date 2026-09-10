@@ -2,6 +2,15 @@
 
 ## 0.6.10 (unreleased)
 
+- Enforce per-portco model allowlists as resolved data (Plan 068, source
+  only): `<home>/model-policy.json` (`0600`, atomic write) carries the
+  centrally resolved slug subset; the picker (`merge`/`check` plus the
+  `--allowed` CI flag) and both protocol routers reject non-listed
+  OpenRouter slugs with the existing closed error while subscription
+  rows are unaffected. Absent file means all approved models; malformed
+  files fail closed to an empty OpenRouter set. Central grant schema,
+  refresh delivery, and per-install issuance stay gated on Plan 054 Stage 4.
+
 - Give the first-run key page an executive light-theme layout matching
   SC_360 (single card, blue-600 primary control, slate hairlines,
   labelled key field and described subscription choices, inline error

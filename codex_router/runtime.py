@@ -58,6 +58,14 @@ def load_state(path=STATE):
         # fails closed per request until one resolves.
         if not setup_pending(state):
             raise SystemExit(f'OpenRouter credential problem: {exc}')
+    # Plan 068: resolved portco allowlist rides alongside the roster. No
+    # policy fetch may block startup: absent file means no policy (None),
+    # and the loader fails closed to empty on malformed input.
+    from .model_policy import load as _load_policy
+    home = path.parent if path != STATE else ROUTER_HOME
+    _, _, allowed = _load_policy(home)
+    if allowed is not None:
+        state['allowed_models'] = list(allowed)
     return state
 
 

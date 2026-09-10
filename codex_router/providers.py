@@ -149,7 +149,9 @@ class SubscriptionProvider:
     name = 'openai-subscription'
     host = 'chatgpt.com'
 
-    def owns(self, model, path, openai_models, openai_mode='subscription'):
+    def owns(self, model, path, openai_models, openai_mode='subscription',
+             allowed=None):
+        del allowed  # Subscription rows are never allowlisted.
         if openai_mode == 'none':
             return False
         if path in NATIVE_SERVICE_PATHS:
@@ -186,9 +188,16 @@ class OpenRouterProvider:
     name = 'openrouter'
     host = OPENROUTER_HOST
 
-    def owns(self, model, path, openai_models, openai_mode='subscription'):
+    def owns(self, model, path, openai_models, openai_mode='subscription',
+             allowed=None):
         entry = by_slug(model) if isinstance(model, str) else None
-        return entry is not None and entry.provider == 'openrouter' and path not in NATIVE_SERVICE_PATHS
+        if (entry is None or entry.provider != 'openrouter'
+                or path in NATIVE_SERVICE_PATHS):
+            return False
+        # Plan 068: a portco allowlist gates routing, never just the picker.
+        # None means no policy provisioned (today's behavior); subscription
+        # rows are unaffected by any list.
+        return allowed is None or model in allowed
 
     def prepare(self, model, path, payload, raw_body, headers, credentials):
         if path not in ('/responses', '/responses/compact'):
@@ -332,7 +341,9 @@ class LocalServicesProvider:
     name = 'local-services'
     host = None
 
-    def owns(self, model, path, openai_models, openai_mode='subscription'):
+    def owns(self, model, path, openai_models, openai_mode='subscription',
+             allowed=None):
+        del allowed  # Native service paths are never allowlisted.
         return openai_mode == 'none' and path in NATIVE_SERVICE_PATHS
 
     def prepare(self, model, path, payload, raw_body, headers, credentials):
@@ -358,9 +369,12 @@ def compaction_call(provider, model, path, payload):
     return None
 
 
-def select(model, path, openai_models=(), openai_mode='subscription'):
+def select(model, path, openai_models=(), openai_mode='subscription',
+           allowed=None):
+    allowset = None if allowed is None else frozenset(allowed)
     for provider in PROVIDERS:
-        if provider.owns(model, path, openai_models, openai_mode):
+        if provider.owns(model, path, openai_models, openai_mode,
+                         allowed=allowset):
             return provider
     if openai_mode == 'none' and isinstance(model, str) and model in (openai_models or []):
         raise ValueError('Model is not available without a ChatGPT subscription')
