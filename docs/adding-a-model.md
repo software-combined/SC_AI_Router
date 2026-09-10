@@ -22,6 +22,11 @@ and ordering differ. A model that needs behaviour the adapter does not
 have (a new quirk type) is a normal code change and release, not a data
 row.
 
+To preview a per-portco subset in CI without touching runtime policy:
+`python3.14 -m codex_router.catalogue --allowed slug-a,slug-b --merge <file>`
+followed by the same `--allowed` with `--check`. Runtime enforcement
+reads `<home>/model-policy.json` alone; the flag never widens it.
+
 The 2026-09-08 roster uses only the Opus, Fable, Sonnet, and Haiku Latest
 Claude aliases from the [OpenRouter model list](https://openrouter.ai/api/v1/models).
 The current DeepSeek rows are V4 Pro 0813 (pinned snapshot), V4 Flash Latest
