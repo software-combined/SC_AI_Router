@@ -91,13 +91,7 @@ def _claim_truncated(key_path):
 
 
 def store_key(home, key, _check_live=None):
-    """Write an OpenRouter key through the one shared writer.
-
-    Plan 055 Stage 3: claims the installer's empty placeholder, refuses a
-    file holding a live key, and truncates only a stored key that
-    `_check_live(stored)` proves dead by returning False. Returns the open
-    fd for writing the new key, or raises KeyExists / OSError.
-    """
+    """Write an OpenRouter key through the one shared writer."""
     key_path = Path(home) / 'openrouter.key'
     try:
         return os.open(key_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -160,10 +154,19 @@ before anything is stored, and kept in an owner-only file the router reads at re
 <em>Route OpenAI models on the subscription</em></span></label>
 <label class="o"><input type="radio" name="mode" value="none"><span>No subscription
 <em>OpenRouter models only</em></span></label>
-</fieldset><button type="submit">Save and connect</button></form>''')
+</fieldset>
+<fieldset><legend>Starter instructions</legend>
+<label class="o"><input type="radio" name="profile" value="general" checked><span>General
+<em>Everyday help: careful, brief, plain language</em></span></label>
+<label class="o"><input type="radio" name="profile" value="dev"><span>Development
+<em>Coding help: read first, small verified changes, tests</em></span></label>
+</fieldset>
+<p style="margin:1rem 0 0">The starter is installed only when no global
+instructions file exists yet. An existing file is never overwritten.</p>
+<button type="submit">Save and connect</button></form>''')
 
 
-def _done(label, limit, usage, mode):
+def _done(label, limit, usage, mode, starter):
     try:
         remaining = 'unlimited' if limit is None else str(limit - (usage or 0))
     except TypeError:
@@ -171,7 +174,8 @@ def _done(label, limit, usage, mode):
     return _page('Connected', f'''<p>Your key is validated and stored.</p>
 <dl><dt>Key</dt><dd>{html.escape(str(label))}</dd>
 <dt>Remaining credit</dt><dd>{html.escape(remaining)}</dd>
-<dt>Mode</dt><dd>{html.escape(mode)}</dd></dl>
+<dt>Mode</dt><dd>{html.escape(mode)}</dd>
+<dt>Starter</dt><dd>{html.escape(starter)}</dd></dl>
 <p>You can close this window and restart Codex.</p>''')
 
 
@@ -185,10 +189,11 @@ def handle_setup(state, home, nonce, is_post, form, _urlopen=None, _now=None):
     fields = dict(parse_qsl(form.decode('utf-8', 'replace'), keep_blank_values=True))
     key = fields.get('key', '').strip()
     mode = fields.get('mode', 'subscription')
+    profile = fields.get('profile', 'general')
     if not key:
         return 422, _form(nonce, 'paste a key before saving')
-    if mode not in ('subscription', 'none'):
-        return 422, _form(nonce, 'unknown subscription choice')
+    if mode not in ('subscription', 'none') or profile not in ('general', 'dev'):
+        return 422, _form(nonce, 'unknown choice; resubmit the form')
     try:
         label, limit, usage = check_key(key, _fetch)
     except ValueError as exc:
@@ -205,13 +210,14 @@ def handle_setup(state, home, nonce, is_post, form, _urlopen=None, _now=None):
     with os.fdopen(fd, 'w') as stream:
         stream.write(key + '\n')
     if _ON_WINDOWS:
-        # The installer backend cannot reach this runtime write; verify the
-        # platform ACL here so a Windows setup window never leaves an exposed
-        # key. Refuse rather than continue exposed.
+        # A Windows setup window never leaves an exposed key: refuse instead.
         from . import winacl
         try:
             winacl.check(key_path)
+            protected = True
         except SystemExit:
+            protected = False
+        if not protected:
             try:
                 key_path.unlink()
             except OSError:
@@ -219,10 +225,17 @@ def handle_setup(state, home, nonce, is_post, form, _urlopen=None, _now=None):
                     nonce, 'could not protect %s; delete it and resubmit this page'
                     % key_path)
             return 500, _form(nonce, 'could not protect the key file')
-    if not _finish_setup(state, home, mode):
+    from . import agents as _agents  # starter lives under ~/.codex
+    try:
+        starter = _agents.install(profile)
+    except Exception:
+        starter = 'skipped'
+    if not _finish_setup(state, home, mode, profile):
+        _agents.revert(starter)
         return 500, _form(nonce, 'key stored but setup could not be closed; '
                                  'delete the key file and resubmit this page')
-    return 200, _done(label, limit, usage, mode)
+    line = _agents.describe(starter)
+    return 200, _done(label, limit, usage, mode, line)
 
 
 def _stored_key_live(stored, _fetch):
@@ -274,10 +287,9 @@ def open_key_window(server, home, _opener=None):
         url = ('http://127.0.0.1:%s/%s/setup/%s'
                % (state.get('port'), state.get('token'), nonce))
     try:
-        opened = opener(url)
+        opened = opener(url) is not False
     except OSError:
         opened = False
-    opened = opened is not False
     if sys.stdout.isatty():
         print('open %s to connect your OpenRouter key' % url)
     else:
@@ -308,8 +320,8 @@ def _atomic_replace(path, doc):
     os.replace(tmp, path)
 
 
-def _finish_setup(state, home, mode):
-    """Drop the single-use nonce and persist the chosen mode; False on IO failure."""
+def _finish_setup(state, home, mode, profile='general'):
+    """Drop the nonce and persist mode plus profile; False on IO failure."""
     path = Path(home) / 'mixed-router-state.json'
     try:
         doc = json.loads(path.read_text())
@@ -317,12 +329,14 @@ def _finish_setup(state, home, mode):
             return False
         doc.pop('setup', None)
         doc['openai_mode'] = mode
+        doc['agents_profile'] = profile if profile in ('general', 'dev') else 'general'
         _atomic_replace(path, doc)
     except (OSError, ValueError):
         return False
     if isinstance(state, dict):
         state.pop('setup', None)
         state['openai_mode'] = mode
+        state['agents_profile'] = profile if profile in ('general', 'dev') else 'general'
     return True
 
 
