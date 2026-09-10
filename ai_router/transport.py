@@ -12,13 +12,21 @@ HOP_HEADERS = {'host', 'connection', 'content-length', 'transfer-encoding',
 
 
 class Prepared:
-    """Upstream target plus wire body. Built by protocol adapters."""
+    """Upstream target plus wire body. Built by protocol adapters.
 
-    __slots__ = ('host', 'path', 'headers', 'body', 'tool_names', 'provider')
+    `fallback` is the optional plan for answering this request elsewhere
+    when upstream refuses it (see subscription_fallback); None means the
+    refusal is relayed as-is.
+    """
 
-    def __init__(self, host, path, headers, body, tool_names, provider):
+    __slots__ = ('host', 'path', 'headers', 'body', 'tool_names', 'provider',
+                 'fallback')
+
+    def __init__(self, host, path, headers, body, tool_names, provider,
+                 fallback=None):
         self.host, self.path, self.headers = host, path, headers
         self.body, self.tool_names, self.provider = body, tool_names, provider
+        self.fallback = fallback
 
 
 def passthrough(response):
