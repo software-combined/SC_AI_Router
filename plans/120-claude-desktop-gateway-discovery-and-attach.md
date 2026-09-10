@@ -7,6 +7,13 @@
 > acceptance, managed-policy change or org change is authorised by this
 > document. Each is a separate owner gate listed below.
 
+> **Amended 2026-09-11** (`1440645`) after review
+> `2026-09-11-claude-router-development-branch-review.md` (F4 desktop half,
+> F7). The source slice this plan describes is merged (PR 56); its history
+> stands and is not rewritten. The amendment adds the safe lifecycle and
+> first-run desktop requirements, and marks the discovery evidence that may
+> not be promoted to client acceptance.
+
 > Drift check: `git diff --stat e043920..HEAD -- ai_router/claude.py packaging/install.py packaging/claude_config.py tests/test_claude_ingress.py tests/test_install_config.py docs/claude-code.md docs/compatibility.md`
 > Compare the "Verified current state" excerpts against live code and the
 > installed client first; on a mismatch, STOP.
@@ -24,8 +31,10 @@
   existing Claude Code CLI attach.
 - First proof already held: a fresh desktop session's picker showed router
   rows and native sign-in survived (see "What already happened").
-- Remaining proof: 20 of 20 rows in the desktop picker from the real
-  router, then the same result reproduced by `install.py` rather than by hand.
+- Remaining proof: every served row in the desktop picker from the real
+  router (19 on the current registry; superseded 2026-09-11 from "20 of 20",
+  which was a literal of its date), then the same result reproduced by
+  `install.py` rather than by hand.
 
 ## What already happened (2026-09-10, this machine)
 
@@ -236,15 +245,19 @@ repo gates. Never push to `main`.
    `compileall`, `check_source_limits.py`, then `pre-commit-review`.
 6. **Live readback.** Detach, confirm the app returns to first-party mode
    with native models and sign-in intact, then reattach through `install.py`
-   and confirm a fresh session's picker lists 20 rows. Record the client
-   version and both discovery counts in `docs/compatibility.md`, and record
-   the coexistence limit in `docs/claude-code.md`.
+   and confirm a fresh session's picker lists every served row. **Superseded
+   2026-09-11:** "20 rows" is a stale literal; the current registry serves 19
+   (see Plan 121's snapshot) and the count must be re-derived, never pinned.
+   Record the client version and both discovery counts in
+   `docs/compatibility.md`, and record the coexistence limit in
+   `docs/claude-code.md`.
 7. **Release hygiene.** `CHANGELOG.md` plus `packaging/VERSION` for the
    user-visible discovery change.
 
 ## Completion
 
-- [ ] 20 of 20 rows discovered from the real router in a fresh desktop session.
+- [ ] Every served row discovered from the real router in a fresh desktop
+  session (19 of 19 on the current registry; re-derive, never pin).
 - [ ] Native sign-in and first-party profile state intact after attach,
   detach and reattach.
 - [ ] Attach and detach performed by `install.py`, not by hand, with receipt
@@ -259,3 +272,39 @@ Stop for a managed-policy conflict, loss of native sign-in, any prompt for a
 real gateway credential, secret output, or a discovery count that changes
 without a configuration change. Paid tool round trips and billing remain
 Plan 115. Do not patch client binaries; the asar was read as evidence only.
+
+## Amendment (2026-09-11)
+
+Review findings F4 (desktop half) and F7 in
+`2026-09-11-claude-router-development-branch-review.md`. The merged source
+slice (tier projection, desktop helper, `install.py --desktop`, claim guards,
+tests) is preserved; these additions are the remaining lifecycle work.
+
+1. **Conflict-safe desktop restoration.** `restore_entry` currently restores
+   the snapshot unconditionally and never compares the current entry with the
+   values attach installed. Extend the desktop receipt to the three-way form
+   in Plan 114's amendment (original presence and value, installed value,
+   current value), refuse a conflicting hand edit before mutating either the
+   entry or `claude_desktop_config.json`, preserve the original snapshot
+   across repairs, and make the two-file write plus receipt recoverable if
+   interrupted. Reuse the existing receipt and atomic-write primitives.
+2. **First-run desktop qualification (F7).** `applied_entry_path` expects an
+   existing `configLibrary/_meta.json` with an applied entry, and
+   `user_data_dir()` defaults to the macOS path. Qualify the clean-install
+   desktop path and guard unsupported OS/surface combinations before any
+   service or client mutation; prefer documented configuration/export
+   mechanisms over private profile internals without a version check. A
+   Windows or Linux desktop promise is not implied.
+3. **Discovery evidence is diagnostic, not acceptance.** The temporary
+   listener on `127.0.0.1:18999` (and the in-dialog "Test model discovery"
+   result) proves the client's keep-rule, not end-to-end acceptance. Do not
+   promote it into client acceptance: the fresh-session picker count through
+   `install.py --desktop`, plus the restoration and sign-in checks, are the
+   acceptance evidence, and paid tool round trips stay Plan 115.
+4. **Connector note.** The inventory gate in Step 4 stands. Local stdio
+   declarations are the only entries the installer may own; remote HTTP/SSE
+   entries need their own sign-in at the destination, and org-served
+   connectors plus account tool toggles are never copied. Plan 121's
+   amendment rewrites the connector strategy around native desktop
+   provisioning; desktop `managedMcpServers` is an array and the Code-side
+   managed form is an object, so never carry one shape into the other surface.
