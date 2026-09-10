@@ -10,14 +10,15 @@ only, builds the bundle, runs the suite, and publishes the release with
 about fifteen minutes. Never push to `main` directly for a release;
 a direct push runs checks but publishes nothing.
 
-## Global subagent guidance
+## Global starter instructions
 
-The installer adds one managed subagent-discovery block to the active global
-Codex `AGENTS.md` (or non-empty `AGENTS.override.md`) beside `config.toml`.
-It preserves existing content and symlinks; updates replace only that block,
-and uninstall removes it. If its text or active file changed, installation
-stops for review. Start a fresh Codex task to load the rule. It applies across
-models without duplicating text in the catalogue and grants no new permission.
+The setup window offers a Dev or General starter after the key is stored and
+installs the chosen one as the full global `AGENTS.md` (or non-empty
+`AGENTS.override.md`) beside `config.toml`, exactly once. An existing file is
+never overwritten; updates and uninstall leave global instructions alone, so
+the owner's edits always win. Start a fresh Codex task to load the file. It
+applies across models without duplicating text in the catalogue and grants no
+new permission.
 
 ## How to test first
 

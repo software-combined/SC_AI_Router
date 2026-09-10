@@ -183,7 +183,8 @@ OpenRouter dashboard.
 ## Without a ChatGPT subscription
 
 Install with `--openai-mode none --setup`, paste one OpenRouter key into
-the setup window, and Codex uses a custom provider (`scg_router`) whose
+the setup window, pick a Dev or General starter for the global instructions,
+and Codex uses a custom provider (`scg_router`) whose
 `base_url` carries the per-install path token. No ChatGPT login is needed
 and no subscription traffic is sent: OpenAI models answer 400, native
 service paths answer 404 locally, and OpenRouter models work with tools,
@@ -264,6 +265,9 @@ directory at an idle boundary:
 `ai_router/protocols/messages.py`,
 `ai_router/models.json`,
 `ai_router/openrouter_base_instructions.txt`,
+`ai_router/agents.py`,
+`ai_router/agents_general.txt`,
+`ai_router/agents_dev.txt`,
 `tools/probe_codex_runtime.py`,
 `tools/global_instructions.py`,
 `tools/disable.py`. The installer also places `packaging/router_launch.py`
