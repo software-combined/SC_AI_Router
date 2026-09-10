@@ -5,6 +5,7 @@ import re
 from . import compaction as comp, local_services, agent_handoffs
 from .capabilities import (CANONICAL_ORDER, OPENROUTER_HOST, REASONING_LEVELS, check_effort,
                               check_images, input_modalities)
+from .context_budget import estimate as estimate_tokens
 from .errors import ContextWindowExceeded, PreparationError
 from .registry import by_slug
 from .runtime import log_event
@@ -236,13 +237,17 @@ class OpenRouterProvider:
         if window:
             # Approximate input plus reserved output must fit. The typed
             # error lets the client mark context full and compact next turn.
-            used = len(json.dumps(payload.get('input', []))) // 4
+            used = estimate_tokens(payload)
             reserved = payload['max_output_tokens']
+            slug = model if isinstance(model, str) else str(getattr(entry, 'slug', model))
             if used + reserved > window:
-                raise ContextWindowExceeded(
+                exc = ContextWindowExceeded(
                     f'request needs ~{used + reserved} tokens '
                     f'(~{used} input + {reserved} reserved output) '
-                    f'but {(model if isinstance(model, str) else entry.slug)} allows {window}; compact or shorten the turn')
+                    f'but {slug} allows {window}; compact or shorten the turn')
+                exc.budget = {'model': slug, 'path': path, 'used': used,
+                              'reserved': reserved, 'window': window}
+                raise exc
         return Prepared(self.host, '/api/v1/responses',
                         {'Authorization': 'Bearer ' + credentials.openrouter_key(),
                          'Content-Type': 'application/json', 'Accept-Encoding': 'identity'},

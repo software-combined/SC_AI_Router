@@ -1,9 +1,9 @@
 {
   "codex_router/catalogue.py": 284,
   "codex_router/compaction.py": 319,
-  "codex_router/errors.py": 263,
-  "codex_router/providers.py": 367,
-  "codex_router/router.py": 385,
+  "codex_router/errors.py": 265,
+  "codex_router/providers.py": 372,
+  "codex_router/router.py": 390,
   "codex_router/setup.py": 365,
   "codex_router/tool_adapter.py": 292,
   "packaging/install.py": 687,
@@ -38,5 +38,7 @@
   "codex_router/sse.py": 29,
   "tools/probe_agent_handoffs.py": 496,
   "tests/test_agent_handoffs.py": 118,
-  "tests/test_agent_handoff_providers.py": 168
+  "tests/test_agent_handoff_providers.py": 168,
+  "codex_router/context_budget.py": 35,
+  "tests/test_context_budget.py": 156
 }
