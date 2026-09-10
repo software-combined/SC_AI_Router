@@ -1,0 +1,237 @@
+"""Claude desktop gateway adapter (Plan 073). Python 3.9-safe helper.
+
+Owns the four owned inference values merged into the third-party
+profile's applied configLibrary entry, plus that profile's
+deploymentMode, with conflict refusal on hand-edited owned values and
+activation receipt handling. Mirrors the claude_config.py discipline:
+private before image, atomic replacement at mode 600, owned values only,
+receipt entry recording the pre-attach snapshot, and an exact detach.
+Loaded through the installer's explicit file-import pattern and shipped
+in the release bundle. No runtime/protocol import here.
+"""
+import json
+import os
+from pathlib import Path
+
+PROVIDER_KEY = 'inferenceProvider'
+CREDENTIAL_KIND_KEY = 'inferenceCredentialKind'
+BASE_URL_KEY = 'inferenceGatewayBaseUrl'
+API_KEY_KEY = 'inferenceGatewayApiKey'
+OWNED_KEYS = (PROVIDER_KEY, CREDENTIAL_KIND_KEY, BASE_URL_KEY, API_KEY_KEY)
+
+PROVIDER_VALUE = 'gateway'
+CREDENTIAL_KIND_VALUE = 'static'
+# Placeholder: the router authorises on the loopback path token, not this.
+API_KEY_VALUE = 'router-path-token'
+
+CLIENT_KEY = 'claude-desktop'
+
+
+def user_data_dir(env=None):
+    """Third-party profile dir, honoring CLAUDE_USER_DATA_DIR when set."""
+    env = os.environ if env is None else env
+    override = env.get('CLAUDE_USER_DATA_DIR')
+    if override:
+        return Path(override).expanduser()
+    return Path.home() / 'Library' / 'Application Support' / 'Claude-3p'
+
+
+def desired_values(state):
+    return {PROVIDER_KEY: PROVIDER_VALUE,
+            CREDENTIAL_KIND_KEY: CREDENTIAL_KIND_VALUE,
+            BASE_URL_KEY: 'http://127.0.0.1:%s/%s' % (state['port'], state['token']),
+            API_KEY_KEY: API_KEY_VALUE}
+
+
+def applied_entry_path(data_dir):
+    """Applied configLibrary entry selected by _meta.json/appliedId."""
+    data_dir = Path(data_dir)
+    try:
+        meta = json.loads((data_dir / 'configLibrary' / '_meta.json').read_text())
+    except (OSError, ValueError):
+        raise SystemExit('Claude desktop library metadata is missing or invalid: %s'
+                         % (data_dir / 'configLibrary' / '_meta.json'))
+    applied = meta.get('appliedId') if isinstance(meta, dict) else None
+    if not applied or not isinstance(applied, str):
+        raise SystemExit('Claude desktop has no applied configuration entry')
+    return data_dir / 'configLibrary' / (applied + '.json')
+
+
+def read_entry(path):
+    path = Path(path)
+    if not path.exists():
+        return {}
+    try:
+        doc = json.loads(path.read_text())
+    except ValueError:
+        raise SystemExit('Claude desktop entry is not valid JSON: %s' % path)
+    if not isinstance(doc, dict):
+        raise SystemExit('Claude desktop entry is not a JSON object: %s' % path)
+    return doc
+
+
+def read_desktop_config(data_dir):
+    path = Path(data_dir) / 'claude_desktop_config.json'
+    if not path.exists():
+        return {}, None
+    try:
+        doc = json.loads(path.read_text())
+    except ValueError:
+        raise SystemExit('Claude desktop config is not valid JSON: %s' % path)
+    if not isinstance(doc, dict):
+        raise SystemExit('Claude desktop config is not a JSON object: %s' % path)
+    return doc, path
+
+
+def merge_entry(state, path):
+    """Merge the four owned values; refuse conflicting hand-edited values.
+
+    Returns (doc, changed, previous_owned) where previous_owned maps each
+    owned key to its prior value (or None when absent) for the receipt.
+    """
+    doc = read_entry(path)
+    want = desired_values(state)
+    previous = {key: doc.get(key) for key in OWNED_KEYS}
+    for key in OWNED_KEYS:
+        if previous[key] is not None and previous[key] != want[key]:
+            raise SystemExit(
+                'Claude desktop setting %s is managed outside this installer; '
+                'remove or correct it by hand, then re-run.' % key)
+    changed = any(previous[key] != want[key] for key in OWNED_KEYS)
+    doc.update(want)
+    return doc, changed, previous
+
+
+def write_json(path, doc):
+    """Atomically replace a desktop JSON file with owner-only permissions."""
+    path = Path(path)
+    if path.parent and not path.parent.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + '.router.tmp')
+    try:
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        # A crash between create and replace leaves the deterministic tmp
+        # behind; unlink and retry once rather than blocking activation.
+        try:
+            tmp.unlink()
+        except OSError:
+            raise SystemExit('stale desktop temp file: delete %s and re-run' % tmp)
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, 'w') as stream:
+        stream.write(json.dumps(doc, indent=2) + '\n')
+    try:
+        os.chmod(tmp, 0o600)
+    except OSError:
+        pass
+    os.replace(tmp, path)
+
+
+def restore_entry(path, previous):
+    """Restore owned keys to their pre-attach values; drop those added."""
+    doc = read_entry(path)
+    for key in OWNED_KEYS:
+        old = previous.get(key)
+        if old is None:
+            doc.pop(key, None)
+        else:
+            doc[key] = old
+    write_json(path, doc)
+
+
+def _snapshot(text):
+    """Prior-values dict from a receipt snapshot; {} when not a JSON object."""
+    try:
+        previous = json.loads(text)
+    except ValueError:
+        return {}
+    return previous if isinstance(previous, dict) else {}
+
+
+def attach(home, state, receipts, data_dir_override=None, env=None):
+    """Attach the desktop gateway without touching first-party state.
+
+    Merges only the four owned entry values and sets the third-party
+    profile's deploymentMode to 3p; conflicting effective overrides refuse
+    with a redacted message. Records the attachment in the versioned
+    receipt. Returns the applied entry path written.
+    """
+    if state.get('claude_mode', 'subscription') == 'none':
+        raise SystemExit('claude_mode is none: re-run with --claude-mode subscription '
+                         'to attach the Claude desktop gateway')
+    data_dir = (Path(data_dir_override) if data_dir_override is not None
+                else user_data_dir(env))
+    entry_path = applied_entry_path(data_dir)
+    # Refuse before writing anything: a mode conflict must leave both the
+    # entry and the desktop config untouched.
+    cfg, cfg_path = read_desktop_config(data_dir)
+    previous_mode = cfg.get('deploymentMode')
+    if previous_mode is not None and previous_mode != '3p':
+        raise SystemExit(
+            'Claude desktop deploymentMode is managed outside this installer; '
+            'remove or correct it by hand, then re-run.')
+    doc, changed, previous = merge_entry(state, entry_path)
+    write_json(entry_path, doc)
+    mode_changed = previous_mode != '3p'
+    if mode_changed:
+        cfg['deploymentMode'] = '3p'
+        write_json(cfg_path if cfg_path is not None
+                   else data_dir / 'claude_desktop_config.json', cfg)
+    receipt = receipts.read_receipt(home)
+    clients = receipt.setdefault('clients', {})
+    existing = clients.get(CLIENT_KEY, {})
+    if (not changed and not mode_changed and isinstance(existing, dict)
+            and 'inserted_block' in existing):
+        # Re-attach with identical values: keep the original pre-attach
+        # snapshot so a later detach restores it instead of our own values.
+        previous = _snapshot(existing['inserted_block'])
+        previous_mode = previous.get('deploymentMode', previous_mode)
+    snapshot = dict(previous)
+    snapshot['deploymentMode'] = previous_mode
+    clients[CLIENT_KEY] = {'config_path': str(entry_path),
+                           'inserted_block': json.dumps(snapshot, sort_keys=True),
+                           'claude_mode': state.get('claude_mode', 'subscription')}
+    receipt['version'] = receipts.RECEIPT_VERSION
+    (Path(home) / 'activation.json').write_text(json.dumps(receipt, indent=2) + '\n')
+    try:
+        os.chmod(Path(home) / 'activation.json', 0o600)
+    except OSError:
+        pass
+    return entry_path
+
+
+def detach(home, receipts, data_dir_override=None, env=None):
+    """Restore desktop settings to pre-attach values; forget the attachment."""
+    receipt = receipts.read_receipt(home)
+    entry = receipt.get('clients', {}).get(CLIENT_KEY, {})
+    if data_dir_override is None and not entry:
+        return  # never attached: nothing to restore, nowhere to resolve
+    if data_dir_override is not None:
+        data_dir = Path(data_dir_override)
+        path = applied_entry_path(data_dir)
+    elif isinstance(entry, dict) and entry.get('config_path'):
+        path = Path(entry['config_path'])
+        data_dir = path.parents[1] if path.parent.name == 'configLibrary' else None
+    else:
+        data_dir = user_data_dir(env)
+        path = applied_entry_path(data_dir)
+    previous = _snapshot(entry.get('inserted_block', '{}'))
+    restore_entry(path, previous)
+    old_mode = previous.get('deploymentMode')
+    if data_dir is not None:
+        cfg, cfg_path = read_desktop_config(data_dir)
+        if cfg_path is not None:
+            if old_mode is None:
+                cfg.pop('deploymentMode', None)
+            else:
+                cfg['deploymentMode'] = old_mode
+            if not cfg and old_mode is None:
+                # Attach created this file; detach removes it instead of
+                # leaving an empty object the app never had.
+                try:
+                    cfg_path.unlink()
+                except OSError:
+                    write_json(cfg_path, cfg)
+            else:
+                write_json(cfg_path, cfg)
+    receipts.drop_client(home, CLIENT_KEY)
