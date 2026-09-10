@@ -11,7 +11,7 @@ import unittest
 
 from compression import zstd
 
-from codex_router.tool_adapter import snoop_response_identity
+from ai_router.tool_adapter import snoop_response_identity
 from tests.fakes import FakeUpstream
 
 

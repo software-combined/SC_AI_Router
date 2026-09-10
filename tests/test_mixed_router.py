@@ -8,10 +8,10 @@ import threading
 import time
 import unittest
 from unittest import mock
-from codex_router import providers
-from codex_router.credentials import Credentials
-from codex_router.registry import by_slug
-from codex_router.router import Router
+from ai_router import providers
+from ai_router.credentials import Credentials
+from ai_router.registry import by_slug
+from ai_router.router import Router
 
 class _StubCredentials:
     def __init__(self, key='router-secret'):

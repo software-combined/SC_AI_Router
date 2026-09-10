@@ -26,7 +26,7 @@ if '--reasoning-summary' in sys.argv:
         # The leg requires default_reasoning_summary auto with parameter
         # support; built from the registry entry so other fields stay put.
         sys.path.insert(0, str(ROOT.parent))
-        from codex_router import catalogue, registry
+        from ai_router import catalogue, registry
         if len(sys.argv) > 1 and not sys.argv[1].startswith('-'):
             _rs_model = registry.by_slug(sys.argv[1])
             _rs_entry = catalogue.openrouter_entry(_rs_model) if _rs_model else None
@@ -41,7 +41,7 @@ if '--apply-patch' in sys.argv:
     # catalogue flips the target entry to freeform; the thread runs with
     # workspace-write sandbox rooted at a temp cwd holding note.txt.
     sys.path.insert(0, str(ROOT.parent))
-    from codex_router import catalogue, registry
+    from ai_router import catalogue, registry
     _ap_dir = Path(tempfile.mkdtemp(prefix='ap-probe-'))
     (_ap_dir / 'note.txt').write_text('alpha\n')
     if '--catalog' not in sys.argv and len(sys.argv) > 1 and not sys.argv[1].startswith('-'):
@@ -56,7 +56,7 @@ if '--experimental-tools' in sys.argv and '--catalog' not in sys.argv:
     # Plan 044 Step 3: temporary catalogue advertising the clock tool.
     # Built from the registry entry so other fields stay put.
     sys.path.insert(0, str(ROOT.parent))
-    from codex_router import catalogue, registry
+    from ai_router import catalogue, registry
     if len(sys.argv) > 1 and not sys.argv[1].startswith('-'):
         _xt_model = registry.by_slug(sys.argv[1])
         _xt_entry = catalogue.openrouter_entry(_xt_model) if _xt_model else None
@@ -152,7 +152,7 @@ def switch_target():
 
 def model_modalities(model):
     try:
-        rows = json.loads((ROOT.parent / 'codex_router' / 'models.json').read_text())
+        rows = json.loads((ROOT.parent / 'ai_router' / 'models.json').read_text())
     except (OSError, ValueError):
         return []
     return next((row.get('modalities', []) for row in rows if row.get('slug') == model), [])

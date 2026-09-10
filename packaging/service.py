@@ -32,7 +32,7 @@ except ImportError:       # pragma: no cover - POSIX
 
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from codex_router import feed_verify  # noqa: E402  (3.9-safe, no router import)
+from ai_router import feed_verify  # noqa: E402  (3.9-safe, no router import)
 
 import importlib.util  # noqa: E402
 _ld_spec = importlib.util.spec_from_file_location(
@@ -48,7 +48,7 @@ LOAD_TIMEOUT_S = 60
 
 # Subscription-side roster for the combined picker: bare slugs that route on
 # the ChatGPT subscription. Matches the live picker and state file; the
-# OpenRouter-side roster lives in codex_router/models.json instead.
+# OpenRouter-side roster lives in ai_router/models.json instead.
 DEFAULT_OPENAI_MODELS = ['gpt-6-astra', 'gpt-5.6-sol',
                          'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5',
                          'gpt-5.4-mini', 'gpt-5.3-codex-spark', 'codex-auto-review']

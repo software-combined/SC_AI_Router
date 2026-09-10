@@ -1,8 +1,8 @@
 from pathlib import Path
 import tempfile
 import unittest
-from codex_router.apply_catalogue import apply, write_guarded
-from codex_router.capabilities import OPENROUTER_MODELS
+from ai_router.apply_catalogue import apply, write_guarded
+from ai_router.capabilities import OPENROUTER_MODELS
 
 def catalog():
     return {'models': [{'slug': slug, 'default_reasoning_level': 'low',

@@ -12,10 +12,10 @@ import tempfile
 import unittest
 from unittest import mock
 from compression import zstd
-from codex_router import setup
-from codex_router.credentials import Credentials
-from codex_router.registry import by_slug
-from codex_router.router import _payload_has_image
+from ai_router import setup
+from ai_router.credentials import Credentials
+from ai_router.registry import by_slug
+from ai_router.router import _payload_has_image
 from tests.fakes import FakeUpstream, install_fake
 from tests.test_mixed_router import _start_server, _test_state
 
@@ -255,7 +255,7 @@ class HandlerCharacterisationTests(unittest.TestCase):
         self.assertEqual(done[0]['item']['input'], 'code')
 
     def test_openai_mode_validation(self):
-        from codex_router.runtime import load_state
+        from ai_router.runtime import load_state
         good = dict(self._state_base(), openai_mode='none', opencode_auth=_auth_file(self))
         self.assertEqual(load_state(self._state_file(good))['openai_mode'], 'none')
         bad = dict(self._state_base(), openai_mode='sometimes')
@@ -362,10 +362,10 @@ class HandlerCharacterisationTests(unittest.TestCase):
         # KeyError subclasses LookupError: a malformed-payload indexing bug
         # in prepare must keep the payload-error mapping, never the window.
         from unittest import mock as _mock
-        from codex_router import setup as _setup
+        from ai_router import setup as _setup
         server, home, opened = self._window_server('sk-live\n')
         with _mock.patch.object(_setup, 'check_key', return_value=('k', 10, 0)):
-            with _mock.patch('codex_router.providers.OpenRouterProvider.prepare',
+            with _mock.patch('ai_router.providers.OpenRouterProvider.prepare',
                              side_effect=KeyError('fragments')):
                 response = _post(server.server_port, '/test-token/responses',
                                  {'model': 'z-ai/glm-5.3', 'input': []})
@@ -377,7 +377,7 @@ class HandlerCharacterisationTests(unittest.TestCase):
         # The file is not the effective credential when the env key is set:
         # no check_key probe, no window, raw 401 passes through.
         from unittest import mock as _mock
-        from codex_router import setup as _setup
+        from ai_router import setup as _setup
         server, home, opened = self._window_server('sk-file\n')
         server.credentials.env = {'OPENROUTER_API_KEY': 'sk-env'}
         install_fake(self, lambda: FakeUpstream(401, b'{"error": "expired"}', []))
@@ -393,7 +393,7 @@ class HandlerCharacterisationTests(unittest.TestCase):
         # A live nonce already arms the window: answer the raw 401 instead
         # of paying a second check_key on every retry.
         from unittest import mock as _mock
-        from codex_router import setup as _setup
+        from ai_router import setup as _setup
         server, home, opened = self._window_server('sk-dead\n')
         server.state['setup'] = {'nonce': 'n' * 16, 'expires': 9_999_999_999}
         install_fake(self, lambda: FakeUpstream(401, b'{"error": "expired"}', []))

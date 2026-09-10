@@ -12,9 +12,9 @@ from tests._platform import requires_posix_perms
 import urllib.request
 from pathlib import Path
 from unittest import mock
-from codex_router import setup
-from codex_router.credentials import Credentials
-from codex_router.runtime import load_state
+from ai_router import setup
+from ai_router.credentials import Credentials
+from ai_router.runtime import load_state
 from tests.test_mixed_router import _start_server
 
 NOW = 1_700_000_000
@@ -123,7 +123,7 @@ class SetupUnitTests(unittest.TestCase):
         state_path.write_text(json.dumps(state))
         form = b'key=sk-test&mode=none'
         with mock.patch.object(setup, '_ON_WINDOWS', True), \
-                mock.patch('codex_router.winacl.check',
+                mock.patch('ai_router.winacl.check',
                             side_effect=SystemExit('cannot verify')):
             status, _ = setup.handle_setup(state, home, 'n' * 16, True, form,
                                            _urlopen=_key_ok(), _now=NOW)
@@ -140,7 +140,7 @@ class SetupUnitTests(unittest.TestCase):
         state_path.write_text(json.dumps(state))
         form = b'key=sk-test&mode=none'
         with mock.patch.object(setup, '_ON_WINDOWS', True), \
-                mock.patch('codex_router.winacl.check',
+                mock.patch('ai_router.winacl.check',
                             side_effect=SystemExit('cannot verify')), \
                 mock.patch.object(Path, 'unlink',
                                    side_effect=OSError('locked')):
@@ -207,8 +207,8 @@ class SetupUnitTests(unittest.TestCase):
         self.addCleanup(shutil.rmtree, home, True)
         path = home / 'mixed-router-state.json'
         with mock.patch.dict(os.environ, {'OPENROUTER_API_KEY': ''}):
-            with mock.patch('codex_router.runtime.ROUTER_HOME', home):
-                from codex_router.runtime import load_state as load
+            with mock.patch('ai_router.runtime.ROUTER_HOME', home):
+                from ai_router.runtime import load_state as load
                 fresh = _state(home)
                 fresh['setup']['expires'] = int(_time.time()) + 900
                 path.write_text(json.dumps(fresh))
@@ -293,7 +293,7 @@ class KeyWindowTests(unittest.TestCase):
         server.state = {'port': 1, 'token': 't'}
         buf = io.StringIO()
         with mock.patch.object(setup.sys.stdout, 'isatty', return_value=False):
-            with mock.patch('codex_router.runtime.log_event') as logged:
+            with mock.patch('ai_router.runtime.log_event') as logged:
                 import contextlib as _ctx
                 with _ctx.redirect_stdout(buf):
                     setup.open_key_window(server, home, _opener=lambda url: True)
@@ -381,7 +381,7 @@ class SetupHandlerTests(unittest.TestCase):
         # the setup POST must work there, not just on directly bound servers.
         import socket
         import threading
-        from codex_router.router import Router
+        from ai_router.router import Router
         home = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, home, True)
         listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

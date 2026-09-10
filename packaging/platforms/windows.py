@@ -17,7 +17,7 @@ from pathlib import Path
 
 import importlib.util as _ilu
 _winacl_spec = _ilu.spec_from_file_location(
-    'router_winacl', Path(__file__).resolve().parents[2] / 'codex_router' / 'winacl.py')
+    'router_winacl', Path(__file__).resolve().parents[2] / 'ai_router' / 'winacl.py')
 _winacl = _ilu.module_from_spec(_winacl_spec)
 _winacl_spec.loader.exec_module(_winacl)
 

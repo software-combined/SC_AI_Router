@@ -1,7 +1,7 @@
 """Generate OpenRouter catalogue entries from the registry.
 
 Every non-model-specific field lives in OPENROUTER_TEMPLATE. Per-model
-values come from codex_router/registry.py rows. Pure: no network, no
+values come from ai_router/registry.py rows. Pure: no network, no
 state; the instructions text is read once at import.
 """
 import json
@@ -276,7 +276,7 @@ def check(path, client='codex', allowed=None):
     return identical == total
 
 
-USAGE = ('usage: python3.14 -m codex_router.catalogue '
+USAGE = ('usage: python3.14 -m ai_router.catalogue '
          '[--client codex|claude] [--allowed slug,...] --check|--merge <catalogue>')
 
 

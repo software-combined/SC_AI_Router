@@ -1,10 +1,10 @@
 import json
 import re
 import unittest
-from codex_router.capabilities import CANONICAL_ORDER
-from codex_router.catalogue import OPENROUTER_TEMPLATE, openrouter_entry
-from codex_router.registry import (FIELDS, MODELS, Model, by_slug, load, openrouter_slugs)
-from codex_router.clients import models_for, visible_for
+from ai_router.capabilities import CANONICAL_ORDER
+from ai_router.catalogue import OPENROUTER_TEMPLATE, openrouter_entry
+from ai_router.registry import (FIELDS, MODELS, Model, by_slug, load, openrouter_slugs)
+from ai_router.clients import models_for, visible_for
 
 CATALOGUE_FIELDS = set(OPENROUTER_TEMPLATE) | {'slug', 'display_name', 'description',
     'default_reasoning_level', 'supported_reasoning_levels', 'priority',
@@ -78,7 +78,7 @@ class RegistryTests(unittest.TestCase):
         self.assertTrue(model.web_search)
 
     def test_merge_preserves_replaces_appends_without_dupes(self):
-        from codex_router.catalogue import merge
+        from ai_router.catalogue import merge
         native = {'slug': 'gpt-6-astra', 'display_name': 'Native'}
         stale = {'slug': 'moonshotai/kimi-k3', 'display_name': 'Stale',
                  'priority': 1, 'context_window': 1, 'max_context_window': 1,
@@ -97,7 +97,7 @@ class RegistryTests(unittest.TestCase):
         self.assertEqual(len(slugs), 1 + len(models_for(MODELS, 'codex')))
 
     def test_catalog_name_vendor_prefix_rule(self):
-        from codex_router.catalogue import catalog_name
+        from ai_router.catalogue import catalog_name
         deepseek = by_slug('deepseek/deepseek-v4-pro-0813')
         self.assertEqual(catalog_name(deepseek), 'DeepSeek: V4 Pro 0813')
         muse = by_slug('meta/muse-spark-1.3')
@@ -166,7 +166,7 @@ class RegistryTests(unittest.TestCase):
         self.assertFalse(visible_for(by_slug('openai/gpt-6-astra'), 'codex'))
 
     def test_near_miss_offers_bare_tilde_alias_only(self):
-        from codex_router.registry import near_miss
+        from ai_router.registry import near_miss
         self.assertEqual(near_miss('anthropic/claude-opus-latest'),
                          '~anthropic/claude-opus-latest')
         self.assertIsNone(near_miss('nobody/none'))

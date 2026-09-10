@@ -43,7 +43,7 @@ class SystemdRuntimeTests(unittest.TestCase):
                     current = self.home / 'current'
                     current.unlink()
                     current.symlink_to(self.home / 'releases' / first)
-                    self.process = subprocess.Popen([sys.executable, '-m', 'codex_router'],
+                    self.process = subprocess.Popen([sys.executable, '-m', 'ai_router'],
                         cwd=current, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     self.assertTrue(installer.wait_version(state, first))
                     build(2)

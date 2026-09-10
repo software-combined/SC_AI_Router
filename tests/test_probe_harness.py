@@ -142,7 +142,7 @@ while True:
 
 
 def _slug_with(test, capable):
-    rows = json.loads((ROOT / 'codex_router' / 'models.json').read_text())
+    rows = json.loads((ROOT / 'ai_router' / 'models.json').read_text())
     for row in rows:
         if ('image' in row.get('modalities', [])) == capable:
             return row['slug']

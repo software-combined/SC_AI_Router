@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
-from codex_router.runtime import load_state
+from ai_router.runtime import load_state
 from tests.test_install import install_mod
 
 

@@ -1,7 +1,7 @@
 """Recording fake upstream for handler characterisation tests.
 
 Never opens a network connection. Patch target is
-http.client.HTTPSConnection as used by codex_router.router.
+http.client.HTTPSConnection as used by ai_router.router.
 """
 import http.client
 import json

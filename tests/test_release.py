@@ -68,8 +68,8 @@ class ReleaseTests(unittest.TestCase):
         tarball = next(iter(out.glob('*.tar.gz')))
         with tarfile.open(tarball, mode='r') as tar:
             names = tar.getnames()
-        for dep in ('codex_router/models.json',
-                    'codex_router/openrouter_base_instructions.txt',
+        for dep in ('ai_router/models.json',
+                    'ai_router/openrouter_base_instructions.txt',
                     'packaging/router_launch.py',
                     'packaging/service.py',
                     'packaging/updater.py',
@@ -87,7 +87,7 @@ class ReleaseTests(unittest.TestCase):
             tar.extractall(extract, filter='data')
         result = subprocess.run(
             [sys.executable, '-c',
-             'from codex_router.registry import MODELS; print(len(MODELS))'],
+             'from ai_router.registry import MODELS; print(len(MODELS))'],
             cwd=str(extract), capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertGreater(int(result.stdout.strip()), 0)
@@ -95,19 +95,19 @@ class ReleaseTests(unittest.TestCase):
         # handler, providers, setup, catalogue, and installer backends.
         result = subprocess.run(
             [sys.executable, '-c',
-             'from codex_router import router, providers, setup, catalogue;'
-             'from codex_router import registry, compaction, tool_adapter;'
+             'from ai_router import router, providers, setup, catalogue;'
+             'from ai_router import registry, compaction, tool_adapter;'
              'print(len(registry.MODELS))'],
             cwd=str(extract), capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertGreater(int(result.stdout.strip()), 0)
         # A deliberately incomplete extraction must fail its smoke with a
         # specific missing dependency, proving the check is not vacuous.
-        missing = extract / 'codex_router' / 'providers.py'
+        missing = extract / 'ai_router' / 'providers.py'
         missing.unlink()
         result = subprocess.run(
             [sys.executable, '-c',
-             'from codex_router import router'],
+             'from ai_router import router'],
             cwd=str(extract), capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('providers', result.stderr)

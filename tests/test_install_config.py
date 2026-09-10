@@ -28,7 +28,7 @@ from tests.test_install import (
 
 
 def _fake_write_catalogue(home, release_dir, python):
-    from codex_router.catalogue import merge, read_roster
+    from ai_router.catalogue import merge, read_roster
     path = home / 'mixed-models.json'
     base = json.loads(path.read_text()) if path.exists() else {'models': []}
     path.write_text(json.dumps(merge(base, read_roster(path)), indent=2) + '\n')

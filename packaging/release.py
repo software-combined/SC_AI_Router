@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from codex_router import feed_verify
+from ai_router import feed_verify
 
 MIN_PYTHON = '3.14'
 REPO = 'software-combined/SC_OpenRouter_adapter'
@@ -20,9 +20,9 @@ REPO = 'software-combined/SC_OpenRouter_adapter'
 
 def bundle_files(root):
     return (
-        sorted(p.relative_to(root).as_posix() for p in (root / 'codex_router').rglob('*.py'))
-        + sorted(p.relative_to(root).as_posix() for p in (root / 'codex_router').glob('*.txt'))
-        + sorted(p.relative_to(root).as_posix() for p in (root / 'codex_router').glob('*.json'))
+        sorted(p.relative_to(root).as_posix() for p in (root / 'ai_router').rglob('*.py'))
+        + sorted(p.relative_to(root).as_posix() for p in (root / 'ai_router').glob('*.txt'))
+        + sorted(p.relative_to(root).as_posix() for p in (root / 'ai_router').glob('*.json'))
         + sorted(p.relative_to(root).as_posix() for p in (root / 'tools').glob('*.py'))
         + ['packaging/VERSION', 'packaging/install.py', 'packaging/launchd.py',
            'packaging/router_launch.py', 'packaging/service.py',
@@ -93,7 +93,7 @@ def main(argv=None):
             info.mode = 0o644
             tar.addfile(info, io.BytesIO(data))
     tarball = gzip.compress(tar_buffer.getvalue(), mtime=0)
-    tarball_name = f'codex-model-router-{version}.tar.gz'
+    tarball_name = f'ai-router-{version}.tar.gz'
     (out_dir / tarball_name).write_bytes(tarball)
     tag = f'v{version}' if args.channel == 'stable' else f'v{version}-beta'
     base = args.url_base or f'https://github.com/{REPO}/releases/download/{tag}'
