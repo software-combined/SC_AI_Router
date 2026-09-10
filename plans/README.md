@@ -255,7 +255,7 @@ independent implementations: the owner mapping prevents duplicate execution.
 | [059](059-python-314-interpreter-provisioning.md) | TODO: private CPython 3.14 runtime | Single pinned lock/native wrappers, isolated bootstrap then 054 mirror; ongoing patch owner required |
 | [060](060-content-safe-router-diagnostics.md) | TODO: content-safe diagnostics | First small source fix; synthetic regression already reproduced |
 | [061](061-domain-rules-and-bundle-contracts.md) | DONE: domain map, boundary tests, bundle closure, 3.9 grammar gate (2026-09-10) | `3bed26d` + extraction follow-ons on develop; 062/064 unblocked under the rules |
-| [062](062-protocol-and-upstream-boundaries.md) | TODO: protocol/transport boundaries | 060/061, with 066 protocol work reconciled before moving shared files |
+| [062](062-protocol-and-upstream-boundaries.md) | DONE: transport leaves + explicit protocol dispatch (2026-09-10) | `a40dcc7` on develop; 112 contract tests OK; 064 consumes the seam next |
 | [063](063-client-activation-and-subscription-policy.md) | DONE: Codex adapter extracted, service-only route, independent subscription modes (2026-09-10) | `f5cf136`+`b40f82e` on develop; 107 focused tests OK; 051/053 consume the seam next |
 | [064](064-model-facts-and-client-projections.md) | TODO: model facts and client projections | 061; serialize shared files with 062; feeds 044/046 |
 | [065](065-kiro-client-compatibility-spike.md) | DONE: negative spike, no verified Kiro inference hook (2026-09-10) | `docs/kiro-compatibility.md`; IDE and CLI separately decided; reopen only on dated official custom-endpoint evidence |
