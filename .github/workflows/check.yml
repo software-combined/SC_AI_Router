@@ -14,15 +14,14 @@ concurrency:
 
 jobs:
   test:
-    name: Test (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        # Plan 056 Stage 4: guard the platform split on all three targets.
-        # Windows runs the suite only; the install layer skips itself there
-        # until Plan 057 (see tests/_platform.py).
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+    name: Test
+    # Single Ubuntu runner, static checks only: the billed test-suite
+    # minutes are unaffordable per-PR on this plan, and installs are
+    # proven on local hardware instead. The full suite
+    # (python -m unittest discover -s tests -t .) is a required local
+    # gate before every commit; CI keeps compile, source limits,
+    # registry/catalogue shape, and the two grep scans.
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -39,7 +38,6 @@ jobs:
         run: |
           python -m codex_router.catalogue --merge ./ci-catalogue.json
           python -m codex_router.catalogue --check ./ci-catalogue.json
-      - run: python -m unittest discover -s tests -t . -v
       - name: No request cap
         shell: bash
         run: |

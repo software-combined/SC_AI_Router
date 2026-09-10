@@ -4,8 +4,8 @@ Per-user Scheduled Tasks at logon (no admin, no stored password), updater on
 a 15-minute repeat, pythonw.exe router with python.exe updater, and icacls
 owner-only key protection verified after writing. Offline-testable: every
 schtasks call goes through the injected `run` seam, and task XML is pure
-rendering over (python, home). Until Stage 6 passes on a real machine,
-select() is not wired: the installer keeps refusing Windows.
+rendering over (python, home). Wired in select(); staff rollout stays
+gated on real-machine acceptance.
 """
 import os
 import json
