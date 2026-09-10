@@ -185,11 +185,37 @@ on it, subscription rows unaffected. Offboarding: remove the user from
 the subgroup and delete their OpenRouter key by id; the policy file goes
 with the machine's decommissioning, never as a revocation control.
 
+## Windows (Task Scheduler)
+
+The Windows backend (`packaging/platforms/windows.py`) registers two
+per-user tasks, `CodexMixedModelRouter` and `CodexMixedModelRouterUpdate`,
+from XML it writes to `logs\*.task.xml`. Facts the design rests on, all
+verified on Windows 11 on 2026-09-10: a logon trigger must name the
+installing user (an unscoped one needs elevation and fails with "Access is
+denied"); a repeating trigger needs a `StartBoundary`; `schtasks /delete`
+leaves a running instance alive, so uninstall ends the tasks first;
+re-registering a running task keeps its instance, so the updater can refresh
+its own definition; and an interactive-token console task shows its window,
+so both tasks run `pythonw.exe` through `task_launch.py` in the router home
+(rewritten on every install), which appends stdout and stderr to
+`logs\launchd.log` and `logs\update.log` (rotated at 1 MB, one backup). Every console child (`schtasks`, `icacls`, `whoami`, `python`,
+`gh`) is spawned without a window.
+
+Restart and update: the task allows one instance (`IgnoreNew`), so a
+handover posts the authenticated `/shutdown`, waits for the instance to
+leave the Running state (up to 180 seconds), then runs the task again; a
+process still alive after that deadline is ended. `schtasks /query /tn
+CodexMixedModelRouter /fo list /v` shows status, last run and last result
+(`267009` means running). Key protection: the router home carries an
+inheritable owner-only grant and the key and state files a plain one; a
+widened ACL makes the router refuse the key at read time.
+
 ## Incidents
 
 Check `/health`, then `logs/launchd.log`, then
-`launchctl print` for the router agent. Roll back by re-running the
-installer with `--version` pointing at the previous release.
+`launchctl print` for the router agent (`schtasks /query` on Windows). Roll
+back by re-running the installer with `--version` pointing at the previous
+release.
 
 ## Decision log
 

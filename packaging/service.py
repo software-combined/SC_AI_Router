@@ -99,6 +99,11 @@ def fetch(url):
 
 def run(cmd, **kwargs):
     """Single subprocess entry point; tests inject a fake."""
+    if sys.platform == 'win32':
+        # The scheduled updater runs this installer under pythonw.exe; a
+        # console child (python, gh, schtasks, icacls) spawned from there
+        # would otherwise open a console window on the desktop.
+        kwargs.setdefault('creationflags', getattr(subprocess, 'CREATE_NO_WINDOW', 0))
     return subprocess.run(cmd, **kwargs)
 
 

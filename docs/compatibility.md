@@ -1,5 +1,26 @@
 # Compatibility
 
+## Windows lifecycle acceptance, 2026-09-10 (Plan 057 first proof)
+
+Machine: Windows 11 Pro 10.0.26200 x64 staff laptop (AzureAD account, no
+elevation), Python 3.14.7 from python.org, Codex desktop `OpenAI.Codex`
+26.903.8094.0 (Store package; the `codex` CLI is not on PATH), GitHub CLI
+2.97.0. Bundles were built from the 0.6.12 source and served from local
+`file://` feeds; no paid model request was made and no Codex session was
+exercised, so this is lifecycle evidence only, not model or client
+acceptance.
+
+| step | result |
+|---|---|
+| `--preflight`, `--status`, `--dry-run` | read-only, no router home created |
+| first install | stops at the key gate (exit 3); key and state files `icacls` owner-only, home grant inheritable, inherited `CodexSandboxUsers` read access removed |
+| install with key present | `/health` reports the installed version in about four seconds; both tasks registered as Interactive-only, least privilege, `pythonw.exe`; Codex `config.toml` parses with a forward-slash catalogue path |
+| scheduled update | `CodexMixedModelRouterUpdate` run by hand installed the next bundle; health moved versions with about fourteen seconds of refused connections; updater output captured in `logs\update.log` |
+| rollback (`--version`) | previous release serving again in about two seconds |
+| uninstall | both tasks ended and deleted, no router process, port free, config block removed, activation receipt dropped, home left in place |
+| reinstall after uninstall | exit 0, Codex re-attached (fails with a stale receipt before this release) |
+| sign-out and sign-in | pending: the machine must be signed out after this session ends; verify with `schtasks /query /tn CodexMixedModelRouter` and `/health` |
+
 ## Token-budget protocol check, 2026-09-09
 
 `python3.14 tools/probe_context_budget.py` passed against Codex CLI 0.153.4

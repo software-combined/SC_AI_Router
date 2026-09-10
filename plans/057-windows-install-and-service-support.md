@@ -23,6 +23,14 @@ The backend is `packaging/platforms/windows.py`, shared with 056 and 054;
 do not create a second `packaging/windows.py`. Plan 059 owns the interpreter
 and native wrapper; this plan consumes that shared bootstrap.
 
+Amendment 2026-09-10, from the first real-machine proof: both tasks run
+`pythonw.exe`. Task Scheduler captures no stdout, so the "python.exe updater
+so its output reaches the task log" rationale did not hold, and an
+interactive-token console task shows its window for the whole run. A
+home-root task launcher routes each task's stdout/stderr to the supervisor
+log instead. The logon trigger must name the installing user (an unscoped
+one needs elevation), and every repeating trigger needs a `StartBoundary`.
+
 A named native Windows 11 x64 staff machine remains required for acceptance.
 Source and offline/CI work can proceed while it is arranged, but no stage
 requiring real-machine evidence is marked complete from mocks. Stage 1 refuses
