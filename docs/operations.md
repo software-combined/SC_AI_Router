@@ -102,6 +102,33 @@ confirm discovery, one exact callback, and the marker in the final
 answer. If the app-server protocol changed, probes fail before any
 user task does; do not ship model changes until the base probe passes.
 
+## Latency phase fields (aggregate-only comparison recipe)
+
+`request_completed` carries per-phase durations in milliseconds plus the
+long-standing cumulative fields (`local_prepare_ms`,
+`upstream_headers_ms`, `first_chunk_ms`, `total_ms`), whose meanings are
+unchanged:
+
+| Field | Meaning |
+|---|---|
+| `read_ms` | Socket read plus body decode |
+| `prepare_ms` | Provider selection plus body preparation |
+| `connect_ms` | Upstream connection establishment (`connect()`) |
+| `send_ms` | Request upload (`request()`) |
+| `headers_ms` | Wait for upstream response headers (`getresponse()`) |
+| `first_data_ms` | First upstream read-return inside adaptation (not provider TTFB on buffering paths) |
+| `first_write_ms` | First successful downstream write (forwarding delay, not network TTFB) |
+| `response_kind` | `sse`, `json`, or `other` (fixed values only) |
+| `response_encoding` | `identity`, `gzip`, `deflate`, `br`, `zstd`, or `other` (fixed values only) |
+
+`transport_error` carries the phases that completed before the failure;
+absent later phases mean the request never got that far. To compare
+builds, group by version/provider/model/stream/encoding over approved
+existing logs, include failed/aborted counts with sample size and time
+window, and use per-request ratios, never ratios of unrelated
+percentiles. Paid direct-versus-router comparisons need separate
+explicit authority.
+
 ## Per-user OpenRouter keys (IT issue and revoke)
 
 Owner decision 2026-09-09: IT issues one OpenRouter key per portco user;
