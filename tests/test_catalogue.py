@@ -7,7 +7,8 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 from ai_router.catalogue import (SUBSCRIPTION_REASONING, catalog_name, check, merge,
-                                     openrouter_entry, subscription_stub)
+                                 merge_file, openrouter_entry, read_openai_mode,
+                                 subscription_stub)
 from ai_router.registry import MODELS, by_slug, picker_key
 from ai_router.clients import models_for
 
@@ -282,6 +283,69 @@ class CatalogueFlagTests(unittest.TestCase):
                      '--client', client, '--check', str(target)],
                     capture_output=True, text=True)
                 self.assertEqual(proc.returncode, 0, proc.stderr)
+
+
+class CatalogueTwinsTests(unittest.TestCase):
+    TWINS = ('openai/gpt-6-astra', 'openai/gpt-5.6-sol',
+             'openai/gpt-5.6-terra', 'openai/gpt-5.6-luna')
+
+    def test_none_mode_merge_lists_twins_without_subscription_stubs(self):
+        merged = merge({'models': []}, roster=('gpt-6-astra',),
+                       include_twins=True)
+        slugs = {m['slug'] for m in merged['models']}
+        for twin in self.TWINS:
+            self.assertIn(twin, slugs)
+        self.assertNotIn('gpt-6-astra', slugs)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'catalogue.json'
+            path.write_text(json.dumps(merged))
+            self.assertTrue(check(str(path), 'codex', include_twins=True))
+
+    def test_none_mode_merge_normalises_a_stale_subscription_catalogue(self):
+        stale_sub = dict(subscription_stub('gpt-6-astra'))
+        stale_openai = dict(openrouter_entry(by_slug('openai/gpt-6-astra')),
+                            description='stale-install')
+        stale_other = {'slug': 'gpt-stale-custom', 'display_name': 'Stale'}
+        merged = merge({'models': [stale_sub, stale_openai, stale_other]},
+                       roster=('gpt-6-astra',), include_twins=True)
+        slugs = {m['slug'] for m in merged['models']}
+        for twin in self.TWINS:
+            self.assertIn(twin, slugs)
+        self.assertNotIn('gpt-6-astra', slugs)
+        self.assertNotIn('gpt-stale-custom', slugs)
+        row = next(m for m in merged['models']
+                   if m['slug'] == 'openai/gpt-6-astra')
+        self.assertNotEqual(row['description'], 'stale-install')
+
+    def test_openai_mode_round_trips_through_merge_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            target = home / 'mixed-models.json'
+            self.assertEqual(read_openai_mode(target), 'subscription')
+            (home / 'mixed-router-state.json').write_text(
+                json.dumps({'port': 1, 'token': 't', 'openai_mode': 'none',
+                            'openai_models': ['gpt-6-astra']}) + '\n')
+            self.assertEqual(read_openai_mode(target), 'none')
+            merge_file(target)
+            slugs = {m['slug'] for m in json.loads(target.read_text())['models']}
+            for twin in self.TWINS:
+                self.assertIn(twin, slugs)
+            self.assertNotIn('gpt-6-astra', slugs)
+            self.assertTrue(check(str(target), 'codex', include_twins=True))
+            (home / 'mixed-router-state.json').write_text(
+                json.dumps({'port': 1, 'token': 't',
+                            'openai_models': ['gpt-6-astra']}) + '\n')
+            self.assertEqual(read_openai_mode(target), 'subscription')
+
+    def test_read_openai_mode_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            target = home / 'mixed-models.json'
+            (home / 'mixed-router-state.json').write_text('[1, 2]\n')
+            self.assertEqual(read_openai_mode(target), 'subscription')
+            (home / 'mixed-router-state.json').write_text(
+                json.dumps({'openai_mode': 'bogus'}) + '\n')
+            self.assertEqual(read_openai_mode(target), 'subscription')
 
 
 class CatalogueSchemaCompatTests(unittest.TestCase):
