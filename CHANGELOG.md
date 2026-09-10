@@ -2,10 +2,18 @@
 
 ## Unreleased
 
+- DeepSeek keeps two pinned, verified rows: `deepseek/deepseek-v4.1-flash`
+  (newest Flash, image-capable) and `deepseek/deepseek-v4-pro-0813`
+  (newest Pro, text-only). The `~deepseek/deepseek-v4-flash-latest`
+  tracking alias and the `deepseek/deepseek-v4-flash-vision-exp` row are
+  retired via `RETIRED_SLUGS` so upgrades drop them from the picker.
+
 - Install global starter instructions once from the setup window: after the
   key is stored, a Dev or General choice writes the matching full
   `AGENTS.md` only when no global instructions file exists yet. Existing
   files are never overwritten, and updates and uninstall leave them alone.
+
+## 0.6.13
 
 - Rename the runtime package `codex_router` to `ai_router` (Plan 074): the
   router serves Codex, Claude Code, and OpenRouter side by side, and the old
@@ -29,6 +37,15 @@
   of probing the catalog. Identity stays strict: nothing auto-routes,
   and the hint never names a slug the portco allowlist excludes.
 
+- List every OpenRouter row in the Claude desktop third-party gateway
+  picker: `GET /v1/models` rows now project `anthropic_family_tier`
+  (`sonnet` for non-Anthropic rows, each Anthropic alias's own tier
+  word), which the desktop requires for non-Anthropic-looking ids. No
+  registry field is added and ordering and labels are untouched.
+  `packaging/install.py --desktop` attaches and detaches the desktop
+  gateway profile with the same ownership receipt discipline as the
+  Claude Code CLI attach, and refuses when `claude_mode` is `none`.
+
 ## 0.6.12
 
 - Make the Windows installer work end to end (Plan 057 Stages 3, 4 and
@@ -41,9 +58,9 @@
   deleting them (a deleted task leaves its process running); both tasks run
   `pythonw.exe` through a home-root `task_launch.py` (written on every
   install) that routes stdout/stderr to `logs\launchd.log` and
-  `logs\update.log`, and every console child is spawned windowless. `stop` on a never-registered task no longer masks the
-  real failure, and the installer prints why a backend refused before it
-  rolls back.
+  `logs\update.log`, and every console child is spawned windowless.
+- `stop` on a never-registered task no longer masks the real failure, and
+  the installer prints why a backend refused before it rolls back.
 - Ship `packaging/platforms/windows.py` in the release bundle: without it
   every scheduled update and rollback on an installed Windows router failed
   to load the backend.

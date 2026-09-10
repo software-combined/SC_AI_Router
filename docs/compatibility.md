@@ -121,3 +121,35 @@ Other preview models (base round trip only):
 |---|---|---|---|
 | anthropic/claude-opus-5 | preview | 2026-09-07 | base round trip |
 | anthropic/claude-fable-5.1 | preview | 2026-09-07 | base round trip |
+
+## DeepSeek two-row cut, 2026-09-10
+
+Isolated-router base round trip (`ai_router.candidate.verify`, Codex CLI
+0.153.1), OpenRouter key via OpenCode auth. Both passed:
+
+| model | tier | date | evidence |
+|---|---|---|---|
+| deepseek/deepseek-v4.1-flash | verified | 2026-09-10 | isolated base round trip PASS |
+| deepseek/deepseek-v4-pro-0813 | verified | 2026-09-10 | isolated base round trip PASS |
+
+## Claude desktop gateway discovery (Plan 073), 2026-09-10
+
+Client: Claude.app `1.49585.0`, signed in; no `managed-settings.json` at
+the user or system location. Router `GET /v1/models` = 20 rows.
+
+- Before (in-dialog "Test model discovery" against the real router):
+  **found 6 models**; the picker showed those 6, all `· OpenRouter`.
+- After (worktree source on a temporary `127.0.0.1:18999` listener,
+  fetched as `/v1/models?limit=1000`, kept by the client's own rule):
+  **20 served, 20 kept**. Listener stopped, port closed.
+- Root cause, read from the installed `app.asar` (evidence only, never
+  patched): a row is kept only when its id passes the Anthropic-name
+  check or declares a valid `anthropic_family_tier`
+  (`sonnet`, `opus`, `haiku`, `fable`, `mythos`); `isFamilyDefault`
+  breaks tier ties. Effort options come from a per-native-model table,
+  so gateway rows show no effort picker on this version; `thinking`
+  still travels byte-identical.
+- Pending: fresh-session picker count of 20 and detach/reattach
+  readback through `install.py --desktop`. Both wait on release plus
+  deploy of this source to the live router and an app relaunch, then
+  this entry gets the observed picker count.
