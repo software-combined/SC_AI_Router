@@ -203,6 +203,39 @@ class WinBackendShapeTests(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, 'CodexMixedModelRouterUpdate'):
             backend.Backend(None, fake_run).uninstall('/home/x')
 
+    def test_failed_state_protection_keeps_a_pre_existing_token(self):
+        # Gap 0 (PR 55 review): a failed state-file ACL check unlinks only
+        # a file this run minted, never a pre-existing live token.
+        from tests.test_install import _craft_bundle, _static_fetch, install_mod
+        from tests.test_install_lifecycle import _patch_attrs, _recording
+        from tests.test_install_config import _fake_write_catalogue
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            blob, latest = _craft_bundle('1.0.0')
+
+            class FailingBackend:
+                def protect_secret(self, path):
+                    if Path(path).name == 'mixed-router-state.json':
+                        raise SystemExit('cannot protect state')
+                def check(self, home):
+                    pass
+
+            _patch_attrs(self, run=_recording([]),
+                         self_test=lambda *a: None,
+                         write_catalogue=_fake_write_catalogue,
+                         wait_version=lambda *a, **k: True)
+            home.mkdir(parents=True)
+            live = home / 'mixed-router-state.json'
+            live.write_text('{"port": 1, "token": "live"}')
+            args = install_mod.build_parser().parse_args(
+                ['--feed', 'file:///latest.json', '--home', str(home)])
+            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'k'}
+            with mock.patch.dict(os.environ, env), mock.patch.object(
+                    install_mod, 'platform_backend', return_value=FailingBackend()):
+                with self.assertRaisesRegex(SystemExit, 'cannot protect state'):
+                    install_mod.do_install(args, _fetch=_static_fetch(latest, blob))
+            self.assertEqual(json.loads(live.read_text())['token'], 'live')
+
     def test_failed_protection_removes_the_placeholder(self):
         # A failed protect_secret must not leave an unprotected placeholder
         # that the next run's exists-early-return would trust.

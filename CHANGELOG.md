@@ -36,9 +36,9 @@
   deleting them (a deleted task leaves its process running); both tasks run
   `pythonw.exe` through a home-root `task_launch.py` (written on every
   install) that routes stdout/stderr to `logs\launchd.log` and
-  `logs\update.log`, and every console child is spawned windowless. `stop` on a never-registered task no longer masks the
-  real failure, and the installer prints why a backend refused before it
-  rolls back.
+  `logs\update.log`, and every console child is spawned windowless.
+- `stop` on a never-registered task no longer masks the real failure, and
+  the installer prints why a backend refused before it rolls back.
 - Ship `packaging/platforms/windows.py` in the release bundle: without it
   every scheduled update and rollback on an installed Windows router failed
   to load the backend.
