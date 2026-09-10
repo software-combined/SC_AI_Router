@@ -357,3 +357,52 @@ or claiming absent upstream timeouts (the existing operation timeout is 120 s).
 [073](073-remote-support-companion.md) is a planning deliverable only. It
 authorises no implementation, rollout, paid probes, or machine changes.
 Next action is an owner decision on its Slice 0 primitive spike, not code.
+## Optimisation audit: Plans 076-089 (10 September 2026)
+
+Read-only audit at `a985197`: four audit lanes (performance, tech debt, scalability,
+tests/DX) plus three independent verification passes. Plans only; no source, live,
+paid, or billing action is authorised. The earlier 068-072 latency round is closed
+at HEAD and is not repeated here.
+
+| Plan | Title | Priority | Effort | Depends on | Status |
+|---|---|---|---|---|---|
+| [076](076-router-ingress-lifecycle-hardening.md) | Ingress lifecycle: request timeout, drain accounting, single listener | P1 | S-M | — | TODO |
+| [077](077-router-adaptation-stream-fast-path.md) | Adaptation fast path: no re-serialize when unchanged | P1 | S | — | TODO |
+| [078](078-router-prepare-path-serialization.md) | Prepare/failure path: no double serialization or re-parse | P2 | S-M | — | TODO |
+| [079](079-router-test-suite-hygiene.md) | Offline test suite, isolated home, three guard tests | P1 | S | — | TODO |
+| [080](080-router-atomic-write-consolidation.md) | One atomic writer for installer state/config | P1 | S-M | — | TODO |
+| [081](081-router-activation-receipt-consolidation.md) | One writer for the activation receipt | P2 | M | 080 | TODO |
+| [082](082-router-streaming-robustness.md) | SSE frame cap and mid-stream error containment | P2 | S-M | — | TODO |
+| [083](083-router-discovered-lock-scope.md) | Narrow the discovered-recall lock scope | P2 | S | — | TODO |
+| [084](084-router-model-refresh-bindings.md) | Refresh-safe registry consumers | P2 | S | — | TODO |
+| [085](085-router-dead-code-and-lint-gate.md) | Delete dead code; add F401/F811 gate | P2 | S | — | TODO |
+| [086](086-router-install-option-collapse.md) | Collapse installer option handling below the cap | P2 | M | — | TODO |
+| [087](087-router-darwin-backend-extraction.md) | Move launchd helpers out of service.py | P3 | M | — | TODO |
+| [088](088-router-docs-metadata-correction.md) | Version, architecture and README corrections | P3 | S | — | TODO |
+| [089](089-router-retired-slug-single-source.md) | Shared retired-subscription slug set | P3 | S | 080 | TODO |
+
+Dependency and coordination notes:
+
+- 080 must land before 081 and must share one writer/worktree; 081 extends the helper.
+- 080 must land before 089 (089 rewrites the same `ensure_state` prune; keep the atomic writer and the write-only-on-change behavior).
+- 085 lands before 086/087 to shrink the tree they refactor; serialize 086 and 087.
+- 084 must land before or with Plan 046 Step 3 (wiring `model_refresh.start()`).
+- 088 owns the two factual README corrections; Plan 058 Stage 5 owns the rest of
+  README. Update the 058 row when 088 integrates; never run both on the file at once.
+- 079's pin-verification tool is a prerequisite for any future decision to run the
+  suite in CI (today's CI test omission is a documented cost tradeoff).
+
+Findings considered and rejected (do not re-audit):
+
+- `_split_frames` remainder copies: bounded by the 64 KiB observation window.
+- Per-request `frozenset` rebuilds, credential re-read (deliberate rotation),
+  `/v1/models` re-sort, startup imports: sub-millisecond by measurement.
+- Discovered-cache disk-write atomicity and prune races: 16-entry bound, self-healing.
+- Router log growth: `RotatingFileHandler`, 5 MB x 3.
+- 16 MB body copies: transient and capped.
+- Cross-request served-model caching and compressed-identity buffering: owned by 069/070.
+- Connection pooling: closed by 071 (no-go).
+- Running the full unittest suite in CI: deliberate billed-minutes decision
+  (`check.yml:18-23`); revisit only after 079 makes the suite cheaper.
+- Retry-After reflection from upstream: TLS-authenticated upstream, below evidence bar.
+- Malformed `Content-Length`: already mapped by the enclosing handler.

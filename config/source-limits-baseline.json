@@ -12,8 +12,8 @@
   "packaging/claude_config.py": 168,
   "packaging/claude_desktop_config.py": 237,
   "packaging/codex_config.py": 152,
-  "packaging/diagnostics.py": 176,
-  "packaging/install.py": 697,
+  "packaging/diagnostics.py": 201,
+  "packaging/install.py": 700,
   "packaging/platforms/windows.py": 440,
   "packaging/service.py": 671,
   "tests/test_agent_containment.py": 94,
@@ -49,5 +49,5 @@
   "ai_router/agents.py": 91,
   "tools/global_instructions.py": 38,
   "packaging/feed.py": 169,
-  "tests/test_feed_migration.py": 328
+  "tests/test_feed_migration.py": 342
 }

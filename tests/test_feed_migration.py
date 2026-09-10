@@ -223,6 +223,20 @@ class LiveHomeGuardTests(unittest.TestCase):
             # Nothing reached the service layer: no release was activated.
             self.assertFalse((home / 'current').exists())
 
+    def test_uninstall_dry_run_previews_without_changes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            backend = mock.Mock()
+            _patch_attrs(self, platform_backend=lambda: backend)
+            with contextlib.redirect_stdout(io.StringIO()) as output, \
+                    mock.patch.dict(os.environ, {'ROUTER_LIVE_RUN': '1'}):
+                rc = install_mod.main(self._argv(home, '--uninstall', '--dry-run'))
+            self.assertEqual(rc, 0)
+            self.assertIn('would uninstall', output.getvalue())
+            self.assertFalse(home.exists())
+            backend.check.assert_not_called()
+            backend.uninstall.assert_not_called()
+
     def test_readonly_main_allows_scratch_home(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'

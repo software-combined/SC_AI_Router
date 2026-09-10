@@ -18,9 +18,15 @@ if (-not $token) {
 New-Item -ItemType Directory -Force -Path $homeDir | Out-Null
 $headers = @{ 'X-SCG-Feed-Token' = $token }
 $tokenPath = Join-Path $homeDir 'feed-token'
+Invoke-RestMethod -Uri "$feedOrigin/runtimes.json" -Headers $headers -OutFile (Join-Path $homeDir 'runtimes.json')
+# Persist only after the token fetched successfully; keep the previous
+# value for the updater's one-time 403 retry, as feed.py does.
+$current = if (Test-Path $tokenPath) { ("" + (Get-Content -Raw $tokenPath)).Trim() } else { '' }
+if ($current -and $current -ne $token) {
+  Set-Content -NoNewline -Path "$tokenPath.previous" -Value ($current + "`n")
+}
 Set-Content -NoNewline -Path "$tokenPath.tmp" -Value ($token + "`n")
 Move-Item -Force -Path "$tokenPath.tmp" -Destination $tokenPath
-Invoke-RestMethod -Uri "$feedOrigin/runtimes.json" -Headers $headers -OutFile (Join-Path $homeDir 'runtimes.json')
 $rt = (Get-Content (Join-Path $homeDir 'runtimes.json') | ConvertFrom-Json).targets.'windows/x86_64'
 Invoke-WebRequest -Uri "$feedOrigin/$($rt.mirror)" -Headers $headers -OutFile (Join-Path $homeDir 'runtime.tar.gz')
 $hash = (Get-FileHash (Join-Path $homeDir 'runtime.tar.gz') -Algorithm SHA256).Hash.ToLower()

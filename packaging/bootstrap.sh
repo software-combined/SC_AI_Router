@@ -25,13 +25,26 @@ case "$OS" in Darwin) OS=darwin ;; Linux) OS=linux ;; esac
 case "$ARCH" in arm64|aarch64) ARCH=arm64 ;; x86_64|amd64) ARCH=x86_64 ;; esac
 mkdir -p "$HOME_DIR"
 chmod 700 "$HOME_DIR"
+# Keep the token off curl's argv: curl reads it from an owner-only header
+# file whose name, not the token, is what other users can see via ps.
+HEADERS="$HOME_DIR/feed-headers.tmp"
+printf 'X-SCG-Feed-Token: %s\n' "$TOKEN" > "$HEADERS"
+chmod 600 "$HEADERS"
+trap 'rm -f "$HEADERS"' EXIT INT TERM
+dl() {
+  curl -fsSL -H "@$HEADERS" "$FEED_ORIGIN/$1" -o "$2"
+}
+dl "runtimes.json" "$HOME_DIR/runtimes.json"
+# Persist only after the token fetched successfully; keep the previous
+# value for the updater's one-time 403 retry, as feed.py does.
+if [ -f "$HOME_DIR/feed-token" ]; then CURRENT="$(cat "$HOME_DIR/feed-token")"; else CURRENT=""; fi
+if [ -n "$CURRENT" ] && [ "$CURRENT" != "$TOKEN" ]; then
+  printf '%s\n' "$CURRENT" > "$HOME_DIR/feed-token.previous"
+  chmod 600 "$HOME_DIR/feed-token.previous"
+fi
 printf '%s\n' "$TOKEN" > "$HOME_DIR/feed-token.tmp"
 chmod 600 "$HOME_DIR/feed-token.tmp"
 mv "$HOME_DIR/feed-token.tmp" "$HOME_DIR/feed-token"
-dl() {
-  curl -fsSL -H "X-SCG-Feed-Token: $TOKEN" "$FEED_ORIGIN/$1" -o "$2"
-}
-dl "runtimes.json" "$HOME_DIR/runtimes.json"
 TARGET="$OS/$ARCH"
 export HOME_DIR TARGET
 RT="$(python3 -c "import json,os;t=json.load(open(os.environ['HOME_DIR']+'/runtimes.json'))['targets'][os.environ['TARGET']];print(t['mirror'],t['sha256'],t['exec'])")"
@@ -50,4 +63,5 @@ dl "bundles/$ASSET" "$HOME_DIR/bundle.tar.gz"
 echo "$SHA  $HOME_DIR/bundle.tar.gz" | shasum -a 256 -c -
 mkdir -p "$HOME_DIR/bootstrap"
 tar -xzf "$HOME_DIR/bundle.tar.gz" -C "$HOME_DIR/bootstrap"
+rm -f "$HEADERS"
 exec "$PY" "$HOME_DIR/bootstrap/packaging/install.py" --home "$HOME_DIR"
