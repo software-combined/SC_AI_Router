@@ -39,6 +39,10 @@ _claude_spec = importlib.util.spec_from_file_location(
     'router_claude_config', Path(__file__).resolve().parent / 'claude_config.py')
 _claude_config = importlib.util.module_from_spec(_claude_spec)
 _claude_spec.loader.exec_module(_claude_config)
+_desktop_spec = importlib.util.spec_from_file_location(
+    'router_claude_desktop_config', Path(__file__).resolve().parent / 'claude_desktop_config.py')
+_desktop_config = importlib.util.module_from_spec(_desktop_spec)
+_desktop_spec.loader.exec_module(_desktop_config)
 _diag_spec = importlib.util.spec_from_file_location(
     'router_diagnostics', Path(__file__).resolve().parent / 'diagnostics.py')
 _diag = importlib.util.module_from_spec(_diag_spec)
@@ -467,9 +471,8 @@ def do_install(args, _fetch=fetch, _run=None):
         # exact owned settings first, or refuse when the block was edited.
         _restore_owned_config(home)
         previous_receipt = _codex_config.codex_attachment(home)
-    if clients == 'none' and _codex_config.read_receipt(home).get('clients', {}).get('claude'):
-        detach_claude(home)
     if clients == 'none':
+        detach_claude(home)
         prune_releases(home, latest['version'], previous,
                        backend.pinned_release(home))
         if not args.feed:
@@ -480,8 +483,8 @@ def do_install(args, _fetch=fetch, _run=None):
     if claude_mode == 'none' and clients in ('claude', 'both'):
         raise SystemExit('claude_mode is none: re-run with --claude-mode subscription '
                          'to attach Claude Code, or select --clients codex')
-    if clients in ('claude', 'both'):
-        attach_claude(home, state)
+    if clients in ('claude', 'both'): attach_claude(home, state)
+    if args.desktop: _desktop_config.attach(home, state, _codex_config)
     # A selection without Claude never silently detaches it: only an
     # explicit service-only install or uninstall drops attachments.
     if clients == 'claude':
@@ -533,6 +536,7 @@ def attach_claude(home, state, settings_path=None, env=None):
 
 
 def detach_claude(home, settings_path=None, env=None):
+    if settings_path is None and env is None: _desktop_config.detach(home, _codex_config)  # also sweep desktop
     return _claude_config.detach(home, _codex_config,
                                  settings_path_override=settings_path, env=env)
 
@@ -586,12 +590,8 @@ def do_uninstall(args):
         raise SystemExit('managed Codex block present without a receipt; '
                          'run tools/disable.py first')
     release = current_release_dir(home)
-    claude_attached = bool(_codex_config.read_receipt(home).get('clients', {}).get('claude'))
-    if claude_attached:
-        # Claude-only or leftover attachment: restore its settings before
-        # any early return, or uninstall would orphan its loopback routing.
-        detach_claude(home)
-    if release is not None and attached == {} and not claude_attached:
+    detach_claude(home)  # sweep first: each surface no-ops without its claim
+    if release is not None and attached == {} and not _codex_config.read_receipt(home).get('clients', {}):
         # Service-only installation: no client settings were ever touched,
         # so there is no receipt and no restore to run.
         backend.uninstall(home)
@@ -612,8 +612,7 @@ def do_uninstall(args):
             # As on a client switch: a stale receipt makes the next install
             # refuse guidance it finds missing rather than changed.
             _codex_config.drop_client(home, 'codex')
-    if _codex_config.read_receipt(home).get('clients', {}).get('claude'):
-        detach_claude(home)
+    detach_claude(home)
     backend.uninstall(home)
     print(f'uninstalled services; {home} left in place for the operator to delete')
     return 0
@@ -665,6 +664,7 @@ def build_parser():
                         choices=('subscription', 'none'),
                         help='Independent Claude subscription choice; '
                              'unset follows the Anthropic mode as before.')
+    parser.add_argument('--desktop', action='store_true', help='Also attach the Claude desktop gateway profile.')
     return parser
 
 

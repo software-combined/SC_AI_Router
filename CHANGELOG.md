@@ -24,6 +24,15 @@
   of probing the catalog. Identity stays strict: nothing auto-routes,
   and the hint never names a slug the portco allowlist excludes.
 
+- List every OpenRouter row in the Claude desktop third-party gateway
+  picker: `GET /v1/models` rows now project `anthropic_family_tier`
+  (`sonnet` for non-Anthropic rows, each Anthropic alias's own tier
+  word), which the desktop requires for non-Anthropic-looking ids. No
+  registry field is added and ordering and labels are untouched.
+  `packaging/install.py --desktop` attaches and detaches the desktop
+  gateway profile with the same ownership receipt discipline as the
+  Claude Code CLI attach, and refuses when `claude_mode` is `none`.
+
 ## 0.6.12
 
 - Make the Windows installer work end to end (Plan 057 Stages 3, 4 and
