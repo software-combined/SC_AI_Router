@@ -94,13 +94,13 @@ class PackagingTests(unittest.TestCase):
         # both stable launchers plus every module service.py imports.
         for name in ('packaging/router_launch.py', 'packaging/update_launch.py',
                      'packaging/launchd.py', 'packaging/service.py',
+                     'packaging/feed.py',
                      'packaging/install.py', 'packaging/updater.py',
                      'packaging/codex_config.py',
                      'packaging/runtime.lock', 'packaging/runtime_lock.py',
                      'packaging/platforms/__init__.py',
                      'packaging/platforms/darwin.py',
                      'packaging/platforms/linux.py',
-                     'packaging/feed_token.py',
                      'packaging/install.sh', 'packaging/install.ps1'):
             self.assertIn(name, names, name)
 
@@ -118,6 +118,7 @@ class PackagingTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         surface = [
             'packaging/install.py', 'packaging/service.py',
+            'packaging/feed.py',
             'packaging/launchd.py', 'packaging/router_launch.py',
             'packaging/systemd.py', 'packaging/update_launch.py',
             'packaging/updater.py', 'packaging/codex_config.py',
