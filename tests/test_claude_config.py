@@ -88,6 +88,37 @@ class ClaudeMergeTests(unittest.TestCase):
             # Last attachment out removes the receipt itself.
             self.assertFalse((home / 'activation.json').exists())
 
+    def test_attach_preserves_prior_codex_entry(self):
+        # Plan 095: the shared writer must not disturb other attachments;
+        # the Codex entry survives a Claude attach byte-for-byte.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            home.mkdir()
+            path = Path(tmp) / 'settings.json'
+            path.write_text(json.dumps({'env': {}}))
+            receipts = install_mod._codex_config
+            receipts.write_receipt(home, '/c/config.toml', 'block-codex',
+                                   None, 'subscription', '')
+            before = json.loads((home / 'activation.json').read_text())['clients']['codex']
+            install_mod.attach_claude(home, _state(), settings_path=path)
+            doc = json.loads((home / 'activation.json').read_text())
+            self.assertEqual(doc['version'], receipts.RECEIPT_VERSION)
+            self.assertEqual(doc['clients']['codex'], before)
+            self.assertIn('claude', doc['clients'])
+
+    def test_fresh_home_attach_reads_back_versioned(self):
+        # Plan 095: a Claude-only home must not produce a versionless file
+        # that read_receipt rejects as never-attached.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            home.mkdir()
+            path = Path(tmp) / 'settings.json'
+            path.write_text(json.dumps({'env': {}}))
+            install_mod.attach_claude(home, _state(), settings_path=path)
+            doc = install_mod._codex_config.read_receipt(home)
+            self.assertEqual(doc['version'], install_mod._codex_config.RECEIPT_VERSION)
+            self.assertIn('claude', doc['clients'])
+
     def test_settings_path_honors_config_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
             env = {'CLAUDE_CONFIG_DIR': tmp}

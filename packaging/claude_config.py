@@ -124,27 +124,15 @@ def attach(home, state, receipts, settings_path_override=None, env=None):
         path = settings_path(env)
     doc, changed, previous = merge_env(home, state, path, env)
     write_settings(path, doc)
-    receipt = receipts.read_receipt(home)
-    clients = receipt.setdefault('clients', {})
-    existing = clients.get('claude', {})
+    existing = receipts.read_receipt(home).get('clients', {}).get('claude', {})
     if not changed and isinstance(existing, dict) and 'inserted_block' in existing:
         # Re-attach with identical values: keep the original pre-attach
         # snapshot so a later detach restores it instead of our own URL.
-        try:
-            previous = json.loads(existing['inserted_block'])
-        except ValueError:
-            previous = {}
-        if not isinstance(previous, dict):
-            previous = {}
-    clients['claude'] = {'config_path': str(path),
-                         'inserted_block': json.dumps(previous, sort_keys=True),
-                         'claude_mode': state.get('claude_mode', 'subscription')}
-    receipt['version'] = receipts.RECEIPT_VERSION
-    (Path(home) / 'activation.json').write_text(json.dumps(receipt, indent=2) + '\n')
-    try:
-        os.chmod(Path(home) / 'activation.json', 0o600)
-    except OSError:
-        pass
+        previous = receipts.parse_snapshot(existing['inserted_block'])
+    entry = {'config_path': str(path),
+             'inserted_block': json.dumps(previous, sort_keys=True),
+             'claude_mode': state.get('claude_mode', 'subscription')}
+    receipts.write_client_receipt(home, 'claude', entry)
     return path
 
 
@@ -160,11 +148,6 @@ def detach(home, receipts, settings_path_override=None, env=None):
         path = Path(entry['config_path'])
     else:
         path = settings_path(env)
-    try:
-        previous = json.loads(entry.get('inserted_block', '{}'))
-    except ValueError:
-        previous = {}
-    if not isinstance(previous, dict):
-        previous = {}
+    previous = receipts.parse_snapshot(entry.get('inserted_block', '{}'))
     restore_settings(path, previous)
     receipts.drop_client(home, 'claude')

@@ -27,7 +27,7 @@ Executor rules for every plan:
 | [092](092-router-test-suite-hygiene.md) | Offline test suite, isolated home, three guard tests | DONE: offline test suite + ingress guard tests 2026-09-11 | coordinate with 105 |
 | [093](093-router-prepare-path-serialization.md) | Prepare/failure path: no double serialization or re-parse | DONE: prepare-path serialization 2026-09-11 | — |
 | [094](094-router-atomic-write-consolidation.md) | One atomic writer for installer state/config | DONE: atomic writer consolidation 2026-09-11 | — |
-| [095](095-router-activation-receipt-consolidation.md) | One writer for the activation receipt | TODO | depends 094 |
+| [095](095-router-activation-receipt-consolidation.md) | One writer for the activation receipt | DONE: activation receipt consolidation 2026-09-11 | depends 094 |
 | [096](096-router-streaming-robustness.md) | SSE frame cap and mid-stream error containment | TODO | — |
 | [097](097-router-discovered-lock-scope.md) | Narrow the discovered-recall lock scope | TODO | — |
 | [098](098-router-model-refresh-bindings.md) | Refresh-safe registry consumers | TODO | before 099 |

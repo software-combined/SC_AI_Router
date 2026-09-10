@@ -141,6 +141,18 @@ class PackagingTests(unittest.TestCase):
         for name in REQUIRED_PACKAGING:
             self.assertIn(name, names, name)
 
+    def test_activation_receipt_has_a_single_writer(self):
+        # Plan 095: activation.json is written in exactly one module
+        # (codex_config.py, through the shared atomic writer). A second
+        # writer literal fails this closed so receipt schema changes
+        # cannot silently drift across adapters again.
+        root = Path(__file__).resolve().parents[1] / 'packaging'
+        writers = sorted(path.relative_to(root).as_posix()
+                         for path in root.rglob('*.py')
+                         if '__pycache__' not in path.parts
+                         and 'activation.json' in path.read_text())
+        self.assertEqual(writers, ['codex_config.py'])
+
     def test_version_is_semver(self):
         version = (Path(__file__).resolve().parents[1] / 'packaging' / 'VERSION').read_text().strip()
         self.assertRegex(version, r'^\d+\.\d+\.\d+$')
