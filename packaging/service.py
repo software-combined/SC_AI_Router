@@ -82,6 +82,7 @@ persist_feed_token = _feed.persist_feed_token
 trusted_origin = _feed.trusted_origin
 channel_feed = _feed.channel_feed
 feed_source = _feed.feed_source
+gh_binary = _feed.gh_binary
 
 
 def github_asset(url):
@@ -89,8 +90,7 @@ def github_asset(url):
     if route is None:
         return None
     tag, asset = route
-    gh = shutil.which('gh') or next((p for p in (
-        '/opt/homebrew/bin/gh', '/usr/local/bin/gh', '/usr/bin/gh') if Path(p).is_file()), None)
+    gh = _feed.gh_binary()
     if gh is None:
         raise SystemExit('Private router updates require GitHub CLI (gh), signed in as this user.')
     result = run(_feed.github_command(gh, tag, asset), capture_output=True, timeout=120)
