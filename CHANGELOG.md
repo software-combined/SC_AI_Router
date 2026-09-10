@@ -8,6 +8,11 @@
   tracking alias and the `deepseek/deepseek-v4-flash-vision-exp` row are
   retired via `RETIRED_SLUGS` so upgrades drop them from the picker.
 
+- Install global starter instructions once from the setup window: after the
+  key is stored, a Dev or General choice writes the matching full
+  `AGENTS.md` only when no global instructions file exists yet. Existing
+  files are never overwritten, and updates and uninstall leave them alone.
+
 ## 0.6.13
 
 - Rename the runtime package `codex_router` to `ai_router` (Plan 074): the

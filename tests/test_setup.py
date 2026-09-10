@@ -80,6 +80,8 @@ class SetupUnitTests(unittest.TestCase):
         self.assertIn('<input type="radio" name="mode" value="subscription" checked>', body)
         self.assertIn('<input type="radio" name="mode" value="none">', body)
         self.assertIn('<button type="submit">', body)
+        self.assertIn('<input type="radio" name="profile" value="general" checked>', body)
+        self.assertIn('<input type="radio" name="profile" value="dev">', body)
         # Inline style only: a loopback page must not fetch an external asset.
         self.assertIn('<style>', body)
         self.assertNotIn('<link', body)

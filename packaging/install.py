@@ -9,7 +9,6 @@ import hashlib
 import io
 import json
 import os
-import runpy
 import secrets
 import subprocess
 import time
@@ -245,8 +244,8 @@ def _restore_owned_config(home):
     """Detach an active client via the single owned remover path.
 
     Runs the matching tools/disable.py with ROUTER_RESTORE_ONLY=1: exact
-    owned-block plus guidance restore with atomic temp and concurrent-edit
-    checks. The machine result decides; success text alone never passes.
+    owned-block restore with atomic temp and concurrent-edit checks. The
+    machine result decides; success text alone never passes.
     """
     disable = Path(__file__).resolve().parents[1] / 'tools' / 'disable.py'
     result = run([sys.executable, str(disable)], capture_output=True, text=True,
@@ -497,10 +496,9 @@ def do_install(args, _fetch=fetch, _run=None):
     config_path = Path.home() / '.codex' / 'config.toml'
     block = _codex_config.build_block(home, state, mode)
     block = _preserve_picker_selection(config_path, previous_receipt.get('inserted_block'), block)
-    release = current_release_dir(home)
-    guidance = runpy.run_path(str(release / 'tools' / 'global_instructions.py'))
-    rules_path, rules_before, rules_after, rules_receipt = guidance['prepare'](
-        config_path.parent, previous_receipt.get('global_instructions'))
+    # Global instructions are install-once via the setup window's starter
+    # choice: this installer never writes, rewrites, or re-enforces them.
+    rules_receipt = previous_receipt.get('global_instructions')
     stamp = time.strftime('%Y%m%d-%H%M%S', time.gmtime())
     (home / f'config-before-{stamp}.toml').write_bytes(
         (config_path.read_text() if config_path.exists() else '').encode())
@@ -509,7 +507,6 @@ def do_install(args, _fetch=fetch, _run=None):
     except OSError:
         pass
     before = replace_config_block(config_path, block, previous_receipt.get('inserted_block'))
-    guidance['write'](rules_path, rules_before, rules_after)
     _codex_config.write_receipt(home, config_path, block, rules_receipt, mode, before)
     if setup_url is not None:
         # Printed as a fallback: the browser should already show this page.
@@ -610,7 +607,7 @@ def do_uninstall(args):
                 raise SystemExit('configuration restore failed; '
                                  'services left running for manual review')
             # As on a client switch: a stale receipt makes the next install
-            # refuse guidance it finds missing rather than changed.
+            # refuse a block it finds missing rather than changed.
             _codex_config.drop_client(home, 'codex')
     detach_claude(home)
     backend.uninstall(home)
