@@ -101,7 +101,7 @@ def do_preflight(args):
     # needs the `gh` binary; the token-gated feed needs nothing beyond this
     # machine. Prefix test only: github_asset() itself would spawn `gh`.
     if feed.startswith(github_route_prefix):
-        if _svc.feed_token(home) is None and shutil.which('gh') is None:
+        if _svc.feed_token(home) is None and _svc.gh_binary() is None:
             missing.append('GitHub CLI (gh) binary not found: install gh, sign it in '
                            'with `gh auth login` as this user, or re-run the '
                            'bootstrap from the Technology library to migrate '

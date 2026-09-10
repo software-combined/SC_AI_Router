@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- The updater now finds GitHub CLI under scheduler-minimal PATH on macOS,
+  Linux and Windows (brew, apt/dnf, snap, Linuxbrew, Program Files,
+  per-user, choco, scoop), with the resolver consolidated into one owner;
+  no behaviour change when gh is already on PATH.
+
 - No-subscription installs (`openai_mode: none`) now list the
   OpenRouter-billed OpenAI rows (Astra, Sol, Terra, Luna) in the Codex
   picker instead of the dead subscription slugs; mode flips in the setup
