@@ -18,10 +18,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Plan 056 Stage 4: guard the platform split on all three targets.
-        # Windows runs the suite only; the install layer skips itself there
-        # until Plan 057 (see tests/_platform.py).
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # Ubuntu and Windows only: macOS installs are proven on local
+        # hardware instead (macOS bills ~10x Linux; unaffordable per-PR
+        # on this plan). The hosted-macOS launcher probe stays skipped
+        # in tests/test_lifecycle.py for the same reason.
+        os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     steps:
