@@ -471,8 +471,8 @@ def do_install(args, _fetch=fetch, _run=None):
         # exact owned settings first, or refuse when the block was edited.
         _restore_owned_config(home)
         previous_receipt = _codex_config.codex_attachment(home)
-    if clients == 'none': detach_claude(home)
     if clients == 'none':
+        detach_claude(home)
         prune_releases(home, latest['version'], previous,
                        backend.pinned_release(home))
         if not args.feed:
@@ -483,8 +483,7 @@ def do_install(args, _fetch=fetch, _run=None):
     if claude_mode == 'none' and clients in ('claude', 'both'):
         raise SystemExit('claude_mode is none: re-run with --claude-mode subscription '
                          'to attach Claude Code, or select --clients codex')
-    if clients in ('claude', 'both'):
-        attach_claude(home, state)
+    if clients in ('claude', 'both'): attach_claude(home, state)
     if args.desktop: _desktop_config.attach(home, state, _codex_config)
     # A selection without Claude never silently detaches it: only an
     # explicit service-only install or uninstall drops attachments.
@@ -537,8 +536,7 @@ def attach_claude(home, state, settings_path=None, env=None):
 
 
 def detach_claude(home, settings_path=None, env=None):
-    if settings_path is None and env is None:  # bare path sweeps desktop too
-        _desktop_config.detach(home, _codex_config)
+    if settings_path is None and env is None: _desktop_config.detach(home, _codex_config)  # also sweep desktop
     return _claude_config.detach(home, _codex_config,
                                  settings_path_override=settings_path, env=env)
 
