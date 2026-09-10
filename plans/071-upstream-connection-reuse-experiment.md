@@ -7,9 +7,10 @@
 
 ## Status and first proof
 
-- TODO, conditional investigation; P3; effort S for decision, M for any later
-  implementation; implementation risk MED-HIGH; confidence HIGH in repeated
-  setup, UNVERIFIED in material savings. Category perf/transport.
+- DONE (investigation, 2026-09-10): EVIDENCE-UNAVAILABLE, no-go by
+  default; zero deployed completions carry connect_ms (068 unreleased), so
+  the 10% rule cannot be applied without inferring the handshake.
+  Evidence in plans/071-connection-reuse-evidence.md; P3; effort S spent.
 - Planned at `83a5023`, 2026-09-10. Depends on 068 measurements and 069 behavior.
 - First proof: a reproducible cost breakdown supports a go/no-go decision with
   sample sizes and explicit connection-establishment contribution.

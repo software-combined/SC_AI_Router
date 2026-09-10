@@ -7,8 +7,11 @@
 
 ## Status and first proof
 
-- TODO, conditional investigation; P3; effort S-M; potential implementation risk
-  HIGH; confidence HIGH in delayed detection, UNVERIFIED in live materiality.
+- DONE (investigation, 2026-09-10): NO-GO on new cancellation machinery;
+  detection boundary reproduced (detect-at-next-write; 62 ambiguous
+  pipe/reset rows of 643 transport_errors; materiality unavailable without
+  068 live phases). Evidence in plans/072-cancellation-evidence.md; P3;
+  effort S spent.
 - Planned at `83a5023`, 2026-09-10. Depends on 068 and 069; independent of 071's
   decision, but serialize any future transport writers with it.
 - First proof: a phase-aware reproduction distinguishes upstream failure from

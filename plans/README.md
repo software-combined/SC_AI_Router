@@ -334,8 +334,8 @@ are now DONE at source (not deployed/live), 071/072 remain investigation-only.
 | [068](068-router-latency-measurement.md) | Separate body/preparation, connection, upstream wait and forwarding metrics | P1 / S-M | None | DONE (source `d6f5c8b`, PR #51) |
 | [069](069-router-streaming-identity-inspection.md) | Preserve incremental forwarding during optional identity inspection | P1 / M | 068 for live attribution; offline regression independent | DONE (source `ef074bf`, PR #53) |
 | [070](070-discovered-schema-deduplication.md) | Deduplicate cached schemas without changing effective tools | P2 / S | None | DONE (source `3ec24bc`, PR #54) |
-| [071](071-upstream-connection-reuse-experiment.md) | Measured go/no-go for connection reuse | P3 / S investigation | 068 evidence, 069 | TODO: investigation only |
-| [072](072-client-cancellation-investigation.md) | Establish material residual cancellation delay and a safe signal | P3 / S-M investigation | 068 evidence, 069 | TODO: investigation only |
+| [071](071-upstream-connection-reuse-experiment.md) | Measured go/no-go for connection reuse | P3 / S investigation | 068 evidence, 069 | DONE (investigation EVIDENCE-UNAVAILABLE, no-go) |
+| [072](072-client-cancellation-investigation.md) | Establish material residual cancellation delay and a safe signal | P3 / S-M investigation | 068 evidence, 069 | DONE (investigation NO-GO) |
 
 Recommended order: 068 then 069; 070 can proceed independently with separate
 write ownership. 071/072 can finish with NO-GO or EVIDENCE-UNAVAILABLE; they do
