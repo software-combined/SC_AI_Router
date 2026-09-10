@@ -149,13 +149,13 @@ checks proof that all OS runners have passed.
 
 ## Done criteria
 
-- [ ] Architecture map gives every listed domain one owner and test gate.
-- [ ] Boundary tests reject a synthetic reversed dependency.
-- [ ] Complete extracted runtime and installer smoke pass without checkout imports.
-- [ ] Missing nested resource/helper fails the smoke; deterministic/hash tests pass.
-- [ ] Installer bootstrap retains its documented minimum interpreter contract.
-- [ ] No broad resource glob can include generated state or secrets.
-- [ ] Required review, commit, `develop` integration and cleanup are recorded.
+- [x] Architecture map gives every listed domain one owner and test gate.
+- [x] Boundary tests reject a synthetic reversed dependency.
+- [x] Complete extracted runtime and installer smoke pass without checkout imports.
+- [x] Missing nested resource/helper fails the smoke; deterministic/hash tests pass.
+- [x] Installer bootstrap retains its documented minimum interpreter contract.
+- [x] No broad resource glob can include generated state or secrets.
+- [x] Required review, commit, `develop` integration and cleanup are recorded.
 
 ## STOP conditions and maintenance
 

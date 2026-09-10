@@ -254,7 +254,7 @@ independent implementations: the owner mapping prevents duplicate execution.
 | [058](058-recipient-readiness-for-windows-and-linux.md) | TODO: recipient preflight, native acceptance and README | Wrong-today docs now; native preflight before runtime download; consumes 056/057/059 |
 | [059](059-python-314-interpreter-provisioning.md) | TODO: private CPython 3.14 runtime | Single pinned lock/native wrappers, isolated bootstrap then 054 mirror; ongoing patch owner required |
 | [060](060-content-safe-router-diagnostics.md) | TODO: content-safe diagnostics | First small source fix; synthetic regression already reproduced |
-| [061](061-domain-rules-and-bundle-contracts.md) | TODO: domain rules and extracted-bundle checks | Before structural moves; preserve AGENTS.md section 9 |
+| [061](061-domain-rules-and-bundle-contracts.md) | DONE: domain map, boundary tests, bundle closure, 3.9 grammar gate (2026-09-10) | `3bed26d` + extraction follow-ons on develop; 062/064 unblocked under the rules |
 | [062](062-protocol-and-upstream-boundaries.md) | TODO: protocol/transport boundaries | 060/061, with 066 protocol work reconciled before moving shared files |
 | [063](063-client-activation-and-subscription-policy.md) | DONE: Codex adapter extracted, service-only route, independent subscription modes (2026-09-10) | `f5cf136`+`b40f82e` on develop; 107 focused tests OK; 051/053 consume the seam next |
 | [064](064-model-facts-and-client-projections.md) | TODO: model facts and client projections | 061; serialize shared files with 062; feeds 044/046 |
