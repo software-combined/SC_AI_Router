@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.10 (unreleased)
+## 0.6.11
 
 - Give the first-run key page an executive light-theme layout matching
   SC_360 (single card, blue-600 primary control, slate hairlines,
