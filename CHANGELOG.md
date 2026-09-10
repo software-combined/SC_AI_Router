@@ -67,12 +67,14 @@
   offline proofs only): per-user logon router task plus 15-minute updater
   task, pythonw.exe router with python.exe updater, graceful /shutdown
   restart, and registration readback that names group-policy refusals.
-  The installer still refuses Windows until real-machine acceptance.
+  The backend is now wired: the installer routes Windows to it instead
+  of refusing. Staff rollout stays gated on real-machine acceptance.
 
 - Pin the private CPython 3.14 runtime: new `packaging/runtime.lock`
   names one install-only distribution per qualified target with validation
-  and wrapper-table generation (Stage 1). Entries ship unpinned by design;
-  provisioning refuses until review pins an immutable source and digest.
+  and wrapper-table generation (Stage 1). All four targets now carry
+  reviewed pins (CPython 3.14.7, astral-sh build 20260814) with URLs and
+  SHA-256 digests verified against the downloaded archives.
   Release builds validate the lock first.
 
 - Give each client explicit activation: new `packaging/codex_config.py`
