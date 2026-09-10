@@ -61,6 +61,11 @@ RULES = {
     'codex_router/compaction.py': ('router', 'providers'),
     'codex_router/tool_adapter.py': ('router', 'providers'),
     'codex_router/providers.py': ('router', 'claude'),
+    'codex_router/transport.py': ('router', 'providers', 'claude', 'registry',
+                                  'catalogue', 'models', 'setup'),
+    'codex_router/protocols/__init__.py': ('router',),
+    'codex_router/protocols/responses.py': ('router',),
+    'codex_router/protocols/messages.py': ('router', 'providers'),
 }
 
 

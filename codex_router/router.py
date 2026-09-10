@@ -10,8 +10,9 @@ import time
 import traceback
 from compression import zstd
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from .credentials import Credentials
-from . import claude, errors, local_services, providers, setup
+from .credentials import Credentials, ENV_VAR as _CREDENTIALS_ENV_VAR
+from . import claude, errors, local_services, providers, setup, transport
+from .protocols import owned_paths, select as select_protocol
 from .errors import InvalidSize, PreparationError
 from .providers import NATIVE_SERVICE_PATHS
 from .runtime import MAX_BODY, ROUTER_HOME, VERSION, log_event
@@ -22,14 +23,22 @@ class Router(ThreadingHTTPServer):
     drain_deadline_s = 120
 
     def __init__(self, state, fileno=None, credentials=None):
-        if fileno is None:
+        sock = (None if fileno is None else
+                socket.fromfd(fileno, socket.AF_INET, socket.SOCK_STREAM))
+        if sock is not None and sock.getsockname()[1] != state['port']:
+            # A foreign launchd socket (e.g. the CI runner's own Listeners
+            # entry) would serve nobody on our port: drop it and fall back
+            # to the configured bind instead of going deaf with no error.
+            sock.close()
+            sock = None
+        if sock is None:
             self.allow_reuse_port = True
             super().__init__(('127.0.0.1', state['port']), Handler)
         else:
             super().__init__(('127.0.0.1', state['port']), Handler,
                              bind_and_activate=False)
             self.socket.close()
-            self.socket = socket.fromfd(fileno, socket.AF_INET, socket.SOCK_STREAM)
+            self.socket = sock
             self.server_activate()
         self.state = state
         self.lock = threading.Lock()
@@ -110,13 +119,17 @@ class Handler(BaseHTTPRequestHandler):
             return self.path.removeprefix('/backend-api/codex'), False
         return None, False
 
-    def context_error(self, message, streaming):
+    def context_error(self, message, streaming, budget=None):
         err = errors.context_window(message)
+        fields = dict(budget) if isinstance(budget, dict) else {}
         if not streaming:
+            if fields:
+                log_event('request_rejected', status=err.status,
+                          code=err.code, **fields)
             return self.error(err)
         # Codex recognizes context_length_exceeded inside response.failed;
         # a plain HTTP 400/409 does not mark its context full for recovery.
-        log_event('request_rejected', status=200, code=err.code)
+        log_event('request_rejected', status=200, code=err.code, **fields)
         body = ('event: response.failed\ndata: ' + json.dumps(
             {'type': 'response.failed', 'response': err.body()}) + '\n\n').encode()
         self.send_response(200)
@@ -168,7 +181,7 @@ class Handler(BaseHTTPRequestHandler):
             # Non-daemon like the SIGTERM path, or teardown kills the drain.
             threading.Thread(target=self.server.drain_and_exit, daemon=False).start()
             return self.send_json(200, {'status': 'draining'})
-        if path not in NATIVE_SERVICE_PATHS | {'/responses', '/responses/compact'} | claude.CLAUDE_PATHS:
+        if path not in owned_paths():
             if path.startswith('/setup/'):
                 return setup.serve(self, path[len('/setup/'):], True)
             return self.error(errors.unsupported_route())
@@ -179,14 +192,13 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(model, str) and path not in NATIVE_SERVICE_PATHS:
                 return self.error(errors.missing_model())
             mode = self.server.state.get('openai_mode', 'subscription')
-            if path in claude.CLAUDE_PATHS:
-                provider = claude.select(model, path, mode)
-            else:
-                provider = providers.select(
-                    model, path, self.server.state.get('openai_models', []), mode)
+            policy = select_protocol(self.command, path)
+            if policy is None:
+                return self.error(errors.unsupported_route())
+            provider = policy.select_provider(model, path, self.server.state, mode)
             if provider.name in ('openai-subscription', 'anthropic-subscription') and not via_path:
                 return self.error(errors.bearer_for_no_subscription_only())
-            compact_call = providers.compaction_call(provider, model, path, payload)
+            compact_call = policy.compaction_call(provider, model, path, payload)
             if compact_call is not None:
                 # Compact before prepare(): a rejected effort must not block it.
                 # Hold an inflight slot so drain waits for mid-compaction
@@ -216,10 +228,19 @@ class Handler(BaseHTTPRequestHandler):
         except InvalidSize as exc:
             return self.error(errors.invalid_size(str(exc)))
         except errors.ContextWindowExceeded as exc:
-            return self.context_error(str(exc), payload.get('stream') is True)
+            return self.context_error(str(exc), payload.get('stream') is True,
+                                      getattr(exc, 'budget', None))
         except PreparationError as exc:
             return self.error(errors.preparation(str(exc)))
-        except (ValueError, KeyError, LookupError, OSError, zstd.ZstdError,
+        except LookupError as exc:
+            if isinstance(exc, KeyError):
+                # Malformed payload/tool-fragment indexing, not keylessness:
+                # keep the original payload-error mapping and open no window.
+                return self.error(errors.map_client_error(exc))
+            setup.open_key_window(self.server, self.server.credentials.home)
+            return self.error(errors.credential_problem(
+                '%s Open the key setup page to connect an OpenRouter key.' % exc))
+        except (ValueError, KeyError, OSError, zstd.ZstdError,
                 AttributeError, TypeError) as exc:
             err = errors.map_client_error(exc)
             if err.code == 'INTERNAL_ERROR':
@@ -241,6 +262,24 @@ class Handler(BaseHTTPRequestHandler):
         with self.server.lock:
             self.server.inflight += 1
         self.relay(provider, prepared, metrics, started)
+
+    def _stored_key_dead(self):
+        """True only when the stored key file itself fails check_key on 401/403."""
+        if self.server.credentials.env.get(_CREDENTIALS_ENV_VAR, '').strip():
+            return False  # The file is not the effective credential.
+        if setup.setup_pending(self.server.state):
+            return False  # A window is already open; answer the raw 401.
+        try:
+            stored = (self.server.credentials.home / 'openrouter.key').read_text().strip()
+        except OSError:
+            return False
+        if not stored:
+            return True
+        try:
+            setup.check_key(stored)
+        except (ValueError, OSError) as exc:
+            return isinstance(exc, setup.KeyRejected) and exc.status in (401, 403)
+        return False
 
     def read_body(self):
         size = int(self.headers.get('Content-Length', '-1'))
@@ -280,6 +319,13 @@ class Handler(BaseHTTPRequestHandler):
                 raw = response.read()
                 if prepared.provider == 'openrouter' and providers.is_context_error(raw):
                     return self.context_error(errors.context_window().message, metrics['stream'])
+                if (prepared.provider == 'openrouter'
+                        and response.status in (401, 403)
+                        and self._stored_key_dead()):
+                    setup.open_key_window(self.server, self.server.credentials.home)
+                    return self.error(errors.credential_problem(
+                        'The stored OpenRouter key was rejected. '
+                        'Open the key setup page to connect a new one.'))
                 described = providers.describe_failure(
                     None, {'status': response.status, 'body': raw},
                     {'model': metrics.get('model'), 'provider': prepared.provider,
@@ -293,7 +339,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self.error(errors.upstream_described(message) if status == 502
                                       else errors.preparation(message))
                 self.send_response(response.status)
-                providers.relay_headers(response, self.send_header, metrics.get('model'))
+                transport.relay_headers(response, self.send_header, metrics.get('model'))
                 self.send_header('Connection', 'close')
                 self.end_headers()
                 self.wfile.write(raw)
@@ -301,8 +347,9 @@ class Handler(BaseHTTPRequestHandler):
                 self.close_connection = True
                 return
             metrics['upstream_headers_ms'] = round((time.monotonic() - started) * 1000, 1)
+            providers.validate_response(response, prepared)
             self.send_response(response.status)
-            providers.relay_headers(response, self.send_header, metrics.get('model'))
+            transport.relay_headers(response, self.send_header, metrics.get('model'))
             self.send_header('Connection', 'close')
             self.end_headers()
             sent = True

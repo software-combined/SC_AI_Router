@@ -27,10 +27,23 @@ _spec = importlib.util.spec_from_file_location(
     Path(__file__).resolve().parent / 'service.py')
 _svc = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_svc)
-_linux_spec = importlib.util.spec_from_file_location(
-    'router_systemd', Path(__file__).resolve().parent / 'systemd.py')
-_linux = importlib.util.module_from_spec(_linux_spec)
-_linux_spec.loader.exec_module(_linux)
+_plat_spec = importlib.util.spec_from_file_location(
+    'router_platforms', Path(__file__).resolve().parent / 'platforms' / '__init__.py')
+_platforms = importlib.util.module_from_spec(_plat_spec)
+_plat_spec.loader.exec_module(_platforms)
+_cfg_spec = importlib.util.spec_from_file_location(
+    'router_codex_config', Path(__file__).resolve().parent / 'codex_config.py')
+_codex_config = importlib.util.module_from_spec(_cfg_spec)
+_cfg_spec.loader.exec_module(_codex_config)
+_claude_spec = importlib.util.spec_from_file_location(
+    'router_claude_config', Path(__file__).resolve().parent / 'claude_config.py')
+_claude_config = importlib.util.module_from_spec(_claude_spec)
+_claude_spec.loader.exec_module(_claude_config)
+_diag_spec = importlib.util.spec_from_file_location(
+    'router_diagnostics', Path(__file__).resolve().parent / 'diagnostics.py')
+_diag = importlib.util.module_from_spec(_diag_spec)
+_diag_spec.loader.exec_module(_diag)
+_linux = _platforms._linux_mod().systemd
 _upd_spec = importlib.util.spec_from_file_location(
     'router_updater', Path(__file__).resolve().parent / 'updater.py')
 _updater = importlib.util.module_from_spec(_upd_spec)
@@ -57,6 +70,7 @@ _write_state = _svc._write_state
 fetch = _svc.fetch
 fetch_feed = _svc.fetch_feed
 feed_serial = _svc.feed_serial
+github_route_prefix = _svc.RELEASES_PREFIX
 find_python = _svc.find_python
 install_launcher = _svc.install_launcher
 main_plist_needs_reload = _svc.main_plist_needs_reload
@@ -82,37 +96,31 @@ wait_version = _svc.wait_version
 ensure_serving = _svc.ensure_serving
 
 
-SUPPORTED_PLATFORMS = ('darwin', 'linux')
+SUPPORTED_PLATFORMS = ('darwin', 'linux', 'win32')
 
 
 def require_supported_platform():
-    # Plan 057 Stage 1: refuse before any router home or bundle work. Without
-    # this, PLATFORM == 'win32' falls through every `if manager:` pair into
-    # the launchd path and dies on os.getuid() after a partial install.
     if PLATFORM not in SUPPORTED_PLATFORMS:
         raise SystemExit(
-            'Windows is not supported by this installer yet; '
-            'no files were changed. See plans/057-windows-install-and-service-support.md.')
+            f'Platform {PLATFORM} is not supported by this installer yet; '
+            'no files were changed.')
 
 
-def systemd_manager(home):
-    return _linux.Manager(home, run) if PLATFORM == 'linux' else None
+def platform_backend():
+    """Backend for this platform, or None when unsupported.
+
+    None no longer means macOS: every caller must refuse it explicitly.
+    Tests drive other platforms by patching PLATFORM before calling in.
+    """
+    return _platforms.select(PLATFORM, _svc, run)
 
 
 def restart_router(home):
-    manager = systemd_manager(home)
-    if manager:
-        manager.restart()
-    else:
-        run(['launchctl', 'kill', 'TERM', f'gui/{os.getuid()}/{LABEL}'], capture_output=True)
+    platform_backend().restart(home)
 
 
 def stop_router(home):
-    manager = systemd_manager(home)
-    if manager:
-        manager.stop()
-    else:
-        run(['launchctl', 'bootout', f'gui/{os.getuid()}/{LABEL}'], capture_output=True)
+    platform_backend().stop(home)
 
 
 def verify_sha256(data, want):
@@ -180,6 +188,14 @@ def ensure_credentials(home, state, env=None):
     key_file = home / 'openrouter.key'
     fd = os.open(key_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     os.close(fd)
+    try:
+        platform_backend().protect_secret(key_file)
+    except SystemExit:
+        try:
+            key_file.unlink()
+        except OSError:
+            pass
+        raise
     print(f'Paste your OpenRouter key into {key_file} (owner-only file) and re-run the installer')
     raise SystemExit(3)
 
@@ -217,54 +233,35 @@ def write_catalogue(home, release_dir, python):
         raise SystemExit('catalogue merge failed')
 
 
-def _preserve_picker_selection(config_path, previous_block, block):
-    """Carry owner-chosen picker lines across managed block rewrites.
+_preserve_picker_selection = _codex_config.preserve_picker_selection
+replace_config_block = _codex_config.replace_config_block
 
-    The installer owns the connection lines (base URL, catalogue) but the
-    owner picks `model` / `model_reasoning_effort` inside the same marked
-    block. A plain rewrite would silently reset that choice on every
-    update, so re-emit those lines from the previous owned block.
+
+def _restore_owned_config(home):
+    """Detach an active client via the single owned remover path.
+
+    Runs the matching tools/disable.py with ROUTER_RESTORE_ONLY=1: exact
+    owned-block plus guidance restore with atomic temp and concurrent-edit
+    checks. The machine result decides; success text alone never passes.
     """
-    if not previous_block:
-        return block
+    disable = Path(__file__).resolve().parents[1] / 'tools' / 'disable.py'
+    result = run([sys.executable, str(disable)], capture_output=True, text=True,
+                 env={**os.environ, 'ROUTER_HOME': str(home),
+                      'ROUTER_RESTORE_ONLY': '1'})
+    print((result.stdout or '')[-2000:])
+    if result.returncode != 0:
+        print((result.stderr or '')[-2000:])
+        raise SystemExit('configuration restore failed; refusing the client change')
+    # The remover restores files but keeps the receipt; a detached client
+    # must not leave a claim to settings it no longer owns. Sibling client
+    # attachments are preserved; the file goes only when none remain.
+    _codex_config.drop_client(home, 'codex')
+    if _codex_config.read_receipt(home).get('clients', {}):
+        return
     try:
-        before = Path(config_path).read_text() if Path(config_path).exists() else ''
-    except OSError:
-        return block
-    if previous_block not in before:
-        return block
-    keep = [line for line in previous_block.splitlines()
-            if line.startswith('model = ') or line.startswith('model_reasoning_effort = ')]
-    if not keep:
-        return block
-    lines = block.splitlines()
-    lines[-1:-1] = keep
-    return '\n'.join(lines) + '\n'
-
-
-def replace_config_block(config_path, block, previous_block=None):
-    """Insert or replace the marked block; refuse hand-edited markers."""
-    config_path = Path(config_path)
-    before = config_path.read_text() if config_path.exists() else ''
-    if previous_block and previous_block in before:
-        if before.count(previous_block) != 1:
-            raise SystemExit('config block was edited by hand; run tools/disable.py first')
-        after = before.replace(previous_block, block, 1)
-    elif '# BEGIN local mixed model picker' in before or '# END local mixed model picker' in before:
-        raise SystemExit('config block was edited by hand; run tools/disable.py first')
-    else:
-        after = block + '\n' + before
-    home = config_path.parent
-    if not config_path.exists():
-        home.mkdir(parents=True, exist_ok=True)
-    fd = os.open(config_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, 'w') as stream:
-        stream.write(after)
-    try:
-        os.chmod(config_path, 0o600)
+        (Path(home) / 'activation.json').unlink()
     except OSError:
         pass
-    return before
 
 
 def do_rollback(args):
@@ -278,9 +275,7 @@ def do_rollback(args):
     if args.dry_run:
         print(f'would roll back to {args.version} under {home}')
         return 0
-    manager = systemd_manager(home)
-    if manager:
-        manager.check()
+    platform_backend().check(home)
     target = home / 'releases' / args.version
     if not target.is_dir() or not (target / 'packaging' / 'VERSION').exists():
         raise SystemExit(f'version {args.version} is not installed under {home}')
@@ -314,6 +309,9 @@ def _sync_seams():
         _svc.run, _svc.health, _svc.wait_version, _svc.ensure_serving)
     _updater.bind(svc=_svc, newer=newer, verify_sha256=verify_sha256,
                   sync_seams=_sync_seams)
+    _diag.bind(find_python=find_python, health=health,
+               current_version=current_version, feed_url=FEED_URL,
+               route_prefix=github_route_prefix, codex_config=_codex_config)
 
 
 def do_install(args, _fetch=fetch, _run=None):
@@ -341,9 +339,8 @@ def do_install(args, _fetch=fetch, _run=None):
         print(f'would fetch {feed}; interpreter {python}')
         print('would verify, unpack, self-test, swap current, restart, write config')
         return 0
-    manager = systemd_manager(home)
-    if manager:
-        manager.check()
+    backend = platform_backend()
+    backend.check(home)
     tarball = _fetch(latest['url'])
     if latest.get('sha256'):
         verify_sha256(tarball, latest['sha256'])
@@ -358,6 +355,40 @@ def do_install(args, _fetch=fetch, _run=None):
     # --feed is one-shot: it selects this run's source only. Never pin it,
     # or one local test would freeze every future scheduled update on it.
     state = ensure_state(home)
+    # Absence in legacy state means Codex, not service-only.
+    client = args.client or state.get('client', 'codex')
+    if client not in ('codex', 'none'):
+        raise SystemExit('client must be codex or none')
+    if state.get('client', 'codex') != client:
+        state['client'] = client
+        _write_state(home, state)
+    # --clients selects attachments; --client none stays service-only.
+    # Unset means the legacy Codex-only path below. `both` keeps the Codex
+    # attach and adds Claude; `claude` attaches Claude without touching
+    # Codex settings.
+    clients = args.clients
+    if clients is None and client == 'none':
+        clients = 'none'
+    if clients is None:
+        clients = 'codex'
+    if clients not in ('codex', 'claude', 'both', 'none'):
+        raise SystemExit('clients must be codex, claude, both, or none')
+    if client == 'none' and clients != 'none':
+        raise SystemExit('--client none conflicts with --clients %s' % clients)
+    if args.client == 'codex' and args.clients == 'claude':
+        raise SystemExit('--client codex conflicts with --clients claude: '
+                         'use --clients both to keep the Codex attachment')
+    claude_mode = args.claude_mode
+    if claude_mode is None:
+        claude_mode = state.get('claude_mode', state.get('anthropic_mode', 'subscription'))
+    if claude_mode not in ('subscription', 'none'):
+        raise SystemExit('claude_mode must be subscription or none')
+    if state.get('claude_mode') != claude_mode:
+        state['claude_mode'] = claude_mode
+        _write_state(home, state)
+    if args.anthropic_mode is not None and args.anthropic_mode != state.get('anthropic_mode'):
+        state['anthropic_mode'] = args.anthropic_mode
+        _write_state(home, state)
     mode = args.openai_mode or state.get('openai_mode', 'subscription')
     if mode not in ('subscription', 'none'):
         raise SystemExit('openai_mode must be subscription or none')
@@ -389,35 +420,8 @@ def do_install(args, _fetch=fetch, _run=None):
     catalog_path = home / 'mixed-models.json'
     before_catalog = catalog_path.read_bytes() if catalog_path.exists() else None
     previous = install_bundle(home, latest['version'], tarball, manifest_doc, python)
-    # POSIX-only call, and the launchd branch below is its only consumer.
-    uid = os.getuid() if hasattr(os, 'getuid') else 0
-    agents = Path.home() / 'Library' / 'LaunchAgents'
     try:
-        if manager:
-            manager.install(python, current_release_dir(home))
-        else:
-            # Decided before the rewrite: once the file is replaced it can no
-            # longer tell us whether launchd's loaded copy went stale.
-            needs_reload = main_plist_needs_reload(uid, python, home, state, agents)
-            write_plist(agents / (LABEL + '.plist'), render_plist(python, home, state))
-            write_plist(agents / (UPDATE_LABEL + '.plist'), render_update_plist(python, home))
-            if previous is None:
-                restart_service(uid, agents)
-            elif needs_reload:
-                if not reload_main_service(uid, agents):
-                    raise SystemExit(f'router service reload failed for {LABEL}')
-            else:
-                # Nothing launchd owns changed, so hand over in place. TERM lets
-                # the old process drain in-flight requests while launchd keeps
-                # the listening socket and respawns into the new pointer, so no
-                # connection is refused and no bootout can strand the machine.
-                restart_router(home)
-            if not ensure_updater(uid, python, home, agents):
-                # The router is fine; only the update channel is not. Say so
-                # rather than exiting clean over a machine that will never
-                # update itself again.
-                print('warning: the scheduled updater is not loaded; run the '
-                      'installer again to restore automatic updates')
+        backend.install(python, home, state, current_release_dir(home), previous)
         healthy = wait_version(state, latest['version'])
     except (OSError, subprocess.CalledProcessError, SystemExit):
         # SystemExit is caught on purpose: reload and launcher failures raise it,
@@ -434,10 +438,7 @@ def do_install(args, _fetch=fetch, _run=None):
             # bootout would unload the service and strand a busy machine.
             restart_router(home)
             rolled_back = f'rolled back to {previous}: new version failed health check'
-            if manager:
-                manager.start_updates()
-                print(rolled_back)
-            elif ensure_serving(uid, home, state, agents, version=previous):
+            if backend.rollback_serving_ok(home, state, previous):
                 print(rolled_back)
             else:
                 # A TERM cannot revive a job that is not loaded, so never report
@@ -450,30 +451,38 @@ def do_install(args, _fetch=fetch, _run=None):
             stop_router(home)
             print('new version failed health check; inspect the service logs')
         raise SystemExit(1)
+    previous_receipt = _codex_config.codex_attachment(home)
+    if clients == 'none' and previous_receipt.get('inserted_block'):
+        # Never silently detach an active Codex configuration: restore the
+        # exact owned settings first, or refuse when the block was edited.
+        _restore_owned_config(home)
+        previous_receipt = _codex_config.codex_attachment(home)
+    if clients == 'none' and _codex_config.read_receipt(home).get('clients', {}).get('claude'):
+        detach_claude(home)
+    if clients == 'none':
+        prune_releases(home, latest['version'], previous,
+                       backend.pinned_release(home))
+        if not args.feed:
+            (home / 'feed-serial').write_text(str(serial) + '\n')
+        backend.start_updates(home)
+        print(f"installed {latest['version']}; health ok; service-only, no client changes")
+        return 0
+    if claude_mode == 'none' and clients in ('claude', 'both'):
+        raise SystemExit('claude_mode is none: re-run with --claude-mode subscription '
+                         'to attach Claude Code, or select --clients codex')
+    if clients in ('claude', 'both'):
+        attach_claude(home, state)
+    # A selection without Claude never silently detaches it: only an
+    # explicit service-only install or uninstall drops attachments.
+    if clients == 'claude':
+        # Claude-only: the shared service is up; Codex settings untouched.
+        if not args.feed:
+            (home / 'feed-serial').write_text(str(serial) + '\n')
+        backend.start_updates(home)
+        print(f"installed {latest['version']}; health ok; Claude Code attached")
+        return 0
     config_path = Path.home() / '.codex' / 'config.toml'
-    catalog_line = f'model_catalog_json = "{home}/mixed-models.json"\n'
-    block = ('# BEGIN local mixed model picker\n'
-             f'openai_base_url = "http://127.0.0.1:{state["port"]}/{state["token"]}/backend-api/codex"\n'
-             + catalog_line + '# END local mixed model picker\n')
-    if mode == 'none':
-        # No env var: the per-install path token embedded in base_url carries
-        # auth, the same mechanism subscription mode uses in openai_base_url.
-        # Nothing on staff machines provisions SCG_ROUTER_TOKEN, so naming it
-        # here fails closed at the router with a 403. The 043 spike (2026-09-08,
-        # Codex 0.153.4) showed thread+turn reaching the router on a custom
-        # provider with bearer auth; live desktop proof that Codex keeps the
-        # path prefix on a custom provider base_url is still the gate.
-        block = ('# BEGIN local mixed model picker\n'
-                 'model_provider = "scg_router"\n'
-                 + catalog_line +
-                 'approvals_reviewer = "user"\n'
-                 '[model_providers.scg_router]\n'
-                 'name = "SC router"\n'
-                 f'base_url = "http://127.0.0.1:{state["port"]}/{state["token"]}/backend-api/codex"\n'
-                 'wire_api = "responses"\n'
-                 + '# END local mixed model picker\n')
-    receipt_path = home / 'activation.json'
-    previous_receipt = json.loads(receipt_path.read_text()) if receipt_path.exists() else {}
+    block = _codex_config.build_block(home, state, mode)
     block = _preserve_picker_selection(config_path, previous_receipt.get('inserted_block'), block)
     release = current_release_dir(home)
     guidance = runpy.run_path(str(release / 'tools' / 'global_instructions.py'))
@@ -488,15 +497,7 @@ def do_install(args, _fetch=fetch, _run=None):
         pass
     before = replace_config_block(config_path, block, previous_receipt.get('inserted_block'))
     guidance['write'](rules_path, rules_before, rules_after)
-    receipt_path.write_text(json.dumps({'config_path': str(config_path), 'inserted_block': block,
-                                        'global_instructions': rules_receipt,
-                                        'openai_mode': mode,
-                                        'previous_sha256': hashlib.sha256(before.encode()).hexdigest()},
-                                       indent=2) + '\n')
-    try:
-        os.chmod(receipt_path, 0o600)
-    except OSError:
-        pass
+    _codex_config.write_receipt(home, config_path, block, rules_receipt, mode, before)
     if setup_url is not None:
         # Printed as a fallback: the browser should already show this page.
         # It carries the per-install loopback token, so it stays operator-private.
@@ -506,15 +507,24 @@ def do_install(args, _fetch=fetch, _run=None):
     # and a scheduled run defers that reload. Pruning the release that command
     # names would leave the updater firing a missing file every 15 minutes.
     prune_releases(home, latest['version'], previous,
-                   None if manager else loaded_updater_release(uid, home))
+                   backend.pinned_release(home))
     if not args.feed:
         # One-shot rule, as for the feed URL: a pinned feed keeps its own
         # serial, so recording it makes the real feed look stale for good.
         (home / 'feed-serial').write_text(str(serial) + '\n')
-    if manager:
-        manager.start_updates()
+    backend.start_updates(home)
     print(f"installed {latest['version']}; health ok; restart Codex to load the router")
     return 0
+
+
+def attach_claude(home, state, settings_path=None, env=None):
+    return _claude_config.attach(home, state, _codex_config,
+                                 settings_path_override=settings_path, env=env)
+
+
+def detach_claude(home, settings_path=None, env=None):
+    return _claude_config.detach(home, _codex_config,
+                                 settings_path_override=settings_path, env=env)
 
 
 def _release_key(name):
@@ -550,10 +560,33 @@ def do_check_update(args, _fetch=fetch, _read_feed=None, _sleep=None):
 def do_uninstall(args):
     _sync_seams()
     home = Path(args.home).expanduser()
-    manager = systemd_manager(home)
-    if manager:
-        manager.check()
+    backend = platform_backend()
+    backend.check(home)
+    # A missing receipt with a managed block still present means manual
+    # interference: fail closed before any release or service decision rather
+    # than orphan the client configuration.
+    config_path = Path.home() / '.codex' / 'config.toml'
+    try:
+        configured = config_path.read_text()
+    except OSError:
+        configured = ''
+    attached = _codex_config.codex_attachment(home)
+    if (attached == {}
+            and (_codex_config.BEGIN in configured or _codex_config.END in configured)):
+        raise SystemExit('managed Codex block present without a receipt; '
+                         'run tools/disable.py first')
     release = current_release_dir(home)
+    claude_attached = bool(_codex_config.read_receipt(home).get('clients', {}).get('claude'))
+    if claude_attached:
+        # Claude-only or leftover attachment: restore its settings before
+        # any early return, or uninstall would orphan its loopback routing.
+        detach_claude(home)
+    if release is not None and attached == {} and not claude_attached:
+        # Service-only installation: no client settings were ever touched,
+        # so there is no receipt and no restore to run.
+        backend.uninstall(home)
+        print(f'uninstalled services; {home} left in place for the operator to delete')
+        return 0
     if release is not None:
         # Use this installer's matching remover even after rolling back old code.
         disable = Path(__file__).resolve().parents[1] / 'tools' / 'disable.py'
@@ -561,26 +594,26 @@ def do_uninstall(args):
             result = run([sys.executable, str(disable)], capture_output=True, text=True,
                               env={**os.environ, 'ROUTER_HOME': str(home),
                                    'ROUTER_RESTORE_ONLY': '1'})
-            out = result.stdout or ''
-            print(out[-2000:])
-            if 'OpenAI direct routing restored' not in out:
+            print((result.stdout or '')[-2000:])
+            if result.returncode != 0:
                 print((result.stderr or '')[-2000:])
                 raise SystemExit('configuration restore failed; '
                                  'services left running for manual review')
-    if manager:
-        manager.uninstall()
-        print(f'uninstalled services; {home} left in place for the operator to delete')
-        return 0
-    run(['launchctl', 'bootout', f'gui/{os.getuid()}/{LABEL}'], capture_output=True)
-    run(['launchctl', 'bootout', f'gui/{os.getuid()}/{UPDATE_LABEL}'], capture_output=True)
-    agents = Path.home() / 'Library' / 'LaunchAgents'
-    for name in (LABEL, UPDATE_LABEL):
-        try:
-            (agents / (name + '.plist')).unlink()
-        except FileNotFoundError:
-            pass
-    print(f'uninstalled agents; {home} left in place for the operator to delete')
+    if _codex_config.read_receipt(home).get('clients', {}).get('claude'):
+        detach_claude(home)
+    backend.uninstall(home)
+    print(f'uninstalled services; {home} left in place for the operator to delete')
     return 0
+
+
+def do_preflight(args):
+    _sync_seams()
+    return _diag.do_preflight(args)
+
+
+def do_status(args):
+    _sync_seams()
+    return _diag.do_status(args)
 
 
 def build_parser():
@@ -593,30 +626,53 @@ def build_parser():
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--check-update', action='store_true')
     parser.add_argument('--uninstall', action='store_true')
+    parser.add_argument('--preflight', action='store_true',
+                        help='Report missing install prerequisites and exit.')
+    parser.add_argument('--status', action='store_true',
+                        help='Print installed version, service, client, and key status.')
+    parser.add_argument('--json', action='store_true',
+                        help='With --status, print machine-readable JSON.')
     parser.add_argument('--static-catalogue', action='store_true',
                         help='No-op: the static catalogue file is now always configured.')
     parser.add_argument('--setup', action='store_true',
                         help='First-run key window: mint a setup link and open it instead of '
                              'requiring the key up front.')
     parser.add_argument('--openai-mode', default=None)
+    parser.add_argument('--anthropic-mode', default=None,
+                        choices=('subscription', 'none'),
+                        help='Independent Claude subscription choice; '
+                             'unset follows the OpenAI mode as before.')
+    parser.add_argument('--client', default=None, choices=('codex', 'none'),
+                        help='Client to activate (default codex); none leaves '
+                             'all client settings and guidance untouched.')
+    parser.add_argument('--clients', default=None, choices=('codex', 'claude', 'both'),
+                        help='Clients to attach (default codex); both attaches '
+                             'Codex and Claude Code.')
+    parser.add_argument('--claude-mode', default=None,
+                        choices=('subscription', 'none'),
+                        help='Independent Claude subscription choice; '
+                             'unset follows the Anthropic mode as before.')
     return parser
 
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
-    require_supported_platform()
-    action = do_uninstall if args.uninstall else do_check_update if args.check_update else do_install
+    action = do_status if args.status else do_preflight if args.preflight else do_uninstall if args.uninstall else do_check_update if args.check_update else do_install
+    if not (args.status or args.preflight):
+        # Plan 057 Stage 1: refuse before any router home or bundle work.
+        # Read-only --status/--preflight run everywhere; everything else
+        # (install, update, rollback, uninstall) stays refused.
+        require_supported_platform()
     home = Path(args.home).expanduser()
-    manager = systemd_manager(home)
+    backend = platform_backend()
     # --check-update spawns the installer as a child, and that child takes the
     # lock itself; holding it here would deadlock every scheduled update. A
     # dry run mutates nothing, so it takes no lock and creates no home.
-    if args.check_update or args.dry_run:
+    if args.status or args.preflight or args.check_update or args.dry_run:
         return action(args)
-    if manager:
-        # Before the lock: a host with no systemd user manager must be refused
-        # without leaving a router home behind.
-        manager.check()
+    # Before the lock: a host with no service manager must be refused
+    # without leaving a router home behind.
+    backend.check(home)
     with install_lock(home) as held:
         if not held:
             # A scheduled pass and a manual run can fire at the same moment,

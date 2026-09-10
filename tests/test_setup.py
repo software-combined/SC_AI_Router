@@ -1,6 +1,7 @@
 """First-run key window over loopback (Plan 047 G). No network: OpenRouter
 key checks run through an injected urlopen fake."""
 import http.client
+import io
 import json
 import os
 import shutil
@@ -70,6 +71,20 @@ class SetupUnitTests(unittest.TestCase):
         self.assertIn(b'<form', body)
         self.assertIn(b'n' * 16, body)
 
+    def test_form_wiring_survives_restyle(self):
+        # The page markup is styled; these attributes are the contract the
+        # browser POST depends on, so a later restyle must not drop one.
+        body = setup._form('n' * 16).decode()
+        self.assertIn('<form method="post" action="./' + 'n' * 16 + '">', body)
+        self.assertIn('type="password" name="key" autocomplete="off"', body)
+        self.assertIn('<input type="radio" name="mode" value="subscription" checked>', body)
+        self.assertIn('<input type="radio" name="mode" value="none">', body)
+        self.assertIn('<button type="submit">', body)
+        # Inline style only: a loopback page must not fetch an external asset.
+        self.assertIn('<style>', body)
+        self.assertNotIn('<link', body)
+        self.assertNotIn('<script', body)
+
     def test_unknown_link_is_404(self):
         home = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, home, True)
@@ -97,6 +112,44 @@ class SetupUnitTests(unittest.TestCase):
         self.assertEqual(saved['openai_mode'], 'none')
         self.assertEqual(saved['token'], 'test-token')
         self.assertNotIn('setup', state)
+
+    def test_post_on_windows_refuses_unprotectable_key(self):
+        # The nt branch verifies the platform ACL after writing; a failed
+        # check refuses rather than leaving an exposed key.
+        home = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, home, True)
+        state_path = home / 'mixed-router-state.json'
+        state = _state(home)
+        state_path.write_text(json.dumps(state))
+        form = b'key=sk-test&mode=none'
+        with mock.patch.object(setup, '_ON_WINDOWS', True), \
+                mock.patch('codex_router.winacl.check',
+                            side_effect=SystemExit('cannot verify')):
+            status, _ = setup.handle_setup(state, home, 'n' * 16, True, form,
+                                           _urlopen=_key_ok(), _now=NOW)
+        self.assertEqual(status, 500)
+        self.assertFalse((home / 'openrouter.key').exists())
+
+    def test_post_on_windows_names_key_when_cleanup_fails(self):
+        # Verify-fail plus unlink-fail must name the file with an explicit
+        # delete instruction instead of a generic 500.
+        home = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, home, True)
+        state_path = home / 'mixed-router-state.json'
+        state = _state(home)
+        state_path.write_text(json.dumps(state))
+        form = b'key=sk-test&mode=none'
+        with mock.patch.object(setup, '_ON_WINDOWS', True), \
+                mock.patch('codex_router.winacl.check',
+                            side_effect=SystemExit('cannot verify')), \
+                mock.patch.object(Path, 'unlink',
+                                   side_effect=OSError('locked')):
+            status, body = setup.handle_setup(state, home, 'n' * 16, True, form,
+                                              _urlopen=_key_ok(), _now=NOW)
+        self.assertEqual(status, 500)
+        text = body.decode() if isinstance(body, bytes) else body
+        self.assertIn('openrouter.key', text)
+        self.assertIn('delete it', text)
 
     def test_post_rejects_bad_key_modes_and_clashes(self):
         home = Path(tempfile.mkdtemp())
@@ -166,6 +219,101 @@ class SetupUnitTests(unittest.TestCase):
                     load(path)
 
 
+class KeyWindowTests(unittest.TestCase):
+    # Plan 055 Stage 3: keyless boot, first-use window, revoked-key carve-out.
+    def _home(self):
+        home = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, home, True)
+        return home
+
+    def _dead_fetch(self, status):
+        def fake(req, timeout=None):
+            raise urllib.error.HTTPError(req.full_url, status, 'Denied', {}, None)
+        return fake
+
+    def _post_with_stored(self, stored_text, live):
+        home = self._home()
+        state = _state(home)
+        (home / 'mixed-router-state.json').write_text(json.dumps(state))
+        (home / 'openrouter.key').write_text(stored_text)
+        os.chmod(home / 'openrouter.key', 0o600)
+        form = b'key=sk-test&mode=none'
+        with mock.patch.object(setup, '_ON_WINDOWS', False), \
+                mock.patch.object(setup, '_stored_key_live', return_value=live):
+            status, body = setup.handle_setup(
+                state, home, 'n' * 16, True, form, _urlopen=_key_ok(), _now=NOW)
+        return home, status, body
+
+    def test_post_replaces_key_proven_dead_on_401(self):
+        home, status, _ = self._post_with_stored('sk-dead\n', False)
+        self.assertEqual(status, 200)
+        self.assertEqual((home / 'openrouter.key').read_text(), 'sk-test\n')
+
+    def test_post_refuses_live_key_without_explicit_delete(self):
+        home, status, _ = self._post_with_stored('sk-live\n', True)
+        self.assertEqual(status, 409)
+        self.assertEqual((home / 'openrouter.key').read_text(), 'sk-live\n')
+
+    def test_post_refuses_truncate_when_stored_check_errors(self):
+        home, status, _ = self._post_with_stored('sk-maybe\n', True)
+        self.assertEqual(status, 409)
+        self.assertEqual((home / 'openrouter.key').read_text(), 'sk-maybe\n')
+
+    def test_stored_key_live_false_only_on_401_or_403(self):
+        self.assertFalse(setup._stored_key_live('sk-x', self._dead_fetch(401)))
+        self.assertFalse(setup._stored_key_live('sk-x', self._dead_fetch(403)))
+        self.assertTrue(setup._stored_key_live('sk-x', self._dead_fetch(429)))
+        self.assertTrue(setup._stored_key_live('sk-x', _key_ok()))
+        def boom(req, timeout=None):
+            raise OSError('down')
+        self.assertTrue(setup._stored_key_live('sk-x', boom))
+
+    def test_open_key_window_mints_once_and_reuses_live_nonce(self):
+        home = self._home()
+        (home / 'mixed-router-state.json').write_text(json.dumps({'port': 1, 'token': 't'}))
+        import threading
+        server = mock.Mock()
+        server.lock = threading.Lock()
+        server.state = {'port': 1, 'token': 't'}
+        opened = []
+        self.assertTrue(setup.open_key_window(server, home, _opener=opened.append))
+        first = server.state['setup']['nonce']
+        self.assertTrue(setup.open_key_window(server, home, _opener=opened.append))
+        self.assertEqual(server.state['setup']['nonce'], first)
+        self.assertEqual(len(opened), 1)
+        saved = json.loads((home / 'mixed-router-state.json').read_text())
+        self.assertEqual(saved['setup']['nonce'], first)
+
+    def test_open_key_window_never_prints_url_off_tty(self):
+        home = self._home()
+        (home / 'mixed-router-state.json').write_text(json.dumps({'port': 1, 'token': 't'}))
+        import threading
+        server = mock.Mock()
+        server.lock = threading.Lock()
+        server.state = {'port': 1, 'token': 't'}
+        buf = io.StringIO()
+        with mock.patch.object(setup.sys.stdout, 'isatty', return_value=False):
+            with mock.patch('codex_router.runtime.log_event') as logged:
+                import contextlib as _ctx
+                with _ctx.redirect_stdout(buf):
+                    setup.open_key_window(server, home, _opener=lambda url: True)
+        self.assertNotIn(server.state['setup']['nonce'], buf.getvalue())
+        self.assertNotIn('test-token', buf.getvalue())
+        logged.assert_called_once()
+        self.assertNotIn('test-token', str(logged.call_args))
+
+
+    def test_atomic_replace_recovers_from_stale_tmp(self):
+        home = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, home, True)
+        path = home / 'mixed-router-state.json'
+        path.write_text(json.dumps({'port': 1, 'token': 't'}))
+        stale = path.with_name(path.name + '.setup.tmp')
+        stale.write_text('crash residue')
+        setup._atomic_replace(path, {'port': 1, 'token': 't', 'setup': {'nonce': 'x', 'expires': 1}})
+        self.assertEqual(json.loads(path.read_text())['setup']['nonce'], 'x')
+        self.assertFalse(stale.exists())
+
 class SetupHandlerTests(unittest.TestCase):
     def _server(self, home, **over):
         state = {'port': 0, 'token': 'test-token', 'openai_models': [],
@@ -231,23 +379,25 @@ class SetupHandlerTests(unittest.TestCase):
     def test_setup_post_over_inherited_listener(self):
         # Production boots socket-activated (no server_bind, no server_port):
         # the setup POST must work there, not just on directly bound servers.
-        import socket as _socket
-        import threading as _threading
+        import socket
+        import threading
         from codex_router.router import Router
         home = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, home, True)
-        state = {'port': 0, 'token': 'test-token', 'openai_models': [],
-                 'setup': {'nonce': 'n' * 16, 'expires': 9_999_999_999}}
-        (home / 'mixed-router-state.json').write_text(json.dumps(state))
-        listener = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+        listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.addCleanup(listener.close)
         listener.bind(('127.0.0.1', 0))
         listener.listen(5)
         port = listener.getsockname()[1]
+        # Inherited fd must be for the configured port (production launchd
+        # declares SockServiceName = state port); foreign fds fall back.
+        state = _state(home, port=port,
+                       setup={'nonce': 'n' * 16, 'expires': 9_999_999_999})
+        (home / 'mixed-router-state.json').write_text(json.dumps(state))
         server = Router(dict(state), fileno=listener.fileno(),
                         credentials=Credentials(dict(state), home, env={}))
         self.addCleanup(server.server_close)
-        thread = _threading.Thread(target=server.serve_forever, daemon=True)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         self.addCleanup(server.shutdown)
         with mock.patch('urllib.request.urlopen', _key_ok()):

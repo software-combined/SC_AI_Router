@@ -3,7 +3,9 @@ import json
 import os
 import sys
 from pathlib import Path
-from .capabilities import (OPENROUTER_MODELS, advertised_or_pinned, catalogue_patch, checked_level_entries)
+from .capabilities import OPENROUTER_MODELS, catalogue_patch
+from .clients.codex import capability_fields as codex_projection
+from .registry import by_slug
 
 
 def apply(catalog, live):
@@ -12,15 +14,13 @@ def apply(catalog, live):
         slug = model['slug']
         if slug not in OPENROUTER_MODELS:
             continue
-        patch = catalogue_patch(slug)
-        advertised = advertised_or_pinned(
-            slug, (live.get(slug, {}).get('reasoning') or {}).get('supported_efforts'))
-        patch['supported_reasoning_levels'] = checked_level_entries(
-            slug, advertised, model['default_reasoning_level'])
-        arch = (live.get(slug, {}).get('architecture') or {})
-        if 'input_modalities' in arch:
-            mods = arch['input_modalities']
-            patch['input_modalities'] = ['text', 'image'] if 'image' in mods else ['text']
+        # One Codex projection for merge and apply alike: the same snapshot
+        # yields identical capability fields on either path. Live entries
+        # render through pinned exclusions and defaults, never promotions.
+        model_obj = by_slug(slug)
+        patch = (codex_projection(model_obj, live.get(slug),
+                                    default=model.get('default_reasoning_level'))
+                 if model_obj is not None else catalogue_patch(slug))
         model.update(patch)
     return catalog
 

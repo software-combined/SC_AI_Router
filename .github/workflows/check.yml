@@ -15,6 +15,12 @@ concurrency:
 jobs:
   test:
     name: Test
+    # Single Ubuntu runner, static checks only: the billed test-suite
+    # minutes are unaffordable per-PR on this plan, and installs are
+    # proven on local hardware instead. The full suite
+    # (python -m unittest discover -s tests -t .) is a required local
+    # gate before every commit; CI keeps compile, source limits,
+    # registry/catalogue shape, and the two grep scans.
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -24,15 +30,19 @@ jobs:
           python-version: "3.14"
       - run: python -m compileall -q codex_router tools tests packaging
       - run: python tools/check_source_limits.py
-      - run: python -m codex_router.models check || python -m codex_router.models check --offline
+      - name: Model registry check (offline)
+        # Live-model check needs network; offline mode pins the registry
+        # shape deterministically on every runner.
+        run: python -m codex_router.models check --offline
       - name: Catalogue merge check
         run: |
-          python -m codex_router.catalogue --merge /tmp/ci-catalogue.json
-          python -m codex_router.catalogue --check /tmp/ci-catalogue.json
-      - run: python -m unittest discover -s tests -t . -v
+          python -m codex_router.catalogue --merge ./ci-catalogue.json
+          python -m codex_router.catalogue --check ./ci-catalogue.json
       - name: No request cap
+        shell: bash
         run: |
           if grep -rEn "request_cap|DEFAULT_REQUEST_CAP" codex_router tools tests packaging ; then echo "request cap removed by decision (docs/operations.md); do not reintroduce"; exit 1; fi
       - name: Secrets scan
+        shell: bash
         run: |
           if grep -rEn "sk-or-v1-[A-Za-z0-9]{20,}|Bearer [A-Za-z0-9._-]{30,}" --include='*.py' --include='*.md' --include='*.json' --include='*.toml' . ; then echo "possible secret committed"; exit 1; fi

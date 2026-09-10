@@ -8,13 +8,15 @@ from global_instructions import restore
 
 root = Path(os.environ.get('ROUTER_HOME', Path.home() / '.codex' / 'mixed-model-router'))
 receipt = json.loads((root / 'activation.json').read_text())
-config = Path(receipt['config_path'])
+clients = receipt.get('clients', {})
+entry = clients.get('codex', receipt)
+config = Path(entry['config_path'])
 before = config.read_text()
-block = receipt['inserted_block']
+block = entry['inserted_block']
 if before.count(block) != 1:
     raise SystemExit('Router settings changed; leaving configuration untouched for manual review.')
 updated = before.replace(block, '', 1)
-restore(receipt.get('global_instructions'))
+restore(entry.get('global_instructions'))
 temp = config.with_name('config.toml.mixed-router-restore')
 fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
 with os.fdopen(fd, 'w') as stream:

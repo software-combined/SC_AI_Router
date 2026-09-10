@@ -72,7 +72,14 @@ class ReleaseTests(unittest.TestCase):
                     'codex_router/openrouter_base_instructions.txt',
                     'packaging/router_launch.py',
                     'packaging/service.py',
-                    'packaging/updater.py'):
+                    'packaging/updater.py',
+                    'packaging/codex_config.py',
+                    'packaging/claude_config.py',
+                    'packaging/diagnostics.py',
+                     'packaging/runtime.lock', 'packaging/runtime_lock.py',
+                    'packaging/platforms/__init__.py',
+                    'packaging/platforms/darwin.py',
+                    'packaging/platforms/linux.py'):
             self.assertIn(dep, names, dep)
         extract = out / 'extracted'
         extract.mkdir()
@@ -110,6 +117,14 @@ class ReleaseTests(unittest.TestCase):
             [sys.executable, 'packaging/install.py', '--help'],
             cwd=str(extract), capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
+        # The extracted installer must reach its extracted diagnostics
+        # helper without checkout imports.
+        result = subprocess.run(
+            [sys.executable, 'packaging/install.py', '--status',
+             '--home', str(extract / 'no-home')],
+            cwd=str(extract), capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('not installed', result.stdout)
 
 
 if __name__ == '__main__':

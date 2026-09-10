@@ -12,14 +12,21 @@ registry / capabilities (leaves: model facts, stdlib + dataclasses only)
   |            |
 catalogue / models / live_refresh / apply_catalogue (client projections)
   |
-compaction / tool_adapter / discovered (request normalization)
+agent_handoffs / compaction / tool_adapter / discovered (request normalization)
   |
-providers (upstream adapters: target, credentials, response adaptation)
+providers (Responses adapters) + claude (Messages adapters)
   |
-router (HTTP transport: loopback auth, body limits, drain/inflight)
+protocols (explicit method/path dispatch table; no policy of its own)
+  |
+transport (Prepared, hop-header rules, raw stream, header relay)
+  |
+router (HTTP control: auth, body limits, drain/inflight, relay)
 ```
 
 Rules:
+
+`agent_handoffs.py` owns collaboration alias schemas and native-name restoration;
+`sse.py` owns shared event framing without provider-specific argument rewriting.
 
 1. `registry.py` imports stdlib only. Nothing in `codex_router/` may make it
    import a client, CLI, installer, or HTTP module. Client listing and config
@@ -47,12 +54,19 @@ Rules:
   `systemd_manager()` two-valued flag (Plan 056 extracts `packaging/platforms/`).
 - `packaging/service.py` mixes launchd/plist/feed/state helpers (Plan 056
   re-homes the launchd half with the darwin backend).
-- `codex_router/providers.py` mixes protocol shaping and upstream transport
-  (Plan 062 separates them).
+- `codex_router/providers.py` keeps Responses shaping plus failure
+  description; shared transport lives in `transport.py` and dispatch in
+  `protocols/` (Plan 062 landed the split; full protocol file moves remain
+  open).
 - `codex_router/catalogue.py` + `models.py` + `live_refresh.py` share client
-  projection duties (Plan 064 unifies normalization and projection).
-- Client activation and receipts live in the installer config-block path
-  (Plan 063 extracts them per client).
+  projection duties through `model_metadata.py` (pure normalization) and
+  `clients/` (capability projection, picker visibility).
+- Client activation lives in `packaging/codex_config.py`: the Codex block,
+  picker preservation, guidance, and receipts. `--client none` runs the
+  router lifecycle without touching client settings; absence of a client
+  selection in legacy state means Codex. Subscription policy is per client:
+  Responses follows `openai_mode`, Messages follows `anthropic_mode` when
+  set, else the legacy `openai_mode` fallback.
 
 ## Acceptance gates are distinct
 

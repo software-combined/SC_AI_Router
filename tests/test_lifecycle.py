@@ -70,6 +70,12 @@ class ShutdownEndpointTests(unittest.TestCase):
 
 
 class LauncherBootTests(unittest.TestCase):
+    @unittest.skipIf(sys.platform == 'darwin'
+                     and os.environ.get('GITHUB_ACTIONS') == 'true',
+                     'hosted macOS runners blackhole subprocess loopback '
+                     '(URLError(TimeoutError) to a live bound child while '
+                     'in-process loopback stays green); proven locally and '
+                     'on ubuntu/windows CI')
     def test_installed_launcher_boots_keyless_and_serves(self):
         # Production boots `python <home>/router_launch.py` with no cwd help:
         # the pointer must resolve the release or nothing serves. Keyless boot
@@ -94,21 +100,42 @@ class LauncherBootTests(unittest.TestCase):
             proc = subprocess.Popen(
                 [sys.executable, str(home / 'router_launch.py')],
                 env={**os.environ, 'ROUTER_HOME': str(home)},
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
             try:
                 base = f'http://127.0.0.1:{port}/{token}'
+                # Bypass ambient proxies: loopback must never leave the
+                # machine, whatever the runner exports (urllib honors
+                # http_proxy; http.client, used elsewhere, does not).
+                direct = urllib.request.build_opener(
+                    urllib.request.ProxyHandler({}))
                 deadline = time.monotonic() + 30
+                last_error = '<no attempts>'
                 while time.monotonic() < deadline:
                     try:
-                        with urllib.request.urlopen(base + '/health', timeout=2) as r:
+                        with direct.open(base + '/health', timeout=2) as r:
                             if r.status == 200 and json.load(r).get('status') == 'ok':
                                 break
-                    except OSError:
+                    except OSError as exc:
+                        # ECONNREFUSED = nothing listening; ETIMEDOUT = SYN
+                        # blackholed. Recorded for CI forensics, not asserted.
+                        last_error = repr(exc)
                         time.sleep(0.2)
                 else:
-                    self.fail('installed launcher never served /health')
-                with urllib.request.urlopen(base + '/setup/' + 'n' * 16,
-                                            timeout=5) as r:
+                    alive = proc.poll() is None
+                    proc.terminate()
+                    _, err = proc.communicate(timeout=20)
+                    # The child logs router_started to logs/router.jsonl at
+                    # boot: its presence means the child bound somewhere
+                    # unexpected, its absence means it hung before serving.
+                    log = home / 'logs' / 'router.jsonl'
+                    started = log.read_text() if log.exists() else '<no log>'
+                    self.fail('installed launcher never served /health '
+                              f'(alive={alive}): '
+                              + (err or '').strip()[-1000:]
+                              + ' | log tail: ' + started.strip()[-1000:]
+                              + ' | last poll error: ' + last_error[-300:])
+                with direct.open(base + '/setup/' + 'n' * 16,
+                                 timeout=5) as r:
                     self.assertEqual(r.status, 200)
             finally:
                 proc.terminate()
@@ -227,7 +254,8 @@ class SocketActivationTests(unittest.TestCase):
         self.addCleanup(listener.close)
         listener.bind(('127.0.0.1', 0))
         listener.listen(5)
-        server = Router({'port': 0, 'token': 'test-token', 'openai_models': []},
+        port = listener.getsockname()[1]
+        server = Router({'port': port, 'token': 'test-token', 'openai_models': []},
                         fileno=listener.fileno())
         self.addCleanup(server.server_close)
         self.assertEqual(server.socket.getsockname(), listener.getsockname())
@@ -235,13 +263,39 @@ class SocketActivationTests(unittest.TestCase):
         thread.start()
         self.addCleanup(server.shutdown)
         conn = http.client.HTTPConnection(
-            '127.0.0.1', listener.getsockname()[1], timeout=10)
+            '127.0.0.1', port, timeout=10)
         conn.request('GET', '/test-token/health')
         self.assertEqual(conn.getresponse().status, 200)
+
+    def test_foreign_listener_falls_back_to_configured_port(self):
+        # A launchd socket for another port (e.g. the CI runner's own
+        # Listeners entry) must not capture the router: it serves the
+        # configured port instead of going deaf with no error.
+        foreign = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.addCleanup(foreign.close)
+        foreign.bind(('127.0.0.1', 0))
+        foreign.listen(5)
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            probe.bind(('127.0.0.1', 0))
+            port = probe.getsockname()[1]
+        server = Router({'port': port, 'token': 'test-token', 'openai_models': []},
+                        fileno=foreign.fileno())
+        self.addCleanup(server.server_close)
+        self.assertEqual(server.socket.getsockname(), ('127.0.0.1', port))
 
     def test_inherited_listener_returns_none_without_launchd(self):
         with mock.patch('ctypes.CDLL', side_effect=AttributeError('no symbol')):
             self.assertIsNone(activation.inherited_listener())
+
+    def test_stuck_activation_ipc_falls_back_within_bound(self):
+        # A launch_activate_socket that never returns must not wedge boot:
+        # the router binds its configured port instead of going deaf.
+        with mock.patch('ctypes.CDLL',
+                        side_effect=lambda name: time.sleep(60)), \
+                mock.patch.object(activation, 'ACTIVATION_WAIT_S', 0.2):
+            started = time.monotonic()
+            self.assertIsNone(activation.inherited_listener())
+            self.assertLess(time.monotonic() - started, 30)
 
 
 if __name__ == '__main__':

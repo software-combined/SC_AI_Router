@@ -94,11 +94,12 @@ class GlobalInstructionsTests(unittest.TestCase):
             _install(self, tmp, home, '1.0.1')
             self.assertEqual(path.read_text(), BLOCK)
             receipt = json.loads((home / 'activation.json').read_text())
-            self.assertEqual(receipt['global_instructions']['path'], str(path.resolve()))
+            rules = receipt['clients']['codex']['global_instructions']
+            self.assertEqual(rules['path'], str(path.resolve()))
             for model in merge({'models': []})['models']:
                 self.assertNotIn('## Subagents and tool discovery',
                                  model['model_messages']['instructions_template'])
-            restore(receipt['global_instructions'])
+            restore(rules)
             self.assertEqual(path.read_text(), '')
 
     def test_disable_removes_owned_rules_and_preserves_other_settings(self):

@@ -10,6 +10,7 @@ from copy import deepcopy
 from .capabilities import has_recursive_refs
 from .discovered import recall
 from .registry import by_slug
+from . import agent_handoffs, sse
 SEARCH_NAME = 'codex_client_tool_search'
 
 def _quirk(payload, name):
@@ -200,6 +201,8 @@ class ToolEvents:
         kind = self.names[tool_key(item)]
         if isinstance(kind, dict):
             item.update(namespace=kind['namespace'], name=kind['name'])
+            if kind['namespace'] == agent_handoffs.PLAINTEXT_NAMESPACE:
+                item = agent_handoffs.restore_item(item, {kind['name']})
             kind = kind['kind']
         if kind == 'identity':
             item['arguments'] = arguments
@@ -280,18 +283,10 @@ def _completed_model(data):
 
 def stream_events(response, names, notes=None):
     adapter = ToolEvents(names, notes)
-    block = []
-    for line in response:
-        if line not in (b'\n', b'\r\n'):
-            block.append(line)
-            continue
-        data = b''.join(line[5:].lstrip() for line in block if line.startswith(b'data:')).strip()
+    for frame, data in sse.blocks(response):
         if data and data != b'[DONE]':
             event = adapter.event(json.loads(data))
             if event is not None:
                 yield b'data: ' + json.dumps(event).encode() + b'\n\n'
         else:
-            yield b''.join(block) + b'\n'
-        block = []
-    if block:
-        raise ValueError('Incomplete upstream SSE event')
+            yield frame

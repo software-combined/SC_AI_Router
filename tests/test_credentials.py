@@ -46,6 +46,18 @@ class CredentialLookupTests(unittest.TestCase):
         with self.assertRaises(PermissionError):
             self.creds().openrouter_key()
 
+    def test_windows_widened_acl_is_refused(self):
+        # The read path keeps the POSIX PermissionError contract so the
+        # request handler maps it to 401 CREDENTIAL_PERMISSION.
+        import codex_router.credentials as cred_mod
+        import codex_router.winacl as winacl_mod
+        self._key_file('k-file\n')
+        with mock.patch.object(cred_mod, '_ON_WINDOWS', True), \
+                mock.patch.object(winacl_mod, 'check',
+                                   side_effect=SystemExit('readable by X')):
+            with self.assertRaisesRegex(PermissionError, 'readable by X'):
+                self.creds().openrouter_key()
+
     def test_empty_key_file_is_lookup_error(self):
         self._key_file('\n')
         with self.assertRaises(LookupError):

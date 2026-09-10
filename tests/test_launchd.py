@@ -16,6 +16,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tests._platform import unix_only
 from tests.fakes import LaunchdDomain
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -50,6 +51,7 @@ def _agents(tmp):
     return agents
 
 
+@unix_only
 class UnloadTests(unittest.TestCase):
     def test_waits_for_the_label_to_leave_the_domain(self):
         # bootout reports success on the first call; the label only disappears
@@ -69,6 +71,7 @@ class UnloadTests(unittest.TestCase):
                                         sleep=lambda *_: None))
 
 
+@unix_only
 class LoadTests(unittest.TestCase):
     def test_retries_a_bootstrap_that_lost_the_teardown_race(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -95,6 +98,7 @@ class LoadTests(unittest.TestCase):
                              'a loaded job must not be bootstrapped again')
 
 
+@unix_only
 class ReloadTests(unittest.TestCase):
     def test_never_bootstraps_while_the_old_job_is_still_loaded(self):
         # The defect in one assertion: a bootstrap issued against a label that
@@ -122,6 +126,7 @@ class ReloadTests(unittest.TestCase):
                              'a failed unload must not proceed to bootstrap')
 
 
+@unix_only
 class LoadedCommandTests(unittest.TestCase):
     def test_reads_the_whole_in_memory_command(self):
         # Reading argv[0] alone is what hid a changed launcher path: the
@@ -158,6 +163,7 @@ class LoadedCommandTests(unittest.TestCase):
                              'a rewritten plist must not change the loaded command')
 
 
+@unix_only
 class UpdateLauncherTests(unittest.TestCase):
     """The updater entry point must resolve `current` at exec time."""
 
@@ -245,6 +251,7 @@ class InterpreterIdentityTests(unittest.TestCase):
             self.assertFalse(install_mod.same_interpreter(None, str(real)))
 
 
+@unix_only
 class EnsureServingTests(unittest.TestCase):
     """The installer must never exit leaving no loaded router behind."""
 
@@ -268,6 +275,44 @@ class EnsureServingTests(unittest.TestCase):
             self.assertTrue([c for c in calls if c[1] == 'bootstrap'],
                             'an unloaded job must be bootstrapped, not just TERMed')
             self.assertTrue(domain.loaded(LABEL))
+
+
+
+class SupervisorLogRotationTests(unittest.TestCase):
+    """Bounded retention for supervisor-captured logs (Plan 058 Stage 5a).
+
+    router.jsonl already rotates via RotatingFileHandler; launchd.log and
+    update.log were unbounded supervisor sinks. rotate_log bounds them with
+    rotate-on-start semantics without losing the newest startup failures.
+    """
+
+    def _service(self):
+        return _load('router_service_rotate_under_test', 'service.py')
+
+    def test_under_limit_log_is_untouched(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / 'update.log'
+            target.write_bytes(b'x' * 100)
+            self._service().rotate_log(target, limit_bytes=1024, backups=2)
+            self.assertEqual(target.read_bytes(), b'x' * 100)
+            self.assertFalse(Path(str(target) + '.1').exists())
+
+    def test_missing_log_is_a_no_op(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / 'missing.log'
+            self._service().rotate_log(target, limit_bytes=10, backups=2)
+            self.assertFalse(target.exists())
+
+    def test_over_limit_log_rotates_keeping_newest_first(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / 'launchd.log'
+            target.write_bytes(b'new-failure-traceback')
+            first = Path(str(target) + '.1')
+            first.write_bytes(b'older-output')
+            self._service().rotate_log(target, limit_bytes=10, backups=2)
+            self.assertEqual(Path(str(target) + '.2').read_bytes(), b'older-output')
+            self.assertEqual(first.read_bytes(), b'new-failure-traceback')
+            self.assertEqual(target.read_bytes(), b'')
 
 
 if __name__ == '__main__':
