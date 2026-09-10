@@ -135,6 +135,11 @@ def prepare_tools(payload):
             tool['name'] = wire
         tool.pop('defer_loading', None)
         flattened.append(tool)
+    if _quirk(payload, 'web_search') is False:
+        # No web-search capability upstream: OpenRouter aborts the turn with
+        # 'Server tool request failed' when the client's web_search server
+        # tool rides along (2026-09-10, deepseek-v4.1-flash).
+        flattened = [tool for tool in flattened if tool.get('type') != 'web_search']
     payload['tools'] = flattened
     ceiling = _quirk(payload, 'max_tools')
     if ceiling and len(flattened) > ceiling:
