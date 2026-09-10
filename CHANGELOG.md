@@ -53,7 +53,8 @@
   offline proofs only): per-user logon router task plus 15-minute updater
   task, pythonw.exe router with python.exe updater, graceful /shutdown
   restart, and registration readback that names group-policy refusals.
-  The installer still refuses Windows until real-machine acceptance.
+  The backend is now wired: the installer routes Windows to it instead
+  of refusing. Staff rollout stays gated on real-machine acceptance.
 
 - Pin the private CPython 3.14 runtime: new `packaging/runtime.lock`
   names one install-only distribution per qualified target with validation

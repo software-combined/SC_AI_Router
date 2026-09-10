@@ -96,17 +96,14 @@ wait_version = _svc.wait_version
 ensure_serving = _svc.ensure_serving
 
 
-SUPPORTED_PLATFORMS = ('darwin', 'linux')
+SUPPORTED_PLATFORMS = ('darwin', 'linux', 'win32')
 
 
 def require_supported_platform():
-    # Plan 057 Stage 1: refuse before any router home or bundle work. Without
-    # this, PLATFORM == 'win32' falls through every `if manager:` pair into
-    # the launchd path and dies on os.getuid() after a partial install.
     if PLATFORM not in SUPPORTED_PLATFORMS:
         raise SystemExit(
-            'Windows is not supported by this installer yet; '
-            'no files were changed. See plans/057-windows-install-and-service-support.md.')
+            f'Platform {PLATFORM} is not supported by this installer yet; '
+            'no files were changed.')
 
 
 def platform_backend():
