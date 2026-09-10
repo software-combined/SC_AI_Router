@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.10 (unreleased)
+## 0.6.11
 
 - Attribute context refusals and estimate the full billable request:
   the pre-flight estimate now counts serialized tools and instructions
