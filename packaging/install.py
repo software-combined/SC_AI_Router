@@ -32,6 +32,7 @@ _platforms = _svc.load(
     'router_platforms', Path(__file__).resolve().parent / 'platforms' / '__init__.py')
 _codex_config = _svc.load(
     'router_codex_config', Path(__file__).resolve().parent / 'codex_config.py')
+_codex_config._atomic_write = _svc.load('router_atomic_write', Path(__file__).resolve().parent / 'atomic_write.py')
 _claude_config = _svc.load(
     'router_claude_config', Path(__file__).resolve().parent / 'claude_config.py')
 _desktop_config = _svc.load(

@@ -100,6 +100,7 @@ class ReleaseTests(unittest.TestCase):
                     'packaging/router_launch.py',
                     'packaging/service.py',
                     'packaging/feed.py',
+                    'packaging/atomic_write.py',
                     'packaging/updater.py',
                     'packaging/codex_config.py',
                     'packaging/claude_config.py',

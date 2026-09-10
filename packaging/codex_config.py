@@ -13,6 +13,18 @@ from pathlib import Path
 BEGIN = '# BEGIN local mixed model picker'
 END = '# END local mixed model picker'
 
+# Atomic text writer, injected by install.py via service.load() (Plan 123):
+# no spec_from_file_location copy lives here, so direct spec-loads of this
+# file (portability/receipt tests) only need it when replacing blocks.
+_atomic_write = None
+
+
+def _replace_text(path, text):
+    """Atomic sibling write through the injected helper."""
+    if _atomic_write is None:  # pragma: no cover - install.py always injects
+        raise RuntimeError('atomic writer not injected; load via install.py')
+    _atomic_write.replace_text(path, text)
+
 
 def build_block(home, state, mode):
     """Managed Codex config block for this install and subscription mode."""
@@ -75,9 +87,7 @@ def replace_config_block(config_path, block, previous_block=None):
     home = config_path.parent
     if not config_path.exists():
         home.mkdir(parents=True, exist_ok=True)
-    fd = os.open(config_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, 'w') as stream:
-        stream.write(after)
+    _replace_text(config_path, after)
     try:
         os.chmod(config_path, 0o600)
     except OSError:
