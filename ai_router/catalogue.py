@@ -11,6 +11,7 @@ from .capabilities import catalogue_patch, describe
 from .clients.codex import capability_fields as codex_projection
 from .clients import models_for
 from .registry import MODELS, picker_key
+from .retired_slugs import SUBSCRIPTION as RETIRED_SUBSCRIPTION_SLUGS
 from .subscription_roster import SUBSCRIPTION_SLUGS
 
 OPENROUTER_TEMPLATE = {
@@ -67,10 +68,9 @@ RETIRED_SLUGS = {'anthropic/claude-opus-5', 'anthropic/claude-fable-5.1',
                  'deepseek/deepseek-v4-flash-0731',
                  '~deepseek/deepseek-v4-flash-latest',
                  'deepseek/deepseek-v4-flash-vision-exp'}  # DeepSeek keeps Pro 0813 + V4.1 Flash; alias and Vision rows retired
-# Subscription roster entries withdrawn from the picker. merge() drops these
-# from roster, catalogue and state-derived seeding alike, so a scheduled
-# update repairs machines that still carry the row.
-RETIRED_SUBSCRIPTION_SLUGS = frozenset({'gpt-reserve'})
+
+# Retired subscription slugs live in retired_slugs.py (Plan 100 single source,
+# shared with the installer prune); merge() drops them from stale machines.
 
 # Native reasoning levels per subscription slug (2026-09-07 owner-Mac
 # models_cache). Fresh installs seed these so the effort picker works.
