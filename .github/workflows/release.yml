@@ -11,6 +11,12 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  AWS_REGION: ap-southeast-2
+  FEED_STACK: scg-router-feed
+  FEED_BUCKET: scg-router-feed-651116729473-apse2
+  FEED_ROLE: arn:aws:iam::651116729473:role/scg-router-feed-publisher
+
 jobs:
   release:
     name: Build and publish
@@ -18,6 +24,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: write
+      id-token: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
@@ -40,14 +47,36 @@ jobs:
           fi
           python packaging/release.py --out dist --build "$GITHUB_RUN_NUMBER" --sha "$GITHUB_SHA" --channel "$CHANNEL"
           echo "CHANNEL=$CHANNEL" >> "$GITHUB_ENV"
+      - name: Configure feed publishing credentials
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c
+        with:
+          role-to-assume: ${{ env.FEED_ROLE }}
+          role-session-name: router-feed-publish
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Resolve the feed distribution
+        run: |
+          DIST_ID="$(aws cloudformation describe-stacks --stack-name "$FEED_STACK" \
+            --query "Stacks[0].Outputs[?OutputKey=='DistributionId'].OutputValue" \
+            --output text)"
+          if [ -z "$DIST_ID" ] || [ "$DIST_ID" = "None" ]; then
+            echo "no DistributionId output on $FEED_STACK"; exit 1
+          fi
+          echo "FEED_DISTRIBUTION_ID=$DIST_ID" >> "$GITHUB_ENV"
+      - name: Publish to the update feed
+        env:
+          ROUTER_FEED_EMBED_TOKEN: ${{ vars.ROUTER_FEED_EMBED_TOKEN }}
+        run: |
+          python tools/publish_feed.py --dist dist --channel "$CHANNEL" \
+            --bucket "$FEED_BUCKET" --distribution-id "$FEED_DISTRIBUTION_ID"
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION=$(python -c "import json;print(json.load(open('dist/latest.json'))['version'])")
           if [ "$CHANNEL" = stable ]; then
+            cp dist/release-latest.json dist/latest.json
             gh release create "v$VERSION" dist/*.tar.gz dist/latest.json --generate-notes --latest
           else
-            cp dist/latest.json dist/latest-beta.json
+            cp dist/release-latest.json dist/latest-beta.json
             gh release create "v$VERSION-beta" dist/*.tar.gz dist/latest-beta.json --prerelease --generate-notes
           fi
