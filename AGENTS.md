@@ -28,8 +28,12 @@ plan that will move them.
 
 Modules 250 lines soft / 400 hard, entrypoints and tools 400/700, tests
 300/500. Checked by `python3.14 tools/check_source_limits.py`. Keep the
-router and provider modules small; a third provider is a new class, never a
-new branch in the request path.
+router and provider modules small. An upstream is one entry in
+`ai_router/provider_defs.py` (host, endpoint prefixes, key location,
+catalogue, failure dialect) consumed by adapter classes parameterized with
+that definition; a provider with a different wire format is a new adapter
+class, never a new branch in the request path. No provider host, key name,
+or catalogue URL literal belongs anywhere else under `ai_router/`.
 
 ## 4. Security
 
@@ -82,7 +86,9 @@ Record both client versions in `docs/compatibility.md`.
 ## 8. Model naming convention
 
 Picker labels read `<Vendor>: <Model> <Version?>` (e.g. `Z.ai: GLM 5.3 Flash`).
-`display_name` is stored fully qualified with the ` · OpenRouter` suffix; the
+`display_name` is stored fully qualified with a ` · <Provider label>` suffix
+(` · OpenRouter` for the built-in external provider, from
+`provider_defs.label_for`); the
 prefix always equals the row's `vendor` field, with one redundant leading vendor
 word dropped (`DeepSeek: DeepSeek V4 ...` becomes `DeepSeek: V4 ...`). Tilde
 alias rows track with `Latest`, never a pinned snapshot; pinned rows keep any

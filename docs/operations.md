@@ -288,7 +288,8 @@ see [Linux upgrade and verification](linux-upgrade.md).
 `~/.codex/mixed-model-router/` holds `current` (pointer to the live
 release), `releases/` (current plus two priors for rollback depth), `logs/`,
 `mixed-router-state.json` (port, token and feature flags, mode 600),
-`activation.json` (config receipt), and `openrouter.key` (mode 600).
+`activation.json` (config receipt), and one owner-only key file per
+external provider (`openrouter.key` by default, mode 600).
 The code may live anywhere; only this directory matters at runtime.
 
 ## Verification after a Codex upgrade
@@ -341,6 +342,12 @@ leaves the prior entry intact.
 
 Owner decision 2026-09-09: IT issues one OpenRouter key per portco user;
 there is no self-service provisioning. The flow per user:
+
+One key file per external provider (Plan 139): the installer and the setup
+window name the provider whose key they are collecting, and a second
+provider's key never overwrites the first. `--status` reports each
+provider's key under `providers`, with the legacy `key_present` /
+`key_usable` pair still describing the default provider (OpenRouter).
 
 1. IT creates the key in the OpenRouter dashboard with a monthly allowance
    and hands it to the user over an existing trusted channel (never commit

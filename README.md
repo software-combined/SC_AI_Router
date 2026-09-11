@@ -228,6 +228,21 @@ OpenAI models use the ChatGPT subscription. OpenRouter models bill the
 API key per request. There is no local spend cap; watch usage in the
 OpenRouter dashboard.
 
+## Providers
+
+One definition per upstream lives in `ai_router/provider_defs.py`: host,
+endpoint prefixes, where its key resolves from, its live model catalogue,
+its key-info endpoint, and its failure dialect. OpenRouter is the built-in
+external provider; `openai` (the ChatGPT backend) and `anthropic`
+(`api.anthropic.com`) are the subscription definitions that carry no router
+key.
+
+Several external providers can serve at once: each keeps its own owner-only
+key file, its own picker label (`Vendor: Model · <Label>`), and its own
+fail-closed state, so one missing or rejected key never stops the others.
+Adding one is a table entry plus registry rows, and the boundary test keeps
+provider host and key names out of the rest of the runtime.
+
 ## Without a ChatGPT subscription
 
 Install with `--openai-mode none --setup`: a native window asks for one
@@ -322,6 +337,7 @@ directory at an idle boundary:
 `ai_router/feed_verify.py`,
 `ai_router/candidate.py`,
 `ai_router/setup.py`,
+`ai_router/key_store.py`,
 `ai_router/setup_page.py`,
 `ai_router/key_dialog.py`,
 `ai_router/key_prompt.py`,
@@ -345,6 +361,8 @@ directory at an idle boundary:
 `ai_router/clients/codex.py`,
 `ai_router/transport.py`,
 `ai_router/subscription_fallback.py`,
+`ai_router/provider_defs.py`,
+`ai_router/upstream.py`,
 `ai_router/protocols/__init__.py`,
 `ai_router/protocols/responses.py`,
 `ai_router/protocols/messages.py`,

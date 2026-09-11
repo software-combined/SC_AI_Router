@@ -1,4 +1,4 @@
-"""Answer refused ChatGPT helper turns from the OpenRouter twin row.
+"""Answer refused ChatGPT helper turns from the external twin row.
 
 Codex desktop generates thread titles, descriptions, summaries and title
 reconsiderations in their own helper threads pinned to the subscription
@@ -9,16 +9,16 @@ upstream answers 429 for every helper turn and the client stores a slice
 of the prompt as the title instead.
 
 With the `openai_helper_fallback` state flag on, the router answers those
-helper turns from the registry's OpenRouter twin row (`openai/<slug>`) and
+helper turns from the registry's external twin row (`openai/<slug>`) and
 relays that response. Ordinary turns keep today's refusal. The flag is off
-by default: the fallback bills the OpenRouter key and sends the helper
-prompt to OpenRouter.
+by default: the fallback bills that provider's key and sends the helper
+prompt to it.
 """
 import json
 
-from . import errors
+from . import errors, provider_defs
 from .capabilities import has_images
-from .providers import OpenRouterProvider
+from .providers import ExternalResponsesProvider
 from .registry import by_slug
 from .runtime import log_event
 
@@ -45,13 +45,16 @@ def helper_turn(headers):
 
 
 def twin_slug(model):
-    """Registry slug of the OpenRouter twin for a subscription slug, else None."""
+    """Registry slug of the external twin for a subscription slug, else None."""
     entry = by_slug(TWIN_PREFIX + model) if isinstance(model, str) else None
-    return entry.slug if entry is not None and entry.provider == 'openrouter' else None
+    if entry is None or not provider_defs.is_external(entry.provider):
+        return None
+    defn = provider_defs.get(entry.provider)
+    return entry.slug if defn.serves(provider_defs.RESPONSES) else None
 
 
 class Plan:
-    """OpenRouter twin prepared lazily, only once upstream actually refuses."""
+    """External twin prepared lazily, only once upstream actually refuses."""
 
     __slots__ = ('slug', 'path', 'payload', 'raw_body', 'headers', 'credentials')
 
@@ -63,8 +66,10 @@ class Plan:
     def prepared(self):
         """Prepared request for the twin row; raises exactly as prepare() does."""
         payload = dict(self.payload, model=self.slug)
-        return OpenRouterProvider().prepare(self.slug, self.path, payload,
-                                            self.raw_body, self.headers, self.credentials)
+        defn = provider_defs.get(by_slug(self.slug).provider)
+        return ExternalResponsesProvider(defn).prepare(
+            self.slug, self.path, payload, self.raw_body, self.headers,
+            self.credentials)
 
 
 def plan(state, prepared, path, payload, raw_body, headers, credentials):
@@ -77,15 +82,15 @@ def plan(state, prepared, path, payload, raw_body, headers, credentials):
     """
     if not state.get('openai_helper_fallback') or path != '/responses':
         return None
-    if prepared.provider != 'openai-subscription' or payload.get('tools'):
+    if prepared.provider != provider_defs.OPENAI.id or payload.get('tools'):
         return None
     if not helper_turn(headers):
         return None
     slug = twin_slug(payload.get('model'))
     if slug is None:
         return None
-    # Plan 068: the twin is an OpenRouter row, so the portco allowlist gates
-    # this redispatch exactly as it gates a directly requested OpenRouter row.
+    # Plan 068: the twin is an external row, so the portco allowlist gates
+    # this redispatch exactly as it gates a directly requested external row.
     allowed = state.get('allowed_models')
     if allowed is not None and slug not in allowed:
         return None
@@ -116,11 +121,15 @@ def refused(handler, prepared, retry_after, metrics, started):
               fallback_model=fallback.slug, path=fallback.path)
     fields = ('request_bytes', 'stream', 'reasoning_effort', 'tool_definitions',
               'read_ms', 'prepare_ms', 'local_prepare_ms')
-    # Fresh metrics: attempt one's upstream timings belong to the 429.
+    # Fresh metrics: attempt one's upstream timings belong to the 429. The
+    # protocol rides along so a mid-stream failure still emits the terminal
+    # frame (transport.emit_terminal_failure keys on it, Plan 141).
+    defn = provider_defs.get(by_slug(fallback.slug).provider)
     twin_metrics = {k: metrics[k] for k in fields if k in metrics}
-    twin_metrics.update(provider='openrouter', model=fallback.slug,
-                        path=fallback.path, helper_fallback=True)
+    twin_metrics.update(provider=defn.id, model=fallback.slug,
+                        path=fallback.path, helper_fallback=True,
+                        protocol=provider_defs.RESPONSES)
     # The owned-request slot still covers this hand-off; relay no longer
     # takes or releases a slot of its own.
-    return handler.relay(OpenRouterProvider(), twin, twin_metrics, started,
+    return handler.relay(ExternalResponsesProvider(defn), twin, twin_metrics, started,
                          has_images(fallback.payload.get('input')))

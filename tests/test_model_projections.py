@@ -20,7 +20,7 @@ def _snapshot(slug='meta/muse-spark-1.3'):
 class ModelProjectionTests(unittest.TestCase):
     def test_merge_and_apply_agree_on_modalities(self):
         model = _snapshot()
-        merged = catalogue.openrouter_entry(model)
+        merged = catalogue.external_entry(model)
         catalog = {'models': [dict(merged, slug=model.slug,
                                    default_reasoning_level=model.default_reasoning)]}
         live = {model.slug: {'architecture': {'input_modalities': list(model.modalities)},
@@ -30,7 +30,7 @@ class ModelProjectionTests(unittest.TestCase):
 
     def test_merge_and_apply_agree_on_reasoning_levels(self):
         model = _snapshot()
-        merged = catalogue.openrouter_entry(model)
+        merged = catalogue.external_entry(model)
         catalog = {'models': [dict(merged, slug=model.slug,
                                    default_reasoning_level=model.default_reasoning)]}
         live = {model.slug: {'architecture': {'input_modalities': list(model.modalities)},
@@ -42,7 +42,7 @@ class ModelProjectionTests(unittest.TestCase):
 
     def test_subscription_rows_and_unrelated_fields_preserved(self):
         model = _snapshot()
-        merged = catalogue.openrouter_entry(model)
+        merged = catalogue.external_entry(model)
         before = dict(merged, slug=model.slug,
                       default_reasoning_level=model.default_reasoning,
                       custom_note='keep me')

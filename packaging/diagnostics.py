@@ -50,7 +50,7 @@ _winacl = _svc.load(
 
 
 def _key_private(key_file):
-    """Owner-only gate mirroring credentials.openrouter_key() precedence.
+    """Owner-only gate mirroring credentials.key_for() precedence.
 
     POSIX checks mode bits; Windows defers to the icacls owner-only check
     (st_mode carries no ACL meaning on NTFS). A failed Windows check means
@@ -66,6 +66,16 @@ def _key_private(key_file):
         return not (key_file.stat().st_mode & 0o077)
     except OSError:
         return False
+
+
+def _provider_defs():
+    """The shared per-provider key walk (Plan 141), spec-loaded for 3.9."""
+    module = _svc.load(
+        'router_provider_keys', Path(__file__).resolve().parent / 'provider_keys.py')
+    module.bind(_svc.load(
+        'router_provider_defs',
+        Path(__file__).resolve().parents[1] / 'ai_router' / 'provider_defs.py'))
+    return module
 
 
 def bind(**overrides):
@@ -142,34 +152,12 @@ def do_status(args):
             body = None
         serving = bool(body and body.get('status') == 'ok'
                        and body.get('version') == version)
-    key_file = home / 'openrouter.key'
-    # Mirror credentials.openrouter_key() precedence without storing secrets:
-    # env wins; else an existing key file decides by non-blank content and
-    # owner-only mode; opencode_auth counts only when no key file shadows
-    # it and it actually carries an openrouter api key.
-    try:
-        key_exists = key_file.is_file()
-    except OSError:
-        key_exists = False
-    try:
-        key_text = key_file.read_text() if key_exists else ''
-    except OSError:
-        key_text = ''
-    key_private = _key_private(key_file) if key_exists else False
-    auth_path = (state or {}).get('opencode_auth') if isinstance(state, dict) else None
-    auth_key = ''
-    if isinstance(auth_path, str) and auth_path:
-        try:
-            auth_doc = json.loads(Path(auth_path).read_text())
-            auth_entry = auth_doc.get('openrouter') if isinstance(auth_doc, dict) else None
-            if isinstance(auth_entry, dict) and auth_entry.get('type') == 'api':
-                auth_key = str(auth_entry.get('key') or '').strip()
-        except (OSError, ValueError, AttributeError):
-            auth_key = ''
-    present = bool(os.environ.get('OPENROUTER_API_KEY', '').strip()
-                   or key_text.strip() or auth_key)
-    usable = bool(os.environ.get('OPENROUTER_API_KEY', '').strip()
-                  or (key_text.strip() and key_private) or auth_key)
+    keys = _provider_defs()
+    defs = keys.external_defs()
+    per_provider = {defn.id: keys.key_state(home, state, os.environ, defn, _key_private)
+                    for defn in defs}
+    default = keys.default_id()
+    present, usable = per_provider.get(default, (False, False))
     def _client(entry):
         if not isinstance(entry, dict):
             return {'attached': False, 'config_path': ''}
@@ -188,6 +176,9 @@ def do_status(args):
     clients = {name: _client(entry) for name, entry in receipt_clients.items()}
     doc = {'installed': installed, 'version': version if installed else None,
            'serving': serving, 'key_present': present, 'key_usable': usable,
+           'providers': {pid: {'key_present': state_pair[0],
+                               'key_usable': state_pair[1]}
+                         for pid, state_pair in per_provider.items()},
            'setup_pending': bool(isinstance(state, dict)
                                 and isinstance(state.get('setup'), dict)
                                 and isinstance(state['setup'].get('expires'), (int, float))

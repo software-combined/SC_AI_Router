@@ -11,11 +11,18 @@ from types import SimpleNamespace
 
 from ai_router import providers
 
+
+def _external_responses():
+    """OpenRouter Codes adapter; Plan 141 makes adapters per-provider."""
+    from ai_router import provider_defs as _defs
+    return providers.ExternalResponsesProvider(_defs.OPENROUTER)
+
+
 MARKER = 'SYNTH-OPAQUE-066-4b1d'
 
 
 def _stub_credentials(key='router-secret'):
-    return SimpleNamespace(openrouter_key=lambda: key)
+    return SimpleNamespace(key_for=lambda _pid=None: key)
 
 
 def _opaque_item(marker=MARKER):
@@ -25,7 +32,7 @@ def _opaque_item(marker=MARKER):
 
 
 def _prepare(items):
-    provider = providers.OpenRouterProvider()
+    provider = _external_responses()
     return provider.prepare('z-ai/glm-5.3', '/responses',
         {'model': 'z-ai/glm-5.3', 'input': items}, b'raw', {}, _stub_credentials())
 

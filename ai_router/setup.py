@@ -18,13 +18,12 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import parse_qsl
 
-from . import key_prompt, setup_page
+from . import key_prompt, key_store, provider_defs, setup_page
 
 _ON_WINDOWS = os.name == 'nt'
 
 SETUP_TTL_S = 15 * 60
 FORM_LIMIT = 4096
-KEY_URL = 'https://openrouter.ai/api/v1/auth/key'
 
 
 def setup_pending(state, now=None):
@@ -56,65 +55,13 @@ def same_origin(origin, port):
     return origin is None or origin == f'http://127.0.0.1:{port}'
 
 
-class KeyRejected(ValueError):
-    """check_key refusal carrying the HTTP status; 401/403 means a dead key."""
-    def __init__(self, message, status=None):
-        super().__init__(message)
-        self.status = status
-
-
-def check_key(key, _urlopen=urllib.request.urlopen):
-    """(label, limit, usage) for a live key; KeyRejected when refused, OSError when down."""
-    req = urllib.request.Request(KEY_URL, headers={'Authorization': 'Bearer ' + key})
-    try:
-        with _urlopen(req, timeout=20) as response:
-            payload = json.load(response)
-    except urllib.error.HTTPError as exc:
-        raise KeyRejected('OpenRouter rejected the key', status=exc.code)
-    data = payload.get('data') if isinstance(payload, dict) else None
-    if not isinstance(data, dict):
-        raise KeyRejected('OpenRouter returned an unexpected key response')
-    return (data.get('label') or 'key', data.get('limit'), data.get('usage'))
-
-
-class KeyExists(OSError):
-    """The key file holds a live key; rotation needs explicit deletion."""
-
-
-def _claim_truncated(key_path):
-    """Open an existing key file for overwrite, keeping owner-only mode."""
-    fd = os.open(key_path, os.O_WRONLY | os.O_TRUNC, 0o600)
-    try:
-        os.fchmod(fd, 0o600)
-    except OSError:
-        pass
-    return fd
-
-
-def store_key(home, key, _check_live=None):
-    """Write an OpenRouter key through the one shared writer."""
-    key_path = Path(home) / 'openrouter.key'
-    try:
-        return os.open(key_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    except FileExistsError:
-        pass
-    try:
-        stored = key_path.read_bytes().strip()
-    except OSError:
-        raise OSError('could not store the key')
-    if not stored:
-        return _claim_truncated(key_path)
-    if _check_live is not None and _check_live(stored.decode('utf-8', 'replace')) is False:
-        return _claim_truncated(key_path)
-    raise KeyExists('a key file already exists; delete it to rotate keys')
-
-
 def handle_setup(state, home, nonce, is_post, form, _urlopen=None, _now=None):
     """(status, html body) for an already-routed setup request."""
+    provider_id = key_store.window_provider(state)
     if not valid_nonce(state, nonce, _now):
         return 404, setup_page.not_found()
     if not is_post:
-        return 200, setup_page.form(nonce)
+        return 200, setup_page.form(nonce, provider_id)
     status, result = _submit(state, home, form, _urlopen)
     if result.get('ok'):
         return status, setup_page.done(result.get('label'), result.get('limit'),
@@ -122,7 +69,7 @@ def handle_setup(state, home, nonce, is_post, form, _urlopen=None, _now=None):
                                        result.get('mode') or state.get('openai_mode', ''),
                                        result.get('starter', ''),
                                        state.get('clients', 'codex'))
-    return status, setup_page.form(nonce, result.get('error'))
+    return status, setup_page.form(nonce, provider_id, result.get('error'))
 
 
 def handle_setup_json(state, home, nonce, form, _urlopen=None, _now=None):
@@ -136,6 +83,7 @@ def handle_setup_json(state, home, nonce, form, _urlopen=None, _now=None):
 def _submit(state, home, form, _urlopen):
     """(status, result) for a setup POST: one writer, both renderers."""
     _fetch = _urlopen or urllib.request.urlopen
+    provider_id = key_store.window_provider(state)
     fields = dict(parse_qsl(form.decode('utf-8', 'replace'), keep_blank_values=True))
     key = fields.get('key', '').strip()
     # The native popup only sends the choices it actually asked; the HTML
@@ -153,15 +101,17 @@ def _submit(state, home, form, _urlopen):
     if claude_mode is not None and claude_mode not in ('subscription', 'none'):
         return 422, {'ok': False, 'error': 'unknown choice; resubmit the form'}
     try:
-        label, limit, usage = check_key(key, _fetch)
+        label, limit, usage = key_store.check_key(provider_id, key, _fetch)
     except ValueError as exc:
         return 422, {'ok': False, 'error': str(exc)}
     except OSError:
-        return 502, {'ok': False, 'error': 'could not reach OpenRouter; retry shortly'}
-    key_path = Path(home) / 'openrouter.key'
+        return 502, {'ok': False, 'error': 'could not reach %s; retry shortly'
+                                        % provider_defs.label_for(provider_id)}
+    key_path = Path(home) / provider_defs.get(provider_id).key.file
     try:
-        fd = store_key(home, key, _check_live=lambda stored: _stored_key_live(stored, _fetch))
-    except KeyExists as exc:
+        fd = key_store.store_key(home, key, provider_id,
+                       _check_live=lambda stored: key_store._stored_key_live(provider_id, stored, _fetch))
+    except key_store.KeyExists as exc:
         return 409, {'ok': False, 'error': str(exc)}
     except OSError:
         return 500, {'ok': False, 'error': 'could not store the key'}
@@ -201,23 +151,7 @@ def _submit(state, home, form, _urlopen):
                  'mode': mode, 'claude_mode': claude_mode or '', 'starter': line}
 
 
-def _stored_key_live(stored, _fetch):
-    """True when the stored key still validates; False only on 401/403.
-
-    Any other outcome (network down, rate limit, unparseable body) refuses
-    the carve-out: truncating there could destroy the only copy of a live
-    provisioned secret.
-    """
-    try:
-        check_key(stored, _fetch)
-    except KeyRejected as exc:
-        return exc.status not in (401, 403)
-    except (ValueError, OSError):
-        return True
-    return True
-
-
-def open_key_window(server, home, _opener=None, _prompt=None):
+def open_key_window(server, home, provider_id=None, _opener=None, _prompt=None):
     """Mint one setup nonce and open the key window; True when opened.
 
     Plan 055 Stage 3: at most one window per live nonce. When
@@ -235,9 +169,11 @@ def open_key_window(server, home, _opener=None, _prompt=None):
     opener = _opener or _webbrowser.open
     prompt = _prompt or key_prompt.open_window
     state = server.state
+    if not provider_defs.is_external(provider_id):
+        provider_id = provider_defs.DEFAULT_EXTERNAL
     with server.lock:
         if setup_pending(state):
-            return True
+            return _repoint_window(state, home, provider_id)
         nonce = _secrets.token_urlsafe(32)
         expires = int(time.time()) + SETUP_TTL_S
         path = Path(home) / 'mixed-router-state.json'
@@ -245,29 +181,61 @@ def open_key_window(server, home, _opener=None, _prompt=None):
             doc = json.loads(path.read_text())
             if not isinstance(doc, dict):
                 return False
-            doc['setup'] = {'nonce': nonce, 'expires': expires}
+            doc['setup'] = {'nonce': nonce, 'expires': expires,
+                            'provider': provider_id}
             _atomic_replace(path, doc)
         except (OSError, ValueError):
             return False
         if isinstance(state, dict):
-            state['setup'] = {'nonce': nonce, 'expires': expires}
+            state['setup'] = {'nonce': nonce, 'expires': expires,
+                              'provider': provider_id}
         url = ('http://127.0.0.1:%s/%s/setup/%s'
                % (state.get('port'), state.get('token'), nonce))
     try:
         opened = prompt(url, thread=True, opener=opener,
-                        clients=state.get('clients', 'codex')) is not False
+                        clients=state.get('clients', 'codex'),
+                        provider_id=provider_id) is not False
     except (OSError, ValueError):
         try:
             opened = opener(url) is not False
         except OSError:
             opened = False
     if sys.stdout.isatty():
-        print('open %s to connect your OpenRouter key' % url)
+        print('open %s to connect your %s key'
+              % (url, provider_defs.label_for(provider_id)))
     else:
         from .runtime import log_event as _log_event
         _log_event('setup_window_opened' if opened else 'setup_window_pending',
                    port=state.get('port'), path='/setup/')
     return opened
+
+
+
+def _repoint_window(state, home, provider_id):
+    """Point an already-open window at the provider this request needs.
+
+    One nonce slot: a second provider's request must not leave the open page
+    collecting for a different provider. False when the state cannot be
+    rewritten, so the caller reports the failure instead of pretending a
+    window is ready.
+    """
+    if key_store.window_provider(state) == provider_id:
+        return True
+    try:
+        path = Path(home) / 'mixed-router-state.json'
+        doc = json.loads(path.read_text())
+        if not isinstance(doc, dict) or not isinstance(doc.get('setup'), dict):
+            return False
+        doc['setup']['provider'] = provider_id
+        _atomic_replace(path, doc)
+    except (OSError, ValueError):
+        return False
+    # Only after the rewrite succeeded: a failed re-point must not leave the
+    # running server collecting for one provider while the state file and the
+    # caller's answer disagree.
+    if isinstance(state, dict) and isinstance(state.get('setup'), dict):
+        state['setup']['provider'] = provider_id
+    return True
 
 
 def _atomic_replace(path, doc):

@@ -1,8 +1,12 @@
 """Onboard models with one command: derive the row, probe it, write the file.
 
 Usage: python3.14 -m ai_router.models add <slug> [--probe] [--dry-run]
-           [--tier preview|verified]
+           [--tier preview|verified] [--provider ID]
        python3.14 -m ai_router.models remove <slug> | check [--offline] | list
+
+The live metadata projection belongs to the provider's definition
+(`provider_defs.ProviderDef.catalogue_shape`); only the `openrouter` shape
+ships today, and a `manual`-shape provider authors its rows by hand.
 """
 import argparse
 import json
@@ -10,19 +14,38 @@ import sys
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
+from . import provider_defs
 from .apply_catalogue import write_guarded
 from .capabilities import CANONICAL_ORDER
 from .model_metadata import project_modalities, qualify_name
 from .registry import load, picker_key
 
-MODELS_URL = 'https://openrouter.ai/api/v1/models'
 MODELS_PATH = Path(__file__).with_name('models.json')
 COMPAT_PATH = Path(__file__).resolve().parents[1] / 'docs' / 'compatibility.md'
 
 
-def fetch_live():
-    with urllib.request.urlopen(MODELS_URL, timeout=20) as response:
+def fetch_live(provider_id=provider_defs.DEFAULT_EXTERNAL):
+    """Live metadata for one provider, keyed by slug; {} when it has none."""
+    defn = provider_defs.get(provider_id)
+    if defn is None or not defn.catalogue_url or defn.catalogue_shape == 'manual':
+        return {}
+    with urllib.request.urlopen(defn.catalogue_url, timeout=20) as response:
         return {model['id']: model for model in json.load(response)['data']}
+
+
+def require_live_shape(provider_id):
+    """The provider whose rows a live derivation can work on, else SystemExit.
+
+    Checked before the live-list lookup so a hand-authored provider is
+    refused for the reason that actually applies.
+    """
+    defn = provider_defs.get(provider_id)
+    if defn is None or not provider_defs.is_external(provider_id):
+        raise SystemExit(f'{provider_id} is not an external provider')
+    if defn.catalogue_shape == 'manual' or not defn.catalogue_url:
+        raise SystemExit(f'{defn.label} rows are authored by hand; '
+                         f'{defn.catalogue_shape} shape has no live metadata to derive from')
+    return defn
 
 
 def row_key(row):
@@ -39,10 +62,11 @@ def renumbered(rows):
     return [{**row, 'priority': 100 + index} for index, row in enumerate(ordered)]
 
 
-def derive_row(slug, live):
+def derive_row(slug, live, provider_id=provider_defs.DEFAULT_EXTERNAL):
     """Registry row for a new slug from its live metadata entry.
 
     Priority is left to renumbered(), which depends on the whole set."""
+    defn = require_live_shape(provider_id)
     vendor, qualified = qualify_name(slug, live)
     modalities = project_modalities(
         live.get('architecture', {}).get('input_modalities', []))
@@ -57,8 +81,8 @@ def derive_row(slug, live):
     default = 'low' if 'low' in reasoning else reasoning[0]
     pricing = live.get('pricing') or {}
     return {'slug': slug,
-            'provider': 'openrouter',
-            'display_name': f'{qualified} \xb7 OpenRouter',
+            'provider': provider_id,
+            'display_name': f'{qualified} \xb7 {defn.label}',
             'vendor': vendor,
             'reasoning': reasoning,
             'default_reasoning': default,
@@ -81,17 +105,19 @@ def read_rows(path):
 
 
 def cmd_add(path, slug, live_by_id, tier=None, dry_run=False, probe=False,
-           _probe=None):
+           _probe=None, provider_id=provider_defs.DEFAULT_EXTERNAL):
+    require_live_shape(provider_id)
     if live_by_id is None:
-        live_by_id = fetch_live()
+        live_by_id = fetch_live(provider_id)
     if slug not in live_by_id:
-        raise SystemExit(f'{slug} is not in the live OpenRouter list')
+        raise SystemExit(f'{slug} is not in the live '
+                         f'{provider_defs.label_for(provider_id)} list')
     before = Path(path).read_text()
     rows = json.loads(before)
     if any(row['slug'] == slug for row in rows):
         raise SystemExit(f'{slug} is already in {path}')
     live = live_by_id[slug]
-    row = derive_row(slug, live)
+    row = derive_row(slug, live, provider_id)
     if tier is not None:
         if tier not in ('preview', 'verified'):
             raise SystemExit('--tier must be preview or verified')
@@ -146,8 +172,10 @@ def cmd_remove(path, slug):
     print(json.dumps({'removed': slug}))
 
 
-def cmd_check(path, live_by_id):
-    """live_by_id None skips the live-list check (offline). Returns exit code."""
+def cmd_check(path, live_by_id, provider_id=provider_defs.DEFAULT_EXTERNAL):
+    """Structural checks for the whole file; the live-list check covers the
+    rows owned by `provider_id` (the provider `live_by_id` came from).
+    live_by_id None skips the live check (offline). Returns exit code."""
     rows = read_rows(path)
     problems = []
     valid = True
@@ -167,7 +195,9 @@ def cmd_check(path, live_by_id):
         if ordered != sorted(ordered):
             problems.append('priorities not in picker order')
     if live_by_id is not None:
-        missing = [slug for slug in slugs if slug not in live_by_id]
+        owned = [row['slug'] for row in rows
+                 if (row.get('provider') or provider_defs.DEFAULT_EXTERNAL) == provider_id]
+        missing = [slug for slug in owned if slug not in live_by_id]
         if missing:
             problems.append('not in live list: ' + ', '.join(sorted(missing)))
     print(f'{path}: {len(rows)} models, {len(problems)} problems')
@@ -191,6 +221,7 @@ def main(argv=None):
     add.add_argument('--probe', action='store_true')
     add.add_argument('--dry-run', action='store_true')
     add.add_argument('--tier', default=None)
+    add.add_argument('--provider', default=provider_defs.DEFAULT_EXTERNAL)
     sub.add_parser('remove').add_argument('slug')
     check = sub.add_parser('check')
     check.add_argument('--offline', action='store_true')
@@ -199,17 +230,22 @@ def main(argv=None):
     path = MODELS_PATH
     if args.command == 'add':
         cmd_add(path, args.slug, None, tier=args.tier,
-                dry_run=args.dry_run, probe=args.probe)
+                dry_run=args.dry_run, probe=args.probe,
+                provider_id=args.provider)
     elif args.command == 'remove':
         cmd_remove(path, args.slug)
     elif args.command == 'check':
-        live = None
-        if not args.offline:
+        if args.offline:
+            return cmd_check(path, None)
+        codes = []
+        for defn in provider_defs.external_catalogues(shape='openrouter'):
             try:
-                live = fetch_live()
+                live = fetch_live(defn.id)
             except (OSError, ValueError):
-                print('live check skipped: fetch failed')
-        return cmd_check(path, live)
+                print(f'{defn.label} live check skipped: fetch failed')
+                live = None
+            codes.append(cmd_check(path, live, defn.id))
+        return max(codes) if codes else cmd_check(path, None)
     elif args.command == 'list':
         cmd_list(path)
 

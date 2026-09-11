@@ -1,0 +1,130 @@
+"""Per-provider key presence for the installer surface (Plan 141).
+
+The installer and diagnostics both need to know whether a provider's key
+resolves, without ever reading the value out. One owner for that walk keeps
+the two surfaces aligned with `ai_router/credentials.py`'s key_for()
+precedence, which is the router's own contract.
+
+Runs on Python 3.9+ like the installer and is spec-loaded by its callers;
+the provider definitions arrive through `bind` so this module imports no
+router package.
+"""
+import json
+import os
+from pathlib import Path
+
+_defs = None
+
+
+def bind(defs_module):
+    """Inject the loaded ai_router.provider_defs module."""
+    global _defs
+    _defs = defs_module
+
+
+def external_defs():
+    return _defs.external_defs()
+
+
+def default_id():
+    return _defs.DEFAULT_EXTERNAL
+
+
+def key_state(home, state, env, defn, private=None):
+    """(present, usable) for one provider; no value ever leaves this call.
+
+    Precedence mirrors credentials.key_for(): env wins; else an existing key
+    file decides by non-blank content, and counts as usable only when
+    `private` accepts its permissions; a configured third-party credential
+    counts only when no key file shadows it and it actually carries an api
+    key. `private` None treats any non-blank key file as usable, which is
+    the installer's pre-existing contract.
+    """
+    key_file = home / defn.key.file
+    try:
+        exists = key_file.is_file()
+    except OSError:
+        exists = False
+    try:
+        text = key_file.read_text() if exists else ''
+    except OSError:
+        text = ''
+    private_ok = bool(private(key_file)) if (exists and private is not None) else bool(text.strip())
+    auth_key = ''
+    auth_path = state.get('opencode_auth') if isinstance(state, dict) else None
+    if defn.key.state_key and isinstance(auth_path, str) and auth_path:
+        try:
+            doc = json.loads(Path(auth_path).read_text())
+            entry = doc.get(defn.key.state_key) if isinstance(doc, dict) else None
+            if isinstance(entry, dict) and entry.get('type') == 'api':
+                auth_key = str(entry.get('key') or '').strip()
+        except (OSError, ValueError, AttributeError):
+            auth_key = ''
+    env_key = env.get(defn.key.env, '').strip() if env else ''
+    present = bool(env_key or text.strip() or auth_key)
+    # Mirror key_for()'s order exactly: an existing key file is terminal, so
+    # the third-party credential is consulted only when there is no key file
+    # at all. An empty placeholder therefore reports not usable, which is
+    # what the router does with it (LookupError: the file is empty).
+    if env_key:
+        usable = True
+    elif exists:
+        usable = bool(text.strip() and private_ok)
+    else:
+        usable = bool(auth_key)
+    return present, usable
+
+
+def ensure(home, state, env, protect):
+    """Prompt for the first provider without a key, then stop the install.
+
+    The placeholder file is created owner-only and protected before the
+    message prints; a failed protection removes it rather than leaving an
+    unprotected placeholder the next run would trust.
+
+    A provider counts as supplied when any source the router will try
+    exists, including a blank placeholder the operator has not filled yet:
+    the installer's own first run creates that file and then hands over to
+    the setup window, and the scheduled updater must keep advancing while
+    the operator finishes. `key_state` stays the stricter reading for
+    `--status`.
+    """
+    pending = [defn for defn in external_defs()
+               if not supplied(home, state, env, defn)]
+    if not pending:
+        return
+    defn = pending[0]
+    key_file = home / defn.key.file
+    if not key_file.exists():
+        fd = os.open(key_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        os.close(fd)
+        try:
+            protect(key_file)
+        except SystemExit:
+            try:
+                key_file.unlink()
+            except OSError:
+                pass
+            raise
+    print(f'Paste your {defn.label} key into {key_file} '
+          '(owner-only file) and re-run the installer')
+    raise SystemExit(3)
+
+
+def supplied(home, state, env, defn):
+    """True when the installer should consider this provider already handled.
+
+    Mirrors the installer's long-standing contract rather than the router's
+    readiness: env non-empty, the key file present at all, or a configured
+    third-party credential file that exists.
+    """
+    if env and env.get(defn.key.env, '').strip():
+        return True
+    try:
+        if (home / defn.key.file).exists():
+            return True
+    except OSError:
+        return False
+    auth_path = state.get('opencode_auth') if isinstance(state, dict) else None
+    return bool(defn.key.state_key and isinstance(auth_path, str) and auth_path
+                and Path(auth_path).exists())

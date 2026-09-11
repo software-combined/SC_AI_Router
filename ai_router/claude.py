@@ -2,25 +2,23 @@
 
 Claude Code points ANTHROPIC_BASE_URL at the loopback router with the path
 token in the URL, as the Codex base URL does. Requests arrive and leave in
-Anthropic Messages format: OpenRouter serves a faithful Anthropic-compatible
-endpoint, so OpenRouter-bound requests need only a host swap and a key swap
-while the body travels byte-identical, which keeps thinking blocks,
-tool_use IDs and cache_control exactly as the client sent them. Registry
-slugs owned by OpenRouter take that route; every other model passes through
-to api.anthropic.com with the client's own credentials, mirroring
-SubscriptionProvider: the router key never accompanies those requests and
-client credentials are never stored or logged.
+Anthropic Messages format: an external provider listed in provider_defs with
+a messages prefix serves a faithful Anthropic-compatible endpoint, so those
+requests need only a host swap and a key swap while the body travels
+byte-identical, which keeps thinking blocks, tool_use IDs and cache_control
+exactly as the client sent them. Registry slugs owned by such a provider
+take that route; every other model passes through to the subscription
+upstream with the client's own credentials, mirroring SubscriptionProvider:
+the router key never accompanies those requests and client credentials are
+never stored or logged.
 """
 import json
 
-from . import transport
-from .capabilities import OPENROUTER_HOST
+from . import provider_defs, transport
 from .errors import PreparationError, UnknownModel
 from . import registry
 from .registry import by_slug
 
-ANTHROPIC_HOST = 'api.anthropic.com'
-ANTHROPIC_PREFIX = '/api'
 # POST-only Messages paths; a future GET-only route (like /v1/models) must
 # not silently become POST-routable.
 CLAUDE_POST_PATHS = frozenset({'/v1/messages', '/v1/messages/count_tokens'})
@@ -30,7 +28,8 @@ CLAUDE_ALIAS_PREFIX = 'claude/'
 def claude_alias(slug):
     """Discovery id for one registry slug; None when it must not list."""
     entry = by_slug(slug) if isinstance(slug, str) else None
-    if entry is None or entry.provider != 'openrouter':
+    defn = provider_defs.get(entry.provider) if entry is not None else None
+    if defn is None or not defn.serves(provider_defs.MESSAGES):
         return None
     bare = slug.removeprefix('~')
     if bare.startswith('anthropic/'):
@@ -92,13 +91,20 @@ def resolve(model):
     return model
 
 
-def _is_openrouter_slug(model):
-    entry = by_slug(resolve(model)) if isinstance(model, str) else None
-    return entry is not None and entry.provider == 'openrouter'
+def row_def(model, _resolve=resolve):
+    """ProviderDef for a requested id, or None when no row owns it."""
+    entry = by_slug(_resolve(model)) if isinstance(model, str) else None
+    return provider_defs.get(entry.provider) if entry is not None else None
 
 
-class ClaudeOpenRouterProvider:
-    name = 'openrouter-claude'
+class ExternalMessagesProvider:
+    """One external provider serving Anthropic Messages (Plan 141)."""
+
+    def __init__(self, defn):
+        self.defn = defn
+        self.name = defn.id
+        self.host = defn.host
+        self.kind = defn.kind
 
     def prepare(self, model, path, payload, raw_body, headers, credentials):
         if path not in CLAUDE_POST_PATHS:
@@ -112,8 +118,8 @@ class ClaudeOpenRouterProvider:
             payload['model'] = slug
             body = json.dumps(payload).encode()
         return transport.Prepared(
-            OPENROUTER_HOST, ANTHROPIC_PREFIX + path,
-            {'Authorization': 'Bearer ' + credentials.openrouter_key(),
+            self.host, self.defn.path_for(provider_defs.MESSAGES, path),
+            {'Authorization': 'Bearer ' + credentials.key_for(self.defn.id),
              'Content-Type': 'application/json'},
             body, set(), self.name)
 
@@ -122,8 +128,13 @@ class ClaudeOpenRouterProvider:
 
 
 class ClaudeSubscriptionProvider:
-    name = 'anthropic-subscription'
-    host = ANTHROPIC_HOST
+    """The client's own Claude login; the router holds no credential."""
+
+    def __init__(self):
+        self.defn = provider_defs.ANTHROPIC
+        self.name = self.defn.id
+        self.host = self.defn.host
+        self.kind = self.defn.kind
 
     def prepare(self, model, path, payload, raw_body, headers, credentials):
         auth = headers.get('Authorization', '')
@@ -138,14 +149,19 @@ class ClaudeSubscriptionProvider:
 
 def select(model, path, openai_mode='subscription', anthropic_mode=None,
            allowed=None):
-    if _is_openrouter_slug(model):
+    defn = row_def(model)
+    if defn is not None and defn.kind == provider_defs.EXTERNAL:
+        if not defn.serves(provider_defs.MESSAGES):
+            raise PreparationError(
+                f'{defn.label} models are available to Codex only: '
+                'this model does not serve the Anthropic Messages API')
         # Plan 068: a portco allowlist gates routing, never just the picker.
         # None means no policy provisioned (today's behavior). Aliases and
         # bare Anthropic ids resolve to the registry slug before the check.
         slug = resolve(model)
         if allowed is not None and slug not in frozenset(allowed):
             raise UnknownModel(slug, ())
-        return ClaudeOpenRouterProvider()
+        return ExternalMessagesProvider(defn)
     # Independent subscription choice; missing mode reproduces the legacy
     # behavior of following openai_mode. Never widened by migration.
     if (anthropic_mode if anthropic_mode is not None else openai_mode) == 'none':

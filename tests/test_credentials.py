@@ -34,17 +34,17 @@ class CredentialLookupTests(unittest.TestCase):
 
     def test_env_var_wins(self):
         self._key_file('k-file\n')
-        self.assertEqual(self.creds({ENV_VAR: 'k-env'}).openrouter_key(), 'k-env')
+        self.assertEqual(self.creds({ENV_VAR: 'k-env'}).key_for(), 'k-env')
 
     def test_key_file_600_is_read(self):
         self._key_file('k-file\n')
-        self.assertEqual(self.creds().openrouter_key(), 'k-file')
+        self.assertEqual(self.creds().key_for(), 'k-file')
 
     @needs_posix
     def test_key_file_group_readable_is_refused(self):
         self._key_file('k-file\n', 0o640)
         with self.assertRaises(PermissionError):
-            self.creds().openrouter_key()
+            self.creds().key_for()
 
     def test_windows_widened_acl_is_refused(self):
         # The read path keeps the POSIX PermissionError contract so the
@@ -56,26 +56,26 @@ class CredentialLookupTests(unittest.TestCase):
                 mock.patch.object(winacl_mod, 'check',
                                    side_effect=SystemExit('readable by X')):
             with self.assertRaisesRegex(PermissionError, 'readable by X'):
-                self.creds().openrouter_key()
+                self.creds().key_for()
 
     def test_empty_key_file_is_lookup_error(self):
         self._key_file('\n')
         with self.assertRaises(LookupError):
-            self.creds().openrouter_key()
+            self.creds().key_for()
 
     def test_opencode_fallback(self):
         auth = self._auth({'openrouter': {'type': 'api', 'key': 'k-oc'}})
         self.assertEqual(Credentials({**self.state, 'opencode_auth': auth},
-                                     self.home, {}).openrouter_key(), 'k-oc')
+                                     self.home, {}).key_for(), 'k-oc')
 
     def test_opencode_non_api_type_is_value_error(self):
         auth = self._auth({'openrouter': {'type': 'oauth', 'key': 'k'}})
         with self.assertRaises(ValueError):
-            Credentials({**self.state, 'opencode_auth': auth}, self.home, {}).openrouter_key()
+            Credentials({**self.state, 'opencode_auth': auth}, self.home, {}).key_for()
 
     def test_nothing_configured_is_lookup_error_naming_all_sources(self):
         with self.assertRaises(LookupError) as ctx:
-            self.creds().openrouter_key()
+            self.creds().key_for()
         for named in (ENV_VAR, 'openrouter.key', 'opencode_auth'):
             self.assertIn(named, str(ctx.exception))
 

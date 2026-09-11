@@ -1,5 +1,14 @@
 # Plan 127: Split failure policy out of providers.py and pages out of setup.py
 
+> **Landed by Plan 141 (2026-09-11).** 141 needed the same headroom and split
+> both modules the way this plan specifies: `ai_router/upstream.py` owns
+> `is_context_error`, `upstream_retry_after`, `_provider_reason`,
+> `validate_response` and `describe_failure` (router imports `upstream.*`),
+> and `ai_router/setup_page.py` owns the page markup while `setup.py` keeps
+> the key lifecycle and state. (Develop renamed the page module from this
+> plan's working name `setup_pages.py` to `setup_page.py`.) Do not execute
+> this plan again; read the landed modules if the split needs extending.
+
 > Planning only. Implement only under a later implementation instruction.
 > Drift check: `git diff --stat b642de9..HEAD -- ai_router/providers.py ai_router/upstream.py ai_router/setup.py ai_router/setup_pages.py ai_router/router.py tests/`
 > Read changed code and preserve current behavior before edits.

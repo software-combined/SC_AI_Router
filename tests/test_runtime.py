@@ -91,6 +91,44 @@ class LoadStateTests(unittest.TestCase):
                     load_state(Path(path))
                 self.assertIn('OpenRouter credential problem', str(ctx.exception))
 
+    def test_one_resolvable_external_key_boots_while_another_stays_keyless(self):
+        # Plan 141: a registry with rows for more than one external provider
+        # boots as soon as one key resolves, and the keyless provider fails
+        # its own requests closed instead of taking the service down.
+        from ai_router import provider_defs
+        acme = provider_defs.ProviderDef(
+            id='acme', label='Acme', kind=provider_defs.EXTERNAL,
+            host='acme.example', responses_path='/v1',
+            key=provider_defs.KeySpec('ACME_API_KEY', 'acme.key'),
+            dialect='acme')
+        provider_defs.PROVIDERS = provider_defs.PROVIDERS + (acme,)
+        provider_defs.BY_ID = {p.id: p for p in provider_defs.PROVIDERS}
+        def restore():
+            provider_defs.PROVIDERS = tuple(
+                p for p in provider_defs.PROVIDERS if p.id != 'acme')
+            provider_defs.BY_ID = {p.id: p for p in provider_defs.PROVIDERS}
+        self.addCleanup(restore)
+
+        import ai_router.registry as registry
+        rows = list(registry.MODELS) + [
+            registry.Model(slug='acme/one', provider='acme', display_name='Acme: One',
+                           vendor='Acme', reasoning=('low',),
+                           default_reasoning='low')]
+        with mock.patch.object(registry, 'MODELS', rows):
+            path = self._write({'port': 0, 'token': 't', 'openai_models': []})
+            home = Path(tempfile.mkdtemp())
+            self.addCleanup(shutil.rmtree, str(home), True)
+            (home / 'openrouter.key').write_text('sk-or\n')
+            os.chmod(home / 'openrouter.key', 0o600)
+            with mock.patch.dict(os.environ, clear=True), \
+                    mock.patch('ai_router.runtime.ROUTER_HOME', home):
+                # One provider resolves, so the router boots.
+                self.assertEqual(load_state(Path(path))['token'], 't')
+                # The keyless provider is named, and its own request fails closed.
+                credentials = Credentials({'openai_models': []}, home, {})
+                self.assertEqual(credentials.key_for('openrouter'), 'sk-or')
+                self.assertIsInstance(credentials.key_missing('acme'), LookupError)
+
 
 class CredentialRequestMappingTests(unittest.TestCase):
     def _server_without_opencode(self, home):

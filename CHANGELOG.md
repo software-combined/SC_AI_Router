@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Providers are now data, not code paths: `ai_router/provider_defs.py` holds
+  one definition per upstream (host, endpoint prefixes, key location, model
+  catalogue, key-info endpoint, failure dialect), and the Responses and
+  Messages adapters are parameterized by it. OpenRouter remains the built-in
+  external provider and behaves exactly as before. Several external
+  providers can serve at once, each with its own owner-only key file and its
+  own fail-closed state: one missing key no longer stops the others. Picker
+  labels and billing lines read the row's provider label, `models add` /
+  `live_refresh` / `models check` follow the row's provider (with
+  `--provider`), `--status` reports a `providers` key map, and the setup
+  window names the provider whose key it collects. Failure policy moved to
+  `ai_router/upstream.py`; the setup page it shares with the native popup
+  renders the provider's own label.
+
 - The Codex picker lists the OpenRouter-billed GPT twins again: Astra,
   Sol, Terra and Luna appear beside their ChatGPT subscription rows, so a
   refused or exhausted allowance still leaves them selectable on the

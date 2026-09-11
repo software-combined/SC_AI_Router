@@ -23,6 +23,7 @@ FILES = [
 'ai_router/candidate.py',
 'ai_router/setup.py',
 'ai_router/setup_page.py',
+         'ai_router/key_store.py',
 'ai_router/key_dialog.py',
 'ai_router/key_prompt.py',
          'ai_router/runtime.py',
@@ -45,6 +46,8 @@ FILES = [
          'ai_router/clients/codex.py',
          'ai_router/transport.py',
          'ai_router/subscription_fallback.py',
+         'ai_router/provider_defs.py',
+         'ai_router/upstream.py',
          'ai_router/protocols/__init__.py',
          'ai_router/protocols/responses.py',
          'ai_router/protocols/messages.py',
@@ -69,7 +72,7 @@ REQUIRED_PACKAGING = (
     'packaging/install.py', 'packaging/updater.py',
     'packaging/codex_config.py', 'packaging/claude_config.py',
     'packaging/claude_desktop_config.py', 'packaging/systemd.py',
-    'packaging/diagnostics.py',
+    'packaging/diagnostics.py', 'packaging/provider_keys.py',
     'packaging/runtime.lock', 'packaging/runtime_lock.py',
     'packaging/platforms/__init__.py',
     'packaging/platforms/darwin.py',
@@ -185,6 +188,7 @@ class PackagingTests(unittest.TestCase):
             'packaging/platforms/windows.py', 'ai_router/feed_verify.py',
             'ai_router/subscription_roster.py',
             'ai_router/retired_slugs.py',
+            'ai_router/provider_defs.py', 'packaging/provider_keys.py',
             'tools/disable.py', 'tools/global_instructions.py',
         ]
         for name in surface:

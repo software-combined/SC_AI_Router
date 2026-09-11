@@ -96,7 +96,7 @@ class RelayContainmentTests(unittest.TestCase):
 class EmitTerminalFailureTests(unittest.TestCase):
     def _frame(self, **metrics):
         buf = io.BytesIO()
-        transport.emit_terminal_failure(buf, metrics, 'openrouter')
+        transport.emit_terminal_failure(buf, dict(metrics, protocol='responses'))
         return buf.getvalue()
 
     def test_emits_generic_frame_on_responses_sse(self):
@@ -110,7 +110,7 @@ class EmitTerminalFailureTests(unittest.TestCase):
     def test_silent_for_claude_non_sse_and_unstreamed(self):
         buf = io.BytesIO()
         transport.emit_terminal_failure(
-            buf, {'stream': True, 'response_kind': 'sse'}, 'openrouter-claude')
+            buf, {'stream': True, 'response_kind': 'sse', 'protocol': 'messages'})
         self.assertEqual(buf.getvalue(), b'')
         for metrics in ({'stream': True, 'response_kind': 'json'},
                         {'stream': False, 'response_kind': 'sse'},
@@ -132,7 +132,8 @@ class EmitTerminalFailureTests(unittest.TestCase):
 
                 transport.emit_terminal_failure(
                     Dead(), {'stream': True, 'response_kind': 'sse',
-                             'response_encoding': 'identity'}, 'openrouter')
+                             'response_encoding': 'identity',
+                             'protocol': 'responses'})
 
 
 if __name__ == '__main__':

@@ -2,16 +2,16 @@ from pathlib import Path
 import tempfile
 import unittest
 from ai_router.apply_catalogue import apply, write_guarded
-from ai_router.capabilities import OPENROUTER_MODELS
+from ai_router.capabilities import EXTERNAL_MODELS
 
 def catalog():
     return {'models': [{'slug': slug, 'default_reasoning_level': 'low',
-             'supported_reasoning_levels': []} for slug in OPENROUTER_MODELS]}
+             'supported_reasoning_levels': []} for slug in EXTERNAL_MODELS]}
 
 def live(levels=None, image=True):
     return {slug: {'reasoning': {'supported_efforts': levels or ['low', 'high', 'max']},
             'architecture': {'input_modalities': ['text', 'image'] if image else ['text']}}
-            for slug in OPENROUTER_MODELS}
+            for slug in EXTERNAL_MODELS}
 
 class ApplyTests(unittest.TestCase):
     def test_merge_applies_live_minus_exclusions_in_canonical_order(self):

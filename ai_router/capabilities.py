@@ -1,15 +1,18 @@
-"""Single source for OpenRouter model capabilities.
+"""Single source for external-provider model capabilities.
 
 Native OpenAI entries keep their catalogue values (multi-agent v2,
-encrypted history, code_mode_only). OpenRouter entries use the proven
-trial values: plaintext V1 subagents, no forced-compaction hash, Node
-REPL offered, and image input only where live metadata advertises it.
+encrypted history, code_mode_only). Externally billed entries use the
+proven trial values: plaintext V1 subagents, no forced-compaction hash,
+Node REPL offered, and image input only where live metadata advertises it.
 GLM 5.3 and the DeepSeek v4 text models are text-only per live metadata. Contributor rejects max despite
 advertising it; Grok has no max/minimal. Defaults stay low.
+
+`EXTERNAL_MODELS` is every slug routed to an external provider's own key,
+whatever that provider is; upstream facts live in provider_defs.py.
 """
 from .image_items import has_images
-from .registry import MODELS, openrouter_slugs
-OPENROUTER_MODELS = openrouter_slugs()
+from .registry import MODELS, external_slugs
+EXTERNAL_MODELS = external_slugs()
 IMAGE_INPUT_MODELS = frozenset(m.slug for m in MODELS if 'image' in m.modalities)
 EXCLUDED_EFFORTS = {m.slug: set(m.excluded_efforts) for m in MODELS if m.excluded_efforts}
 REASONING_LEVELS = {m.slug: list(m.reasoning) for m in MODELS}
@@ -30,8 +33,6 @@ def live_levels(slug, advertised):
 
 def describe(level):
     return EFFORT_DESCRIPTIONS.get(level, level.title() + ' reasoning')
-
-OPENROUTER_HOST = 'openrouter.ai'
 
 def has_recursive_refs(schema):
     def walk(value, refs=()):
@@ -68,7 +69,7 @@ def check_effort(slug, effort):
     clear message instead of an opaque upstream 400. Unknown shapes pass
     through untouched; only a known-bad combination raises.
     """
-    if effort is None or slug not in OPENROUTER_MODELS:
+    if effort is None or slug not in EXTERNAL_MODELS:
         return
     levels = REASONING_LEVELS[slug]
     if effort not in levels:
@@ -87,7 +88,7 @@ def check_images(slug, items):
     Unknown shapes pass through untouched; only a known-bad combination
     raises.
     """
-    if not isinstance(slug, str) or slug not in OPENROUTER_MODELS:
+    if not isinstance(slug, str) or slug not in EXTERNAL_MODELS:
         return
     if 'image' not in input_modalities(slug) and has_images(items):
         raise ValueError(
@@ -96,8 +97,8 @@ def check_images(slug, items):
 
 
 def catalogue_patch(slug):
-    if slug not in OPENROUTER_MODELS:
-        raise KeyError('Unknown OpenRouter model: ' + slug)
+    if slug not in EXTERNAL_MODELS:
+        raise KeyError('Unknown external model: ' + slug)
     return {
         'multi_agent_version': MULTI_AGENT_VERSION,
         'multi_agent_reasoning_effort': None,

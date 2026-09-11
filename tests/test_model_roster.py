@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 from ai_router.apply_catalogue import apply
 from ai_router.catalogue import RETIRED_SLUGS, merge
-from ai_router.providers import OpenRouterProvider, PreparationError, select
+from ai_router.providers import ExternalResponsesProvider, PreparationError, select
 from ai_router.registry import by_slug
 
 PINNED_DEEPSEEK = (('deepseek/deepseek-v4-pro-0813', 1048576, 384000, ('text',)),
@@ -30,7 +30,7 @@ class ModelRosterTests(unittest.TestCase):
         self.assertEqual({s for s in entries if 'claude-' in s}, set(slugs))
         for slug in slugs:
             with self.subTest(slug=slug):
-                self.assertIsInstance(select(slug, '/responses', []), OpenRouterProvider)
+                self.assertIsInstance(select(slug, '/responses', []), ExternalResponsesProvider)
                 self.assertIn('Anthropic', entries[slug]['description'])
 
     def test_pinned_deepseek_metadata_and_verified_status(self):
@@ -67,7 +67,7 @@ class ModelRosterTests(unittest.TestCase):
         payload = {'model': slug, 'input': [], 'reasoning': {'effort': 'none'}}
         prepared = provider.prepare(slug, '/responses', payload, b'',
                                     {'Authorization': 'Bearer subscription-test'},
-                                    SimpleNamespace(openrouter_key=lambda: 'router-test'))
+                                    SimpleNamespace(key_for=lambda _pid=None: 'router-test'))
         self.assertEqual(json.loads(prepared.body)['reasoning'], {'effort': 'none'})
         self.assertEqual(prepared.headers['Authorization'], 'Bearer router-test')
         payload['reasoning']['effort'] = 'high'

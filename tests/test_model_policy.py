@@ -51,7 +51,7 @@ class ModelPolicyTests(unittest.TestCase):
     def test_allowed_openrouter_slug_still_routes(self):
         provider = providers.select('z-ai/glm-5.3-flash', '/responses', (),
                                     'subscription', allowed=ALLOWED)
-        self.assertIsInstance(provider, providers.OpenRouterProvider)
+        self.assertIsInstance(provider, providers.ExternalResponsesProvider)
 
     def test_subscription_rows_unaffected(self):
         subset = {m['slug'] for m in merge(
@@ -179,7 +179,7 @@ class ModelPolicyTests(unittest.TestCase):
                 'meta/muse-spark-1.3', '/responses', state, 'subscription')
         provider = responses.POLICY.select_provider(
             'z-ai/glm-5.3-flash', '/responses', state, 'subscription')
-        self.assertIsInstance(provider, providers.OpenRouterProvider)
+        self.assertIsInstance(provider, providers.ExternalResponsesProvider)
         provider = responses.POLICY.select_provider(
             'gpt-6-astra', '/responses', state, 'subscription')
         self.assertIsInstance(provider, providers.SubscriptionProvider)
@@ -188,7 +188,7 @@ class ModelPolicyTests(unittest.TestCase):
         provider = messages.POLICY.select_provider(
             'claude/moonshotai/kimi-k3-x', '/v1/messages', state,
             'subscription')
-        self.assertEqual(provider.name, 'anthropic-subscription')
+        self.assertEqual(provider.name, 'anthropic')
         with self.assertRaisesRegex(ValueError, 'not in the configured catalog'):
             messages.POLICY.select_provider(
                 'claude/meta/muse-spark-1.3', '/v1/messages', state,
