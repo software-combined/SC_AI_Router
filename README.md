@@ -1,3 +1,5 @@
+<img src="docs/assets/sc-logo-wide.png" alt="Software Combined" width="420">
+
 # Model router
 
 A small program on your computer that serves the Codex picker and Claude
@@ -20,10 +22,10 @@ feed, and an OpenRouter API key for OpenRouter models.
 |---|---|---|
 | macOS | Supported | Supported (`launchd` user agent) |
 | Linux with a systemd user manager | Supported | Supported (`systemd` user units) |
-| Windows 11 x64 | Lifecycle-proven, pending sign-out/in | Per-user Scheduled Tasks: install, scheduled update, rollback and uninstall passed on a staff machine on 2026-09-10; sign-out/in re-launch pending. Staff rollout stays gated on Plan 117 |
+| Windows 11 x64 | Lifecycle-proven, pending sign-out/in | Per-user Scheduled Tasks: install, scheduled update, rollback and uninstall passed on a staff machine on 2026-09-10; sign-out/in re-launch pending. Staff rollout stays gated on the remaining sign-out/in proof |
 
-Windows support follows Plan 116; see the Windows section below and
-`docs/compatibility.md` for the acceptance record. A Linux install needs a
+Windows support is per-user Scheduled Tasks; see the Windows section below
+and `docs/compatibility.md` for the acceptance record. A Linux install needs a
 running systemd user manager: run it in the signed-in desktop session, not
 over a bare SSH shell without one.
 
@@ -81,7 +83,7 @@ default feed:
 python3 packaging/install.py --feed file://$HANDOFF_DIR/latest.json
 ```
 
-The exact download location is named at publication time (Plan 106).
+The exact download location is named at publication time.
 Before installing on a machine that has run the router before, check for
 a stale feed pin or beta channel: `cat` the `feed` and `channel` files in
 the router home (a leftover `feed` file overrides the channel), see
@@ -149,6 +151,11 @@ connections queue for the incoming process too; on Linux there is no socket
 activation, so a connection attempted mid-handover fails until the new
 process binds the port. To update now, re-run the installer with
 `--check-update`. Machines on the `beta` channel follow pre-releases.
+After an update a desktop dialog offers to quit and reopen Codex (the
+macOS app, the Windows Store app, or the Linux preview app when it is
+installed) so the new models load, with a "Later" button for anyone who
+would rather keep working. Where the desktop app is not installed, the
+restart button simply does nothing.
 
 ## Choosing a model
 
