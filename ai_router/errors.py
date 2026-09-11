@@ -162,13 +162,6 @@ def bearer_for_no_subscription_only():
                   'Bearer auth is for no-subscription mode only')
 
 
-def subscription_auth_required(claude=False):
-    if claude:
-        return _error(401, 'CLAUDE_SUBSCRIPTION_AUTH_REQUIRED',
-                      'Claude subscription authentication required')
-    return PermissionError('Router subscription authentication required')
-
-
 class _UnknownModelError(RouterError):
     """UNKNOWN_MODEL body also naming the id and its tilde candidate."""
 

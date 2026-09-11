@@ -15,14 +15,14 @@
 
 Retired-subscription knowledge is duplicated and unlinked:
 
-- `ai_router/catalogue.py:73` — `RETIRED_SUBSCRIPTION_SLUGS = frozenset({'gpt-reserve'})`, consumed
-  at `:211-215` to drop the row from the merged catalogue.
-- `packaging/service.py:617-620` — `ensure_state` prunes the literal `'gpt-reserve'` from
+- `ai_router/catalogue.py:73` (at plan time; now imported from `retired_slugs.py`) — the set was consumed
+  at `:211-215` then, `:222-225` at implementation, to drop the row from the merged catalogue.
+- `packaging/service.py:617-620` at plan time (`:622-633` at implementation) — `ensure_state` prunes the literal `'gpt-reserve'` from
   `openai_models`.
 
 A future retirement needs both edits, and a missed one lets a retired slug linger in state or
 reappear in the picker. Packaging can import 3.9-safe `ai_router` leaves (precedent:
-`service.load()` (service.py:38-50) loads `feed.py` by spec), but **cannot** import `catalogue` or `registry`:
+`service.load()` (service.py:38-50 at plan time; same helper, same lines, at implementation) loads `feed.py` by spec), but **cannot** import `catalogue` or `registry`:
 `registry.py:29` uses `int | None` annotations without `from __future__`, so it is not 3.9-parseable.
 
 ## Current state (verified at a985197)
@@ -32,9 +32,9 @@ reappear in the picker. Packaging can import 3.9-safe `ai_router` leaves (preced
   RETIRED_SUBSCRIPTION_SLUGS = frozenset({'gpt-reserve'})
   ```
   and at `:211-215` it pops those slugs from merged entries and skips them when seeding from roster.
-- `packaging/service.py:609-621` `ensure_state`; the prune is the `elif 'gpt-reserve' in state['openai_models']`
+- `packaging/service.py:609-621` at plan time (`:622-633` at implementation) `ensure_state`; the prune was the `elif 'gpt-reserve' in state['openai_models']`
   branch.
-- `packaging/service.py:38-50` shows the house loader (`service.load(name, filename)`; no
+- `packaging/service.py:38-50` shows the house loader (`load(name, filename)`; no
   `sys.path` insert, the module is read from disk and executed by spec):
   ```python
   import importlib.util  # noqa: E402
@@ -85,7 +85,7 @@ the explicit `python3.9` installer-surface parse list test if that list is expli
 - `ai_router/catalogue.py`: replace the literal with
   `from .retired_slugs import SUBSCRIPTION as RETIRED_SUBSCRIPTION_SLUGS` (keep the local name so
   existing importers/tests are unaffected).
-- `packaging/service.py`: beside the `launchd.py`/`feed.py` spec-loads at `:52-53`, load the new leaf with the
+- `packaging/service.py`: beside the `launchd.py`/`feed.py`/`subscription_roster.py` spec-loads at `:52-57`, load the new leaf with the
   same helper (`load('router_retired_slugs', ...)`) and bind `RETIRED_SUBSCRIPTION_SLUGS` from it;
   then change the prune to iterate the set:
   ```python

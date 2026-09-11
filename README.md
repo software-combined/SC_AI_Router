@@ -283,6 +283,7 @@ directory at an idle boundary:
 `ai_router/image_items.py`,
 `ai_router/model_policy.py`,
 `ai_router/subscription_roster.py`,
+`ai_router/retired_slugs.py`,
 `ai_router/clients/__init__.py`,
 `ai_router/clients/codex.py`,
 `ai_router/transport.py`,
