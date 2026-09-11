@@ -229,6 +229,7 @@ class ToolAdapterTests(unittest.TestCase):
         qualified = ToolEvents(names).item({'type': 'function_call', 'name': SEARCH_NAME, 'arguments': '{"query":"probe.echo_probe"}'})
         self.assertEqual(qualified['arguments'], {'query': 'probe echo_probe'})
 
+
     def test_union_root_schema_is_string_wrapped_for_grok_only(self):
         union = {'anyOf': [{'type': 'object', 'properties': {'value': {'type': 'string'}}},
                            {'type': 'string'}]}

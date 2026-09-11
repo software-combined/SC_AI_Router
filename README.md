@@ -198,6 +198,9 @@ has one. If something looks wrong, start at
 - A 400 means the model, payload or local key configuration is invalid. A 409
   means the provider cannot serve the request, for example an unsupported
   reasoning level after a model switch; the message names the allowed levels.
+  A refusal on an OpenRouter turn names the provider code when one is present
+  and says to switch the thread back to the previous model or start a new
+  thread.
 - A 503 with `Retry-After` means the request was not served: either the router
   is draining for an update (`SERVER_DRAINING`) or an upstream 429 was mapped
   to a retryable answer (`UPSTREAM_RATE_LIMITED`). The JSON body names the

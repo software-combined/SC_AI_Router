@@ -84,6 +84,67 @@ def user_message_item(text):
     return {'type': 'message', 'role': 'user',
             'content': [{'type': 'input_text', 'text': text}]}
 
+
+PORTABLE_SEARCH_NOTE = ('[tool search result replayed as declared tools; '
+                        'the search call itself is omitted on this model]')
+
+
+def _has_model_switch(items):
+    """True on the client's `<model_switch>` marker (first content block).
+
+    The marker is a developer message the client writes on the first turn
+    after a model swap; user text is data and never selects this path.
+    """
+    for item in items:
+        if not isinstance(item, dict) or item.get('role') != 'developer':
+            continue
+        content = item.get('content')
+        first = content[0] if isinstance(content, list) and content else None
+        text = first.get('text') if isinstance(first, dict) else None
+        if isinstance(text, str) and text.strip().startswith('<model_switch>'):
+            return True
+    return False
+
+
+def portablize_search_history(items, search_name, history_mode):
+    """Collapse the discovery pair into one note on portable turns.
+
+    Trigger: `history_mode == 'portable'` (the caller's registry quirk)
+    or the client's `<model_switch>` marker. Only the search call/output
+    matched by call_id collapses; a half without its mate falls away so
+    no orphan rides along. Discovery outputs ride nameless from the
+    rewrite loop, so they join by call_id. Released schemas stay
+    declared in payload['tools']; every other item passes through.
+    """
+    if not isinstance(items, list):
+        return items
+    if history_mode != 'portable' and not _has_model_switch(items):
+        return items
+    calls = {item.get('call_id') for item in items
+             if isinstance(item, dict) and item.get('type') == 'function_call'
+             and item.get('name') == search_name and item.get('call_id')}
+    matched = calls & {item.get('call_id') for item in items
+                       if isinstance(item, dict)
+                       and item.get('type') == 'function_call_output'
+                       and (item.get('name') == search_name
+                            or not item.get('name'))}
+    out, noted = [], False
+    for item in items:
+        if not isinstance(item, dict):
+            out.append(item)
+            continue
+        kind, name, call_id = item.get('type'), item.get('name'), item.get('call_id')
+        discovery = ((kind == 'function_call' and name == search_name)
+                     or (kind == 'function_call_output'
+                         and (name == search_name or (not name and call_id in calls))))
+        if not discovery:
+            out.append(item)
+        elif call_id in matched and not noted:
+            out.append(user_message_item(PORTABLE_SEARCH_NOTE))
+            noted = True
+        # Unmatched halves and repeat matches fall away here.
+    return out
+
 def build_compact_v1_output(user_messages, summary):
     if not isinstance(summary, str) or not summary.strip():
         raise ValueError('Compaction summary missing or empty; retry compaction.')

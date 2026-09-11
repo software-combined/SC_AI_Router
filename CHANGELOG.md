@@ -9,6 +9,16 @@
   the offline unit suite on every pull request, parses the shipped shell and
   PowerShell scripts, and the secrets scan covers `*.yml`, `*.sh` and `*.ps1`.
 
+- Carried-history portability (plan 149, slice 2a): turns on the
+  `meta/muse-spark-1.3-contributor` row, or turns carrying the
+  client's `<model_switch>` developer marker, replay a carried tool-search
+  call as its declared tools with the search call itself omitted.
+  Refusals on a routed turn now name the provider code when the field
+  is already code-shaped and say to switch the thread back or start a
+  new thread; an identical deterministic refusal answers 409 once more
+  without dispatching again (8 entries, 60 s, never a 5xx). Rejection
+  logs carry counts only.
+
 - README: the router home path and the installed-release installer are
   documented, installs and updates need no GitHub account, and switching
   channels by hand requires clearing `feed-serial`.

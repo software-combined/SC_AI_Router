@@ -1,0 +1,302 @@
+import json
+import unittest
+from types import SimpleNamespace
+from unittest import mock
+
+from ai_router import provider_defs, upstream
+
+
+class FailureDescriptionTests(unittest.TestCase):
+    def test_stall_before_headers_names_model_and_timeout(self):
+        status, message, _ = upstream.describe_failure(
+            TimeoutError('timed out'), None,
+            {'model': 'x-ai/grok-4.6', 'provider': 'openrouter',
+             'elapsed_ms': 120001.0, 'timeout_s': 120, 'has_image': False})
+        self.assertEqual(status, 502)
+        self.assertIn('x-ai/grok-4.6', message)
+        self.assertIn('120', message)
+        self.assertIn('shorter', message)
+
+    def test_grok_image_stall_suggests_text_only(self):
+        # The hint matches the pinned id and any tilde alias of the vendor.
+        for model in ('x-ai/grok-4.6', '~x-ai/grok-latest'):
+            with self.subTest(model=model):
+                status, message, _ = upstream.describe_failure(
+                    TimeoutError('timed out'), None,
+                    {'model': model, 'provider': 'openrouter',
+                     'elapsed_ms': 120001.0, 'timeout_s': 120, 'has_image': True})
+                self.assertEqual(status, 502)
+                self.assertIn('text-only', message)
+        _, message, _ = upstream.describe_failure(
+            TimeoutError('timed out'), None,
+            {'model': 'z-ai/glm-5.3', 'provider': 'openrouter',
+             'elapsed_ms': 120001.0, 'timeout_s': 120, 'has_image': True})
+        self.assertNotIn('text-only', message)
+
+    def test_dns_failure_names_host(self):
+        status, message, _ = upstream.describe_failure(
+            OSError('Name or service not known'), None,
+            {'model': 'z-ai/glm-5.3', 'provider': 'openrouter',
+             'host': 'openrouter.ai', 'elapsed_ms': 12.0, 'timeout_s': 120,
+             'has_image': False})
+        self.assertEqual(status, 502)
+        self.assertIn('openrouter.ai', message)
+
+    def test_nested_provider_400_becomes_actionable_409(self):
+        raw = ('{"code": "invalid-argument", "error": "Failed to start sampling: '
+               '[invalid_client_tool_schema] ns_abc123def456_tool_update: tool parameter '
+               'root must be an object type"}')
+        body = json.dumps({'error': {'message': 'Provider returned error',
+                                     'metadata': {'raw': raw, 'provider_name': 'xAI'}}})
+        status, message, _ = upstream.describe_failure(
+            None, {'status': 400, 'body': body.encode()},
+            {'model': 'x-ai/grok-4.6', 'provider': 'openrouter',
+             'elapsed_ms': 1831.8, 'timeout_s': 120, 'has_image': False})
+        self.assertEqual(status, 409)
+        self.assertIn('xAI', message)
+        self.assertIn('ns_abc123def456_tool_update', message)
+        self.assertIn('tool schema was rejected', message)
+        self.assertNotIn('Failed to start sampling', message)
+        self.assertNotIn('arguments_json', message)
+
+    def test_bare_message_body_names_recovery_without_code(self):
+        body = json.dumps({'error': {'message': 'Provider returned error',
+                                     'metadata': {'provider_name': 'Meta'}}})
+        status, message, code = upstream.describe_failure(
+            None, {'status': 400, 'body': body.encode()},
+            {'model': 'meta/muse-spark-1.3-contributor', 'provider': 'openrouter',
+             'elapsed_ms': 1500.0, 'timeout_s': 120, 'has_image': False, 'routed': True})
+        self.assertEqual(status, 409)
+        self.assertIsNone(code)
+        self.assertIn('the request was rejected', message)
+        self.assertIn('Switch this thread back to the previous model, '
+                      'or start a new thread for meta/muse-spark-1.3-contributor',
+                      message)
+        self.assertIn('Do not retry the unchanged request', message)
+        self.assertNotIn('code ', message)
+        self.assertNotIn('Provider returned error', message)
+
+    def test_only_a_code_shaped_field_reaches_the_client(self):
+        # A code-shaped value surfaces; prose, however short, never does.
+        for raw_code, expected in ((' INVALID_Request-9 ', 'invalid_request-9'),
+                                   ('MY secret token ABC123 x', None),
+                                   ('invalid-request!!', None),
+                                   ('x' * 100, None)):
+            with self.subTest(code=raw_code):
+                body = json.dumps({'error': {
+                    'message': 'Provider returned error mentioning MY SECRET-SCHEMA',
+                    'code': raw_code,
+                    'metadata': {'provider_name': 'Meta'}}})
+                self.assertEqual(upstream._provider_reason(body.encode())[3], expected)
+                _, message, code = upstream.describe_failure(
+                    None, {'status': 400, 'body': body.encode()},
+                    {'model': 'meta/muse-spark-1.3-contributor', 'provider': 'openrouter',
+                     'elapsed_ms': 1500.0, 'timeout_s': 120, 'has_image': False,
+                     'routed': True})
+                self.assertEqual(code, expected)
+                self.assertNotIn('MY SECRET-SCHEMA', message)
+                if expected:
+                    self.assertIn(', code ' + expected, message)
+                else:
+                    self.assertNotIn('code ', message)
+
+    def test_routed_flag_controls_the_recovery_sentence(self):
+        body = json.dumps({'error': {'message': 'Provider returned error',
+                                     'metadata': {'provider_name': 'Meta'}}})
+        _, routed_message, _ = upstream.describe_failure(
+            None, {'status': 400, 'body': body.encode()},
+            {'model': 'meta/muse-spark-1.3-contributor', 'provider': 'openrouter',
+             'elapsed_ms': 1500.0, 'timeout_s': 120, 'has_image': False, 'routed': True})
+        plain_message = upstream.describe_failure(
+            None, {'status': 400, 'body': body.encode()},
+            {'model': 'claude-sonnet-5', 'provider': 'anthropic-subscription',
+             'elapsed_ms': 1500.0, 'timeout_s': 120, 'has_image': False})[1]
+        self.assertIn('Switch this thread back to the previous model', routed_message)
+        self.assertNotIn('Switch this thread back', plain_message)
+        self.assertIn('Do not retry the unchanged request', plain_message)
+
+    def test_error_type_and_inner_raw_code_win_in_order(self):
+        body = json.dumps({'error': {'message': 'Provider returned error',
+                                     'error_type': ' Upstream_Timeout ',
+                                     'metadata': {'provider_name': 'Meta'}}})
+        self.assertEqual(upstream._provider_reason(body.encode())[3], 'upstream_timeout')
+        raw = json.dumps({'error': {'code': 'Inner_Code-9', 'error': 'boom'}})
+        body = json.dumps({'error': {'message': 'Provider returned error',
+                                     'metadata': {'raw': raw, 'provider_name': 'Meta'}}})
+        self.assertEqual(upstream._provider_reason(body.encode())[3], 'inner_code-9')
+
+    def test_unparseable_upstream_body_passes_through(self):
+        self.assertIsNone(upstream.describe_failure(
+            None, {'status': 400, 'body': b'not json at all'},
+            {'model': 'z-ai/glm-5.3', 'provider': 'openrouter',
+             'elapsed_ms': 500.0, 'timeout_s': 120, 'has_image': False}))
+        self.assertIsNone(upstream.describe_failure(
+            ValueError('odd shape'), None,
+            {'model': 'z-ai/glm-5.3', 'provider': 'openrouter',
+             'elapsed_ms': 500.0, 'timeout_s': 120, 'has_image': False}))
+
+
+class RefusalCacheTests(unittest.TestCase):
+    def setUp(self):
+        upstream.clear_refusals()
+        self.addCleanup(upstream.clear_refusals)
+
+    def _refusal_body(self, marker='boom'):
+        return json.dumps({'error': {'message': f'Provider blew up on {marker}',
+                                     'metadata': {'provider_name': 'Meta'}}}).encode()
+
+    def test_identical_body_answers_twice_with_one_dispatch(self):
+        from ai_router import relay
+        from ai_router.transport import Prepared
+        dispatches = []
+        refused = self._refusal_body()
+
+        class FakeResp:
+            status = 400
+            def read(self, *a): return refused
+            def getheader(self, *a, **k): return ''
+
+        class FakeConn:
+            def __init__(self, *a, **k): pass
+            def connect(self): pass
+            def request(self, *a, **k): dispatches.append(1)
+            def getresponse(self): return FakeResp()
+            def close(self): pass
+
+        seen = {}
+        handler = SimpleNamespace(
+            server=SimpleNamespace(credentials=SimpleNamespace(
+                key_rejected=lambda provider: False)),
+            error=lambda err: seen.setdefault('err', err))
+        provider = SimpleNamespace(defn=provider_defs.OPENROUTER)
+        body = json.dumps({'model': 'm', 'input': [], 'tools': []}).encode()
+        prepared = Prepared('openrouter.ai', '/responses', {}, body, {}, 'openrouter')
+        metrics = {'provider': 'openrouter', 'protocol': 'responses',
+                   'model': 'meta/muse-spark-1.3-contributor', 'path': '/responses'}
+        events = []
+        with mock.patch.object(relay.http.client, 'HTTPSConnection', FakeConn):
+            relay.relay(handler, provider, prepared, metrics, 0.0,
+                        log_event=lambda event, **f: events.append((event, f)))
+            first = seen['err']
+            relay.relay(handler, provider, prepared, metrics, 0.0,
+                        log_event=lambda event, **f: events.append((event, f)))
+        self.assertEqual(len(dispatches), 1)
+        self.assertEqual(seen['err'].status, 409)
+        self.assertEqual(seen['err'].message, first.message)
+        cached = [e for e, _ in events if e == 'upstream_rejected_cached']
+        self.assertEqual(len(cached), 1)
+        fields = dict(events[-1][1])
+        self.assertNotIn('request_bytes', fields)
+
+    def test_changed_body_dispatches_again(self):
+        body = json.dumps({'input': []}).encode()
+        upstream.remember_refusal('openrouter', 'm', body, 'MSG', now=10.0)
+        self.assertEqual(upstream.recall_refusal('openrouter', 'm', body, now=20.0), 'MSG')
+        self.assertIsNone(upstream.recall_refusal(
+            'openrouter', 'm', json.dumps({'input': [1]}).encode(), now=20.0))
+
+    def test_entries_expire_after_60_seconds(self):
+        body = b'same'
+        upstream.remember_refusal('openrouter', 'm', body, 'MSG', now=100.0)
+        self.assertEqual(upstream.recall_refusal('openrouter', 'm', body, now=160.0), 'MSG')
+        self.assertIsNone(upstream.recall_refusal('openrouter', 'm', body, now=160.1))
+
+    def test_cache_caps_at_8_entries(self):
+        for i in range(9):
+            upstream.remember_refusal('openrouter', 'm', f'body-{i}'.encode(),
+                                      f'MSG-{i}', now=100.0 + i)
+        self.assertEqual(len(upstream._REFUSALS), 8)
+        self.assertIsNone(upstream.recall_refusal('openrouter', 'm', b'body-0', now=110.0))
+        self.assertEqual(upstream.recall_refusal('openrouter', 'm', b'body-8', now=110.0),
+                         'MSG-8')
+
+    def test_transient_upstream_failure_dispatches_again(self):
+        from ai_router import relay
+        from ai_router.transport import Prepared
+        dispatches = []
+        refused = self._refusal_body()
+
+        class FakeResp:
+            status = 502
+            def read(self, *a): return refused
+            def getheader(self, *a, **k): return ''
+
+        class FakeConn:
+            def __init__(self, *a, **k): pass
+            def connect(self): pass
+            def request(self, *a, **k): dispatches.append(1)
+            def getresponse(self): return FakeResp()
+            def close(self): pass
+
+        seen = {}
+        handler = SimpleNamespace(
+            server=SimpleNamespace(credentials=SimpleNamespace(
+                key_rejected=lambda provider: False)),
+            error=lambda err: seen.setdefault('err', err))
+        provider = SimpleNamespace(defn=provider_defs.OPENROUTER)
+        body = json.dumps({'model': 'm', 'input': [], 'tools': []}).encode()
+        prepared = Prepared('openrouter.ai', '/responses', {}, body, {}, 'openrouter')
+        metrics = {'provider': 'openrouter', 'protocol': 'responses',
+                   'model': 'meta/muse-spark-1.3-contributor', 'path': '/responses'}
+        events = []
+        with mock.patch.object(relay.http.client, 'HTTPSConnection', FakeConn):
+            for _ in range(2):
+                relay.relay(handler, provider, prepared, metrics, 0.0,
+                            log_event=lambda event, **f: events.append((event, f)))
+        self.assertEqual(len(dispatches), 2)
+        self.assertEqual([e for e, _ in events if e == 'upstream_rejected_cached'], [])
+        self.assertEqual(len(upstream._REFUSALS), 0)
+
+    def test_non_responses_route_is_not_cached(self):
+        from ai_router import relay
+        from ai_router.transport import Prepared
+        dispatches = []
+        refused = self._refusal_body()
+
+        class FakeResp:
+            status = 400
+            def read(self, *a): return refused
+            def getheader(self, *a, **k): return ''
+
+        class FakeConn:
+            def __init__(self, *a, **k): pass
+            def connect(self): pass
+            def request(self, *a, **k): dispatches.append(1)
+            def getresponse(self): return FakeResp()
+            def close(self): pass
+
+        handler = SimpleNamespace(
+            server=SimpleNamespace(credentials=SimpleNamespace(
+                key_rejected=lambda provider: False)),
+            error=lambda err: None)
+        provider = SimpleNamespace(defn=provider_defs.OPENROUTER)
+        body = json.dumps({'model': 'm', 'messages': [{'role': 'user', 'content': 'hi'}]}).encode()
+        prepared = Prepared('openrouter.ai', '/v1/messages', {}, body, {}, 'openrouter')
+        metrics = {'provider': 'openrouter', 'protocol': 'messages',
+                   'model': 'anthropic/claude-opus-5', 'path': '/v1/messages'}
+        with mock.patch.object(relay.http.client, 'HTTPSConnection', FakeConn):
+            for _ in range(2):
+                relay.relay(handler, provider, prepared, metrics, 0.0,
+                            log_event=lambda event, **f: None)
+        self.assertEqual(len(dispatches), 2)
+        self.assertEqual(len(upstream._REFUSALS), 0)
+
+    def test_concurrent_remember_is_safe_and_capped(self):
+        import threading
+        failures = []
+
+        def worker(n):
+            try:
+                for i in range(200):
+                    upstream.remember_refusal('openrouter', 'm', f'{n}-{i}'.encode(), 'MSG')
+                    upstream.recall_refusal('openrouter', 'm', f'{n}-{i}'.encode())
+            except Exception as exc:  # noqa: BLE001 - the test asserts nothing escapes
+                failures.append(exc)
+
+        threads = [threading.Thread(target=worker, args=(n,)) for n in range(8)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        self.assertEqual(failures, [])
+        self.assertLessEqual(len(upstream._REFUSALS), 8)

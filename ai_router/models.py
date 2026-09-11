@@ -89,6 +89,7 @@ def derive_row(slug, live, provider_id=provider_defs.DEFAULT_EXTERNAL):
             'modalities': modalities or ['text'],
             'excluded_efforts': [],
             'schema_mode': 'native',
+            'history_mode': 'native',
             'max_tools': None,
             'drop_images': False,
             'context_window': live.get('context_length', 0),
