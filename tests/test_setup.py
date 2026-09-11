@@ -14,7 +14,6 @@ from pathlib import Path
 from unittest import mock
 from ai_router import setup
 from ai_router.credentials import Credentials
-from ai_router.runtime import load_state
 from tests.test_mixed_router import _start_server
 
 NOW = 1_700_000_000

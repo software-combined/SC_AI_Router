@@ -254,7 +254,6 @@ class DesktopMergeTests(unittest.TestCase):
         # Mirror of the CLI-only uninstall test: a desktop-only attachment
         # is restored instead of taking the service-only early return.
         from tests.test_install import _patch_attrs as _pa, _ok_run
-        from tests.test_install_config import _install
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             home.mkdir()

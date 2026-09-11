@@ -10,7 +10,6 @@ import unittest
 from unittest import mock
 from ai_router import providers
 from ai_router.credentials import Credentials
-from ai_router.registry import by_slug
 from ai_router.router import Router
 
 class _StubCredentials:

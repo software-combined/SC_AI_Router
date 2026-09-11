@@ -13,7 +13,7 @@ client credentials are never stored or logged.
 """
 import json
 
-from . import providers, transport
+from . import transport
 from .capabilities import OPENROUTER_HOST
 from .errors import PreparationError, UnknownModel
 from . import registry
@@ -21,9 +21,8 @@ from .registry import by_slug
 
 ANTHROPIC_HOST = 'api.anthropic.com'
 ANTHROPIC_PREFIX = '/api'
-# GET and POST share the Messages paths today; the names differ so a future
-# GET-only route (like /v1/models) cannot silently become POST-routable.
-CLAUDE_PATHS = frozenset({'/v1/messages', '/v1/messages/count_tokens'})
+# POST-only Messages paths; a future GET-only route (like /v1/models) must
+# not silently become POST-routable.
 CLAUDE_POST_PATHS = frozenset({'/v1/messages', '/v1/messages/count_tokens'})
 CLAUDE_ALIAS_PREFIX = 'claude/'
 
