@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- The picker pins exact model ids: `anthropic/claude-opus-5`,
+  `anthropic/claude-sonnet-5`, `anthropic/claude-fable-5.1`,
+  `anthropic/claude-haiku-4.5`, `google/gemini-3.8-flash`,
+  `google/gemini-3.1-pro-preview` and `x-ai/grok-4.6` replace the
+  `~...-latest` aliases, which are retired via `RETIRED_SLUGS` so upgrades
+  drop them. The router no longer follows upstream `latest` movement on its
+  own; a new version is a registry row plus a retirement. Opus 5, Fable 5.1
+  and Haiku 4.5 passed isolated base round trips and are verified (Haiku at
+  `none`, its only supported effort), and the Grok image-stall hint keeps
+  matching the pinned row.
+
 - Providers are now data, not code paths: `ai_router/provider_defs.py` holds
   one definition per upstream (host, endpoint prefixes, key location, model
   catalogue, key-info endpoint, failure dialect), and the Responses and

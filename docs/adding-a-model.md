@@ -36,16 +36,27 @@ To preview a per-portco subset in CI without touching runtime policy:
 followed by the same `--allowed` with `--check`. Runtime enforcement
 reads `<home>/model-policy.json` alone; the flag never widens it.
 
-The current roster uses only the Opus, Fable, Sonnet, and Haiku Latest
-Claude aliases from the [OpenRouter model list](https://openrouter.ai/api/v1/models).
-The current DeepSeek rows are V4.1 Flash (newest Flash, pinned snapshot,
-image-capable) and V4 Pro 0813 (newest Pro, pinned snapshot, text-only).
-Upstream serves no pro-latest id, so Pro keeps dated ids with clean display
-names instead of invented slugs. Rows land as `preview` until the isolated
+The current roster pins exact ids from the
+[OpenRouter model list](https://openrouter.ai/api/v1/models): Claude Opus 5,
+Sonnet 5, Fable 5.1 and Haiku 4.5; Gemini 3.8 Flash and Gemini 3.1 Pro
+Preview; Grok 4.6; and the DeepSeek V4.1 Flash (newest Flash, image-capable)
+and V4 Pro 0813 (newest Pro, text-only) rows. The router does not follow
+upstream `latest` movement on its own: when a new version ships, add its
+pinned row, probe it, and put the superseded slug in `RETIRED_SLUGS` so
+upgrades drop it from the picker. Rows land as `preview` until the isolated
 `--probe` round trip passes and the run is recorded in
-`docs/compatibility.md`. Tilde alias
-slugs are used only when upstream actually serves the `~`-prefixed id; never
-invent one. New entries are Preview, not runtime-verified.
+`docs/compatibility.md`. `models add --probe` runs its round trip at `low`
+and takes no effort flag, so a model whose only effort is `none` (Claude
+Haiku 4.5) is verified by hand: add the row as `preview`, boot
+`ai_router.candidate.IsolatedRouter(slug)`, run
+`python3.14 tools/probe_codex_runtime.py <slug> --router-state
+<home>/mixed-router-state.json --catalog <home>/candidate-catalogue.json
+--effort none`, then set the row's `tier` to `verified` in
+`ai_router/models.json` and record the run in `docs/compatibility.md`.
+A tilde alias slug is used only when the roster deliberately tracks upstream
+and upstream actually serves the `~`-prefixed id; never invent one, and an
+alias keeps the `Latest` label. New entries are Preview, not
+runtime-verified.
 
 Picker labels follow the naming convention in `AGENTS.md` section 8
 (`<Vendor>: <Model> <Version?>`); `models add` and `live_refresh` produce

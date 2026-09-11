@@ -27,15 +27,16 @@ class SelectTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'not in the configured catalog'):
             providers.select('unknown/model', '/responses', ['gpt-6-astra'])
 
-    def test_select_unknown_carries_id_and_tilde_candidate(self):
+    def test_select_unknown_carries_id_and_no_alias_candidate(self):
+        # The retired Claude aliases are gone from the registry, so there is
+        # no tilde candidate to offer; the requested id still travels.
         from ai_router.errors import UnknownModel
         with self.assertRaises(UnknownModel) as caught:
             providers.select('anthropic/claude-opus-latest', '/responses',
                              ['gpt-6-astra'])
         self.assertEqual(caught.exception.model,
                          'anthropic/claude-opus-latest')
-        self.assertEqual(caught.exception.candidates,
-                         ('~anthropic/claude-opus-latest',))
+        self.assertEqual(caught.exception.candidates, ())
         with self.assertRaises(UnknownModel) as caught:
             providers.select('unknown/model', '/responses', ['gpt-6-astra'])
         self.assertEqual(caught.exception.candidates, ())
@@ -145,20 +146,28 @@ class FailureDescriptionTests(unittest.TestCase):
     def test_stall_before_headers_names_model_and_timeout(self):
         status, message = upstream.describe_failure(
             TimeoutError('timed out'), None,
-            {'model': '~x-ai/grok-latest', 'provider': 'openrouter',
+            {'model': 'x-ai/grok-4.6', 'provider': 'openrouter',
              'elapsed_ms': 120001.0, 'timeout_s': 120, 'has_image': False})
         self.assertEqual(status, 502)
-        self.assertIn('~x-ai/grok-latest', message)
+        self.assertIn('x-ai/grok-4.6', message)
         self.assertIn('120', message)
         self.assertIn('shorter', message)
 
     def test_grok_image_stall_suggests_text_only(self):
-        status, message = upstream.describe_failure(
+        # The hint matches the pinned id and any tilde alias of the vendor.
+        for model in ('x-ai/grok-4.6', '~x-ai/grok-latest'):
+            with self.subTest(model=model):
+                status, message = upstream.describe_failure(
+                    TimeoutError('timed out'), None,
+                    {'model': model, 'provider': 'openrouter',
+                     'elapsed_ms': 120001.0, 'timeout_s': 120, 'has_image': True})
+                self.assertEqual(status, 502)
+                self.assertIn('text-only', message)
+        _, message = upstream.describe_failure(
             TimeoutError('timed out'), None,
-            {'model': '~x-ai/grok-latest', 'provider': 'openrouter',
+            {'model': 'z-ai/glm-5.3', 'provider': 'openrouter',
              'elapsed_ms': 120001.0, 'timeout_s': 120, 'has_image': True})
-        self.assertEqual(status, 502)
-        self.assertIn('text-only', message)
+        self.assertNotIn('text-only', message)
 
     def test_dns_failure_names_host(self):
         status, message = upstream.describe_failure(
@@ -177,7 +186,7 @@ class FailureDescriptionTests(unittest.TestCase):
                                      'metadata': {'raw': raw, 'provider_name': 'xAI'}}})
         status, message = upstream.describe_failure(
             None, {'status': 400, 'body': body.encode()},
-            {'model': '~x-ai/grok-latest', 'provider': 'openrouter',
+            {'model': 'x-ai/grok-4.6', 'provider': 'openrouter',
              'elapsed_ms': 1831.8, 'timeout_s': 120, 'has_image': False})
         self.assertEqual(status, 409)
         self.assertIn('xAI', message)
@@ -266,12 +275,12 @@ class SummarizerTests(unittest.TestCase):
             'moonshotai/kimi-k3', '/responses', payload, b'raw', {}, _stub_credentials())
         kept = json.loads(prepared.body)['input'][0]['content']
         self.assertEqual(len(kept), 2)
-        grok_payload = {'model': '~x-ai/grok-latest', 'input': [
+        grok_payload = {'model': 'x-ai/grok-4.6', 'input': [
             {'type': 'message', 'role': 'user', 'content': [
                 {'type': 'input_text', 'text': 'look'},
                 {'type': 'input_image', 'image_url': 'data:image/png;base64,AAA'}]}]}
         grok_prepared = _external_responses().prepare(
-            '~x-ai/grok-latest', '/responses', grok_payload, b'raw', {}, _stub_credentials())
+            'x-ai/grok-4.6', '/responses', grok_payload, b'raw', {}, _stub_credentials())
         self.assertEqual(json.loads(grok_prepared.body)['input'][0]['content'],
             [{'type': 'input_text', 'text': 'look'},
              {'type': 'input_text', 'text': '[image omitted: this model runs text-only]'}])

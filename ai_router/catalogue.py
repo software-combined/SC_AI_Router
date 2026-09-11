@@ -68,11 +68,16 @@ ROW_TEMPLATE = {
     'auto_review_model_override': None,
 }
 
-RETIRED_SLUGS = {'anthropic/claude-opus-5', 'anthropic/claude-fable-5.1',
+# Claude, Gemini and Grok pin exact ids, so their latest aliases retire.
+# DeepSeek keeps Pro 0813 + V4.1 Flash; its alias and Vision rows retire too.
+RETIRED_SLUGS = {'~anthropic/claude-sonnet-latest', '~anthropic/claude-fable-latest',
+                 '~anthropic/claude-haiku-latest', '~anthropic/claude-opus-latest',
+                 '~google/gemini-flash-latest', '~google/gemini-pro-latest',
+                 '~x-ai/grok-latest',
                  'deepseek/deepseek-v4-pro', 'deepseek/deepseek-v4-flash',
                  'deepseek/deepseek-v4-flash-0731',
                  '~deepseek/deepseek-v4-flash-latest',
-                 'deepseek/deepseek-v4-flash-vision-exp'}  # DeepSeek keeps Pro 0813 + V4.1 Flash; alias and Vision rows retired
+                 'deepseek/deepseek-v4-flash-vision-exp'}
 
 # Retired subscription slugs live in retired_slugs.py (Plan 100 single source,
 # shared with the installer prune); merge() drops them from stale machines.
