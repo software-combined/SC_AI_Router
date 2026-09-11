@@ -66,6 +66,8 @@ class SystemdTests(unittest.TestCase):
         self.assertIn(str(self.home / 'releases' / '0.6.6.0' / 'packaging' / 'install.py'), update)
         self.assertNotIn('--feed', update)
         self.assertIn('ROUTER_UPDATE_SERVICE=1', update)
+        # A detached restart dialog must outlive the oneshot unit.
+        self.assertIn('KillMode=process', update)
         self.assertIn(['systemctl', '--user', 'start', install_mod._linux.TIMER], self.calls)
 
     def test_failed_upgrade_restores_pointer_catalogue_and_timer(self):
