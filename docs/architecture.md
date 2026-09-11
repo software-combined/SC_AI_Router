@@ -7,7 +7,7 @@ transitional owners name the plan that will move them.
 ## Domains and direction
 
 ```
-registry / capabilities (leaves: model facts, stdlib + dataclasses only)
+registry / capabilities / image_items (leaves: model facts, stdlib + dataclasses only)
   ^            ^
   |            |
 catalogue / models / live_refresh / apply_catalogue (client projections)
