@@ -221,6 +221,24 @@ class ClaudeIngressTests(unittest.TestCase):
                 self.assertEqual((host, path), ('openrouter.ai', '/api/v1/messages'))
                 self.assertEqual(json.loads(body)['model'], slug)
 
+    def test_openrouter_context_error_answers_a_json_error_not_a_responses_frame(self):
+        # Plan 141 regression: the context-error gate is Responses-only. An
+        # Anthropic client must get the JSON error, never a 200 SSE stream
+        # carrying `response.failed` (that envelope belongs to Codex).
+        body = json.dumps({'error': {'code': 'context_length_exceeded',
+                                     'message': 'too long'}}).encode()
+        install_fake(self, lambda: FakeUpstream(400, body, []))
+        server = self._server()
+        payload = _messages('z-ai/glm-5.3-flash')
+        payload['stream'] = True
+        response = _post(server.server_port, '/test-token/v1/messages',
+                         payload, {'Content-Type': 'application/json'})
+        payload = response.read()
+        self.assertEqual(response.status, 409)
+        self.assertIn('application/json', response.getheader('Content-Type', ''))
+        self.assertNotIn(b'response.failed', payload)
+        self.assertNotEqual(payload[:6], b'data: ')
+
     def test_direct_slug_still_routes_byte_identical(self):
         recorded = install_fake(self, lambda: FakeUpstream(
             200, b'{"id":"msg_4","type":"message","content":[]}', []))

@@ -5,6 +5,7 @@ names. Consumed by models.py (new rows) and live_refresh.py (derived
 fields). Must never import models, live_refresh, catalogue, providers,
 installer, or clients.
 """
+from . import provider_defs
 
 # Codex input vocabulary: change this one line if Codex widens InputModality.
 CODEX_MODALITIES = ('text', 'image', 'audio')
@@ -53,6 +54,8 @@ def refresh_display_name(row, live):
     or snapshot token they advertise, but the vendor prefix stays pinned to
     the row: an upstream rebrand must not rewrite the label out from under
     the row's vendor field (such a rename is a registry edit, not a refresh).
+    The provider suffix is the row's own provider label, so a refresh never
+    relabels another provider's rows.
     """
     alias = live.get('alias_target')
     alias = alias.get('name') if isinstance(alias, dict) else None
@@ -62,5 +65,7 @@ def refresh_display_name(row, live):
     if name:
         vendor, qualified = qualify_name(row['slug'], {'name': name})
         if vendor == row.get('vendor'):
-            return qualified + ' \u00b7 OpenRouter'
+            label = provider_defs.label_for(
+                row.get('provider') or provider_defs.DEFAULT_EXTERNAL)
+            return qualified + ' \u00b7 ' + label
     return row.get('display_name')

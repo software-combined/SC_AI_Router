@@ -171,26 +171,26 @@ def _clear_current(home):
 
 
 def ensure_credentials(home, state, env=None):
+    """Prompt for any missing external-provider key, then stop.
+
+    One key file per provider (Plan 141): the first provider without a
+    resolvable key gets an owner-only empty file and the instructions to
+    paste into it. Providers that resolve are skipped, so a second
+    provider's key is collected without disturbing the first.
+    """
     env = os.environ if env is None else env
-    if env.get('OPENROUTER_API_KEY', '').strip():
-        return
-    if (home / 'openrouter.key').exists():
-        return
-    if state.get('opencode_auth') and Path(state['opencode_auth']).exists():
-        return
-    key_file = home / 'openrouter.key'
-    fd = os.open(key_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    os.close(fd)
-    try:
-        platform_backend().protect_secret(key_file)
-    except SystemExit:
-        try:
-            key_file.unlink()
-        except OSError:
-            pass
-        raise
-    print(f'Paste your OpenRouter key into {key_file} (owner-only file) and re-run the installer')
-    raise SystemExit(3)
+    provider_keys().ensure(home, state, env,
+                           lambda path: platform_backend().protect_secret(path))
+
+
+def provider_keys():
+    """The shared per-provider key walk (Plan 141), spec-loaded for 3.9."""
+    module = _svc.load(
+        'router_provider_keys', Path(__file__).resolve().parent / 'provider_keys.py')
+    module.bind(_svc.load(
+        'router_provider_defs',
+        Path(__file__).resolve().parents[1] / 'ai_router' / 'provider_defs.py'))
+    return module
 
 
 def install_bundle(home, version, tarball, manifest_doc, python):

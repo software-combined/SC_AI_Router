@@ -24,7 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ai_router.agent_handoffs import add_plaintext_tools, restore_event
-from ai_router.catalogue import openrouter_entry
+from ai_router.catalogue import external_entry
 from ai_router.registry import by_slug
 
 PARENT = 'gpt-6-astra'
@@ -289,7 +289,7 @@ def run(args):
         server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
         server.ordinal = 0
         threading.Thread(target=server.serve_forever, daemon=True).start()
-        child = openrouter_entry(by_slug(CHILD))
+        child = external_entry(by_slug(CHILD))
         child['prefer_websockets'] = False
         if PARENT.startswith('gpt-'):
             # Subscription parents keep their live multi-agent contract.
@@ -308,7 +308,7 @@ def run(args):
             parent = dict(child, slug=PARENT, display_name='Synthetic parent',
                           multi_agent_version=live.get(PARENT, 'v2'))
         else:
-            parent = openrouter_entry(by_slug(PARENT))
+            parent = external_entry(by_slug(PARENT))
         native = dict(parent, slug='gpt-5.6-sol')
         catalog = root / 'catalog.json'
         catalog.write_text(json.dumps({'models': [parent, child, native]}))

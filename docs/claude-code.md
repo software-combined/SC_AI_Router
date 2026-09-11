@@ -1,9 +1,12 @@
 # Claude Code via the local router (Preview)
 
 The router speaks the Anthropic Messages API alongside the Codex
-backend, with the same billing split: registry slugs owned by OpenRouter
-bill the OpenRouter key, everything else passes through to the Claude
-subscription untouched.
+backend, with the same billing split: registry slugs owned by an external
+provider bill that provider's key, everything else passes through to the
+Claude subscription untouched. A provider definition
+(`ai_router/provider_defs.py`) says which external providers speak
+Messages; one without a `messages_path` is refused here with a clear 400
+and stays a Codex-only model.
 
 ## Setup
 

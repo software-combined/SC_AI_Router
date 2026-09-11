@@ -16,8 +16,10 @@ import unittest
 from unittest import mock
 from ai_router.compaction import decode_summary, encode_summary
 from ai_router.discovered import _MEMORY
+from ai_router import provider_defs
 from ai_router.providers import (
-    OpenRouterProvider, PreparationError, SubscriptionProvider, compaction_call)
+    ExternalResponsesProvider, PreparationError, SubscriptionProvider,
+    compaction_call)
 from tests.fakes import FakeUpstream, install_fake
 from tests.test_mixed_router import _start_server, _test_state
 
@@ -43,7 +45,7 @@ def _isolated_home(test):
 class CompactTriggerProviderTests(unittest.TestCase):
     def _provider(self, summary='handoff done'):
         _isolated_home(self)
-        provider = OpenRouterProvider()
+        provider = ExternalResponsesProvider(provider_defs.OPENROUTER)
         seen = {}
 
         def fake_summarize(model, key, items):
@@ -85,7 +87,7 @@ class CompactTriggerProviderTests(unittest.TestCase):
 
 class CompactionCallSelectionTests(unittest.TestCase):
     def test_only_openrouter_compact_turns_serve_locally(self):
-        provider = OpenRouterProvider()
+        provider = ExternalResponsesProvider(provider_defs.OPENROUTER)
         trigger = [{'type': 'message', 'role': 'user', 'content': 'hi'},
                    {'type': 'compaction_trigger'}]
         plain = [{'type': 'message', 'role': 'user', 'content': 'hi'}]
@@ -119,7 +121,7 @@ class CompactTriggerHandlerTests(unittest.TestCase):
         _isolated_home(self)
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{"output": []}', []))
         server = self._server()
-        with mock.patch.object(OpenRouterProvider, 'summarize',
+        with mock.patch.object(ExternalResponsesProvider, 'summarize',
                                return_value='handoff done'):
             response = self._post(server.server_port, '/test-token/responses', {
                 'model': 'z-ai/glm-5.3-flash',

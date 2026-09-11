@@ -29,7 +29,7 @@ if '--reasoning-summary' in sys.argv:
         from ai_router import catalogue, registry
         if len(sys.argv) > 1 and not sys.argv[1].startswith('-'):
             _rs_model = registry.by_slug(sys.argv[1])
-            _rs_entry = catalogue.openrouter_entry(_rs_model) if _rs_model else None
+            _rs_entry = catalogue.external_entry(_rs_model) if _rs_model else None
             if _rs_entry is not None:
                 _rs_entry['default_reasoning_summary'] = 'auto'
                 _rs_entry['supports_reasoning_summary_parameter'] = True
@@ -46,7 +46,7 @@ if '--apply-patch' in sys.argv:
     (_ap_dir / 'note.txt').write_text('alpha\n')
     if '--catalog' not in sys.argv and len(sys.argv) > 1 and not sys.argv[1].startswith('-'):
         _ap_model = registry.by_slug(sys.argv[1])
-        _ap_entry = catalogue.openrouter_entry(_ap_model) if _ap_model else None
+        _ap_entry = catalogue.external_entry(_ap_model) if _ap_model else None
         if _ap_entry is not None:
             _ap_entry['apply_patch_tool_type'] = 'freeform'
             _ap_path = Path(tempfile.mkdtemp(prefix='ap-catalog-')) / 'apply-patch-catalog.json'
@@ -59,7 +59,7 @@ if '--experimental-tools' in sys.argv and '--catalog' not in sys.argv:
     from ai_router import catalogue, registry
     if len(sys.argv) > 1 and not sys.argv[1].startswith('-'):
         _xt_model = registry.by_slug(sys.argv[1])
-        _xt_entry = catalogue.openrouter_entry(_xt_model) if _xt_model else None
+        _xt_entry = catalogue.external_entry(_xt_model) if _xt_model else None
         if _xt_entry is not None:
             _xt_entry['experimental_supported_tools'] = ['clock']
             _xt_path = Path(tempfile.mkdtemp(prefix='xt-catalog-')) / 'exp-tools-catalog.json'

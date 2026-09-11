@@ -7,7 +7,7 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 from ai_router.catalogue import (SUBSCRIPTION_REASONING, catalog_name, check, merge,
-                                 merge_file, openrouter_entry, read_openai_mode,
+                                 merge_file, external_entry, read_openai_mode,
                                  subscription_stub)
 from ai_router.registry import MODELS, by_slug, picker_key
 from ai_router.clients import models_for
@@ -19,7 +19,7 @@ class CatalogueFlagTests(unittest.TestCase):
                              modalities=('text', 'audio'), max_output_tokens=5000,
                              reasoning_summary='auto', apply_patch='freeform',
                              experimental_tools=('clock',), web_search=False)
-        entry = openrouter_entry(everything)
+        entry = external_entry(everything)
         self.assertEqual(entry['input_modalities'], ['text', 'audio'])
         self.assertEqual(entry['default_reasoning_summary'], 'auto')
         self.assertTrue(entry['supports_reasoning_summary_parameter'])
@@ -28,7 +28,7 @@ class CatalogueFlagTests(unittest.TestCase):
         self.assertEqual(entry['web_search_tool_type'], 'text')
 
     def test_defaults_keep_current_catalogue_values(self):
-        entry = openrouter_entry(by_slug('z-ai/glm-5.3-flash'))
+        entry = external_entry(by_slug('z-ai/glm-5.3-flash'))
         self.assertEqual(entry['default_reasoning_summary'], 'none')
         self.assertFalse(entry['supports_reasoning_summary_parameter'])
         self.assertIsNone(entry['apply_patch_tool_type'])
@@ -42,12 +42,12 @@ class CatalogueFlagTests(unittest.TestCase):
 
     def test_preview_entry_is_labelled(self):
         preview = replace(by_slug('z-ai/glm-5.3-flash'), tier='preview')
-        entry = openrouter_entry(preview)
+        entry = external_entry(preview)
         self.assertTrue(entry['display_name'].endswith(' · Preview'))
         self.assertTrue(entry['description'].startswith(
             'Preview, not yet verified with Codex. '))
         self.assertEqual(entry['priority'], preview.priority)  # no global offset
-        plain = openrouter_entry(by_slug('z-ai/glm-5.3-flash'))
+        plain = external_entry(by_slug('z-ai/glm-5.3-flash'))
         self.assertFalse(plain['display_name'].endswith('Preview'))
         self.assertEqual(entry['slug'], plain['slug'])
         self.assertEqual(entry['context_window'], plain['context_window'])
@@ -55,7 +55,7 @@ class CatalogueFlagTests(unittest.TestCase):
 
     def test_instructions_live_in_model_messages_template(self):
         from ai_router.catalogue import BASE_INSTRUCTIONS
-        entry = openrouter_entry(by_slug('z-ai/glm-5.3-flash'))
+        entry = external_entry(by_slug('z-ai/glm-5.3-flash'))
         self.assertNotIn('base_instructions', entry)
         self.assertEqual(entry['model_messages'],
                          {'instructions_template': BASE_INSTRUCTIONS})
@@ -199,7 +199,7 @@ class CatalogueFlagTests(unittest.TestCase):
 
     def test_merge_preserves_openai_entries_and_refreshes_stale_rows(self):
         slug = next(m.slug for m in models_for(MODELS, 'codex') if m.provider == 'openrouter')
-        stale = dict(openrouter_entry(by_slug(slug)), description='stale')
+        stale = dict(external_entry(by_slug(slug)), description='stale')
         base = {'models': [{'slug': 'gpt-6-astra'}, {'slug': 'gpt-5.6-luna'}, stale]}
         merged = merge(base)
         slugs = [m['slug'] for m in merged['models']]
@@ -222,19 +222,19 @@ class CatalogueFlagTests(unittest.TestCase):
             self.assertTrue(check(str(path)))
 
     def test_merge_keeps_codex_twins_and_drops_claude_hidden_rows(self):
-        stale = dict(openrouter_entry(by_slug('openai/gpt-6-astra')),
+        stale = dict(external_entry(by_slug('openai/gpt-6-astra')),
                      description='stale-install')
         merged = merge({'models': [stale]}, client='codex')
         self.assertIn('openai/gpt-6-astra',
                       {m['slug'] for m in merged['models']})
-        hid = dict(openrouter_entry(by_slug('~anthropic/claude-sonnet-latest')),
+        hid = dict(external_entry(by_slug('~anthropic/claude-sonnet-latest')),
                    description='stale-install')
         self.assertNotIn('~anthropic/claude-sonnet-latest',
                          {m['slug'] for m in merge({'models': [hid]},
                                                    client='claude')['models']})
 
     def test_check_rejects_hidden_rows_left_in_catalogue(self):
-        stale = dict(openrouter_entry(by_slug('~anthropic/claude-sonnet-latest')),
+        stale = dict(external_entry(by_slug('~anthropic/claude-sonnet-latest')),
                      description='stale-install')
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'stale.json'
@@ -303,7 +303,7 @@ class CatalogueTwinsTests(unittest.TestCase):
 
     def test_none_mode_merge_normalises_a_stale_subscription_catalogue(self):
         stale_sub = dict(subscription_stub('gpt-6-astra'))
-        stale_openai = dict(openrouter_entry(by_slug('openai/gpt-6-astra')),
+        stale_openai = dict(external_entry(by_slug('openai/gpt-6-astra')),
                             description='stale-install')
         stale_other = {'slug': 'gpt-stale-custom', 'display_name': 'Stale'}
         merged = merge({'models': [stale_sub, stale_openai, stale_other]},
@@ -410,7 +410,7 @@ class CatalogueSchemaCompatTests(unittest.TestCase):
         self.assertTrue(row['description'])
 
     def test_openrouter_template_matches_codex_required_fields(self):
-        entry = openrouter_entry(by_slug('z-ai/glm-5.3-flash'))
+        entry = external_entry(by_slug('z-ai/glm-5.3-flash'))
         self.assertTrue(entry['prefer_websockets'])
         self.assertTrue(entry['supports_parallel_tool_calls'])
         self.assertTrue(entry['supports_reasoning_summaries'])

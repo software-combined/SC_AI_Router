@@ -1,9 +1,9 @@
-"""Apply capabilities.py to OpenRouter catalogue entries with backup and guards."""
+"""Apply capabilities.py to external catalogue entries with backup and guards."""
 import json
 import os
 import sys
 from pathlib import Path
-from .capabilities import OPENROUTER_MODELS, catalogue_patch
+from .capabilities import EXTERNAL_MODELS, catalogue_patch
 from .clients.codex import capability_fields as codex_projection
 from .registry import by_slug
 
@@ -12,7 +12,7 @@ def apply(catalog, live):
     """Merge pinned capabilities and live metadata; fail closed on bad defaults."""
     for model in catalog['models']:
         slug = model['slug']
-        if slug not in OPENROUTER_MODELS:
+        if slug not in EXTERNAL_MODELS:
             continue
         # One Codex projection for merge and apply alike: the same snapshot
         # yields identical capability fields on either path. Live entries
@@ -41,4 +41,4 @@ if __name__ == '__main__':
     before = catalog_path.read_text()
     catalog = apply(json.loads(before), {m['id']: m for m in json.loads(live_path.read_text())['data']})
     write_guarded(catalog_path, before, json.dumps(catalog, indent=2) + '\n')
-    print(json.dumps({'models': [m['slug'] for m in catalog['models'] if m['slug'] in OPENROUTER_MODELS]}))
+    print(json.dumps({'models': [m['slug'] for m in catalog['models'] if m['slug'] in EXTERNAL_MODELS]}))

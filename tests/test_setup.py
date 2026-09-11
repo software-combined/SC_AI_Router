@@ -5,12 +5,13 @@ import json
 import os
 import shutil
 import tempfile
+import threading
 import unittest
 import urllib.error
 import urllib.request
 from pathlib import Path
 from unittest import mock
-from ai_router import setup, setup_page
+from ai_router import key_store, setup, setup_page
 from tests._platform import requires_posix_perms
 
 NOW = 1_700_000_000
@@ -71,7 +72,7 @@ class SetupUnitTests(unittest.TestCase):
     def test_form_wiring_survives_restyle(self):
         # The page markup is styled; these attributes are the contract the
         # browser POST depends on, so a later restyle must not drop one.
-        body = setup_page.form('n' * 16).decode()
+        body = setup_page.form('n' * 16, 'openrouter').decode()
         self.assertIn('<form method="post" action="./' + 'n' * 16 + '">', body)
         self.assertIn('type="password" name="key" autocomplete="off"', body)
         self.assertIn('<input type="radio" name="mode" value="subscription" checked>', body)
@@ -150,13 +151,13 @@ class SetupUnitTests(unittest.TestCase):
     def test_post_with_none_mode_refreshes_picker_to_twins(self):
         # The setup window fires after the installer wrote the catalogue,
         # so the mode flip must refresh the picker file itself.
-        from ai_router.catalogue import check, openrouter_entry
+        from ai_router.catalogue import check, external_entry
         from ai_router.registry import by_slug
         home = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, home, True)
         state = _state(home)
         (home / 'mixed-router-state.json').write_text(json.dumps(state))
-        stale = dict(openrouter_entry(by_slug('z-ai/glm-5.3-flash')),
+        stale = dict(external_entry(by_slug('z-ai/glm-5.3-flash')),
                      slug='gpt-6-astra', display_name='GPT-6-Astra')
         (home / 'mixed-models.json').write_text(
             json.dumps({'models': [stale]}))
@@ -276,7 +277,6 @@ class SetupUnitTests(unittest.TestCase):
                 with self.assertRaisesRegex(SystemExit, 'credential problem'):
                     load(path)
 
-
 class KeyWindowTests(unittest.TestCase):
     # Plan 055 Stage 3: keyless boot, first-use window, revoked-key carve-out.
     def _home(self):
@@ -297,7 +297,7 @@ class KeyWindowTests(unittest.TestCase):
         os.chmod(home / 'openrouter.key', 0o600)
         form = b'key=sk-test&mode=none'
         with mock.patch.object(setup, '_ON_WINDOWS', False), \
-                mock.patch.object(setup, '_stored_key_live', return_value=live):
+                mock.patch.object(key_store, '_stored_key_live', return_value=live):
             status, body = setup.handle_setup(
                 state, home, 'n' * 16, True, form, _urlopen=_key_ok(), _now=NOW)
         return home, status, body
@@ -318,18 +318,17 @@ class KeyWindowTests(unittest.TestCase):
         self.assertEqual((home / 'openrouter.key').read_text(), 'sk-maybe\n')
 
     def test_stored_key_live_false_only_on_401_or_403(self):
-        self.assertFalse(setup._stored_key_live('sk-x', self._dead_fetch(401)))
-        self.assertFalse(setup._stored_key_live('sk-x', self._dead_fetch(403)))
-        self.assertTrue(setup._stored_key_live('sk-x', self._dead_fetch(429)))
-        self.assertTrue(setup._stored_key_live('sk-x', _key_ok()))
+        self.assertFalse(key_store._stored_key_live('openrouter', 'sk-x', self._dead_fetch(401)))
+        self.assertFalse(key_store._stored_key_live('openrouter', 'sk-x', self._dead_fetch(403)))
+        self.assertTrue(key_store._stored_key_live('openrouter', 'sk-x', self._dead_fetch(429)))
+        self.assertTrue(key_store._stored_key_live('openrouter', 'sk-x', _key_ok()))
         def boom(req, timeout=None):
             raise OSError('down')
-        self.assertTrue(setup._stored_key_live('sk-x', boom))
+        self.assertTrue(key_store._stored_key_live('openrouter', 'sk-x', boom))
 
     def test_open_key_window_mints_once_and_reuses_live_nonce(self):
         home = self._home()
         (home / 'mixed-router-state.json').write_text(json.dumps({'port': 1, 'token': 't'}))
-        import threading
         server = mock.Mock()
         server.lock = threading.Lock()
         server.state = {'port': 1, 'token': 't'}
@@ -350,7 +349,6 @@ class KeyWindowTests(unittest.TestCase):
     def test_open_key_window_never_prints_url_off_tty(self):
         home = self._home()
         (home / 'mixed-router-state.json').write_text(json.dumps({'port': 1, 'token': 't'}))
-        import threading
         server = mock.Mock()
         server.lock = threading.Lock()
         server.state = {'port': 1, 'token': 't'}
@@ -371,7 +369,6 @@ class KeyWindowTests(unittest.TestCase):
         # path broke when webbrowser.open was reused as a urlopen-shaped seam.
         home = self._home()
         (home / 'mixed-router-state.json').write_text(json.dumps({'port': 1, 'token': 't'}))
-        import threading
         server = mock.Mock()
         server.lock = threading.Lock()
         server.state = {'port': 1, 'token': 't'}

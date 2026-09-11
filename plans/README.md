@@ -74,7 +74,7 @@ below interleaves them.
 | [124](124-test-harness-consolidation.md) | Shared test harness; installer fixtures out of a test file | TODO | after 092 |
 | [125](125-runtime-shared-primitives.md) | Runtime primitives: path sets, image blocks, catalogue predicate, capability maps | TODO | after 090/091/093/096/101 |
 | [126](126-error-taxonomy.md) | Typed error classification; drop the dead CLI error half | TODO | after 101 |
-| [127](127-providers-setup-module-splits.md) | Split upstream failure policy and setup pages out | TODO | after 101; before 128 |
+| [127](127-providers-setup-module-splits.md) | Split upstream failure policy and setup pages out | DONE: landed by 141 2026-09-11 | after 101; before 128 |
 | [128](128-router-handler-decomposition.md) | Decompose router.py into ingress + relay | TODO | after 090/091/093/096 |
 | [129](129-tool-merge-unification.md) | One tool-definition merge rule | TODO | after 091/096/097 |
 | [130](130-installer-bundle-split.md) | packaging/bundle.py: real installer headroom | TODO | after 102/123 |
@@ -117,6 +117,16 @@ and group-distribution work; this plan owns the update path only.
 |---|---|---|---|
 | [139](139-router-private-feed-publication.md) | Private feed publication: tag publishes to the token-gated feed | PARTIAL: feed live (stacks deployed, token seeded, 0.6.25 transition released); first-install assets published via `tools/publish_first_install.py`; gated library page and per-install tokens stay with 106 | supersedes 106's push-trigger and feed-only variants; before 106's remaining first-install stages |
 
+## Provider abstraction wave (141)
+
+Added 2026-09-11 from the owner request to replace the hard-wired OpenRouter identity with a
+definition per upstream. One `ai_router/provider_defs.py` entry plus registry rows must be enough
+to add or swap an external provider; no protocol translation is in scope.
+
+| Plan | Title | Status | Sequencing |
+|---|---|---|---|
+| [141](141-provider-abstraction.md) | Provider abstraction: one definition per upstream | DONE: provider abstraction 2026-09-11 (also lands 127's provider and setup-page splits) | independent; 126/128/134 rebase on it |
+
 ## Recommended overall order
 
 Work top to bottom; stop at owner gates and report. Phases 0-2 are local; 3-5 are largely
@@ -133,7 +143,9 @@ Phase notes: 099 executes only after 139's feed is qualified; 134's feed_verify 
 106 and its CI step after 101; 133 and 132 land before Phase 5 paid probes and Phase 4 Windows
 acceptance respectively; 135 exposes the pending-model hook that 099's refresh wiring calls once
 it lands, and needs no owner gate itself. The security wave rides Phase 1: 136 and 138 are
-independent, and 137 proceeds now that 090 has landed.
+independent, and 137 proceeds now that 090 has landed. The provider abstraction (141) rides
+Phase 2 and needs no owner gate: it changes no routing behaviour, and 126/127/128 must rebase on
+it rather than run alongside it.
 
 ## Dependency and coordination notes
 
