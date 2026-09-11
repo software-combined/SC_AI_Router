@@ -6,6 +6,7 @@ from . import compaction as comp, local_services, agent_handoffs
 from .capabilities import (CANONICAL_ORDER, OPENROUTER_HOST, REASONING_LEVELS, check_effort,
                               check_images, input_modalities)
 from .context_budget import estimate as estimate_tokens
+from .image_items import note_images, strip_images
 from .errors import ContextWindowExceeded, PreparationError, UnknownModel
 from .registry import by_slug, near_miss
 from .runtime import log_event
@@ -222,7 +223,7 @@ class OpenRouterProvider:
             raise PreparationError(str(exc))
         keep_images = 'image' in input_modalities(model) if isinstance(model, str) else True
         entry = by_slug(model) if isinstance(model, str) else model
-        payload['input'] = comp.note_images(rewritten) if getattr(entry, 'drop_images', False) else comp.strip_images(rewritten, keep_images)
+        payload['input'] = note_images(rewritten) if getattr(entry, 'drop_images', False) else strip_images(rewritten, keep_images)
         reasoning = payload.get('reasoning')
         try:
             check_effort(model,
