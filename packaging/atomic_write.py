@@ -1,25 +1,18 @@
-"""One atomic text writer for installer-side state and config files.
+"""Installer-side name for the shared atomic writer (Plan 131).
 
-Python 3.9-safe, stdlib only. Loaded through service.load() (Plan 123),
-never a package import, so installed bundles keep working.
+The leaf lives in ai_router/atomic_write.py so the runtime and the installer
+share one contract; this file keeps the Plan 123 file-based load path
+(`service.load('router_atomic_write', ...)`) working. Python 3.9-safe.
 """
-import os
-import tempfile
+import importlib.util as _ilu
 from pathlib import Path
 
+_spec = _ilu.spec_from_file_location(
+    'router_runtime_atomic_write',
+    Path(__file__).resolve().parents[1] / 'ai_router' / 'atomic_write.py')
+_mod = _ilu.module_from_spec(_spec)
+_spec.loader.exec_module(_mod)
 
-def replace_text(path, text, mode=0o600):
-    """Atomically replace path with text; unique tmp, fsync-free."""
-    path = Path(path)
-    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=path.name + '.', suffix='.tmp')
-    try:
-        with os.fdopen(fd, 'w') as stream:
-            stream.write(text)
-        os.chmod(tmp, mode)
-        os.replace(tmp, path)
-    except BaseException:
-        try:
-            os.unlink(tmp)
-        except OSError:
-            pass
-        raise
+replace_text = _mod.replace_text
+replace_json = _mod.replace_json
+StaleTmp = _mod.StaleTmp

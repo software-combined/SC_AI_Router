@@ -19,6 +19,7 @@ from pathlib import Path
 from urllib.parse import parse_qsl
 
 from . import key_prompt, key_store, provider_defs, setup_page
+from .atomic_write import StaleTmp, replace_json
 
 _ON_WINDOWS = os.name == 'nt'
 
@@ -107,16 +108,14 @@ def _submit(state, home, form, _urlopen):
     except OSError:
         return 502, {'ok': False, 'error': 'could not reach %s; retry shortly'
                                         % provider_defs.label_for(provider_id)}
-    key_path = Path(home) / provider_defs.get(provider_id).key.file
     try:
-        fd = key_store.store_key(home, key, provider_id,
-                       _check_live=lambda stored: key_store._stored_key_live(provider_id, stored, _fetch))
+        key_path = key_store.store_key(
+            home, key, provider_id,
+            _check_live=lambda stored: key_store._stored_key_live(provider_id, stored, _fetch))
     except key_store.KeyExists as exc:
         return 409, {'ok': False, 'error': str(exc)}
     except OSError:
         return 500, {'ok': False, 'error': 'could not store the key'}
-    with os.fdopen(fd, 'w') as stream:
-        stream.write(key + '\n')
     if _ON_WINDOWS:
         # A Windows setup window never leaves an exposed key: refuse instead.
         from . import winacl
@@ -239,24 +238,15 @@ def _repoint_window(state, home, provider_id):
 
 
 def _atomic_replace(path, doc):
-    """Write doc atomically via tmp plus os.replace; retry past a stale tmp.
-
-    A crash between O_EXCL create and replace leaves the deterministic tmp
-    behind; without the retry every later nonce mint or close fails closed
-    forever until someone unlinks it by hand.
-    """
-    tmp = path.with_name(path.name + '.setup.tmp')
+    # A crash between create and replace leaves the deterministic tmp behind;
+    # the writer's default policy clears it once and retries, so a later nonce
+    # mint or close cannot fail closed forever until someone unlinks it by hand.
     try:
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    except FileExistsError:
-        try:
-            tmp.unlink()
-        except OSError:
-            raise OSError('could not replace %s' % path)
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, 'w') as stream:
-        stream.write(json.dumps(doc, indent=2) + '\n')
-    os.replace(tmp, path)
+        replace_json(path, doc, mode=None, tmp_name=path.name + '.setup.tmp')
+    except StaleTmp:
+        # Only a leftover we could not clear is remapped; every other OSError
+        # keeps its own reason for the caller.
+        raise OSError('could not replace %s' % path)
 
 
 def _finish_setup(state, home, mode=None, profile=None, claude_mode=None):

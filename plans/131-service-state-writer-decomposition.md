@@ -9,6 +9,9 @@
 - Priority P2; effort L; risk MED; confidence HIGH; category tech-debt; depends on 094, 095, 100,
   103, 123; coordinate with 106 (feed) and 099 (cache writers).
 - Planned at `b642de9`, 2026-09-11.
+- In progress: **step 1 (one writer contract) landed 2026-09-12 on top of `2011de0`**; steps 2-4
+  (state-read contract, service decomposition, diagnostics/key privacy) are outstanding and the
+  plan row stays PARTIAL until they land.
 - First proof: each state file has one reader contract and one writer contract; `service.py` owns
   service/lock/health only; `--preflight` shares the installer's service instance.
 
@@ -19,12 +22,13 @@ update-failure state (`:469-506`, consumed only by `updater.py`), feed serial an
 (`:87-118`, `:288-306`, `:638-671`, overlapping `feed.py` with a different retry policy), and health
 (`:262-285`). Separately, the persistence story is incomplete:
 
-- `packaging/feed.py:46-60` rewrites `feed-token` and `feed-token.previous` with `O_TRUNC`;
-  `ai_router/discovered.py:37` and `ai_router/catalogue.py:305` write with truncate/`write_text`;
-  `ai_router/model_refresh.py:89,138` write cache/etag. Plans 094/095 route only
+- `packaging/feed.py` rewrote `feed-token`/`feed-token.previous` with `O_TRUNC` at planning;
+  *reconciled 2026-09-12: the public token-free feed (139/143) removed that pair, so there is no
+  token sink left in `feed.py`.* `ai_router/discovered.py` and `ai_router/catalogue.py` wrote with
+  truncate/`write_text`; `ai_router/model_refresh.py` wrote cache/etag. Plans 094/095 route only
   `service._write_state`/`ensure_state` and `codex_config`/receipts; 094 explicitly excludes
-  `claude_config.write_settings`/`claude_desktop_config.write_json`, which remain a second
-  deterministic-tmp recipe.
+  `claude_config.write_settings`/`claude_desktop_config.write_json`, which remained a second
+  deterministic-tmp recipe. *Landed: the shared leaf now owns all of these sinks.*
 - State reads are duplicated at ~10 sites with three strictness levels: full validation in
   `ai_router/runtime.py:36-69`, partial in `packaging/service.py:475-481,609-620`, unchecked
   `json.loads` in `install.py`, `updater.py:127`, `diagnostics.py:129`,
@@ -62,6 +66,19 @@ behaviour/format change to state documents, the receipt writer (095 owns it), re
    it lands after the setup split in 127. Any packaging-side import of a runtime leaf must work in
    the installed launcher context (spec loading or an explicit release-root `sys.path` insert); add
    a test that spec-loads the module from a home-style layout.
+   *Landed 2026-09-12: the leaf is `ai_router/atomic_write.py` (`replace_text`, `replace_json`,
+   `StaleTmp`, plus `tmp_name`/`stale_tmp` options); `packaging/atomic_write.py` re-exports it by
+   spec load and keeps the Plan 123 load name. Routed: `claude_config.write_settings`,
+   `claude_desktop_config.write_json` (deterministic tmp, reuse-and-retry with the pre-image
+   refusal message on a lost race, explicit 0600 chmod),
+   `catalogue.merge_file`, `discovered._write_disk`, `model_refresh.poll_once`/etag,
+   `key_store.store_key` (now atomic under a module lock; the fd-returning contract is gone) and
+   `setup.py`'s `_atomic_replace` nonce/state writer. All sinks are owner-only 0600; the catalogue
+   and model cache were previously 0644-umask and are tightened (no cross-user reader exists).
+   Tests: `tests/test_atomic_write.py` gains deterministic-tmp policy cases and a home-style layout
+   load; `tests/test_setup_provider.py` pins the key-claim matrix; `tests/test_packaging.py` adds
+   the leaf to the 3.9 installer-surface list. Drift: the old feed-token pair no longer exists
+   (public feed).*
 2. **One read contract.** Add a 3.9-safe `ai_router/state.py` with `read(path) -> dict|None`,
    `required_keys`, and `migrate(doc)`; `runtime.py` keeps its credential/policy checks but reads
    through it; route `service._read_failures`/`ensure_state`, `install.py` loads, `updater.py`,

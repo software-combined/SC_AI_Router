@@ -189,3 +189,25 @@ class ProviderWindowTests(unittest.TestCase):
         self.assertEqual(key_store.window_provider(state), 'openrouter')
 
 
+class StoreKeyTests(unittest.TestCase):
+    """The key-claim decision matrix (Plan 131 move to the shared writer)."""
+
+    def _key_path(self, home):
+        spec = provider_defs.get(provider_defs.DEFAULT_EXTERNAL)
+        return Path(home) / spec.key.file
+
+    def test_store_key_refuses_a_live_stored_key_untouched(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            key_store.store_key(tmp, 'sk-old')
+            path = self._key_path(tmp)
+            with self.assertRaises(key_store.KeyExists):
+                key_store.store_key(tmp, 'sk-new')
+            self.assertEqual(path.read_text(), 'sk-old\n')
+
+    def test_store_key_replaces_a_key_proven_dead(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            key_store.store_key(tmp, 'sk-old')
+            path = self._key_path(tmp)
+            key_store.store_key(tmp, 'sk-new', _check_live=lambda stored: False)
+            self.assertEqual(path.read_text(), 'sk-new\n')
+            self.assertEqual(oct(path.stat().st_mode & 0o777), '0o600')
