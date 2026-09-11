@@ -81,6 +81,30 @@ class RouterResponseTests(unittest.TestCase):
         response.read()
         self.assertEqual(response.getheader('openai-model'), 'x-ai/grok-4.6')
 
+    def test_subscription_required_classification_is_type_based(self):
+        # Plan 126: the raise sites and the mapper agree on the exception
+        # type, so rewording a message cannot silently reclassify the body.
+        from ai_router import claude as claude_mod
+        from ai_router import errors, providers
+        from ai_router.subscription_roster import SUBSCRIPTION_SLUGS
+        slug = SUBSCRIPTION_SLUGS[0]
+        with self.assertRaises(errors.SubscriptionRequired):
+            providers.select(slug, '/responses', [slug], 'none')
+        with self.assertRaises(errors.ClaudeSubscriptionRequired):
+            claude_mod.select(slug, '/v1/messages', 'none')
+        for exc, code in ((errors.SubscriptionRequired(), 'SUBSCRIPTION_REQUIRED'),
+                          (errors.ClaudeSubscriptionRequired(),
+                           'CLAUDE_SUBSCRIPTION_REQUIRED')):
+            mapped = errors.map_client_error(exc)
+            self.assertEqual((mapped.status, mapped.code), (400, code))
+
+        class _Reworded(errors.SubscriptionRequired):
+            def __init__(self):
+                ValueError.__init__(self, 'please attach a subscription first')
+
+        self.assertEqual(errors.map_client_error(_Reworded()).code,
+                         'SUBSCRIPTION_REQUIRED')
+
 
 if __name__ == '__main__':
     unittest.main()

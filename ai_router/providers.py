@@ -5,7 +5,7 @@ from . import capabilities, compaction as comp, local_services, agent_handoffs, 
 from .standalone_outputs import materialize_outputs
 from .capabilities import CANONICAL_ORDER, check_effort, check_images, input_modalities
 from .image_items import note_images, strip_images
-from .errors import PreparationError, UnknownModel
+from .errors import PreparationError, SubscriptionRequired, UnknownModel
 from .registry import by_slug, near_miss
 from .runtime import log_event
 from .discovered import remember
@@ -277,7 +277,7 @@ def select(model, path, openai_models=(), openai_mode='subscription',
                          allowed=allowset):
             return provider
     if openai_mode == 'none' and isinstance(model, str) and model in (openai_models or []):
-        raise ValueError('Model is not available without a ChatGPT subscription')
+        raise SubscriptionRequired()
     entry = by_slug(model) if isinstance(model, str) else None
     defn = provider_defs.get(entry.provider) if entry is not None else None
     if defn is not None and not defn.serves(provider_defs.RESPONSES):
