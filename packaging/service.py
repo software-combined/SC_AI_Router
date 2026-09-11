@@ -57,6 +57,8 @@ _retired = load('router_retired_slugs',
                 Path(__file__).resolve().parents[1] / 'ai_router' / 'retired_slugs.py')
 _atomic_write = load('router_atomic_write',
                      Path(__file__).resolve().parent / 'atomic_write.py')
+_notice = load('router_notice',
+                Path(__file__).resolve().parent / 'notice.py')
 
 # Patchable seam so tests never sleep through a real launchd settle window.
 _sleep = time.sleep
@@ -90,6 +92,7 @@ trusted_origin = _feed.trusted_origin
 channel_feed = _feed.channel_feed
 feed_source = _feed.feed_source
 gh_binary = _feed.gh_binary
+notice = _notice
 
 
 def github_asset(url):
