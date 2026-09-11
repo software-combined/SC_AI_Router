@@ -7,8 +7,8 @@ merges to `main` via PR. Tag the merge `v$(cat packaging/VERSION)` (or
 `v*-beta` for pre-releases): the release workflow runs on `v*` tags
 only, runs the suite, builds the bundle, publishes the release to the
 token-gated feed, and then creates the GitHub Release with `latest.json`.
-Every router on the stable channel installs it within about fifteen
-minutes. Never push to `main` directly for a release; a direct push runs
+Every router on the stable channel installs it within about four hours.
+Never push to `main` directly for a release; a direct push runs
 checks but publishes nothing.
 
 ## Feed infrastructure and publishing
@@ -83,8 +83,8 @@ older document, which up-to-date hosts refuse; the release step of a re-run
 reports the existing GitHub Release, but the feed publish runs first.
 
 Record the version the channel serves before the republish, wait one poll
-cycle plus the updater's bounded jitter (900 s plus up to 120 s, so allow
-about 20 minutes), then confirm the edge accepts the new value, the served
+cycle plus the updater's bounded jitter (14400 s plus up to 120 s, so allow
+about 4 hours), then confirm the edge accepts the new value, the served
 document carries it, and the document is still that release before deleting
 the retired key:
 
@@ -141,20 +141,20 @@ an idle moment. Moving a host from `beta` back to `stable` needs
 `<home>/feed-serial` cleared first, or the lower stable serial is refused
 as stale.
 
-## Update feed and repo-free auto-update
+## Update feed and enrolment-only auto-update
 
-Installed routers update themselves with no GitHub account, no repo
-access, and no `gh`. Each host resolves its feed through
-`packaging/feed.py`: hosts without `<home>/feed-token` poll the private
-GitHub Releases feed over `gh` exactly as before; the first feed that
-carries `feed_token` is persisted owner-only (previous value kept for
-one 403 retry) and every later poll uses
+Automatic updates are for enrolled SC hosts only. Enrolment is the
+owner-only `<home>/feed-token` written by the SC bootstrap or MDM; a host
+without it makes no scheduled request at all (`--status` reports
+`feed: unenrolled`). An enrolled host polls
 `https://dist.softwarecombined.com/<channel>/latest.json` with the
-`X-SCG-Feed-Token` header. Persistence happens after the serial check
-but before the version comparison, so an already-current host still
-migrates. Feeds and bundles off the trusted origins are refused, and a
-double 403 names the Technology library bootstrap as the remedy without
-leaking token bytes. `update.log` records each install with its source
+`X-SCG-Feed-Token` header and needs no GitHub account or repository
+access. A feed that carries a rotated `feed_token` is persisted owner-only
+(previous value kept for one 403 retry) after the serial check and before
+the version comparison. Feeds and bundles off the trusted origins are
+refused, and a double 403 names the SC bootstrap as the remedy without
+leaking token bytes. A manual install passes `--feed` with a downloaded
+release document; `update.log` records each install with its source
 (`cloudfront`, `github`, or `local`).
 
 First install for no-repo-access users uses the two bootstrap wrappers
@@ -267,7 +267,7 @@ then verifies a loaded job is serving the restored version, bootstrapping
 it if launchd has none; it says the router is not serving rather than
 reporting a clean rollback over a dead machine. A version that fails three
 times is parked, so a bad release stops costing a service restart every
-fifteen minutes; run the installer by hand to retry. The count lives in the
+four hours; run the installer by hand to retry. The count lives in the
 state file, which is what parks it on the production feed -- that feed is
 read through the GitHub CLI and carries no ETag to save. Linux uses
 systemd user service restart with a 150-second stop timeout; the launcher

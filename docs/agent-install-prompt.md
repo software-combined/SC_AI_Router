@@ -22,5 +22,5 @@ you only supply the feed token and approve restarts.
 > URLs, or config bodies. Restarting Codex or Claude Code afterwards is my
 > decision, not yours.
 
-After setup, updates are automatic every 15 minutes from the token-gated
+After setup, updates are automatic every 4 hours from the token-gated
 feed. No GitHub account or repo access is needed, now or ever.

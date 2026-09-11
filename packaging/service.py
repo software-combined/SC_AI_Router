@@ -90,6 +90,7 @@ feed_token = _feed.feed_token
 persist_feed_token = _feed.persist_feed_token
 trusted_origin = _feed.trusted_origin
 channel_feed = _feed.channel_feed
+require_channel_feed = _feed.require_channel_feed
 feed_source = _feed.feed_source
 gh_binary = _feed.gh_binary
 notice = _notice
@@ -102,10 +103,10 @@ def github_asset(url):
     tag, asset = route
     gh = _feed.gh_binary()
     if gh is None:
-        raise SystemExit('Private router updates require GitHub CLI (gh), signed in as this user.')
+        raise SystemExit('GitHub release downloads require GitHub CLI (gh), signed in as this user.')
     result = run(_feed.github_command(gh, tag, asset), capture_output=True, timeout=120)
     if result.returncode:
-        raise SystemExit('Cannot read private router release; check gh auth status and repository access.')
+        raise SystemExit('Cannot read the GitHub release asset; check gh auth status and repository access.')
     return result.stdout
 
 
@@ -266,13 +267,13 @@ def render_update_plist(python, home):
     # The stable home launcher, never a per-release install.py path. launchd
     # keeps running its in-memory copy of a loaded plist, so a versioned path
     # outlives the release it names: after a prune the updater keeps firing a
-    # deleted or obsolete installer every 15 minutes. update_launch.py
+    # deleted or obsolete installer every 4 hours. update_launch.py
     # resolves `current` at exec time instead, exactly like router_launch.py.
     args = [python, str(home / 'update_launch.py')]
     return {'Label': UPDATE_LABEL,
             'ProgramArguments': args,
             'RunAtLoad': True,
-            'StartInterval': 900,
+            'StartInterval': 14400,
             'StandardOutPath': str(home / 'logs' / 'update.log'),
             'StandardErrorPath': str(home / 'logs' / 'update.log')}
 

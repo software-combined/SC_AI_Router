@@ -79,11 +79,23 @@ REQUIRED_PACKAGING = (
     'packaging/platforms/linux.py',
     'packaging/platforms/windows.py',
     'packaging/install.sh', 'packaging/install.ps1',
-    'LICENSE', 'COMMERCIAL_LICENSE.md', 'THIRD_PARTY_NOTICES.md',
+    'LICENSE', 'NOTICE', 'THIRD_PARTY_NOTICES.md',
 )
 
 
 class PackagingTests(unittest.TestCase):
+    def test_apache_only_licence_gate(self):
+        root = Path(__file__).resolve().parents[1]
+        for rel in ('LICENSE', 'NOTICE', 'THIRD_PARTY_NOTICES.md',
+                    'pyproject.toml', 'README.md',
+                    '.codex-plugin/plugin.json', '.claude-plugin/plugin.json',
+                    'packaging/release.py'):
+            text = (root / rel).read_text().lower()
+            for token in ('polyform', 'licenseref-polyform',
+                          'commercial_license', 'unlicensed'):
+                self.assertNotIn(token, text, rel)
+        self.assertFalse((root / 'COMMERCIAL_LICENSE.md').exists())
+
     def test_wrappers_call_install_py(self):
         root = Path(__file__).resolve().parents[1] / 'packaging'
         sh, ps1 = (root / 'install.sh').read_text(), (root / 'install.ps1').read_text()

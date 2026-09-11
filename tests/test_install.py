@@ -395,8 +395,7 @@ class InstallTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             home.mkdir()
-            # No token yet: the host stays on the pre-migration GitHub route
-            # (see test_feed_migration.py); the token selects the origin.
+            # An enrolled host with channel=beta resolves the gated beta URL.
             (home / 'feed-token').write_text('tok-1\n')
             (home / 'channel').write_text('beta\n')
             self.assertEqual(
@@ -425,9 +424,9 @@ class InstallTests(unittest.TestCase):
             self.assertGreaterEqual(sleeps[0], 0)
             self.assertLessEqual(sleeps[0], 120)
 
-    def test_update_plist_checks_every_fifteen_minutes(self):
+    def test_update_plist_checks_every_four_hours(self):
         content = install_mod.render_update_plist('/opt/homebrew/bin/python3.14', Path('/tmp/hm'))
-        self.assertEqual(content['StartInterval'], 900)
+        self.assertEqual(content['StartInterval'], 14400)
         self.assertTrue(content['RunAtLoad'])
         self.assertNotIn('StartCalendarInterval', content)
 

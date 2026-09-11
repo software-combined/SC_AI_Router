@@ -376,7 +376,7 @@ def do_install(args, _fetch=fetch, _run=None):
                       if PLATFORM == 'win32' else 'brew install python@3.14')
             print(f'No Python 3.14 found: {remedy}')
             raise SystemExit(2)
-    feed = args.feed or channel_feed(home)
+    feed = args.feed or _svc.require_channel_feed(home)
     latest = json.loads(_svc.feed_read(_fetch, feed, home).decode())
     serial = check_serial(home, latest, pinned=bool(args.feed))
     if not newer(latest['version'], current_version(home)):
@@ -514,7 +514,7 @@ def do_install(args, _fetch=fetch, _run=None):
     _codex_config.write_receipt(home, config_path, block, rules_receipt, mode, before)
     # launchd keeps the updater command it loaded until the job is reloaded,
     # and a scheduled run defers that reload. Pruning the release that command
-    # names would leave the updater firing a missing file every 15 minutes.
+    # names would leave the updater firing a missing file every 4 hours.
     prune_releases(home, latest['version'], previous,
                    backend.pinned_release(home))
     if not args.feed:

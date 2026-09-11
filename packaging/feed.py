@@ -1,13 +1,14 @@
 """Token-gated update feed: origin, token storage, and fetch (Plan 054 T).
 
-Hosts without a feed token stay on the pre-migration GitHub route over
-gh; the first feed that carries a token migrates every later poll to the
-token-gated origin. Runs on Python 3.9+ like the installer. Loaded via
-the installer's file-based import pattern, never `import packaging.feed`.
+Automatic updates are for enrolled hosts only: the owner-only `feed-token`
+file written by the SC bootstrap or MDM is the enrolment fact. A host
+without it makes no scheduled request at all; an explicit `--feed` pin or a
+`feed` file is the manual path, and the GitHub release route is reachable
+only that way. Runs on Python 3.9+ like the installer. Loaded via the
+installer's file-based import pattern, never `import packaging.feed`.
 """
 import os
 import shutil
-import subprocess
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -27,8 +28,8 @@ FEED_TOKEN_FILE = 'feed-token'
 FEED_TOKEN_PREVIOUS_FILE = 'feed-token.previous'
 
 _GITHUB_REPO = 'software-combined/SC_OpenRouter_adapter'
-_TOKEN_REMEDY = ('feed refused the stored token (HTTP 403); '
-                 're-run the bootstrap from the Technology library')
+_TOKEN_REMEDY = ('the update feed refused the stored token (HTTP 403); '
+                 're-enrol this host with the SC bootstrap')
 
 
 def _safe_url(url):
@@ -87,9 +88,6 @@ def trusted_origin(url):
     return url.startswith(FEED_ORIGIN + '/')
 
 
-# Test seam for the gh subprocess; production default is subprocess.run.
-_gh_run = subprocess.run
-
 # Absolute locations checked when PATH lookup fails: schedulers start
 # the updater with a minimal PATH, so an installed gh is invisible.
 GH_POSIX_FALLBACKS = ('/opt/homebrew/bin/gh', '/usr/local/bin/gh',  # macOS (brew)
@@ -118,45 +116,31 @@ def gh_binary():
         (p for p in gh_candidates() if Path(p).is_file()), None)
 
 
-def _beta_github_feed(home):
-    """Newest pre-release's latest-beta.json asset URL via gh.
-
-    GitHub Releases does not serve a CDN-style /beta/latest.json path on a
-    private repo before the token-gated origin is live; the workflow
-    publishes the feed as a release asset, so return the tagged asset URL.
-    """
-    gh = gh_binary()
-    if gh is None:
-        raise SystemExit('Cannot resolve beta release: install GitHub CLI (gh) '
-                         'and sign in as this user')
-    cmd = [gh, 'release', 'list', '--repo', _GITHUB_REPO,
-           '--limit', '10', '--json', 'tagName,isPrerelease,isDraft', '--jq',
-           '.[] | select(.isPrerelease == true and .isDraft == false) | .tagName']
-    try:
-        result = _gh_run(cmd, capture_output=True, text=True, timeout=120)
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise SystemExit(f'Cannot resolve beta release: {exc}')
-    if result.returncode or not result.stdout.strip():
-        raise SystemExit('Cannot resolve beta release; check gh auth status')
-    tag = result.stdout.strip().splitlines()[0]
-    if not tag or any(c in tag for c in '/?# '):
-        raise SystemExit(f'refusing malformed beta release tag: {tag!r}')
-    return f'{RELEASES_PREFIX.rstrip("/")}/download/{tag}/latest-beta.json'
-
-
 def channel_feed(home):
-    """Feed URL for this host: GitHub until it learns a token, then origin."""
+    """Feed URL for this host, or None when it is not enrolled.
+
+    Enrolment is the owner-only `feed-token` file (SC bootstrap or MDM).
+    Without it the scheduled updater makes no request. An explicit `--feed`
+    pin or a `feed` file remains the manual path.
+    """
     home = Path(home)
     if (home / 'feed').exists():
         return (home / 'feed').read_text().strip()
     channel = (home / 'channel').read_text().strip() if (home / 'channel').exists() else 'stable'
     if feed_token(home) is None:
-        if channel == 'beta':
-            return _beta_github_feed(home)
-        return RELEASES_PREFIX + 'latest/download/latest.json'
+        return None
     if channel == 'beta':
         return _feed_verify.beta_feed_url(FEED_URL)
     return FEED_URL
+
+
+def require_channel_feed(home):
+    """Channel feed for an install run; refuse a host that is not enrolled."""
+    feed = channel_feed(home)
+    if feed is None:
+        raise SystemExit('no update feed configured: pass --feed <local latest.json> '
+                         'for a manual install, or enrol this host with the SC bootstrap')
+    return feed
 
 
 def github_route_parts(url):

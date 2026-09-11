@@ -12,12 +12,10 @@ your machine.
 ## Requirements
 
 The Codex app and/or Claude Code, Python 3.14 (the installer finds it or
-tells you how to get it), GitHub CLI (`gh`) signed in with read access to
-the private router repository only while updates ride the transitional
-GitHub feed, and an OpenRouter API key for OpenRouter models. Once a host
-has polled a release that carries the feed token it updates from the
-token-gated feed at `dist.softwarecombined.com` and needs neither `gh` nor
-repository access.
+tells you how to get it), and an OpenRouter API key for OpenRouter models.
+SC-managed machines receive automatic updates once enrolled with the SC
+bootstrap; everyone else installs and updates manually from the published
+releases.
 
 ## Platform support
 
@@ -38,8 +36,8 @@ Run the installer below in your signed-in desktop user session. It checks
 that the user systemd manager is available before installation, writes the
 router service and update timer, and enables them for future logins. It
 does not create a root service or enable lingering.
-The repository is private: install GitHub CLI (`gh`) and sign in as this
-same user with repository read access. Scheduled downloads use that login.
+Automatic updates need SC enrolment (see the update section below). A
+manual install passes `--feed` with a downloaded release document.
 
 Older symlink installations are migrated to `router_launch.py` and a
 `current` pointer file. Existing state, credentials and model settings are
@@ -58,8 +56,8 @@ Updates do not wait for idle traffic; systemd restarts the router through
 the stable launcher and the outgoing process finishes the requests it has
 already accepted. Linux has no socket activation, so connections attempted
 during the handover fail until the new process binds the port. The service allows 150 seconds for the 120-second drain.
-The first update check runs five minutes after installation, then fifteen
-minutes after each check completes. Restart Codex after catalogue changes.
+The first update check runs five minutes after installation, then four hours
+after each check completes. Restart Codex after catalogue changes.
 
 ### Arch Linux: install the ChatGPT desktop app first
 
@@ -142,7 +140,7 @@ only). The installer registers two per-user Scheduled Tasks: `CodexMixedModelRou
 runs at your logon (plus a one-minute
 recovery trigger) as the signed-in user with least privilege and no stored
 password, and `CodexMixedModelRouterUpdate` checks for releases every
-fifteen minutes. Both run `pythonw.exe`, so no console window appears, and
+four hours. Both run `pythonw.exe`, so no console window appears, and
 their output goes to `logs\launchd.log` and `logs\update.log` under the
 router home. The router home, key file and state file are restricted to the
 installing user with `icacls`, verified after every write; the key file is
@@ -160,7 +158,7 @@ binds. Uninstall ends both tasks before deleting them.
 
 ## Updating
 
-Releases install themselves within about fifteen minutes, whether or not
+Releases install themselves within about four hours, whether or not
 the router is busy, and the outgoing process finishes the requests it has
 already accepted, so an in-flight chat is not dropped and nothing waits for
 an idle window. On macOS launchd holds the listening socket, so new
@@ -176,10 +174,11 @@ restart button simply does nothing.
 
 Each tagged release publishes to the token-gated feed at
 `https://dist.softwarecombined.com/<channel>/latest.json` as well as to
-GitHub Releases. A host that has received a feed token polls the feed with
-the `X-SCG-Feed-Token` header and no longer needs `gh` or repository
-access; a host without one keeps using the GitHub route, so old and new
-installs coexist. `logs/update.log` records the source of each install.
+GitHub Releases. Enrolled hosts (the owner-only `feed-token` written by
+the SC bootstrap or MDM) poll the feed with the `X-SCG-Feed-Token` header;
+a host without a token does not auto-update and installs or updates
+manually from the published releases. `logs/update.log` records the source
+of each install.
 
 ## Choosing a model
 
@@ -296,24 +295,17 @@ Monthly model allocation review: `model-allocation-review-process.md` (the proce
 
 ## Licensing
 
-SC Router is source-available under the [PolyForm Shield License
-1.0.0](LICENSE). It is not an OSI-approved open-source licence.
-
-You can use, modify and redistribute the software subject to that licence,
-and internal use by organisations is permitted as long as the use complies
-with it. PolyForm Shield restricts using the software to provide products or
-services that compete with the licensor or its affiliates, including
-products and services they provide using this software. Uses outside the
-licence may be available under a separate commercial agreement with Software
-Combined, as described in [COMMERCIAL_LICENSE.md](COMMERCIAL_LICENSE.md).
+SC Router is open source under the [Apache License 2.0](LICENSE). You can
+use, modify and redistribute it, including for commercial purposes, under
+the terms of that licence.
 
 Attribution and licence notices must be preserved as the licence requires.
 Third-party material and its terms are listed in
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 - Licence: [LICENSE](LICENSE)
-- Commercial licensing: [COMMERCIAL_LICENSE.md](COMMERCIAL_LICENSE.md)
-- Official licence text: <https://polyformproject.org/licenses/shield/1.0.0>
+- Notices: [NOTICE](NOTICE)
+- Official licence text: <https://www.apache.org/licenses/LICENSE-2.0>
 
 Copyright 2026 Software Combined Pty Ltd. Primary author and maintainer:
 Cyril Allart <cyril@softwarecombined.com>.
