@@ -24,6 +24,9 @@ class SystemdRuntimeTests(unittest.TestCase):
             self.commands = []
             env = {'HOME': str(root / 'user'), 'XDG_CONFIG_HOME': str(root / 'config'),
                    'ROUTER_HOME': str(self.home), 'OPENROUTER_API_KEY': 'test-key',
+                   # The restart notice is a GUI side effect; this suite must
+                   # never pop dialogs (the child installer inherits this).
+                   'ROUTER_NO_NOTICE': '1',
                    # Deliberate live run: HOME is faked hermetic and only
                    # systemctl is stubbed, so main() may use this home.
                    'ROUTER_LIVE_RUN': '1'}

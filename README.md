@@ -212,8 +212,10 @@ OpenRouter dashboard.
 
 ## Without a ChatGPT subscription
 
-Install with `--openai-mode none --setup`, paste one OpenRouter key into
-the setup window, pick a Dev or General starter for the global instructions,
+Install with `--openai-mode none --setup`: a native window asks for one
+OpenRouter key, the subscription choice and an Everyday help or Coding help
+starter for the
+global instructions (the loopback page is used on hosts with no dialog tool),
 and Codex uses a custom provider (`scg_router`) whose
 `base_url` carries the per-install path token. No ChatGPT login is needed
 and no subscription traffic is sent: Astra, Sol, Terra and Luna are served
@@ -302,6 +304,9 @@ directory at an idle boundary:
 `ai_router/feed_verify.py`,
 `ai_router/candidate.py`,
 `ai_router/setup.py`,
+`ai_router/setup_page.py`,
+`ai_router/key_dialog.py`,
+`ai_router/key_prompt.py`,
 `ai_router/runtime.py`,
 `ai_router/catalogue.py`,
 `ai_router/local_services.py`,
