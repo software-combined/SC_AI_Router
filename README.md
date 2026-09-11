@@ -167,6 +167,28 @@ process binds the port.
 the update schedule and the client configuration. The state directory, key
 file and loopback token are left in place for you to delete.
 
+## Common commands
+
+```sh
+# Install or reinstall for the invoking client (add --clients both to attach both)
+python3.14 packaging/install.py --setup
+
+# Read-only checks: prerequisites, then installed state (add --json for machines)
+python3.14 packaging/install.py --preflight
+python3.14 packaging/install.py --status
+
+# Update now, or return to a previously installed version
+python3.14 packaging/install.py --check-update
+python3.14 packaging/install.py --version <installed version>
+
+# Detach every client and remove the service (state and key stay behind)
+python3.14 packaging/install.py --uninstall
+```
+
+`--check-update` is not a dry run: it installs a newer release when the channel
+has one. If something looks wrong, start at
+[Troubleshooting](docs/troubleshooting.md).
+
 ## Diagnostics
 
 - Health: `http://127.0.0.1:<port>/<token>/health`, with the port and token
@@ -231,11 +253,14 @@ stay Python 3.9-compatible. Branches start from `develop`, pull requests target
 More documentation:
 
 - [Architecture](docs/architecture.md)
+- [Troubleshooting](docs/troubleshooting.md)
 - [Claude Code setup](docs/claude-code.md)
 - [Adding a model](docs/adding-a-model.md)
 - [Compatibility](docs/compatibility.md)
 - [Operations](docs/operations.md)
 - [Installed runtime files](docs/runtime-files.md)
+- [Provenance](docs/PROVENANCE.md)
+- [All documentation](docs/README.md)
 
 ## Licence
 

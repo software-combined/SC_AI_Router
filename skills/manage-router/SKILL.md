@@ -49,3 +49,19 @@ this skill never edits client settings or router state by hand.
 - Never print tokens, keys, setup URLs, or config bodies.
 - Native client sign-in is preserved; conflicting overrides block with a
   redacted explanation instead of silent overwrite.
+
+## When something is wrong
+
+Work from `docs/troubleshooting.md` in the installed release. The common
+staff cases and their first check:
+
+- No OpenRouter models in the Codex picker: Codex reads its catalogue only at
+  startup, so quit and reopen it before investigating anything else.
+- An update that stopped: the updater parks a version after three failed
+  attempts and says so; `logs/update.log` lists activated installs, and a
+  failed attempt's output is there on macOS or in the update service's journal
+  on Linux.
+- Claude Code stopped routing: `ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_API_KEY`
+  must stay unset; only `ANTHROPIC_BASE_URL` belongs in the client settings.
+
+Send IT `--status --json` output only; it carries no tokens, keys or URLs.

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Documentation now ships with every release: the bundle carries `README.md`
+  and `docs/*.md`, `docs/troubleshooting.md` covers the staff-real failures
+  (a parked update, a client that needs a restart, key recovery, Claude Code
+  routing, request error codes) and `docs/README.md` indexes the set. CI runs
+  the offline unit suite on every pull request, parses the shipped shell and
+  PowerShell scripts, and the secrets scan covers `*.yml`, `*.sh` and `*.ps1`.
+
 - README: the router home path and the installed-release installer are
   documented, installs and updates need no GitHub account, and switching
   channels by hand requires clearing `feed-serial`.
