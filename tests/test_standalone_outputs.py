@@ -1,4 +1,4 @@
-"""Standalone app-injected tool outputs become readable plaintext."""
+"""Standalone app-injected tool outputs become matched tool pairs."""
 import unittest
 from ai_router.errors import PreparationError
 from ai_router.standalone_outputs import materialize_outputs
@@ -16,46 +16,63 @@ def delegation(**extra):
     return item
 
 
-def as_text(converted):
-    return converted['content'][0]['text']
+def pair_text(out):
+    return out[1]['output']
 
 
 class MaterializeTests(unittest.TestCase):
-    def test_delegation_converts_to_one_prefixed_assistant_message(self):
+    def test_delegation_converts_to_call_plus_output_pair(self):
         item = delegation()
         out = materialize_outputs([item])
-        self.assertEqual(len(out), 1)
-        converted = out[0]
-        self.assertEqual((converted['type'], converted['role']),
-                         ('message', 'assistant'))
-        self.assertTrue(as_text(converted).startswith(
-            'Delegated task message via create_thread:\n'))
-        self.assertTrue(as_text(converted).endswith(ENVELOPE))
-        self.assertIn('<source_thread_id>01a08e3a-0e63-7382-9cf7-bc034d96c726</source_thread_id>',
-                      as_text(converted))
+        self.assertEqual(len(out), 2)
+        call, result = out
+        self.assertEqual(call['type'], 'function_call')
+        self.assertEqual(result['type'], 'function_call_output')
+        self.assertEqual(call['call_id'], result['call_id'])
+        self.assertEqual(call['name'], 'create_thread')
+        self.assertEqual(call['arguments'], '{}')
+        self.assertEqual(pair_text(out), ENVELOPE)
+        self.assertNotIn('namespace', call)
+        self.assertNotIn('namespace', result)
 
     def test_missing_name_defaults_to_codex_app(self):
         item = delegation()
         del item['name']
-        self.assertTrue(as_text(materialize_outputs([item])[0]).startswith(
-            'Delegated task message via codex_app:\n'))
+        out = materialize_outputs([item])
+        self.assertEqual(out[0]['name'], 'codex_app')
+        self.assertEqual(pair_text(out), ENVELOPE)
 
     def test_order_preserved_with_neighbours(self):
         before = {'type': 'message', 'role': 'user', 'content': 'hi'}
         after = {'type': 'message', 'role': 'user', 'content': 'bye'}
         out = materialize_outputs([before, delegation(), after])
-        self.assertEqual([out[0], out[2]], [before, after])
-        self.assertEqual(out[1]['role'], 'assistant')
-        self.assertIn('READ-ONLY forensic sub-audit', as_text(out[1]))
+        self.assertEqual([out[0], out[3]], [before, after])
+        self.assertEqual(out[1]['type'], 'function_call')
+        self.assertEqual(out[2]['type'], 'function_call_output')
+        self.assertIn('READ-ONLY forensic sub-audit', out[2]['output'])
 
     def test_two_standalones_both_convert(self):
         first = delegation(output='first marker')
         second = delegation(name='send_message_to_thread', output='second marker')
         out = materialize_outputs([first, second])
-        self.assertEqual(len(out), 2)
-        self.assertIn('first marker', as_text(out[0]))
-        self.assertIn('second marker', as_text(out[1]))
-        self.assertIn('send_message_to_thread', as_text(out[1]))
+        self.assertEqual(len(out), 4)
+        self.assertEqual(out[0]['call_id'], out[1]['call_id'])
+        self.assertEqual(out[2]['call_id'], out[3]['call_id'])
+        self.assertNotEqual(out[1]['call_id'], out[3]['call_id'])
+        self.assertIn('first marker', out[1]['output'])
+        self.assertIn('second marker', out[3]['output'])
+        self.assertEqual(out[2]['name'], 'send_message_to_thread')
+
+    def test_call_id_derives_from_item_id_with_index_fallback(self):
+        item = delegation(id='it_719')
+        out = materialize_outputs([item])
+        self.assertEqual(out[0]['call_id'], 'call_it_719')
+        self.assertEqual(out[1]['call_id'], 'call_it_719')
+        plain = delegation()
+        plain.pop('id', None)
+        out = materialize_outputs(['x', 'y', plain])
+        self.assertEqual(out[2]['call_id'], 'call_standalone_2')
+        self.assertEqual(out[3]['call_id'], 'call_standalone_2')
 
     def test_matched_pair_and_messages_untouched(self):
         call = {'type': 'function_call', 'name': 'e', 'call_id': 'c1',
@@ -76,18 +93,19 @@ class MaterializeTests(unittest.TestCase):
         once = materialize_outputs([delegation()])
         twice = materialize_outputs(once)
         self.assertIs(twice, once)
-        self.assertEqual(as_text(twice[0]).count('Delegated task message via'), 1)
+        self.assertEqual(len(twice), 2)
+        self.assertEqual(twice[0]['call_id'], twice[1]['call_id'])
 
     def test_text_fields_and_content_blocks_read_verbatim(self):
         for field in ('result', 'content', 'text', 'data'):
             with self.subTest(field=field):
                 out = materialize_outputs([delegation(**{field: 'verbatim 719', 'output': ''})])
-                self.assertIn('verbatim 719', as_text(out[0]))
+                self.assertEqual(out[1]['output'], 'verbatim 719')
         blocks = [{'type': 'text', 'text': 'block one'},
                   {'type': 'input_text', 'text': 'block two'}]
         out = materialize_outputs([delegation(content=blocks, output='')])
-        self.assertIn('block one', as_text(out[0]))
-        self.assertIn('block two', as_text(out[0]))
+        self.assertIn('block one', out[1]['output'])
+        self.assertIn('block two', out[1]['output'])
 
     def test_unsupported_shape_raises_without_item_text(self):
         # No readable field at all: empty strings and missing keys only.

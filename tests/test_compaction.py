@@ -70,6 +70,15 @@ class ScrubFragmentsTests(unittest.TestCase):
         self.assertEqual(scrub_tool_fragments([call, standalone]),
                          [call, standalone])
 
+    def test_materialized_pair_survives_scrub(self):
+        from ai_router.standalone_outputs import materialize_outputs
+        standalone = {'type': 'function_call_output', 'name': 'create_thread',
+                      'namespace': 'codex_app', 'output': 'delegated task'}
+        pair = materialize_outputs([standalone])
+        self.assertEqual(len(pair), 2)
+        self.assertEqual(scrub_tool_fragments(pair), pair)
+        self.assertEqual(pair[0]['call_id'], pair[1]['call_id'])
+
     def test_non_list_input_passes_through(self):
         self.assertEqual(scrub_tool_fragments('do the task'), 'do the task')
 

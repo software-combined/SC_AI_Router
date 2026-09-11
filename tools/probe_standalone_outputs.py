@@ -2,7 +2,7 @@
 
 Offline default runs the prepare-level assertion against the local source:
 a captured no-call_id app-injected item must reach the OpenRouter prepared
-body as readable plaintext. Prints PASS/FAIL only.
+body as a matched call+output pair carrying the marker. Prints PASS/FAIL.
 
 --live forwards the same shape through the installed router to OpenRouter
 (model deepseek/deepseek-v4.1-flash) and asserts the reply carries a
@@ -41,11 +41,12 @@ def prepare_offline():
         MODEL, '/responses', {'model': MODEL, 'input': [captured_item()]},
         b'raw', {}, _OfflineKey())
     data = json.loads(prepared.body)['input']
-    assert len(data) == 1, 'standalone item dropped'
-    item = data[0]
-    assert (item.get('type'), item.get('role')) == ('message', 'assistant'), \
-        'not plaintext'
-    assert MARKER in item['content'][0]['text'], 'marker missing'
+    assert len(data) == 2, 'standalone item dropped'
+    call, result = data
+    assert call.get('type') == 'function_call', 'no synthesized call'
+    assert result.get('type') == 'function_call_output', 'no output'
+    assert call.get('call_id') == result.get('call_id'), 'unmatched pair'
+    assert MARKER in result.get('output', ''), 'marker missing'
 
 
 def run_live():
