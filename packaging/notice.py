@@ -25,6 +25,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 NOTICE_FILE = 'update-notice.json'
+CATALOGUE_FILE = 'mixed-models.json'
+PICKER_BASELINE_FILE = 'picker-baseline.json'
 TITLE = 'SCG Router'
 DISMISS = 'Later'
 REOPEN = 'Quit and reopen'
@@ -129,27 +131,94 @@ def _pid_alive(pid):
         return False
 
 
-def record(home, previous, version, clients=None):
-    """Stage a restart notice when an update lands a new version.
+def _picker_slugs(blob):
+    """Picker slugs in a merged-catalogue blob, or None when unusable."""
+    if not blob:
+        return None
+    try:
+        doc = json.loads(blob)
+        rows = doc.get('models') if isinstance(doc, dict) else None
+        if not isinstance(rows, list):
+            return None
+        return {str(row['slug']) for row in rows
+                if isinstance(row, dict) and row.get('slug')}
+    except (TypeError, ValueError):
+        return None
 
-    Returns True when a notice is staged. Fresh installs, reinstalls,
-    versions already shown, and any write failure return False without
-    touching the file. The pid of a dialog an earlier version left open is
-    carried over so the next show_pending() folds into it instead of
-    stacking a second dialog. `clients` is the install run's attachment set
-    when it knows one; without it the previous notice's set is kept, and a
-    legacy install reads as Codex-only. A notice never affects installs.
+
+def _read_blob(path):
+    try:
+        return Path(path).read_bytes()
+    except OSError:
+        return None
+
+
+def _picker_baseline(home):
+    """Slugs left by the last install that reached the notice, or None."""
+    try:
+        doc = json.loads((Path(home) / PICKER_BASELINE_FILE).read_text())
+    except (OSError, ValueError):
+        return None
+    if not isinstance(doc, list):
+        return None
+    return {str(slug) for slug in doc if isinstance(slug, str)}
+
+
+def _remember_picker(home, slugs):
+    """Record the picker this install leaves behind; best effort."""
+    if slugs is None:
+        return
+    try:
+        _write_notice(Path(home) / PICKER_BASELINE_FILE, sorted(slugs))
+    except OSError:
+        pass
+
+
+def record(home, previous, version, clients=None):
+    """Stage a restart notice when an update adds a picker row.
+
+    The prompt is about the picker, not the version: a release that adds no
+    selectable row is not worth a Codex restart, so the notice is staged
+    only when the merged catalogue gained a slug since the last install
+    that reached this point. That baseline is recorded per install rather
+    than read from the pre-install file, so an attempt that merged rows and
+    then failed still prompts when it is retried. A staged but unshown
+    notice is refreshed with this version instead of left stale, and an
+    unreadable catalogue or baseline keeps the earlier behaviour and
+    stages the notice, so a home this comparison cannot read is never
+    silently skipped. Returns True when a notice is staged. Fresh
+    installs, reinstalls, and versions already shown return False; they
+    record the picker they leave only when nothing is waiting to be
+    announced, and rows that were found but not announced are never
+    recorded, so a failed write is retried by the next install. The pid of
+    a dialog an earlier version left open is carried over so the next
+    show_pending() folds into it instead of stacking a second dialog.
+    `clients` is the install run's attachment set when it knows one;
+    without it the previous notice's set is kept, and a legacy install
+    reads as Codex-only. A notice never affects installs.
     """
     try:
-        if not previous or previous == version:
-            return False
         path = Path(home) / NOTICE_FILE
         try:
             existing = json.loads(path.read_text())
         except (OSError, ValueError):
             existing = None
+        picker = _picker_slugs(_read_blob(Path(home) / CATALOGUE_FILE))
+        baseline = _picker_baseline(home)
+        added = None if picker is None or baseline is None else picker - baseline
+        if not previous or previous == version:
+            # Fresh installs and reinstalls prompt nothing; record what they
+            # leave behind so the next version compares against it.
+            if not added:
+                _remember_picker(home, picker)
+            return False
         if isinstance(existing, dict) and existing.get('version') == version \
                 and existing.get('shown'):
+            _remember_picker(home, picker)
+            return False
+        pending = isinstance(existing, dict) and not existing.get('shown')
+        if not pending and added is not None and not added:
+            _remember_picker(home, picker)
             return False
         if not clients:
             # A scheduled update passes no --clients; the install recorded
@@ -166,6 +235,9 @@ def record(home, previous, version, clients=None):
         if pid:
             doc['pid'] = pid
         _write_notice(path, doc)
+        # Only a staged notice marks rows as announced; a write that failed
+        # leaves the baseline alone so the next install retries.
+        _remember_picker(home, picker)
         return True
     except (OSError, ValueError):
         return False
