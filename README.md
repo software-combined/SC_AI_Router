@@ -198,12 +198,16 @@ carries over; an effort the new model does not support is rejected with
 the allowed levels (change effort before switching). Models labelled
 Preview in the picker are not yet verified: they work, but report
 anything odd.
-With a ChatGPT subscription, OpenRouter-billed GPT rows stay out of
-the Codex picker so the subscription GPT rows stand alone; requesting
-one directly still routes to OpenRouter. In no-subscription mode
-(`openai_mode: none`) the picker lists the OpenRouter-billed Astra, Sol,
-Terra and Luna rows instead. The Claude listing will apply the mirror
-rule to OpenRouter-billed Anthropic rows when it lands.
+The Codex picker lists both routes for the GPT twins: the ChatGPT
+subscription rows and the OpenRouter-billed Astra, Sol, Terra and Luna
+rows labelled `· OpenRouter`. Picking a subscription row keeps the
+ChatGPT subscription; picking its OpenRouter row bills the API key, so
+an exhausted allowance still leaves those models selectable. In
+no-subscription mode (`openai_mode: none`) only the OpenRouter rows
+list. This is Codex-only: nothing changes for Claude Code, whose
+`GET /v1/models` listing already includes every OpenRouter registry row,
+and the `--client claude` catalogue merge keeps its mirror rule for
+OpenRouter-billed Anthropic rows.
 In Claude Code, point `ANTHROPIC_BASE_URL` at the router and choose
 the model with `ANTHROPIC_MODEL`; see `docs/claude-code.md`.
 

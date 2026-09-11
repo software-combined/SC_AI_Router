@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- The Codex picker lists the OpenRouter-billed GPT twins again: Astra,
+  Sol, Terra and Luna appear beside their ChatGPT subscription rows, so a
+  refused or exhausted allowance still leaves them selectable on the
+  OpenRouter key. The subscription rows are unchanged and still first in
+  the picker; the `· OpenRouter` label and the client's billing note keep
+  the two routes apart. Nothing changes on the Claude side: the gateway
+  listing already includes every registry row, and the mirror rule stays
+  in the `--client claude` catalogue merge.
+
 - First install no longer needs the repository: the pinned CPython runtimes
   and both bootstrap wrappers are published to the token-gated feed, so a
   machine holding only the feed token installs and then auto-updates with
@@ -109,7 +118,8 @@
 - No-subscription installs (`openai_mode: none`) now list the
   OpenRouter-billed OpenAI rows (Astra, Sol, Terra, Luna) in the Codex
   picker instead of the dead subscription slugs; mode flips in the setup
-  window refresh the picker file. Subscription installs are unchanged.
+  window refresh the picker file. Subscription installs are otherwise
+  unchanged.
 
 - Models whose OpenRouter row carries no web-search capability no longer
   receive Codex's `web_search` server tool. OpenRouter cannot execute it

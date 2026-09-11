@@ -113,7 +113,7 @@ class InstallCatalogueTests(unittest.TestCase):
                     self.assertIn(model.slug, slugs)
             for slug in ('openai/gpt-6-astra', 'openai/gpt-5.6-sol',
                          'openai/gpt-5.6-luna', 'openai/gpt-5.6-terra'):
-                self.assertNotIn(slug, slugs)
+                self.assertIn(slug, slugs)
             self.assertTrue(check(str(home / 'mixed-models.json')))
 
     def test_install_catalogue_contains_subscription_roster(self):
