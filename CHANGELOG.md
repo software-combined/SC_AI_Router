@@ -12,7 +12,8 @@
   screen: an update that lands while the previous dialog is still open
   folds into it instead of stacking a second one. The notice is
   best-effort, fires once per version, and never blocks or delays the
-  update.
+  update. The Linux update unit keeps `KillMode=process`, so the detached
+  dialog survives the oneshot run that spawned it.
 
 - Replayed reasoning history no longer disappears before OpenRouter turns.
   `strip_reasoning_blobs` now strips only the provider blob field and keeps a
