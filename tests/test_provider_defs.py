@@ -80,7 +80,7 @@ class RegistryCompatibilityTests(unittest.TestCase):
     def _row(self, **over):
         row = {'slug': 'vendor/model', 'provider': 'openrouter', 'display_name': 'V: M',
                'vendor': 'V', 'reasoning': ['low'], 'default_reasoning': 'low',
-               'modalities': ['text'], 'excluded_efforts': [], 'schema_mode': 'native',
+               'modalities': ['text'], 'excluded_efforts': [], 'schema_mode': 'native', 'history_mode': 'native',
                'max_tools': None, 'drop_images': False, 'context_window': 1000,
                'priority': 100, 'max_output_tokens': 100, 'reasoning_summary': 'none',
                'apply_patch': 'none', 'experimental_tools': [], 'web_search': True,

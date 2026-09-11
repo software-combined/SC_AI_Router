@@ -8,6 +8,7 @@ import json
 import re
 from copy import deepcopy
 from .capabilities import has_recursive_refs
+from .compaction import portablize_search_history
 from .discovered import recall
 from .registry import by_slug
 from . import agent_handoffs, sse, tool_merge
@@ -192,6 +193,9 @@ def prepare_tools(payload):
             kind = entry.get('kind') if isinstance(entry, dict) else entry
             if kind in ('json_text', 'json_text_root'):
                 item['arguments'] = json.dumps({'arguments_json': item['arguments']})
+    if isinstance(payload.get('input'), list):
+        payload['input'] = portablize_search_history(
+            payload['input'], SEARCH_NAME, _quirk(payload, 'history_mode'))
     return names
 
 class ToolEvents:
