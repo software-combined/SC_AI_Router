@@ -77,7 +77,15 @@ and not required. (Use `paru -S codex-desktop-git` if you prefer paru.)
 
 ## Install on macOS or Linux
 
-Recipients install from the published release channel, not from a checkout.
+Without repository access, install from the feed with the bootstrap: with
+the feed token in `SCG_FEED_TOKEN`, download
+`https://dist.softwarecombined.com/bootstrap/bootstrap.sh` with the
+`X-SCG-Feed-Token` header and run it. It fetches the pinned Python runtime
+and the release bundle from the feed, verifies both checksums, writes the
+token for the updater, and installs; updates then need no `gh`.
+
+Otherwise, recipients install from the published release channel, not from
+a checkout.
 A maintainer hands you the release directory; install from its feed file
 so the installer verifies the published bundle instead of fetching the
 default feed:
@@ -108,6 +116,12 @@ is the same installer for POSIX shells; `packaging/install.ps1` is the
 PowerShell wrapper for Windows below.
 
 ## Install on Windows
+
+Without repository access, run the feed bootstrap instead of this path:
+download `https://dist.softwarecombined.com/bootstrap/bootstrap.ps1` with
+the `X-SCG-Feed-Token` header and run it with `SCG_FEED_TOKEN` set; it
+needs no `gh` and no Python preinstalled, because it fetches and verifies
+both from the feed.
 
 Requirements: Windows 11 x64, Python 3.14 from python.org (the installer
 finds it through the `py` launcher; never rely on the bare `python` alias,

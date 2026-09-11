@@ -44,7 +44,7 @@ Executor rules for every plan:
 | [103](103-router-darwin-backend-extraction.md) | Move launchd helpers out of service.py | TODO | serialize with 102; before 104 |
 | [104](104-router-docs-metadata-correction.md) | Version, architecture and README corrections | TODO | after 103; coordinates README with 117 |
 | [105](105-python-314-interpreter-provisioning.md) | Provision and maintain a private CPython 3.14 runtime | PARTIAL | Stage 1 in; hardening + maintenance owner left |
-| [106](106-group-distribution-private-feed-and-auto-update.md) | Group distribution, private feed and auto-update | PARTIAL | publication split into 139 (tag-driven, GitHub Releases kept); first install, group gating and library page left here |
+| [106](106-group-distribution-private-feed-and-auto-update.md) | Group distribution, private feed and auto-update | PARTIAL | publication split into 139 (tag-driven, GitHub Releases kept; runtime mirror and bootstrap published); group gating and the library page left here |
 | [107](107-central-key-federation-and-first-use-key-window.md) | Central per-user key federation and first-use key window | PARTIAL | Stage 4 depends 106; Stage 2 installer acceptance left |
 | [108](108-router-service-recovery-and-update-readiness.md) | Live router recovery and safe update readiness | PARTIAL | live update/rollback evidence; serialize with 109/110 |
 | [109](109-codex-router-continuous-release-and-seamless-restart.md) | Continuous release and seamless restart (live evidence) | PARTIAL | live restart evidence; release-trigger conflict settled by 139: tags publish, no push-to-main release |
@@ -115,7 +115,7 @@ and group-distribution work; this plan owns the update path only.
 
 | Plan | Title | Status | Sequencing |
 |---|---|---|---|
-| [139](139-router-private-feed-publication.md) | Private feed publication: tag publishes to the token-gated feed | PARTIAL: source landed on `develop`; owner deploys the stacks, seeds the token and tags the transition release | supersedes 106's push-trigger and feed-only variants; before 106's remaining first-install stages |
+| [139](139-router-private-feed-publication.md) | Private feed publication: tag publishes to the token-gated feed | PARTIAL: feed live (stacks deployed, token seeded, 0.6.25 transition released); first-install assets published via `tools/publish_first_install.py`; gated library page and per-install tokens stay with 106 | supersedes 106's push-trigger and feed-only variants; before 106's remaining first-install stages |
 
 ## Recommended overall order
 
