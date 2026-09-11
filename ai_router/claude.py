@@ -15,7 +15,7 @@ never stored or logged.
 import json
 
 from . import provider_defs, transport
-from .errors import PreparationError, UnknownModel
+from .errors import ClaudeSubscriptionRequired, PreparationError, UnknownModel
 from . import registry
 from .registry import by_slug
 
@@ -165,6 +165,5 @@ def select(model, path, openai_mode='subscription', anthropic_mode=None,
     # Independent subscription choice; missing mode reproduces the legacy
     # behavior of following openai_mode. Never widened by migration.
     if (anthropic_mode if anthropic_mode is not None else openai_mode) == 'none':
-        raise ValueError('Model is not available without a Claude subscription; '
-                         'use an OpenRouter model')
+        raise ClaudeSubscriptionRequired()
     return ClaudeSubscriptionProvider()
