@@ -147,18 +147,6 @@ def checked_feed(body, sig):
     return json.loads(body.decode())
 
 
-def load_signed_feed(feed_url, fetch, body=None):
-    """Fetch (unless body is given) and verify a feed document. The signature
-    lives beside the feed at feed_url + '.sig' and covers the exact bytes."""
-    if body is None:
-        body = fetch(feed_url)
-    try:
-        sig = fetch(feed_url + '.sig')
-    except Exception:
-        raise SystemExit('feed has no signature; refusing unsigned feed')
-    return checked_feed(body, sig)
-
-
 def beta_feed_url(stable_url):
     """Beta feed on the same origin: <origin>/beta/latest.json. No GitHub API
     call; anonymous fetches work on the release CDN like stable does."""

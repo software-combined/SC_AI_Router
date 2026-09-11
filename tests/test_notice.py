@@ -5,8 +5,6 @@ Linux zenity; no test in this module launches a real dialog.
 """
 import importlib.util
 import json
-import os
-import shutil
 import subprocess
 import sys
 import tempfile

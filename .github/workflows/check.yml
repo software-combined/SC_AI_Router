@@ -29,6 +29,17 @@ jobs:
         with:
           python-version: "3.14"
       - run: python -m compileall -q ai_router tools tests packaging
+      - name: Lint (F401/F811)
+        # python -m ruff: the script location differs by platform, the module
+        # import does not. Version + wheel hash pinned (repo convention for
+        # CI inputs); both Ubuntu and macOS wheels are listed so the same pin
+        # works for manual runs.
+        run: |
+          python -m pip install --user --require-hashes --only-binary :all: \
+            -r .github/requirements-lint.txt
+          # Explicit --select, not just pyproject: CI pins the enforced rule
+          # set so loosening the local config cannot widen this gate.
+          python -m ruff check --select F401,F811 ai_router packaging tools tests
       - run: python tools/check_source_limits.py
       - name: Model registry check (offline)
         # Live-model check needs network; offline mode pins the registry

@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from .apply_catalogue import write_guarded
 from .capabilities import CANONICAL_ORDER
-from .model_metadata import CODEX_MODALITIES, project_modalities, qualify_name
+from .model_metadata import project_modalities, qualify_name
 from .registry import load, picker_key
 
 MODELS_URL = 'https://openrouter.ai/api/v1/models'

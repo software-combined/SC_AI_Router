@@ -37,6 +37,7 @@ FILES = [
          'ai_router/image_items.py',
           'ai_router/model_policy.py',
          'ai_router/subscription_roster.py',
+         'ai_router/retired_slugs.py',
           'ai_router/clients/__init__.py',
          'ai_router/clients/codex.py',
          'ai_router/transport.py',
@@ -179,6 +180,7 @@ class PackagingTests(unittest.TestCase):
             'packaging/platforms/darwin.py', 'packaging/platforms/linux.py',
             'packaging/platforms/windows.py', 'ai_router/feed_verify.py',
             'ai_router/subscription_roster.py',
+            'ai_router/retired_slugs.py',
             'tools/disable.py', 'tools/global_instructions.py',
         ]
         for name in surface:

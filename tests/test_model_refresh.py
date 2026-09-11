@@ -6,7 +6,6 @@ malformed/offline payloads keep last-good with a models_refresh_failed log;
 over-200 and bad-slug payloads refuse; serial acceptance is untouched.
 """
 import json
-import logging
 import tempfile
 import unittest
 import urllib.error

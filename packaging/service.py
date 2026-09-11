@@ -53,6 +53,8 @@ _launchd = load('router_launchd', Path(__file__).resolve().parent / 'launchd.py'
 _feed = load('router_feed', Path(__file__).resolve().parent / 'feed.py')
 _roster = load('router_subscription_roster',
                Path(__file__).resolve().parents[1] / 'ai_router' / 'subscription_roster.py')
+_retired = load('router_retired_slugs',
+                Path(__file__).resolve().parents[1] / 'ai_router' / 'retired_slugs.py')
 _atomic_write = load('router_atomic_write',
                      Path(__file__).resolve().parent / 'atomic_write.py')
 _notice = load('router_notice',
@@ -71,6 +73,11 @@ LOAD_TIMEOUT_S = 60
 # picker and state file; the OpenRouter-side roster lives in
 # ai_router/models.json instead.
 DEFAULT_OPENAI_MODELS = list(_roster.SUBSCRIPTION_SLUGS)
+
+# Subscription slugs withdrawn from the picker, single-sourced from
+# ai_router/retired_slugs.py (Plan 100; spec-loaded above for the same
+# relocated-tree reason as the roster).
+RETIRED_SUBSCRIPTION_SLUGS = frozenset(_retired.SUBSCRIPTION)
 
 LABEL = 'com.local.codex-mixed-model-router'
 UPDATE_LABEL = LABEL + '.update'
@@ -629,9 +636,12 @@ def ensure_state(home):
         if not isinstance(state.get('openai_models'), list):
             state['openai_models'] = list(DEFAULT_OPENAI_MODELS)
             _atomic_write.replace_text(path, json.dumps(state, indent=2) + '\n')
-        elif 'gpt-reserve' in state['openai_models']:
-            # Retired slug: prune so routing stops authorizing it on update.
-            state['openai_models'].remove('gpt-reserve')
+        elif any(slug in state['openai_models'] for slug in RETIRED_SUBSCRIPTION_SLUGS):
+            # Retired slugs: prune so routing stops authorizing them on update.
+            # Type-check first: a corrupt non-string element must not be hashed.
+            state['openai_models'] = [
+                s for s in state['openai_models']
+                if not (isinstance(s, str) and s in RETIRED_SUBSCRIPTION_SLUGS)]
             _atomic_write.replace_text(path, json.dumps(state, indent=2) + '\n')
         return state
     port = 18749

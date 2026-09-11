@@ -15,7 +15,7 @@ from .tool_adapter import prepare_tools, snoop_response_identity, stream_events,
 
 # Transport leaves live in transport.py (Plan 062); these aliases keep
 # existing importers working until the protocol split completes.
-from .transport import HOP_HEADERS, Prepared, passthrough, relay_headers
+from .transport import HOP_HEADERS, Prepared, passthrough
 NATIVE_SERVICE_PATHS = {'/alpha/search', '/alpha/notes/v2/thread_hint', '/guardian', '/guardian-classifier'}
 
 
