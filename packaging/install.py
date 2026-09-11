@@ -300,6 +300,65 @@ def _sync_seams():
                route_prefix=github_route_prefix, codex_config=_codex_config)
 
 
+def _resolve_clients_and_modes(args, home, state):
+    # Absence in legacy state means Codex, not service-only.
+    client = args.client or state.get('client', 'codex')
+    if client not in ('codex', 'none'):
+        raise SystemExit('client must be codex or none')
+    changed = state.get('client', 'codex') != client
+    if changed: state['client'] = client
+    # --clients selects attachments; --client none stays service-only.
+    # Unset means the legacy Codex-only path below. `both` keeps the Codex
+    # attach and adds Claude; `claude` attaches Claude without touching
+    # Codex settings.
+    clients = args.clients
+    if clients is None: clients = 'none' if client == 'none' else 'codex'
+    if clients not in ('codex', 'claude', 'both', 'none'):
+        raise SystemExit('clients must be codex, claude, both, or none')
+    if client == 'none' and clients != 'none':
+        raise SystemExit('--client none conflicts with --clients %s' % clients)
+    if args.client == 'codex' and args.clients == 'claude':
+        raise SystemExit('--client codex conflicts with --clients claude: '
+                         'use --clients both to keep the Codex attachment')
+    claude_mode = args.claude_mode
+    if claude_mode is None: claude_mode = state.get('claude_mode', state.get('anthropic_mode', 'subscription'))
+    if claude_mode not in ('subscription', 'none'):
+        raise SystemExit('claude_mode must be subscription or none')
+    if state.get('claude_mode') != claude_mode:
+        state['claude_mode'] = claude_mode; changed = True
+    if args.anthropic_mode is not None and args.anthropic_mode != state.get('anthropic_mode'):
+        state['anthropic_mode'] = args.anthropic_mode; changed = True
+    mode = args.openai_mode or state.get('openai_mode', 'subscription')
+    if mode not in ('subscription', 'none'):
+        raise SystemExit('openai_mode must be subscription or none')
+    if state.get('openai_mode') != mode:
+        state['openai_mode'] = mode; changed = True
+    if args.clients and state.get('clients') != clients:
+        state['clients'] = clients; changed = True
+    if changed: _write_state(home, state)
+    return (client, clients, claude_mode, mode)
+
+
+def _rollback_failed_install(home, state, backend, latest, previous, catalog_path,
+                             before_catalog):
+    # TERM, not bootout: KeepAlive restarts the old release; bootout would
+    # unload the service and strand a busy machine. A TERM cannot revive a
+    # job that is not loaded, so never report a clean rollback over a router
+    # that is not actually serving.
+    if before_catalog is None: catalog_path.unlink(missing_ok=True)
+    else: catalog_path.write_bytes(before_catalog)
+    if previous:
+        swap_current(home, home / 'releases' / previous); restart_router(home)
+        rolled_back = f'rolled back to {previous}: new version failed health check'
+        if backend.rollback_serving_ok(home, state, previous): print(rolled_back)
+        else: print(f'{rolled_back}; router is NOT serving on port '
+                    f'{state["port"]}, run the installer again')
+    else:
+        if current_release_dir(home) == home / 'releases' / latest['version']: _clear_current(home)
+        stop_router(home); print('new version failed health check; inspect the service logs')
+    raise SystemExit(1)
+
+
 def do_install(args, _fetch=fetch, _run=None):
     if _run is not None:
         _svc.run = _run
@@ -355,45 +414,7 @@ def do_install(args, _fetch=fetch, _run=None):
         if minted_state:
             (home / 'mixed-router-state.json').unlink(missing_ok=True)
         raise
-    # Absence in legacy state means Codex, not service-only.
-    client = args.client or state.get('client', 'codex')
-    if client not in ('codex', 'none'):
-        raise SystemExit('client must be codex or none')
-    if state.get('client', 'codex') != client:
-        state['client'] = client; _write_state(home, state)
-    # --clients selects attachments; --client none stays service-only.
-    # Unset means the legacy Codex-only path below. `both` keeps the Codex
-    # attach and adds Claude; `claude` attaches Claude without touching
-    # Codex settings.
-    clients = args.clients
-    if clients is None:
-        clients = 'none' if client == 'none' else 'codex'
-    if clients not in ('codex', 'claude', 'both', 'none'):
-        raise SystemExit('clients must be codex, claude, both, or none')
-    if client == 'none' and clients != 'none':
-        raise SystemExit('--client none conflicts with --clients %s' % clients)
-    if args.client == 'codex' and args.clients == 'claude':
-        raise SystemExit('--client codex conflicts with --clients claude: '
-                         'use --clients both to keep the Codex attachment')
-    claude_mode = args.claude_mode
-    if claude_mode is None:
-        claude_mode = state.get('claude_mode', state.get('anthropic_mode', 'subscription'))
-    if claude_mode not in ('subscription', 'none'):
-        raise SystemExit('claude_mode must be subscription or none')
-    if state.get('claude_mode') != claude_mode:
-        state['claude_mode'] = claude_mode
-        _write_state(home, state)
-    if args.anthropic_mode is not None and args.anthropic_mode != state.get('anthropic_mode'):
-        state['anthropic_mode'] = args.anthropic_mode
-        _write_state(home, state)
-    mode = args.openai_mode or state.get('openai_mode', 'subscription')
-    if mode not in ('subscription', 'none'):
-        raise SystemExit('openai_mode must be subscription or none')
-    if state.get('openai_mode') != mode:
-        state['openai_mode'] = mode
-        _write_state(home, state)
-    if args.clients and state.get('clients') != clients:
-        state['clients'] = clients; _write_state(home, state)
+    client, clients, claude_mode, mode = _resolve_clients_and_modes(args, home, state)
     setup_url = None
     if args.setup:
         # First-run window: the router boots keyless on this single-use link
@@ -430,29 +451,8 @@ def do_install(args, _fetch=fetch, _run=None):
         print(f'service start failed: {exc}')
         healthy = False
     if not healthy:
-        if before_catalog is None:
-            catalog_path.unlink(missing_ok=True)
-        else:
-            catalog_path.write_bytes(before_catalog)
-        if previous:
-            swap_current(home, home / 'releases' / previous)
-            # TERM, not bootout: KeepAlive restarts the old release.
-            # bootout would unload the service and strand a busy machine.
-            restart_router(home)
-            rolled_back = f'rolled back to {previous}: new version failed health check'
-            if backend.rollback_serving_ok(home, state, previous):
-                print(rolled_back)
-            else:
-                # A TERM cannot revive a job that is not loaded, so never report
-                # a clean rollback over a router that is not actually serving.
-                print(f'{rolled_back}; router is NOT serving on port '
-                      f'{state["port"]}, run the installer again')
-        else:
-            if current_release_dir(home) == home / 'releases' / latest['version']:
-                _clear_current(home)
-            stop_router(home)
-            print('new version failed health check; inspect the service logs')
-        raise SystemExit(1)
+        _rollback_failed_install(home, state, backend, latest, previous, catalog_path,
+                                 before_catalog)
     # Stage the restart notice once the new version is healthy (fresh
     # installs are a no-op); notice failures never surface.
     _svc.notice.record(home, previous, latest['version'], args.clients)
