@@ -1,10 +1,16 @@
-"""Standalone app-injected tool outputs become readable plaintext.
+"""Standalone app-injected tool outputs become matched tool pairs.
 
 Codex Desktop injects cross-task messages (create_thread,
 send_message_to_thread) as Responses items shaped like tool outputs but
-with no call_id. Providers that cannot accept the native shape receive a
-readable assistant-role plaintext message instead; the scrub in
-compaction.py never drops that shape.
+with no call_id. OpenRouter rejects that raw shape (HTTP 400), and live
+acceptance showed a readable assistant-role plaintext message is not
+acted on (the child replied NO-ASSIGNMENT and a router probe returned
+no output items). Each standalone output is therefore rendered as a
+matched pair -- a synthesized complete `function_call` plus the
+`function_call_output` carrying the delegation text verbatim -- which
+the model treats as a tool result and the scrub in compaction.py passes
+through untouched. No `namespace` is set on either member: OpenRouter
+400s when it is present on both members of the pair.
 """
 from .compaction import OUTPUT_TYPES
 from .errors import PreparationError
@@ -33,7 +39,15 @@ def _is_standalone(item):
             and not isinstance(item.get('call_id'), str))
 
 
-def _materialize(item):
+def _call_id(item, index):
+    """Deterministic unique id: the item id when present, else its index."""
+    item_id = item.get('id')
+    if isinstance(item_id, str) and item_id:
+        return 'call_' + item_id
+    return f'call_standalone_{index}'
+
+
+def _materialize(item, index):
     text = _readable_text(item)
     if not text:
         raise PreparationError(
@@ -41,16 +55,23 @@ def _materialize(item):
     name = item.get('name')
     if not isinstance(name, str) or not name:
         name = 'codex_app'
-    return {'type': 'message', 'role': 'assistant',
-            'content': [{'type': 'output_text',
-                         'text': f'Delegated task message via {name}:\n{text}'}]}
+    cid = _call_id(item, index)
+    return [{'type': 'function_call', 'call_id': cid,
+             'name': name, 'arguments': '{}'},
+            {'type': 'function_call_output', 'call_id': cid,
+             'output': text}]
 
 
 def materialize_outputs(items):
-    """Render standalone outputs as plaintext; same list when none found."""
+    """Render standalone outputs as matched pairs; same list when none."""
     if not isinstance(items, list):
         return items
     if not any(_is_standalone(item) for item in items):
         return items
-    return [_materialize(item) if _is_standalone(item) else item
-            for item in items]
+    out = []
+    for index, item in enumerate(items):
+        if _is_standalone(item):
+            out.extend(_materialize(item, index))
+        else:
+            out.append(item)
+    return out

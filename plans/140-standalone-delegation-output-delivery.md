@@ -18,21 +18,41 @@
 - **Depends on**: none
 - **Category**: bug / compatibility
 - **Planned at**: commit `d440c3a`, 2026-09-11
-- **Status**: IN PROGRESS: offline proof complete 2026-09-11; commit,
-  release and live acceptance pending
+- **Status**: IN PROGRESS: tool-pair shape implemented 2026-09-11; live
+  acceptance pending
 
 First proof: a request containing the captured no-call_id `create_thread`
-item prepares an OpenRouter body with exactly one assistant-role plaintext
-message carrying the delegation marker, and the full offline suite exits 0.
+item prepares an OpenRouter body with exactly one matched
+`function_call` + `function_call_output` pair carrying the delegation
+marker, and the full offline suite exits 0.
+
+## Follow-up (tool-pair shape, 2026-09-11)
+
+Live acceptance rejected the assistant-role rendering: on a fresh task
+running `deepseek/deepseek-v4.1-flash` the child replied exactly
+`NO-ASSIGNMENT`, and a router-level probe returned no output items at
+all, while a matched `function_call` + `function_call_output` pair made
+the model reason about the delegated assignment and emit the requested
+token. `materialize_outputs` now renders each standalone output as two
+adjacent items at the original position -- a synthesized complete
+`function_call` (deterministic `call_id`, no `namespace`) plus the
+`function_call_output` carrying the delegation text verbatim -- which
+preserves tool-result semantics and matches what OpenAI-routed children
+already receive. Offline proof for this shape: the prepared OpenRouter
+body contains the pair carrying the marker, and the full suite exits 0.
+Live acceptance of the pair shape is orchestrator-owned and still
+pending.
 
 ## Outcome
 
 Nested cross-task messages (`create_thread`, `send_message_to_thread`)
 injected by Codex Desktop reach tasks running on OpenRouter models instead
 of being silently dropped as orphan tool fragments. Standalone
-app-injected outputs (no `call_id`) are rendered as readable assistant-role
-plaintext before the scrub; matched call/output pairs and the OpenAI
-subscription path are unchanged.
+app-injected outputs (no `call_id`) are rendered as a matched tool-call
+pair (a synthesized complete `function_call` plus the
+`function_call_output` carrying the delegation text verbatim) before the
+scrub; matched call/output pairs and the OpenAI subscription path are
+unchanged.
 
 ## Current state
 
@@ -52,14 +72,17 @@ read.
 
 Ownership: worktree
 `/Users/cyrilallart/Documents/Github/.worktrees/router-handoff-outputs-20260911`,
-branch `codex/router-handoff-outputs-20260911`, target `develop`.
+original branch `codex/router-handoff-outputs-20260911` (merged as PR 79),
+follow-up branch `codex/router-handoff-tool-pair-20260911` (tool-pair
+shape and 0.6.27), target `develop`.
 
 ## Scope and ownership
 
 **In scope** (exact file list; nothing else was touched):
 
-- NEW `ai_router/standalone_outputs.py` (56 lines): `materialize_outputs`
-  converts standalone outputs to prefixed assistant plaintext.
+- NEW `ai_router/standalone_outputs.py` (77 lines): `materialize_outputs`
+  renders each standalone output as a synthesized complete `function_call`
+  plus its `function_call_output` (no `namespace` on either member).
 - `ai_router/providers.py` (399 lines): `OpenRouterProvider.prepare` only
   calls `materialize_outputs` before the existing scrub line.
 - `ai_router/compaction.py` (314 lines): the scrub drops an output only
@@ -71,11 +94,12 @@ branch `codex/router-handoff-outputs-20260911`, target `develop`.
 - NEW `tools/probe_standalone_outputs.py` (92 lines): offline PASS/FAIL
   plus capped `--live` probe.
 - This plan file, the `plans/README.md` row, one `docs/compatibility.md`
-  entry, one `CHANGELOG.md` bullet. No `packaging/VERSION` change, no
-  commit (integration owns both).
+  entry, one `CHANGELOG.md` bullet, and the `0.6.27` version bump in
+  `packaging/VERSION` plus both plugin manifests. No commit (integration
+  owns it).
 
 **Out of scope**: the OpenAI subscription provider, `ai_router/claude.py`,
-live paid probes (orchestrator-owned acceptance), release/version work.
+and live paid probes (orchestrator-owned acceptance).
 
 ## Steps
 
