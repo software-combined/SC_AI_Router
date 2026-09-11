@@ -187,6 +187,19 @@ Isolated-router base round trip (`ai_router.candidate.verify`, Codex CLI
 | deepseek/deepseek-v4.1-flash | verified | 2026-09-10 | isolated base round trip PASS |
 | deepseek/deepseek-v4-pro-0813 | verified | 2026-09-10 | isolated base round trip PASS |
 
+Reasoning-replay follow-up, 2026-09-11 (Codex CLI 0.153.4; router
+0.6.21.36-beta): the base round trips above never replayed a stored
+`reasoning` item, so they missed the `encrypted_content: null` replay bug that
+rejected DeepSeek thinking turns on 2026-09-11. With the 0.6.21 fix installed,
+the Codex runtime probe's replaying switch leg (`tools/probe_codex_runtime.py
+deepseek/deepseek-v4.1-flash --router-state <home>/mixed-router-state.json
+--effort max --switch --switch-to deepseek/deepseek-v4.1-flash`) passed:
+turn one produced a `reasoning` item and the
+`desktop_runtime_tool_round_trip: passed` marker, and the switch turn replayed
+that history and reported `history_preserved: true`.
+Router log: `request_completed` 200s for the alias with `served_model` set
+and no provider rejection.
+
 ## Claude desktop gateway discovery (Plan 120), 2026-09-10
 
 Client: Claude.app `1.49585.0`, signed in; no `managed-settings.json` at
