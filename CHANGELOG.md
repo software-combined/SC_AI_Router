@@ -6,8 +6,12 @@
   Codex Desktop injects `create_thread` / `send_message_to_thread` turns as
   standalone tool outputs with no `call_id`; the router used to drop them
   as orphan tool fragments, so delegated tasks on OpenRouter models never
-  saw the message. Standalone app-injected outputs are now rendered as
-  readable assistant-role plaintext before the scrub instead.
+  saw the message. Each standalone app-injected output is now rendered
+  before the scrub as a matched tool-result pair -- a synthesized complete
+  `function_call` plus the `function_call_output` carrying the delegation
+  text verbatim -- which the model acts on as a tool result. Assistant-role
+  plaintext was tried first but live acceptance rejected it (the child
+  replied `NO-ASSIGNMENT` instead of acting on the assignment).
 
 - Tagged releases now publish to the token-gated update feed at
   `dist.softwarecombined.com` as well as to GitHub Releases, so an
