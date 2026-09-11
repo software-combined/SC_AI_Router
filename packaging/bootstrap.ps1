@@ -28,7 +28,10 @@ if ($current -and $current -ne $token) {
 Set-Content -NoNewline -Path "$tokenPath.tmp" -Value ($token + "`n")
 Move-Item -Force -Path "$tokenPath.tmp" -Destination $tokenPath
 $rt = (Get-Content (Join-Path $homeDir 'runtimes.json') | ConvertFrom-Json).targets.'windows/x86_64'
-Invoke-WebRequest -Uri "$feedOrigin/$($rt.mirror)" -Headers $headers -OutFile (Join-Path $homeDir 'runtime.tar.gz')
+# Percent-encode the URL path: a raw '+' in an S3 key is decoded as a space
+# at the edge and denied, and upstream runtime names carry '+' (3.14.7+DATE).
+$mirrorUrl = (($rt.mirror -split '/') | ForEach-Object { [uri]::EscapeDataString($_) }) -join '/'
+Invoke-WebRequest -Uri "$feedOrigin/$mirrorUrl" -Headers $headers -OutFile (Join-Path $homeDir 'runtime.tar.gz')
 $hash = (Get-FileHash (Join-Path $homeDir 'runtime.tar.gz') -Algorithm SHA256).Hash.ToLower()
 if ($hash -ne $rt.sha256.ToLower()) { Write-Error -ErrorAction Continue 'runtime checksum mismatch'; exit 1 }
 New-Item -ItemType Directory -Force -Path (Join-Path $homeDir 'runtime') | Out-Null
