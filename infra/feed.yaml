@@ -1,10 +1,9 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >-
-  Router update feed: private versioned bucket, CloudFront distribution with
-  the edge token gate, DNS alias, and the tag-only GitHub Actions publisher
-  role. Deploy in ap-southeast-2 after infra/feed-cert.yaml reports
-  CREATE_COMPLETE. The SSM parameter holding the current token is created by
-  the operator, never by this stack, so a stack update cannot overwrite it.
+  Router update feed: private versioned bucket served publicly through
+  CloudFront, DNS alias, and the tag-only GitHub Actions publisher role.
+  Deploy in ap-southeast-2 after infra/feed-cert.yaml reports
+  CREATE_COMPLETE.
 
 Parameters:
   CertificateArn:
@@ -32,11 +31,6 @@ Parameters:
     Description: >-
       Repository IDs GitHub emits in an immutable OIDC subject (owner@id/repo@id),
       kept beside the classic form so either claim can assume the role.
-  TokenParameterName:
-    Type: String
-    Default: /scg/router-feed/current-token
-    Description: SecureString the publisher reads; the operator owns its value.
-
 Resources:
   FeedBucket:
     Type: AWS::S3::Bucket
@@ -83,57 +77,6 @@ Resources:
         SigningBehavior: always
         SigningProtocol: sigv4
 
-  TokenStore:
-    Type: AWS::CloudFront::KeyValueStore
-    Properties:
-      Name: scg-router-feed-tokens
-      Comment: Active feed read tokens; key is the token, value is active
-
-  GateFunction:
-    Type: AWS::CloudFront::Function
-    Properties:
-      Name: scg-router-feed-gate
-      AutoPublish: true
-      FunctionConfig:
-        Comment: Refuse any feed read without an active X-SCG-Feed-Token
-        Runtime: cloudfront-js-2.0
-        KeyValueStoreAssociations:
-          - KeyValueStoreARN: !GetAtt TokenStore.Arn
-      FunctionCode: |
-        import cf from 'cloudfront';
-
-        // cf.kvs() throws if no key value store is associated, which would
-        // leave the function failing at init: the stack associates the store
-        // in the same resource so the two can never drift apart.
-        const kvsHandle = cf.kvs();
-
-        function deny() {
-            // statusCode is an integer in a CloudFront Functions response
-            // object; a string is a validation error, which would deny too
-            // but with the wrong status: the updater's one-time retry with
-            // the previous feed token and its re-bootstrap remedy both key
-            // off 403.
-            return { statusCode: 403, statusDescription: 'Forbidden' };
-        }
-
-        async function handler(event) {
-            var header = event.request.headers['x-scg-feed-token'];
-            var token = header ? header.value : '';
-            if (!token) {
-                return deny();
-            }
-            try {
-                // get() rejects when the key is absent, which lands in the
-                // catch: absent, retired and unknown tokens all deny.
-                if (await kvsHandle.get(token) === 'active') {
-                    return event.request;
-                }
-            } catch (error) {
-                return deny();
-            }
-            return deny();
-        }
-
   Distribution:
     Type: AWS::CloudFront::Distribution
     Properties:
@@ -158,9 +101,6 @@ Resources:
           ViewerProtocolPolicy: redirect-to-https
           CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
           Compress: true
-          FunctionAssociations:
-            - EventType: viewer-request
-              FunctionARN: !GetAtt GateFunction.FunctionMetadata.FunctionARN
 
   FeedDns:
     Type: AWS::Route53::RecordSetGroup
@@ -218,16 +158,6 @@ Resources:
               - Effect: Allow
                 Action: cloudformation:DescribeStacks
                 Resource: !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AWS::StackName}/*
-              - Effect: Allow
-                Action: ssm:GetParameter
-                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${TokenParameterName}
-              - Effect: Allow
-                Action: kms:Decrypt
-                Resource: '*'
-                Condition:
-                  StringEquals:
-                    kms:ViaService: !Sub ssm.${AWS::Region}.amazonaws.com
-
 Outputs:
   DistributionId:
     Description: Invalidation target; the release workflow reads this output.
@@ -238,9 +168,6 @@ Outputs:
   BucketName:
     Description: Feed and bundle bucket.
     Value: !Ref FeedBucket
-  KeyValueStoreArn:
-    Description: ARN for seeding and rotating feed tokens.
-    Value: !GetAtt TokenStore.Arn
   PublisherRoleArn:
     Description: Role the release workflow assumes.
     Value: !GetAtt PublisherRole.Arn

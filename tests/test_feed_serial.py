@@ -62,8 +62,6 @@ class FeedSerialTests(unittest.TestCase):
         # The channel-resolved feed is the one whose serial is worth recording.
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
-            home.mkdir(parents=True)
-            (home / 'feed-token').write_text('tok-1\n')
             blob, latest = _craft_bundle('0.4.2.9')
             latest = {**latest, 'serial': 9}
             version = latest['version']
@@ -108,7 +106,6 @@ class FeedSerialTests(unittest.TestCase):
         # real channel. A pinned feed is operator-supplied for one run.
         with tempfile.TemporaryDirectory() as tmp:
             home = _home_with_serial(tmp, '21\n')
-            (home / 'feed-token').write_text('tok-1\n')
             blob, latest = _craft_bundle('0.4.2.0')
             latest = {**latest, 'serial': 0}
             version = latest['version']
@@ -160,7 +157,6 @@ class FeedSerialTests(unittest.TestCase):
     def test_check_update_refuses_stale_feed_before_download(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = _home_with_serial(tmp)
-            (home / 'feed-token').write_text('tok-1\n')
             blob, latest = _craft_bundle('9.9.9')
             stale = {**latest, 'serial': 7}
             # Unpinned: the unattended channel is what the guard protects.

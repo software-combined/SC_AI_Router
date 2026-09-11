@@ -1,4 +1,4 @@
-"""Publish first-install assets to the token-gated feed (Plan 139 follow-up).
+"""Publish first-install assets to the public feed (Plan 139 follow-up).
 
 Usage: python tools/publish_first_install.py [--bucket B] [--dry-run]
 
@@ -14,8 +14,8 @@ The `runtimes/*` mirrors are immutable (a different sha under a mirror key
 is refused). The two `bootstrap/*` wrappers are the one mutable entry
 point: they are replaced when they change and cached for five minutes, so
 a wrapper fix can still reach new installers. The operator's AWS
-credentials do the upload; the feed token gates reads at the edge, not
-writes, so this tool never handles it.
+credentials do the upload; reads are public, so this tool never handles a
+credential.
 """
 import argparse
 import hashlib

@@ -305,8 +305,6 @@ class WinBackendShapeTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
-            home.mkdir(parents=True)
-            (home / 'feed-token').write_text('tok-1\n')
             fetch = lambda url: blob if url.endswith('.tar.gz') else json.dumps(latest).encode()  # noqa: E731
             _patch_attrs(self, run=_ok_run, wait_version=lambda s, v: {'version': v},
                          self_test=lambda *a: None, write_catalogue=lambda *a: None)
