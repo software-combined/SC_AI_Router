@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- README: the router home path and the installed-release installer are
+  documented, installs and updates need no GitHub account, and switching
+  channels by hand requires clearing `feed-serial`.
+
 - Repository README rewritten for public consumption: an install quick start,
   client and model guidance, updates, security, architecture and development
   sections, with the installed-file inventory moved to

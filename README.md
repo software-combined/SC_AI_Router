@@ -41,11 +41,16 @@ the client versions it was recorded against live in
   `python3`, plus `curl`, `tar` and `shasum`. Windows needs no Python.
 - An OpenRouter API key for any model billed to OpenRouter.
 
+The router home is `~/.codex/mixed-model-router`
+(`%USERPROFILE%\.codex\mixed-model-router` on Windows). Installed releases,
+state, the key file and logs live there.
+
 ## Install
 
-The quickest install is the bootstrap. It downloads the pinned Python runtime
-and the release bundle from the public feed, verifies both checksums and
-installs the per-user service:
+The quickest install is the bootstrap. It needs no GitHub account, token or
+repository access: it downloads the pinned Python runtime and the release
+bundle from the public feed, verifies both checksums and installs the
+per-user service:
 
 ```sh
 curl -fsSL https://dist.softwarecombined.com/bootstrap/bootstrap.sh -o bootstrap.sh
@@ -77,6 +82,13 @@ launcher:
 py -3 packaging/release.py --out dist --url-base "file://$PWD/dist"
 py -3 packaging/install.py --feed "file://$PWD/dist/latest.json"
 ```
+
+The installer commands later in this README run from a checkout. A bootstrap
+install ships the same installer at
+`<home>/releases/<version>/packaging/install.py`, where `<version>` is the
+version recorded in `<home>/current`; run it with the pinned interpreter at
+`<home>/runtime/python/bin/python3.14` (`python.exe` under the same path on
+Windows) when the host has no Python 3.14 of its own.
 
 The installer verifies the bundle checksum, self-tests the runtime, installs
 the per-user service and writes the client configuration. If no OpenRouter key
@@ -128,13 +140,15 @@ OpenRouter dashboard.
 Every install checks the public feed at
 `https://dist.softwarecombined.com/<channel>/latest.json`; `stable` is the
 default, and writing `beta` into the `channel` file in the router home selects
-pre-releases. A `feed` file left in the router home by an older install
-overrides the channel, so check or remove it before relying on automatic
-updates. Checks run every four hours: Linux also checks five minutes after the
-timer activates, and macOS checks when the job loads. The feed needs no token,
-account or repository access, and every bundle is verified by SHA-256 with
-version and identity checks; the channel path also enforces the serial replay
-guard.
+pre-releases. Switching channels by hand also means deleting `feed-serial`
+beside it: the channels publish independently, so a higher serial left over
+from the other channel refuses the new channel's updates. A `feed` file left
+in the router home by an older install overrides the channel, so check or
+remove it before relying on automatic updates. Checks run every four hours:
+Linux also checks five minutes after the timer activates, and macOS checks
+when the job loads. The feed needs no token, account or repository access,
+and every bundle is verified by SHA-256 with version and identity checks;
+the channel path also enforces the serial replay guard.
 
 The outgoing process finishes requests it has already accepted before the
 service restarts; on macOS launchd queues new connections through the
