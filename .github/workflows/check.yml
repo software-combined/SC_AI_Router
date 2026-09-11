@@ -15,19 +15,46 @@ concurrency:
 jobs:
   test:
     name: Test
-    # Single Ubuntu runner, static checks only: the billed test-suite
-    # minutes are unaffordable per-PR on this plan, and installs are
-    # proven on local hardware instead. The full suite
-    # (python -m unittest discover -s tests -t .) is a required local
-    # gate before every commit; CI keeps compile, source limits,
-    # CloudFormation lint, registry/catalogue shape, and the two grep scans.
+    # Single Ubuntu runner. Plan 134 revisited the cost decision after the
+    # 2026-09-12 external review found a green check that never executed the
+    # tests: the offline unit suite now runs on every pull request. Installs
+    # and native lifecycle stay proven on local hardware, recorded per client
+    # and OS version in docs/compatibility.md.
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: "3.14"
+      - name: Unit suite (offline)
+        # Pull requests only: the suite is the required local gate for every
+        # commit, and the release workflow runs it again at tag time. Push
+        # runs keep the static checks so a merge to develop stays cheap.
+        if: github.event_name == 'pull_request'
+        run: python -m unittest discover -s tests -t .
+      - name: Shell syntax
+        shell: bash
+        # The bootstrap and installer shells ship to every host; a syntax
+        # error should fail here, not on a recipient's machine.
+        run: |
+          for f in packaging/*.sh; do
+            sh -n "$f" || { echo "$f failed sh -n"; exit 1; }
+          done
+      - name: PowerShell parse
+        shell: pwsh
+        # Real parser validation, not a lint pass: a .ps1 syntax error is
+        # otherwise only discovered on a Windows host.
+        run: |
+          foreach ($f in Get-ChildItem packaging/*.ps1) {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              $f.FullName, [ref]$null, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Host "::error file=$($f.Name)::$($_.Message)" }
+              exit 1
+            }
+          }
       - run: python -m compileall -q ai_router tools tests packaging
       - name: Lint (F401/F811)
         # python -m ruff: the script location differs by platform, the module
@@ -63,4 +90,4 @@ jobs:
       - name: Secrets scan
         shell: bash
         run: |
-          if grep -rEn "sk-or-v1-[A-Za-z0-9]{20,}|Bearer [A-Za-z0-9._-]{30,}" --include='*.py' --include='*.md' --include='*.json' --include='*.toml' . ; then echo "possible secret committed"; exit 1; fi
+          if grep -rEn "sk-or-v1-[A-Za-z0-9]{20,}|Bearer [A-Za-z0-9._-]{30,}" --include='*.py' --include='*.md' --include='*.json' --include='*.toml' --include='*.yml' --include='*.yaml' --include='*.sh' --include='*.ps1' --include='*.txt' . ; then echo "possible secret committed"; exit 1; fi
