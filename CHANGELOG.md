@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- The pre-flight context estimate no longer counts base64 image payloads in
+  replayed history as text, so a turn carrying images inside tool outputs is
+  no longer refused as over-context; image blocks now cost a flat per-block
+  allowance, and text-only models detect images that sit inside tool outputs.
+
 - The updater now finds GitHub CLI under scheduler-minimal PATH on macOS,
   Linux and Windows (brew, apt/dnf, snap, Linuxbrew, Program Files,
   per-user, choco, scoop), with the resolver consolidated into one owner;

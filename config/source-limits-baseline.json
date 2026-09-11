@@ -1,10 +1,10 @@
 {
   "ai_router/agent_handoffs.py": 271,
   "ai_router/catalogue.py": 343,
-  "ai_router/compaction.py": 319,
+  "ai_router/compaction.py": 287,
   "ai_router/context_budget.py": 52,
   "ai_router/errors.py": 293,
-  "ai_router/providers.py": 390,
+  "ai_router/providers.py": 391,
   "ai_router/router.py": 398,
   "ai_router/setup.py": 381,
   "ai_router/sse.py": 38,

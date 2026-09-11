@@ -114,20 +114,6 @@ def rewrite_input(items):
             rewritten.append(item)
     return rewritten
 
-def strip_images(items, keep_images):
-    if keep_images or not isinstance(items, list):
-        return items
-    out = []
-    for item in items:
-        if (isinstance(item, dict) and item.get('type') == 'message'
-                and isinstance(item.get('content'), list)):
-            blocks = [b for b in item['content']
-                      if not (isinstance(b, dict) and b.get('type') == 'input_image')]
-            if len(blocks) != len(item['content']):
-                item = {**item, 'content': blocks}
-        out.append(item)
-    return out
-
 # Calls the endpoint accepts, and outputs keyed by call. A fragment missing
 # these fields (interrupted call, orphan output) 400s the whole turn, so the
 # scrub drops fragments before anything is forwarded. A partial call never
@@ -169,24 +155,6 @@ def scrub_tool_fragments(items):
             continue
         if kind in OUTPUT_TYPES and item.get('call_id') not in calls:
             continue
-        out.append(item)
-    return out
-
-
-def note_images(items):
-    """Swap image blocks for a short note; the turn stays text-only."""
-    if not isinstance(items, list):
-        return items
-    out = []
-    for item in items:
-        if (isinstance(item, dict) and item.get('type') == 'message'
-                and isinstance(item.get('content'), list)):
-            blocks = [{'type': 'input_text',
-                       'text': '[image omitted: this model runs text-only]'}
-                      if isinstance(b, dict) and b.get('type') == 'input_image'
-                      else b for b in item['content']]
-            if blocks != item['content']:
-                item = {**item, 'content': blocks}
         out.append(item)
     return out
 
