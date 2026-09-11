@@ -20,7 +20,6 @@ from urllib.parse import parse_qsl
 
 _ON_WINDOWS = os.name == 'nt'
 
-SETUP_PREFIX = '/setup/'
 SETUP_TTL_S = 15 * 60
 FORM_LIMIT = 4096
 KEY_URL = 'https://openrouter.ai/api/v1/auth/key'
@@ -324,12 +323,14 @@ def _finish_setup(state, home, mode, profile='general'):
     """Drop the nonce and persist mode plus profile; False on IO failure."""
     path = Path(home) / 'mixed-router-state.json'
     try:
+        from . import catalogue
         doc = json.loads(path.read_text())
         if not isinstance(doc, dict):
             return False
         doc.pop('setup', None)
         doc['openai_mode'] = mode
         doc['agents_profile'] = profile if profile in ('general', 'dev') else 'general'
+        catalogue.merge_file(Path(home) / 'mixed-models.json', openai_mode=mode)
         _atomic_replace(path, doc)
     except (OSError, ValueError):
         return False

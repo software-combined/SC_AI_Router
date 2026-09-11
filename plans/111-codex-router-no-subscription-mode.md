@@ -6,7 +6,7 @@
 > report. Do not improvise. When done, update the status row for this plan
 > in `plans/README.md`.
 >
-> **Drift check (run first)**: `git diff --stat 749a6b8d..HEAD -- <ROUTER_ROOT>`
+> **Drift check (run first)**: `git diff --stat b642de9..HEAD -- ai_router/ packaging/install.py tests/ README.md docs/compatibility.md`
 > On any in-scope change, compare the "Current state" excerpts against the
 > live code first; on a mismatch, STOP.
 
@@ -17,11 +17,11 @@
 - **Risk**: MED (depends on how Codex behaves without OpenAI login; Step 1 is a no-cost spike with hard go/no-go gates)
 - **Depends on**: Plan 037 (providers), Plan 038 (registry). Plan 039 and Plan 110 consume this plan's `openai_mode` (their amendment notes point here).
 - **Category**: direction / correctness
-- **Planned at**: commit `749a6b8d`, 2026-09-07
+- **Planned at**: commit `749a6b8d`, 2026-09-07 (drift base refreshed to `b642de9`, 2026-09-11)
 
 ## Path convention
 
-Repository root post-Plan 034 (`codex_router/...`, `tools/...`, `tests/...`); pre-034 the flat names under `domains/ai-platform/codex-model-router/`.
+Repository root post-Plan 034 (`ai_router/...`, `tools/...`, `tests/...`); pre-034 the flat names under `domains/ai-platform/codex-model-router/`.
 
 ## Why this matters
 
@@ -49,7 +49,7 @@ Never point `CODEX_HOME` at the real `~/.codex` during the spike, and never copy
 
 ## Scope
 
-**In scope**: `codex_router/router.py`, `codex_router/providers.py`, `codex_router/runtime.py` (state schema), new `codex_router/local_services.py`, `tests/test_handler.py` (new tests), new `tests/test_local_services.py`, `packaging/install.py` (`--openai-mode` flag and the config it writes; coordinate with Plan 110), `README.md` section "Without a ChatGPT subscription", `docs/compatibility.md` (login shapes verified).
+**In scope**: `ai_router/router.py`, `ai_router/providers.py`, `ai_router/runtime.py` (state schema), new `ai_router/local_services.py`, `tests/test_handler.py` (new tests), new `tests/test_local_services.py`, `packaging/install.py` (`--openai-mode` flag and the config it writes; coordinate with Plan 110), `README.md` section "Without a ChatGPT subscription", `docs/compatibility.md` (login shapes verified).
 
 **Out of scope**: OpenAI API-key forwarding to `api.openai.com` (`openai_mode = api_key`) is deferred, see Maintenance notes; any change to OpenRouter request handling; the real `~/.codex/auth.json` on any machine.
 
@@ -113,7 +113,7 @@ Add optional state key `openai_mode` with values `subscription` (default when ab
 
 ### Step 4: Local answers for native service calls
 
-Create `codex_router/local_services.py`, used only in `none` mode (and, as a fallback, when the subscription upstream returns 401 or 403 for these paths):
+Create `ai_router/local_services.py`, used only in `none` mode (and, as a fallback, when the subscription upstream returns 401 or 403 for these paths):
 
 - `/alpha/notes/v2/thread_hint`: read the request JSON, find the first user message text (reuse `compaction.extract_user_messages`), build a title from its first eight words (strip newlines, cap 60 characters, fall back to `New task`), and respond with the same JSON shape the real service returns. The shape must come from Step 1's recording or from one real response captured on the author's machine (a JSON body with a title field; record the exact key name, never guess). If no recording exists, STOP for this path and return 404 instead.
 - `/alpha/search`: respond with the empty-result shape recorded in Step 1. If the spike shows Codex fails the turn when this returns 404 and no shape was recorded, STOP.
@@ -147,7 +147,7 @@ Listed per step; all in `tests/test_handler.py` and `tests/test_local_services.p
 - [ ] Step 1 report with per-shape sink logs and the decision. (Report landed in-file 2026-09-08, Shape C works; desktop-app sign-in check still open per owner 2026-09-09.)
 - [x] State accepts `openai_mode` and refuses bad values at startup. (`runtime.py:50`, installer `packaging/install.py:273`.)
 - [x] In `none` mode no request ever reaches `chatgpt.com`. (`test_none_mode_rejects_openai_models_without_upstream_call`: 400 with `recorded == []`.)
-- [x] Native paths answered locally in `none` mode. (`codex_router/local_services.py` via `LocalServicesProvider`; deliberate 404-only, no recorded shapes exist; 404 toleration still open at the desktop gate.)
+- [x] Native paths answered locally in `none` mode. (`ai_router/local_services.py` via `LocalServicesProvider`; deliberate 404-only, no recorded shapes exist; 404 toleration still open at the desktop gate.)
 - [ ] Installer writes a working `none` configuration on a sandboxed `CODEX_HOME` and the probe's `model/list` through the router shows the OpenRouter models. (Needs the live desktop gate.)
 - [x] Full suite `OK`; Plan 036 tests unchanged. (Verified 2026-09-09: handler/providers/install-config legs green.)
 - [x] `plans/README.md` status row updated. (2026-09-09.)

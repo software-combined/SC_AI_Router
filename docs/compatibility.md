@@ -41,6 +41,35 @@ prove recovery of the original long task or installation of the candidate.
 Claude Code 2.1.223 reported signed out, so its live compatibility probes
 remain unverified.
 
+## Paid probe, 0.6.20 candidate, 2026-09-11
+
+Clients: Codex desktop 26.903.61454 (bundled CLI 0.153.4), Claude Code
+2.1.223, OpenCode 1.18.25. Run against the fix branch source on two
+separate loopback listeners while the installed router stayed on
+0.6.19.34.
+
+| leg | result |
+|---|---|
+| `meta/muse-spark-1.3-contributor` via OpenRouter | passed; `served_model` echoed the requested model, items `userMessage`, `reasoning`, `agentMessage`, `dynamicToolCall` |
+| `gpt-5.6-luna` via the subscription route | blocked: `openai-subscription` answered 503 `upstream_rate_limited` on every attempt. The ChatGPT subscription has no remaining allowance, so this leg is an environment limit, not a router defect |
+| Claude Code, OpenRouter and subscription | not run: Claude Code is not usable on this machine yet |
+
+Upstream source review at these versions pins the contract this release
+targets. Codex derives the compaction threshold as 90% of the context
+window (`rust-v0.153.4`, `codex-rs/protocol/src/openai_models.rs`), counts
+provider-reported usage rather than payload bytes, and maps a
+`context_length_exceeded` stream failure to `contextWindowExceeded`. Its
+own history estimator already discounts base64 image payloads — including
+images inside `function_call_output` — to a flat ~1,844 tokens per
+non-original-detail image (`codex-rs/core/src/context_manager/history.rs`).
+OpenCode v1.18.25 treats the same code as recoverable: `SessionProcessor.halt`
+sets `needsCompaction` and the run loop compacts
+(`packages/opencode/src/session/processor.ts`). OpenCode is a credential
+source for this router, not a routed client, so it is unaffected by the
+pre-flight refusal.
+Pending: an OpenAI-billed model on a subscription with remaining allowance,
+and both Claude Code legs, once that client is usable again.
+
 Tested Codex desktop versions:
 
 | version | date | result |
@@ -131,6 +160,19 @@ Isolated-router base round trip (`ai_router.candidate.verify`, Codex CLI
 |---|---|---|---|
 | deepseek/deepseek-v4.1-flash | verified | 2026-09-10 | isolated base round trip PASS |
 | deepseek/deepseek-v4-pro-0813 | verified | 2026-09-10 | isolated base round trip PASS |
+
+Reasoning-replay follow-up, 2026-09-11 (Codex CLI 0.153.4; router
+0.6.21.36-beta): the base round trips above never replayed a stored
+`reasoning` item, so they missed the `encrypted_content: null` replay bug that
+rejected DeepSeek thinking turns on 2026-09-11. With the 0.6.21 fix installed,
+the Codex runtime probe's replaying switch leg (`tools/probe_codex_runtime.py
+deepseek/deepseek-v4.1-flash --router-state <home>/mixed-router-state.json
+--effort max --switch --switch-to deepseek/deepseek-v4.1-flash`) passed:
+turn one produced a `reasoning` item and the
+`desktop_runtime_tool_round_trip: passed` marker, and the switch turn replayed
+that history and reported `history_preserved: true`.
+Router log: `request_completed` 200s for the alias with `served_model` set
+and no provider rejection.
 
 ## Claude desktop gateway discovery (Plan 120), 2026-09-10
 

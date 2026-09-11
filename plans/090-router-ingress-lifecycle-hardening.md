@@ -1,8 +1,13 @@
 # Plan 090: Harden the router ingress lifecycle (timeouts, drain accounting, single listener)
 
-> Planning only. Implement only under a later implementation instruction.
-> Drift check: `git diff --stat a985197..HEAD -- ai_router/router.py tests/test_lifecycle.py tests/test_handler.py`
-> Read changed code and preserve current behavior before edits.
+> Implemented 2026-09-11; drift reconciled against the a985197 base in the same
+> change. Two post-plan additions reshaped the code: PR #59 routes preparation
+> through `ai_router/subscription_fallback.py` (its `refused()` held a second
+> slot, deleted by Step 2 because the owned slot now covers the hand-off), and
+> `do_POST` gained the `_owned_post` split used for the slot wrapper.
+> Current anchors: `Handler.timeout` at `ai_router/router.py:78`, slot
+> acquire/release at `:189-195`, `settimeout` at `:198`, relay without slot
+> accounting at `:306-400`.
 
 ## Status and first proof
 
@@ -17,34 +22,31 @@
 Three ingress-lifecycle defects share one file and one test surface:
 
 1. `Handler` has no socket timeout, so a connection that never finishes its request line
-   blocks a thread forever. `self.connection.settimeout(120)` runs only at
-   `ai_router/router.py:188`, deep inside `do_POST` after routing, `/shutdown`, setup and
-   `do_GET` branches. `ThreadingHTTPServer` has no connection cap, so threads and fds leak
-   across a long desktop session.
-2. Drain accounting counts only the relay window. `inflight` increments at
-   `ai_router/router.py:267-269` (relay) and `:209-219` (compaction); a request accepted at
-   `:176` but still in `read_body` (`:190`) or `prepare` (`:221`) is invisible, so
-   `drain_and_exit` (`:50-59`) can see `inflight == 0` and `os._exit(0)` mid-upload.
-3. `self.allow_reuse_port = True` (`ai_router/router.py:34-36`) sets `SO_REUSEPORT` on the
+   blocks a thread forever. `self.connection.settimeout(120)` runs only
+   inside `do_POST` after routing, `/shutdown`, setup and `do_GET` branches.
+   `ThreadingHTTPServer` has no connection cap, so threads and fds leak across a long desktop session.
+2. Drain accounting counts only the relay window. `inflight` increments
+   before `relay` and around the compaction branch; a request accepted by `do_POST` but still in `read_body` or `prepare` is invisible,
+   so `drain_and_exit` can see `inflight == 0` and `os._exit(0)` mid-upload.
+3. `self.allow_reuse_port = True` sets `SO_REUSEPORT` on the
    fallback bind, so a second router can bind the same port and the kernel splits
    connections between two processes with divergent health, state and logs.
 
 ## Current state (verified at a985197)
 
-- `ai_router/router.py:21-23` — `class Router(ThreadingHTTPServer): daemon_threads = True; drain_deadline_s = 120`; no `timeout`.
-- `ai_router/router.py:77-78` — `class Handler(BaseHTTPRequestHandler): protocol_version = 'HTTP/1.1'`; no timeout.
-- `ai_router/router.py:176-190` — draining check, `/shutdown`, setup/unsupported routing, then `self.connection.settimeout(120)`, then `read_body()`.
-- `ai_router/router.py:50-59` — `drain_and_exit` calls `os._exit(0)` once `inflight == 0` or the deadline passes.
-- `ai_router/router.py:267-269` — `inflight += 1` immediately before `self.relay(...)`; `relay`'s `finally` (`:396-399`) decrements.
-- `ai_router/router.py:34-36` — fallback bind sets `self.allow_reuse_port = True` before `super().__init__`.
-- Repo conventions: tests are stdlib `unittest`, offline; `tests/test_lifecycle.py:173-187` sets `server.inflight` by hand and mocks `os._exit`-class behavior through the drain; `tests/test_handler.py:123-142` shows the raw-`HTTPConnection` pattern for protocol-level tests. Match those.
+- `class Router(ThreadingHTTPServer)` — `daemon_threads = True; drain_deadline_s = 120`; no `timeout`.
+- `class Handler(BaseHTTPRequestHandler)` — `protocol_version = 'HTTP/1.1'`; no timeout.
+- `do_POST` — draining check, `/shutdown`, setup/unsupported routing, then `self.connection.settimeout(120)`, then `read_body()`.
+- `drain_and_exit` calls `os._exit(0)` once `inflight == 0` or the deadline passes.
+- `inflight += 1` immediately before `self.relay(...)`; `relay`'s `finally` decrements.
+- Fallback bind sets `self.allow_reuse_port = True` before `super().__init__`.
+- Repo conventions: tests are stdlib `unittest`, offline; `tests/test_lifecycle.py` sets `server.inflight` by hand and mocks `os._exit`-class behavior through the drain; `tests/test_handler.py` shows the raw-`HTTPConnection` pattern for protocol-level tests. Match those.
 
 ## Scope
 
-**In scope**: `ai_router/router.py`, `tests/test_lifecycle.py`, `tests/test_handler.py`.
+**In scope**: `ai_router/router.py`, `ai_router/subscription_fallback.py`, `tests/test_lifecycle.py`, `tests/test_handler.py`.
 **Out of scope**: provider/transport code, setup route behavior, the `fileno` launchd socket path
-(`router.py:25-42` first branch), `drain_deadline_s`, any connection-cap feature, the 120 s
-upstream timeout in `relay` (`:305`).
+(first branch of `Router.__init__`), `drain_deadline_s`, any connection-cap feature, the 120 s upstream timeout in `relay`.
 
 ## Commands
 
@@ -60,7 +62,7 @@ upstream timeout in `relay` (`:305`).
 ### Step 1: pre-request socket timeout (commit 1)
 
 Add `timeout = 120` to `Handler` (next to `protocol_version`). Keep `self.connection.settimeout(120)`
-at `:188` unchanged (redundant but harmless; removing it is a follow-up decision, not this plan).
+in `_owned_post` unchanged (redundant but harmless; removing it is a follow-up decision, not this plan).
 Add a handler test that builds the test server with a small class-level timeout (e.g. set
 `Handler.timeout = 1` inside the test, restore in cleanup), opens a raw socket, sends a partial
 request line, and asserts the connection is closed within ~2 s without a response.
@@ -69,16 +71,18 @@ request line, and asserts the connection is closed within ~2 s without a respons
 
 ### Step 2: whole-request drain accounting (commit 2)
 
-Move slot acquisition to just after the owned-path check (`ai_router/router.py:184-187`) and release
+Move slot acquisition to just after the owned-path check and release
 it exactly once in a `finally` that wraps everything from `self.connection.settimeout(120)` through
 `self.relay(...)`. Concretely:
 
-- Acquire under `self.server.lock` immediately before `settimeout`.
+- Acquire under `self.server.lock` immediately before delegating to `_owned_post`.
 - Wrap the remainder in `try: ... finally: with self.server.lock: self.server.inflight -= 1`.
-- Delete the compaction-branch pair at `:209-219`.
-- In `relay`'s `finally` (`:396-399`), delete only the `inflight` decrement; keep `conn.close()`
+- Delete the compaction-branch pair.
+- In `relay`'s `finally`, delete only the `inflight` decrement; keep `conn.close()`
   and `self.close_connection = True`.
-- `/shutdown` (`:178-183`) and non-owned routes stay outside the slot: the drain thread must not
+- Delete the second slot acquire in `subscription_fallback.refused()`: the owned slot
+  now covers the twin hand-off (PR #59 drift; otherwise every helper fallback leaks +1).
+  `/shutdown` and non-owned routes stay outside the slot: the drain thread must not
   wait on the very request that started it.
 
 Extend `tests/test_lifecycle.py`: with a mocked `os._exit`, start a request whose body is not fully
@@ -91,7 +95,7 @@ existing hand-set-`inflight` tests working; add a negative case asserting no dou
 
 ### Step 3: single-listener enforcement (commit 3)
 
-Delete `self.allow_reuse_port = True` at `:35`. `allow_reuse_address` (SO_REUSEADDR) stays on,
+Delete `self.allow_reuse_port = True`. `allow_reuse_address` (SO_REUSEADDR) stays on,
 so normal restarts still rebind over TIME_WAIT. Add a test that constructs one `Router` and then a
 second on the same port, asserting the second raises `OSError`.
 

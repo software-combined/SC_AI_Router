@@ -2,8 +2,9 @@ import unittest
 import base64
 from ai_router.compaction import (PREFIX, TRANSCRIPT_BUDGET, build_compact_v1_output,
     compaction_text, decode_summary, encode_summary, extract_summary, extract_user_messages,
-    has_compaction_trigger, note_images, rewrite_input, scrub_tool_fragments, strip_images,
+    has_compaction_trigger, rewrite_input, scrub_tool_fragments,
     transcript_for_summary, v2_compaction_item, OPAQUE_NOTE)
+from ai_router.image_items import IMAGE_NOTE, note_images, strip_images
 
 class CompactionTests(unittest.TestCase):
     def test_transparent_envelope_round_trips(self):
@@ -171,9 +172,31 @@ class ImageStripTests(unittest.TestCase):
         out = note_images([item])
         self.assertEqual(out[0]['content'],
             [{'type': 'input_text', 'text': 'look here'},
-             {'type': 'input_text', 'text': '[image omitted: this model runs text-only]'}])
+             {'type': 'input_text', 'text': IMAGE_NOTE}])
         self.assertEqual(len(item['content']), 2)
         self.assertEqual(note_images('prompt'), 'prompt')
+
+    def test_tool_output_images_stripped_without_mutating(self):
+        item = {'type': 'function_call_output', 'call_id': 'c1', 'name': 'view_image',
+                'output': [{'type': 'input_image', 'image_url': 'data:image/png;base64,AAA',
+                            'detail': 'high'},
+                           {'type': 'text', 'text': 'caption'}]}
+        out = strip_images([item], False)
+        self.assertEqual(out[0]['output'], [{'type': 'text', 'text': 'caption'}])
+        self.assertEqual(out[0]['call_id'], 'c1')
+        self.assertEqual(out[0]['name'], 'view_image')
+        self.assertEqual(len(item['output']), 2)
+
+    def test_tool_output_images_noted_without_mutating(self):
+        item = {'type': 'function_call_output', 'call_id': 'c1',
+                'output': [{'type': 'input_image', 'image_url': 'data:image/png;base64,AAA',
+                            'detail': 'high'}]}
+        out = note_images([item])
+        self.assertEqual(out[0]['output'],
+                         [{'type': 'input_text', 'text': IMAGE_NOTE}])
+        self.assertEqual(item['output'],
+                         [{'type': 'input_image', 'image_url': 'data:image/png;base64,AAA',
+                           'detail': 'high'}])
 
 class TranscriptBoundaryTests(unittest.TestCase):
     def test_drops_oldest_whole_items_newest_first(self):
@@ -211,6 +234,28 @@ class ReasoningAndShapeTests(unittest.TestCase):
         self.assertIn('chose X', text)
         self.assertNotIn('leak', text)
         self.assertNotIn('opaque', text)
+
+    def test_reasoning_null_blob_reads_summary_and_content_text(self):
+        text = transcript_for_summary([
+            {'type': 'reasoning',
+             'summary': [{'type': 'summary_text', 'text': 'sum-marker'}],
+             'content': [{'type': 'reasoning_text', 'text': 'content-marker'},
+                         {'type': 'encrypted_content', 'encrypted_content': 'blob-marker'}],
+             'encrypted_content': None},
+        ])
+        self.assertIn('sum-marker', text)
+        self.assertIn('content-marker', text)
+        self.assertNotIn('blob-marker', text)
+
+    def test_reasoning_blob_only_item_stays_out_of_transcript(self):
+        text = transcript_for_summary([
+            {'type': 'message', 'role': 'user', 'content': 'keep me'},
+            {'type': 'reasoning', 'summary': [], 'content': [],
+             'encrypted_content': 'QkxPQg=='},
+        ])
+        self.assertIn('keep me', text)
+        self.assertNotIn('QkxPQg==', text)
+        self.assertNotIn('reasoning:', text)
 
     def test_alternate_result_keys_extracted(self):
         for key in ('output', 'result', 'content', 'text', 'data'):

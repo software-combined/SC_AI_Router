@@ -8,9 +8,9 @@ python3.14 -m ai_router.models add <slug> --probe     # verify, then write
 ```
 
 Without `--probe` the row lands as `tier: preview`: it appears in the
-picker labelled Preview but is not trusted yet (an `openai/*` row stays
-out of the Codex picker, and an `anthropic/*` row will stay out of the
-Claude listing). With `--probe` the base
+picker labelled Preview but is not trusted yet (in subscription mode an
+`openai/*` row stays out of the Codex picker, and an `anthropic/*` row
+will stay out of the Claude listing). With `--probe` the base
 tool round trip runs on the installed router; a pass writes
 `tier: verified`, anything else stays `preview` and appends a row to
 `docs/compatibility.md`. Validate with
@@ -18,7 +18,9 @@ tool round trip runs on the installed router; a pass writes
 remove with `python3.14 -m ai_router.models remove <slug>`.
 
 Preview models route exactly like verified ones; only the picker label
-and ordering differ. A model that needs behaviour the adapter does not
+and their position differ: the picker groups rows by vendor A-Z, verified
+before preview inside each vendor, and `models add` renumbers priorities
+to hold that order. A model that needs behaviour the adapter does not
 have (a new quirk type) is a normal code change and release, not a data
 row.
 

@@ -133,11 +133,28 @@ class ReceiptVersionTests(unittest.TestCase):
     # receipts import as the codex attachment with restore info intact.
     def _mod(self):
         import importlib.util as _ilu
+        root = Path(__file__).resolve().parents[1]
         spec = _ilu.spec_from_file_location(
-            'router_codex_config', Path(__file__).resolve().parents[1] / 'packaging' / 'codex_config.py')
+            'router_codex_config', root / 'packaging' / 'codex_config.py')
         mod = _ilu.module_from_spec(spec)
         spec.loader.exec_module(mod)
+        # Same injection as install.py: receipt writes go through the
+        # shared atomic writer, so the direct spec-load needs it too.
+        aspec = _ilu.spec_from_file_location(
+            'router_atomic_write', root / 'packaging' / 'atomic_write.py')
+        amod = _ilu.module_from_spec(aspec)
+        aspec.loader.exec_module(amod)
+        mod._atomic_write = amod
         return mod
+
+    def test_parse_snapshot_falls_back_to_empty_for_non_objects(self):
+        # Plan 095: the shared parser replaces both per-adapter decoders; pin
+        # the {} fallback the re-attach paths rely on.
+        config = self._mod()
+        for text in ('{', '[1]', '"s"', 'null', '42', 'true'):
+            with self.subTest(text=text):
+                self.assertEqual(config.parse_snapshot(text), {})
+        self.assertEqual(config.parse_snapshot('{"a": 1}'), {'a': 1})
 
     def test_legacy_flat_receipt_imports_as_codex(self):
         mod = self._mod()

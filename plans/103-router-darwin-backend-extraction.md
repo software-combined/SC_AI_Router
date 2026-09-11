@@ -1,4 +1,4 @@
-# Plan 103: Move launchd-specific helpers out of the 680-line service module
+# Plan 103: Move launchd-specific helpers out of the 671-line service module
 
 > Planning only. Implement only under a later implementation instruction.
 > Drift check: `git diff --stat a985197..HEAD -- packaging/service.py packaging/launchd.py packaging/platforms/darwin.py tests/test_launchd.py tests/test_interpreter_resolution.py tests/test_install.py`
@@ -8,7 +8,7 @@
 
 - Priority P3; effort M; risk MED; confidence HIGH; category tech-debt; depends on none (run after 101).
 - Planned at `a985197`, 2026-09-10.
-- First proof: `packaging/service.py` drops below its 680-line count, launchd rendering/reload lives
+- First proof: `packaging/service.py` drops below its 671-line count, launchd rendering/reload lives
   in `packaging/launchd.py`, and the launchd + installer suites stay green.
 
 ## Why this matters
@@ -18,7 +18,7 @@
 `main_plist_needs_reload`, `reload_main_service`, `ensure_updater`, `loaded_updater_release`, ...),
 while the Linux backend wraps a dedicated `packaging/systemd.py` (`platforms/linux.py:11-14`). The
 architecture document (`docs/architecture.md:55-56`) still records this as transitional debt with
-Plan 056 already DONE, so nobody owns it. `service.py` (680 lines) mixes launchd rendering with
+Plan 056 already DONE, so nobody owns it. `service.py` (671 lines) mixes launchd rendering with
 feed, state, log and bundle-home helpers; a Darwin change requires reading all of it.
 
 ## Current state (verified at a985197; line refs refreshed at 12c834b)

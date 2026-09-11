@@ -134,7 +134,7 @@ Block Public Access on, reads only through CloudFront Origin Access Control.
 | Key | Cache | Notes |
 |---|---|---|
 | `stable/latest.json`, `beta/latest.json` | `max-age=60`, ETag preserved | existing `fetch_feed` 304 revalidation keeps 15-minute polls cheap |
-| `bundles/codex-model-router-<version>.tar.gz` | `immutable, max-age=31536000` | never overwritten; `release.py` output unchanged |
+| `bundles/ai-router-<version>.tar.gz` | `immutable, max-age=31536000` | never overwritten; `release.py` output unchanged |
 | `runtime/<os>-<arch>/<pbs-filename>` | immutable | mirrored `python-build-standalone` install-only CPython 3.14, pinned by URL and SHA-256 in `packaging/runtime.lock` (Plan 112 §2); licences retained |
 | `bootstrap/install.sh`, `bootstrap/install.ps1` | `max-age=300` | download-then-run entry points (§5) |
 
@@ -261,7 +261,7 @@ The canonical download endpoints, served from the Stage 1 feed and
 republished on every push to `main` (section 3):
 
 - `https://dist.softwarecombined.com/stable/latest.json`
-- `https://dist.softwarecombined.com/bundles/codex-model-router-<version>.tar.gz`
+- `https://dist.softwarecombined.com/bundles/ai-router-<version>.tar.gz`
 - `https://dist.softwarecombined.com/runtime/<os>-<arch>/<pbs-filename>`
 - `https://dist.softwarecombined.com/bootstrap/install.sh`
 - `https://dist.softwarecombined.com/bootstrap/install.ps1`

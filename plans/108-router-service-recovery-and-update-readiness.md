@@ -109,7 +109,7 @@ From the owned worktree, all must exit 0:
 ```sh
 python3.14 -m unittest tests.test_install tests.test_install_lifecycle tests.test_claude_ingress tests.test_feed_verify tests.test_feed_serial
 python3.14 -m unittest discover -s tests -t .
-python3.14 -m compileall -q codex_router tools tests
+python3.14 -m compileall -q ai_router tools tests
 python3.14 tools/check_source_limits.py
 ```
 

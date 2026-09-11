@@ -8,13 +8,13 @@
 
 - Priority P2; effort M; risk MED; confidence HIGH; category tech-debt; depends on none (run after 101).
 - Planned at `a985197`, 2026-09-10.
-- First proof: `python3.14 tools/check_source_limits.py` passes with `packaging/install.py` below its
-  previous 697-line count, with every installer test green.
+- First proof: `python3.14 tools/check_source_limits.py` passes with `packaging/install.py` below the
+  700-line hard cap, with every installer test green.
 
 ## Why this matters
 
-`packaging/install.py` is 697 lines — three under the 700 hard cap — and
-`config/source-limits-baseline.json` pins it at 697. Any one-line fix requires a compensating deletion, and the 217-line `do_install`
+`packaging/install.py` is 700 lines — exactly at the 700 hard cap — and
+`config/source-limits-baseline.json` pins it at 700. Any one-line fix requires a compensating deletion, and the 217-line `do_install`
 (`:313-529`) interleaves option resolution, bundle install, rollback, and client attachment.
 
 Pure extraction within the file does **not** create headroom by itself; the win comes from
@@ -90,7 +90,7 @@ count (it will remain above the 400 soft limit, so the entry must match exactly)
 
 ## Done criteria
 
-- [ ] `install.py` count is lower than 697 and the baseline entry matches exactly.
+- [ ] `install.py` count is below 700 and the baseline entry matches exactly.
 - [ ] All installer suites and the full suite pass with zero test edits required by the moves.
 - [ ] No seam patched by tests moved out of the module (`_sync_seams` still binds the same names).
 - [ ] Compile and limit gates pass; only in-scope files changed.

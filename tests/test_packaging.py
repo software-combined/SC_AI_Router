@@ -34,10 +34,14 @@ FILES = [
          'ai_router/model_refresh.py',
          'ai_router/winacl.py',
          'ai_router/context_budget.py',
+         'ai_router/image_items.py',
           'ai_router/model_policy.py',
+         'ai_router/subscription_roster.py',
+         'ai_router/retired_slugs.py',
           'ai_router/clients/__init__.py',
          'ai_router/clients/codex.py',
          'ai_router/transport.py',
+         'ai_router/subscription_fallback.py',
          'ai_router/protocols/__init__.py',
          'ai_router/protocols/responses.py',
          'ai_router/protocols/messages.py',
@@ -50,6 +54,26 @@ FILES = [
          'tools/global_instructions.py',
          'tools/disable.py',
          ]
+
+# Explicit required-files assertion (Plan 123 STOP condition): every member
+# an installed release needs to boot and to update itself. Kept independent
+# of release.py's inventory so a dropped member fails the bundle gate.
+REQUIRED_PACKAGING = (
+    'packaging/router_launch.py', 'packaging/update_launch.py',
+    'packaging/launchd.py', 'packaging/service.py',
+    'packaging/feed.py', 'packaging/atomic_write.py',
+    'packaging/install.py', 'packaging/updater.py',
+    'packaging/codex_config.py', 'packaging/claude_config.py',
+    'packaging/claude_desktop_config.py', 'packaging/systemd.py',
+    'packaging/diagnostics.py',
+    'packaging/runtime.lock', 'packaging/runtime_lock.py',
+    'packaging/platforms/__init__.py',
+    'packaging/platforms/darwin.py',
+    'packaging/platforms/linux.py',
+    'packaging/platforms/windows.py',
+    'packaging/install.sh', 'packaging/install.ps1',
+)
+
 
 class PackagingTests(unittest.TestCase):
     def test_wrappers_call_install_py(self):
@@ -73,6 +97,24 @@ class PackagingTests(unittest.TestCase):
         for tool in ('tools/probe_codex_runtime.py', 'tools/disable.py'):
             self.assertIn(tool, FILES, tool)
 
+    def test_packaging_modules_are_all_bundled(self):
+        # Every packaging module an installed release can load must be in the
+        # release inventory; release.py is the publish-time tool and is the
+        # one deliberate exclusion.
+        root = Path(__file__).resolve().parents[1]
+        spec = importlib.util.spec_from_file_location(
+            'release_scan', root / 'packaging' / 'release.py')
+        release_scan = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(release_scan)
+        bundled = set(release_scan.bundle_files(root))
+        for path in sorted((root / 'packaging').rglob('*.py')):
+            if '__pycache__' in path.parts:
+                continue
+            rel = path.relative_to(root).as_posix()
+            if rel == 'packaging/release.py':
+                continue
+            self.assertIn(rel, bundled, 'packaging module missing from the release inventory')
+
     def test_readme_runtime_list_matches_files(self):
         import re
         readme = (Path(__file__).resolve().parents[1] / 'README.md').read_text()
@@ -91,22 +133,27 @@ class PackagingTests(unittest.TestCase):
         tarball = next(out.glob('*.tar.gz'))
         with tarfile.open(tarball, mode='r') as tar:
             names = set(tar.getnames())
+        # Single inventory (Plan 123): the tarball must match release.py's
+        # bundle_files() exactly, neither missing a member nor shipping an
+        # extra. REQUIRED_PACKAGING below stays an explicit list so a member
+        # dropped from the inventory still fails this gate.
+        self.assertEqual(names, set(release_mod.bundle_files(root)) | {'MANIFEST.json'})
         for name in FILES:
             self.assertIn(name, names, name)
-        self.assertIn('MANIFEST.json', names)
-        # An installed release must be able to boot and to update itself:
-        # both stable launchers plus every module service.py imports.
-        for name in ('packaging/router_launch.py', 'packaging/update_launch.py',
-                     'packaging/launchd.py', 'packaging/service.py',
-                     'packaging/feed.py',
-                     'packaging/install.py', 'packaging/updater.py',
-                     'packaging/codex_config.py',
-                     'packaging/runtime.lock', 'packaging/runtime_lock.py',
-                     'packaging/platforms/__init__.py',
-                     'packaging/platforms/darwin.py',
-                     'packaging/platforms/linux.py',
-                     'packaging/install.sh', 'packaging/install.ps1'):
+        for name in REQUIRED_PACKAGING:
             self.assertIn(name, names, name)
+
+    def test_activation_receipt_has_a_single_writer(self):
+        # Plan 095: activation.json is written in exactly one module
+        # (codex_config.py, through the shared atomic writer). A second
+        # writer literal fails this closed so receipt schema changes
+        # cannot silently drift across adapters again.
+        root = Path(__file__).resolve().parents[1] / 'packaging'
+        writers = sorted(path.relative_to(root).as_posix()
+                         for path in root.rglob('*.py')
+                         if '__pycache__' not in path.parts
+                         and 'activation.json' in path.read_text())
+        self.assertEqual(writers, ['codex_config.py'])
 
     def test_version_is_semver(self):
         version = (Path(__file__).resolve().parents[1] / 'packaging' / 'VERSION').read_text().strip()
@@ -122,7 +169,7 @@ class PackagingTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         surface = [
             'packaging/install.py', 'packaging/service.py',
-            'packaging/feed.py',
+            'packaging/feed.py', 'packaging/atomic_write.py',
             'packaging/launchd.py', 'packaging/router_launch.py',
             'packaging/systemd.py', 'packaging/update_launch.py',
             'packaging/updater.py', 'packaging/codex_config.py',
@@ -130,6 +177,8 @@ class PackagingTests(unittest.TestCase):
             'packaging/runtime_lock.py', 'packaging/platforms/__init__.py',
             'packaging/platforms/darwin.py', 'packaging/platforms/linux.py',
             'packaging/platforms/windows.py', 'ai_router/feed_verify.py',
+            'ai_router/subscription_roster.py',
+            'ai_router/retired_slugs.py',
             'tools/disable.py', 'tools/global_instructions.py',
         ]
         for name in surface:

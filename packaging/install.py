@@ -16,41 +16,31 @@ import webbrowser
 import shutil
 import sys
 import tarfile
-import urllib.error
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import importlib.util
+# Bootstrap loader (Plan 123 exception): service must be spec-loaded before
+# service.load() exists, so this single bootstrap copy stays.
 _spec = importlib.util.spec_from_file_location(
     'packaging.service',
     Path(__file__).resolve().parent / 'service.py')
 _svc = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_svc)
-_plat_spec = importlib.util.spec_from_file_location(
+_platforms = _svc.load(
     'router_platforms', Path(__file__).resolve().parent / 'platforms' / '__init__.py')
-_platforms = importlib.util.module_from_spec(_plat_spec)
-_plat_spec.loader.exec_module(_platforms)
-_cfg_spec = importlib.util.spec_from_file_location(
+_codex_config = _svc.load(
     'router_codex_config', Path(__file__).resolve().parent / 'codex_config.py')
-_codex_config = importlib.util.module_from_spec(_cfg_spec)
-_cfg_spec.loader.exec_module(_codex_config)
-_claude_spec = importlib.util.spec_from_file_location(
+_codex_config._atomic_write = _svc.load('router_atomic_write', Path(__file__).resolve().parent / 'atomic_write.py')
+_claude_config = _svc.load(
     'router_claude_config', Path(__file__).resolve().parent / 'claude_config.py')
-_claude_config = importlib.util.module_from_spec(_claude_spec)
-_claude_spec.loader.exec_module(_claude_config)
-_desktop_spec = importlib.util.spec_from_file_location(
+_desktop_config = _svc.load(
     'router_claude_desktop_config', Path(__file__).resolve().parent / 'claude_desktop_config.py')
-_desktop_config = importlib.util.module_from_spec(_desktop_spec)
-_desktop_spec.loader.exec_module(_desktop_config)
-_diag_spec = importlib.util.spec_from_file_location(
+_diag = _svc.load(
     'router_diagnostics', Path(__file__).resolve().parent / 'diagnostics.py')
-_diag = importlib.util.module_from_spec(_diag_spec)
-_diag_spec.loader.exec_module(_diag)
 _linux = _platforms._linux_mod().systemd
-_upd_spec = importlib.util.spec_from_file_location(
+_updater = _svc.load(
     'router_updater', Path(__file__).resolve().parent / 'updater.py')
-_updater = importlib.util.module_from_spec(_upd_spec)
-_upd_spec.loader.exec_module(_updater)
 # One shared service module: tests patch install_mod._svc attrs and the
 # updater must see the same object. Bound once at load; _sync_seams keeps
 # the function seams fresh per call.

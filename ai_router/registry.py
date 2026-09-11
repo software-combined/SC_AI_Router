@@ -1,7 +1,7 @@
 """The one place that says what a model is. Data lives in models.json.
 
 Everything else derives from MODELS. Keep the loader pure (text in,
-validated registry out) so Plan 046 can reload it at runtime.
+validated registry out) so Plan 099 can reload it at runtime.
 """
 import json
 from dataclasses import dataclass
@@ -110,6 +110,14 @@ def near_miss(model):
         return None
     candidate = '~' + model
     return candidate if by_slug(candidate) is not None else None
+
+
+def picker_key(vendor, tier, display_name, slug):
+    """Vendor-grouped picker order: vendor A-Z, verified before preview.
+
+    Codex lists the picker by ascending priority, so registry priorities
+    must ascend in this order; merge emits file rows in it as well."""
+    return (vendor.casefold(), tier != 'verified', display_name.casefold(), slug)
 
 
 def openrouter_slugs():

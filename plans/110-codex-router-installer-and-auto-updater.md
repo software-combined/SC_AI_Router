@@ -26,7 +26,7 @@
 > report. Do not improvise. When done, update the status row for this plan
 > in `plans/README.md`.
 >
-> **Drift check (run first)**: `git diff --stat 749a6b8d..HEAD -- <ROUTER_ROOT>`
+> **Drift check (run first)**: `git diff --stat b642de9..HEAD -- packaging/ .github/workflows/release.yml tests/test_packaging.py tests/test_install.py CHANGELOG.md README.md`
 > On any in-scope change, compare the "Current state" excerpts against the
 > live code first; on a mismatch, STOP.
 
@@ -37,7 +37,7 @@
 - **Risk**: MED (writes a LaunchAgent and a config block on staff machines; mitigated by dry-run, health check and rollback)
 - **Depends on**: Plan 034 (repository and package layout), Plan 035 (`ROUTER_HOME`, self-check, `/health` with `inflight`), Plan 040 (key file). Plan 039 changes what the config block contains (Step 6 handles both cases).
 - **Category**: dx / migration / direction
-- **Planned at**: commit `749a6b8d`, 2026-09-07
+- **Planned at**: commit `749a6b8d`, 2026-09-07 (drift base refreshed to `b642de9`, 2026-09-11)
 
 ## Why this matters
 
@@ -60,7 +60,7 @@ model_catalog_json = "/Users/cyrilallart/.codex/mixed-model-router/mixed-models.
 - State file contract after Plans 035 and 040: `{"port": int, "token": str}` required; `openai_models` and `opencode_auth` optional. Token is `secrets.token_urlsafe(32)` style (43 characters on the author's machine).
 - `/health` (Plan 035) returns `{"status": "ok", "version": "...", "inflight": N}`.
 - Runtime needs Python 3.14 (`compression.zstd`). System Python on macOS is 3.9.6; Homebrew provides 3.14 at `/opt/homebrew/bin/python3`. `uv` is not installed on the author's machine.
-- Release feed decision from Plan 034 Step 1: public repository with GitHub Releases (default), or S3 plus CloudFront. `latest.json` on GitHub is reachable at `https://github.com/software-combined/codex-model-router/releases/latest/download/latest.json` for a public repository.
+- Release feed decision from Plan 034 Step 1: public repository with GitHub Releases (default), or S3 plus CloudFront. `latest.json` on GitHub is reachable at `https://github.com/software-combined/SC_OpenRouter_adapter/releases/latest/download/latest.json` for a public repository.
 - Repository CI conventions (Plan 034 Step 5): top-level `permissions`, `concurrency` group, `timeout-minutes`, actions pinned to full SHAs.
 
 ## Commands you will need
@@ -68,7 +68,7 @@ model_catalog_json = "/Users/cyrilallart/.codex/mixed-model-router/mixed-models.
 | Purpose | Command | Expected |
 |---|---|---|
 | Tests | `python3.14 -m unittest discover -s tests -t . -v` | `OK` |
-| Build a bundle locally | `python3.14 packaging/release.py --out dist` | `dist/codex-model-router-<VERSION>.tar.gz`, `dist/latest.json` |
+| Build a bundle locally | `python3.14 packaging/release.py --out dist` | `dist/ai-router-<VERSION>.tar.gz`, `dist/latest.json` |
 | Dry run install | `python3 packaging/install.py --dry-run --feed file://$PWD/dist/latest.json` | prints the actions it would take, exits 0 |
 | Real install (author's machine) | `python3 packaging/install.py --feed file://$PWD/dist/latest.json` | `installed <VERSION>; health ok` |
 | Update check | `python3 packaging/install.py --check-update` | `up to date <VERSION>` or `installed <NEW>` or `deferred: router busy` |
@@ -89,7 +89,7 @@ model_catalog_json = "/Users/cyrilallart/.codex/mixed-model-router/mixed-models.
 
 ### Step 1: `packaging/release.py` builds a deterministic bundle
 
-Stdlib only. Reads `packaging/VERSION`. Creates `dist/codex-model-router-<VERSION>.tar.gz` containing exactly: `codex_router/**/*.py` and `codex_router/*.txt`, `tools/*.py`, `tests/*.py`, `packaging/VERSION`, `packaging/install.py`, and a generated `MANIFEST.json` `{"version", "files": {relative path: sha256}, "codex_tested": <value from docs/compatibility.md or "unknown">, "min_python": "3.14"}`. Set fixed `mtime`, `uid`/`gid` 0, `uname`/`gname` empty on every tar member so two builds of the same tree are byte-identical. Writes `dist/latest.json` `{"version", "url": "<release asset URL for the tarball>", "sha256": <tarball sha256>, "min_python": "3.14", "published": <UTC ISO>}` where the URL is `https://github.com/software-combined/codex-model-router/releases/download/v<VERSION>/codex-model-router-<VERSION>.tar.gz` unless `--url-base` is given. Exclude `__pycache__`.
+Stdlib only. Reads `packaging/VERSION`. Creates `dist/ai-router-<VERSION>.tar.gz` containing exactly: `ai_router/**/*.py` and `ai_router/*.txt`, `tools/*.py`, `tests/*.py`, `packaging/VERSION`, `packaging/install.py`, and a generated `MANIFEST.json` `{"version", "files": {relative path: sha256}, "codex_tested": <value from docs/compatibility.md or "unknown">, "min_python": "3.14"}`. Set fixed `mtime`, `uid`/`gid` 0, `uname`/`gname` empty on every tar member so two builds of the same tree are byte-identical. Writes `dist/latest.json` `{"version", "url": "<release asset URL for the tarball>", "sha256": <tarball sha256>, "min_python": "3.14", "published": <UTC ISO>}` where the URL is `https://github.com/software-combined/SC_OpenRouter_adapter/releases/download/v<VERSION>/ai-router-<VERSION>.tar.gz` unless `--url-base` is given. Exclude `__pycache__`.
 
 **Verify**: build twice; `shasum -a 256 dist/*.tar.gz` identical both times; `tar tzf dist/*.tar.gz | grep -c __pycache__` prints `0`.
 
@@ -117,13 +117,13 @@ Flow for install:
 
 ### Step 4: Service on macOS, health check, rollback
 
-9. Write `~/Library/LaunchAgents/com.local.codex-mixed-model-router.plist` from a template: `ProgramArguments` `[<python3.14>, -m, codex_router]`, `WorkingDirectory` `home/current`, `EnvironmentVariables` `{ROUTER_HOME: home}`, `KeepAlive` true, `RunAtLoad` true, `ThrottleInterval` 10, `Umask` 63, `StandardOutPath` and `StandardErrorPath` `home/logs/launchd.log`. Create `home/logs/` first.
+9. Write `~/Library/LaunchAgents/com.local.codex-mixed-model-router.plist` from a template: `ProgramArguments` `[<python3.14>, -m, ai_router]`, `WorkingDirectory` `home/current`, `EnvironmentVariables` `{ROUTER_HOME: home}`, `KeepAlive` true, `RunAtLoad` true, `ThrottleInterval` 10, `Umask` 63, `StandardOutPath` and `StandardErrorPath` `home/logs/launchd.log`. Create `home/logs/` first.
 10. `launchctl bootout gui/<uid>/com.local.codex-mixed-model-router` (ignore a non-zero exit when the agent is not loaded), then `launchctl bootstrap gui/<uid> <plist>`.
 11. Poll `GET http://127.0.0.1:<port>/<token>/health` every 0.5 s for up to 20 s; success is HTTP 200 with JSON `status == 'ok'` and `version == <version>`.
 12. On failure: repoint `current` to the previous release (if any), run steps 10 and 11 again for the old version, and exit 1 with `rolled back to <old>: new version failed health check; see home/logs/launchd.log`. If there was no previous release, bootout and exit 1.
 13. Prune `home/releases/` to the current and the previous release only.
 
-**Verify**: simulate a failure once on the author's machine by installing a bundle whose `codex_router/__main__.py` has been edited to `raise SystemExit('boom')` (build it into a scratch `dist-bad/`); the installer must print the rollback line and the router must answer `/health` with the previous version afterwards. Then install the good bundle.
+**Verify**: simulate a failure once on the author's machine by installing a bundle whose `ai_router/__main__.py` has been edited to `raise SystemExit('boom')` (build it into a scratch `dist-bad/`); the installer must print the rollback line and the router must answer `/health` with the previous version afterwards. Then install the good bundle.
 
 ### Step 5: Config block
 
@@ -152,11 +152,11 @@ Flow for install:
 
 `.github/workflows/release.yml`: trigger `push: tags: ['v*']`; top-level `permissions: contents: read`; `concurrency` group `release-${{ github.ref }}` with `cancel-in-progress: false`; one job with `timeout-minutes: 15` and job-scoped `permissions: contents: write`; steps: checkout (pinned SHA), setup-python 3.14 (pinned SHA), `python -m unittest discover -s tests -t .`, `python packaging/release.py --out dist`, then `gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/latest.json --generate-notes` with `GH_TOKEN: ${{ github.token }}`; for tags containing `-beta`, also upload `latest-beta.json` (a copy of `latest.json`) and pass `--prerelease`. Bump `packaging/VERSION` to `0.4.0`, add a `CHANGELOG.md` entry, merge, then the operator tags `v0.4.0`.
 
-**Verify**: `gh release view v0.4.0 --json assets --jq '.assets[].name'` lists the tarball and `latest.json`; `curl -sL https://github.com/software-combined/codex-model-router/releases/latest/download/latest.json | python3 -c "import json,sys;print(json.load(sys.stdin)['version'])"` prints `0.4.0`. Then on the author's machine: `python3 packaging/install.py` with no `--feed` installs from the public feed and `/health` reports `0.4.0`.
+**Verify**: `gh release view v0.4.0 --json assets --jq '.assets[].name'` lists the tarball and `latest.json`; `curl -sL https://github.com/software-combined/SC_OpenRouter_adapter/releases/latest/download/latest.json | python3 -c "import json,sys;print(json.load(sys.stdin)['version'])"` prints `0.4.0`. Then on the author's machine: `python3 packaging/install.py` with no `--feed` installs from the public feed and `/health` reports `0.4.0`.
 
 ### Step 9 (gated phase 2): Windows
 
-Only if Cyril confirms staff run the Codex desktop app on Windows and names one test machine. Then: installer detects `os.name == 'nt'`; config path `%USERPROFILE%\.codex\config.toml`; service via `schtasks /Create /SC ONLOGON /TN CodexModelRouter /TR "<python> -m codex_router" /F` with `ROUTER_HOME` set through a small `.cmd` wrapper in `home`; update task `schtasks /Create /SC DAILY /ST 10:00 /TN CodexModelRouterUpdate ...`; health check identical; rollback identical; key file mode check skipped (documented). Add a `windows-latest` job to `check.yml` running the unit tests.
+Only if Cyril confirms staff run the Codex desktop app on Windows and names one test machine. Then: installer detects `os.name == 'nt'`; config path `%USERPROFILE%\.codex\config.toml`; service via `schtasks /Create /SC ONLOGON /TN CodexModelRouter /TR "<python> -m ai_router" /F` with `ROUTER_HOME` set through a small `.cmd` wrapper in `home`; update task `schtasks /Create /SC DAILY /ST 10:00 /TN CodexModelRouterUpdate ...`; health check identical; rollback identical; key file mode check skipped (documented). Add a `windows-latest` job to `check.yml` running the unit tests.
 
 **Verify**: on the named machine, `python install.py` prints `installed`, and Codex lists the OpenRouter models.
 

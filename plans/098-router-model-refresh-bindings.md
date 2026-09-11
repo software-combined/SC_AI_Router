@@ -103,6 +103,12 @@ The existing `setUp`/`addCleanup` restore is in place; add any newly needed rest
 
 - Rule going forward: request-path consumers read registry/capabilities through the module, never by
   value; `apply()` remains the single swap point.
+- **Required before Plan 099 Step 3 wires `start()`**: `apply()` publishes its six module globals
+  sequentially with no lock, so a request landing mid-swap can see new `registry.MODELS` with old
+  `capabilities.*` (reviewers proved the window and the `check_effort` `KeyError` it enables). This
+  plan deliberately left `model_refresh.py` out of scope; the wiring step must build all derived
+  maps into locals and publish capabilities before `registry.MODELS`/`BY_SLUG`, or guard the
+  publish with one lock.
 - Plan 099 Step 3 (wiring `start()`) must land after or with this plan; note it in the 099 row when
   integrating. While wiring, correct the stale "Plan 046 step 4" phrase in
   `ai_router/model_refresh.py:3-5`, which still names the old number and the wrong step.

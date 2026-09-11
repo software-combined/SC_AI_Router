@@ -63,7 +63,7 @@ The integration target is `develop`; release promotion is a separate PR to
 `main`. Planning worktree: `~/Documents/Github/.worktrees/router-plugin-plan`,
 branch `codex/plan-router-plugins-multios`, owner this planning task.
 
-Run `git diff --stat 9f2a6fa..HEAD -- packaging codex_router tools tests .github docs AGENTS.md`
+Run `git diff --stat 9f2a6fa..HEAD -- packaging ai_router tools tests .github docs AGENTS.md`
 before execution. Reconcile changed contracts, especially the Arch PR and the
 active Claude verification stream, before editing. Do not reclaim their worktrees.
 
@@ -79,9 +79,9 @@ Relevant verified source:
 | `packaging/install.py:323` | Always writes Codex configuration; no Claude-only installation target. |
 | `packaging/service.py:144` | Scheduled updater points inside a versioned release; use a stable management entrypoint so pruning cannot remove its executable. |
 | `tools/disable.py` | Restores the Codex block and invokes `launchctl`; configuration detachment and shared-service removal are not separated. |
-| `codex_router/router.py:136` | Authenticated `POST /shutdown` already exists. Reuse it for portable drain; do not add another control endpoint. |
-| `codex_router/setup.py` | Local, expiring key-entry window exists; subscription selection currently changes state separately from installer-written configuration. |
-| `codex_router/credentials.py:20` | Windows bypasses POSIX mode checks; Windows needs actual ACL enforcement. |
+| `ai_router/router.py:178` | Authenticated `POST /shutdown` already exists. Reuse it for portable drain; do not add another control endpoint. |
+| `ai_router/setup.py` | Local, expiring key-entry window exists; subscription selection currently changes state separately from installer-written configuration. |
+| `ai_router/credentials.py:31` | Windows bypasses POSIX mode checks; Windows needs actual ACL enforcement. |
 | `docs/claude-code.md` | Claude uses `ANTHROPIC_BASE_URL`; native subscription headers must remain intact. Live verification is recorded as pending on this baseline. |
 | Plan 106 feed table | Existing delivery direction is AWS account `651116729473`, `ap-southeast-2`; feed publication and live cutover remain separate gates. |
 
@@ -141,7 +141,7 @@ root, store a Windows password or silently enable systemd lingering.
    adapter repository root, with plugin name `scg-openrouter`, display name
    `SCG OpenRouter Setup`, and a shared `skills/manage-router/SKILL.md`.
    The whole repository is the plugin root, so the skill can use the existing
-   `packaging/` and `codex_router/` files without escaping its installed cache.
+   `packaging/` and `ai_router/` files without escaping its installed cache.
    This deliberately uses a repository-root source instead of duplicating
    installer code into a plugin subdirectory. Publish matching semver metadata
    from `packaging/VERSION`; runtime bundle build identifiers remain separate.
@@ -377,7 +377,7 @@ local source verification, not native Windows/Linux or paid-client acceptance.
 
 ```sh
 python3.14 -m unittest discover -s tests -t .
-python3.14 -m compileall -q codex_router tools tests
+python3.14 -m compileall -q ai_router tools tests
 python3.14 tools/check_source_limits.py
 ```
 

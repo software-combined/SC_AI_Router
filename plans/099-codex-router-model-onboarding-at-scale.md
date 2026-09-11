@@ -14,7 +14,7 @@
 > report. Do not improvise. When done, update the status row for this plan
 > in `plans/README.md`.
 >
-> **Drift check (run first)**: `git diff --stat 749a6b8d..HEAD -- <ROUTER_ROOT>`
+> **Drift check (run first)**: `git diff --stat b642de9..HEAD -- ai_router packaging tests docs .github`
 > On any in-scope change, compare the "Current state" excerpts against the
 > live code first; on a mismatch, STOP.
 
@@ -25,11 +25,11 @@
 - **Risk**: MED (the router starts trusting a remotely fetched data file; mitigated by strict validation, fixed provider hosts, and a last-good cache)
 - **Depends on**: Plan 038 (completed: registry as data), Plan 039 (parked: live catalogue), Plan 118 (probe flags and derived fields), Plan 109 (release feed)
 - **Category**: direction / dx
-- **Planned at**: commit `749a6b8d`, 2026-09-07
+- **Planned at**: commit `749a6b8d`, 2026-09-07 (drift base refreshed to `b642de9`, 2026-09-11)
 
 ## Path convention
 
-Repository root post-Plan 034 (`codex_router/...`, `tools/...`, `tests/...`).
+Repository root post-Plan 034 (`ai_router/...`, `tools/...`, `tests/...`).
 
 ## Why this matters
 
@@ -37,11 +37,11 @@ Cyril will keep enabling models. After Plan 038 a model is one row, but it is st
 
 ## Current state
 
-- After Plan 038 (as amended), `codex_router/models.json` holds one object per model with the fields of the `Model` dataclass (`slug`, `provider`, `display_name`, `vendor`, `reasoning`, `default_reasoning`, `modalities`, `excluded_efforts`, `schema_mode`, `max_tools`, `context_window`, `priority`) plus Plan 118's fields (`max_output_tokens`, `reasoning_summary`, `apply_patch`, `experimental_tools`, `web_search`). `registry.py` loads and validates it and exposes `MODELS`, `by_slug`, `openrouter_slugs`.
+- After Plan 038 (as amended), `ai_router/models.json` holds one object per model with the fields of the `Model` dataclass (`slug`, `provider`, `display_name`, `vendor`, `reasoning`, `default_reasoning`, `modalities`, `excluded_efforts`, `schema_mode`, `max_tools`, `context_window`, `priority`) plus Plan 118's fields (`max_output_tokens`, `reasoning_summary`, `apply_patch`, `experimental_tools`, `web_search`). `registry.py` loads and validates it and exposes `MODELS`, `by_slug`, `openrouter_slugs`.
 - Plan 118's `live_refresh.py` rewrites the derived fields (`modalities`, `context_window`, `max_output_tokens`, `reasoning`) in place from `https://openrouter.ai/api/v1/models`.
 - Plan 039: the router answers `GET /models` by forwarding to OpenAI and appending `openrouter_entry(m)` for every registry OpenRouter model; providers route by `by_slug(model).provider`.
 - Plan 118's probe flags: `--image`, `--audio`, `--reasoning-summary`, `--apply-patch`, `--web-search`, `--experimental-tools`, plus the base tool round trip.
-- Plan 109: releases publish `latest.json`; the repository is public (Plan 034 decision) so raw files are fetchable at `https://raw.githubusercontent.com/software-combined/codex-model-router/main/codex_router/models.json`.
+- Plan 109: releases publish `latest.json`; the repository is public (Plan 034 decision) so raw files are fetchable at `https://raw.githubusercontent.com/software-combined/SC_OpenRouter_adapter/main/ai_router/models.json`.
 - OpenRouter live metadata provides `name` (for example `Z.ai: GLM 5.3 Flash`), `architecture.input_modalities`, `context_length`, `top_provider.max_completion_tokens`, `reasoning.supported_efforts`, `reasoning.default_effort`.
 
 ## Commands you will need
@@ -49,16 +49,16 @@ Cyril will keep enabling models. After Plan 038 a model is one row, but it is st
 | Purpose | Command | Expected |
 |---|---|---|
 | Tests | `python3.14 -m unittest discover -s tests -t . -v` | `OK` |
-| Add a model (dry) | `python3.14 -m codex_router.models add qwen/qwen4-coder --dry-run` | prints the derived row, writes nothing |
-| Add and probe | `python3.14 -m codex_router.models add qwen/qwen4-coder --probe` | row written with `tier: verified` when the round trip passes, else `preview` |
-| Validate the file | `python3.14 -m codex_router.models check` | `models.json: N models, 0 problems` |
-| Remove | `python3.14 -m codex_router.models remove qwen/qwen4-coder` | row removed |
+| Add a model (dry) | `python3.14 -m ai_router.models add qwen/qwen4-coder --dry-run` | prints the derived row, writes nothing |
+| Add and probe | `python3.14 -m ai_router.models add qwen/qwen4-coder --probe` | row written with `tier: verified` when the round trip passes, else `preview` |
+| Validate the file | `python3.14 -m ai_router.models check` | `models.json: N models, 0 problems` |
+| Remove | `python3.14 -m ai_router.models remove qwen/qwen4-coder` | row removed |
 
 (`qwen/qwen4-coder` is an example slug; use whatever Cyril wants next, it must exist in the live OpenRouter list.)
 
 ## Scope
 
-**In scope**: `codex_router/models.json`, `codex_router/registry.py` (tier, hot reload), new `codex_router/models.py` (the command), `codex_router/catalogue.py` (preview labelling), `codex_router/router.py` (hourly refresh thread), `packaging/release.py` and `latest.json` (`models_url`), `.github/workflows/check.yml` (models validation step), `tests/test_models_cmd.py`, `tests/test_registry.py`, `docs/adding-a-model.md`, `.github/pull_request_template.md`.
+**In scope**: `ai_router/models.json`, `ai_router/registry.py` (tier, hot reload), new `ai_router/models.py` (the command), `ai_router/catalogue.py` (preview labelling), `ai_router/router.py` (hourly refresh thread), `packaging/release.py` and `latest.json` (`models_url`), `.github/workflows/check.yml` (models validation step), `tests/test_models_cmd.py`, `tests/test_registry.py`, `docs/adding-a-model.md`, `.github/pull_request_template.md`.
 
 **Out of scope**: adding a new quirk type in code (a model that needs behaviour the adapter does not have is a normal code change and release); OpenAI models; provider hosts (fixed in `providers.py`, never data).
 
@@ -74,9 +74,14 @@ Add field `tier` to every row: `verified` (all current six) or `preview`. `regis
 
 **Verify**: `tests/test_registry.py::test_tier_required_and_validated`, `tests/test_catalogue.py::test_preview_entry_is_labelled`.
 
+> 2026-09-11: the global "priority after all verified models" rule is
+> superseded. The picker groups vendors A-Z, verified before preview
+> inside each vendor, and registry priorities carry that order
+> (`registry.picker_key`, renumbered by `models add`).
+
 ### Step 2: The `models` command
 
-Create `codex_router/models.py` with subcommands:
+Create `ai_router/models.py` with subcommands:
 
 - `add <slug> [--probe] [--dry-run] [--tier preview|verified]`: fetch the live OpenRouter list (`urllib`, 20 s timeout), STOP with a clear message if the slug is absent; derive `display_name` as `<live name without the vendor prefix> · OpenRouter`, `vendor` as the text before the first colon in the live name, `modalities` as the intersection with `('text', 'image', 'audio')`, `context_window`, `max_output_tokens`, `reasoning` in canonical order, `default_reasoning` as `low` when available else the lowest advertised, `priority` as the next free integer at or above 100, `schema_mode: native`, `max_tools: null`, `excluded_efforts: []`, `reasoning_summary: none`, `apply_patch: none`, `experimental_tools: []`, `web_search: <pricing has web_search>`, `tier: preview`. With `--probe`: run the base tool round trip from `tools/probe_codex_runtime.py` on the installed router at low effort; if it passes, set `tier: verified` and, when `--probe` is combined with `--full`, run the Plan 118 capability flags and set the flags per the results; append a row to `docs/compatibility.md`. Write through `write_guarded`. With `--dry-run` print the row only.
 - `remove <slug>`: delete the row; refuse if the slug is not present.
@@ -85,11 +90,11 @@ Create `codex_router/models.py` with subcommands:
 
 Never accept API keys or tokens as arguments; the probe uses the installed router's own credential lookup.
 
-**Verify**: `tests/test_models_cmd.py`: derivation from a fixture live payload (name split, intersection, priority allocation, default reasoning), `add` refuses unknown slugs, `check` reports duplicates, `remove` refuses missing slugs, `--dry-run` writes nothing. Live: `python3.14 -m codex_router.models add <slug> --dry-run` prints a plausible row for a real slug.
+**Verify**: `tests/test_models_cmd.py`: derivation from a fixture live payload (name split, intersection, priority allocation, default reasoning), `add` refuses unknown slugs, `check` reports duplicates, `remove` refuses missing slugs, `--dry-run` writes nothing. Live: `python3.14 -m ai_router.models add <slug> --dry-run` prints a plausible row for a real slug.
 
 ### Step 3: Routers fetch the model list
 
-- `latest.json` (Plan 109's `release.py`) gains `"models_url": "https://raw.githubusercontent.com/software-combined/codex-model-router/main/codex_router/models.json"` (or the beta branch for the beta channel).
+- `latest.json` (Plan 109's `release.py`) gains `"models_url": "https://raw.githubusercontent.com/software-combined/SC_OpenRouter_adapter/main/ai_router/models.json"` (or the beta branch for the beta channel).
 - `registry.py` becomes reloadable: `load(text) -> Registry` validates and returns an object with `MODELS`, `by_slug`, `openrouter_slugs`; the module keeps a `current()` accessor that providers and the catalogue call instead of importing constants. Swapping is a single attribute assignment, so requests in flight see either the old or the new registry, never a mix.
 - `router.py` starts a daemon thread at startup: load the bundled `models.json` first, then `ROUTER_HOME/models-cache.json` if present and valid, then every 60 minutes (plus 0 to 5 minutes jitter) fetch `models_url` with `If-None-Match`; on 200, validate with `load()`; on success write the cache atomically (mode 0600) and swap; on any failure keep the current registry and log `log_event('models_refresh_failed', reason=<class name>)`. Validation rules that must hold before a swap: JSON object list, every field typed, `provider` only `openrouter`, no unknown fields, at most 200 models, every slug matching `^[~a-z0-9._-]+/[a-z0-9._:-]+$`. The provider host is not part of the data and cannot be changed by it.
 - Codex sees new models the next time it requests `/models` (picker open or restart); no router restart is needed.
@@ -98,7 +103,7 @@ Never accept API keys or tokens as arguments; the probe uses the installed route
 
 ### Step 4: Guard the data in CI and PRs
 
-- `check.yml` gains a step `python -m codex_router.models check` (with network; falls back to `--offline` when the OpenRouter fetch fails, and prints which mode ran).
+- `check.yml` gains a step `python -m ai_router.models check` (with network; falls back to `--offline` when the OpenRouter fetch fails, and prints which mode ran).
 - `.github/pull_request_template.md`: a checklist with "If `models.json` changed: `models check` output pasted, probe result pasted (or `tier: preview` chosen on purpose)".
 
 **Verify**: a PR that adds a duplicate priority fails the `Check` workflow.
@@ -130,6 +135,6 @@ As listed per step; pattern `tests/test_apply_catalogue.py` for temp files and `
 
 ## Maintenance notes
 
-- Adding a model is now: `python3.14 -m codex_router.models add <slug> --probe`, review the diff, merge. Everyone's picker shows it within about an hour, labelled Preview until verified.
+- Adding a model is now: `python3.14 -m ai_router.models add <slug> --probe`, review the diff, merge. Everyone's picker shows it within about an hour, labelled Preview until verified.
 - Reviewers should refuse any change that lets `models.json` influence hosts, headers, credentials or paths. Data selects among behaviours the code already has; it never adds behaviour.
 - Deferred: allowlisting by pattern (for example every `qwen/*` model) as auto-preview. It is a small addition to the refresh thread once staff ask for breadth over curation.

@@ -30,8 +30,8 @@ Dead code (no references outside plans/docs):
 - Unused imports: `ai_router/models.py:15` `CODEX_MODALITIES`; `ai_router/claude.py:16` `providers`;
   `ai_router/providers.py:17` `relay_headers` (keep `HOP_HEADERS`, `Prepared`, `passthrough`);
   `packaging/install.py:19` `urllib.error`.
-- Additional findings from an AST scan to confirm with ruff: `packaging/feed_token.py:8-9`,
-  `packaging/platforms/linux.py:6`, and several test-file imports.
+- Additional findings from an AST scan to confirm with ruff: `packaging/platforms/linux.py:6`,
+  and several test-file imports. (`packaging/feed.py` was checked: its `urllib.*` imports are used.)
 
 ## Scope
 
@@ -66,7 +66,7 @@ fact if the GET-only intent is gone). For `feed_verify.py`, delete only `load_si
 ### Step 2: run ruff and fix the full F401/F811 wave (commit 2)
 
 Run the survey command; fix every finding in the four trees (test imports included). Typical wave:
-`packaging/feed_token.py` unused `urllib.*`, `packaging/platforms/linux.py` unused `sys`, plus
+`packaging/platforms/linux.py` unused `sys`, plus
 `tests/test_model_refresh.py`, `tests/test_setup.py`, `tests/test_mixed_router.py`,
 `tests/test_model_policy.py`, `tests/test_claude_desktop_config.py`, `tests/test_windows_portability.py`.
 Do not remove names that are used only by `mock.patch` strings or plan-owned contracts; for those,

@@ -5,7 +5,7 @@
 > or declaring an unverified fallback successful. This is a planning document,
 > not authorization to modify the installed client, run paid probes or deploy.
 >
-> Drift check: `git diff --stat 6840312..HEAD -- codex_router/providers.py codex_router/compaction.py codex_router/tool_adapter.py codex_router/catalogue.py codex_router/capabilities.py tools/probe_codex_runtime.py tests docs/compatibility.md`.
+> Drift check: `git diff --stat 6840312..HEAD -- ai_router/providers.py ai_router/compaction.py ai_router/tool_adapter.py ai_router/catalogue.py ai_router/capabilities.py tools/probe_codex_runtime.py tests docs/compatibility.md`.
 > Compare changed files with the excerpts below before implementation.
 
 ## Status
@@ -51,15 +51,19 @@ their names; children with inherited turns act on the broad parent request.
 The content is present but unreadable. A child-side v1 setting alone is
 insufficient. The exact client selection mechanism remains to be captured.
 
-`codex_router/providers.py:173` currently starts preparation with:
+`ai_router/providers.py:205-216` currently prepares OpenRouter input with:
 
 ```python
 payload['input'] = comp.scrub_tool_fragments(payload.get('input', []))
 ```
 
 It then calls `prepare_tools`, `rewrite_input`, `strip_reasoning_blobs` and
-image handling, and serializes the result. No step handles `agent_message`.
-`codex_router/compaction.py:108` only rewrites compaction items:
+image handling, and serializes the result. No client-delivery step handles `agent_message`.
+> **Drift 2026-09-11 (Plan 122 reconciliation):** `compaction.rewrite_input` now lives at
+> `:103-115` and already maps `agent_message` to plaintext (`:111-112`); the remaining gap is
+> the client-side delivery path below. Anchors refreshed against the current tree.
+
+It rewrites `agent_message` items as it walks the input:
 
 ```python
 if is_compaction_item(item):
@@ -68,7 +72,7 @@ else:
     rewritten.append(item)
 ```
 
-`_item_text` at line 213 omits agent messages from summary input.
+`_item_text` at line 215 omits agent messages from summary input.
 `MULTI_AGENT_VERSION = 'v1'` in `capabilities.py:17` applies to OpenRouter
 catalogue rows; native OpenAI metadata is preserved. Existing ordinary probes
 disable collaboration and therefore cannot verify this contract.
@@ -182,7 +186,7 @@ acceptance require their own authority and readback.
 |---|---|---|
 | Focused regression | `python3.14 -B -m unittest tests.test_mixed_router tests.test_compaction tests.test_tool_adapter` | All pass, including new behavioral tests |
 | Full suite | `python3.14 -B -m unittest discover -s tests -t .` | All pass; baseline was 473 tests |
-| Compilation | `python3.14 -m compileall -q codex_router tools tests` | Exit 0 |
+| Compilation | `python3.14 -m compileall -q ai_router tools tests` | Exit 0 |
 | Source limits | `python3.14 tools/check_source_limits.py` | Zero failures |
 | Patch hygiene | `git diff --check` | Exit 0 |
 

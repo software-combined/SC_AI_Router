@@ -9,8 +9,10 @@ import sys
 from pathlib import Path
 from .capabilities import catalogue_patch, describe
 from .clients.codex import capability_fields as codex_projection
-from .clients import models_for, visible_for
-from .registry import MODELS
+from .clients import models_for
+from .registry import MODELS, picker_key
+from .retired_slugs import SUBSCRIPTION as RETIRED_SUBSCRIPTION_SLUGS
+from .subscription_roster import SUBSCRIPTION_SLUGS
 
 OPENROUTER_TEMPLATE = {
     'shell_type': 'unified_exec',
@@ -61,16 +63,14 @@ OPENROUTER_TEMPLATE = {
     'auto_review_model_override': None,
 }
 
-PREVIEW_PRIORITY_OFFSET = 100000  # preview entries sort after every verified model
 RETIRED_SLUGS = {'anthropic/claude-opus-5', 'anthropic/claude-fable-5.1',
                  'deepseek/deepseek-v4-pro', 'deepseek/deepseek-v4-flash',
                  'deepseek/deepseek-v4-flash-0731',
                  '~deepseek/deepseek-v4-flash-latest',
                  'deepseek/deepseek-v4-flash-vision-exp'}  # DeepSeek keeps Pro 0813 + V4.1 Flash; alias and Vision rows retired
-# Subscription roster entries withdrawn from the picker. merge() drops these
-# from roster, catalogue and state-derived seeding alike, so a scheduled
-# update repairs machines that still carry the row.
-RETIRED_SUBSCRIPTION_SLUGS = frozenset({'gpt-reserve'})
+
+# Retired subscription slugs live in retired_slugs.py (Plan 100 single source,
+# shared with the installer prune); merge() drops them from stale machines.
 
 # Native reasoning levels per subscription slug (2026-09-07 owner-Mac
 # models_cache). Fresh installs seed these so the effort picker works.
@@ -98,6 +98,14 @@ SUBSCRIPTION_DISPLAY_NAMES = {
     'gpt-5.3-codex-spark': 'GPT-5.3-Codex-Spark',
     'codex-auto-review': 'Codex Auto Review',
 }
+
+
+# Plan 123: the roster leaf owns the subscription slug set; these tables own
+# the per-slug presentation values. Fail closed at import when they disagree
+# so a half-added row can never ship; the coupling test pins the same set.
+if (set(SUBSCRIPTION_REASONING) != set(SUBSCRIPTION_SLUGS)
+        or set(SUBSCRIPTION_DISPLAY_NAMES) != set(SUBSCRIPTION_SLUGS)):
+    raise ValueError('subscription roster and catalogue tables disagree')
 
 
 def subscription_stub(slug):
@@ -144,8 +152,7 @@ def openrouter_entry(model):
                             + 'OpenRouter: ' + catalog_name(model)),
             'default_reasoning_level': model.default_reasoning,
             'supported_reasoning_levels': projected['supported_reasoning_levels'],
-            'priority': (model.priority + PREVIEW_PRIORITY_OFFSET
-                           if model.tier == 'preview' else model.priority),
+            'priority': model.priority,
             'context_window': model.context_window,
             'max_context_window': model.context_window,
             'model_messages': {'instructions_template': BASE_INSTRUCTIONS},
@@ -158,7 +165,7 @@ def openrouter_entry(model):
             'web_search_tool_type': 'text_and_image' if model.web_search else 'text'}
 
 
-def merge(catalog, roster=(), client='codex', allowed=None):
+def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False):
     """Merge registry OpenRouter entries, dropping explicitly retired picker rows.
 
     Only models_for(client) OpenRouter entries are emitted: the Codex
@@ -170,9 +177,11 @@ def merge(catalog, roster=(), client='codex', allowed=None):
     retaining their model-specific values, repairing older bare stubs.
     One exception: rows matching the exact 0.6.10.23 single-medium
     placeholder signature get their two reasoning fields upgraded.
-    Order is subscription rows in roster order, then verified OpenRouter
-    rows A-Z by display name, then preview rows A-Z; values are never
-    rewritten to achieve it. Retired subscription slugs are dropped.
+    Order is subscription rows in roster order, then OpenRouter rows
+    grouped by vendor A-Z, verified before preview inside a vendor and
+    label A-Z inside a tier. Registry priorities ascend in the same order,
+    because Codex lists the picker by ascending priority. Retired
+    subscription slugs are dropped.
     The future Claude listing reuses models_for('claude') to omit
     OpenRouter-billed Anthropic rows. Plan 039's live /models remains
     the proper replacement for this fallback. Routing never consults
@@ -181,15 +190,17 @@ def merge(catalog, roster=(), client='codex', allowed=None):
     None preserves today's behavior exactly; a list drops visible
     OpenRouter rows not in the list like hidden rows. Subscription rows
     are unaffected.
+    In none mode (include_twins true) the swap is inverted: the dead
+    subscription stubs are dropped and no existing non-registry row is
+    carried, so the picker lists registry rows only, twins included.
     """
     allowset = None if allowed is None else frozenset(allowed)
-    visible = [m for m in models_for(MODELS, client)
+    visible = [m for m in models_for(MODELS, client, include_twins=include_twins)
                if m.provider == 'openrouter'
                and (allowset is None or m.slug in allowset)]
+    shown = {m.slug for m in visible}
     hidden = {m.slug for m in MODELS
-              if m.provider == 'openrouter'
-              and (not visible_for(m, client)
-                   or (allowset is not None and m.slug not in allowset))}
+              if m.provider == 'openrouter' and m.slug not in shown}
     active = {m.slug for m in MODELS}
     models = [m for m in catalog.get('models', [])
               if (m['slug'] not in RETIRED_SLUGS or m['slug'] in active)
@@ -213,27 +224,51 @@ def merge(catalog, roster=(), client='codex', allowed=None):
     for slug in roster:
         if slug not in entries and slug not in RETIRED_SUBSCRIPTION_SLUGS:
             entries[slug] = subscription_stub(slug)
-    shown = {m.slug for m in visible}
-    subs = [s for s in dict.fromkeys(roster) if s in entries]
-    subs += [m['slug'] for m in models
-             if m['slug'] in entries and m['slug'] not in shown and m['slug'] not in subs]
+    if include_twins:
+        subs = []
+    else:
+        subs = [s for s in dict.fromkeys(roster) if s in entries]
+        subs += [m['slug'] for m in models
+                 if m['slug'] in entries and m['slug'] not in shown and m['slug'] not in subs]
     def rank(slug):
         model = next(m for m in visible if m.slug == slug)
-        return (model.tier != 'verified', model.display_name.casefold(), slug)
+        return picker_key(model.vendor, model.tier, model.display_name, model.slug)
     catalog['models'] = [entries[s] for s in subs + sorted(shown, key=rank)]
     return catalog
 
 
-def read_roster(catalog_path):
-    """Subscription roster from the state file beside the catalogue; () when absent."""
+def _state_doc(catalog_path):
+    """State dict beside the catalogue; {} when missing or unreadable."""
     try:
         state = json.loads((Path(catalog_path).parent / 'mixed-router-state.json').read_text())
     except (OSError, ValueError):
-        return ()
-    if not isinstance(state, dict):
-        return ()
-    roster = state.get('openai_models')
+        return {}
+    return state if isinstance(state, dict) else {}
+
+
+def read_roster(catalog_path):
+    """Subscription roster from the state file beside the catalogue; () when absent."""
+    roster = _state_doc(catalog_path).get('openai_models')
     return tuple(roster) if isinstance(roster, list) else ()
+
+
+def read_openai_mode(catalog_path):
+    """openai_mode from the state file beside the catalogue; 'subscription' when absent."""
+    mode = _state_doc(catalog_path).get('openai_mode')
+    return mode if mode in ('none', 'subscription') else 'subscription'
+
+
+def merge_file(path, client='codex', allowed=None, openai_mode=None):
+    """Merge the catalogue file for the install's openai_mode and write it atomically."""
+    path = Path(path)
+    mode = openai_mode if openai_mode is not None else read_openai_mode(path)
+    base = json.loads(path.read_text()) if path.exists() else {'models': []}
+    merged = merge(base, read_roster(path), client, allowed,
+                   include_twins=(mode == 'none'))
+    tmp = path.with_name(path.name + '.tmp')
+    tmp.write_text(json.dumps(merged, indent=2) + '\n')
+    tmp.replace(path)
+    return merged
 
 
 def _same(old, new, key):
@@ -243,7 +278,7 @@ def _same(old, new, key):
     return old.get(key) == new.get(key)
 
 
-def check(path, client='codex', allowed=None):
+def check(path, client='codex', allowed=None, include_twins=False):
     catalog = json.loads(Path(path).read_text())
     existing = {m['slug']: m for m in catalog.get('models', [])}
     for slug, row in existing.items():
@@ -252,17 +287,17 @@ def check(path, client='codex', allowed=None):
             print(f'{slug}: missing schema fields: {", ".join(sorted(missing))}')
             return False
     allowset = None if allowed is None else frozenset(allowed)
+    visible = [m for m in models_for(MODELS, client, include_twins=include_twins)
+               if m.provider == 'openrouter'
+               and (allowset is None or m.slug in allowset)]
+    shown = {m.slug for m in visible}
     identical, total = 0, 0
     for model in (m for m in MODELS
-                  if m.provider == 'openrouter'
-                  and (not visible_for(m, client)
-                       or (allowset is not None and m.slug not in allowset))):
+                  if m.provider == 'openrouter' and m.slug not in shown):
         if model.slug in existing:
             print(f'{model.slug}: hidden from the {client} picker but present')
             return False
-    for model in (m for m in models_for(MODELS, client)
-                  if m.provider == 'openrouter'
-                  and (allowset is None or m.slug in allowset)):
+    for model in visible:
         total += 1
         old = existing.get(model.slug)
         if old is None:
@@ -300,10 +335,9 @@ if __name__ == '__main__':
         allowed = tuple(s.strip() for s in args[1].split(',') if s.strip())
         args = args[2:]
     if args[:1] == ['--merge'] and len(args) == 2:
-        path = Path(args[1])
-        base = json.loads(path.read_text()) if path.exists() else {'models': []}
-        path.write_text(json.dumps(merge(base, read_roster(path), client, allowed), indent=2) + '\n')
+        merge_file(Path(args[1]), client, allowed)
     elif args[:1] == ['--check'] and len(args) == 2:
-        sys.exit(0 if check(args[1], client, allowed) else 1)
+        sys.exit(0 if check(args[1], client, allowed,
+                            include_twins=read_openai_mode(args[1]) == 'none') else 1)
     else:
         raise SystemExit(USAGE)

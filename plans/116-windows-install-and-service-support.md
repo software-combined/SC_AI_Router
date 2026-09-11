@@ -61,14 +61,21 @@ failure is a traceback rather than a refusal.
 | **W1 - Windows falls into the macOS path.** `systemd_manager()` returns a backend on `linux` and `None` elsewhere, and every caller reads `None` as "use launchd" | `packaging/install.py:78`, and the `if manager: ... else: ...` pairs at `:370-395`, `:414-424`, `:639-648` |
 | **W2 - Hard crash on POSIX-only calls.** `restart_router()` and `stop_router()` call `os.getuid()`, which does not exist on Windows | Executed this session with `PLATFORM='win32'` and `os.getuid` removed: both raise `AttributeError: module 'os' has no attribute 'getuid'`. Same call at `install.py:643-644` (uninstall). `tools/disable.py:29` has it too but is unreachable from the installer, which always passes `ROUTER_RESTORE_ONLY=1` (see Stage 4) |
 | **W3 - Partial install then traceback.** On first install the bundle extracts and `current` is written; the launchd probe then fails, health is marked failed, `_clear_current()` runs, and `stop_router()` raises uncaught | Traced through `install.py:373-455`. The Codex config block is written only after a healthy check, so `config.toml` is left untouched - the machine is left with an orphaned router home, not a broken Codex |
-| **W4 - No autostart mechanism exists.** No Task Scheduler, Windows service, Startup-folder or registry Run entry anywhere in the source | `rg -i 'schtasks|winsw|nssm|Task Scheduler|pythonw|winreg|sc\.exe'` matches only plan and doc prose, never `packaging/` or `codex_router/` |
-| **W5 - The API key is unprotected on Windows.** The owner-only gate is explicitly skipped there, and nothing replaces it with an ACL | `codex_router/credentials.py:27` reads `if os.name != 'nt' and key_file.stat().st_mode & 0o077`. Every writer (`install.py:160`, `codex_router/setup.py:120-131`) passes mode `0o600`, which Windows reduces to the read-only attribute |
-| **W6 - The bootstrap picks the wrong interpreter.** `install.ps1` runs `python`, which on a stock Windows 11 profile resolves to the Microsoft Store stub and opens the Store instead of running | `packaging/install.ps1` (3 lines). `find_python` already knows the right answer - it has a `py -V:3.14` candidate at `service.py:116` - but the wrapper never gets that far |
+| **W4 - No autostart mechanism exists.** No Task Scheduler, Windows service, Startup-folder or registry Run entry anywhere in the source | `rg -i 'schtasks|winsw|nssm|Task Scheduler|pythonw|winreg|sc\.exe'` matches only plan and doc prose, never `packaging/` or `ai_router/` |
+| **W5 - The API key is unprotected on Windows.** The owner-only gate is explicitly skipped there, and nothing replaces it with an ACL | `ai_router/credentials.py:31` reads `if os.name != 'nt' and key_file.stat().st_mode & 0o077`. Every writer (`install.py:184`, `ai_router/setup.py:120-131`) passes mode `0o600`, which Windows reduces to the read-only attribute |
+| **W6 - The bootstrap picks the wrong interpreter.** `install.ps1` runs `python`, which on a stock Windows 11 profile resolves to the Microsoft Store stub and opens the Store instead of running | Fixed since: `packaging/install.ps1` now prefers the `py` launcher (`py -3`) and falls back to `python3` with an explicit no-launcher error; `find_python` (`service.py:131-145`) carries the `py -V:3.14` candidate |
 | **W7 - macOS advice shown to Windows users.** The no-interpreter path prints `No Python 3.14 found: brew install python@3.14` on every platform | `packaging/install.py:305-309` |
 | **W8 - No Windows CI.** The 2026-09-09 portability fix was verified once by hand and nothing guards it | `.github/workflows/check.yml` runs `ubuntu-latest` only. PR #18/`0682d3d` states the service layer "has no Windows equivalent" and skips 100 tests there |
 
 W1-W3 mean the honest answer today is that the installer must not be run on
 Windows at all. W5 means Windows support cannot ship on POSIX mode bits alone.
+
+> **Drift 2026-09-11 (Plan 122 reconciliation):** this table records the
+> 2026-09-09 audit baseline. The Windows backend has since landed
+> (`packaging/platforms/windows.py`, `ai_router/winacl.py`, `schtasks` task XML),
+> so W4 and W6 read as pre-Stage-1 state; W5's ACL gap is still open (Stage 2).
+> The remaining gates are those listed in Stage 3 and the plan status row; the
+> W5 and W6 anchors above are refreshed against the current tree.
 
 ## Design decisions to settle before Stage 3
 
@@ -90,7 +97,7 @@ Ordering note: key protection comes **before** the first real-machine install.
 A normal install writes `openrouter.key` (`install.py:ensure_credentials`) and
 `mixed-router-state.json`, and until the ACL work lands both sit unprotected on
 a staff machine. The router can boot keyless while a setup nonce is pending
-(`codex_router/runtime.py:52-58`), so a key on disk is not strictly required to
+(`ai_router/runtime.py:53-59`), so a key on disk is not strictly required to
 reach `/health`, but the setup window writes the same unprotected file the
 moment someone uses it. Harden first, then install.
 
@@ -105,13 +112,13 @@ Stage 3 must carry this refusal across the refactor - see its gate.*
 
 **Stage 2 - protect the key, before any real-machine install.** Add ACL
 hardening where the key is created (`install.py:ensure_credentials`,
-`codex_router/setup.py`) and a Windows read-time check in `credentials.py` that
-replaces the POSIX gate skipped at `credentials.py:27`. Apply the same treatment
+`ai_router/setup.py`) and a Windows read-time check in `credentials.py` that
+replaces the POSIX gate skipped at `credentials.py:31`. Apply the same treatment
 to `mixed-router-state.json`, which carries the loopback token. Create each file
 inside a directory that already has the restricted ACL; never widen then narrow.
 *Gate, deliberately not requiring an install: no Windows install can complete
 until Stage 3 exists, because Stage 1 refuses the platform. Prove the write side
-directly instead - drive `ensure_credentials` and the `codex_router/setup.py`
+directly instead - drive `ensure_credentials` and the `ai_router/setup.py`
 key window on a Windows machine, then `icacls` both `openrouter.key` and
 `mixed-router-state.json` and see only the installing user - and prove the read
 side by widening the ACL and confirming the router refuses the key, mirroring

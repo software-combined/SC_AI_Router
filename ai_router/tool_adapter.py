@@ -23,6 +23,8 @@ def _quirk(payload, name):
 def integer_json(text):
     # Meta emits e.g. 8.0 for integer arguments. Rust's integer deserializers
     # reject that spelling. Preserve strings, fractions and large-number precision.
+    if '.0' not in text:
+        return text
     try:
         json.loads(text)
     except json.JSONDecodeError:
@@ -135,6 +137,11 @@ def prepare_tools(payload):
             tool['name'] = wire
         tool.pop('defer_loading', None)
         flattened.append(tool)
+    if _quirk(payload, 'web_search') is False:
+        # No web-search capability upstream: OpenRouter aborts the turn with
+        # 'Server tool request failed' when the client's web_search server
+        # tool rides along (2026-09-10, deepseek-v4.1-flash).
+        flattened = [tool for tool in flattened if tool.get('type') != 'web_search']
     payload['tools'] = flattened
     ceiling = _quirk(payload, 'max_tools')
     if ceiling and len(flattened) > ceiling:
@@ -192,24 +199,37 @@ class ToolEvents:
         self.names = names
         self.notes = notes
         self.item_ids = set()
+        self.changed = False
 
     def item(self, item, started=False):
         if not started and item.get('type') == 'function_call' and isinstance(item.get('arguments'), str):
-            item['arguments'] = integer_json(item['arguments'])
+            trimmed = integer_json(item['arguments'])
+            if trimmed != item['arguments']:
+                self.changed = True
+                item['arguments'] = trimmed
         if item.get('type') != 'function_call' or tool_key(item) not in self.names:
             return item
         if item.get('id'):
             self.item_ids.add(item['id'])
+        had_arguments = 'arguments' in item
         arguments = item.pop('arguments', '')
         kind = self.names[tool_key(item)]
         if isinstance(kind, dict):
+            if item.get('namespace') != kind['namespace'] or item.get('name') != kind['name']:
+                self.changed = True
             item.update(namespace=kind['namespace'], name=kind['name'])
             if kind['namespace'] == agent_handoffs.PLAINTEXT_NAMESPACE:
-                item = agent_handoffs.restore_item(item, {kind['name']})
+                restored = agent_handoffs.restore_item(item, {kind['name']})
+                if restored is not item:
+                    self.changed = True
+                item = restored
             kind = kind['kind']
         if kind == 'identity':
+            if not had_arguments:
+                self.changed = True
             item['arguments'] = arguments
             return item
+        self.changed = True
         if kind == 'search':
             item.pop('name')
             args = {} if started else json.loads(arguments)
@@ -233,6 +253,7 @@ class ToolEvents:
         return item
 
     def event(self, event):
+        self.changed = False
         kind = event.get('type', '')
         if kind in ('response.function_call_arguments.delta', 'response.function_call_arguments.done'):
             if event.get('item_id') in self.item_ids:
@@ -343,7 +364,11 @@ def stream_events(response, names, notes=None):
     for frame, data in sse.blocks(response):
         if data and data != b'[DONE]':
             event = adapter.event(json.loads(data))
-            if event is not None:
+            if event is None:
+                continue
+            if adapter.changed:
                 yield b'data: ' + json.dumps(event).encode() + b'\n\n'
+            else:
+                yield b'data: ' + data + b'\n\n'
         else:
             yield frame

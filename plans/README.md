@@ -1,11 +1,17 @@
 # Implementation Plans
 
-The router backlog. Renumbered 2026-09-10: the live set is **090-121**, listed in
-recommended execution order. The pre-renumbering 034-089 series is archived:
-completed plans were removed from the tree (git history and the dated reports
-preserve them), parked decisions moved to `parked/`, and the old-to-new mapping is
-at the bottom of this file. Dated audit, roadmap and brief files at the top level
-are historical snapshots and keep the old numbering.
+The router backlog. Renumbered 2026-09-10: the live set is **090-138** — the core
+backlog **090-121**, the refactor wave **122-134** from the 2026-09-11 four-lane
+refactoring/reorganisation audit, the new-model prompt plan **135**, and the
+security wave **136-138** from the 2026-09-11 router external security audit
+(`2026-09-11-router-external-security-audit.md`), plus the amended Claude
+plans 113-115 and 120-121 from the 2026-09-11 Claude router
+development-branch review (`2026-09-11-claude-router-development-branch-review.md`). The
+recommended overall execution order is below the tables. The pre-renumbering 034-089 series is
+archived: completed plans were removed from the tree (git history and the dated
+reports preserve them), parked decisions moved to `parked/`, and the old-to-new
+mapping is at the bottom of this file. Dated audit, roadmap and brief files at the
+top level are historical snapshots and keep the old numbering.
 
 Executor rules for every plan:
 
@@ -20,18 +26,18 @@ Executor rules for every plan:
 
 | Plan | Title | Status | Sequencing |
 |---|---|---|---|
-| [090](090-router-ingress-lifecycle-hardening.md) | Ingress lifecycle: request timeout, drain accounting, single listener | TODO | supersedes 109's `allow_reuse_port` fallback |
-| [091](091-router-adaptation-stream-fast-path.md) | Adaptation fast path: no re-serialize when unchanged | TODO | — |
-| [092](092-router-test-suite-hygiene.md) | Offline test suite, isolated home, three guard tests | TODO | coordinate with 105 |
-| [093](093-router-prepare-path-serialization.md) | Prepare/failure path: no double serialization or re-parse | TODO | — |
-| [094](094-router-atomic-write-consolidation.md) | One atomic writer for installer state/config | TODO | — |
-| [095](095-router-activation-receipt-consolidation.md) | One writer for the activation receipt | TODO | depends 094 |
-| [096](096-router-streaming-robustness.md) | SSE frame cap and mid-stream error containment | TODO | — |
-| [097](097-router-discovered-lock-scope.md) | Narrow the discovered-recall lock scope | TODO | — |
-| [098](098-router-model-refresh-bindings.md) | Refresh-safe registry consumers | TODO | before 099 |
-| [099](099-codex-router-model-onboarding-at-scale.md) | Model onboarding: one-command add, data-driven dispatch, refresh wiring | PARTIAL | needs 098; refresh wiring awaits 106's qualified feed; then publish `models_url` |
-| [100](100-router-retired-slug-single-source.md) | Shared retired-subscription slug set | TODO | depends 094 |
-| [101](101-router-dead-code-and-lint-gate.md) | Delete dead code; add F401/F811 gate | TODO | before 102/103 |
+| [090](090-router-ingress-lifecycle-hardening.md) | Ingress lifecycle: request timeout, drain accounting, single listener | DONE: ingress lifecycle hardening 2026-09-11 | supersedes 109's `allow_reuse_port` fallback |
+| [091](091-router-adaptation-stream-fast-path.md) | Adaptation fast path: no re-serialize when unchanged | DONE: adaptation fast path 2026-09-11 | — |
+| [092](092-router-test-suite-hygiene.md) | Offline test suite, isolated home, three guard tests | DONE: offline test suite + ingress guard tests 2026-09-11 | coordinate with 105 |
+| [093](093-router-prepare-path-serialization.md) | Prepare/failure path: no double serialization or re-parse | DONE: prepare-path serialization 2026-09-11 | — |
+| [094](094-router-atomic-write-consolidation.md) | One atomic writer for installer state/config | DONE: atomic writer consolidation 2026-09-11 | — |
+| [095](095-router-activation-receipt-consolidation.md) | One writer for the activation receipt | DONE: activation receipt consolidation 2026-09-11 | depends 094 |
+| [096](096-router-streaming-robustness.md) | SSE frame cap and mid-stream error containment | DONE: streaming robustness 2026-09-11 | — |
+| [097](097-router-discovered-lock-scope.md) | Narrow the discovered-recall lock scope | DONE: discovered lock scope 2026-09-11 | — |
+| [098](098-router-model-refresh-bindings.md) | Refresh-safe registry consumers | DONE: refresh-safe registry consumers 2026-09-11 | before 099 |
+| [099](099-codex-router-model-onboarding-at-scale.md) | Model onboarding: one-command add, data-driven dispatch, refresh wiring | PARTIAL | 098 landed; refresh wiring awaits 106's qualified feed, then publish `models_url`; wiring must also fix `model_refresh.apply()` swap publication order (see plan 098) |
+| [100](100-router-retired-slug-single-source.md) | Shared retired-subscription slug set | DONE: retired-slug single source 2026-09-11 | depends 094 |
+| [101](101-router-dead-code-and-lint-gate.md) | Delete dead code; add F401/F811 gate | DONE: dead code + F401/F811 lint gate 2026-09-11 | before 102/103 |
 | [102](102-router-install-option-collapse.md) | Collapse installer option handling below the cap | TODO | serialize with 103 |
 | [103](103-router-darwin-backend-extraction.md) | Move launchd helpers out of service.py | TODO | serialize with 102; before 104 |
 | [104](104-router-docs-metadata-correction.md) | Version, architecture and README corrections | TODO | after 103; coordinates README with 117 |
@@ -43,15 +49,69 @@ Executor rules for every plan:
 | [110](110-codex-router-installer-and-auto-updater.md) | Versioned installer and auto-updater acceptance | PARTIAL | acceptance owned with 105/106/108/116/117 |
 | [111](111-codex-router-no-subscription-mode.md) | No-subscription mode for staff | PARTIAL | desktop sign-in + isolated install proof left |
 | [112](112-agent-plugin-and-three-os-installation.md) | Plugin and three-OS installation | PARTIAL | plugin publication + staff acceptance left |
-| [113](113-claude-cli-and-desktop-gateway-setup.md) | Claude CLI and desktop qualification | PARTIAL | CLI/desktop qualification left |
-| [114](114-claude-code-private-plugin.md) | Claude Code private plugin: validation and publication | PARTIAL | after 113; local validation then publication |
-| [115](115-claude-billing-probes-and-release-acceptance.md) | Claude billing and tool-execution probes | TODO | after 113; paid authority |
+| [113](113-claude-cli-and-desktop-gateway-setup.md) | Claude CLI and desktop qualification | PARTIAL | CLI/desktop qualification left; amended 2026-09-11 (per-surface setup, billing policy F5, superseded claims) |
+| [114](114-claude-code-private-plugin.md) | Claude Code private plugin: validation and publication | PARTIAL | after 113; local validation then publication; amended 2026-09-11 (same-version attach/repair F1, preflight F2, key window F3, restore F4, desktop distribution W4) |
+| [115](115-claude-billing-probes-and-release-acceptance.md) | Claude billing and tool-execution probes | TODO | after 113; paid authority; amended 2026-09-11 (per-surface routes, real MCP proof, ingress contract F8/F9) |
 | [116](116-windows-install-and-service-support.md) | Windows install and service support (acceptance) | PARTIAL | sign-out/in + later stages left |
 | [117](117-recipient-readiness-for-windows-and-linux.md) | Linux and Windows recipient readiness | PARTIAL | native desktop acceptance + Stage 5b left |
 | [118](118-codex-router-full-capability-parity.md) | Capability parity: paid per-model/client probes | PARTIAL | remaining paid per-model legs |
 | [119](119-mixed-provider-agent-instruction-delivery.md) | Mixed-provider agent instruction delivery | PARTIAL | paid live probe left |
-| [120](120-claude-desktop-gateway-discovery-and-attach.md) | Claude desktop gateway: release and live picker proof | PARTIAL | extends 113 |
-| [121](121-claude-desktop-models-effort-and-connectors.md) | Claude desktop models, effort readout, and connectors (planning) | PLANNING | amends 113/120 |
+| [120](120-claude-desktop-gateway-discovery-and-attach.md) | Claude desktop gateway: release and live picker proof | PARTIAL | extends 113; source merged (PR 56); amended 2026-09-11 (safe lifecycle F4/F7, no promotion of the listener probe) |
+| [121](121-claude-desktop-models-effort-and-connectors.md) | Claude desktop models, effort readout, and connectors (planning) | PLANNING | amends 113/120; amended 2026-09-11 (blockers before descriptions, connector/tool-search/marketplace rewrite) |
+
+## Refactor and feature wave (122-135)
+
+Added 2026-09-11: 122-134 from the refactoring/reorganisation audit, 135 from the
+update-prompt request. Each plan depends on the core plans listed; the overall order
+below interleaves them.
+
+| Plan | Title | Status | Sequencing |
+|---|---|---|---|
+| [122](122-plan-hygiene-sweep.md) | Backlog hygiene: runnable drift checks, current paths and counts | DONE: backlog hygiene sweep 2026-09-11 | before 094/101/102/103 |
+| [123](123-packaging-plumbing-single-sources.md) | One 3.9 loader, one release inventory, one subscription roster | DONE: packaging plumbing single-sources 2026-09-11 | before 094; pairs with 100 |
+| [124](124-test-harness-consolidation.md) | Shared test harness; installer fixtures out of a test file | TODO | after 092 |
+| [125](125-runtime-shared-primitives.md) | Runtime primitives: path sets, image blocks, catalogue predicate, capability maps | TODO | after 090/091/093/096/101 |
+| [126](126-error-taxonomy.md) | Typed error classification; drop the dead CLI error half | TODO | after 101 |
+| [127](127-providers-setup-module-splits.md) | Split upstream failure policy and setup pages out | TODO | after 101; before 128 |
+| [128](128-router-handler-decomposition.md) | Decompose router.py into ingress + relay | TODO | after 090/091/093/096 |
+| [129](129-tool-merge-unification.md) | One tool-definition merge rule | TODO | after 091/096/097 |
+| [130](130-installer-bundle-split.md) | packaging/bundle.py: real installer headroom | TODO | after 102/123 |
+| [131](131-service-state-writer-decomposition.md) | Service/state/writer decomposition | TODO | after 094/095/100/103/123; coordinate 106 |
+| [132](132-windows-backend-cleanup.md) | Windows backend cleanup | TODO | before/with 116; after 123 |
+| [133](133-probe-harness-consolidation.md) | One app-server probe harness | TODO | before 118/119 |
+| [134](134-repo-hygiene-feed-ci-docs.md) | feed_verify move, CI single owner, docs index, shim owner | TODO | after 101; before 106 (feed work) |
+| [135](135-new-model-prompt.md) | New-model prompt: notify + one-click Codex restart only when new models appear | TODO | after 128/131; hooks into 099; coordinate 106 |
+
+## Security wave (136-138)
+
+Added 2026-09-11 from the three-model external security audit of the loopback
+router's exposure surface (Kimi K3 `max`, GLM 5.3 `max`, Qwen 3.8 Max `xhigh`).
+The report, its verifications and its rejected findings are in
+`2026-09-11-router-external-security-audit.md`.
+
+| Plan | Title | Status | Sequencing |
+|---|---|---|---|
+| [136](136-unauth-ingress-crash-containment.md) | Contain the unauthenticated ingress compare crash | DONE: unauth ingress compare containment 2026-09-11 | P1; independent; a few lines in router.py (398 today) |
+| [137](137-loopback-host-header-validation.md) | Validate the Host header on loopback ingress | BLOCKED: STOP condition hit 2026-09-11 — router.py is 398/400, the 3-line guard needs 397 max; hand to 128's split | 090 landed; headroom exhausted by 096/136 |
+| [138](138-subscription-cookie-hygiene.md) | Drop Cookie on subscription passthrough and make the tests honest | TODO | independent |
+
+## Recommended overall order
+
+Work top to bottom; stop at owner gates and report. Phases 0-2 are local; 3-5 are largely
+owner-gated.
+
+- **Phase 0 (prep):** 122, 123.
+- **Phase 1 (core backlog):** 090, 091, 092, 093, 094, 095, 096, 097, 098, 100, 101, 102, 103, 104.
+- **Phase 2 (refactor and feature wave):** 124, 125, 126, 127, 129, 128, 130, 131, 135, 134, 133, 132.
+- **Phase 3 (infrastructure, mostly owner-gated):** 105, 106, 107, 099, 108, 109, 110.
+- **Phase 4 (clients and OS acceptance, owner-gated):** 111, 112, 113, 114, 115, 116, 117.
+- **Phase 5 (paid probes and desktop, owner-gated):** 118, 119, 120, 121.
+
+Phase notes: 099 executes only after 106's feed is qualified; 134's feed_verify move lands before
+106 and its CI step after 101; 133 and 132 land before Phase 5 paid probes and Phase 4 Windows
+acceptance respectively; 135 exposes the pending-model hook that 099's refresh wiring calls once
+it lands, and needs no owner gate itself. The security wave rides Phase 1: 136 and 138 are
+independent, and 137 proceeds now that 090 has landed.
 
 ## Dependency and coordination notes
 
@@ -66,6 +126,25 @@ Executor rules for every plan:
   `models_url` after that.
 - 113 is the CLI/desktop contract; 114 (publication) and 115 (paid probes) follow it.
   120 and 121 extend 113.
+- 113-115 and 120-121 were amended 2026-09-11 by
+  `2026-09-11-claude-router-development-branch-review.md`. The installer
+  lifecycle fixes F1-F4 are specified in 112's installer contract and accepted
+  by 114 whichever plan executes them; do not run both writers at once.
+- Refactor wave: 122 and 123 land first; 124 follows 092; 125 follows the runtime edits
+  in 090/091/093/096; 126/127 follow 101; 128 follows 090/091/093/096 and 127; 130
+  follows 102; 131 follows 094/095/103 and coordinates 106.
+- Cross-wave: 131's writer changes should land before 106's feed work; 132 lands
+  before 116's real-machine acceptance; 133 lands before 118/119 paid probes.
+- Security wave: 090 landed at `02e8e6e` and left `ai_router/router.py` at 395
+  lines, so 136 and 137 both fit under the 400 hard cap (sync the baseline
+  entry in each). Execute 136 before 137 and serialize them: both edit
+  `authorized_path`, `tests/test_ingress_guards.py` and the router baseline
+  entry, so the second to land re-syncs the count after the first. 138 touches
+  transport and tests only.
+- 135 follows 128 (router cap), 131 (state/writer rules) and 127 (page split); its
+  pending-model check is the hook 099's refresh wiring must call; coordinate 106.
+  It starts with a client-behaviour spike: if Codex re-reads the catalogue without a
+  restart, the owner re-scopes it before any implementation.
 - References in older plans to numbers 034-089 are historical: completed numbers
   resolve in the removal log below; renumbered numbers resolve in the old→new map
   below; parked numbers resolve under `parked/`.

@@ -39,7 +39,10 @@ part of the new shared contract.)
 - Re-attach snapshot semantics: `claude_config.py:130-138` and
   `claude_desktop_config.py:183-188` must preserve the original pre-attach values when the effective
   values did not change (tested by `tests/test_claude_desktop_config.py::test_reattach_keeps_original_snapshot`).
-- Plan 094 adds `packaging/atomic_write.py`; route the receipt writes through it here.
+- Plan 094 landed: `packaging/atomic_write.py` exists, injected as `codex_config._atomic_write`
+  via `service.load()` in `install.py` (and `diagnostics.py`); route the receipt writes through
+  it here. Direct `spec_from_file_location` loads of `codex_config.py` (e.g. the
+  `ReceiptVersionTests._mod` helper) must inject the atomic module the same way.
 
 ## Scope
 
@@ -70,8 +73,9 @@ def write_client_receipt(home, client, entry):
 ```
 It reads the receipt, **always ensures `doc['version'] = RECEIPT_VERSION` before writing** (a
 fresh Claude-only home must not produce a versionless file that `read_receipt` rejects as
-never-attached), sets `doc.setdefault('clients', {})[client] = entry`, writes via
-`atomic_write.replace_text`, chmods 0600, and returns nothing. Refactor `write_receipt` to build the
+never-attached), sets `doc.setdefault('clients', {})[client] = entry`, writes via the injected
+`_atomic_write.replace_text` (never a package import, per Plan 123), chmods 0600, and returns
+nothing. Refactor `write_receipt` to build the
 Codex entry and delegate to it (keep the `previous_sha256` key for Codex). Add
 `parse_snapshot(text)` returning `{}` for non-object JSON, replacing the two private helpers.
 

@@ -8,6 +8,7 @@ through to api.anthropic.com with the client's credentials untouched.
 import http.client
 import json
 import unittest
+from compression import zstd
 from tests.fakes import FakeUpstream, install_fake
 from tests.test_handler import _auth_file, _post
 from tests.test_mixed_router import _start_server, _test_state
@@ -231,6 +232,50 @@ class ClaudeIngressTests(unittest.TestCase):
                      headers={'Content-Type': 'application/json'})
         self.assertEqual(conn.getresponse().status, 200)
         self.assertEqual(recorded[0][3].decode(), raw)
+
+
+    def test_aliased_model_is_rewritten_from_the_parsed_payload(self):
+        # Alias rewrite reads the already-parsed payload, never raw_body:
+        # a direct slug stays byte-identical while the alias row carries
+        # the registry slug.
+
+        recorded = install_fake(self, lambda: FakeUpstream(
+            200, b'{"id":"msg_5","type":"message","content":[]}', []))
+        server = self._server()
+        direct = json.dumps(_messages('z-ai/glm-5.3-flash'))
+        conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
+        conn.request('POST', '/test-token/v1/messages', body=direct,
+                     headers={'Content-Type': 'application/json'})
+        self.assertEqual(conn.getresponse().status, 200)
+        host, _, _, body, _ = recorded[0]
+        self.assertEqual(host, 'openrouter.ai')
+        self.assertEqual(body.decode(), direct)
+
+        recorded.clear()
+        response = _post(server.server_port, '/test-token/v1/messages',
+                         _messages('claude/z-ai/glm-5.3-flash'),
+                         {'Authorization': 'Bearer test-key-bearer'})
+        self.assertEqual(response.status, 200)
+        host, _, _, body, _ = recorded[0]
+        self.assertEqual(host, 'openrouter.ai')
+        self.assertEqual(json.loads(body)['model'], 'z-ai/glm-5.3-flash')
+
+    def test_aliased_zstd_body_is_rewritten_to_plain_json(self):
+        # Previously the alias path decoded raw_body and forwarded the still-
+        # compressed bytes under a JSON content type; now the parsed payload
+        # is re-serialized to plain JSON.
+        recorded = install_fake(self, lambda: FakeUpstream(
+            200, b'{"id":"msg_6","type":"message","content":[]}', []))
+        server = self._server()
+        payload = _messages('claude/z-ai/glm-5.3-flash')
+        conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
+        conn.request('POST', '/test-token/v1/messages',
+                     body=zstd.compress(json.dumps(payload).encode()),
+                     headers={'Content-Type': 'application/json',
+                              'Content-Encoding': 'zstd'})
+        self.assertEqual(conn.getresponse().status, 200)
+        body = recorded[0][3]
+        self.assertEqual(json.loads(body)['model'], 'z-ai/glm-5.3-flash')
 
     def test_post_with_query_string_routes_like_bare_path(self):
         # Claude's gateway client sends /v1/messages?beta=true; the query
