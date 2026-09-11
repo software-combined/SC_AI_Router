@@ -49,7 +49,10 @@ TARGET="$OS/$ARCH"
 export HOME_DIR TARGET
 RT="$(python3 -c "import json,os;t=json.load(open(os.environ['HOME_DIR']+'/runtimes.json'))['targets'][os.environ['TARGET']];print(t['mirror'],t['sha256'],t['exec'])")"
 set -- $RT; MIRROR="$1"; RSHA="$2"; REXEC="$3"
-dl "$MIRROR" "$HOME_DIR/runtime.tar.gz"
+# Percent-encode the URL path: a raw '+' in an S3 key is decoded as a space
+# at the edge and denied, and upstream runtime names carry '+' (3.14.7+DATE).
+MIRROR_URL="$(python3 -c "import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1], safe='/'))" "$MIRROR")"
+dl "$MIRROR_URL" "$HOME_DIR/runtime.tar.gz"
 echo "$RSHA  $HOME_DIR/runtime.tar.gz" | shasum -a 256 -c -
 mkdir -p "$HOME_DIR/runtime"
 tar -xzf "$HOME_DIR/runtime.tar.gz" -C "$HOME_DIR/runtime"
