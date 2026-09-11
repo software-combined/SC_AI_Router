@@ -149,11 +149,9 @@ class RegistryTests(unittest.TestCase):
         self.assertEqual(openrouter_slugs(),
                          {m.slug for m in MODELS if m.provider == 'openrouter'})
 
-    def test_visibility_hides_same_billing_rows_per_client(self):
+    def test_visibility_hides_only_the_claude_same_billing_rows(self):
         self.assertEqual({m.slug for m in MODELS if m.provider == 'openrouter'
-                          and not visible_for(m, 'codex')},
-                         {'openai/gpt-6-astra', 'openai/gpt-5.6-sol',
-                          'openai/gpt-5.6-luna', 'openai/gpt-5.6-terra'})
+                          and not visible_for(m, 'codex')}, set())
         self.assertEqual({m.slug for m in MODELS if m.provider == 'openrouter'
                           and not visible_for(m, 'claude')},
                          {'~anthropic/claude-sonnet-latest', '~anthropic/claude-fable-latest',
@@ -176,7 +174,7 @@ class RegistryTests(unittest.TestCase):
                       default_reasoning='low')
         self.assertFalse(visible_for(plain, 'claude'))
         self.assertTrue(visible_for(plain, 'codex'))
-        self.assertFalse(visible_for(by_slug('openai/gpt-6-astra'), 'codex'))
+        self.assertTrue(visible_for(by_slug('openai/gpt-6-astra'), 'codex'))
 
     def test_near_miss_offers_bare_tilde_alias_only(self):
         from ai_router.registry import near_miss
@@ -197,10 +195,8 @@ class RegistryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             visible_for(by_slug('moonshotai/kimi-k3'), 'other')
 
-    def test_include_twins_reveals_openai_rows_in_codex_picker(self):
-        self.assertTrue(visible_for(by_slug('openai/gpt-6-astra'), 'codex',
-                                    include_twins=True))
-        twins = {m.slug for m in models_for(MODELS, 'codex', include_twins=True)
+    def test_codex_picker_lists_openai_twins_without_include_twins(self):
+        twins = {m.slug for m in models_for(MODELS, 'codex')
                  if m.slug.startswith('openai/')}
         self.assertEqual(twins, {'openai/gpt-6-astra', 'openai/gpt-5.6-sol',
                                  'openai/gpt-5.6-terra', 'openai/gpt-5.6-luna'})

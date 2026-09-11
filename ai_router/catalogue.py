@@ -168,13 +168,13 @@ def openrouter_entry(model):
 def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False):
     """Merge registry OpenRouter entries, dropping explicitly retired picker rows.
 
-    Only models_for(client) OpenRouter entries are emitted: the Codex
-    picker omits OpenRouter-billed GPT rows, so an upgrade merge also
-    drops a pre-existing hidden row instead of preserving it. Roster
-    slugs (the subscription side from runtime state) absent from the
+    Only models_for(client) OpenRouter entries are emitted, so an upgrade
+    merge drops a row hidden for this client (today only Claude's
+    OpenRouter-billed Anthropic rows); the Codex picker lists the GPT
+    twins beside their subscription rows. Roster slugs absent from the
     catalogue are appended as stubs so a fresh file still lists the
     approved picker. Existing rows gain missing schema defaults while
-    retaining their model-specific values, repairing older bare stubs.
+    retaining model-specific values, repairing older bare stubs.
     One exception: rows matching the exact 0.6.10.23 single-medium
     placeholder signature get their two reasoning fields upgraded.
     Order is subscription rows in roster order, then OpenRouter rows
