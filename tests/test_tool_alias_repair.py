@@ -5,7 +5,6 @@ guidance, content-free repair logging, the handler path, and the upstream hint.
 """
 import hashlib
 import json
-import re
 import unittest
 from unittest import mock
 
