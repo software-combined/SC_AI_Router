@@ -12,7 +12,8 @@ import json
 import sys
 from pathlib import Path
 from . import provider_defs
-from .capabilities import catalogue_patch, describe
+from .capabilities import (COMP_HASH, MULTI_AGENT_VERSION, NODE_REPL_DISABLED,
+                           catalogue_patch, describe)
 from .clients.codex import capability_fields as codex_projection
 from .clients import models_for
 from .registry import MODELS, picker_key
@@ -38,15 +39,15 @@ ROW_TEMPLATE = {
     'web_search_tool_type': 'text_and_image',
     'truncation_policy': {'mode': 'tokens', 'limit': 10000},
     'supports_image_detail_original': True,
-    'comp_hash': None,
+    'comp_hash': COMP_HASH,
     'effective_context_window_percent': 90,
     'experimental_supported_tools': [],
     'supports_search_tool': True,
     'use_responses_lite': False,
     'node_repl_auto_review_required': False,
-    'node_repl_disabled': False,
+    'node_repl_disabled': NODE_REPL_DISABLED,
     'tool_mode': None,
-    'multi_agent_version': 'v1',
+    'multi_agent_version': MULTI_AGENT_VERSION,
     'multi_agent_reasoning_effort': None,
     # Codex >=0.153.4 catalogue schema: every row must carry these or chat
     # creation fails with 'missing field' (2026-09-08, Codex 26.901.51231).
@@ -182,6 +183,25 @@ def external_entry(model):
             'web_search_tool_type': 'text_and_image' if model.web_search else 'text'}
 
 
+def _visible_rows(client, allowed, include_twins=False):
+    """(visible, hidden) external registry rows for one client and allowlist.
+
+    `allowed` is the optional portco allowlist of registry slugs (Plan 068):
+    None preserves today's behavior exactly; a list drops visible
+    OpenRouter rows not in the list like hidden rows. Subscription rows
+    are unaffected. `merge` and `check` share this derivation so `check`
+    can never certify a catalogue `merge` would not produce.
+    """
+    allowset = None if allowed is None else frozenset(allowed)
+    visible = [m for m in models_for(MODELS, client, include_twins=include_twins)
+               if provider_defs.is_external(m.provider)
+               and (allowset is None or m.slug in allowset)]
+    shown = {m.slug for m in visible}
+    hidden = [m for m in MODELS
+              if provider_defs.is_external(m.provider) and m.slug not in shown]
+    return visible, hidden
+
+
 def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False):
     """Merge registry OpenRouter entries, dropping explicitly retired picker rows.
 
@@ -211,13 +231,9 @@ def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False)
     subscription stubs are dropped and no existing non-registry row is
     carried, so the picker lists registry rows only, twins included.
     """
-    allowset = None if allowed is None else frozenset(allowed)
-    visible = [m for m in models_for(MODELS, client, include_twins=include_twins)
-               if provider_defs.is_external(m.provider)
-               and (allowset is None or m.slug in allowset)]
+    visible, hidden_rows = _visible_rows(client, allowed, include_twins)
     shown = {m.slug for m in visible}
-    hidden = {m.slug for m in MODELS
-              if provider_defs.is_external(m.provider) and m.slug not in shown}
+    hidden = {m.slug for m in hidden_rows}
     active = {m.slug for m in MODELS}
     models = [m for m in catalog.get('models', [])
               if (m['slug'] not in RETIRED_SLUGS or m['slug'] in active)
@@ -303,14 +319,9 @@ def check(path, client='codex', allowed=None, include_twins=False):
         if missing:
             print(f'{slug}: missing schema fields: {", ".join(sorted(missing))}')
             return False
-    allowset = None if allowed is None else frozenset(allowed)
-    visible = [m for m in models_for(MODELS, client, include_twins=include_twins)
-               if provider_defs.is_external(m.provider)
-               and (allowset is None or m.slug in allowset)]
-    shown = {m.slug for m in visible}
+    visible, hidden = _visible_rows(client, allowed, include_twins)
     identical, total = 0, 0
-    for model in (m for m in MODELS
-                  if provider_defs.is_external(m.provider) and m.slug not in shown):
+    for model in hidden:
         if model.slug in existing:
             print(f'{model.slug}: hidden from the {client} picker but present')
             return False

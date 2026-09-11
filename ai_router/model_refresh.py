@@ -98,18 +98,13 @@ def apply(models):
     """Swap the live registry and rebuild import-time derived maps.
 
     capabilities.* and claude.models_listing snapshot MODELS at import; a swap
-    without a rebuild would serve new slugs with stale gates. The rebuild
-    below mirrors each derived definition next to its source.
+    without a rebuild would serve new slugs with stale gates, so the swap and
+    the rebuild travel together in capabilities.rebuild (Plan 125).
     """
     registry.MODELS = models
     registry.BY_SLUG = {m.slug: m for m in models}
     from . import capabilities
-    capabilities.EXTERNAL_MODELS = registry.external_slugs()
-    capabilities.IMAGE_INPUT_MODELS = frozenset(
-        m.slug for m in models if 'image' in m.modalities)
-    capabilities.EXCLUDED_EFFORTS = {
-        m.slug: set(m.excluded_efforts) for m in models if m.excluded_efforts}
-    capabilities.REASONING_LEVELS = {m.slug: list(m.reasoning) for m in models}
+    capabilities.rebuild(models)
 
 
 def start(models_url, home, _urlopen=urllib.request.urlopen):

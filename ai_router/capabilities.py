@@ -12,15 +12,32 @@ whatever that provider is; upstream facts live in provider_defs.py.
 """
 from .image_items import has_images
 from .registry import MODELS, external_slugs
-EXTERNAL_MODELS = external_slugs()
-IMAGE_INPUT_MODELS = frozenset(m.slug for m in MODELS if 'image' in m.modalities)
-EXCLUDED_EFFORTS = {m.slug: set(m.excluded_efforts) for m in MODELS if m.excluded_efforts}
-REASONING_LEVELS = {m.slug: list(m.reasoning) for m in MODELS}
+EXTERNAL_MODELS = frozenset()
+IMAGE_INPUT_MODELS = frozenset()
+EXCLUDED_EFFORTS = {}
+REASONING_LEVELS = {}
 EFFORT_DESCRIPTIONS = {'none': 'No reasoning', 'xhigh': 'Extra high reasoning', 'max': 'Maximum reasoning'}
 CANONICAL_ORDER = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
 MULTI_AGENT_VERSION = 'v1'
 NODE_REPL_DISABLED = False
 COMP_HASH = None
+
+
+def rebuild(models):
+    """Refresh the maps derived from one registry snapshot (Plan 125).
+
+    The caller swaps registry.MODELS first (model_refresh.apply), so
+    external_slugs() reads that same snapshot; the import-time call below
+    seeds the maps for the shipped registry.
+    """
+    global EXTERNAL_MODELS, IMAGE_INPUT_MODELS, EXCLUDED_EFFORTS, REASONING_LEVELS
+    EXTERNAL_MODELS = external_slugs()
+    IMAGE_INPUT_MODELS = frozenset(m.slug for m in models if 'image' in m.modalities)
+    EXCLUDED_EFFORTS = {m.slug: set(m.excluded_efforts) for m in models if m.excluded_efforts}
+    REASONING_LEVELS = {m.slug: list(m.reasoning) for m in models}
+
+
+rebuild(MODELS)
 
 def input_modalities(slug):
     return ['text', 'image'] if slug in IMAGE_INPUT_MODELS else ['text']
