@@ -265,7 +265,7 @@ class UpdateBackoffTests(unittest.TestCase):
             json.dumps({'port': 1, 'token': 'x'}))
         return home
 
-    def _check(self, home, blob, latest, fetches, child_rc):
+    def _check(self, home, blob, latest, fetches, run=None, child_rc=1):
         def fake_run(cmd, **kwargs):
             if cmd[:1] == ['launchctl']:
                 return _ok_run(cmd, **kwargs)
@@ -275,7 +275,7 @@ class UpdateBackoffTests(unittest.TestCase):
             fetches.append(url)
             return blob
 
-        _patch_attrs(self, run=fake_run)
+        _patch_attrs(self, run=run or fake_run)
         args = install_mod.build_parser().parse_args(
             ['--feed', 'file:///latest.json', '--home', str(home)])
         buf = io.StringIO()
@@ -330,6 +330,60 @@ class UpdateBackoffTests(unittest.TestCase):
             self.assertEqual(install_mod._update_failures(home), {})
             state = json.loads((home / 'mixed-router-state.json').read_text())
             self.assertEqual(state['port'], 1, 'unrelated state must survive')
+
+    def _landing_run(self, home, serving):
+        """A child that swaps the pointer, stages its notice, then fails."""
+        def fake_run(cmd, **kwargs):
+            if cmd[:1] == ['launchctl']:
+                return _ok_run(cmd, **kwargs)
+            (home / 'releases' / '9.9.9').mkdir()
+            (home / 'current').write_text('9.9.9')
+            (home / 'update-notice.json').write_text(
+                json.dumps({'version': '9.9.9'}))
+            return SimpleNamespace(returncode=1, stdout='',
+                                   stderr='config block was edited by hand')
+
+        _patch_attrs(self, wait_version=lambda *a, **k: serving)
+        return fake_run
+
+    def test_a_landed_update_that_failed_a_later_step_is_recorded_not_parked(self):
+        # A refused Codex settings merge exits non-zero after the swap and a
+        # healthy restart. That release keeps serving: record the pass, leave
+        # the notice to the notice module, and still report the failure.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = self._home(tmp)
+            (home / 'releases' / '9.9.8').mkdir(parents=True)
+            (home / 'current').write_text('9.9.8')
+            blob, latest = _craft_bundle('9.9.9')
+            honest = install_mod._svc.notice.show_pending
+            run = self._landing_run(home, serving=True)
+            with mock.patch.object(install_mod._svc.notice, 'show_pending',
+                                   wraps=honest) as shown, \
+                    mock.patch.dict(os.environ, {'ROUTER_NO_NOTICE': '1'}):
+                rc, out = self._check(home, blob, latest, [], run=run)
+            self.assertEqual(rc, 1, 'the failure must stay visible')
+            self.assertEqual(shown.call_count, 1, 'the notice module is asked')
+            self.assertEqual(install_mod._update_failures(home), {},
+                             'a release that landed must not be parked')
+            notice = json.loads((home / 'update-notice.json').read_text())
+            self.assertNotIn('shown', notice, 'a silenced dialog is not a shown one')
+            self.assertIn('9.9.9', (home / 'logs' / 'update.log').read_text())
+            self.assertIn('exited 1 after the swap', out)
+
+    def test_a_pointer_without_a_serving_router_is_parked(self):
+        # The pointer alone is not proof: a killed rollback can leave it
+        # naming a release the router never served.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = self._home(tmp)
+            (home / 'releases' / '9.9.8').mkdir(parents=True)
+            (home / 'current').write_text('9.9.8')
+            blob, latest = _craft_bundle('9.9.9')
+            run = self._landing_run(home, serving=False)
+            rc, out = self._check(home, blob, latest, [], run=run)
+            self.assertEqual(rc, 1)
+            self.assertEqual(install_mod._update_failures(home), {'9.9.9': 1})
+            self.assertFalse((home / 'logs' / 'update.log').exists())
+            self.assertNotIn('after the swap', out)
 
 
 if __name__ == '__main__':

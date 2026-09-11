@@ -63,8 +63,8 @@ tar -xzf "$HOME_DIR/runtime.tar.gz" -C "$HOME_DIR/runtime"
 PY="$HOME_DIR/runtime/$REXEC"
 "$PY" -c "import compression.zstd; print('runtime ok')"
 dl "$CHANNEL/latest.json" "$HOME_DIR/latest.json"
-set -- $(python3 -c "import json,os;d=json.load(open(os.environ['HOME_DIR']+'/latest.json'));print(d['url'],d['sha256'])")
-URL="$1"; SHA="$2"
+set -- $(python3 -c "import json,os;d=json.load(open(os.environ['HOME_DIR']+'/latest.json'));print(d['version'],d['url'],d['sha256'])")
+VERSION="$1"; URL="$2"; SHA="$3"
 ASSET="${URL##*/}"
 dl "bundles/$ASSET" "$HOME_DIR/bundle.tar.gz"
 echo "$SHA  $HOME_DIR/bundle.tar.gz" | shasum -a 256 -c -
@@ -74,10 +74,20 @@ rm -f "$HEADERS"
 # Pin this run to the channel the operator asked for: the installer resolves
 # its own feed from the router home, which may still name the old channel.
 # Persist the channel only once the install proves out, so an aborted
-# bootstrap cannot move a stable host onto pre-releases.
+# bootstrap cannot move a stable host onto pre-releases. A host already
+# ahead of the requested channel is current, not deferred.
 if "$PY" "$HOME_DIR/bootstrap/packaging/install.py" --home "$HOME_DIR" \
      --feed "$FEED_ORIGIN/$CHANNEL/latest.json"; then
-  printf '%s\n' "$CHANNEL" > "$HOME_DIR/channel"
+  CURRENT="$(cat "$HOME_DIR/current" 2>/dev/null || true)"
 else
   exit $?
 fi
+if ! python3 -c 'import sys;a,b=sys.argv[1:];sys.exit(0 if [int(p) for p in a.split(".")]>=[int(p) for p in b.split(".")] else 1)' "$CURRENT" "$VERSION"; then
+  echo "install did not land $VERSION (current ${CURRENT:-none}); channel left unchanged" >&2
+  exit 1
+fi
+# A channel switch invalidates the old channel's anti-replay serial.
+if [ "$(cat "$HOME_DIR/channel" 2>/dev/null)" != "$CHANNEL" ]; then
+  rm -f "$HOME_DIR/feed-serial"
+fi
+printf '%s\n' "$CHANNEL" > "$HOME_DIR/channel"

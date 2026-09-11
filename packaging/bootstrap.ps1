@@ -60,4 +60,19 @@ if ($LASTEXITCODE -ne 0) { exit 1 }
 # bootstrap cannot move a stable host onto pre-releases.
 & $py (Join-Path $homeDir 'bootstrap\packaging\install.py') --home $homeDir --feed "$feedOrigin/$Channel/latest.json"
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+$current = if (Test-Path (Join-Path $homeDir 'current')) { ("" + (Get-Content -Raw (Join-Path $homeDir 'current'))).Trim() } else { '' }
+$landed = $false
+if ($current) {
+  try { $landed = ([version]$current -ge [version]$feed.version) } catch { $landed = $false }
+}
+if (-not $landed) {
+  Write-Error -ErrorAction Continue "install did not land $($feed.version) (current '$current'); channel left unchanged"
+  exit 1
+}
+# A channel switch invalidates the old channel's anti-replay serial.
+$oldChannel = if (Test-Path (Join-Path $homeDir 'channel')) { ("" + (Get-Content -Raw (Join-Path $homeDir 'channel'))).Trim() } else { '' }
+if ($oldChannel -ne $Channel) {
+  $serial = Join-Path $homeDir 'feed-serial'
+  if (Test-Path $serial) { Remove-Item -Force $serial }
+}
 Set-Content -Path (Join-Path $homeDir 'channel') -Value $Channel

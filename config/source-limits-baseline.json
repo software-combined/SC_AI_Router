@@ -27,7 +27,7 @@
   "tests/test_probe_harness.py": 362,
   "tests/test_setup.py": 397,
   "tests/test_tool_adapter.py": 451,
-  "tests/test_update_channel.py": 336,
+  "tests/test_update_channel.py": 390,
   "tests/test_windows_acl.py": 324,
   "tests/test_windows_backend.py": 374,
   "tools/probe_agent_handoffs.py": 496,
