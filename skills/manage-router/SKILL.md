@@ -37,7 +37,8 @@ this skill never edits client settings or router state by hand.
 - Detach Claude: uninstall detaches every client; `--client none`
   drops to service-only and restores Claude settings too. A plain
   `--clients codex` reinstall never silently detaches Claude.
-- Key recovery: a missing or revoked key opens the local setup page on
+- Key recovery: a missing or revoked key opens the native key popup (or the
+  loopback setup page when the host has no dialog tool) on
   next request. Never ask for the key in chat, arguments, or environment.
 
 ## Rules

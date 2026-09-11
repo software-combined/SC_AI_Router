@@ -39,7 +39,7 @@ class ShowPendingTests(unittest.TestCase):
         test.addCleanup(setattr, notice_mod, 'dialog_command', real)
         test.addCleanup(setattr, install_mod._svc.notice,
                         'dialog_command', install_mod._svc.notice.dialog_command)
-        fake = lambda version, platform_name=None, which=None, icon=None: ['fake-dialog', version]  # noqa: E731
+        fake = lambda version, platform_name=None, which=None, icon=None, clients='codex': ['fake-dialog', version]  # noqa: E731
         setattr(notice_mod, 'dialog_command', fake)
         setattr(install_mod._svc.notice, 'dialog_command', fake)
 
@@ -185,7 +185,7 @@ class ShowPendingTests(unittest.TestCase):
             self.addCleanup(setattr, notice_mod, 'dialog_command', real)
             self.addCleanup(setattr, install_mod._svc.notice, 'dialog_command',
                             install_mod._svc.notice.dialog_command)
-            fake = lambda version, platform_name=None, which=None, icon=None: None  # noqa: E731
+            fake = lambda version, platform_name=None, which=None, icon=None, clients='codex': None  # noqa: E731
             setattr(notice_mod, 'dialog_command', fake)
             setattr(install_mod._svc.notice, 'dialog_command', fake)
             seen = []
@@ -201,6 +201,33 @@ class ShowPendingTests(unittest.TestCase):
             home.mkdir()
             self.assertFalse(
                 notice_mod.show_pending(home, spawn=lambda cmd: None))
+
+    def test_silent_install_env_never_spawns(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            home.mkdir()
+            self._pending(home)
+            self._with_dialog(self)
+            seen = []
+            with mock.patch.dict(os.environ, {'ROUTER_NO_NOTICE': '1'}):
+                self.assertFalse(notice_mod.show_pending(home, spawn=seen.append))
+            self.assertEqual(seen, [])
+            doc = json.loads((home / 'update-notice.json').read_text())
+            self.assertNotIn('shown', doc)
+
+    def test_claude_only_notice_has_no_codex_restart_button(self):
+        cmd = notice_mod.dialog_command('1.0.1', platform_name='darwin',
+                                        which=lambda name: '/usr/bin/' + name,
+                                        clients='claude')
+        script = cmd[cmd.index('-e') + 1]
+        self.assertIn('buttons {"OK"}', script)
+        self.assertIn('Restart Claude Code', script)
+        self.assertNotIn('to quit', script)
+
+    def test_both_clients_notice_names_both(self):
+        message = notice_mod._message('1.0.1', 'both')
+        self.assertIn('Quit and reopen Codex', message)
+        self.assertIn('restart Claude Code', message)
 
 
 class InstallNoticeTests(unittest.TestCase):
