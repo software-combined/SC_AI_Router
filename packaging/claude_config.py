@@ -7,7 +7,14 @@ and shipped in the release bundle. No runtime/protocol import here.
 """
 import json
 import os
+import importlib.util as _ilu
 from pathlib import Path
+
+_spec = _ilu.spec_from_file_location(
+    'router_runtime_atomic_write',
+    Path(__file__).resolve().parents[1] / 'ai_router' / 'atomic_write.py')
+atomic_write = _ilu.module_from_spec(_spec)
+_spec.loader.exec_module(atomic_write)
 
 BASE_URL_KEY = 'ANTHROPIC_BASE_URL'
 DISCOVERY_KEY = 'CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY'
@@ -74,22 +81,12 @@ def write_settings(path, doc):
         path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + '.router.tmp')
     try:
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    except FileExistsError:
+        atomic_write.replace_json(path, doc, tmp_name=tmp.name)
+    except atomic_write.StaleTmp:
         # A crash between create and replace leaves the deterministic tmp
-        # behind; unlink and retry once rather than blocking activation.
-        try:
-            tmp.unlink()
-        except OSError:
-            raise SystemExit('stale settings temp file: delete %s and re-run' % tmp)
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, 'w') as stream:
-        stream.write(json.dumps(doc, indent=2) + '\n')
-    try:
-        os.chmod(tmp, 0o600)
-    except OSError:
-        pass
-    os.replace(tmp, path)
+        # behind; the writer clears it once and retries, and only a lost
+        # race to the retry lands here.
+        raise SystemExit('stale settings temp file: delete %s and re-run' % tmp)
 
 
 def restore_settings(path, previous):

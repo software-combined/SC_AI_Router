@@ -12,6 +12,7 @@ import json
 import sys
 from pathlib import Path
 from . import provider_defs
+from .atomic_write import replace_json
 from .capabilities import (COMP_HASH, MULTI_AGENT_VERSION, NODE_REPL_DISABLED,
                            catalogue_patch, describe)
 from .clients.codex import capability_fields as codex_projection
@@ -298,9 +299,7 @@ def merge_file(path, client='codex', allowed=None, openai_mode=None):
     base = json.loads(path.read_text()) if path.exists() else {'models': []}
     merged = merge(base, read_roster(path), client, allowed,
                    include_twins=(mode == 'none'))
-    tmp = path.with_name(path.name + '.tmp')
-    tmp.write_text(json.dumps(merged, indent=2) + '\n')
-    tmp.replace(path)
+    replace_json(path, merged)
     return merged
 
 

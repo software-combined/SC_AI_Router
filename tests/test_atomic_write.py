@@ -58,6 +58,41 @@ class AtomicWriteTests(unittest.TestCase):
         self.assertEqual(sorted(p.name for p in home.iterdir()),
                          sorted(p.name for p in before))
 
+    def test_replace_json_and_deterministic_tmp_policies(self):
+        mod = _mod()
+        home = self._dir()
+        target = home / 'state.json'
+        mod.replace_json(target, {'a': 1})
+        self.assertEqual(target.read_text(), '{\n  "a": 1\n}\n')
+        stale = home / (target.name + '.router.tmp')
+        stale.write_text('leftover')
+        with self.assertRaises(mod.StaleTmp):
+            mod.replace_json(target, {'a': 2}, tmp_name=stale.name,
+                             stale_tmp='refuse')
+        self.assertEqual(stale.read_text(), 'leftover')
+        mod.replace_json(target, {'a': 2}, tmp_name=stale.name)
+        self.assertEqual(json.loads(target.read_text()), {'a': 2})
+        self.assertFalse(stale.exists())
+
+    def test_packaging_alias_loads_from_a_home_style_layout(self):
+        # An installed release keeps packaging/ and ai_router/ as siblings,
+        # and the alias must resolve the runtime leaf from that layout.
+        import importlib.util as _ilu
+        root = self._dir() / 'home'
+        (root / 'ai_router').mkdir(parents=True)
+        (root / 'packaging').mkdir()
+        for rel in ('ai_router/atomic_write.py', 'packaging/atomic_write.py'):
+            source = Path(__file__).resolve().parents[1] / rel
+            (root / rel).write_text(source.read_text())
+        spec = _ilu.spec_from_file_location(
+            'home_router_atomic_write', root / 'packaging' / 'atomic_write.py')
+        mod = _ilu.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        target = root / 'config.toml'
+        mod.replace_text(target, 'x = 1\n')
+        self.assertEqual(target.read_text(), 'x = 1\n')
+        self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o600)
+
     def test_concurrent_writers_leave_one_complete_file(self):
         # Plan 094 core claim: unique temp names mean two writers cannot unlink
         # each other's in-flight temp, and no temp survives.
