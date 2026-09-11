@@ -2,6 +2,43 @@
 
 ## Unreleased
 
+- Tagged releases now publish to the token-gated update feed at
+  `dist.softwarecombined.com` as well as to GitHub Releases, so an
+  installed router updates with no GitHub account, no `gh` and no
+  repository access. The feed stack lives in this repository
+  (`infra/feed-cert.yaml` in us-east-1, `infra/feed.yaml` in
+  ap-southeast-2) behind an edge token gate, and a tag-only GitHub OIDC
+  role is the sole publisher. Existing hosts migrate themselves: the
+  transition release carries the feed token in the GitHub `latest.json`,
+  the updater persists it owner-only on its next poll and reads the feed
+  from then on. Bundles are immutable, the channel feed is invalidated on
+  publish, and no client request-path behaviour changes.
+
+- Context size is the provider's call again: the OpenRouter pre-flight
+  refused a turn whenever serialized characters divided by four exceeded
+  the model window, but real tokenizer ratios run 4.4-5.8 chars/token over
+  long sessions, so the estimate refused turns the client still had room
+  for and Codex ended the thread instead of compacting. Live 2026-09-11
+  (thread 01a08ba0): a 4,324,328-byte turn billed 750,806 tokens upstream,
+  was estimated at 1,091,485, and was refused at 79% of the model window
+  with 193k tokens left in the client's compaction budget. Local refusals
+  are removed; a genuine upstream context error still arrives as the typed
+  `context_length_exceeded`, now also recognizing OpenRouter's explicit
+  top-level `error_type` shape. The output-reservation math is unchanged.
+
+- After an update the router shows a single desktop dialog (macOS, Linux
+  and Windows) carrying the SCG product icon. It offers "Quit and reopen",
+  which quits the Codex desktop app and launches it again so the new models
+  load: the macOS bundle `com.openai.codex`, the Windows Store package
+  `OpenAI.Codex`, and the Linux preview app `chatgpt` when it is
+  installed. "Later" dismisses the dialog; where the app is not installed
+  the restart button simply does nothing. Only one dialog is ever on
+  screen: an update that lands while the previous dialog is still open
+  folds into it instead of stacking a second one. The notice is
+  best-effort, fires once per version, and never blocks or delays the
+  update. The Linux update unit keeps `KillMode=process`, so the detached
+  dialog survives the oneshot run that spawned it.
+
 - Replayed reasoning history no longer disappears before OpenRouter turns.
   `strip_reasoning_blobs` now strips only the provider blob field and keeps a
   reasoning item whenever readable summary or `reasoning_text` content

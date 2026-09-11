@@ -15,7 +15,11 @@ The machine's agent should:
    release downloads; anonymous GitHub asset URLs return 404. Inspect the
    existing unit definitions, pointer, installed version and
    release channel. Keep keys, state tokens and private health URLs out of
-   reports. Disable the old update timer while preparing the upgrade. Check
+   reports. `gh` is required only while the host is on the transitional
+   GitHub route: once a release that carries the feed token has been
+   polled, the host stores it owner-only and reads
+   `dist.softwarecombined.com` from then on, with no repository access.
+   Disable the old update timer while preparing the upgrade. Check
    for a `feed` override file in the router home: preserve intentional pins;
    if it is the obsolete local development feed, retain a backup and remove
    that override so subsequent checks use the normal release channel.

@@ -5,9 +5,8 @@ import re
 from . import capabilities, compaction as comp, local_services, agent_handoffs
 from .capabilities import (CANONICAL_ORDER, OPENROUTER_HOST, check_effort,
                               check_images, input_modalities)
-from .context_budget import estimate as estimate_tokens
 from .image_items import note_images, strip_images
-from .errors import ContextWindowExceeded, PreparationError, UnknownModel
+from .errors import PreparationError, UnknownModel
 from .registry import by_slug, near_miss
 from .runtime import log_event
 from .discovered import remember
@@ -19,16 +18,34 @@ from .transport import HOP_HEADERS, Prepared, passthrough
 NATIVE_SERVICE_PATHS = {'/alpha/search', '/alpha/notes/v2/thread_hint', '/guardian', '/guardian-classifier'}
 
 
+def _explicit_context_code(data):
+    """True only on explicit context-limit fields, never message prose."""
+    if not isinstance(data, dict):
+        return False
+    if data.get('error_type') == 'context_length_exceeded':
+        return True
+    error = data.get('error')
+    if not isinstance(error, dict):
+        return False
+    if error.get('code') == 'context_length_exceeded':
+        return True
+    if error.get('error_type') == 'context_length_exceeded':
+        return True
+    metadata = error.get('metadata')
+    raw = metadata.get('raw') if isinstance(metadata, dict) else None
+    if isinstance(raw, str):
+        try:
+            return _explicit_context_code(json.loads(raw))
+        except ValueError:
+            return False
+    return False
+
+
 def is_context_error(body):
     """Recognize explicit upstream codes, never infer from user-bearing prose."""
     try:
-        error = json.loads(body)['error']
-        if error.get('code') == 'context_length_exceeded':
-            return True
-        raw = error.get('metadata', {}).get('raw')
-        return (isinstance(raw, str)
-                and json.loads(raw)['error'].get('code') == 'context_length_exceeded')
-    except (ValueError, KeyError, TypeError, AttributeError):
+        return _explicit_context_code(json.loads(body))
+    except (ValueError, TypeError):
         return False
 
 
@@ -244,20 +261,8 @@ class OpenRouterProvider:
             default = min(default, window - window * 9 // 10)
         requested = payload.get('max_output_tokens')
         payload['max_output_tokens'] = min(requested, limit) if requested else default
-        if window:
-            # Approximate input plus reserved output must fit. The typed
-            # error lets the client mark context full and compact next turn.
-            used = estimate_tokens(payload)
-            reserved = payload['max_output_tokens']
-            slug = model if isinstance(model, str) else str(getattr(entry, 'slug', model))
-            if used + reserved > window:
-                exc = ContextWindowExceeded(
-                    f'request needs ~{used + reserved} tokens '
-                    f'(~{used} input + {reserved} reserved output) '
-                    f'but {slug} allows {window}; compact or shorten the turn')
-                exc.budget = {'model': slug, 'path': path, 'used': used,
-                              'reserved': reserved, 'window': window}
-                raise exc
+        # Context size stays the provider's call: a chars-per-token estimate
+        # refused long turns the client still had room for.
         return Prepared(self.host, '/api/v1/responses',
                         {'Authorization': 'Bearer ' + credentials.openrouter_key(),
                          'Content-Type': 'application/json', 'Accept-Encoding': 'identity'},
