@@ -33,7 +33,6 @@ FILES = [
          'ai_router/model_metadata.py',
          'ai_router/model_refresh.py',
          'ai_router/winacl.py',
-         'ai_router/context_budget.py',
          'ai_router/image_items.py',
           'ai_router/model_policy.py',
          'ai_router/subscription_roster.py',
@@ -62,6 +61,7 @@ REQUIRED_PACKAGING = (
     'packaging/router_launch.py', 'packaging/update_launch.py',
     'packaging/launchd.py', 'packaging/service.py',
     'packaging/feed.py', 'packaging/atomic_write.py',
+    'packaging/notice.py', 'packaging/assets/router-icon.png',
     'packaging/install.py', 'packaging/updater.py',
     'packaging/codex_config.py', 'packaging/claude_config.py',
     'packaging/claude_desktop_config.py', 'packaging/systemd.py',
@@ -170,6 +170,7 @@ class PackagingTests(unittest.TestCase):
         surface = [
             'packaging/install.py', 'packaging/service.py',
             'packaging/feed.py', 'packaging/atomic_write.py',
+            'packaging/notice.py',
             'packaging/launchd.py', 'packaging/router_launch.py',
             'packaging/systemd.py', 'packaging/update_launch.py',
             'packaging/updater.py', 'packaging/codex_config.py',

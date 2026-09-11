@@ -54,6 +54,9 @@ class Manager:
             UPDATE: ('[Unit]\nDescription=Update SC mixed model router\n'
                      '[Service]\nType=oneshot\nExecStart=' + updater + '\n'
                      'Environment=' + env + '\nEnvironment=ROUTER_UPDATE_SERVICE=1\n'
+                     # The restart dialog is spawned detached; the default
+                     # control-group kill would reap it when the oneshot ends.
+                     'KillMode=process\n'
                      'UMask=0077\n'),
             TIMER: ('[Unit]\nDescription=Check SC router updates every 15 minutes\n'
                     '[Timer]\nOnActiveSec=5min\nOnUnitInactiveSec=15min\n'

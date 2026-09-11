@@ -96,22 +96,6 @@ class OutputCapTests(unittest.TestCase):
                              {'model': 'unknown/model', 'input': []},
                              b'raw', {}, _stub_credentials())
 
-    def test_request_over_context_window_is_rejected_before_upstream(self):
-        # Live 2026-09-09: ~501k input tokens with a 524288 output
-        # explicit reservation against a 1048576 window (~1050400 total).
-        # Reject before forwarding, using the context-specific error so
-        # Codex can distinguish exhaustion from other preparation failures.
-        from ai_router.registry import by_slug
-        provider = providers.OpenRouterProvider()
-        entry = by_slug('meta/muse-spark-1.3-contributor')
-        payload = {'model': 'meta/muse-spark-1.3-contributor',
-                   'input': [{'type': 'message', 'role': 'user',
-                              'content': 'x' * 2100000}],
-                   'max_output_tokens': 524288}
-        with self.assertRaisesRegex(providers.PreparationError, 'compact'):
-            provider.prepare(entry, '/responses', payload, b'raw', {},
-                             _stub_credentials())
-
     def test_request_within_context_window_still_passes(self):
         from ai_router.registry import by_slug
         provider = providers.OpenRouterProvider()
@@ -124,26 +108,9 @@ class OutputCapTests(unittest.TestCase):
                                     _stub_credentials())
         self.assertEqual(json.loads(prepared.body)['max_output_tokens'], 524288)
 
-    def test_request_exactly_at_window_passes(self):
-        # Strict > pins the boundary: estimate + reserve == window forwards.
-        import json as _json
-        from ai_router.registry import by_slug
-        provider = providers.OpenRouterProvider()
-        entry = by_slug('meta/muse-spark-1.3-contributor')
-        reserved = entry.context_window // 2
-        overhead = len(_json.dumps([{'type': 'message', 'role': 'user',
-                                     'content': ''}]))
-        pad = 'x' * (reserved * 4 - overhead)
-        payload = {'model': entry.slug,
-                   'input': [{'type': 'message', 'role': 'user',
-                              'content': pad}],
-                   'max_output_tokens': reserved}
-        prepared = provider.prepare(entry, '/responses', payload, b'raw', {},
-                                    _stub_credentials())
-        self.assertEqual(json.loads(prepared.body)['max_output_tokens'], reserved)
-
-    def test_unknown_window_skips_guard(self):
-        # Registry default context_window=0: forward as before, endpoint enforces.
+    def test_unknown_window_keeps_default_output(self):
+        # Registry default context_window=0: the default output still clamps
+        # to the provider ceiling, and the endpoint enforces context.
         provider = providers.OpenRouterProvider()
         fake = SimpleNamespace(max_output_tokens=1000, context_window=0,
                                slug='fake/model')

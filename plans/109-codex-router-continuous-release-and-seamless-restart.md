@@ -1,5 +1,11 @@
 # Plan 109: Every push to `main` becomes a release that reaches every router within minutes, with a restart nobody notices
 
+> **Amendment 2026-09-11 (Plan 139):** the push-to-`main` release trigger in
+> Step 1 is withdrawn. Releases are tag-driven (`on: push: tags: ['v*']`),
+> GitHub Releases stay beside the token-gated feed, and the `gh` fallback
+> route is retained. Do not restore the branch trigger when executing this
+> plan; the restart, drain and socket-activation work below is unaffected.
+
 > **Executor instructions**: Follow this plan step by step. Run every
 > verification command and confirm the expected result before moving to the
 > next step. If anything in the "STOP conditions" section occurs, stop and

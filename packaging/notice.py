@@ -1,0 +1,345 @@
+"""Best-effort desktop notice after a router update (runs on Python 3.9+).
+
+The installer records the new version once a healthy update lands, and the
+installer CLI shows a dialog offering to restart the client (the picker is
+read at startup, so a running Codex never sees the new models). "Quit and
+reopen" quits the desktop app and launches it again: the macOS bundle
+``com.openai.codex``, the Windows Store package ``OpenAI.Codex``, and the
+Linux preview app ``chatgpt``. Linux only offers the restart when that app
+is installed; on macOS and Windows the button is harmless without it, and
+the dialog always carries "Later". Only one dialog is ever on screen: the
+pid of the dialog we spawned is remembered, and a later notice is folded
+into that dialog instead of stacking a second one. Every failure is
+swallowed: the notice must never block, delay, or fail an update.
+"""
+import json
+import os
+import shutil
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+NOTICE_FILE = 'update-notice.json'
+TITLE = 'SCG Router'
+DISMISS = 'Later'
+REOPEN = 'Quit and reopen'
+CODEX_BUNDLE_ID = 'com.openai.codex'
+WINDOWS_PACKAGE = 'OpenAI.Codex'
+LINUX_APP = 'chatgpt'
+PROBE_TIMEOUT = 5
+ICON = Path(__file__).resolve().parent / 'assets' / 'router-icon.png'
+ICON_NAME = 'router-icon.png'
+
+
+def _message(version):
+    return ('SCG router updated to %s. '
+            'Quit and reopen Codex to use the new models.') % (version,)
+
+
+def _utcnow():
+    return datetime.now(timezone.utc).isoformat(timespec='seconds')
+
+
+def _home_icon(home):
+    """A copy of the bundled icon that outlives this process, or None.
+
+    The scheduled updater runs the installer from a temporary extraction
+    that is gone by the time the user clicks the dialog, and a dialog whose
+    icon file has vanished never appears at all. The router home persists,
+    so the dialog points there; when the copy fails the caller draws no
+    icon rather than a path that may disappear.
+    """
+    try:
+        target = Path(home) / ICON_NAME
+        target.write_bytes(ICON.read_bytes())
+        return str(target)
+    except OSError:
+        return None
+
+
+def _write_notice(path, doc):
+    tmp = path.parent / (path.name + '.tmp')
+    tmp.write_text(json.dumps(doc) + '\n')
+    os.replace(tmp, path)
+
+
+def _dialog_pid(doc):
+    """The pid of the dialog we spawned, when it is a sane positive int."""
+    if isinstance(doc, dict):
+        pid = doc.get('pid')
+        if isinstance(pid, int) and not isinstance(pid, bool) and pid > 0:
+            return pid
+    return None
+
+
+def _pid_alive(pid):
+    """True only for a live process that is one of our dialogs.
+
+    A recycled pid must never stand in for an open dialog, so the process
+    command line has to carry the dialog title. False when unsure: the
+    worst case is a second dialog, never a silently dropped notice. The
+    probe is bounded: the scheduled updater waits on this process, so a
+    wedged WMI or `ps` must not park a healthy install.
+    """
+    pid = _dialog_pid({'pid': pid})
+    if pid is None:
+        return False
+    try:
+        if sys.platform == 'win32':
+            query = ('(Get-CimInstance Win32_Process -Filter "ProcessId=%d")'
+                     '.CommandLine' % pid)
+            out = subprocess.run(['powershell', '-NoProfile', '-Command',
+                                  query], stdout=subprocess.PIPE,
+                                 stderr=subprocess.DEVNULL, text=True,
+                                 timeout=PROBE_TIMEOUT)
+        else:
+            out = subprocess.run(['ps', '-p', str(pid), '-o', 'command='],
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.DEVNULL, text=True,
+                                 timeout=PROBE_TIMEOUT)
+        return TITLE in (out.stdout or '')
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return False
+
+
+def record(home, previous, version):
+    """Stage a restart notice when an update lands a new version.
+
+    Returns True when a notice is staged. Fresh installs, reinstalls,
+    versions already shown, and any write failure return False without
+    touching the file. The pid of a dialog an earlier version left open is
+    carried over so the next show_pending() folds into it instead of
+    stacking a second dialog. A notice never affects installs.
+    """
+    try:
+        if not previous or previous == version:
+            return False
+        path = Path(home) / NOTICE_FILE
+        try:
+            existing = json.loads(path.read_text())
+        except (OSError, ValueError):
+            existing = None
+        if isinstance(existing, dict) and existing.get('version') == version \
+                and existing.get('shown'):
+            return False
+        doc = {'version': version, 'at': _utcnow()}
+        pid = _dialog_pid(existing)
+        if pid:
+            doc['pid'] = pid
+        _write_notice(path, doc)
+        return True
+    except (OSError, ValueError):
+        return False
+
+
+def _darwin_script(message, icon):
+    """AppleScript for the dialog, restarting Codex when asked.
+
+    The restart is the last thing the script does, so a failure to quit or
+    relaunch can never take the dialog down with it. Strings stay raw
+    UTF-8: AppleScript has no unicode escape, and the default json.dumps
+    escaping would emit one for any accented path.
+    """
+    quote = lambda text: json.dumps(text, ensure_ascii=False)  # noqa: E731
+    icon_clause = (' with icon (POSIX file %s)' % quote(icon)
+                   if icon else ' with icon note')
+    return '\n'.join([
+        'set answer to button returned of (display dialog %s with title "%s" '
+        'buttons {"%s", "%s"} default button "%s" cancel button "%s"%s)'
+        % (quote(message), TITLE, DISMISS, REOPEN, REOPEN, DISMISS,
+           icon_clause),
+        'if answer is "%s" then' % REOPEN,
+        '  try',
+        '    tell application id "%s" to quit' % CODEX_BUNDLE_ID,
+        '  end try',
+        '  delay 2',
+        '  do shell script "open -b %s"' % CODEX_BUNDLE_ID,
+        'end if',
+    ])
+
+
+def _windows_restart():
+    """PowerShell that closes the Codex Store app and starts it again.
+
+    The app is an MSIX package, so it is started through its package
+    family identity rather than an executable path; `Get-StartApps` is the
+    documented fallback for the launch identity. The quit is scoped to
+    processes running out of that package: a host with only the Codex CLI
+    must not lose it, and without a resolved identity nothing is quit.
+    Everything is guarded: when the app cannot be found the dialog merely
+    closes.
+    """
+    return (
+        "try { "
+        "$pkg = Get-AppxPackage -Name '%s' -ErrorAction SilentlyContinue; "
+        "$aumid = $null; "
+        "if ($pkg) { "
+        "$entry = (Get-AppxPackageManifest $pkg).Package.Applications.Application "
+        "| Select-Object -First 1; "
+        "if ($entry) { $aumid = $pkg.PackageFamilyName + '!' + $entry.Id } }; "
+        "if (-not $aumid) { "
+        "$start = Get-StartApps | "
+        "Where-Object { $_.Name -match '^(Codex|ChatGPT)' } | Select-Object -First 1; "
+        "if ($start) { $aumid = $start.AppID } }; "
+        "if ($pkg) { "
+        "$root = $pkg.InstallLocation; "
+        "$procs = @(Get-Process -ErrorAction SilentlyContinue | "
+        "Where-Object { $_.Path -and $_.Path.StartsWith($root, 'OrdinalIgnoreCase') }); "
+        "foreach ($p in $procs) { try { [void]$p.CloseMainWindow() } catch { } }; "
+        "Start-Sleep -Seconds 3; "
+        "foreach ($p in $procs) { "
+        "try { if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force } } catch { } }; "
+        "if ($aumid) { Start-Process ('shell:AppsFolder\\' + $aumid) } } "
+        "} catch { }" % WINDOWS_PACKAGE)
+
+
+def _linux_command(message, icon=None, app=None):
+    """argv for the Linux dialog, quitting and relaunching the app.
+
+    zenity reports the choice through its exit status, so the restart runs
+    in the same detached shell the dialog is spawned from: the installer
+    still never waits for the user. The dialog argv travels as positional
+    parameters so no path or message is ever re-parsed by the shell.
+    Without the desktop app installed the dialog is informational, exactly
+    as before.
+    """
+    dialog = ['zenity', '--question' if app else '--info',
+              '--title=' + TITLE]
+    if icon:
+        dialog.append('--window-icon=' + icon)
+    dialog.append('--text=' + message)
+    if not app:
+        return dialog + ['--ok-label=' + DISMISS]
+    dialog += ['--ok-label=' + REOPEN, '--cancel-label=' + DISMISS]
+    launch = ("if command -v setsid >/dev/null 2>&1; "
+              "then setsid -f %(app)s; "
+              "else nohup %(app)s >/dev/null 2>&1 & fi" % {'app': app})
+    script = ('if "$@" >/dev/null 2>&1; then '
+              'pkill -x %(app)s; sleep 2; %(launch)s; fi'
+              % {'app': app, 'launch': launch})
+    return ['sh', '-c', script, 'scg-router'] + dialog
+
+
+def _windows_script(message, icon=None):
+    quoted = message.replace("'", "''")
+    picture = ''
+    if icon:
+        picture = (
+            "$p = New-Object System.Windows.Forms.PictureBox; "
+            "$p.Image = [System.Drawing.Image]::FromFile('%s'); "
+            "$p.SizeMode = 'StretchImage'; $p.Width = 64; $p.Height = 64; "
+            "$f.Controls.Add($p); " % icon.replace("'", "''"))
+    reopen = (
+        "$r = New-Object System.Windows.Forms.Button; "
+        "$r.Text = 'Quit and reopen'; $r.Dock = 'Bottom'; "
+        "$r.Add_Click({ $f.Tag = 'reopen'; $f.Close() }); ")
+    restart = ("if ($f.Tag -eq 'reopen') { %s }" % _windows_restart())
+    return (
+        "Add-Type -AssemblyName System.Windows.Forms; "
+        "Add-Type -AssemblyName System.Drawing; "
+        "$f = New-Object System.Windows.Forms.Form; "
+        "$f.Text = 'SCG Router'; $f.TopMost = $true; "
+        "$f.StartPosition = 'CenterScreen'; $f.AutoSize = $true; "
+        "$l = New-Object System.Windows.Forms.Label; "
+        "$l.Text = '%s'; $l.AutoSize = $true; $l.Dock = 'Top'; "
+        "%s"
+        "$b = New-Object System.Windows.Forms.Button; "
+        "$b.Text = '%s'; $b.Dock = 'Bottom'; "
+        "$b.Add_Click({ $f.Close() }); "
+        "%s"
+        "$f.Controls.Add($l); $f.Controls.Add($b); $f.Controls.Add($r); "
+        "[void]$f.ShowDialog(); "
+        "%s" % (quoted, picture, DISMISS, reopen, restart)
+    )
+
+
+def dialog_command(version, platform_name=None, which=None, icon=None):
+    """argv for a one-shot dismissible restart dialog, or None.
+
+    None means the platform is unknown or its dialog tool is missing, so
+    the caller leaves the notice pending for a later GUI run. `which` and
+    `icon` are injectable so tests never probe the host; the icon defaults
+    to the bundled logo and is dropped when that asset is not installed.
+    """
+    if platform_name is None:
+        platform_name = sys.platform
+    if which is None:
+        which = shutil.which
+    if icon is None and ICON.is_file():
+        icon = str(ICON)
+    message = _message(version)
+    if platform_name == 'darwin':
+        if which('osascript') is None:
+            return None
+        return ['osascript', '-e', _darwin_script(message, icon)]
+    if platform_name.startswith('linux'):
+        if which('zenity') is not None:
+            app = LINUX_APP if which(LINUX_APP) is not None else None
+            return _linux_command(message, icon, app)
+        if which('notify-send') is not None:
+            return ['notify-send', TITLE, message]
+        return None
+    if platform_name == 'win32':
+        powershell = which('powershell') or which('powershell.exe')
+        if powershell is None:
+            return None
+        return [powershell, '-NoProfile', '-WindowStyle', 'Hidden',
+                '-Command', _windows_script(message, icon)]
+    return None
+
+
+def _spawn(cmd):
+    """Launch the dialog detached and return its pid; never waits."""
+    if sys.platform == 'win32':
+        flags = (getattr(subprocess, 'DETACHED_PROCESS', 0)
+                 | getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0))
+        proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL,
+                                stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL,
+                                creationflags=flags)
+    else:
+        proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL,
+                                stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL,
+                                close_fds=True, start_new_session=True)
+    return proc.pid
+
+
+def show_pending(home, spawn=None, pid_alive=None):
+    """Show the pending restart notice; True once it is shown.
+
+    A missing dialog tool leaves the notice pending so a later GUI run
+    retries; the file is marked shown only after spawn returns. While the
+    dialog from an earlier version is still open, this notice is marked
+    shown rather than stacked on top of it. Any failure returns False and
+    never surfaces to the installer.
+    """
+    if spawn is None:
+        spawn = _spawn
+    if pid_alive is None:
+        pid_alive = _pid_alive
+    try:
+        path = Path(home) / NOTICE_FILE
+        doc = json.loads(path.read_text())
+        if not isinstance(doc, dict) or doc.get('shown'):
+            return False
+        version = doc.get('version')
+        if not isinstance(version, str) or not version:
+            return False
+        cmd = dialog_command(version, icon=_home_icon(home) or '')
+        if cmd is None:
+            return False
+        pid = _dialog_pid(doc)
+        if pid and pid_alive(pid):
+            _write_notice(path, {'version': version, 'shown': True,
+                                 'pid': pid, 'at': _utcnow()})
+            return False
+        shown = {'version': version, 'shown': True, 'at': _utcnow()}
+        pid = _dialog_pid({'pid': spawn(cmd)})
+        if pid:
+            shown['pid'] = pid
+        _write_notice(path, shown)
+        return True
+    except (OSError, ValueError):
+        return False

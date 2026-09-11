@@ -1,3 +1,5 @@
+<img src="docs/assets/sc-logo-wide.png" alt="Software Combined" width="420">
+
 # Model router
 
 A small program on your computer that serves the Codex picker and Claude
@@ -11,8 +13,11 @@ your machine.
 
 The Codex app and/or Claude Code, Python 3.14 (the installer finds it or
 tells you how to get it), GitHub CLI (`gh`) signed in with read access to
-the private router repository while updates ride the transitional GitHub
-feed, and an OpenRouter API key for OpenRouter models.
+the private router repository only while updates ride the transitional
+GitHub feed, and an OpenRouter API key for OpenRouter models. Once a host
+has polled a release that carries the feed token it updates from the
+token-gated feed at `dist.softwarecombined.com` and needs neither `gh` nor
+repository access.
 
 ## Platform support
 
@@ -20,10 +25,10 @@ feed, and an OpenRouter API key for OpenRouter models.
 |---|---|---|
 | macOS | Supported | Supported (`launchd` user agent) |
 | Linux with a systemd user manager | Supported | Supported (`systemd` user units) |
-| Windows 11 x64 | Lifecycle-proven, pending sign-out/in | Per-user Scheduled Tasks: install, scheduled update, rollback and uninstall passed on a staff machine on 2026-09-10; sign-out/in re-launch pending. Staff rollout stays gated on Plan 117 |
+| Windows 11 x64 | Lifecycle-proven, pending sign-out/in | Per-user Scheduled Tasks: install, scheduled update, rollback and uninstall passed on a staff machine on 2026-09-10; sign-out/in re-launch pending. Staff rollout stays gated on the remaining sign-out/in proof |
 
-Windows support follows Plan 116; see the Windows section below and
-`docs/compatibility.md` for the acceptance record. A Linux install needs a
+Windows support is per-user Scheduled Tasks; see the Windows section below
+and `docs/compatibility.md` for the acceptance record. A Linux install needs a
 running systemd user manager: run it in the signed-in desktop session, not
 over a bare SSH shell without one.
 
@@ -81,7 +86,7 @@ default feed:
 python3 packaging/install.py --feed file://$HANDOFF_DIR/latest.json
 ```
 
-The exact download location is named at publication time (Plan 106).
+The exact download location is named at publication time.
 Before installing on a machine that has run the router before, check for
 a stale feed pin or beta channel: `cat` the `feed` and `channel` files in
 the router home (a leftover `feed` file overrides the channel), see
@@ -149,6 +154,18 @@ connections queue for the incoming process too; on Linux there is no socket
 activation, so a connection attempted mid-handover fails until the new
 process binds the port. To update now, re-run the installer with
 `--check-update`. Machines on the `beta` channel follow pre-releases.
+After an update a desktop dialog offers to quit and reopen Codex (the
+macOS app, the Windows Store app, or the Linux preview app when it is
+installed) so the new models load, with a "Later" button for anyone who
+would rather keep working. Where the desktop app is not installed, the
+restart button simply does nothing.
+
+Each tagged release publishes to the token-gated feed at
+`https://dist.softwarecombined.com/<channel>/latest.json` as well as to
+GitHub Releases. A host that has received a feed token polls the feed with
+the `X-SCG-Feed-Token` header and no longer needs `gh` or repository
+access; a host without one keeps using the GitHub route, so old and new
+installs coexist. `logs/update.log` records the source of each install.
 
 ## Choosing a model
 
@@ -272,7 +289,6 @@ directory at an idle boundary:
 `ai_router/model_metadata.py`,
 `ai_router/model_refresh.py`,
 `ai_router/winacl.py`,
-`ai_router/context_budget.py`,
 `ai_router/image_items.py`,
 `ai_router/model_policy.py`,
 `ai_router/subscription_roster.py`,
