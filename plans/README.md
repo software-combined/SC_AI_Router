@@ -1,12 +1,14 @@
 # Implementation Plans
 
-The router backlog. Renumbered 2026-09-10: the live set is **090-138** — the core
+The router backlog. Renumbered 2026-09-10: the live set is **090-140** — the core
 backlog **090-121**, the refactor wave **122-134** from the 2026-09-11 four-lane
-refactoring/reorganisation audit, the new-model prompt plan **135**, and the
+refactoring/reorganisation audit, the new-model prompt plan **135**, the
 security wave **136-138** from the 2026-09-11 router external security audit
-(`2026-09-11-router-external-security-audit.md`), plus the amended Claude
-plans 113-115 and 120-121 from the 2026-09-11 Claude router
-development-branch review (`2026-09-11-claude-router-development-branch-review.md`). The
+(`2026-09-11-router-external-security-audit.md`), and the publication wave
+**139**, the standalone delegation delivery plan **140**, plus the amended
+Claude plans 113-115 and 120-121 from the 2026-09-11
+Claude router development-branch review
+(`2026-09-11-claude-router-development-branch-review.md`). The
 recommended overall execution order is below the tables. The pre-renumbering 034-089 series is
 archived: completed plans were removed from the tree (git history and the dated
 reports preserve them), parked decisions moved to `parked/`, and the old-to-new
@@ -42,10 +44,10 @@ Executor rules for every plan:
 | [103](103-router-darwin-backend-extraction.md) | Move launchd helpers out of service.py | TODO | serialize with 102; before 104 |
 | [104](104-router-docs-metadata-correction.md) | Version, architecture and README corrections | TODO | after 103; coordinates README with 117 |
 | [105](105-python-314-interpreter-provisioning.md) | Provision and maintain a private CPython 3.14 runtime | PARTIAL | Stage 1 in; hardening + maintenance owner left |
-| [106](106-group-distribution-private-feed-and-auto-update.md) | Group distribution, private feed and auto-update | PARTIAL | source slices in; infrastructure/authority left |
+| [106](106-group-distribution-private-feed-and-auto-update.md) | Group distribution, private feed and auto-update | PARTIAL | publication split into 139 (tag-driven, GitHub Releases kept); first install, group gating and library page left here |
 | [107](107-central-key-federation-and-first-use-key-window.md) | Central per-user key federation and first-use key window | PARTIAL | Stage 4 depends 106; Stage 2 installer acceptance left |
 | [108](108-router-service-recovery-and-update-readiness.md) | Live router recovery and safe update readiness | PARTIAL | live update/rollback evidence; serialize with 109/110 |
-| [109](109-codex-router-continuous-release-and-seamless-restart.md) | Continuous release and seamless restart (live evidence) | PARTIAL | live restart evidence; settle the release-trigger conflict with 106 |
+| [109](109-codex-router-continuous-release-and-seamless-restart.md) | Continuous release and seamless restart (live evidence) | PARTIAL | live restart evidence; release-trigger conflict settled by 139: tags publish, no push-to-main release |
 | [110](110-codex-router-installer-and-auto-updater.md) | Versioned installer and auto-updater acceptance | PARTIAL | acceptance owned with 105/106/108/116/117 |
 | [111](111-codex-router-no-subscription-mode.md) | No-subscription mode for staff | PARTIAL | desktop sign-in + isolated install proof left |
 | [112](112-agent-plugin-and-three-os-installation.md) | Plugin and three-OS installation | PARTIAL | plugin publication + staff acceptance left |
@@ -95,6 +97,26 @@ The report, its verifications and its rejected findings are in
 | [137](137-loopback-host-header-validation.md) | Validate the Host header on loopback ingress | BLOCKED: STOP condition hit 2026-09-11 — router.py is 398/400, the 3-line guard needs 397 max; hand to 128's split | 090 landed; headroom exhausted by 096/136 |
 | [138](138-subscription-cookie-hygiene.md) | Drop Cookie on subscription passthrough and make the tests honest | TODO | independent |
 
+## Standalone delegation delivery (140)
+
+Added 2026-09-11 after cross-task messages stopped reaching tasks on
+OpenRouter models: the standalone app-injected output shape was dropped as an
+orphan tool fragment.
+
+| Plan | Title | Status | Sequencing |
+|---|---|---|---|
+| [140](140-standalone-delegation-output-delivery.md) | Deliver standalone delegation outputs to OpenRouter models | IN PROGRESS: offline proof complete 2026-09-11; live acceptance pending | P1; independent; OpenRouter prepare path only |
+
+## Publication wave (139)
+
+Added 2026-09-11: the tag-driven feed publication that makes installed
+routers update without repository access. Plan 106 keeps the first-install
+and group-distribution work; this plan owns the update path only.
+
+| Plan | Title | Status | Sequencing |
+|---|---|---|---|
+| [139](139-router-private-feed-publication.md) | Private feed publication: tag publishes to the token-gated feed | PARTIAL: source landed on `develop`; owner deploys the stacks, seeds the token and tags the transition release | supersedes 106's push-trigger and feed-only variants; before 106's remaining first-install stages |
+
 ## Recommended overall order
 
 Work top to bottom; stop at owner gates and report. Phases 0-2 are local; 3-5 are largely
@@ -107,7 +129,7 @@ owner-gated.
 - **Phase 4 (clients and OS acceptance, owner-gated):** 111, 112, 113, 114, 115, 116, 117.
 - **Phase 5 (paid probes and desktop, owner-gated):** 118, 119, 120, 121.
 
-Phase notes: 099 executes only after 106's feed is qualified; 134's feed_verify move lands before
+Phase notes: 099 executes only after 139's feed is qualified; 134's feed_verify move lands before
 106 and its CI step after 101; 133 and 132 land before Phase 5 paid probes and Phase 4 Windows
 acceptance respectively; 135 exposes the pending-model hook that 099's refresh wiring calls once
 it lands, and needs no owner gate itself. The security wave rides Phase 1: 136 and 138 are
@@ -122,7 +144,7 @@ independent, and 137 proceeds now that 090 has landed.
   105 Stage 2.
 - 106 before 107 Stage 4. 108/109/110 share owner-Mac update/rollback acceptance —
   serialize them; one writer per machine state.
-- 099's hourly refresh leg awaits 106's authenticated/versioned feed; publish
+- 099's hourly refresh leg awaits 139's authenticated/versioned feed; publish
   `models_url` after that.
 - 113 is the CLI/desktop contract; 114 (publication) and 115 (paid probes) follow it.
   120 and 121 extend 113.

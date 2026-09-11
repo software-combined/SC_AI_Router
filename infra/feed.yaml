@@ -1,0 +1,249 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Router update feed: private versioned bucket, CloudFront distribution with
+  the edge token gate, DNS alias, and the tag-only GitHub Actions publisher
+  role. Deploy in ap-southeast-2 after infra/feed-cert.yaml reports
+  CREATE_COMPLETE. The SSM parameter holding the current token is created by
+  the operator, never by this stack, so a stack update cannot overwrite it.
+
+Parameters:
+  CertificateArn:
+    Type: String
+    Description: ACM certificate ARN from the scg-router-feed-cert stack (us-east-1).
+  DomainName:
+    Type: String
+    Default: dist.softwarecombined.com
+    Description: Feed hostname; must match the certificate.
+  HostedZoneId:
+    Type: String
+    Default: Z0272966357LH6IEJY0NV
+    Description: Public hosted zone for softwarecombined.com.
+  BucketName:
+    Type: String
+    Default: scg-router-feed-651116729473-apse2
+    Description: Bucket holding feeds and immutable bundles. Retained on delete.
+  Repository:
+    Type: String
+    Default: software-combined/SC_OpenRouter_adapter
+    Description: GitHub repository whose tag builds may assume the publisher role.
+  ImmutableSubjectPrefix:
+    Type: String
+    Default: software-combined@200868195/SC_OpenRouter_adapter@1360169840
+    Description: >-
+      Repository IDs GitHub emits in an immutable OIDC subject (owner@id/repo@id),
+      kept beside the classic form so either claim can assume the role.
+  TokenParameterName:
+    Type: String
+    Default: /scg/router-feed/current-token
+    Description: SecureString the publisher reads; the operator owns its value.
+
+Resources:
+  FeedBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Ref BucketName
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  FeedBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FeedBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: ReadOnlyThroughThisDistribution
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub ${FeedBucket.Arn}/*
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}
+
+  FeedOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: scg-router-feed-oac
+        Description: Signed reads of the private router feed bucket
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  TokenStore:
+    Type: AWS::CloudFront::KeyValueStore
+    Properties:
+      Name: scg-router-feed-tokens
+      Comment: Active feed read tokens; key is the token, value is active
+
+  GateFunction:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: scg-router-feed-gate
+      AutoPublish: true
+      FunctionConfig:
+        Comment: Refuse any feed read without an active X-SCG-Feed-Token
+        Runtime: cloudfront-js-2.0
+        KeyValueStoreAssociations:
+          - KeyValueStoreARN: !GetAtt TokenStore.Arn
+      FunctionCode: |
+        import cf from 'cloudfront';
+
+        // cf.kvs() throws if no key value store is associated, which would
+        // leave the function failing at init: the stack associates the store
+        // in the same resource so the two can never drift apart.
+        const kvsHandle = cf.kvs();
+
+        function deny() {
+            // statusCode is an integer in a CloudFront Functions response
+            // object; a string is a validation error, which would deny too
+            // but with the wrong status: the updater's one-time retry with
+            // the previous feed token and its re-bootstrap remedy both key
+            // off 403.
+            return { statusCode: 403, statusDescription: 'Forbidden' };
+        }
+
+        async function handler(event) {
+            var header = event.request.headers['x-scg-feed-token'];
+            var token = header ? header.value : '';
+            if (!token) {
+                return deny();
+            }
+            try {
+                // get() rejects when the key is absent, which lands in the
+                // catch: absent, retired and unknown tokens all deny.
+                if (await kvsHandle.get(token) === 'active') {
+                    return event.request;
+                }
+            } catch (error) {
+                return deny();
+            }
+            return deny();
+        }
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: Software Combined router update feed
+        Aliases:
+          - !Ref DomainName
+        IPV6Enabled: true
+        ViewerCertificate:
+          AcmCertificateArn: !Ref CertificateArn
+          MinimumProtocolVersion: TLSv1.2_2021
+          SslSupportMethod: sni-only
+        Origins:
+          - Id: feed-bucket
+            DomainName: !GetAtt FeedBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt FeedOriginAccessControl.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+        DefaultCacheBehavior:
+          TargetOriginId: feed-bucket
+          ViewerProtocolPolicy: redirect-to-https
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          Compress: true
+          FunctionAssociations:
+            - EventType: viewer-request
+              FunctionARN: !GetAtt GateFunction.FunctionMetadata.FunctionARN
+
+  FeedDns:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      RecordSets:
+        - Name: !Ref DomainName
+          Type: A
+          AliasTarget:
+            DNSName: !GetAtt Distribution.DomainName
+            HostedZoneId: Z2FDTNDATAQYW2
+        - Name: !Ref DomainName
+          Type: AAAA
+          AliasTarget:
+            DNSName: !GetAtt Distribution.DomainName
+            HostedZoneId: Z2FDTNDATAQYW2
+
+  PublisherRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: scg-router-feed-publisher
+      Description: GitHub Actions OIDC publisher for the router feed (tag builds only)
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Sub arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                token.actions.githubusercontent.com:sub:
+                  - !Sub repo:${Repository}:ref:refs/tags/v*
+                  - !Sub repo:${ImmutableSubjectPrefix}:ref:refs/tags/v*
+      Policies:
+        - PolicyName: publish-router-feed
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub ${FeedBucket.Arn}/*
+              # Absent-object HeadObject returns 403 without ListBucket, and
+              # the publisher's immutability check keys on the 404.
+              - Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt FeedBucket.Arn
+              - Effect: Allow
+                Action: cloudfront:CreateInvalidation
+                Resource: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}
+              - Effect: Allow
+                Action: cloudformation:DescribeStacks
+                Resource: !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AWS::StackName}/*
+              - Effect: Allow
+                Action: ssm:GetParameter
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${TokenParameterName}
+              - Effect: Allow
+                Action: kms:Decrypt
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    kms:ViaService: !Sub ssm.${AWS::Region}.amazonaws.com
+
+Outputs:
+  DistributionId:
+    Description: Invalidation target; the release workflow reads this output.
+    Value: !Ref Distribution
+  DistributionDomainName:
+    Description: CloudFront domain behind the alias.
+    Value: !GetAtt Distribution.DomainName
+  BucketName:
+    Description: Feed and bundle bucket.
+    Value: !Ref FeedBucket
+  KeyValueStoreArn:
+    Description: ARN for seeding and rotating feed tokens.
+    Value: !GetAtt TokenStore.Arn
+  PublisherRoleArn:
+    Description: Role the release workflow assumes.
+    Value: !GetAtt PublisherRole.Arn
+  FeedUrl:
+    Description: Stable feed document; beta lives at /beta/latest.json beside it.
+    Value: !Sub https://${DomainName}/stable/latest.json

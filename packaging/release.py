@@ -38,6 +38,10 @@ PACKAGING_FILES = (
     'packaging/platforms/darwin.py', 'packaging/platforms/linux.py',
     'packaging/platforms/windows.py',
     'packaging/install.sh', 'packaging/install.ps1',
+    # Every installed release is a copy of the software delivered to a
+    # user, so the licence terms and the Required Notice travel with it
+    # (PolyForm Shield 1.0.0, Notices).
+    'LICENSE', 'COMMERCIAL_LICENSE.md', 'THIRD_PARTY_NOTICES.md',
 )
 
 

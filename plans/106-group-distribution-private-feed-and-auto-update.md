@@ -15,6 +15,13 @@
 > and per-install authority must precede 107 Stage 4 automated key issuance.
 > Stable-launcher work is already implemented; verify it rather than duplicate.
 
+> **Amendment 2026-09-11 (Plan 139):** the push-to-`main` publication trigger
+> and the feed-only/`gh`-removal variants below are superseded: releases are
+> tag-driven (`on: push: tags: ['v*']`), GitHub Releases stay beside the
+> token-gated feed, and the `gh` fallback route is retained. Do not implement
+> branch-driven publication from this plan; the first-install, group-gating
+> and library-page work remains here.
+
 > Planning only. No AWS resource creation, DNS or certificate change, GitHub
 > organisation plan change, workflow publication, live updater change,
 > staff-machine install or release is authorised by this document. Each is a separate owner gate listed below.

@@ -13,8 +13,11 @@ your machine.
 
 The Codex app and/or Claude Code, Python 3.14 (the installer finds it or
 tells you how to get it), GitHub CLI (`gh`) signed in with read access to
-the private router repository while updates ride the transitional GitHub
-feed, and an OpenRouter API key for OpenRouter models.
+the private router repository only while updates ride the transitional
+GitHub feed, and an OpenRouter API key for OpenRouter models. Once a host
+has polled a release that carries the feed token it updates from the
+token-gated feed at `dist.softwarecombined.com` and needs neither `gh` nor
+repository access.
 
 ## Platform support
 
@@ -157,6 +160,13 @@ installed) so the new models load, with a "Later" button for anyone who
 would rather keep working. Where the desktop app is not installed, the
 restart button simply does nothing.
 
+Each tagged release publishes to the token-gated feed at
+`https://dist.softwarecombined.com/<channel>/latest.json` as well as to
+GitHub Releases. A host that has received a feed token polls the feed with
+the `X-SCG-Feed-Token` header and no longer needs `gh` or repository
+access; a host without one keeps using the GitHub route, so old and new
+installs coexist. `logs/update.log` records the source of each install.
+
 ## Choosing a model
 
 Switch models mid-thread from the picker; the same thread continues
@@ -251,6 +261,30 @@ Claude Code setup: `docs/claude-code.md`. Operator guide: `docs/operations.md`. 
 Monthly model allocation review: `model-allocation-review-process.md` (the process) and
 `model-allocation-suggestion.md` (its output, refreshed on the 1st of each month).
 
+## Licensing
+
+SC Router is source-available under the [PolyForm Shield License
+1.0.0](LICENSE). It is not an OSI-approved open-source licence.
+
+You can use, modify and redistribute the software subject to that licence,
+and internal use by organisations is permitted as long as the use complies
+with it. PolyForm Shield restricts using the software to provide products or
+services that compete with the licensor or its affiliates, including
+products and services they provide using this software. Uses outside the
+licence may be available under a separate commercial agreement with Software
+Combined, as described in [COMMERCIAL_LICENSE.md](COMMERCIAL_LICENSE.md).
+
+Attribution and licence notices must be preserved as the licence requires.
+Third-party material and its terms are listed in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+- Licence: [LICENSE](LICENSE)
+- Commercial licensing: [COMMERCIAL_LICENSE.md](COMMERCIAL_LICENSE.md)
+- Official licence text: <https://polyformproject.org/licenses/shield/1.0.0>
+
+Copyright 2026 Software Combined Pty Ltd. Primary author and maintainer:
+Cyril Allart <cyril@softwarecombined.com>.
+
 ## Runtime files
 
 A manual install copies ONLY these files beside the private state
@@ -264,6 +298,7 @@ directory at an idle boundary:
 `ai_router/agent_handoffs.py`, `ai_router/sse.py`,
 `ai_router/capabilities.py`,
 `ai_router/compaction.py`,
+`ai_router/standalone_outputs.py`,
 `ai_router/discovered.py`,
 `ai_router/errors.py`,
 `ai_router/feed_verify.py`,
