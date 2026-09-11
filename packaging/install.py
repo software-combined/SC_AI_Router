@@ -456,6 +456,9 @@ def do_install(args, _fetch=fetch, _run=None):
             stop_router(home)
             print('new version failed health check; inspect the service logs')
         raise SystemExit(1)
+    # Stage the restart notice once the new version is healthy (fresh
+    # installs are a no-op); notice failures never surface.
+    _svc.notice.record(home, previous, latest['version'])
     previous_receipt = _codex_config.codex_attachment(home)
     if clients == 'none' and previous_receipt.get('inserted_block'):
         # Never silently detach an active Codex configuration: restore the
@@ -684,7 +687,12 @@ def main(argv=None):
             print('deferred: another router operation is in progress')
             return 0
         require_live_home(home, 'this action')
-        return action(args)
+        rc = action(args)
+        if rc == 0 and action is do_install:
+            # A pending restart notice fires only from this CLI entry point,
+            # never from do_install, so in-process callers cannot spawn one.
+            _svc.notice.show_pending(home)
+        return rc
 
 
 if __name__ == '__main__':

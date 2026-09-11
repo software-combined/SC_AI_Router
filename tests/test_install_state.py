@@ -71,7 +71,7 @@ class InstallStateTests(unittest.TestCase):
             (tmp / 'packaging').mkdir()
             (tmp / 'ai_router').mkdir()
             for name in ('service.py', 'launchd.py', 'feed.py',
-                         'atomic_write.py'):
+                         'atomic_write.py', 'notice.py'):
                 shutil.copy(root / 'packaging' / name, tmp / 'packaging' / name)
             for name in ('subscription_roster.py', 'feed_verify.py'):
                 shutil.copy(root / 'ai_router' / name, tmp / 'ai_router' / name)
