@@ -68,6 +68,12 @@ class Manager:
         self.ctl('daemon-reload')
         self.ctl('enable', SERVICE, TIMER)
         self.restart()
+        # The installer calls start_updates() again once it finishes, but a
+        # later failure (a refused settings merge, a client attach) used to
+        # return before that call and leave the timer stopped: no scheduled
+        # check ran again until the next reinstall. Start it here, where it
+        # was stopped, so polling survives every later step.
+        self.ctl('start', TIMER)
 
     def start_updates(self):
         self.ctl('start', TIMER)

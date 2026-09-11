@@ -81,6 +81,19 @@ class SystemdTests(unittest.TestCase):
         self.assertEqual(catalogue.read_text(), 'previous catalogue')
         self.assertEqual(self.calls[-1], ['systemctl', '--user', 'start', install_mod._linux.TIMER])
 
+    def test_refused_settings_merge_leaves_the_update_timer_running(self):
+        # A hand-edited Codex block refuses the settings rewrite after the
+        # router swap. That used to return before start_updates(), leaving
+        # the timer stopped: no scheduled check ran until a reinstall.
+        self.install('0.6.2.0')
+        config = self.root / 'user' / '.codex' / 'config.toml'
+        config.write_text(config.read_text().replace(
+            'openai_base_url', 'openai_base_url_edited'))
+        with self.assertRaisesRegex(SystemExit, 'edited by hand'):
+            self.install('0.6.6.0')
+        self.assertEqual(self.calls[-1],
+                         ['systemctl', '--user', 'start', install_mod._linux.TIMER])
+
     def test_rollback_and_uninstall_use_systemd_and_preserve_home(self):
         self.install('0.6.2.0')
         self.install('0.6.6.0')
