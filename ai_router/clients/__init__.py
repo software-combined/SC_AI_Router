@@ -10,20 +10,19 @@ routing or credentials, and never import command modules.
 def visible_for(model, client, include_twins=False):
     """Picker visibility for one registry row; routing never consults this.
 
-    Codex hides OpenRouter-billed GPT rows, Claude hides OpenRouter-billed
-    Anthropic rows; subscription rows are never hidden. Tilde aliases
+    Claude hides OpenRouter-billed Anthropic rows; the Codex picker lists
+    the OpenRouter-billed GPT twins beside the subscription rows, so an
+    exhausted ChatGPT allowance still leaves those models selectable on
+    the OpenRouter key. Subscription rows are never hidden. Tilde aliases
     normalize before the prefix check. Unknown clients fail closed.
     "Twins" are a client's OpenRouter-billed subscription-vendor rows;
-    with include_twins they stay visible because a no-subscription router
-    has no subscription row for them to stand aside for.
+    with include_twins the hidden ones stay visible.
     """
-    try:
-        hidden = {'codex': 'openai/', 'claude': 'anthropic/'}[client]
-    except KeyError:
-        raise ValueError(f'unknown client: {client}') from None
-    if model.provider != 'openrouter' or include_twins:
+    if client not in ('codex', 'claude'):
+        raise ValueError(f'unknown client: {client}')
+    if model.provider != 'openrouter' or include_twins or client == 'codex':
         return True
-    return not model.slug.removeprefix('~').startswith(hidden)
+    return not model.slug.removeprefix('~').startswith('anthropic/')
 
 
 def models_for(rows, client, include_twins=False):
