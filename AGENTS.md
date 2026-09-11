@@ -90,11 +90,15 @@ Picker labels read `<Vendor>: <Model> <Version?>` (e.g. `Z.ai: GLM 5.3 Flash`).
 (` · OpenRouter` for the built-in external provider, from
 `provider_defs.label_for`); the
 prefix always equals the row's `vendor` field, with one redundant leading vendor
-word dropped (`DeepSeek: DeepSeek V4 ...` becomes `DeepSeek: V4 ...`). Tilde
-alias rows track with `Latest`, never a pinned snapshot; pinned rows keep any
-version/snapshot token verbatim, and dated snapshots merge into a tracking alias
-only when upstream actually serves the `~` id (never invent one). `models add`
-and `live_refresh` must produce conforming rows; the registry naming test enforces it.
+word dropped (`DeepSeek: DeepSeek V4 ...` becomes `DeepSeek: V4 ...`). The
+roster pins exact upstream ids (`anthropic/claude-opus-5`,
+`google/gemini-3.8-flash`), so a new version is a registry edit: add the new
+pinned row and retire the superseded slug via `RETIRED_SLUGS`. Pinned rows keep
+any version/snapshot token verbatim. A tilde alias row is only added when the
+roster deliberately tracks upstream, and it tracks with `Latest`, never a pinned
+snapshot; dated snapshots merge into a tracking alias only when upstream
+actually serves the `~` id (never invent one). `models add` and `live_refresh`
+must produce conforming rows; the registry naming test enforces it.
 
 ## 9. Upstream client sources for insight
 

@@ -76,7 +76,7 @@ third-party mode in separate profiles (`.../Claude` and `.../Claude-3p`).
 Pointing the third-party profile at the loopback router lists every
 registry row: the app drops discovery rows whose id looks non-Anthropic
 unless the row declares a valid `anthropic_family_tier`, so the router
-projects one (`sonnet` for non-Anthropic rows, each Anthropic alias's own
+projects one (`sonnet` for non-Anthropic rows, each Anthropic row's own
 tier word). No stored registry field is added. Attach with
 `packaging/install.py --desktop` (refuses when `claude_mode` is `none`);
 service-only install and uninstall detach again. The first-party

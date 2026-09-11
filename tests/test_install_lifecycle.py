@@ -74,7 +74,7 @@ def _uninstall_home(tmp):
 
 
 def _run_install(test, tmp, home, version, *extra_args, feed='file:///latest.json',
-                 wait_version=True):
+                 wait_version=True, write_catalogue=_fake_write_catalogue):
     blob, latest = _craft_bundle(version)
     latest = dict(latest, version=version)
     calls = []
@@ -84,7 +84,7 @@ def _run_install(test, tmp, home, version, *extra_args, feed='file:///latest.jso
         return _ok_run(cmd, **kwargs)
 
     _patch_attrs(test, run=fake_run, self_test=lambda *args: None,
-                 write_catalogue=_fake_write_catalogue,
+                 write_catalogue=write_catalogue,
                  wait_version=lambda *args, **kwargs: wait_version)
     argv = ['--home', str(home), *extra_args]
     if feed is not None:

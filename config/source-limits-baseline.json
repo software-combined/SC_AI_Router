@@ -1,6 +1,6 @@
 {
   "ai_router/agent_handoffs.py": 274,
-  "ai_router/catalogue.py": 355,
+  "ai_router/catalogue.py": 360,
   "ai_router/compaction.py": 314,
   "ai_router/errors.py": 280,
   "ai_router/key_dialog.py": 256,
@@ -12,10 +12,10 @@
   "packaging/install.py": 697,
   "packaging/platforms/windows.py": 440,
   "packaging/service.py": 661,
-  "tests/test_catalogue.py": 480,
+  "tests/test_catalogue.py": 483,
   "tests/test_claude_ingress.py": 338,
   "tests/test_client_activation.py": 454,
-  "tests/test_handler.py": 492,
+  "tests/test_handler.py": 494,
   "tests/test_install.py": 491,
   "tests/test_install_config.py": 432,
   "tests/test_install_lifecycle.py": 486,
@@ -30,6 +30,7 @@
   "tests/test_windows_acl.py": 324,
   "tests/test_windows_backend.py": 374,
   "tools/probe_agent_handoffs.py": 496,
-  "packaging/notice.py": 428,
-  "tests/test_notice_delivery.py": 347
+  "packaging/notice.py": 500,
+  "tests/test_notice.py": 366,
+  "tests/test_notice_delivery.py": 398
 }

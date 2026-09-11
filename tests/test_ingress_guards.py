@@ -128,7 +128,7 @@ class IngressGuardTests(unittest.TestCase):
             raise TimeoutError('timed out')
         install_fake(self, stall)
         server = self._server()
-        payload = {'model': '~x-ai/grok-latest', 'input': [
+        payload = {'model': 'x-ai/grok-4.6', 'input': [
             {'type': 'message', 'role': 'user', 'content': [
                 {'type': 'input_text', 'text': 'look'},
                 {'type': 'input_image', 'image_url': 'data:x'}]}]}
