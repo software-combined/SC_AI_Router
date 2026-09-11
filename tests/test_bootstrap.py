@@ -44,7 +44,7 @@ sys.exit(1)
 
 @unix_only
 class BootstrapTokenTests(unittest.TestCase):
-    def _run(self, tmp, mode, token='tok-new'):
+    def _run(self, tmp, mode, token='tok-new', mirror='runtimes/x.tar.gz'):
         home = Path(tmp) / 'home'
         bin_dir = Path(tmp) / 'bin'
         bin_dir.mkdir()
@@ -64,7 +64,7 @@ class BootstrapTokenTests(unittest.TestCase):
             'CURL_MODE': mode,
             'CURL_ARGV_LOG': str(argv_log),
             'RUNTIMES_JSON': json.dumps({'targets': {
-                f'{os_name}/{arch}': {'mirror': 'runtimes/x.tar.gz',
+                f'{os_name}/{arch}': {'mirror': mirror,
                                       'sha256': '00', 'exec': 'python/bin/python3.14'}}}),
         }
         proc = subprocess.run(
@@ -97,6 +97,16 @@ class BootstrapTokenTests(unittest.TestCase):
             self.assertEqual((home / 'feed-token.previous').read_text(), 'tok-old\n')
             self.assertNotIn('tok-new', argv_log.read_text())
             self.assertFalse((home / 'feed-headers.tmp').exists())
+
+    def test_runtime_url_percent_encodes_the_mirror(self):
+        """A raw '+' in an S3 key is decoded as a space and denied at the edge."""
+        with tempfile.TemporaryDirectory() as tmp:
+            mirror = 'runtimes/cpython-3.14.7+20260814-aarch64-test.tar.gz'
+            proc, _, argv_log = self._run(tmp, mode='ok-first', mirror=mirror)
+            self.assertNotEqual(proc.returncode, 0)
+            log = argv_log.read_text()
+            self.assertIn('cpython-3.14.7%2B20260814', log)
+            self.assertNotIn('+20260814', log)
 
 
 if __name__ == '__main__':
