@@ -38,7 +38,7 @@ class ToolAdapterTests(unittest.TestCase):
         self.assertIs(type(item['arguments']['limit']), int)
 
     def test_grok_oversized_catalog_defers_instead_of_rejecting(self):
-        payload = {'model': '~x-ai/grok-latest',
+        payload = {'model': 'x-ai/grok-4.6',
             'tools': [{'type': 'tool_search', 'description': 's',
                        'parameters': {'type': 'object', 'properties': {}}}] + [
                 {'type': 'function', 'name': f'tool_{i}', 'parameters': {'type': 'object'}}
@@ -52,7 +52,7 @@ class ToolAdapterTests(unittest.TestCase):
         self.assertEqual((item['type'], item['execution']), ('tool_search_call', 'client'))
 
     def test_grok_ceiling_without_search_still_fails_closed(self):
-        payload = {'model': '~x-ai/grok-latest', 'tools': [
+        payload = {'model': 'x-ai/grok-4.6', 'tools': [
             {'type': 'function', 'name': f'tool_{i}', 'parameters': {'type': 'object'}} for i in range(351)]}
         with self.assertRaisesRegex(ValueError, '350'):
             prepare_tools(payload)
@@ -63,7 +63,7 @@ class ToolAdapterTests(unittest.TestCase):
              'parameters': {'type': 'object'}}]}
         stub = {'type': 'namespace', 'name': 'probe', 'tools': [
             {'type': 'function', 'name': 'echo', 'description': 'Echo'}]}
-        payload = {'model': '~x-ai/grok-latest',
+        payload = {'model': 'x-ai/grok-4.6',
             'tools': [{'type': 'tool_search', 'description': 's',
                        'parameters': {'type': 'object', 'properties': {}}},
                       stub] + [
@@ -79,7 +79,7 @@ class ToolAdapterTests(unittest.TestCase):
     def test_grok_kept_over_ceiling_still_fails_closed(self):
         released = [{'type': 'function', 'name': f'found_{i}', 'description': 'Found',
                      'parameters': {'type': 'object'}} for i in range(400)]
-        payload = {'model': '~x-ai/grok-latest',
+        payload = {'model': 'x-ai/grok-4.6',
             'tools': [{'type': 'tool_search', 'description': 's',
                        'parameters': {'type': 'object', 'properties': {}}}],
             'input': [{'type': 'tool_search_output', 'call_id': 's1', 'tools': released}]}
@@ -88,7 +88,7 @@ class ToolAdapterTests(unittest.TestCase):
 
     def test_grok_released_custom_tool_survives_with_its_kind(self):
         released = {'type': 'custom', 'name': 'exec', 'format': {'type': 'grammar'}}
-        payload = {'model': '~x-ai/grok-latest',
+        payload = {'model': 'x-ai/grok-4.6',
             'tools': [{'type': 'tool_search', 'description': 's',
                        'parameters': {'type': 'object', 'properties': {}}}] + [
                 {'type': 'function', 'name': f'tool_{i}', 'parameters': {'type': 'object'}}
@@ -127,7 +127,7 @@ class ToolAdapterTests(unittest.TestCase):
         released = {'type': 'namespace', 'name': 'probe', 'tools': [
             {'type': 'function', 'name': 'echo', 'description': 'Echo',
              'parameters': {'type': 'object'}}]}
-        payload = {'model': '~x-ai/grok-latest',
+        payload = {'model': 'x-ai/grok-4.6',
             'tools': [{'type': 'tool_search', 'description': 's',
                        'parameters': {'type': 'object', 'properties': {}}}] + [
                 {'type': 'function', 'name': f'tool_{i}', 'parameters': {'type': 'object'}}
@@ -244,7 +244,7 @@ class ToolAdapterTests(unittest.TestCase):
     def test_union_root_schema_is_string_wrapped_for_grok_only(self):
         union = {'anyOf': [{'type': 'object', 'properties': {'value': {'type': 'string'}}},
                            {'type': 'string'}]}
-        for model, wrapped in (('~x-ai/grok-latest', True), ('z-ai/glm-5.3-flash', False)):
+        for model, wrapped in (('x-ai/grok-4.6', True), ('z-ai/glm-5.3-flash', False)):
             with self.subTest(model=model):
                 payload = {'model': model, 'tools': [
                     {'type': 'function', 'name': 'flex', 'description': 'Flex',
@@ -267,7 +267,7 @@ class ToolAdapterTests(unittest.TestCase):
         params = {'type': 'object', 'properties': {},
                   'oneOf': [{'type': 'object', 'properties': {'a': {'type': 'string'}}},
                             {'type': 'string'}]}
-        payload = {'model': '~x-ai/grok-latest', 'tools': [
+        payload = {'model': 'x-ai/grok-4.6', 'tools': [
             {'type': 'function', 'name': 'automation_update', 'description': 'D',
              'parameters': params}]}
         names = prepare_tools(payload)
@@ -285,7 +285,7 @@ class ToolAdapterTests(unittest.TestCase):
         params = {'type': 'object', 'properties': {},
                   'oneOf': [{'type': 'object', 'properties': {'a': {'type': 'string'}}},
                             {'type': 'object', 'properties': {'b': {'type': 'integer'}}}]}
-        payload = {'model': '~x-ai/grok-latest', 'tools': [
+        payload = {'model': 'x-ai/grok-4.6', 'tools': [
             {'type': 'function', 'name': 'flex', 'description': 'Flex',
              'parameters': params}]}
         names = prepare_tools(payload)

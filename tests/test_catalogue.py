@@ -190,7 +190,10 @@ class CatalogueFlagTests(unittest.TestCase):
         self.assertEqual(again, merged)  # idempotent
 
     def test_alias_display_name_keeps_own_prefix(self):
-        alias = replace(by_slug('~x-ai/grok-latest'),
+        # catalog_name is a pure provider-suffix strip; a synthetic alias row
+        # keeps its tracking label until the row itself is re-qualified.
+        alias = replace(by_slug('x-ai/grok-4.6'),
+                          slug='~x-ai/grok-latest',
                           display_name='SpaceXAI: Grok Latest \xb7 OpenRouter')
         self.assertEqual(catalog_name(alias), 'SpaceXAI: Grok Latest')
         plain = replace(by_slug('z-ai/glm-5.3-flash'))
@@ -227,14 +230,14 @@ class CatalogueFlagTests(unittest.TestCase):
         merged = merge({'models': [stale]}, client='codex')
         self.assertIn('openai/gpt-6-astra',
                       {m['slug'] for m in merged['models']})
-        hid = dict(external_entry(by_slug('~anthropic/claude-sonnet-latest')),
+        hid = dict(external_entry(by_slug('anthropic/claude-sonnet-5')),
                    description='stale-install')
-        self.assertNotIn('~anthropic/claude-sonnet-latest',
+        self.assertNotIn('anthropic/claude-sonnet-5',
                          {m['slug'] for m in merge({'models': [hid]},
                                                    client='claude')['models']})
 
     def test_check_rejects_hidden_rows_left_in_catalogue(self):
-        stale = dict(external_entry(by_slug('~anthropic/claude-sonnet-latest')),
+        stale = dict(external_entry(by_slug('anthropic/claude-sonnet-5')),
                      description='stale-install')
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'stale.json'
@@ -254,12 +257,12 @@ class CatalogueFlagTests(unittest.TestCase):
                 self.assertIn(model.slug, claude_slugs)
         self.assertTrue({'openai/gpt-6-astra', 'openai/gpt-5.6-sol',
                          'openai/gpt-5.6-luna', 'openai/gpt-5.6-terra'} <= codex_slugs)
-        self.assertFalse(claude_slugs & {'~anthropic/claude-sonnet-latest',
-                                         '~anthropic/claude-fable-latest',
-                                         '~anthropic/claude-haiku-latest',
-                                         '~anthropic/claude-opus-latest'})
+        self.assertFalse(claude_slugs & {'anthropic/claude-sonnet-5',
+                                         'anthropic/claude-fable-5.1',
+                                         'anthropic/claude-haiku-4.5',
+                                         'anthropic/claude-opus-5'})
         self.assertIn('openai/gpt-6-astra', claude_slugs)
-        self.assertIn('~anthropic/claude-sonnet-latest', codex_slugs)
+        self.assertIn('anthropic/claude-sonnet-5', codex_slugs)
         with tempfile.TemporaryDirectory() as tmp:
             for client, merged in (('codex', codex), ('claude', claude)):
                 path = Path(tmp) / f'{client}.json'
@@ -268,7 +271,7 @@ class CatalogueFlagTests(unittest.TestCase):
 
     def test_client_flag_round_trip_on_cli(self):
         with tempfile.TemporaryDirectory() as tmp:
-            for client, other_row in (('codex', '~anthropic/claude-sonnet-latest'),
+            for client, other_row in (('codex', 'anthropic/claude-sonnet-5'),
                                       ('claude', 'openai/gpt-6-astra')):
                 target = Path(tmp) / f'{client}.json'
                 proc = subprocess.run(

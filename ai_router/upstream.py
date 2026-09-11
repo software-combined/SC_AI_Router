@@ -144,7 +144,9 @@ def describe_failure(exc, response, info):
         elapsed = round((info.get('elapsed_ms') or 0) / 1000)
         message = (f'{model} did not answer within {timeout}s '
                    f'(waited {elapsed}s). Retry a shorter turn')
-        if isinstance(model, str) and model.startswith('~x-ai/') and info.get('has_image'):
+        # Tilde aliases and pinned ids share the vendor prefix.
+        if (isinstance(model, str) and model.removeprefix('~').startswith('x-ai/')
+                and info.get('has_image')):
             message += '; Grok image turns stall upstream, retry text-only'
         return 502, message
     if isinstance(exc, OSError):
