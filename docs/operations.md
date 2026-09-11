@@ -49,7 +49,7 @@ manager. Direct `do_install` calls in tests must use the fake `run` seam.
 
 ## Global starter instructions
 
-The setup window offers a Dev or General starter after the key is stored and
+The setup window offers an Everyday help or Coding help starter after the key is stored and
 installs the chosen one as the full global `AGENTS.md` (or non-empty
 `AGENTS.override.md`) beside `config.toml`, exactly once. An existing file is
 never overwritten; updates and uninstall leave global instructions alone, so
@@ -187,10 +187,14 @@ there is no self-service provisioning. The flow per user:
 1. IT creates the key in the OpenRouter dashboard with a monthly allowance
    and hands it to the user over an existing trusted channel (never commit
    it, never paste it into chat or email threads beyond that handoff).
-2. The user installs with `--setup`, opens the setup link, and pastes the
-   key once. The window validates it against OpenRouter before storing
-   anything and shows remaining credit; the key lands in `openrouter.key`
-   (mode 600), which the router reads per request.
+2. The user installs with `--setup` and a native window asks for the key, the
+   subscription choice for the client(s) being set up (ChatGPT for Codex,
+   Claude for Claude Code, both when both are attached) and the starter. It
+   validates the key against OpenRouter before storing anything and shows
+   remaining credit; the key lands in `openrouter.key` (mode 600), which the
+   router reads per request. A host with no dialog tool (headless Linux, SSH)
+   opens the loopback page instead, and the installer prints the link on its
+   own terminal so the operator can paste it into a browser.
 3. Rotation: delete `openrouter.key` first (the setup window refuses to
    overwrite a file holding a real key with 409), then re-run the installer
    with `--setup` and paste the replacement. File-level alternative is under

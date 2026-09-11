@@ -37,6 +37,27 @@ Never commit state, activation receipts, catalogues, logs, keys or bearer
 tokens. Never log request or tool content. Loopback only; the path token is
 per-install. Subscription headers never accompany OpenRouter requests.
 
+## 4a. Popup style
+
+Every dialog the router shows a person (the update notice, the first-run key
+window, and anything added later) follows one style:
+
+- the title `SCG Router` and the bundled product icon
+  `packaging/assets/router-icon.png` -- no platform default icon;
+- plain language for non-technical users: say "key", "ChatGPT subscription",
+  "restart"; never name router internals (`nonce`, `loopback`, `catalogue`,
+  `owner-only file`, process or port detail);
+- client-aware: name the client(s) this install serves (Codex, Claude Code,
+  both) in the wording and the action -- never tell a Claude-only user to
+  reopen Codex, and never offer a restart the machine cannot perform;
+- at most two actions, and the safe one is always available ("Later" or
+  "Cancel" never disappears);
+- best-effort: a missing dialog tool falls back to the loopback page and no
+  popup ever blocks or fails an install.
+
+`tests/test_popup_style.py` pins the shared title, icon asset and vocabulary
+across the platforms, so a new dialog cannot drift from this style.
+
 ## 5. Verification before commit
 
 Run `python3.14 -m unittest discover -s tests -t .`,

@@ -12,7 +12,6 @@ import os
 import secrets
 import subprocess
 import time
-import webbrowser
 import shutil
 import sys
 import tarfile
@@ -361,17 +360,14 @@ def do_install(args, _fetch=fetch, _run=None):
     if client not in ('codex', 'none'):
         raise SystemExit('client must be codex or none')
     if state.get('client', 'codex') != client:
-        state['client'] = client
-        _write_state(home, state)
+        state['client'] = client; _write_state(home, state)
     # --clients selects attachments; --client none stays service-only.
     # Unset means the legacy Codex-only path below. `both` keeps the Codex
     # attach and adds Claude; `claude` attaches Claude without touching
     # Codex settings.
     clients = args.clients
-    if clients is None and client == 'none':
-        clients = 'none'
     if clients is None:
-        clients = 'codex'
+        clients = 'none' if client == 'none' else 'codex'
     if clients not in ('codex', 'claude', 'both', 'none'):
         raise SystemExit('clients must be codex, claude, both, or none')
     if client == 'none' and clients != 'none':
@@ -396,6 +392,8 @@ def do_install(args, _fetch=fetch, _run=None):
     if state.get('openai_mode') != mode:
         state['openai_mode'] = mode
         _write_state(home, state)
+    if args.clients and state.get('clients') != clients:
+        state['clients'] = clients; _write_state(home, state)
     setup_url = None
     if args.setup:
         # First-run window: the router boots keyless on this single-use link
@@ -457,8 +455,20 @@ def do_install(args, _fetch=fetch, _run=None):
         raise SystemExit(1)
     # Stage the restart notice once the new version is healthy (fresh
     # installs are a no-op); notice failures never surface.
-    _svc.notice.record(home, previous, latest['version'])
+    _svc.notice.record(home, previous, latest['version'], args.clients)
     previous_receipt = _codex_config.codex_attachment(home)
+    if setup_url is not None:
+        # Native key popup; the child's detached stdio means a TTY fallback link is printed here.
+        if sys.stdout.isatty():
+            print(f'open {setup_url} to connect your OpenRouter key')
+        try:
+            subprocess.Popen([python, '-m', 'ai_router.key_prompt', setup_url, '--clients', clients],
+                             cwd=str(current_release_dir(home)), start_new_session=True,
+                             creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
+        except OSError:
+            print(f'open {setup_url} to connect your OpenRouter key')
     if clients == 'none' and previous_receipt.get('inserted_block'):
         # Never silently detach an active Codex configuration: restore the
         # exact owned settings first, or refuse when the block was edited.
@@ -502,11 +512,6 @@ def do_install(args, _fetch=fetch, _run=None):
         pass
     before = replace_config_block(config_path, block, previous_receipt.get('inserted_block'))
     _codex_config.write_receipt(home, config_path, block, rules_receipt, mode, before)
-    if setup_url is not None:
-        # Printed as a fallback: the browser should already show this page.
-        # It carries the per-install loopback token, so it stays operator-private.
-        print(f'open {setup_url} to connect your OpenRouter key')
-        webbrowser.open(setup_url)
     # launchd keeps the updater command it loaded until the job is reloaded,
     # and a scheduled run defers that reload. Pruning the release that command
     # names would leave the updater firing a missing file every 15 minutes.
@@ -528,8 +533,7 @@ def attach_claude(home, state, settings_path=None, env=None):
 
 def detach_claude(home, settings_path=None, env=None):
     if settings_path is None and env is None: _desktop_config.detach(home, _codex_config)  # also sweep desktop
-    return _claude_config.detach(home, _codex_config,
-                                 settings_path_override=settings_path, env=env)
+    return _claude_config.detach(home, _codex_config, settings_path_override=settings_path, env=env)
 
 
 def _release_key(name):
@@ -554,8 +558,7 @@ MAX_VERSION_FAILURES = _updater.MAX_VERSION_FAILURES
 
 
 def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None):
-    return _updater.do_check_update(args, _fetch=_fetch, _read_feed=_read_feed,
-                                    _sleep=_sleep)
+    return _updater.do_check_update(args, _fetch=_fetch, _read_feed=_read_feed, _sleep=_sleep)
 
 
 def do_uninstall(args):
@@ -609,13 +612,11 @@ def do_uninstall(args):
 
 
 def do_preflight(args):
-    _sync_seams()
-    return _diag.do_preflight(args)
+    _sync_seams(); return _diag.do_preflight(args)
 
 
 def do_status(args):
-    _sync_seams()
-    return _diag.do_status(args)
+    _sync_seams(); return _diag.do_status(args)
 
 
 def build_parser():

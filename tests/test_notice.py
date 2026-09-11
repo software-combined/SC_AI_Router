@@ -25,7 +25,7 @@ def _notice_mod():
 
 notice_mod = _notice_mod()
 
-MSG = ('SCG router updated to 1.0.1. '
+MSG = ('SCG Router was updated to 1.0.1. '
        'Quit and reopen Codex to use the new models.')
 
 
@@ -76,6 +76,24 @@ class RecordTests(unittest.TestCase):
             self.assertEqual(doc['version'], '1.0.2')
             self.assertEqual(doc['pid'], 4321)
             self.assertNotIn('shown', doc)
+
+    def test_notice_records_the_install_clients(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            home.mkdir()
+            self.assertTrue(notice_mod.record(home, '1.0.0', '1.0.1', 'claude'))
+            doc = json.loads((home / 'update-notice.json').read_text())
+            self.assertEqual(doc['clients'], 'claude')
+
+    def test_notice_reads_the_recorded_clients_for_a_scheduled_update(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            home.mkdir()
+            (home / 'mixed-router-state.json').write_text(
+                json.dumps({'clients': 'both'}))
+            self.assertTrue(notice_mod.record(home, '1.0.0', '1.0.1'))
+            doc = json.loads((home / 'update-notice.json').read_text())
+            self.assertEqual(doc['clients'], 'both')
 
     def test_dialog_pid_must_be_a_positive_int(self):
         for bogus in (None, True, 0, -3, '4321'):

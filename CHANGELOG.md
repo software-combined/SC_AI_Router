@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- First-run key setup is a native popup instead of a browser page: macOS,
+  Windows and Linux are asked for the OpenRouter key, the ChatGPT-subscription
+  choice and the starter in one flow, and the popup confirms the stored key
+  with its remaining credit. It submits through the same single-use nonce
+  route as before, so validation and owner-only storage are unchanged; a host
+  with no dialog tool still gets the loopback page. The popup carries the same
+  product icon and plain-language wording as the update notice, and the new
+  popup-style rule in `AGENTS.md` (pinned by `tests/test_popup_style.py`) keeps
+  every future dialog consistent. `ROUTER_NO_NOTICE=1` silences the post-update
+  restart dialog for unattended installs, and the test suite no longer spawns
+  real dialogs.
+
+- The setup and update dialogs follow the install's client set: a Codex-only
+  machine is asked about ChatGPT and offered "Quit and reopen Codex", a
+  Claude-only machine is asked about Claude and told to restart Claude Code
+  (no Codex app button), and a both-clients machine gets both questions and
+  both instructions. The installer records the attachment set in the router
+  state, and a scheduled update reads it back for the notice.
+
 - Context size is the provider's call again: the OpenRouter pre-flight
   refused a turn whenever serialized characters divided by four exceeded
   the model window, but real tokenizer ratios run 4.4-5.8 chars/token over
