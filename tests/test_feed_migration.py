@@ -1,4 +1,4 @@
-"""Token-gated feed migration: gh route until a token arrives (Plan 054 T)."""
+"""Token-gated feed: enrolment, origin resolution, and fetch (Plan 054 T)."""
 import contextlib
 import io
 import json
@@ -42,11 +42,24 @@ class FeedMigrationTests(unittest.TestCase):
         home.mkdir(parents=True)
         return home
 
-    def test_no_token_stays_on_github_route(self):
+    def test_no_token_is_unenrolled(self):
         home = self._home()
-        self.assertEqual(svc.channel_feed(home),
-                         svc.RELEASES_PREFIX + 'latest/download/latest.json')
+        self.assertIsNone(svc.channel_feed(home))
         self.assertIsNone(svc.feed_token(home))
+
+    def test_unenrolled_scheduled_update_makes_no_request(self):
+        home = self._home()
+
+        def boom(*args, **kwargs):
+            raise AssertionError('an unenrolled host must not touch the network')
+
+        args = install_mod.build_parser().parse_args(['--home', str(home)])
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = install_mod.do_check_update(
+                args, _fetch=boom, _read_feed=boom, _sleep=boom)
+        self.assertEqual(rc, 0)
+        self.assertIn('not enrolled', buf.getvalue())
 
     def test_token_switches_origin_and_beta(self):
         home = self._home()
@@ -118,15 +131,16 @@ class FeedMigrationTests(unittest.TestCase):
             raise svc.urllib.error.HTTPError(req.full_url, 403, 'Forbidden', {}, None)
 
         with mock.patch.object(svc.urllib.request, 'urlopen', side_effect=fake_urlopen):
-            with self.assertRaisesRegex(SystemExit, 'Technology library') as ctx:
+            with self.assertRaisesRegex(SystemExit, 'SC bootstrap') as ctx:
                 svc.fetch_feed(ORIGIN + '/stable/latest.json', None, home=home)
         self.assertNotIn('tok-new', str(ctx.exception.code))
         self.assertNotIn('tok-old', str(ctx.exception.code))
 
-    def test_current_host_learns_token_and_migrates_next_poll(self):
+    def test_enrolled_host_persists_rotated_token_before_version_compare(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             home.mkdir(parents=True)
+            (home / 'feed-token').write_text('tok-old\n')
             (home / 'mixed-router-state.json').write_text(json.dumps({'port': 1, 'token': 'x'}))
             (home / 'releases' / '1.0.0' / 'packaging').mkdir(parents=True)
             (home / 'releases' / '1.0.0' / 'packaging' / 'VERSION').write_text('1.0.0\n')
@@ -145,6 +159,7 @@ class FeedMigrationTests(unittest.TestCase):
                         _sleep=lambda s: None)
             self.assertEqual(rc, 0)
             self.assertEqual((home / 'feed-token').read_text(), 'tok-new\n')
+            self.assertEqual((home / 'feed-token.previous').read_text(), 'tok-old\n')
             self.assertEqual(svc.channel_feed(home), ORIGIN + '/stable/latest.json')
 
     def test_scheduled_poll_carries_token_on_default_wiring(self):
@@ -242,7 +257,8 @@ class LiveHomeGuardTests(unittest.TestCase):
             home = Path(tmp) / 'home'
             with contextlib.redirect_stdout(io.StringIO()):
                 install_mod.main(self._argv(home, '--preflight', '--client', 'none',
-                                            '--python', sys.executable))
+                                            '--python', sys.executable,
+                                            '--feed', 'file:///bundle.tar.gz'))
             self.assertFalse(home.exists())
 
     def test_explicit_live_run_reaches_the_lock(self):
@@ -263,14 +279,10 @@ class BetaChannelTests(unittest.TestCase):
         home.mkdir(parents=True)
         return home
 
-    def _patch_gh(self, func):
-        """Fake gh resolution plus gh process; hermetic on hosts without gh."""
-        feed_mod = install_mod._svc._feed
-        stack = contextlib.ExitStack()
-        stack.enter_context(mock.patch.object(
-            feed_mod.shutil, 'which', lambda name: '/usr/bin/gh'))
-        stack.enter_context(mock.patch.object(feed_mod, '_gh_run', func))
-        return stack
+    def test_beta_without_token_is_unenrolled(self):
+        home = self._home()
+        (home / 'channel').write_text('beta\n')
+        self.assertIsNone(svc.channel_feed(home))
 
     def test_gh_binary_prefers_path_then_candidates(self):
         feed_mod = install_mod._svc._feed
@@ -282,15 +294,6 @@ class BetaChannelTests(unittest.TestCase):
         with mock.patch.object(feed_mod.shutil, 'which', lambda name: None), \
                 mock.patch.object(feed_mod, 'gh_candidates', return_value=('/nope',)):
             self.assertIsNone(feed_mod.gh_binary())
-
-    def test_beta_no_token_fails_closed_without_any_gh(self):
-        home = self._home()
-        (home / 'channel').write_text('beta\n')
-        feed_mod = install_mod._svc._feed
-        with mock.patch.object(feed_mod.shutil, 'which', lambda name: None), \
-                mock.patch.object(feed_mod, 'gh_candidates', return_value=('/nonexistent-gh',)):
-            with self.assertRaisesRegex(SystemExit, 'Cannot resolve beta'):
-                svc.channel_feed(home)
 
     def test_gh_candidates_cover_posix_and_windows_roots(self):
         feed_mod = install_mod._svc._feed
@@ -327,70 +330,6 @@ class BetaChannelTests(unittest.TestCase):
             with mock.patch.object(feed_mod.shutil, 'which', lambda name: None), \
                     mock.patch.object(feed_mod, 'gh_candidates', return_value=('/nope',)):
                 self.assertIsNone(feed_mod.gh_binary())
-
-    def test_beta_no_token_resolves_prerelease_asset_via_gh(self):
-        home = self._home()
-        (home / 'channel').write_text('beta\n')
-        seen = []
-
-        def fake_run(cmd, **kwargs):
-            seen.append(cmd)
-            return type('R', (), {'returncode': 0,
-                                  'stdout': 'v0.6.14.29-beta\n',
-                                  'stderr': ''})()
-
-        with self._patch_gh(fake_run):
-            url = svc.channel_feed(home)
-        # Absolute path: a bare 'gh' is not on the service PATH.
-        self.assertEqual(seen[0][:4], ['/usr/bin/gh', 'release', 'list', '--repo'])
-        self.assertTrue(url.endswith(
-            '/releases/download/v0.6.14.29-beta/latest-beta.json'))
-
-    def test_beta_no_token_fails_closed_on_gh_error(self):
-        home = self._home()
-        (home / 'channel').write_text('beta\n')
-
-        def raising_gh(exc):
-            def _gh(*a, **k):
-                raise exc
-            return _gh
-
-        cases = (
-            ('nonzero', type('R', (), {'returncode': 2,
-                                       'stdout': '', 'stderr': 'nope'})()),
-            ('empty', type('R', (), {'returncode': 0,
-                                     'stdout': '\n', 'stderr': ''})()),
-            ('missing-gh', FileNotFoundError(2, 'gh')),
-        )
-        for name, outcome in cases:
-            if isinstance(outcome, BaseException):
-                gh = raising_gh(outcome)
-            else:
-                gh = lambda *a, **k: outcome  # noqa: E731
-            with self.subTest(name=name), self._patch_gh(gh):
-                with self.assertRaisesRegex(SystemExit, 'Cannot resolve beta'):
-                    svc.channel_feed(home)
-
-    def test_beta_no_token_rejects_malformed_tag(self):
-        home = self._home()
-        (home / 'channel').write_text('beta\n')
-        for bad in ('a/b', 'a?b', 'a#b', 'a b'):
-            result = type('R', (), {'returncode': 0, 'stdout': bad + '\n',
-                                    'stderr': ''})()
-            with self.subTest(tag=bad), self._patch_gh(lambda *a, **k: result):
-                with self.assertRaisesRegex(SystemExit, 'malformed beta release'):
-                    svc.channel_feed(home)
-
-    def test_beta_no_token_takes_first_prerelease_behind_stable(self):
-        home = self._home()
-        (home / 'channel').write_text('beta\n')
-        result = type('R', (), {'returncode': 0,
-                                'stdout': 'v0.6.14.29-beta\nv0.6.13.28\n',
-                                'stderr': ''})()
-        with self._patch_gh(lambda *a, **k: result):
-            url = svc.channel_feed(home)
-        self.assertTrue(url.endswith(
-            '/releases/download/v0.6.14.29-beta/latest-beta.json'))
 
     def test_beta_token_stays_on_cloudfront_beta_path(self):
         home = self._home()

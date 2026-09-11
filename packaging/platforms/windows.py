@@ -1,7 +1,7 @@
 """Windows backend (Plan 057 Stage 3). Task Scheduler lifecycle + ACL key protection.
 
 Per-user Scheduled Tasks at logon (no admin, no stored password), updater on
-a 15-minute repeat, pythonw.exe for both tasks through a home-root task
+a 4-hour repeat, pythonw.exe for both tasks through a home-root task
 launcher that routes stdout/stderr to the router log directory, and icacls
 owner-only protection verified after writing. Offline-testable: every
 schtasks call goes through the injected `run` seam, task XML is pure
@@ -44,7 +44,7 @@ UNINSTALL_DRAIN_S = 30
 _NO_WINDOW = {'creationflags': getattr(subprocess, 'CREATE_NO_WINDOW', 0)}
 
 # Plan 049 slice 4: logon trigger plus a one-minute repeated recovery
-# trigger (duplicate launches ignored), 15-minute updater, IgnoreNew,
+# trigger (duplicate launches ignored), 4-hour updater, IgnoreNew,
 # unlimited router execution time (PT0S), battery settings that do not
 # stop working sessions, interactive-token least-privilege execution.
 _TASK_HEAD = (
@@ -94,7 +94,7 @@ _TASK_TAIL = (
 _ROUTER_XML = (_TASK_HEAD + _LOGON_TRIGGER + _repeat_trigger('PT1M') + _TASK_MID
                + '<ExecutionTimeLimit>PT0S</ExecutionTimeLimit>'
                + _TASK_TAIL)
-_UPDATE_XML = (_TASK_HEAD + _repeat_trigger('PT15M') + _TASK_MID
+_UPDATE_XML = (_TASK_HEAD + _repeat_trigger('PT4H') + _TASK_MID
                + '<ExecutionTimeLimit>PT30M</ExecutionTimeLimit>'
                + _TASK_TAIL)
 
@@ -403,7 +403,7 @@ class Backend:
         self._registered_and_running(name)
 
     def start_updates(self, home):
-        del home  # The updater task runs on its own 15-minute trigger.
+        del home  # The updater task runs on its own 4-hour trigger.
         return None
 
     def ensure_serving(self, home, state, version):

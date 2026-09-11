@@ -22,7 +22,8 @@ class PreflightTests(unittest.TestCase):
         with mock.patch.object(install_mod.shutil, 'which', return_value='/usr/bin/x'):
             buf = io.StringIO()
             with contextlib.redirect_stdout(buf):
-                rc = install_mod.do_preflight(self._args())
+                rc = install_mod.do_preflight(
+                    self._args('--feed', 'file:///bundle.tar.gz'))
         self.assertEqual(rc, 0)
         self.assertIn('Python, feed-route, and client prerequisites present', buf.getvalue())
 
@@ -37,7 +38,7 @@ class PreflightTests(unittest.TestCase):
                     install_mod.do_preflight(self._args())
         out = buf.getvalue()
         self.assertIn('no Python 3.14 found', out)
-        self.assertIn('GitHub CLI (gh) binary not found', out)
+        self.assertIn('not enrolled for automatic updates', out)
         self.assertIn('Codex CLI not found', out)
 
     def test_preflight_explicit_feed_skips_gh_requirement(self):
@@ -56,7 +57,8 @@ class PreflightTests(unittest.TestCase):
                                side_effect=lambda name: None if name == 'codex' else '/usr/bin/x'):
             buf = io.StringIO()
             with contextlib.redirect_stdout(buf):
-                rc = install_mod.do_preflight(self._args('--client', 'none'))
+                rc = install_mod.do_preflight(
+                    self._args('--client', 'none', '--feed', 'file:///bundle.tar.gz'))
         self.assertEqual(rc, 0)
 
     def test_preflight_through_main_creates_no_home(self):
@@ -66,7 +68,9 @@ class PreflightTests(unittest.TestCase):
                 home = Path(tmp) / 'home'
                 buf = io.StringIO()
                 with contextlib.redirect_stdout(buf):
-                    rc = install_mod.main(['--preflight', '--home', str(home)])
+                    rc = install_mod.main([
+                        '--preflight', '--home', str(home),
+                        '--feed', 'file:///bundle.tar.gz'])
                 self.assertEqual(rc, 0)
                 self.assertFalse(home.exists())
 

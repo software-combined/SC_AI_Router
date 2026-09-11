@@ -81,6 +81,10 @@ def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None):
     import random
     home = Path(args.home).expanduser()
     feed = args.feed or _svc.channel_feed(home)
+    if feed is None:
+        print('not enrolled for automatic updates; enrol this host with the SC '
+              'bootstrap or install manually')
+        return 0
     # The default home-bound fetch sends the stored feed token to the feed
     # origin; bundle fetches below reuse it, so a migrated host never needs
     # gh. An injected fake keeps its one-argument shape all the way down.
@@ -144,7 +148,7 @@ def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None):
             result = _svc.run(cmd, capture_output=True, text=True, timeout=900)
         except subprocess.SubprocessError as exc:
             # A child that is killed or never starts reports nothing itself,
-            # so count it here or a hanging release retries every 15 minutes
+            # so count it here or a hanging release retries every poll
             # forever. TimeoutExpired is a SubprocessError, not an OSError.
             _park(home, etag, etag_path, latest['version'])
             print(f'installer did not complete: {type(exc).__name__}')

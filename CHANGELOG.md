@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Repository relicensed to Apache-2.0 only: `LICENSE` carries the Apache
+  License 2.0 text, `COMMERCIAL_LICENSE.md` is removed, a `NOTICE` file is
+  added, and package and plugin metadata use the `Apache-2.0` SPDX
+  identifier. `pyproject.toml` keeps its long-standing `0.6.9` project
+  version; `packaging/VERSION` remains the release authority. Publication
+  remains blocked until the provenance question for
+  `ai_router/openrouter_base_instructions.txt` is resolved.
+
+- Automatic updates are enrolment-only: the owner-only `feed-token` written
+  by the SC bootstrap or MDM is the enrolment fact. A host without it makes
+  no scheduled request (the GitHub fallback is gone from the unattended
+  path), `--feed` remains the manual install and update route, and
+  `--status` reports the feed source and channel. Stable and beta channels
+  are unchanged for enrolled hosts.
+
 - Providers are now data, not code paths: `ai_router/provider_defs.py` holds
   one definition per upstream (host, endpoint prefixes, key location, model
   catalogue, key-info endpoint, failure dialect), and the Responses and

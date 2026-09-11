@@ -166,6 +166,8 @@ class InstallConfigTests(unittest.TestCase):
     def test_update_plist_omits_feed_for_channel_resolution(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
+            home.mkdir()
+            (home / 'feed-token').write_text('tok-1\n')
             _install(self, tmp, home, '1.0.0', feed=None)
             agents = Path(tmp) / 'fakehome' / 'Library' / 'LaunchAgents'
             doc = plistlib.loads(
@@ -176,9 +178,11 @@ class InstallConfigTests(unittest.TestCase):
     def test_update_plist_never_names_a_release_path(self):
         # launchd runs its in-memory copy of a loaded plist, so a versioned
         # install.py path outlives the release it names: prune that release and
-        # the updater keeps firing a deleted installer every 15 minutes.
+        # the updater keeps firing a deleted installer every 4 hours.
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
+            home.mkdir()
+            (home / 'feed-token').write_text('tok-1\n')
             _install(self, tmp, home, '1.0.0', feed=None)
             agents = Path(tmp) / 'fakehome' / 'Library' / 'LaunchAgents'
             doc = plistlib.loads(
@@ -387,6 +391,7 @@ class InstallConfigTests(unittest.TestCase):
             home.mkdir()
             (home / 'mixed-router-state.json').write_text(
                 json.dumps({'port': 1, 'token': 'x'}) + '\n')
+            (home / 'feed-token').write_text('tok-1\n')
             rel = home / 'releases' / '1.0.0'
             (rel / 'packaging').mkdir(parents=True)
             (rel / 'packaging' / 'VERSION').write_text('1.0.0\n')

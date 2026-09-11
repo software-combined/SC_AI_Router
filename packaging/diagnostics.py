@@ -91,10 +91,10 @@ def do_preflight(args):
 
     Plan 058 Stage 1: one check before anything is written, with a
     platform-correct remedy per missing item. Never creates the router
-    home, never touches the network: the feed check only reads which
-    route is selected (the transitional GitHub route needs the `gh`
-    binary; an explicit `--feed` needs nothing beyond this machine).
-    Sign-in itself is verified when the feed is actually fetched.
+    home, never touches the network: the feed check reads only which
+    route is selected (an unenrolled host reports the enrolment gap; a
+    pinned GitHub release URL needs the `gh` binary). Sign-in is
+    verified when the feed is actually fetched.
     """
     missing = []
     if find_python(args.python) is None:
@@ -107,15 +107,13 @@ def do_preflight(args):
                            'Python 3.14 first')
     home = Path(args.home).expanduser()
     feed = args.feed or _svc.channel_feed(home)
-    # Same route decision as fetch(): only the pre-migration GitHub route
-    # needs the `gh` binary; the token-gated feed needs nothing beyond this
-    # machine. Prefix test only: github_asset() itself would spawn `gh`.
-    if feed.startswith(github_route_prefix):
-        if _svc.feed_token(home) is None and _svc.gh_binary() is None:
-            missing.append('GitHub CLI (gh) binary not found: install gh, sign it in '
-                           'with `gh auth login` as this user, or re-run the '
-                           'bootstrap from the Technology library to migrate '
-                           'this host to the token-gated feed')
+    if feed is None:
+        missing.append('not enrolled for automatic updates: enrol this host with '
+                       'the SC bootstrap, or pass --feed <local latest.json> for a '
+                       'manual install')
+    elif feed.startswith(github_route_prefix) and _svc.gh_binary() is None:
+        missing.append('GitHub release downloads need GitHub CLI (gh), signed in '
+                       'as this user')
     if (args.client or 'codex') == 'codex' and shutil.which('codex') is None:
         missing.append('Codex CLI not found: install Codex first, or pass '
                        '--client none for a service-only install')
@@ -174,8 +172,12 @@ def do_status(args):
     if not isinstance(receipt_clients, dict):
         receipt_clients = {}
     clients = {name: _client(entry) for name, entry in receipt_clients.items()}
+    feed = _svc.channel_feed(home)
     doc = {'installed': installed, 'version': version if installed else None,
            'serving': serving, 'key_present': present, 'key_usable': usable,
+           'feed': 'unenrolled' if feed is None else _svc.feed_source(feed),
+           'channel': ((home / 'channel').read_text().strip()
+                       if (home / 'channel').exists() else 'stable'),
            'providers': {pid: {'key_present': state_pair[0],
                                'key_usable': state_pair[1]}
                          for pid, state_pair in per_provider.items()},
@@ -190,5 +192,7 @@ def do_status(args):
         print('version: %s' % (doc['version'] or 'not installed'))
         print('service: %s' % ({True: 'serving', False: 'not serving', None: 'unknown'}[serving]))
         print('key: %s' % ('usable' if usable else 'present' if present else 'missing'))
+        print('feed: %s' % doc['feed'])
+        print('channel: %s' % doc['channel'])
         print('clients: %s' % (', '.join(sorted(clients)) or 'none'))
     return 0
