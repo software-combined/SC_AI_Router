@@ -13,8 +13,11 @@ your machine.
 
 The Codex app and/or Claude Code, Python 3.14 (the installer finds it or
 tells you how to get it), GitHub CLI (`gh`) signed in with read access to
-the private router repository while updates ride the transitional GitHub
-feed, and an OpenRouter API key for OpenRouter models.
+the private router repository only while updates ride the transitional
+GitHub feed, and an OpenRouter API key for OpenRouter models. Once a host
+has polled a release that carries the feed token it updates from the
+token-gated feed at `dist.softwarecombined.com` and needs neither `gh` nor
+repository access.
 
 ## Platform support
 
@@ -156,6 +159,13 @@ macOS app, the Windows Store app, or the Linux preview app when it is
 installed) so the new models load, with a "Later" button for anyone who
 would rather keep working. Where the desktop app is not installed, the
 restart button simply does nothing.
+
+Each tagged release publishes to the token-gated feed at
+`https://dist.softwarecombined.com/<channel>/latest.json` as well as to
+GitHub Releases. A host that has received a feed token polls the feed with
+the `X-SCG-Feed-Token` header and no longer needs `gh` or repository
+access; a host without one keeps using the GitHub route, so old and new
+installs coexist. `logs/update.log` records the source of each install.
 
 ## Choosing a model
 
