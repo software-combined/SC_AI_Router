@@ -28,6 +28,17 @@ from tests.test_install_lifecycle import _run_install
 from tests.test_notice import notice_mod
 
 
+def _adding_catalogue(slug):
+    """A write_catalogue fake whose next install adds one picker row."""
+    def fake(home, release_dir, python):
+        _fake_write_catalogue(home, release_dir, python)
+        path = home / 'mixed-models.json'
+        doc = json.loads(path.read_text())
+        doc['models'].append({'slug': slug})
+        path.write_text(json.dumps(doc, indent=2))
+    return fake
+
+
 class ShowPendingTests(unittest.TestCase):
     def _pending(self, home, version='1.0.1'):
         (home / 'update-notice.json').write_text(
@@ -293,15 +304,55 @@ class InstallNoticeTests(unittest.TestCase):
             self.assertFalse((home / 'update-notice.json').exists())
 
     @unix_only
-    def test_upgrade_stages_notice_with_new_version(self):
+    def test_upgrade_with_an_unchanged_picker_stays_silent(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             _run_install(self, tmp, home, '1.0.0')
             rc, _, _, _ = _run_install(self, tmp, home, '1.0.1')
             self.assertEqual(rc, 0)
+            self.assertFalse((home / 'update-notice.json').exists(),
+                             'a version bump alone is not worth a restart')
+
+    @unix_only
+    def test_upgrade_stages_notice_when_the_picker_gains_a_row(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            _run_install(self, tmp, home, '1.0.0')
+            rc, _, _, _ = _run_install(
+                self, tmp, home, '1.0.1',
+                write_catalogue=_adding_catalogue('openrouter/new-model'))
+            self.assertEqual(rc, 0)
             doc = json.loads((home / 'update-notice.json').read_text())
             self.assertEqual(doc['version'], '1.0.1')
             self.assertNotIn('shown', doc)
+
+    @unix_only
+    def test_a_failed_install_does_not_lose_the_next_prompt(self):
+        # A pre-swap failure has already merged the rows without activating
+        # anything; the retry must still see them as additions.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            _run_install(self, tmp, home, '1.0.0')
+            real_launcher = install_mod.install_launcher
+            calls = []
+
+            def flaky_launcher(home_dir, release):
+                calls.append(release)
+                if len(calls) == 1:
+                    raise OSError('launcher write failed')
+                return real_launcher(home_dir, release)
+
+            _patch_attrs(self, install_launcher=flaky_launcher)
+            with self.assertRaises(OSError):
+                _run_install(self, tmp, home, '1.0.1',
+                             write_catalogue=_adding_catalogue('openrouter/new-model'))
+            self.assertFalse((home / 'update-notice.json').exists())
+            rc, _, _, _ = _run_install(
+                self, tmp, home, '1.0.1',
+                write_catalogue=_adding_catalogue('openrouter/new-model'))
+            self.assertEqual(rc, 0)
+            doc = json.loads((home / 'update-notice.json').read_text())
+            self.assertEqual(doc['version'], '1.0.1')
 
     @unix_only
     def test_cli_path_shows_pending_after_install(self):
@@ -311,7 +362,7 @@ class InstallNoticeTests(unittest.TestCase):
             blob, latest = _craft_bundle('1.0.1')
             _patch_attrs(self, run=_ok_run,
                          self_test=lambda *a: None,
-                         write_catalogue=_fake_write_catalogue,
+                         write_catalogue=_adding_catalogue('openrouter/new-model'),
                          wait_version=lambda *a, **k: True)
             launchd_in_sync(home, install_mod.LABEL, install_mod.UPDATE_LABEL)
             # main() takes no fetch injector, so the feed and bundle live
