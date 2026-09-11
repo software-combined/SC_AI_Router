@@ -1,8 +1,12 @@
 # Plan 102: Reduce install.py at its hard cap by collapsing duplicated option handling
 
-> Planning only. Implement only under a later implementation instruction.
+> Implemented 2026-09-11; drift reconciled in the same change.
 > Drift check: `git diff --stat a985197..HEAD -- packaging/install.py tests/test_install_lifecycle.py tests/test_install.py tests/test_install_config.py config/source-limits-baseline.json`
-> Read changed code and preserve current behavior before edits.
+> Drift reality (2026-09-11, develop c892e1f): `install.py` is 699 lines (baseline pins 699), the
+> option writes were already compacted to five single-line sites, and the file has moved on. The
+> extraction below therefore lands as a net-zero decomposition: `do_install` now delegates to
+> `_resolve_clients_and_modes` (`:303-339`) and `_rollback_failed_install` (`:342-359`), with
+> `do_install` at `:362-527`.
 
 ## Status and first proof
 
@@ -13,33 +17,40 @@
 
 ## Why this matters
 
-`packaging/install.py` is 700 lines — exactly at the 700 hard cap — and
-`config/source-limits-baseline.json` pins it at 700. Any one-line fix requires a compensating deletion, and the 217-line `do_install`
-(`:313-529`) interleaves option resolution, bundle install, rollback, and client attachment.
+`packaging/install.py` sits at its 400/700 entrypoint ceiling — 699 lines against a 700 hard cap,
+`config/source-limits-baseline.json` pinned at 699 — so any one-line fix needs a compensating
+deletion, and `do_install` (`:362-527`) interleaves option resolution, bundle install, rollback, and
+client attachment.
 
-Pure extraction within the file does **not** create headroom by itself; the win comes from
-collapsing four near-identical `state.get(...) != ... : _write_state(...)` blocks (`:369-407`) into
-one resolution pass that writes state once, plus extracting the rollback block. Keep helpers in the
-same module: the installer's tests patch globals on `install_mod` and mirror seams through
-`_sync_seams` (`:301-310`); moving helpers to another module silently bypasses those patches.
+Pure extraction within the file does **not** create headroom by itself; the win is the decomposition
+itself: collapsing the near-identical `state.get(...) != ... : _write_state(...)` sites into one
+resolution pass that writes state at most once (`:303-339`), plus extracting the rollback block
+(`:342-359`). Keep helpers in the same module: the installer's tests patch globals on `install_mod`
+and mirror seams through `_sync_seams` (`:291-300`); moving helpers to another module silently
+bypasses those patches.
 
-## Current state (verified at a985197; line refs refreshed at 12c834b)
+## Current state (verified at 2026-09-11 on develop c892e1f; original refs at a985197/12c834b in git history)
 
-- `packaging/install.py:313-529` `do_install`; `:301-310` `_sync_seams` mirrors
-  `run/health/wait_version/ensure_serving` from `_svc`; `:89-99` binds service seams at module level.
-- `:369-407` — four separate writes to the same state document as each option resolves:
+- `packaging/install.py` is 699 lines; `do_install` is `:362-527`; `_sync_seams` is `:291-300`
+  (mirrors `run/health/wait_version/ensure_serving` from `_svc`); `:89-99` binds service seams at
+  module level.
+- The option resolution had drifted from four to five write sites (client, claude_mode,
+  anthropic_mode, openai_mode, clients) at `:359-406`, each writing the same state document:
   ```python
   if state.get('client', 'codex') != client:
-      state['client'] = client
-      _write_state(home, state)
+      state['client'] = client; _write_state(home, state)
   ...
   if state.get('claude_mode') != claude_mode:
       state['claude_mode'] = claude_mode
       _write_state(home, state)
   ...
   ```
-- `:419-466` — bundle install, service start, health wait, and the multi-branch rollback/refusal block.
-- `:467-529` — attachment tail; keep in place for this plan.
+  These now live in `_resolve_clients_and_modes` (`:303-339`), which validates in the same order
+  with the same messages and performs at most one `_write_state`. The `args.setup` nonce write
+  (`:440-446`) is deliberately outside the helper.
+- `:432-455` — bundle install, service start, health wait, and the multi-branch rollback/refusal
+  block; now `_rollback_failed_install` (`:342-359`) with byte-identical messages.
+- `:456-527` — attachment tail; unchanged by this plan.
 - Characterizing tests: `tests/test_install_lifecycle.py`, `tests/test_install.py`,
   `tests/test_interpreter_resolution.py`, `tests/test_platform_dispatch_order.py`,
   `tests/test_install_config.py`, `tests/test_update_channel.py`, plus `test_windows_acl`.
@@ -90,11 +101,15 @@ count (it will remain above the 400 soft limit, so the entry must match exactly)
 
 ## Done criteria
 
-- [ ] `install.py` count is below 700 and the baseline entry matches exactly.
-- [ ] All installer suites and the full suite pass with zero test edits required by the moves.
-- [ ] No seam patched by tests moved out of the module (`_sync_seams` still binds the same names).
-- [ ] Compile and limit gates pass; only in-scope files changed.
-- [ ] `plans/README.md` status row updated.
+- [x] `install.py` count is below 700 (699, net-zero: the two helper definitions offset the
+      collapsed writes) and the baseline entry matches exactly.
+- [x] All installer suites and the full suite pass with zero test edits required by the moves
+      (installer 98, full suite 1009).
+- [x] No seam patched by tests moved out of the module (`_sync_seams` still binds the same names).
+- [x] Compile, limit and F401/F811 gates pass; only in-scope files changed.
+- [x] `plans/README.md` status row updated.
+- [x] Accepted semantic delta (per the plan's own note): a failed late validation no longer
+      persists the earlier option writes; state is written once, after validation.
 
 ## STOP conditions
 
