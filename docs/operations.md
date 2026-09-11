@@ -31,11 +31,15 @@ aws cloudformation deploy --stack-name scg-router-feed --region ap-southeast-2 \
 
 `infra/feed.yaml` owns the private versioned bucket, the CloudFront
 distribution and its viewer-request token gate, the DNS alias, and the
-publisher role. The role is assumable only by `token.actions.githubusercontent.com`
-for `repo:software-combined/SC_OpenRouter_adapter:ref:refs/tags/v*`, and it
-can read and write objects in the feed bucket, list the bucket, invalidate
-the feed, read the stack outputs and read the token parameter. It cannot
-delete objects, write the token stores, or touch any other resource.
+publisher role. The role is assumable only by
+`token.actions.githubusercontent.com`, and only for this repository's tag
+refs: `repo:software-combined/SC_OpenRouter_adapter:ref:refs/tags/v*` in the
+classic subject form, or
+`repo:software-combined@200868195/SC_OpenRouter_adapter@1360169840:ref:refs/tags/v*`
+in GitHub's immutable form. It can read and write objects in the feed
+bucket, list the bucket, invalidate the feed, read the stack outputs and
+read the token parameter. It cannot delete objects, write the token stores,
+or touch any other resource.
 
 ### Feed tokens
 
