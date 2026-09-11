@@ -21,6 +21,32 @@ acceptance.
 | reinstall after uninstall | exit 0, Codex re-attached (fails with a stale receipt before this release) |
 | sign-out and sign-in | pending: the machine must be signed out after this session ends; verify with `schtasks /query /tn CodexMixedModelRouter` and `/health` |
 
+## Desktop client restart targets, 2026-09-11
+
+Researched before wiring the update notice's "Quit and reopen" action, so
+the restart targets the installed client rather than a guessed process
+name. Sources are the official documentation and the open-source clients
+listed in `AGENTS.md` section 9; re-check them before relying on the
+identities below.
+
+| platform | client identity | evidence |
+|---|---|---|
+| macOS | bundle `com.openai.codex` (ChatGPT.app hosts Codex) | installed desktop app, `mdls`/`osascript` on this machine |
+| Windows | MSIX package `OpenAI.Codex` | Plan 116 acceptance machine reported this package identity (`docs/compatibility.md`, 2026-09-10) |
+| Linux | preview app installed as package `chatgpt`, launched by running `chatgpt` | <https://learn.chatgpt.com/docs/linux/linux-app> (Ubuntu 24.04/26.04, Debian 13, Fedora 43/44; x64 and ARM64; graphical sessions only) |
+
+The Codex CLI advertises the desktop app per platform in the same terms:
+`codex-rs/tui/src/tooltips.rs` at `aff3e0db`, `LINUX_APP_TOOLTIP` ("install
+it from .../linux/linux-app and run 'chatgpt'") gated on a graphical,
+non-WSL session, and `MACOS_APP_TOOLTIP` for `codex app`. Windows Store
+apps launch through their package identity, so the restart path resolves
+the AUMID with `Get-AppxPackage`/`Get-AppxPackageManifest` and falls back
+to `Get-StartApps`, the documented AUMID lookup
+(<https://learn.microsoft.com/en-us/windows/configuration/store/find-aumid>).
+
+The notice itself is best-effort: if a platform's dialog tool or client is
+missing, the dialog still appears and the installer continues.
+
 ## Token-budget protocol check, 2026-09-09
 
 `python3.14 tools/probe_context_budget.py` passed against Codex CLI 0.153.4

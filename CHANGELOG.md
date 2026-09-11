@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- After an update the router shows a single desktop dialog (macOS, Linux
+  and Windows) carrying the SCG product icon. It offers "Quit and reopen",
+  which quits the Codex desktop app and launches it again so the new models
+  load: the macOS bundle `com.openai.codex`, the Windows Store package
+  `OpenAI.Codex`, and the Linux preview app `chatgpt` when it is
+  installed. "Later" dismisses the dialog; where the app is not installed
+  the restart button simply does nothing. Only one dialog is ever on
+  screen: an update that lands while the previous dialog is still open
+  folds into it instead of stacking a second one. The notice is
+  best-effort, fires once per version, and never blocks or delays the
+  update.
+
 - Replayed reasoning history no longer disappears before OpenRouter turns.
   `strip_reasoning_blobs` now strips only the provider blob field and keeps a
   reasoning item whenever readable summary or `reasoning_text` content
