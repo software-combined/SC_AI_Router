@@ -16,7 +16,8 @@ import json
 from . import providers, transport
 from .capabilities import OPENROUTER_HOST
 from .errors import PreparationError, UnknownModel
-from .registry import MODELS, by_slug
+from . import registry
+from .registry import by_slug
 
 ANTHROPIC_HOST = 'api.anthropic.com'
 ANTHROPIC_PREFIX = '/api'
@@ -67,7 +68,7 @@ def models_listing():
     """Anthropic-style {data: [{id, display_name, anthropic_family_tier}]}.
 
     Verified rows first A-Z by display name, then preview rows A-Z."""
-    ordered = sorted(MODELS, key=lambda m: (m.tier != 'verified',
+    ordered = sorted(registry.MODELS, key=lambda m: (m.tier != 'verified',
                                             m.display_name.casefold()))
     rows = []
     for entry in ordered:

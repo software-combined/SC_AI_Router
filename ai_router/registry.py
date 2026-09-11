@@ -1,7 +1,7 @@
 """The one place that says what a model is. Data lives in models.json.
 
 Everything else derives from MODELS. Keep the loader pure (text in,
-validated registry out) so Plan 046 can reload it at runtime.
+validated registry out) so Plan 099 can reload it at runtime.
 """
 import json
 from dataclasses import dataclass

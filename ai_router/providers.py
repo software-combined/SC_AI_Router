@@ -2,8 +2,8 @@
 import http.client
 import json
 import re
-from . import compaction as comp, local_services, agent_handoffs
-from .capabilities import (CANONICAL_ORDER, OPENROUTER_HOST, REASONING_LEVELS, check_effort,
+from . import capabilities, compaction as comp, local_services, agent_handoffs
+from .capabilities import (CANONICAL_ORDER, OPENROUTER_HOST, check_effort,
                               check_images, input_modalities)
 from .context_budget import estimate as estimate_tokens
 from .image_items import note_images, strip_images
@@ -324,7 +324,7 @@ class OpenRouterProvider:
         prompt = comp.COMPACT_PROMPT + '\n\nConversation:\n' + transcript
         body = {'model': model, 'input': [comp.user_message_item(prompt)],
                 'max_output_tokens': 4000}
-        levels = REASONING_LEVELS.get(model)
+        levels = capabilities.REASONING_LEVELS.get(model)
         if levels:
             # Never let default high effort burn the whole budget on reasoning.
             body['reasoning'] = {'effort': min(levels, key=CANONICAL_ORDER.index)}
