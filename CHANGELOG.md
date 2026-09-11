@@ -21,6 +21,35 @@
   both instructions. The installer records the attachment set in the router
   state, and a scheduled update reads it back for the notice.
 
+- Licensing groundwork: the repository now carries the verbatim PolyForm
+  Shield License 1.0.0 text with the `Required Notice: Copyright 2026
+  Software Combined Pty Ltd` line, `COMMERCIAL_LICENSE.md` explains when a
+  separate commercial licence may be needed, and `THIRD_PARTY_NOTICES.md`
+  records the MIT-licensed opencodex material in `ai_router/compaction.py`.
+  Package and plugin metadata move from `UNLICENSED` to
+  `LicenseRef-PolyForm-Shield-1.0.0`, and every release bundle now ships the
+  licence files. No runtime behaviour changes. The repository stays private;
+  publication remains an owner decision.
+
+- Nested cross-task messages now reach tasks running on OpenRouter models.
+  Codex Desktop injects `create_thread` / `send_message_to_thread` turns as
+  standalone tool outputs with no `call_id`; the router used to drop them
+  as orphan tool fragments, so delegated tasks on OpenRouter models never
+  saw the message. Standalone app-injected outputs are now rendered as
+  readable assistant-role plaintext before the scrub instead.
+
+- Tagged releases now publish to the token-gated update feed at
+  `dist.softwarecombined.com` as well as to GitHub Releases, so an
+  installed router updates with no GitHub account, no `gh` and no
+  repository access. The feed stack lives in this repository
+  (`infra/feed-cert.yaml` in us-east-1, `infra/feed.yaml` in
+  ap-southeast-2) behind an edge token gate, and a tag-only GitHub OIDC
+  role is the sole publisher. Existing hosts migrate themselves: the
+  transition release carries the feed token in the GitHub `latest.json`,
+  the updater persists it owner-only on its next poll and reads the feed
+  from then on. Bundles are immutable, the channel feed is invalidated on
+  publish, and no client request-path behaviour changes.
+
 - Context size is the provider's call again: the OpenRouter pre-flight
   refused a turn whenever serialized characters divided by four exceeded
   the model window, but real tokenizer ratios run 4.4-5.8 chars/token over

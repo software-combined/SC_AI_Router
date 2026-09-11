@@ -48,6 +48,16 @@ Rules:
    depending on a third-party distribution named `packaging`. Installer
    scripts stay Python 3.9-compatible; the runtime requires 3.14.
 
+## Distribution (outside the request path)
+
+`infra/` owns the update feed as code: the certificate stack, the private
+bucket, the CloudFront distribution with its viewer-request token gate, the
+DNS alias, and the tag-only publisher role. `tools/publish_feed.py` owns one
+publication: it turns a built `dist/` into the feed's `<channel>/latest.json`
+and the GitHub Release document, and it is the only writer of the feed. The
+router imports neither: hosts read the feed through `packaging/feed.py`, which
+stays the client-side owner of origin, token and channel resolution.
+
 ## Transitional owners (do not entrench)
 
 - `packaging/install.py` still dispatches `darwin` vs `linux` inline with a

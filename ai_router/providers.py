@@ -3,6 +3,7 @@ import http.client
 import json
 import re
 from . import capabilities, compaction as comp, local_services, agent_handoffs
+from .standalone_outputs import materialize_outputs
 from .capabilities import (CANONICAL_ORDER, OPENROUTER_HOST, check_effort,
                               check_images, input_modalities)
 from .image_items import note_images, strip_images
@@ -225,6 +226,8 @@ class OpenRouterProvider:
         # credential lookup or upstream dispatch, where a child would infer
         # its assignment from inherited context instead.
         reject_opaque_agent_items(payload.get('input', []))
+        # Standalone outputs (no call_id) are delegated messages, not orphans.
+        payload['input'] = materialize_outputs(payload.get('input', []))
         # Scrub before prepare_tools: fragments KeyError its indexing, and
         # tool_search_output items (released-tool discovery) are never scrubbed.
         payload['input'] = comp.scrub_tool_fragments(payload.get('input', []))
