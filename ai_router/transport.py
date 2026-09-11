@@ -4,7 +4,9 @@ Prepared, hop-header rules, raw stream iteration, and response header relay.
 Transport never imports router, claude, registry, or the installer.
 """
 import http.client  # noqa: F401 (re-exported for consumer call sites)
+import json
 import time
+import traceback
 
 
 HOP_HEADERS = {'host', 'connection', 'content-length', 'transfer-encoding',
@@ -12,13 +14,21 @@ HOP_HEADERS = {'host', 'connection', 'content-length', 'transfer-encoding',
 
 
 class Prepared:
-    """Upstream target plus wire body. Built by protocol adapters."""
+    """Upstream target plus wire body. Built by protocol adapters.
 
-    __slots__ = ('host', 'path', 'headers', 'body', 'tool_names', 'provider')
+    `fallback` is the optional plan for answering this request elsewhere
+    when upstream refuses it (see subscription_fallback); None means the
+    refusal is relayed as-is.
+    """
 
-    def __init__(self, host, path, headers, body, tool_names, provider):
+    __slots__ = ('host', 'path', 'headers', 'body', 'tool_names', 'provider',
+                 'fallback')
+
+    def __init__(self, host, path, headers, body, tool_names, provider,
+                 fallback=None):
         self.host, self.path, self.headers = host, path, headers
         self.body, self.tool_names, self.provider = body, tool_names, provider
+        self.fallback = fallback
 
 
 def passthrough(response):
@@ -86,6 +96,41 @@ def describe_response(response):
     elif encoding not in ('gzip', 'deflate', 'br', 'zstd'):
         encoding = 'other'
     return kind, encoding
+
+
+RESPONSES_STREAM_PROVIDERS = ('openrouter', 'openai-subscription')
+
+
+def describe_location(exc):
+    """One-line traceback handle for the failing adapter frame."""
+    return ';'.join(
+        f'{frame.filename.split("/")[-1]}:{frame.lineno}:{frame.name}'
+        for frame in traceback.extract_tb(exc.__traceback__, limit=3))
+
+
+def emit_terminal_failure(wfile, metrics, provider):
+    """Best-effort mid-stream terminal frame on Responses SSE only.
+
+    No-op for Claude Messages streams and non-SSE bodies; a dead socket
+    never raises from the error path.
+    """
+    from .errors import upstream_failed
+    if not (metrics.get('stream') is True
+            and metrics.get('response_kind') == 'sse'
+            and metrics.get('response_encoding') == 'identity'
+            and provider in RESPONSES_STREAM_PROVIDERS):
+        # Identity only: appending plaintext to an encoded stream would be
+        # undecodable for the client.
+        return
+    frame = ('event: response.failed\ndata: ' + json.dumps(
+        {'type': 'response.failed',
+         'response': upstream_failed().body()}) + '\n\n').encode()
+    try:
+        wfile.write(frame)
+        wfile.flush()
+    except (OSError, ValueError):
+        # Closed-file ValueError plus dead-socket OSError: never raise here.
+        pass
 
 
 def relay_headers(response, send_header, model):

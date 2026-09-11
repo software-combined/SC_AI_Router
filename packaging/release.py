@@ -18,25 +18,34 @@ MIN_PYTHON = '3.14'
 REPO = 'software-combined/SC_OpenRouter_adapter'
 
 
+# Single release inventory (Plan 123): every non-globbed bundle member lives
+# here. tests/test_packaging.py derives its expected bundle from
+# bundle_files() and keeps an explicit required-files assertion, so a member
+# dropped from this list still fails the gate.
+PACKAGING_FILES = (
+    'packaging/VERSION', 'packaging/install.py', 'packaging/launchd.py',
+    'packaging/router_launch.py', 'packaging/service.py',
+    'packaging/feed.py', 'packaging/atomic_write.py',
+    'packaging/systemd.py', 'packaging/update_launch.py',
+    'packaging/updater.py', 'packaging/codex_config.py',
+    'packaging/claude_config.py',
+    'packaging/claude_desktop_config.py',
+    'packaging/diagnostics.py',
+    'packaging/runtime.lock', 'packaging/runtime_lock.py',
+    'packaging/platforms/__init__.py',
+    'packaging/platforms/darwin.py', 'packaging/platforms/linux.py',
+    'packaging/platforms/windows.py',
+    'packaging/install.sh', 'packaging/install.ps1',
+)
+
+
 def bundle_files(root):
     return (
         sorted(p.relative_to(root).as_posix() for p in (root / 'ai_router').rglob('*.py'))
         + sorted(p.relative_to(root).as_posix() for p in (root / 'ai_router').glob('*.txt'))
         + sorted(p.relative_to(root).as_posix() for p in (root / 'ai_router').glob('*.json'))
         + sorted(p.relative_to(root).as_posix() for p in (root / 'tools').glob('*.py'))
-        + ['packaging/VERSION', 'packaging/install.py', 'packaging/launchd.py',
-           'packaging/router_launch.py', 'packaging/service.py',
-           'packaging/feed.py',
-           'packaging/systemd.py', 'packaging/update_launch.py',
-           'packaging/updater.py', 'packaging/codex_config.py',
-           'packaging/claude_config.py',
-           'packaging/claude_desktop_config.py',
-           'packaging/diagnostics.py',
-           'packaging/runtime.lock', 'packaging/runtime_lock.py',
-           'packaging/platforms/__init__.py',
-           'packaging/platforms/darwin.py', 'packaging/platforms/linux.py',
-           'packaging/platforms/windows.py',
-           'packaging/install.sh', 'packaging/install.ps1']
+        + list(PACKAGING_FILES)
     )
 
 

@@ -1,6 +1,53 @@
 # Changelog
 
-## 0.6.14
+## Unreleased
+
+- Replayed reasoning history no longer disappears before OpenRouter turns.
+  `strip_reasoning_blobs` now strips only the provider blob field and keeps a
+  reasoning item whenever readable summary or `reasoning_text` content
+  remains, so DeepSeek thinking mode receives the prior reasoning the API
+  requires; the old key-presence test dropped every item even when
+  `encrypted_content` was null. Real blobs are still removed, items with no
+  readable text are still dropped, and compaction briefs now read reasoning
+  text from both `summary` and `content` instead of treating any
+  `encrypted_content` key as opaque.
+
+- The pre-flight context estimate no longer counts base64 image payloads in
+  replayed history as text, so a turn carrying images inside tool outputs is
+  no longer refused as over-context; image blocks now cost a flat per-block
+  allowance, and text-only models detect images that sit inside tool outputs.
+
+- The updater now finds GitHub CLI under scheduler-minimal PATH on macOS,
+  Linux and Windows (brew, apt/dnf, snap, Linuxbrew, Program Files,
+  per-user, choco, scoop), with the resolver consolidated into one owner;
+  no behaviour change when gh is already on PATH.
+
+- No-subscription installs (`openai_mode: none`) now list the
+  OpenRouter-billed OpenAI rows (Astra, Sol, Terra, Luna) in the Codex
+  picker instead of the dead subscription slugs; mode flips in the setup
+  window refresh the picker file. Subscription installs are unchanged.
+
+- Models whose OpenRouter row carries no web-search capability no longer
+  receive Codex's `web_search` server tool. OpenRouter cannot execute it
+  for those models and aborted the stream with `Server tool request
+  failed`, killing the turn a few seconds in; the affected rows (DeepSeek
+  V4.1 Flash and V4 Pro 0813) keep their client-side tools.
+
+- Thread titles, descriptions, summaries and title reconsiderations run as
+  helper turns on the subscription model. When the ChatGPT allowance is
+  exhausted upstream refuses every helper turn and the client stores a
+  slice of the prompt as the title instead. With the new
+  `openai_helper_fallback` state flag on (default off) the router answers
+  just those helper turns from the registry's OpenRouter twin row
+  (`openai/<slug>`) and logs `subscription_fallback`, so generated titles
+  survive an exhausted allowance; ordinary turns keep the existing 503.
+  A provisioned portco allowlist still gates the twin, and enabling the
+  flag bills the OpenRouter key for helper-shaped prompts.
+
+- The Codex picker groups OpenRouter rows by vendor A-Z, verified before
+  preview inside each vendor; `models add` renumbers priorities into that
+  order and the global "preview last" offset is gone, so Anthropic's four
+  rows sit together again.
 
 - DeepSeek keeps two pinned, verified rows: `deepseek/deepseek-v4.1-flash`
   (newest Flash, image-capable) and `deepseek/deepseek-v4-pro-0813`

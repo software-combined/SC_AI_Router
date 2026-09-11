@@ -17,6 +17,7 @@ from unittest import mock
 from ai_router import activation
 import ai_router.__main__ as router_main
 from ai_router.router import Router
+from tests.test_mixed_router import _start_auth_server
 
 
 _ROOT = Path(__file__).resolve().parents[1]
@@ -244,6 +245,96 @@ class DrainTests(unittest.TestCase):
         finally:
             server.inflight = 0
         self.assertEqual(exits, [0])
+
+
+class InFlightBodyDrainTests(unittest.TestCase):
+    def test_drain_waits_for_request_still_reading_its_body(self):
+        # Plan 090 Step 2: the slot is held from the owned-path check, so a
+        # request mid-read_body keeps drain_and_exit from exiting early.
+        server = _server(self)
+        payload = json.dumps({'model': 'x', 'input': []}).encode()
+        sock = socket.create_connection(('127.0.0.1', server.server_port), timeout=10)
+        self.addCleanup(sock.close)
+        sock.sendall(b'\r\n'.join([
+            b'POST /test-token/responses HTTP/1.1',
+            b'Host: 127.0.0.1',
+            b'Content-Type: application/json',
+            b'Content-Length: ' + str(len(payload) + 500).encode(),
+            b'Connection: close', b'', b'']) + payload[:len(payload) // 2])
+        deadline = time.monotonic() + 10
+        while server.inflight == 0 and time.monotonic() < deadline:
+            time.sleep(0.01)
+        self.assertEqual(server.inflight, 1)
+        exits = []
+        with mock.patch('ai_router.router.os._exit',
+                        side_effect=lambda c: exits.append(c)):
+            worker = threading.Thread(target=server.drain_and_exit, daemon=True)
+            worker.start()
+            time.sleep(0.5)
+            self.assertEqual(exits, [], 'drain must wait for the unread body')
+            sock.sendall(payload[len(payload) // 2:] + b'x' * 500)
+            worker.join(timeout=20)
+        self.assertEqual(exits, [0])
+
+    def test_error_paths_release_the_slot_exactly_once(self):
+        # Plan 090 Step 2 negative case: an owned request whose upstream
+        # transport fails (mapped to 502) must not leak or double-release the
+        # slot the wrapper took.
+        from ai_router import providers
+        server = _start_auth_server(self)
+
+        class _FailConn:
+            def __init__(self, *a, **k):
+                pass
+
+            def connect(self):
+                pass
+
+            def request(self, *a, **k):
+                pass
+
+            def getresponse(self):
+                raise OSError('upstream unreachable')
+
+            def close(self):
+                pass
+
+        patcher = mock.patch.object(providers.http.client, 'HTTPSConnection', _FailConn)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        response = _post(server.server_port, '/test-token/responses',
+                         {'model': 'z-ai/glm-5.3', 'input': []})
+        self.assertGreaterEqual(response.status, 400)
+        response.read()
+        deadline = time.monotonic() + 10
+        while server.inflight != 0 and time.monotonic() < deadline:
+            time.sleep(0.01)
+        self.assertEqual(server.inflight, 0)
+
+    def test_rejects_outside_the_slot_do_not_hold_it(self):
+        # Plan 090 Step 2: /shutdown starts the drain, so it must stay outside
+        # the slot; otherwise the drain thread would wait on its own trigger.
+        # Sampling inflight when drain is entered (not after the reply) is what
+        # makes this fail if /shutdown ever moves inside the slot.
+        server = _server(self)
+        seen = []
+        with mock.patch.object(Router, 'drain_and_exit',
+                               side_effect=lambda: seen.append(server.inflight)):
+            response = _post(server.server_port, '/test-token/shutdown', {})
+            response.read()
+        deadline = time.monotonic() + 5
+        while not seen and time.monotonic() < deadline:
+            time.sleep(0.01)
+        self.assertEqual(seen, [0])
+
+
+class SingleListenerTests(unittest.TestCase):
+    def test_second_bind_to_same_port_raises(self):
+        # Plan 090 Step 3: no SO_REUSEPORT, so a second router on the same
+        # loopback port fails instead of silently sharing connections.
+        server = _server(self)
+        with self.assertRaises(OSError):
+            Router({'port': server.server_port, 'token': 't', 'openai_models': []})
 
 
 class SocketActivationTests(unittest.TestCase):

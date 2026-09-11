@@ -8,14 +8,16 @@ import json
 import os
 import pathlib
 import shutil
+import socket
 import tempfile
+import time
 import unittest
 from unittest import mock
 from compression import zstd
 from ai_router import setup
 from ai_router.credentials import Credentials
 from ai_router.registry import by_slug
-from ai_router.router import _payload_has_image
+from ai_router.router import Handler, _payload_has_image
 from tests.fakes import FakeUpstream, install_fake
 from tests.test_mixed_router import _start_server, _test_state
 
@@ -180,16 +182,16 @@ class HandlerCharacterisationTests(unittest.TestCase):
         self.assertEqual(server.inflight, before)
 
     def test_payload_image_check_matches_blocks_not_prose(self):
-        block = json.dumps({'model': 'm', 'input': [
+        block = {'model': 'm', 'input': [
             {'type': 'message', 'role': 'user', 'content': [
                 {'type': 'input_text', 'text': 'look'},
-                {'type': 'input_image', 'image_url': 'data:x'}]}]}).encode()
+                {'type': 'input_image', 'image_url': 'data:x'}]}]}
         self.assertTrue(_payload_has_image(block))
-        prose = json.dumps({'model': 'm', 'input': [
+        prose = {'model': 'm', 'input': [
             {'type': 'message', 'role': 'user',
-             'content': 'tell me about "image" processing'}]}).encode()
+             'content': 'tell me about "image" processing'}]}
         self.assertFalse(_payload_has_image(prose))
-        self.assertFalse(_payload_has_image(b'not json'))
+        self.assertFalse(_payload_has_image('not a dict'))
         self.assertFalse(_payload_has_image(None))
 
     def test_upstream_stall_names_model_in_502(self):
@@ -461,6 +463,28 @@ class HandlerCharacterisationTests(unittest.TestCase):
         response = conn.getresponse()
         self.assertEqual(response.status, 200)
         self.assertEqual(json.loads(response.read())['status'], 'ok')
+
+    def test_partial_request_line_is_dropped_on_handler_timeout(self):
+        # Plan 090 Step 1: Handler.timeout bounds the pre-request read, so a
+        # connection that never finishes its request line is dropped.
+        self.assertEqual(Handler.timeout, 120)
+        server = self._server()
+        old = Handler.timeout
+        Handler.timeout = 1
+        self.addCleanup(setattr, Handler, 'timeout', old)
+        sock = socket.create_connection(('127.0.0.1', server.server_port), timeout=10)
+        self.addCleanup(sock.close)
+        sock.sendall(b'POST /test-token/responses HT')
+        sock.settimeout(8)
+        start = time.monotonic()
+        try:
+            data = sock.recv(4096)
+        except socket.timeout:
+            self.fail('stalled connection was never dropped')
+        except OSError:
+            data = b''  # RST also proves the server dropped the connection.
+        self.assertEqual(data, b'')
+        self.assertLess(time.monotonic() - start, 6)
 
 
 if __name__ == '__main__':

@@ -1,0 +1,5 @@
+# Lint gate input (Plan 101): pinned version + wheel hashes.
+# Update together with the ruff step in check.yml.
+ruff==0.16.7 \
+    --hash=sha256:9ce7f8f22df67c93ed96c717f9128eadb797144ac2bad475cf536f31d6100c55 \
+    --hash=sha256:7ab81118df8945e0193d0240712aa4496573595b75185c3636ed825592a0f728

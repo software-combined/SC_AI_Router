@@ -114,20 +114,6 @@ def rewrite_input(items):
             rewritten.append(item)
     return rewritten
 
-def strip_images(items, keep_images):
-    if keep_images or not isinstance(items, list):
-        return items
-    out = []
-    for item in items:
-        if (isinstance(item, dict) and item.get('type') == 'message'
-                and isinstance(item.get('content'), list)):
-            blocks = [b for b in item['content']
-                      if not (isinstance(b, dict) and b.get('type') == 'input_image')]
-            if len(blocks) != len(item['content']):
-                item = {**item, 'content': blocks}
-        out.append(item)
-    return out
-
 # Calls the endpoint accepts, and outputs keyed by call. A fragment missing
 # these fields (interrupted call, orphan output) 400s the whole turn, so the
 # scrub drops fragments before anything is forwarded. A partial call never
@@ -173,33 +159,37 @@ def scrub_tool_fragments(items):
     return out
 
 
-def note_images(items):
-    """Swap image blocks for a short note; the turn stays text-only."""
-    if not isinstance(items, list):
-        return items
-    out = []
-    for item in items:
-        if (isinstance(item, dict) and item.get('type') == 'message'
-                and isinstance(item.get('content'), list)):
-            blocks = [{'type': 'input_text',
-                       'text': '[image omitted: this model runs text-only]'}
-                      if isinstance(b, dict) and b.get('type') == 'input_image'
-                      else b for b in item['content']]
-            if blocks != item['content']:
-                item = {**item, 'content': blocks}
-        out.append(item)
-    return out
+REASONING_TEXT_BLOCKS = frozenset({'reasoning_text', 'text'})
+
+
+def _reasoning_text(item):
+    """Readable reasoning text; the provider blob value is never read."""
+    parts = []
+    for blocks, restricted in ((item.get('summary'), False), (item.get('content'), True)):
+        if isinstance(blocks, str) and blocks.strip():
+            parts.append(blocks.strip())
+        elif isinstance(blocks, list):
+            for block in blocks:
+                if not isinstance(block, dict):
+                    continue
+                if restricted and block.get('type') not in REASONING_TEXT_BLOCKS:
+                    continue
+                text = block.get('text')
+                if isinstance(text, str) and text.strip():
+                    parts.append(text.strip())
+    return ' '.join(parts)
 
 
 def strip_reasoning_blobs(items):
-    """Drop OpenAI-owned reasoning blobs other models cannot read; keep plaintext."""
+    """Strip OpenAI-owned reasoning blobs; keep items that still hold readable text."""
     if not isinstance(items, list):
         return items
     out = []
     for item in items:
-        if isinstance(item, dict) and item.get('type') == 'reasoning' and 'encrypted_content' in item:
+        if (isinstance(item, dict) and item.get('type') == 'reasoning'
+                and 'encrypted_content' in item):
             item = {k: v for k, v in item.items() if k != 'encrypted_content'}
-            if not item.get('summary'):
+            if not _reasoning_text(item):
                 continue
         out.append(item)
     return out
@@ -231,9 +221,11 @@ def _item_text(item):
                 return f'tool result{label}: ' + _block_text(item[key])[:2000]
         return ''
     if kind == 'reasoning':
-        if 'encrypted_content' in item:
-            return ''  # Provider-owned blob; never forward opaque content.
-        return 'reasoning: ' + _block_text(item.get('summary', ''))[:2000]
+        blob = item.get('encrypted_content')
+        if isinstance(blob, str) and blob:
+            return ''  # Real provider blob; opaque content never reaches summaries.
+        text = _reasoning_text(item)
+        return f'reasoning: {text}'[:2000] if text else ''
     if is_compaction_item(item):
         return compaction_text(item)
     if kind == 'agent_message':

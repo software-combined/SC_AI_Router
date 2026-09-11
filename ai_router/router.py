@@ -7,11 +7,10 @@ import os
 import socket
 import threading
 import time
-import traceback
 from compression import zstd
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from .credentials import Credentials, ENV_VAR as _CREDENTIALS_ENV_VAR
-from . import claude, errors, local_services, providers, setup, transport
+from . import capabilities, claude, errors, local_services, providers, setup, subscription_fallback, transport
 from .protocols import owned_paths, select as select_protocol
 from .errors import InvalidSize, PreparationError
 from .providers import NATIVE_SERVICE_PATHS
@@ -32,7 +31,6 @@ class Router(ThreadingHTTPServer):
             sock.close()
             sock = None
         if sock is None:
-            self.allow_reuse_port = True
             super().__init__(('127.0.0.1', state['port']), Handler)
         else:
             super().__init__(('127.0.0.1', state['port']), Handler,
@@ -58,24 +56,18 @@ class Router(ThreadingHTTPServer):
         log_event('exit', inflight=self.inflight, forced=forced)
         os._exit(0)
 
-def _payload_has_image(body):
-    """True when the serialized request carries an input_image block; False on doubt."""
-    # ponytail: parse, don't substring-match; prose mentioning images must not count.
-    try:
-        payload = json.loads(body.decode() if isinstance(body, bytes) else '')
-    except (ValueError, UnicodeDecodeError, AttributeError):
+def _payload_has_image(payload):
+    """True when the parsed turn carries an input_image block; False on doubt."""
+    # ponytail: walk the parsed payload, don't substring-match or re-parse the body;
+    # prose mentioning images must not count.
+    if not isinstance(payload, dict):
         return False
-    items = payload.get('input') if isinstance(payload, dict) else None
-    if not isinstance(items, list):
-        return False
-    return any(isinstance(item, dict) and isinstance(item.get('content'), list)
-               and any(isinstance(block, dict) and block.get('type') == 'input_image'
-                       for block in item['content'])
-               for item in items)
+    return capabilities.has_images(payload.get('input'))
 
 
 class Handler(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
+    timeout = 120
 
     def log_message(self, *args):
         pass  # Request URLs and upstream credentials must never enter access logs.
@@ -110,12 +102,15 @@ class Handler(BaseHTTPRequestHandler):
                 and '/setup/' not in self.path.split('?', 1)[0]):
             return None, False
         prefix = '/' + self.server.state['token']
+        token = self.server.state['token'].encode()
         candidate, sep, _ = self.path[1:].partition('/')
-        if sep and hmac.compare_digest(candidate, self.server.state['token']):
+        # Byte compares (Plan 136): compare_digest rejects non-ASCII str with
+        # TypeError, and latin-1 ingress input can carry bytes 0x80-0xFF.
+        if sep and hmac.compare_digest(candidate.encode('iso-8859-1'), token):
             return self.path[len(prefix):].removeprefix('/backend-api/codex'), True
         header = self.headers.get('Authorization', '')
         if header.startswith('Bearer ') and hmac.compare_digest(
-                header[len('Bearer '):], self.server.state['token']):
+                header[len('Bearer '):].encode('iso-8859-1'), token):
             return self.path.removeprefix('/backend-api/codex'), False
         return None, False
 
@@ -185,10 +180,22 @@ class Handler(BaseHTTPRequestHandler):
             if path.startswith('/setup/'):
                 return setup.serve(self, path[len('/setup/'):], True)
             return self.error(errors.unsupported_route())
+        # One slot spans read_body, prepare and relay; rejects above return first.
+        with self.server.lock:
+            self.server.inflight += 1
+        try:
+            return self._owned_post(path, via_path, started)
+        finally:
+            with self.server.lock:
+                self.server.inflight -= 1
+
+    def _owned_post(self, path, via_path, started):
         self.connection.settimeout(120)
         try:
             raw, payload, size = self.read_body()
             read_done = time.monotonic()
+            # Snapshot before provider.prepare mutates or strips the payload.
+            has_image = _payload_has_image(payload)
             model = payload.get('model')
             if not isinstance(model, str) and path not in NATIVE_SERVICE_PATHS:
                 return self.error(errors.missing_model())
@@ -202,24 +209,18 @@ class Handler(BaseHTTPRequestHandler):
             compact_call = policy.compaction_call(provider, model, path, payload)
             if compact_call is not None:
                 # Compact before prepare(): a rejected effort must not block it.
-                # Hold an inflight slot so drain waits for mid-compaction
-                # releases. Key lookup stays outside the try so credential
+                # Key lookup stays outside the send try so credential
                 # errors keep 401/400, not 502.
                 key = self.server.credentials.openrouter_key()
-                with self.server.lock:
-                    self.server.inflight += 1
                 try:
                     return self.send_json(200, {'output': compact_call(key)})
                 except PreparationError as exc:
                     return self.error(errors.preparation(str(exc)))
                 except (OSError, http.client.HTTPException):
                     return self.error(errors.compaction_unavailable())
-                finally:
-                    with self.server.lock:
-                        self.server.inflight -= 1
             try:
-                prepared = provider.prepare(model, path, payload, raw,
-                                            dict(self.headers), self.server.credentials)
+                prepared = subscription_fallback.prepare(provider, model, path, payload,
+                                                         raw, dict(self.headers), self.server)
             except local_services.LocalAnswer as exc:
                 return self.error(exc)
             if os.environ.get('ROUTER_DEBUG'):
@@ -245,12 +246,9 @@ class Handler(BaseHTTPRequestHandler):
                 AttributeError, TypeError) as exc:
             err = errors.map_client_error(exc)
             if err.code == 'INTERNAL_ERROR':
-                frames = traceback.extract_tb(exc.__traceback__, limit=3)
-                location = ';'.join(
-                    f'{frame.filename.split("/")[-1]}:{frame.lineno}:{frame.name}'
-                    for frame in frames)
                 log_event('request_failed', code=err.code,
-                          error_type=type(exc).__name__, location=location)
+                          error_type=type(exc).__name__,
+                          location=transport.describe_location(exc))
             return self.error(err)
         _reasoning = payload.get('reasoning')
         prepare_done = time.monotonic()
@@ -264,9 +262,7 @@ class Handler(BaseHTTPRequestHandler):
                    'read_ms': round((read_done - started) * 1000, 1),
                    'prepare_ms': round((prepare_done - read_done) * 1000, 1)}
         log_event('request_started', **metrics)
-        with self.server.lock:
-            self.server.inflight += 1
-        self.relay(provider, prepared, metrics, started)
+        self.relay(provider, prepared, metrics, started, has_image)
 
     def _stored_key_dead(self):
         """True only when the stored key file itself fails check_key on 401/403."""
@@ -301,7 +297,7 @@ class Handler(BaseHTTPRequestHandler):
             raise InvalidSize('Decoded request is too large')
         return body, json.loads(decoded), size
 
-    def relay(self, provider, prepared, metrics, started):
+    def relay(self, provider, prepared, metrics, started, has_image=False):
         conn = http.client.HTTPSConnection(prepared.host, timeout=120)
         sent = False
         response = None
@@ -320,7 +316,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self.error(exc)
             retry_after = providers.upstream_retry_after(response, prepared, metrics)
             if retry_after is not None:
-                return self.retryable_reject(errors.upstream_rate_limited(), retry_after)
+                return subscription_fallback.refused(self, prepared, retry_after, metrics, started)
             if response.status >= 400:
                 raw = response.read()
                 transport.note_first_data(metrics, headers_done)
@@ -338,7 +334,7 @@ class Handler(BaseHTTPRequestHandler):
                     {'model': metrics.get('model'), 'provider': prepared.provider,
                      'elapsed_ms': round((time.monotonic() - started) * 1000, 1),
                      'timeout_s': 120,
-                     'has_image': _payload_has_image(prepared.body)})
+                     'has_image': has_image})
                 if described is not None:
                     status, message = described
                     log_event('upstream_rejected', status=response.status,
@@ -373,20 +369,24 @@ class Handler(BaseHTTPRequestHandler):
             if metrics.get('served_model'):
                 with self.server.lock:
                     self.server.served_models[metrics['model']] = metrics['served_model']
-        except (OSError, http.client.HTTPException, ValueError, KeyError) as exc:
+        except (OSError, http.client.HTTPException, ValueError, KeyError,
+                TypeError, AttributeError) as exc:
             total_ms = round((time.monotonic() - started) * 1000, 1)
             log_event('transport_error',
                         status=response.status if response is not None else None,
                         **metrics, error_type=type(exc).__name__,
                         error_category=exc.msg if isinstance(exc, json.JSONDecodeError) else type(exc).__name__,
+                        location=transport.describe_location(exc),
                         total_ms=total_ms)
-            if not sent:
+            if sent:  # best-effort terminal frame on Responses SSE
+                transport.emit_terminal_failure(self.wfile, metrics, prepared.provider)
+            else:
                 described = providers.describe_failure(
                     exc, None,
                     {'model': metrics.get('model'), 'provider': prepared.provider,
                      'host': prepared.host, 'elapsed_ms': total_ms,
                      'timeout_s': 120,
-                     'has_image': _payload_has_image(prepared.body)})
+                     'has_image': has_image})
                 if described is not None:
                     status, message = described
                     self.error(errors.upstream_described(message) if status == 502
@@ -394,7 +394,5 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     self.error(errors.upstream_failed())
         finally:
-            with self.server.lock:
-                self.server.inflight -= 1
             conn.close()
             self.close_connection = True

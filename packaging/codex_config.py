@@ -13,6 +13,18 @@ from pathlib import Path
 BEGIN = '# BEGIN local mixed model picker'
 END = '# END local mixed model picker'
 
+# Atomic text writer, injected by install.py via service.load() (Plan 123):
+# no spec_from_file_location copy lives here, so direct spec-loads of this
+# file (portability/receipt tests) only need it when replacing blocks.
+_atomic_write = None
+
+
+def _replace_text(path, text):
+    """Atomic sibling write through the injected helper."""
+    if _atomic_write is None:  # pragma: no cover - install.py always injects
+        raise RuntimeError('atomic writer not injected; load via install.py')
+    _atomic_write.replace_text(path, text)
+
 
 def build_block(home, state, mode):
     """Managed Codex config block for this install and subscription mode."""
@@ -75,9 +87,7 @@ def replace_config_block(config_path, block, previous_block=None):
     home = config_path.parent
     if not config_path.exists():
         home.mkdir(parents=True, exist_ok=True)
-    fd = os.open(config_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, 'w') as stream:
-        stream.write(after)
+    _replace_text(config_path, after)
     try:
         os.chmod(config_path, 0o600)
     except OSError:
@@ -110,10 +120,33 @@ def read_receipt(home):
     return {}
 
 
+def parse_snapshot(text):
+    """Prior-values dict from a receipt snapshot; {} when not a JSON object."""
+    try:
+        previous = json.loads(text)
+    except ValueError:
+        return {}
+    return previous if isinstance(previous, dict) else {}
+
+
+def write_client_receipt(home, client, entry):
+    """Record one client attachment; other attachments are preserved."""
+    # The single activation.json writer (Plan 095): entry builders stay in
+    # each adapter, this function stays dumb. Always stamps the version so
+    # a fresh single-client home reads back as attached, never legacy.
+    doc = read_receipt(home) or {'version': RECEIPT_VERSION, 'clients': {}}
+    doc['version'] = RECEIPT_VERSION
+    doc.setdefault('clients', {})[client] = entry
+    receipt_path = Path(home) / 'activation.json'
+    _replace_text(receipt_path, json.dumps(doc, indent=2) + '\n')
+    try:
+        os.chmod(receipt_path, 0o600)
+    except OSError:
+        pass
+
+
 def write_receipt(home, config_path, block, rules_receipt, mode, before='', client='codex'):
     """Record one client attachment; existing attachments are preserved."""
-    receipt_path = Path(home) / 'activation.json'
-    doc = read_receipt(home) or {'version': RECEIPT_VERSION, 'clients': {}}
     entry = {'config_path': str(config_path), 'inserted_block': block,
              'openai_mode': mode,
              'previous_sha256': hashlib.sha256(before.encode()).hexdigest()}
@@ -121,12 +154,7 @@ def write_receipt(home, config_path, block, rules_receipt, mode, before='', clie
         # Legacy installs recorded the managed global-instructions block;
         # install-once starters record nothing, so the key stays absent.
         entry['global_instructions'] = rules_receipt
-    doc.setdefault('clients', {})[client] = entry
-    receipt_path.write_text(json.dumps(doc, indent=2) + '\n')
-    try:
-        os.chmod(receipt_path, 0o600)
-    except OSError:
-        pass
+    write_client_receipt(home, client, entry)
 
 
 def codex_attachment(home):
@@ -147,7 +175,7 @@ def drop_client(home, client):
     del clients[client]
     receipt_path = Path(home, 'activation.json')
     if clients:
-        receipt_path.write_text(json.dumps(doc, indent=2) + '\n')
+        _replace_text(receipt_path, json.dumps(doc, indent=2) + '\n')
     else:
         try:
             receipt_path.unlink()

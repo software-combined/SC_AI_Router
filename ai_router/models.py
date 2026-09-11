@@ -12,8 +12,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from .apply_catalogue import write_guarded
 from .capabilities import CANONICAL_ORDER
-from .model_metadata import CODEX_MODALITIES, project_modalities, qualify_name
-from .registry import load
+from .model_metadata import project_modalities, qualify_name
+from .registry import load, picker_key
 
 MODELS_URL = 'https://openrouter.ai/api/v1/models'
 MODELS_PATH = Path(__file__).with_name('models.json')
@@ -25,8 +25,24 @@ def fetch_live():
         return {model['id']: model for model in json.load(response)['data']}
 
 
-def derive_row(slug, live, rows):
-    """Registry row for a new slug from its live metadata entry."""
+def row_key(row):
+    """Picker sort key for one registry row (see registry.picker_key)."""
+    return picker_key(row['vendor'], row['tier'], row['display_name'], row['slug'])
+
+
+def renumbered(rows):
+    """Rows in picker order with priorities renumbered from 100.
+
+    Codex lists the picker by ascending priority, so the numbers carry the
+    vendor grouping; every add or promotion re-stamps the whole set."""
+    ordered = sorted(rows, key=row_key)
+    return [{**row, 'priority': 100 + index} for index, row in enumerate(ordered)]
+
+
+def derive_row(slug, live):
+    """Registry row for a new slug from its live metadata entry.
+
+    Priority is left to renumbered(), which depends on the whole set."""
     vendor, qualified = qualify_name(slug, live)
     modalities = project_modalities(
         live.get('architecture', {}).get('input_modalities', []))
@@ -39,7 +55,6 @@ def derive_row(slug, live, rows):
     if not reasoning:
         raise SystemExit(f'live metadata for {slug} advertises no reasoning levels')
     default = 'low' if 'low' in reasoning else reasoning[0]
-    priorities = [row['priority'] for row in rows if isinstance(row.get('priority'), int)]
     pricing = live.get('pricing') or {}
     return {'slug': slug,
             'provider': 'openrouter',
@@ -53,7 +68,6 @@ def derive_row(slug, live, rows):
             'max_tools': None,
             'drop_images': False,
             'context_window': live.get('context_length', 0),
-            'priority': max([100] + priorities) + 1,
             'max_output_tokens': top.get('max_completion_tokens') or 32768,
             'reasoning_summary': 'none',
             'apply_patch': 'none',
@@ -77,32 +91,36 @@ def cmd_add(path, slug, live_by_id, tier=None, dry_run=False, probe=False,
     if any(row['slug'] == slug for row in rows):
         raise SystemExit(f'{slug} is already in {path}')
     live = live_by_id[slug]
-    row = derive_row(slug, live, rows)
+    row = derive_row(slug, live)
     if tier is not None:
         if tier not in ('preview', 'verified'):
             raise SystemExit('--tier must be preview or verified')
         row['tier'] = tier
-    if dry_run:
-        # Never writes and never bills: preview what a plain add would store.
-        preview = dict(row)
-        print(json.dumps(preview, indent=2))
-        return preview
-    if probe and tier is None:
+    promote = probe and tier is None
+    if promote:
         # Preview-activate-verify-promote: the registry is file-baked, so the
         # candidate must be written before anything can route it. Verification
         # runs isolated (own router, home and catalogue); only a pass promotes.
-        from .candidate import verify
         row['tier'] = 'preview'
-        write_guarded(path, before, json.dumps(rows + [row], indent=2) + '\n')
+    rows = renumbered(rows + [row])
+    row = next(entry for entry in rows if entry['slug'] == slug)
+    if dry_run:
+        # Never writes and never bills: preview what a plain add would store.
+        print(json.dumps(row, indent=2))
+        return row
+    if promote:
+        from .candidate import verify
+        write_guarded(path, before, json.dumps(rows, indent=2) + '\n')
         if (_probe or verify)(slug):
             activated = Path(path).read_text()
-            promoted = [{**entry, 'tier': 'verified'} if entry.get('slug') == slug
-                        else entry for entry in json.loads(activated)]
+            promoted = renumbered(
+                [{**entry, 'tier': 'verified'} if entry.get('slug') == slug
+                 else entry for entry in json.loads(activated)])
             write_guarded(path, activated, json.dumps(promoted, indent=2) + '\n')
-            row['tier'] = 'verified'
+            row = next(entry for entry in promoted if entry['slug'] == slug)
         _record_compat(slug, row['tier'])
     else:
-        write_guarded(path, before, json.dumps(rows + [row], indent=2) + '\n')
+        write_guarded(path, before, json.dumps(rows, indent=2) + '\n')
     print(json.dumps({'added': slug, 'tier': row['tier']}))
     return row
 
@@ -132,16 +150,22 @@ def cmd_check(path, live_by_id):
     """live_by_id None skips the live-list check (offline). Returns exit code."""
     rows = read_rows(path)
     problems = []
+    valid = True
     try:
         load(json.dumps(rows))
     except SystemExit as exc:
         problems.append(str(exc))
+        valid = False
     slugs = [row.get('slug') for row in rows]
     if len(set(slugs)) != len(slugs):
         problems.append('duplicate slug')
     priorities = [row.get('priority') for row in rows]
     if len(set(priorities)) != len(priorities):
         problems.append('duplicate priority')
+    if valid:
+        ordered = [row['priority'] for row in sorted(rows, key=row_key)]
+        if ordered != sorted(ordered):
+            problems.append('priorities not in picker order')
     if live_by_id is not None:
         missing = [slug for slug in slugs if slug not in live_by_id]
         if missing:

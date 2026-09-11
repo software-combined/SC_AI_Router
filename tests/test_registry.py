@@ -3,7 +3,8 @@ import re
 import unittest
 from ai_router.capabilities import CANONICAL_ORDER
 from ai_router.catalogue import OPENROUTER_TEMPLATE, openrouter_entry
-from ai_router.registry import (FIELDS, MODELS, Model, by_slug, load, openrouter_slugs)
+from ai_router.registry import (FIELDS, MODELS, Model, by_slug, load, picker_key,
+                                openrouter_slugs)
 from ai_router.clients import models_for, visible_for
 
 CATALOGUE_FIELDS = set(OPENROUTER_TEMPLATE) | {'slug', 'display_name', 'description',
@@ -92,9 +93,21 @@ class RegistryTests(unittest.TestCase):
         self.assertTrue(CATALOGUE_FIELDS <= out['models'][0].keys())
         kimi = out['models'][slugs.index('moonshotai/kimi-k3')]
         self.assertEqual(kimi['display_name'], 'MoonshotAI: Kimi K3 · OpenRouter')
-        self.assertEqual(kimi['priority'], 104)
+        self.assertEqual(kimi['priority'], by_slug('moonshotai/kimi-k3').priority)
         self.assertEqual(len(slugs), len(set(slugs)))
         self.assertEqual(len(slugs), 1 + len(models_for(MODELS, 'codex')))
+
+    def test_registry_priorities_follow_picker_order(self):
+        # Codex lists the picker by ascending priority, so the numbers must
+        # keep each vendor's rows together: vendor A-Z, verified before
+        # preview, label A-Z inside a tier.
+        ordered = sorted(MODELS, key=lambda m: picker_key(
+            m.vendor, m.tier, m.display_name, m.slug))
+        priorities = [m.priority for m in ordered]
+        self.assertEqual(priorities, sorted(priorities))
+        self.assertEqual(len(set(priorities)), len(priorities))
+        vendors = [m.vendor.casefold() for m in ordered]
+        self.assertEqual(vendors, sorted(vendors))
 
     def test_catalog_name_vendor_prefix_rule(self):
         from ai_router.catalogue import catalog_name
@@ -183,6 +196,14 @@ class RegistryTests(unittest.TestCase):
             models_for(MODELS, 'other')
         with self.assertRaises(ValueError):
             visible_for(by_slug('moonshotai/kimi-k3'), 'other')
+
+    def test_include_twins_reveals_openai_rows_in_codex_picker(self):
+        self.assertTrue(visible_for(by_slug('openai/gpt-6-astra'), 'codex',
+                                    include_twins=True))
+        twins = {m.slug for m in models_for(MODELS, 'codex', include_twins=True)
+                 if m.slug.startswith('openai/')}
+        self.assertEqual(twins, {'openai/gpt-6-astra', 'openai/gpt-5.6-sol',
+                                 'openai/gpt-5.6-terra', 'openai/gpt-5.6-luna'})
 
 if __name__ == '__main__':
     unittest.main()

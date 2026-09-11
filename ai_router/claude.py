@@ -13,16 +13,16 @@ client credentials are never stored or logged.
 """
 import json
 
-from . import providers, transport
+from . import transport
 from .capabilities import OPENROUTER_HOST
 from .errors import PreparationError, UnknownModel
-from .registry import MODELS, by_slug
+from . import registry
+from .registry import by_slug
 
 ANTHROPIC_HOST = 'api.anthropic.com'
 ANTHROPIC_PREFIX = '/api'
-# GET and POST share the Messages paths today; the names differ so a future
-# GET-only route (like /v1/models) cannot silently become POST-routable.
-CLAUDE_PATHS = frozenset({'/v1/messages', '/v1/messages/count_tokens'})
+# POST-only Messages paths; a future GET-only route (like /v1/models) must
+# not silently become POST-routable.
 CLAUDE_POST_PATHS = frozenset({'/v1/messages', '/v1/messages/count_tokens'})
 CLAUDE_ALIAS_PREFIX = 'claude/'
 
@@ -67,7 +67,7 @@ def models_listing():
     """Anthropic-style {data: [{id, display_name, anthropic_family_tier}]}.
 
     Verified rows first A-Z by display name, then preview rows A-Z."""
-    ordered = sorted(MODELS, key=lambda m: (m.tier != 'verified',
+    ordered = sorted(registry.MODELS, key=lambda m: (m.tier != 'verified',
                                             m.display_name.casefold()))
     rows = []
     for entry in ordered:
@@ -106,14 +106,11 @@ class ClaudeOpenRouterProvider:
         body = raw_body
         slug = resolve(model)
         # resolve() only returns a different string for a known registry slug.
-        if isinstance(model, str) and slug != model:
-            try:
-                obj = json.loads(raw_body.decode())
-            except (ValueError, UnicodeDecodeError):
-                obj = None
-            if isinstance(obj, dict):
-                obj['model'] = slug
-                body = json.dumps(obj).encode()
+        # payload is the parsed form of this same body, so rewrite the alias
+        # there instead of decoding raw_body again.
+        if isinstance(model, str) and slug != model and isinstance(payload, dict):
+            payload['model'] = slug
+            body = json.dumps(payload).encode()
         return transport.Prepared(
             OPENROUTER_HOST, ANTHROPIC_PREFIX + path,
             {'Authorization': 'Bearer ' + credentials.openrouter_key(),

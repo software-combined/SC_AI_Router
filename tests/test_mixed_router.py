@@ -10,7 +10,6 @@ import unittest
 from unittest import mock
 from ai_router import providers
 from ai_router.credentials import Credentials
-from ai_router.registry import by_slug
 from ai_router.router import Router
 
 class _StubCredentials:
@@ -73,6 +72,39 @@ class RoutingTests(unittest.TestCase):
         self.assertEqual(data[1], call)
         self.assertEqual(data[2]['output'], 'r')
         self.assertEqual(len(data), 3)
+
+    def test_reasoning_null_blob_keeps_content_text_drops_unreadable(self):
+        readable = {'type': 'reasoning', 'id': 'rs_a', 'summary': [],
+                    'content': [{'type': 'reasoning_text', 'text': 'read first'}],
+                    'encrypted_content': None}
+        empty = {'type': 'reasoning', 'id': 'rs_b', 'summary': [],
+                 'content': [], 'encrypted_content': None}
+        data = json.loads(_prepared('z-ai/glm-5.3', '/responses',
+                                    {'input': [readable, empty]}).body)['input']
+        self.assertEqual(data, [{'type': 'reasoning', 'id': 'rs_a', 'summary': [],
+                                 'content': [{'type': 'reasoning_text',
+                                              'text': 'read first'}]}])
+
+    def test_reasoning_blob_stripped_but_readable_text_survives(self):
+        summary = [{'type': 'text', 'text': 'chose X'}]
+        content = [{'type': 'reasoning_text', 'text': 'tried Y'}]
+        call = {'type': 'function_call', 'name': 'e', 'call_id': 't',
+                'arguments': '{"v": 1}'}
+        result = {'type': 'function_call_output', 'call_id': 't', 'output': 'r'}
+        items = [{'type': 'reasoning', 'id': 'rs_s', 'summary': summary,
+                  'content': [], 'encrypted_content': 'YmxvYg=='},
+                 {'type': 'reasoning', 'id': 'rs_c', 'summary': [],
+                  'content': content, 'encrypted_content': 'YmxvYg=='},
+                 call, result]
+        prepared = _prepared('z-ai/glm-5.3', '/responses', {'input': items})
+        data = json.loads(prepared.body)['input']
+        self.assertEqual(data, [
+            {'type': 'reasoning', 'id': 'rs_s', 'summary': summary, 'content': []},
+            {'type': 'reasoning', 'id': 'rs_c', 'summary': [], 'content': content},
+            call, result])
+        blob = json.dumps(data)
+        self.assertNotIn('YmxvYg==', blob)
+        self.assertNotIn('encrypted_content', blob)
 
     def test_fragment_history_with_declared_tools_prepares_cleanly(self):
         # A fragment custom_tool_call used to KeyError inside prepare_tools.

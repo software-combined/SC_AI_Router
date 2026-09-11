@@ -14,7 +14,6 @@ from pathlib import Path
 from unittest import mock
 from ai_router import setup
 from ai_router.credentials import Credentials
-from ai_router.runtime import load_state
 from tests.test_mixed_router import _start_server
 
 NOW = 1_700_000_000
@@ -114,6 +113,30 @@ class SetupUnitTests(unittest.TestCase):
         self.assertEqual(saved['openai_mode'], 'none')
         self.assertEqual(saved['token'], 'test-token')
         self.assertNotIn('setup', state)
+
+    def test_post_with_none_mode_refreshes_picker_to_twins(self):
+        # The setup window fires after the installer wrote the catalogue,
+        # so the mode flip must refresh the picker file itself.
+        from ai_router.catalogue import check, openrouter_entry
+        from ai_router.registry import by_slug
+        home = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, home, True)
+        state = _state(home)
+        (home / 'mixed-router-state.json').write_text(json.dumps(state))
+        stale = dict(openrouter_entry(by_slug('z-ai/glm-5.3-flash')),
+                     slug='gpt-6-astra', display_name='GPT-6-Astra')
+        (home / 'mixed-models.json').write_text(
+            json.dumps({'models': [stale]}))
+        form = b'key=sk-test&mode=none'
+        status, _ = setup.handle_setup(state, home, 'n' * 16, True, form,
+                                       _urlopen=_key_ok(), _now=NOW)
+        self.assertEqual(status, 200)
+        slugs = {m['slug'] for m in
+                 json.loads((home / 'mixed-models.json').read_text())['models']}
+        self.assertIn('openai/gpt-6-astra', slugs)
+        self.assertNotIn('gpt-6-astra', slugs)
+        self.assertTrue(check(str(home / 'mixed-models.json'), 'codex',
+                               include_twins=True))
 
     def test_post_on_windows_refuses_unprotectable_key(self):
         # The nt branch verifies the platform ACL after writing; a failed

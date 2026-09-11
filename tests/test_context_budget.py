@@ -4,6 +4,7 @@ import unittest
 from types import SimpleNamespace
 
 from ai_router import context_budget, errors, providers
+from ai_router.image_items import IMAGE_TOKEN_ALLOWANCE, count_images, strip_images
 from tests.fakes import FakeUpstream, install_fake
 from tests.test_handler import _post
 from tests.test_mixed_router import _start_server, _test_state
@@ -63,20 +64,44 @@ class EstimateTests(unittest.TestCase):
 
     def test_excludes_image_payloads(self):
         img = 'data:image/png;base64,' + 'A' * 500000
-        with_images = context_budget.estimate(
-            {'input': [{'content': [{'type': 'input_text', 'text': 'see this'},
-                                    {'type': 'input_image', 'image_url': img}]}]})
-        self.assertLess(with_images, 1000)
+        items = [{'content': [{'type': 'input_text', 'text': 'see this'},
+                              {'type': 'input_image', 'image_url': img}]}]
+        stripped = [{'content': [{'type': 'input_text', 'text': 'see this'}]}]
+        expected = IMAGE_TOKEN_ALLOWANCE + len(json.dumps(stripped)) // 4
+        estimate = context_budget.estimate({'input': items})
+        self.assertEqual(estimate, expected)
+        # A 500KB base64 payload must not inflate the estimate.
+        self.assertLess(estimate, 10000)
 
-    def test_mixed_text_and_image_counts_text_only(self):
+    def test_mixed_text_and_image_counts_text_plus_allowance(self):
         img = 'data:image/png;base64,' + 'A' * 500000
-        mixed = context_budget.estimate(
-            {'input': [{'content': [{'type': 'input_text',
-                                     'text': 'x' * 4000},
-                                    {'type': 'input_image',
-                                     'image_url': img}]}]})
-        self.assertGreater(mixed, 900)
-        self.assertLess(mixed, 2000)
+        items = [{'content': [{'type': 'input_text', 'text': 'x' * 4000},
+                              {'type': 'input_image', 'image_url': img}]}]
+        stripped = [{'content': [{'type': 'input_text', 'text': 'x' * 4000}]}]
+        expected = IMAGE_TOKEN_ALLOWANCE + len(json.dumps(stripped)) // 4
+        estimate = context_budget.estimate({'input': items})
+        self.assertEqual(estimate, expected)
+        # A 500KB base64 payload must not inflate the estimate.
+        self.assertLess(estimate, 10000)
+
+    def test_tool_output_images_do_not_exhaust_the_window(self):
+        # Thread 01a08d41 (2026-09-11, deepseek/deepseek-v4.1-flash) was
+        # refused as context_length_exceeded with used=1249940: three
+        # view_image results replayed as base64 inside function_call_output
+        # items counted at ~4 chars/token as phantom text tokens.
+        items = [{'type': 'message', 'role': 'user',
+                  'content': [{'type': 'input_text',
+                               'text': 'x' * 1052000}]}]
+        for seq in range(3):
+            items.append({'type': 'function_call_output', 'call_id': f'c{seq}',
+                          'output': [{'type': 'input_image',
+                                      'image_url': 'data:image/png;base64,'
+                                                   + 'A' * 1400000,
+                                      'detail': 'high'}]})
+        payload = {'model': MODEL, 'input': items}
+        self.assertLess(context_budget.estimate(payload), 1048576 - 32000)
+        sent = ContextBudgetTests().prepare(payload)
+        self.assertEqual(sent['max_output_tokens'], 32000)
 
     def test_refusal_record_carries_model_and_estimate(self):
         prepare = ContextBudgetTests().prepare
@@ -86,6 +111,57 @@ class EstimateTests(unittest.TestCase):
         self.assertEqual((budget['model'], budget['path']), (MODEL, '/responses'))
         self.assertGreater(budget['used'], 1000000)
         self.assertEqual((budget['reserved'], budget['window']), (32000, 1048576))
+
+
+class EstimateParityTests(unittest.TestCase):
+    """Pin the counting sink against the previous json.dumps implementation."""
+
+    def _legacy(self, payload):
+        if not isinstance(payload, dict):
+            return 0
+        try:
+            items = payload.get('input', [])
+            if not isinstance(items, list):
+                items = []
+            total = (count_images(items) * IMAGE_TOKEN_ALLOWANCE
+                     + len(json.dumps(strip_images(items, False))) // 4)
+            if isinstance(payload.get('tools'), list):
+                total += len(json.dumps(payload['tools'])) // 4
+            if isinstance(payload.get('instructions'), str):
+                total += len(payload['instructions']) // 4
+            return total
+        except (ValueError, TypeError):
+            return 0
+
+    def _shapes(self):
+        img = {'type': 'input_image', 'image_url': 'data:image/png;base64,' + 'A' * 5000}
+        block = {'type': 'message', 'role': 'user', 'content': [
+            {'type': 'input_text', 'text': 'x' * 4000}, img]}
+        return {
+            'images excluded': {'input': [block]},
+            'tools included': {'input': [],
+                                'tools': [{'name': f'f{i}', 'description': 'd' * 200}
+                                          for i in range(9)]},
+            'instructions included': {'input': [], 'instructions': 'y' * 8000},
+            'malformed payload': {'input': 'not-a-list', 'tools': 'nope'},
+            # ensure_ascii escaping must count the same as the old string form
+            'non-ascii text and keys': {'input': [{'content': 'nac\u0308ive \U0001f600'}],
+                                        'instructions': '\u00e9' * 4000,
+                                        'tools': [{'n\u00e4me': 'x' * 100}]},
+            'numeric edge shapes': {'input': [{'content': None}, {'v': float('nan')},
+                                              {'v': 9007199254740993}],
+                                    'tools': [{'n': True}, {'n': -0.0}]},
+        }
+
+    def test_counting_sink_matches_legacy_counts(self):
+        for name, payload in self._shapes().items():
+            with self.subTest(shape=name):
+                self.assertEqual(context_budget.estimate(payload),
+                                   self._legacy(payload))
+        for payload in ('nope', 42, None):
+            with self.subTest(payload=repr(payload)):
+                self.assertEqual(context_budget.estimate(payload), 0)
+
 
 
 class ContextWireTests(unittest.TestCase):

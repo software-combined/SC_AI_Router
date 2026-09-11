@@ -21,15 +21,19 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# Bootstrap loader (Plan 123 exception): service must be spec-loaded before
+# service.load() exists, so this single bootstrap copy stays.
 _spec = importlib.util.spec_from_file_location(
     'packaging.service',
     Path(__file__).resolve().parent / 'service.py')
 _svc = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_svc)
-_cfg_spec = importlib.util.spec_from_file_location(
+_codex_config = _svc.load(
     'router_codex_config', Path(__file__).resolve().parent / 'codex_config.py')
-_codex_config = importlib.util.module_from_spec(_cfg_spec)
-_cfg_spec.loader.exec_module(_codex_config)
+# Same injection as install.py: this copy is read-only by contract today, but a
+# future write path must not hit the un-injected guard (Plan 094).
+_codex_config._atomic_write = _svc.load(
+    'router_atomic_write', Path(__file__).resolve().parent / 'atomic_write.py')
 
 find_python = _svc.find_python
 health = _svc.health
@@ -41,10 +45,8 @@ _SEAM_NAMES = {'feed_url': 'FEED_URL', 'route_prefix': 'github_route_prefix',
                'codex_config': '_codex_config'}
 
 
-_winacl_spec = importlib.util.spec_from_file_location(
+_winacl = _svc.load(
     'router_winacl', Path(__file__).resolve().parents[1] / 'ai_router' / 'winacl.py')
-_winacl = importlib.util.module_from_spec(_winacl_spec)
-_winacl_spec.loader.exec_module(_winacl)
 
 
 def _key_private(key_file):
@@ -99,7 +101,7 @@ def do_preflight(args):
     # needs the `gh` binary; the token-gated feed needs nothing beyond this
     # machine. Prefix test only: github_asset() itself would spawn `gh`.
     if feed.startswith(github_route_prefix):
-        if _svc.feed_token(home) is None and shutil.which('gh') is None:
+        if _svc.feed_token(home) is None and _svc.gh_binary() is None:
             missing.append('GitHub CLI (gh) binary not found: install gh, sign it in '
                            'with `gh auth login` as this user, or re-run the '
                            'bootstrap from the Technology library to migrate '

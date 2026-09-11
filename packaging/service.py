@@ -33,14 +33,30 @@ except ImportError:       # pragma: no cover - POSIX
 import sys
 
 import importlib.util  # noqa: E402
-_ld_spec = importlib.util.spec_from_file_location(
-    'router_launchd', Path(__file__).resolve().parent / 'launchd.py')
-_launchd = importlib.util.module_from_spec(_ld_spec)
-_ld_spec.loader.exec_module(_launchd)
-_feed_spec = importlib.util.spec_from_file_location(
-    'router_feed', Path(__file__).resolve().parent / 'feed.py')
-_feed = importlib.util.module_from_spec(_feed_spec)
-_feed_spec.loader.exec_module(_feed)
+
+
+def load(name, filename):
+    """Load one sibling module from its file path (Plan 123).
+
+    The single 3.9-safe loader for every packaging module: the
+    spec-from-file + module_from_spec + exec_module sequence.
+    Callers resolve `filename` against their own __file__ so relocated
+    (installed) trees keep working.
+    """
+    spec = importlib.util.spec_from_file_location(name, filename)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_launchd = load('router_launchd', Path(__file__).resolve().parent / 'launchd.py')
+_feed = load('router_feed', Path(__file__).resolve().parent / 'feed.py')
+_roster = load('router_subscription_roster',
+               Path(__file__).resolve().parents[1] / 'ai_router' / 'subscription_roster.py')
+_retired = load('router_retired_slugs',
+                Path(__file__).resolve().parents[1] / 'ai_router' / 'retired_slugs.py')
+_atomic_write = load('router_atomic_write',
+                     Path(__file__).resolve().parent / 'atomic_write.py')
 
 # Patchable seam so tests never sleep through a real launchd settle window.
 _sleep = time.sleep
@@ -49,11 +65,17 @@ UNLOAD_TIMEOUT_S = 180
 LOAD_TIMEOUT_S = 60
 
 # Subscription-side roster for the combined picker: bare slugs that route on
-# the ChatGPT subscription. Matches the live picker and state file; the
-# OpenRouter-side roster lives in ai_router/models.json instead.
-DEFAULT_OPENAI_MODELS = ['gpt-6-astra', 'gpt-5.6-sol',
-                         'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5',
-                         'gpt-5.4-mini', 'gpt-5.3-codex-spark', 'codex-auto-review']
+# the ChatGPT subscription. Single-sourced from ai_router/subscription_roster.py
+# (spec-loaded above: a package import would break the installed launchers,
+# which spec-load this module before any sys.path insert). Matches the live
+# picker and state file; the OpenRouter-side roster lives in
+# ai_router/models.json instead.
+DEFAULT_OPENAI_MODELS = list(_roster.SUBSCRIPTION_SLUGS)
+
+# Subscription slugs withdrawn from the picker, single-sourced from
+# ai_router/retired_slugs.py (Plan 100; spec-loaded above for the same
+# relocated-tree reason as the roster).
+RETIRED_SUBSCRIPTION_SLUGS = frozenset(_retired.SUBSCRIPTION)
 
 LABEL = 'com.local.codex-mixed-model-router'
 UPDATE_LABEL = LABEL + '.update'
@@ -67,6 +89,7 @@ persist_feed_token = _feed.persist_feed_token
 trusted_origin = _feed.trusted_origin
 channel_feed = _feed.channel_feed
 feed_source = _feed.feed_source
+gh_binary = _feed.gh_binary
 
 
 def github_asset(url):
@@ -74,8 +97,7 @@ def github_asset(url):
     if route is None:
         return None
     tag, asset = route
-    gh = shutil.which('gh') or next((p for p in (
-        '/opt/homebrew/bin/gh', '/usr/local/bin/gh', '/usr/bin/gh') if Path(p).is_file()), None)
+    gh = _feed.gh_binary()
     if gh is None:
         raise SystemExit('Private router updates require GitHub CLI (gh), signed in as this user.')
     result = run(_feed.github_command(gh, tag, asset), capture_output=True, timeout=120)
@@ -601,9 +623,7 @@ def install_launcher(home, release_dir):
 
 
 def _write_state(home, state):
-    fd = os.open(home / 'mixed-router-state.json', os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, 'w') as stream:
-        stream.write(json.dumps(state, indent=2) + '\n')
+    _atomic_write.replace_text(home / 'mixed-router-state.json', json.dumps(state, indent=2) + '\n')
 
 
 def ensure_state(home):
@@ -612,11 +632,14 @@ def ensure_state(home):
         state = json.loads(path.read_text())
         if not isinstance(state.get('openai_models'), list):
             state['openai_models'] = list(DEFAULT_OPENAI_MODELS)
-            path.write_text(json.dumps(state, indent=2) + '\n')
-        elif 'gpt-reserve' in state['openai_models']:
-            # Retired slug: prune so routing stops authorizing it on update.
-            state['openai_models'].remove('gpt-reserve')
-            path.write_text(json.dumps(state, indent=2) + '\n')
+            _atomic_write.replace_text(path, json.dumps(state, indent=2) + '\n')
+        elif any(slug in state['openai_models'] for slug in RETIRED_SUBSCRIPTION_SLUGS):
+            # Retired slugs: prune so routing stops authorizing them on update.
+            # Type-check first: a corrupt non-string element must not be hashed.
+            state['openai_models'] = [
+                s for s in state['openai_models']
+                if not (isinstance(s, str) and s in RETIRED_SUBSCRIPTION_SLUGS)]
+            _atomic_write.replace_text(path, json.dumps(state, indent=2) + '\n')
         return state
     port = 18749
     probe = socket.socket()
