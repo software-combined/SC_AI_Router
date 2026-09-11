@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- The restart notice is about the picker, not the version: it is staged only
+  when a release adds a picker row the last install did not announce, so a
+  routine update no longer asks for a Codex restart that would change
+  nothing. An attempt that merged rows and then failed still prompts on its
+  retry, an unshown notice is refreshed with the running version, a notice
+  that could not be written is retried by the next install, and a catalogue
+  or baseline this comparison cannot read keeps the previous behaviour and
+  stages the notice. Additions that never pass through an install (live
+  refresh, picker mode changes) still need Plan 135.
+
 - The picker pins exact model ids: `anthropic/claude-opus-5`,
   `anthropic/claude-sonnet-5`, `anthropic/claude-fable-5.1`,
   `anthropic/claude-haiku-4.5`, `google/gemini-3.8-flash`,

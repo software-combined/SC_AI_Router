@@ -31,6 +31,7 @@
   "tests/test_windows_acl.py": 324,
   "tests/test_windows_backend.py": 374,
   "tools/probe_agent_handoffs.py": 496,
-  "packaging/notice.py": 428,
-  "tests/test_notice_delivery.py": 347
+  "packaging/notice.py": 500,
+  "tests/test_notice.py": 366,
+  "tests/test_notice_delivery.py": 398
 }
