@@ -77,7 +77,7 @@ below interleaves them.
 | [127](127-providers-setup-module-splits.md) | Split upstream failure policy and setup pages out | DONE: landed by 141 2026-09-11 | after 101; before 128 |
 | [128](128-router-handler-decomposition.md) | Decompose router.py into ingress + relay | DONE: router decomposition 2026-09-12 | after 090/091/093/096 |
 | [129](129-tool-merge-unification.md) | One tool-definition merge rule | DONE: shared tool-merge rule 2026-09-12 | after 091/096/097 |
-| [130](130-installer-bundle-split.md) | packaging/bundle.py: real installer headroom | TODO | after 102/123 |
+| [130](130-installer-bundle-split.md) | packaging/bundle.py: real installer headroom | DONE: installer bundle split 2026-09-12 | after 102/123 |
 | [131](131-service-state-writer-decomposition.md) | Service/state/writer decomposition | TODO | after 094/095/100/103/123; coordinate 106 |
 | [132](132-windows-backend-cleanup.md) | Windows backend cleanup | TODO | before/with 116; after 123 |
 | [133](133-probe-harness-consolidation.md) | One app-server probe harness | TODO | before 118/119 |

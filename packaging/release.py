@@ -23,7 +23,8 @@ REPO = 'software-combined/SC_OpenRouter_adapter'
 # bundle_files() and keeps an explicit required-files assertion, so a member
 # dropped from this list still fails the gate.
 PACKAGING_FILES = (
-    'packaging/VERSION', 'packaging/install.py', 'packaging/launchd.py',
+    'packaging/VERSION', 'packaging/install.py', 'packaging/bundle.py',
+    'packaging/launchd.py',
     'packaging/router_launch.py', 'packaging/service.py',
     'packaging/feed.py', 'packaging/atomic_write.py',
     'packaging/notice.py',

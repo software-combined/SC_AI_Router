@@ -72,7 +72,7 @@ REQUIRED_PACKAGING = (
     'packaging/launchd.py', 'packaging/service.py',
     'packaging/feed.py', 'packaging/atomic_write.py',
     'packaging/notice.py', 'packaging/assets/router-icon.png',
-    'packaging/install.py', 'packaging/updater.py',
+    'packaging/install.py', 'packaging/bundle.py', 'packaging/updater.py',
     'packaging/codex_config.py', 'packaging/claude_config.py',
     'packaging/claude_desktop_config.py', 'packaging/systemd.py',
     'packaging/diagnostics.py', 'packaging/provider_keys.py',
@@ -200,7 +200,7 @@ class PackagingTests(unittest.TestCase):
         import ast
         root = Path(__file__).resolve().parents[1]
         surface = [
-            'packaging/install.py', 'packaging/service.py',
+            'packaging/install.py', 'packaging/bundle.py', 'packaging/service.py',
             'packaging/feed.py', 'packaging/atomic_write.py',
             'packaging/notice.py',
             'packaging/launchd.py', 'packaging/router_launch.py',
