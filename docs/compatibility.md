@@ -167,22 +167,25 @@ Per-model quirks, generated from the registry:
 
 | model | modalities | schema | max tools | excluded efforts | tier |
 |---|---|---|---|---|---|
-| meta/muse-spark-1.3 | text,image,audio | json_text | None | - | verified |
+| anthropic/claude-fable-5.1 | text,image | native | None | - | verified |
+| anthropic/claude-haiku-4.5 | text,image | native | None | - | verified |
+| anthropic/claude-opus-5 | text,image | native | None | - | verified |
+| anthropic/claude-sonnet-5 | text,image | native | None | - | verified |
+| deepseek/deepseek-v4-pro-0813 | text | native | None | - | verified |
+| deepseek/deepseek-v4.1-flash | text,image | native | None | - | verified |
+| google/gemini-3.1-pro-preview | text,image,audio | native | None | - | verified |
+| google/gemini-3.8-flash | text,image,audio | native | None | - | verified |
 | meta/muse-spark-1.3-contributor | text,image,audio | json_text | None | max | verified |
+| meta/muse-spark-1.3 | text,image,audio | json_text | None | - | verified |
+| moonshotai/kimi-k3 | text,image | native | None | - | verified |
+| openai/gpt-5.6-luna | text,image | native | None | - | verified |
+| openai/gpt-5.6-sol | text,image | native | None | - | verified |
+| openai/gpt-5.6-terra | text,image | native | None | - | verified |
+| openai/gpt-6-astra | text,image | native | None | - | verified |
+| qwen/qwen3.8-max-0902 | text,image | native | None | - | verified |
+| x-ai/grok-4.6 | text,image | json_text_root | 350 | - | verified |
 | z-ai/glm-5.3-flash | text,image | native | None | - | verified |
 | z-ai/glm-5.3 | text | native | None | - | verified |
-| moonshotai/kimi-k3 | text,image | native | None | - | verified |
-| ~x-ai/grok-latest | text,image | json_text_root | 350 | - | verified |
-| qwen/qwen3.8-max-0902 | text,image | native | None | - | verified |
-| ~google/gemini-flash-latest | text,image,audio | native | None | - | verified |
-| ~google/gemini-pro-latest | text,image,audio | native | None | - | verified |
-| openai/gpt-6-astra | text,image | native | None | - | verified |
-| openai/gpt-5.6-sol | text,image | native | None | - | verified |
-| openai/gpt-5.6-luna | text,image | native | None | - | verified |
-| openai/gpt-5.6-terra | text,image | native | None | - | verified |
-| ~anthropic/claude-sonnet-latest | text,image | native | None | - | verified |
-| anthropic/claude-opus-5 | text,image | native | None | - | preview |
-| anthropic/claude-fable-5.1 | text,image | native | None | - | preview |
 
 ## Probe runs 2026-09-08
 
@@ -268,3 +271,21 @@ the user or system location. Router `GET /v1/models` = 20 rows.
   readback through `install.py --desktop`. Both wait on release plus
   deploy of this source to the live router and an app relaunch, then
   this entry gets the observed picker count.
+
+## Pinned Claude rows, 2026-09-11
+
+`models add <slug> --probe`, base tool round trip through the isolated
+router (Codex CLI 0.153.1, OpenRouter key via OpenCode auth):
+
+| model | tier | date | probes |
+|---|---|---|---|
+| anthropic/claude-fable-5.1 | verified | 2026-09-11 | base round trip |
+| anthropic/claude-opus-5 | verified | 2026-09-11 | base round trip |
+| anthropic/claude-haiku-4.5 | verified | 2026-09-11 | base round trip at `--effort none`; the harness default `low` is refused by the router's effort gate because `none` is the only supported effort |
+
+The Haiku row was probed by hand with `--effort none` because
+`models add --probe` carries no effort flag. Sonnet 5, both Gemini rows and
+Grok 4.6 keep the `verified` tier their retired alias rows earned, since
+each alias resolved to the pinned id at the rename (Grok's 2026-09-08 base
+round trip is recorded above); no separate pinned-id probe is recorded for
+the other three.
