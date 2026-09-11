@@ -167,7 +167,6 @@ class InstallConfigTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             home.mkdir()
-            (home / 'feed-token').write_text('tok-1\n')
             _install(self, tmp, home, '1.0.0', feed=None)
             agents = Path(tmp) / 'fakehome' / 'Library' / 'LaunchAgents'
             doc = plistlib.loads(
@@ -182,7 +181,6 @@ class InstallConfigTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             home.mkdir()
-            (home / 'feed-token').write_text('tok-1\n')
             _install(self, tmp, home, '1.0.0', feed=None)
             agents = Path(tmp) / 'fakehome' / 'Library' / 'LaunchAgents'
             doc = plistlib.loads(
@@ -391,7 +389,6 @@ class InstallConfigTests(unittest.TestCase):
             home.mkdir()
             (home / 'mixed-router-state.json').write_text(
                 json.dumps({'port': 1, 'token': 'x'}) + '\n')
-            (home / 'feed-token').write_text('tok-1\n')
             rel = home / 'releases' / '1.0.0'
             (rel / 'packaging').mkdir(parents=True)
             (rel / 'packaging' / 'VERSION').write_text('1.0.0\n')

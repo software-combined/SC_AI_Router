@@ -9,8 +9,10 @@
 ## Status and first proof
 
 - Priority P1; effort S; risk MED (deployment/supply chain); category
-  infra/security; depends on plan 142 (licence) and plan 143 (cutover +
-  rotation) completing first.
+  infra/security; depends on plan 142 (licence) completing first. The plan
+  143 token rotation is gone (owner decision 2026-09-12: the feed is public
+  and token-free); only retiring the inert `v0.6.25.42` token-bearing asset
+  below remains.
 - Planned at `28a1af4`, 2026-09-11.
 - First proof: the repository can be made public without granting any new
   path to secrets, releases or the feed, and every control below reads back
@@ -55,7 +57,8 @@ pre-flip cleanup owned by plans 142 and 143.
 - Add a `release` environment with required reviewers (owner: `SC-Cyril`)
   and a tag-only deployment rule; attach it to `release.yml`'s publish job.
 - Enable immutable releases only after the `v0.6.25.42` token-bearing asset
-  has been removed or superseded (plan 143, Step 6).
+  has been removed or superseded (retired as hygiene; there is no token to
+  rotate).
 
 **Verify**: `gh api repos/software-combined/SC_OpenRouter_adapter/branches/main/protection`,
 the tag ruleset, the environment, and the immutable-releases setting each
@@ -87,7 +90,7 @@ accepted items, recorded in the plan status.
 
 ### Step 4: the flip and post-flip checks
 
-Only after plans 142 and 143 are complete and the owner approves:
+Only after plan 142 is complete and the owner approves:
 1. Flip the repository visibility to public.
 2. Re-check `allow_forking`, fork-PR approval settings, secret scanning on
    the first public push, and that Actions are still read-only by default.
@@ -97,8 +100,8 @@ Only after plans 142 and 143 are complete and the owner approves:
    private-repository links.
 
 **Verify**: a fresh clone from the public URL passes `python3.14 -m
-unittest discover -s tests -t .`, and a tokenless second machine installs
-manually while performing no automatic updates.
+unittest discover -s tests -t .`, and a second machine installs from the
+public feed and updates itself automatically.
 
 ## Done criteria
 
@@ -106,13 +109,13 @@ manually while performing no automatic updates.
 - [ ] Secret scanning + push protection enabled; Gitleaks in required checks.
 - [ ] Workflow inputs hash-pinned; CODEOWNERS review required for `.github/`.
 - [ ] Public text audit recorded.
-- [ ] Flip performed only after plans 142 and 143; post-flip checks recorded.
+- [ ] Flip performed only after plan 142; post-flip checks recorded.
 
 ## STOP conditions
 
-- Any plan 142 or 143 gate is unfinished: do not flip.
-- A public scan finds a live credential or token-bearing release asset: STOP,
-  rotate/remove first, then repeat the scan.
+- Any plan 142 gate is unfinished: do not flip.
+- A public scan finds a live credential or the unretired token-bearing
+  release asset: STOP, remove it first, then repeat the scan.
 - A control cannot be enabled without paying for a GitHub plan the owner has
   not approved: STOP and record the gap (this is an owner decision, not a
   code workaround).

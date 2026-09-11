@@ -127,6 +127,18 @@ to add or swap an external provider; no protocol translation is in scope.
 |---|---|---|---|
 | [141](141-provider-abstraction.md) | Provider abstraction: one definition per upstream | DONE: provider abstraction 2026-09-11 (also lands 127's provider and setup-page splits) | independent; 126/128/134 rebase on it |
 
+## Public release wave (142-144)
+
+Added 2026-09-11, amended 2026-09-12: relicence to Apache-2.0, replace the
+token-gated update feed with the public token-free feed, and harden the
+repository before the visibility flip.
+
+| Plan | Title | Status | Sequencing |
+|---|---|---|---|
+| [142](142-apache-2-public-licence.md) | Relicense the repository to Apache-2.0 only | PARTIAL: source landed 2026-09-11; owner approval and prompt-file provenance before merge | before 143/144 |
+| [143](143-enrolment-only-auto-update.md) | Enrolment-only auto-update | SUPERSEDED 2026-09-12: the public token-free feed replaced it; kept as history | superseded by the owner decision |
+| [144](144-public-repo-controls.md) | Public repository controls and visibility flip | TODO: owner-gated | after 142/143 |
+
 ## Recommended overall order
 
 Work top to bottom; stop at owner gates and report. Phases 0-2 are local; 3-5 are largely

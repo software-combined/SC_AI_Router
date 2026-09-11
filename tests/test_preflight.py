@@ -25,31 +25,18 @@ class PreflightTests(unittest.TestCase):
                 rc = install_mod.do_preflight(
                     self._args('--feed', 'file:///bundle.tar.gz'))
         self.assertEqual(rc, 0)
-        self.assertIn('Python, feed-route, and client prerequisites present', buf.getvalue())
+        self.assertIn('Python and client prerequisites present', buf.getvalue())
 
     def test_preflight_reports_everything_missing_together(self):
         _patch_attrs(self, find_python=lambda explicit=None: None)
-        diag_feed = install_mod._diag._svc._feed
-        with mock.patch.object(install_mod.shutil, 'which', return_value=None), \
-                mock.patch.object(diag_feed, 'gh_candidates', return_value=()):
+        with mock.patch.object(install_mod.shutil, 'which', return_value=None):
             buf = io.StringIO()
             with contextlib.redirect_stdout(buf):
                 with self.assertRaisesRegex(SystemExit, '2'):
                     install_mod.do_preflight(self._args())
         out = buf.getvalue()
         self.assertIn('no Python 3.14 found', out)
-        self.assertIn('not enrolled for automatic updates', out)
         self.assertIn('Codex CLI not found', out)
-
-    def test_preflight_explicit_feed_skips_gh_requirement(self):
-        _patch_attrs(self, find_python=lambda explicit=None: '/usr/bin/python3.14')
-        with mock.patch.object(install_mod.shutil, 'which',
-                               side_effect=lambda name: None if name == 'gh' else '/usr/bin/x'):
-            buf = io.StringIO()
-            with contextlib.redirect_stdout(buf):
-                rc = install_mod.do_preflight(
-                    self._args('--feed', 'file:///bundle.tar.gz'))
-        self.assertEqual(rc, 0)
 
     def test_preflight_service_only_skips_codex_requirement(self):
         _patch_attrs(self, find_python=lambda explicit=None: '/usr/bin/python3.14')

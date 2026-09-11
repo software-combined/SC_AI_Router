@@ -6,7 +6,8 @@ Work lands on `develop` via `fix/*`/`feat/*` branches, then `develop`
 merges to `main` via PR. Tag the merge `v$(cat packaging/VERSION)` (or
 `v*-beta` for pre-releases): the release workflow runs on `v*` tags
 only, runs the suite, builds the bundle, publishes the release to the
-token-gated feed, and then creates the GitHub Release with `latest.json`.
+public feed, and then creates the GitHub Release with `latest.json` as a
+public mirror for humans.
 Every router on the stable channel installs it within about four hours.
 Never push to `main` directly for a release; a direct push runs
 checks but publishes nothing.
@@ -29,106 +30,33 @@ aws cloudformation deploy --stack-name scg-router-feed --region ap-southeast-2 \
   --parameter-overrides CertificateArn="$CERT"
 ```
 
-`infra/feed.yaml` owns the private versioned bucket, the CloudFront
-distribution and its viewer-request token gate, the DNS alias, and the
+`infra/feed.yaml` owns the versioned bucket (private to S3, served publicly
+through CloudFront), the CloudFront distribution, the DNS alias, and the
 publisher role. The role is assumable only by
 `token.actions.githubusercontent.com`, and only for this repository's tag
 refs: `repo:software-combined/SC_OpenRouter_adapter:ref:refs/tags/v*` in the
 classic subject form, or
 `repo:software-combined@200868195/SC_OpenRouter_adapter@1360169840:ref:refs/tags/v*`
 in GitHub's immutable form. It can read and write objects in the feed
-bucket, list the bucket, invalidate the feed, read the stack outputs and
-read the token parameter. It cannot delete objects, write the token stores,
-or touch any other resource.
+bucket, list the bucket, invalidate the feed, and read the stack outputs.
+It cannot delete objects or touch any other resource. The feed and its
+bundles are public: readers need no credential.
 
-### Feed tokens
-
-The gate is a CloudFront KeyValueStore: a request is served only when
-`X-SCG-Feed-Token` is a store key whose value is `active`. Every other
-request, including a lookup error, gets 403. The workflow reads the current
-value from the SecureString `/scg/router-feed/current-token` and embeds it
-in the feed's `latest.json`; the value is never an argv word, never printed
-and never logged.
-
-The stack deliberately does not create the parameter, so a stack update
-cannot overwrite a live token. Seed both stores once, after the first
-deploy:
-
-```sh
-TOKEN="$(python3 -c 'import secrets;print(secrets.token_hex(32))')"
-aws cloudfront-keyvaluestore put-key --kvs-arn "<KeyValueStoreArn>" \
-  --key "$TOKEN" --value active --if-match "<etag>"
-aws ssm put-parameter --region ap-southeast-2 \
-  --name /scg/router-feed/current-token \
-  --type SecureString --value "$TOKEN" --overwrite
-```
-
-Verify the gate before trusting a release. Before the first publish the
-channel documents do not exist, so even a valid token gets 403; run the
-positive check after the first release.
+Verify the feed before trusting a release. Before the first publish the
+channel documents do not exist; run the positive check after the first
+release.
 
 ```sh
 curl -s -o /dev/null -w '%{http_code}\n' https://dist.softwarecombined.com/stable/latest.json
-# 403: no header, and also before the first publish. After a release, a
-# request with the token header returns the feed document.
+# 200 once a release is published.
 ```
 
-Rotation keeps the fleet polling. Add the new value to the KeyValueStore as
-a second key (`aws cloudfront-keyvaluestore describe-key-value-store`
-returns the `--if-match` ETag, and the write fails on a stale one), put the
-new value in SSM, then republish the current release: re-run the release
-workflow for the latest release tag. A new tag only publishes when its
-version equals `packaging/VERSION`, and re-running an older tag replays that
-older document, which up-to-date hosts refuse; the release step of a re-run
-reports the existing GitHub Release, but the feed publish runs first.
+### Retired: token rotation and the embed-token migration switch (2026-09-12)
 
-Record the version the channel serves before the republish, wait one poll
-cycle plus the updater's bounded jitter (14400 s plus up to 120 s, so allow
-about 4 hours), then confirm the edge accepts the new value, the served
-document carries it, and the document is still that release before deleting
-the retired key:
-
-```sh
-# Run this before the republish, while OLD is still active.
-BEFORE="$(curl -s -H "X-SCG-Feed-Token: $OLD" \
-  https://dist.softwarecombined.com/<channel>/latest.json \
-  | python3 -c 'import json,sys;print(json.load(sys.stdin)["version"])')"
-
-# OLD = retired token value, NEW = its replacement.
-test -n "$NEW" || { echo 'NEW is unset'; exit 1; }
-AFTER="$(curl -sf -H "X-SCG-Feed-Token: $NEW" \
-  https://dist.softwarecombined.com/<channel>/latest.json \
-  | python3 -c 'import json,sys;d=json.load(sys.stdin);print(d["version"], d["feed_token"])')"
-[ "$AFTER" = "$BEFORE $NEW" ] \
-  && echo "the edge accepts the new token and the channel serves it; safe to retire the old key"
-```
-
-Before retiring the key, all of these must hold: the edge accepts `$NEW`,
-the served document carries `$NEW`, and it is still the release you
-recorded. A failed request means the new key is not in the store; a version
-that differs means the republish was not that release — an older document
-is refused by up-to-date hosts, and a newer one means a release shipped
-alongside the rotation, so check against its version instead.
-
-Repeat for every channel in use (`stable` and `beta`) before retiring the
-key: a channel you do not republish still serves the old token, and its
-hosts lose updates when that key is deleted.
-
-A host keeps the previous value in `feed-token.previous` and retries a 403
-once with it, which is what makes the overlap invisible. Never retire the
-key before that check passes: a host that has not yet seen the new document
-has only the retired value. A host offline for the whole rotation needs the
-bootstrap again; a double 403 names the Technology library bootstrap as the
-remedy without leaking bytes.
-
-### Migration switch and rollback
-
-`ROUTER_FEED_EMBED_TOKEN` (repository variable) makes the publisher also
-carry the token in the GitHub Release copy of `latest.json`. Hosts that
-still read the private repository pick the token up on their next poll,
-persist it owner-only, and never read the release asset again. Set it for
-the transition release, unset it once the fleet has polled, then rotate the
-token so the value that appeared in a release asset is dead.
+There is no feed token to rotate: the feed is public and token-free. The
+old token-bearing `latest.json` asset on the `v0.6.25.42` release is inert
+but should still be retired before enabling immutable releases. The
+repository visibility flip remains its own owner-gated step (plan 144).
 
 Feed bundles are immutable and the updater refuses a feed whose serial is
 older than the last accepted one, so recovering from a bad release is
@@ -141,28 +69,36 @@ an idle moment. Moving a host from `beta` back to `stable` needs
 `<home>/feed-serial` cleared first, or the lower stable serial is refused
 as stale.
 
-## Update feed and enrolment-only auto-update
+## Update feed: public and automatic
 
-Automatic updates are for enrolled SC hosts only. Enrolment is the
-owner-only `<home>/feed-token` written by the SC bootstrap or MDM; a host
-without it makes no scheduled request at all (`--status` reports
-`feed: unenrolled`). An enrolled host polls
-`https://dist.softwarecombined.com/<channel>/latest.json` with the
-`X-SCG-Feed-Token` header and needs no GitHub account or repository
-access. A feed that carries a rotated `feed_token` is persisted owner-only
-(previous value kept for one 403 retry) after the serial check and before
-the version comparison. Feeds and bundles off the trusted origins are
-refused, and a double 403 names the SC bootstrap as the remedy without
-leaking token bytes. A manual install passes `--feed` with a downloaded
-release document; `update.log` records each install with its source
-(`cloudfront`, `github`, or `local`).
+Every install polls the public feed at
+`https://dist.softwarecombined.com/<channel>/latest.json` with no token,
+no enrolment, no GitHub account and no repository access. The `channel`
+file in the router home (`~/.codex/mixed-model-router`) selects the
+document: `beta` follows the pre-release document, anything else (or a
+missing file) follows `stable`. Checks run every 4 hours (macOS
+`StartInterval` 14400, systemd `OnUnitInactiveSec=4h`, Windows `PT4H`);
+Linux also runs a first check 5 minutes after the timer activates, and
+macOS runs one when the job loads. Security rests on HTTPS from the
+trusted feed origin only (plus `file://` for manual installs), SHA-256
+verification of every bundle, version and identity checks, and the feed
+serial replay guard. Feeds and bundles off the trusted origins are
+refused. A manual install passes `--feed` with a downloaded release
+document; `--status` reports the feed source (`cloudfront`) and the
+channel. A leftover `feed-token` file on an older host is inert and can
+be ignored or deleted. `update.log` records each install with its source
+(`cloudfront` or `local`).
 
-First install for no-repo-access users uses the two bootstrap wrappers
+A host still on a pre-cutover build reaches the public-feed version with
+one bootstrap or one manual `--feed` install; after that it updates
+itself.
+
+First install uses the two bootstrap wrappers
 (`packaging/bootstrap.sh` for macOS/Linux, `packaging/bootstrap.ps1` for
-Windows) with the feed token. The bootstrap resolves the pinned runtime
-from `runtimes.json`, verifies the runtime and bundle checksums, writes
-the feed token, and runs the bundle installer; every download comes from
-the token-gated feed, so the recipient never touches GitHub.
+Windows). Each bootstrap downloads the pinned runtime and the release
+bundle from the public feed, verifies both checksums, and runs the bundle
+installer; `--channel=beta` follows pre-releases. The recipient never
+touches GitHub and supplies no token.
 
 The first-install assets are published by
 `tools/publish_first_install.py`: it reads `packaging/runtime.lock`,
@@ -179,24 +115,22 @@ python3.14 tools/publish_first_install.py --dry-run   # plan only
 python3.14 tools/publish_first_install.py             # download, verify, upload
 ```
 
-Hand a recipient the bootstrap URL and the token. Until the gated library
-page and per-install tokens land, the shared feed token is the credential,
-so rotating it retires every holder at once:
+Hand a recipient the bootstrap URL for their OS:
 
 ```sh
-curl -fsSL -H "X-SCG-Feed-Token: $TOKEN" \
-  https://dist.softwarecombined.com/bootstrap/bootstrap.sh -o bootstrap.sh
-SCG_FEED_TOKEN="$TOKEN" sh bootstrap.sh
+curl -fsSL https://dist.softwarecombined.com/bootstrap/bootstrap.sh -o bootstrap.sh
+sh bootstrap.sh
 ```
 
-The gated Technology site library page remains the self-serve follow-up,
-and a machine that cannot use the bootstrap's download path still gets
-its first install the old way.
+A machine that cannot use the bootstrap's download path still gets its
+first install from a handed-off release directory with
+`python3 packaging/install.py --feed file:///path/to/latest.json`, a
+one-shot pin that is never persisted.
 
-The library page also carries `docs/agent-install-prompt.md`: a
-paste-to-agent prompt so the user asks their own agent to run the
-bootstrap and verify setup. The prompt pins the production home, forbids
-printing secrets, and leaves client restarts to the user.
+`docs/agent-install-prompt.md` is the paste-to-agent prompt so the user
+asks their own agent to run the bootstrap and verify setup. The prompt
+pins the production home, forbids printing secrets, and leaves client
+restarts to the user.
 
 Never run the installer against a scratch `--home` on a live machine:
 service names are machine-wide, so even a /tmp home bootstraps, bootouts,
@@ -217,8 +151,9 @@ new permission.
 
 ## How to test first
 
-Tag `v*-beta` from `develop`. The workflow publishes a pre-release with
-`latest-beta.json`. Cyril's machine follows the `beta` channel (`beta`
+Tag `v*-beta` from `develop`. The workflow publishes a pre-release to the
+public beta document (`beta/latest.json`). Cyril's machine follows the
+`beta` channel (`beta`
 in the `channel` file beside the state directory), so it updates first;
 watch its `/health` version and `logs/update.log` before merging
 `develop` to `main` and tagging stable.
@@ -269,7 +204,7 @@ reporting a clean rollback over a dead machine. A version that fails three
 times is parked, so a bad release stops costing a service restart every
 four hours; run the installer by hand to retry. The count lives in the
 state file, which is what parks it on the production feed -- that feed is
-read through the GitHub CLI and carries no ETag to save. Linux uses
+read from the public feed. Linux uses
 systemd user service restart with a 150-second stop timeout; the launcher
 opens the same loopback port after the old process drains. It does not use
 launchd socket activation. Failed upgrades restore the prior catalogue too.
@@ -438,8 +373,8 @@ re-registering a running task keeps its instance, so the updater can refresh
 its own definition; and an interactive-token console task shows its window,
 so both tasks run `pythonw.exe` through `task_launch.py` in the router home
 (rewritten on every install), which appends stdout and stderr to
-`logs\launchd.log` and `logs\update.log` (rotated at 1 MB, one backup). Every console child (`schtasks`, `icacls`, `whoami`, `python`,
-`gh`) is spawned without a window.
+`logs\launchd.log` and `logs\update.log` (rotated at 1 MB, one backup). Every console child (`schtasks`, `icacls`, `whoami`, `python`)
+is spawned without a window.
 
 Restart and update: the task allows one instance (`IgnoreNew`), so a
 handover posts the authenticated `/shutdown`, waits for the instance to

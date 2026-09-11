@@ -10,12 +10,16 @@
   remains blocked until the provenance question for
   `ai_router/openrouter_base_instructions.txt` is resolved.
 
-- Automatic updates are enrolment-only: the owner-only `feed-token` written
-  by the SC bootstrap or MDM is the enrolment fact. A host without it makes
-  no scheduled request (the GitHub fallback is gone from the unattended
-  path), `--feed` remains the manual install and update route, and
-  `--status` reports the feed source and channel. Stable and beta channels
-  are unchanged for enrolled hosts.
+- Automatic updates come from the public token-free feed: every install
+  polls `https://dist.softwarecombined.com/<channel>/latest.json` with no
+  token, no enrolment, no GitHub account and no repository access. Checks
+  run every 4 hours (Linux also checks 5 minutes after the timer activates;
+  macOS checks when the job loads); the `channel` file in the router home
+  selects `stable` (default) or the
+  public pre-release document at `beta/latest.json`. Checksums, version
+  and identity checks, and the serial replay guard are unchanged, and
+  `--feed` remains the manual install and update route. A leftover
+  `feed-token` file on an older host is inert.
 
 - Providers are now data, not code paths: `ai_router/provider_defs.py` holds
   one definition per upstream (host, endpoint prefixes, key location, model
@@ -76,11 +80,11 @@
   in the `--client claude` catalogue merge.
 
 - First install no longer needs the repository: the pinned CPython runtimes
-  and both bootstrap wrappers are published to the token-gated feed, so a
-  machine holding only the feed token installs and then auto-updates with
-  no GitHub account, no `gh` and no repo access. The new
-  `tools/publish_first_install.py` verifies every runtime against
-  `packaging/runtime.lock` before upload and is idempotent.
+  and both bootstrap wrappers are published to the public feed, so any
+  machine installs and then auto-updates with no token, no GitHub account
+  and no repo access. The new `tools/publish_first_install.py` verifies
+  every runtime against `packaging/runtime.lock` before upload and is
+  idempotent.
 
 - First-run key setup is a native popup instead of a browser page: macOS,
   Windows and Linux are asked for the OpenRouter key, the ChatGPT-subscription
@@ -122,17 +126,15 @@
   plaintext was tried first but live acceptance rejected it (the child
   replied `NO-ASSIGNMENT` instead of acting on the assignment).
 
-- Tagged releases now publish to the token-gated update feed at
+- Tagged releases now publish to the public update feed at
   `dist.softwarecombined.com` as well as to GitHub Releases, so an
-  installed router updates with no GitHub account, no `gh` and no
+  installed router updates with no token, no GitHub account and no
   repository access. The feed stack lives in this repository
   (`infra/feed-cert.yaml` in us-east-1, `infra/feed.yaml` in
-  ap-southeast-2) behind an edge token gate, and a tag-only GitHub OIDC
-  role is the sole publisher. Existing hosts migrate themselves: the
-  transition release carries the feed token in the GitHub `latest.json`,
-  the updater persists it owner-only on its next poll and reads the feed
-  from then on. Bundles are immutable, the channel feed is invalidated on
-  publish, and no client request-path behaviour changes.
+  ap-southeast-2), and a tag-only GitHub OIDC role is the sole publisher.
+  GitHub Releases remain a public mirror of each release for humans,
+  published after the feed. Bundles are immutable, the channel feed is
+  invalidated on publish, and no client request-path behaviour changes.
 
 - Context size is the provider's call again: the OpenRouter pre-flight
   refused a turn whenever serialized characters divided by four exceeded
@@ -174,10 +176,8 @@
   no longer refused as over-context; image blocks now cost a flat per-block
   allowance, and text-only models detect images that sit inside tool outputs.
 
-- The updater now finds GitHub CLI under scheduler-minimal PATH on macOS,
-  Linux and Windows (brew, apt/dnf, snap, Linuxbrew, Program Files,
-  per-user, choco, scoop), with the resolver consolidated into one owner;
-  no behaviour change when gh is already on PATH.
+- Install and update need no GitHub CLI: the updater reads the public feed
+  directly, so the scheduler-minimal PATH resolver for `gh` is gone.
 
 - No-subscription installs (`openai_mode: none`) now list the
   OpenRouter-billed OpenAI rows (Astra, Sol, Terra, Luna) in the Codex
@@ -218,11 +218,10 @@
   `AGENTS.md` only when no global instructions file exists yet. Existing
   files are never overwritten, and updates and uninstall leave them alone.
 
-- Bootstrap token hygiene: the feed token no longer appears on the curl
-  command line (curl reads it from an owner-only header file that is
-  removed when the bootstrap exits), and it is persisted only after the
-  first authenticated fetch succeeds, keeping the prior value in
-  `feed-token.previous` for the updater's one-time 403 retry.
+- Bootstrap downloads need no token: `bootstrap.sh` and `bootstrap.ps1`
+  fetch the pinned runtime and the release bundle from the public feed
+  with plain requests and verify both checksums. The header-file and
+  `feed-token.previous` machinery is gone.
 
 - `--uninstall --dry-run` now previews: it reports the target home and
   exits before touching client settings or services, matching the other

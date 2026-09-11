@@ -395,8 +395,7 @@ class InstallTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             home.mkdir()
-            # An enrolled host with channel=beta resolves the gated beta URL.
-            (home / 'feed-token').write_text('tok-1\n')
+            # A beta host resolves the beta document URL.
             (home / 'channel').write_text('beta\n')
             self.assertEqual(
                 install_mod.channel_feed(home),

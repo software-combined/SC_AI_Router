@@ -378,8 +378,6 @@ class SafeUpdateTests(unittest.TestCase):
         # pointer, no published release, no launchd signal, no serial write.
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
-            home.mkdir(parents=True)
-            (home / 'feed-token').write_text('tok-1\n')
             blob, latest = _craft_bundle('9.9.9')
             bad_blob = _remanifest(blob, version='9.9.8')
             calls = []

@@ -62,9 +62,8 @@ def _park(home, etag, etag_path, version):
 
     A version that has failed this often will not start working on its own,
     and every pass costs a service restart. The saved ETag skips even the
-    feed re-read, but the production feed is served through the GitHub CLI
-    and carries no ETag, so the count in the state file is what actually
-    parks it there.
+    feed re-read when the edge answers 304, and the count in the state file
+    is the hard stop.
     """
     count = _svc.record_update_failure(home, version)
     if count < MAX_VERSION_FAILURES:
@@ -81,16 +80,11 @@ def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None):
     import random
     home = Path(args.home).expanduser()
     feed = args.feed or _svc.channel_feed(home)
-    if feed is None:
-        print('not enrolled for automatic updates; enrol this host with the SC '
-              'bootstrap or install manually')
-        return 0
-    # The default home-bound fetch sends the stored feed token to the feed
-    # origin; bundle fetches below reuse it, so a migrated host never needs
-    # gh. An injected fake keeps its one-argument shape all the way down.
+    # Feeds and bundles come from the public feed origin; an injected fake
+    # keeps its one-argument shape all the way down.
     injected = _fetch
-    _fetch = injected or (lambda url: _svc.fetch(url, home))
-    read_feed = _read_feed or (lambda url, etag: _svc.fetch_feed(url, etag, injected, home=home))
+    _fetch = injected or _svc.fetch
+    read_feed = _read_feed or (lambda url, etag: _svc.fetch_feed(url, etag, injected))
     sleep = _sleep or time.sleep
     sleep(random.uniform(0, 120))
     etag_path = home / 'update-etag'
@@ -112,11 +106,9 @@ def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None):
         print(f"up to date {_svc.current_version(home)}")
         return 0
     latest = json.loads(body.decode())
-    # check_serial persists the feed token after the serial check but
-    # before the version comparison, so a host that is already current
-    # still migrates: its next poll resolves CloudFront.
     _svc.check_serial(home, latest, pinned=bool(args.feed))
-    if not _svc.trusted_origin(latest.get('url', '')):
+    bundle_url = _svc.sibling_bundle(feed, latest.get('url', ''))
+    if not _svc.trusted_origin(bundle_url):
         raise SystemExit('feed points off the trusted update origin; refusing')
     if not newer(latest['version'], _svc.current_version(home)):
         if etag:
@@ -131,7 +123,7 @@ def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None):
               f"run the installer by hand to retry")
         return 0
     state = json.loads((home / 'mixed-router-state.json').read_text())
-    tarball = _fetch(latest['url'])
+    tarball = _fetch(bundle_url)
     if latest.get('sha256'):
         verify_sha256(tarball, latest['sha256'])
     with tempfile.TemporaryDirectory() as tmp:

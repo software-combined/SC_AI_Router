@@ -94,7 +94,7 @@ class StatusTests(unittest.TestCase):
         self.assertEqual(rc, 0)
         out = buf.getvalue()
         self.assertIn('clients: codex', out)
-        self.assertIn('feed: unenrolled', out)
+        self.assertIn('feed: cloudfront', out)
         self.assertIn('channel: stable', out)
         self.assertNotIn('block', out)
 

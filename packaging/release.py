@@ -61,9 +61,6 @@ def main(argv=None):
     parser.add_argument('--sha', default='')
     parser.add_argument('--channel', default='stable')
     parser.add_argument('--url-base')
-    parser.add_argument('--feed-token-file', metavar='FILE',
-                        help='read the feed read-token and embed it as latest.json feed_token '
-                             '(publish-time only; never commit the file)')
     parser.add_argument('--gen-key', metavar='OUT',
                         help='write a fresh 32-byte hex release signing seed (owner-only file) and exit')
     parser.add_argument('--sign', metavar='SEEDFILE',
@@ -122,14 +119,6 @@ def main(argv=None):
               'sha256': hashlib.sha256(tarball).hexdigest(), 'min_python': MIN_PYTHON,
               'serial': args.build,
               'published': datetime.now(timezone.utc).isoformat(timespec='seconds')}
-    if args.feed_token_file:
-        try:
-            token = Path(args.feed_token_file).read_text().strip()
-        except OSError:
-            raise SystemExit('cannot read feed token file')
-        if not token:
-            raise SystemExit('feed token file is empty')
-        latest['feed_token'] = token
     (out_dir / 'latest.json').write_text(json.dumps(latest, indent=2) + '\n')
     # The bootstrap resolves its runtime from this table, never from a
     # hardcoded filename: pins land only through reviewed lock changes.

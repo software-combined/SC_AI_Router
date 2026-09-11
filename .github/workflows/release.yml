@@ -63,8 +63,6 @@ jobs:
           fi
           echo "FEED_DISTRIBUTION_ID=$DIST_ID" >> "$GITHUB_ENV"
       - name: Publish to the update feed
-        env:
-          ROUTER_FEED_EMBED_TOKEN: ${{ vars.ROUTER_FEED_EMBED_TOKEN }}
         run: |
           python tools/publish_feed.py --dist dist --channel "$CHANNEL" \
             --bucket "$FEED_BUCKET" --distribution-id "$FEED_DISTRIBUTION_ID"

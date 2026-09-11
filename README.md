@@ -13,8 +13,8 @@ your machine.
 
 The Codex app and/or Claude Code, Python 3.14 (the installer finds it or
 tells you how to get it), and an OpenRouter API key for OpenRouter models.
-SC-managed machines receive automatic updates once enrolled with the SC
-bootstrap; everyone else installs and updates manually from the published
+Every install updates itself from the public feed; no enrolment, no token,
+no account. Anyone can also install or update by hand from the published
 releases.
 
 ## Platform support
@@ -36,8 +36,9 @@ Run the installer below in your signed-in desktop user session. It checks
 that the user systemd manager is available before installation, writes the
 router service and update timer, and enables them for future logins. It
 does not create a root service or enable lingering.
-Automatic updates need SC enrolment (see the update section below). A
-manual install passes `--feed` with a downloaded release document.
+Automatic updates come from the public feed (see the update section
+below). A manual install passes `--feed` with a downloaded release
+document.
 
 Older symlink installations are migrated to `router_launch.py` and a
 `current` pointer file. Existing state, credentials and model settings are
@@ -75,18 +76,16 @@ and not required. (Use `paru -S codex-desktop-git` if you prefer paru.)
 
 ## Install on macOS or Linux
 
-Without repository access, install from the feed with the bootstrap: with
-the feed token in `SCG_FEED_TOKEN`, download
-`https://dist.softwarecombined.com/bootstrap/bootstrap.sh` with the
-`X-SCG-Feed-Token` header and run it. It fetches the pinned Python runtime
-and the release bundle from the feed, verifies both checksums, writes the
-token for the updater, and installs; updates then need no `gh`.
+The friendliest first install is the bootstrap: download
+`https://dist.softwarecombined.com/bootstrap/bootstrap.sh` and run it. It
+fetches the pinned Python runtime and the release bundle from the public
+feed, verifies both checksums, and installs. No token, no account, no
+repository access. Add `--channel=beta` to follow pre-releases.
 
-Otherwise, recipients install from the published release channel, not from
-a checkout.
-A maintainer hands you the release directory; install from its feed file
-so the installer verifies the published bundle instead of fetching the
-default feed:
+Otherwise, install from the published release channel, not from
+a checkout. A maintainer hands you the release directory (the feed file and
+its bundle); install from the feed file so the installer verifies the
+bundle that travels beside it instead of fetching the default feed:
 
 ```sh
 python3 packaging/install.py --feed file://$HANDOFF_DIR/latest.json
@@ -115,17 +114,15 @@ PowerShell wrapper for Windows below.
 
 ## Install on Windows
 
-Without repository access, run the feed bootstrap instead of this path:
-download `https://dist.softwarecombined.com/bootstrap/bootstrap.ps1` with
-the `X-SCG-Feed-Token` header and run it with `SCG_FEED_TOKEN` set; it
-needs no `gh` and no Python preinstalled, because it fetches and verifies
-both from the feed.
+Run the feed bootstrap instead of this path: download
+`https://dist.softwarecombined.com/bootstrap/bootstrap.ps1` and run it; it
+needs no Python preinstalled, because it fetches and verifies both the
+pinned runtime and the release bundle from the public feed.
 
 Requirements: Windows 11 x64, Python 3.14 from python.org (the installer
 finds it through the `py` launcher; never rely on the bare `python` alias,
-which a stock profile resolves to the Microsoft Store stub), GitHub CLI
-signed in as this user, and the Codex desktop app. Run in your signed-in
-desktop session from PowerShell:
+which a stock profile resolves to the Microsoft Store stub), and the Codex
+desktop app. Run in your signed-in desktop session from PowerShell:
 
 From the same handed-off release directory, in your signed-in desktop
 session:
@@ -172,13 +169,19 @@ installed) so the new models load, with a "Later" button for anyone who
 would rather keep working. Where the desktop app is not installed, the
 restart button simply does nothing.
 
-Each tagged release publishes to the token-gated feed at
-`https://dist.softwarecombined.com/<channel>/latest.json` as well as to
-GitHub Releases. Enrolled hosts (the owner-only `feed-token` written by
-the SC bootstrap or MDM) poll the feed with the `X-SCG-Feed-Token` header;
-a host without a token does not auto-update and installs or updates
-manually from the published releases. `logs/update.log` records the source
-of each install.
+Every install polls the public feed at
+`https://dist.softwarecombined.com/<channel>/latest.json`: `stable` serves
+`stable/latest.json`, and writing `beta` into the `channel` file in the
+router home selects the pre-release document at `beta/latest.json`. No
+token, no enrolment, no account, no repository access. Checks run every
+4 hours: Linux runs its first check 5 minutes after the timer activates,
+macOS runs one when the job loads, and Windows waits for its next 4-hour
+trigger. Each tagged release also publishes to GitHub Releases afterwards
+as a public mirror for humans.
+Security rests on HTTPS from the trusted feed origin, SHA-256 verification
+of every bundle, version and identity checks, and the feed serial replay
+guard. A leftover `feed-token` file on an older host is inert and can be
+ignored or deleted. `logs/update.log` records the source of each install.
 
 ## Choosing a model
 

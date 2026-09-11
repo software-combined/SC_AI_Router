@@ -1,10 +1,19 @@
 # Plan 143: Enrolment-only auto-update for SC hosts
 
+> SUPERSEDED 2026-09-12 (owner decision, Cyril): the update feed is fully
+> public and token-free. The enrolment-only model below (feed-token file
+> required; tokenless hosts make no requests; installer refuses without a
+> feed) no longer applies. Every install updates from
+> `https://dist.softwarecombined.com/<channel>/latest.json` with no token,
+> no enrolment, no GitHub account and no repository access; a leftover
+> `feed-token` file is inert. The three SC testers stay on the public beta
+> channel with no token. The body below is kept as history; steps marked
+> SUPERSEDED must not be implemented.
 > Planning only. Implement only under a later implementation instruction.
 > Drift check: `git diff --stat 28a1af4..HEAD -- packaging/feed.py packaging/updater.py packaging/service.py packaging/diagnostics.py packaging/install.py packaging/bootstrap.sh packaging/bootstrap.ps1 docs/operations.md README.md tests/test_feed_migration.py tests/test_private_updates.py tests/test_install.py tests/test_install_config.py tests/test_preflight.py`
 > Reconcile the line references below against the live files before editing.
 
-## Status and first proof
+## Status and first proof (SUPERSEDED 2026-09-12: see the note at the top)
 
 - Priority P1; effort S-M; risk MED-HIGH (update channel); category
   release/security; depends on none for the code change; the cutover depends
@@ -66,7 +75,7 @@ unchanged), the bootstraps (usage wording only), `docs/operations.md`,
 Entra validation, the licence conversion (plan 142), GitHub settings (plan
 144).
 
-## Design decisions (locked)
+## Design decisions (locked, then SUPERSEDED 2026-09-12: kept as history)
 
 1. **Enrolled = `<home>/feed-token` exists (0600).** No new marker file.
    `feed-token.previous` stays for one rotation of overlap.
@@ -87,7 +96,7 @@ Entra validation, the licence conversion (plan 142), GitHub settings (plan
    edge, header and updater do not change. Store the feed origin next to the
    token so an Entra-fronted origin can move without a code release.
 
-## Steps
+## Steps (SUPERSEDED 2026-09-12: kept as history, do not implement)
 
 ### Step 1: make tokenless mean unenrolled in `feed.py`
 
@@ -148,7 +157,7 @@ language (no internal library names).
 **Verify**: `rg -n -i "technology library|private router" README.md docs/`
 returns nothing public-unsafe.
 
-### Step 6: cutover (owner-run, do not automate)
+### Step 6: cutover (SUPERSEDED 2026-09-12: no token rotation happens)
 
 1. Confirm the fleet is enrolled and healthy: `update.log` source
    `cloudfront`, current versions read back.
@@ -164,9 +173,16 @@ returns nothing public-unsafe.
 **Verify**: old token returns 403 and new returns 200; a tokenless public
 test host performs no update over 24 hours.
 
-## Known fleet and Entra (2026-09-11)
+## Known fleet (updated 2026-09-12; the 2026-09-11 enrolment text below is history)
 
-Three SC beta testers are the known enrolled fleet. They keep
+Three SC beta testers remain the known fleet. They stay on the public
+beta channel with no token: one bootstrap or manual install each reaches
+the public-feed version, after which they update themselves. A leftover
+`feed-token` file on any of these hosts is inert and can be ignored or
+deleted.
+
+2026-09-11 enrolment text (superseded): three SC beta testers are the
+known enrolled fleet. They keep
 `channel = beta`; migration is one bootstrap (or MDM push) per host writing
 `feed-token` 0600, then `--status` must read `feed: cloudfront` and
 `channel: beta`, and `feed-serial` must not be ahead of the beta document.
@@ -180,7 +196,7 @@ fetches, and offboarding also rotates the token. The edge, header and
 updater stay unchanged; per-request Entra validation would need
 Lambda@Edge or signed URLs and is out of scope.
 
-## Done criteria
+## Done criteria (SUPERSEDED 2026-09-12: kept as history)
 
 - [ ] Tokenless scheduled passes do zero network calls and exit 0 quietly.
 - [ ] Enrolled hosts update unchanged; explicit `--feed` still works.
@@ -188,7 +204,7 @@ Lambda@Edge or signed URLs and is out of scope.
 - [ ] Fleet enrolment and token rotation recorded before the visibility flip.
 - [ ] `plans/README.md` index row added when the plan is committed.
 
-## STOP conditions
+## STOP conditions (SUPERSEDED 2026-09-12: kept as history)
 
 - Fleet enrolment cannot be verified: STOP before the token rotation and the
   visibility flip.
@@ -197,7 +213,7 @@ Lambda@Edge or signed URLs and is out of scope.
 - Two rotations inside one poll window: STOP; hosts keep one previous token
   only and would need the bootstrap.
 
-## Maintenance notes
+## Maintenance notes (SUPERSEDED 2026-09-12: kept as history)
 
 - The feed token is a shared bearer secret: enrolment is out-of-band and
   eviction requires a full re-key; per-device or Entra-issued credentials are
