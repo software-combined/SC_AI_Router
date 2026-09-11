@@ -63,8 +63,6 @@ jobs:
           fi
           echo "FEED_DISTRIBUTION_ID=$DIST_ID" >> "$GITHUB_ENV"
       - name: Publish to the update feed
-        env:
-          ROUTER_FEED_EMBED_TOKEN: ${{ vars.ROUTER_FEED_EMBED_TOKEN }}
         run: |
           python tools/publish_feed.py --dist dist --channel "$CHANNEL" \
             --bucket "$FEED_BUCKET" --distribution-id "$FEED_DISTRIBUTION_ID"
@@ -75,8 +73,8 @@ jobs:
           VERSION=$(python -c "import json;print(json.load(open('dist/latest.json'))['version'])")
           if [ "$CHANNEL" = stable ]; then
             cp dist/release-latest.json dist/latest.json
-            gh release create "v$VERSION" dist/*.tar.gz dist/latest.json --generate-notes --latest
+            gh release create "v$VERSION" dist/*.tar.gz dist/latest.json --generate-notes --latest --target "$GITHUB_SHA"
           else
             cp dist/release-latest.json dist/latest-beta.json
-            gh release create "v$VERSION-beta" dist/*.tar.gz dist/latest-beta.json --prerelease --generate-notes
+            gh release create "v$VERSION-beta" dist/*.tar.gz dist/latest-beta.json --prerelease --generate-notes --target "$GITHUB_SHA"
           fi

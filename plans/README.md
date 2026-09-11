@@ -1,11 +1,12 @@
 # Implementation Plans
 
-The router backlog. Renumbered 2026-09-10: the live set is **090-139** — the core
+The router backlog. Renumbered 2026-09-10: the live set is **090-140** — the core
 backlog **090-121**, the refactor wave **122-134** from the 2026-09-11 four-lane
 refactoring/reorganisation audit, the new-model prompt plan **135**, the
 security wave **136-138** from the 2026-09-11 router external security audit
 (`2026-09-11-router-external-security-audit.md`), and the publication wave
-**139**, plus the amended Claude plans 113-115 and 120-121 from the 2026-09-11
+**139**, the standalone delegation delivery plan **140**, plus the amended
+Claude plans 113-115 and 120-121 from the 2026-09-11
 Claude router development-branch review
 (`2026-09-11-claude-router-development-branch-review.md`). The
 recommended overall execution order is below the tables. The pre-renumbering 034-089 series is
@@ -39,11 +40,11 @@ Executor rules for every plan:
 | [099](099-codex-router-model-onboarding-at-scale.md) | Model onboarding: one-command add, data-driven dispatch, refresh wiring | PARTIAL | 098 landed; refresh wiring awaits 106's qualified feed, then publish `models_url`; wiring must also fix `model_refresh.apply()` swap publication order (see plan 098) |
 | [100](100-router-retired-slug-single-source.md) | Shared retired-subscription slug set | DONE: retired-slug single source 2026-09-11 | depends 094 |
 | [101](101-router-dead-code-and-lint-gate.md) | Delete dead code; add F401/F811 gate | DONE: dead code + F401/F811 lint gate 2026-09-11 | before 102/103 |
-| [102](102-router-install-option-collapse.md) | Collapse installer option handling below the cap | TODO | serialize with 103 |
-| [103](103-router-darwin-backend-extraction.md) | Move launchd helpers out of service.py | TODO | serialize with 102; before 104 |
-| [104](104-router-docs-metadata-correction.md) | Version, architecture and README corrections | TODO | after 103; coordinates README with 117 |
+| [102](102-router-install-option-collapse.md) | Collapse installer option handling below the cap | DONE: installer option collapse 2026-09-11 | serialize with 103 |
+| [103](103-router-darwin-backend-extraction.md) | Move launchd helpers out of service.py | DONE: darwin backend extraction 2026-09-12 | serialize with 102; before 104 |
+| [104](104-router-docs-metadata-correction.md) | Version, architecture and README corrections | DONE: docs/metadata corrections 2026-09-12 | after 103; coordinates README with 117 |
 | [105](105-python-314-interpreter-provisioning.md) | Provision and maintain a private CPython 3.14 runtime | PARTIAL | Stage 1 in; hardening + maintenance owner left |
-| [106](106-group-distribution-private-feed-and-auto-update.md) | Group distribution, private feed and auto-update | PARTIAL | publication split into 139 (tag-driven, GitHub Releases kept); first install, group gating and library page left here |
+| [106](106-group-distribution-private-feed-and-auto-update.md) | Group distribution, private feed and auto-update | PARTIAL | publication split into 139 (tag-driven, GitHub Releases kept; runtime mirror and bootstrap published); group gating and the library page left here |
 | [107](107-central-key-federation-and-first-use-key-window.md) | Central per-user key federation and first-use key window | PARTIAL | Stage 4 depends 106; Stage 2 installer acceptance left |
 | [108](108-router-service-recovery-and-update-readiness.md) | Live router recovery and safe update readiness | PARTIAL | live update/rollback evidence; serialize with 109/110 |
 | [109](109-codex-router-continuous-release-and-seamless-restart.md) | Continuous release and seamless restart (live evidence) | PARTIAL | live restart evidence; release-trigger conflict settled by 139: tags publish, no push-to-main release |
@@ -54,7 +55,7 @@ Executor rules for every plan:
 | [114](114-claude-code-private-plugin.md) | Claude Code private plugin: validation and publication | PARTIAL | after 113; local validation then publication; amended 2026-09-11 (same-version attach/repair F1, preflight F2, key window F3, restore F4, desktop distribution W4) |
 | [115](115-claude-billing-probes-and-release-acceptance.md) | Claude billing and tool-execution probes | TODO | after 113; paid authority; amended 2026-09-11 (per-surface routes, real MCP proof, ingress contract F8/F9) |
 | [116](116-windows-install-and-service-support.md) | Windows install and service support (acceptance) | PARTIAL | sign-out/in + later stages left |
-| [117](117-recipient-readiness-for-windows-and-linux.md) | Linux and Windows recipient readiness | PARTIAL | native desktop acceptance + Stage 5b left |
+| [117](117-recipient-readiness-for-windows-and-linux.md) | Linux and Windows recipient readiness | PARTIAL | native desktop acceptance + Stage 5b left; the README 503/Claude-listing claims were corrected by plan 104 — do not re-edit those passages |
 | [118](118-codex-router-full-capability-parity.md) | Capability parity: paid per-model/client probes | PARTIAL | remaining paid per-model legs |
 | [119](119-mixed-provider-agent-instruction-delivery.md) | Mixed-provider agent instruction delivery | PARTIAL | paid live probe left |
 | [120](120-claude-desktop-gateway-discovery-and-attach.md) | Claude desktop gateway: release and live picker proof | PARTIAL | extends 113; source merged (PR 56); amended 2026-09-11 (safe lifecycle F4/F7, no promotion of the listener probe) |
@@ -70,13 +71,13 @@ below interleaves them.
 |---|---|---|---|
 | [122](122-plan-hygiene-sweep.md) | Backlog hygiene: runnable drift checks, current paths and counts | DONE: backlog hygiene sweep 2026-09-11 | before 094/101/102/103 |
 | [123](123-packaging-plumbing-single-sources.md) | One 3.9 loader, one release inventory, one subscription roster | DONE: packaging plumbing single-sources 2026-09-11 | before 094; pairs with 100 |
-| [124](124-test-harness-consolidation.md) | Shared test harness; installer fixtures out of a test file | TODO | after 092 |
-| [125](125-runtime-shared-primitives.md) | Runtime primitives: path sets, image blocks, catalogue predicate, capability maps | TODO | after 090/091/093/096/101 |
-| [126](126-error-taxonomy.md) | Typed error classification; drop the dead CLI error half | TODO | after 101 |
-| [127](127-providers-setup-module-splits.md) | Split upstream failure policy and setup pages out | TODO | after 101; before 128 |
-| [128](128-router-handler-decomposition.md) | Decompose router.py into ingress + relay | TODO | after 090/091/093/096 |
-| [129](129-tool-merge-unification.md) | One tool-definition merge rule | TODO | after 091/096/097 |
-| [130](130-installer-bundle-split.md) | packaging/bundle.py: real installer headroom | TODO | after 102/123 |
+| [124](124-test-harness-consolidation.md) | Shared test harness; installer fixtures out of a test file | DONE: test harness consolidation 2026-09-12 | after 092 |
+| [125](125-runtime-shared-primitives.md) | Runtime primitives: path sets, image blocks, catalogue predicate, capability maps | DONE: runtime shared primitives 2026-09-12 | after 090/091/093/096/101 |
+| [126](126-error-taxonomy.md) | Typed error classification; drop the dead CLI error half | DONE: typed error classification 2026-09-12 | after 101 |
+| [127](127-providers-setup-module-splits.md) | Split upstream failure policy and setup pages out | DONE: landed by 141 2026-09-11 | after 101; before 128 |
+| [128](128-router-handler-decomposition.md) | Decompose router.py into ingress + relay | DONE: router decomposition 2026-09-12 | after 090/091/093/096 |
+| [129](129-tool-merge-unification.md) | One tool-definition merge rule | DONE: shared tool-merge rule 2026-09-12 | after 091/096/097 |
+| [130](130-installer-bundle-split.md) | packaging/bundle.py: real installer headroom | DONE: installer bundle split 2026-09-12 | after 102/123 |
 | [131](131-service-state-writer-decomposition.md) | Service/state/writer decomposition | TODO | after 094/095/100/103/123; coordinate 106 |
 | [132](132-windows-backend-cleanup.md) | Windows backend cleanup | TODO | before/with 116; after 123 |
 | [133](133-probe-harness-consolidation.md) | One app-server probe harness | TODO | before 118/119 |
@@ -93,8 +94,18 @@ The report, its verifications and its rejected findings are in
 | Plan | Title | Status | Sequencing |
 |---|---|---|---|
 | [136](136-unauth-ingress-crash-containment.md) | Contain the unauthenticated ingress compare crash | DONE: unauth ingress compare containment 2026-09-11 | P1; independent; a few lines in router.py (398 today) |
-| [137](137-loopback-host-header-validation.md) | Validate the Host header on loopback ingress | BLOCKED: STOP condition hit 2026-09-11 — router.py is 398/400, the 3-line guard needs 397 max; hand to 128's split | 090 landed; headroom exhausted by 096/136 |
-| [138](138-subscription-cookie-hygiene.md) | Drop Cookie on subscription passthrough and make the tests honest | TODO | independent |
+| [137](137-loopback-host-header-validation.md) | Validate the Host header on loopback ingress | TODO: unblocked by 128 (router.py 204/400); the guard belongs in ingress.py | 090 landed; 128 landed |
+| [138](138-subscription-cookie-hygiene.md) | Drop Cookie on subscription passthrough and make the tests honest | DONE: subscription cookie hygiene 2026-09-12 | independent |
+
+## Standalone delegation delivery (140)
+
+Added 2026-09-11 after cross-task messages stopped reaching tasks on
+OpenRouter models: the standalone app-injected output shape was dropped as an
+orphan tool fragment.
+
+| Plan | Title | Status | Sequencing |
+|---|---|---|---|
+| [140](140-standalone-delegation-output-delivery.md) | Deliver standalone delegation outputs to OpenRouter models | DONE: live acceptance 2026-09-11 on router 0.6.27.44 (deepseek child echoed the marker) | P1; independent; OpenRouter prepare path only |
 
 ## Publication wave (139)
 
@@ -104,7 +115,29 @@ and group-distribution work; this plan owns the update path only.
 
 | Plan | Title | Status | Sequencing |
 |---|---|---|---|
-| [139](139-router-private-feed-publication.md) | Private feed publication: tag publishes to the token-gated feed | PARTIAL: source landed on `develop`; owner deploys the stacks, seeds the token and tags the transition release | supersedes 106's push-trigger and feed-only variants; before 106's remaining first-install stages |
+| [139](139-router-private-feed-publication.md) | Private feed publication: tag publishes to the token-gated feed | PARTIAL: feed live (stacks deployed, token seeded, 0.6.25 transition released); first-install assets published via `tools/publish_first_install.py`; gated library page and per-install tokens stay with 106 | supersedes 106's push-trigger and feed-only variants; before 106's remaining first-install stages |
+
+## Provider abstraction wave (141)
+
+Added 2026-09-11 from the owner request to replace the hard-wired OpenRouter identity with a
+definition per upstream. One `ai_router/provider_defs.py` entry plus registry rows must be enough
+to add or swap an external provider; no protocol translation is in scope.
+
+| Plan | Title | Status | Sequencing |
+|---|---|---|---|
+| [141](141-provider-abstraction.md) | Provider abstraction: one definition per upstream | DONE: provider abstraction 2026-09-11 (also lands 127's provider and setup-page splits) | independent; 126/128/134 rebase on it |
+
+## Public release wave (142-144)
+
+Added 2026-09-11, amended 2026-09-12: relicence to Apache-2.0, replace the
+token-gated update feed with the public token-free feed, and harden the
+repository before the visibility flip.
+
+| Plan | Title | Status | Sequencing |
+|---|---|---|---|
+| [142](142-apache-2-public-licence.md) | Relicense the repository to Apache-2.0 only | PARTIAL: source landed 2026-09-11; owner approval and prompt-file provenance before merge | before 143/144 |
+| [143](143-enrolment-only-auto-update.md) | Enrolment-only auto-update | SUPERSEDED 2026-09-12: the public token-free feed replaced it; kept as history | superseded by the owner decision |
+| [144](144-public-repo-controls.md) | Public repository controls and visibility flip | TODO: owner-gated | after 142/143 |
 
 ## Recommended overall order
 
@@ -122,7 +155,9 @@ Phase notes: 099 executes only after 139's feed is qualified; 134's feed_verify 
 106 and its CI step after 101; 133 and 132 land before Phase 5 paid probes and Phase 4 Windows
 acceptance respectively; 135 exposes the pending-model hook that 099's refresh wiring calls once
 it lands, and needs no owner gate itself. The security wave rides Phase 1: 136 and 138 are
-independent, and 137 proceeds now that 090 has landed.
+independent, and 137 proceeds now that 090 has landed. The provider abstraction (141) rides
+Phase 2 and needs no owner gate: it changes no routing behaviour, and 126/127/128 must rebase on
+it rather than run alongside it.
 
 ## Dependency and coordination notes
 

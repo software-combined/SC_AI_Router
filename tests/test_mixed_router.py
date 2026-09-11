@@ -10,14 +10,20 @@ import unittest
 from unittest import mock
 from ai_router import providers
 from ai_router.credentials import Credentials
-from ai_router.router import Router
+from tests.harness import (
+    StubCredentials as _StubCredentials,
+    start_auth_server as _start_auth_server,
+    start_server as _start_server,
+    test_state as _test_state,
+)
 
-class _StubCredentials:
-    def __init__(self, key='router-secret'):
-        self.key = key
 
-    def openrouter_key(self):
-        return self.key
+def _external_responses():
+    """OpenRouter Codes adapter; Plan 141 makes adapters per-provider."""
+    from ai_router import provider_defs as _defs
+    return providers.ExternalResponsesProvider(_defs.OPENROUTER)
+
+
 
 
 def _prepared(model, path, payload, headers=None, openai_models=None):
@@ -117,6 +123,24 @@ class RoutingTests(unittest.TestCase):
                                     payload).body)['input']
         self.assertEqual([i.get('type') for i in data], ['message'])
 
+    def test_standalone_delegation_reaches_openrouter_as_tool_pair(self):
+        # Codex Desktop injects cross-task messages with no call_id; they
+        # used to vanish in the scrub and never reach OpenRouter models.
+        # Assistant plaintext was read but not acted on, so the router
+        # now ships a matched call+output pair carrying the delegation.
+        item = {'type': 'function_call_output', 'name': 'create_thread',
+                'namespace': 'codex_app',
+                'output': '<codex_delegation>SYNTH_HANDOFF_MARKER_719</codex_delegation>'}
+        data = json.loads(_prepared(
+            'deepseek/deepseek-v4.1-flash', '/responses',
+            {'model': 'deepseek/deepseek-v4.1-flash', 'input': [item]}).body)['input']
+        self.assertEqual(len(data), 2)
+        call, result = data
+        self.assertEqual(call['type'], 'function_call')
+        self.assertEqual(result['type'], 'function_call_output')
+        self.assertEqual(call['call_id'], result['call_id'])
+        self.assertIn('SYNTH_HANDOFF_MARKER_719', result['output'])
+
     def test_contributor_rejects_max_effort_with_actionable_message(self):
         with self.assertRaisesRegex(ValueError, "does not support reasoning effort 'max'"):
             _prepared('meta/muse-spark-1.3-contributor', '/responses',
@@ -172,33 +196,12 @@ class RoutingTests(unittest.TestCase):
                       {'model': 'meta/muse-spark-1.3-contributor', 'input': [],
                        'reasoning': {'effort': 'max'}})
 
-def _test_state(auth_path):
-    return {'port': 0, 'token': 'test-token',
-            'openai_models': [], 'opencode_auth': auth_path}
 
 # Broken-credential tests need the real lookup against a home whose key-file
 # leg always misses (this path never exists on any OS), so only the state's
 # opencode_auth contract is exercised.
 _ISOLATED_CREDENTIAL_HOME = pathlib.Path('/nonexistent-codex-router-home')
 
-
-def _start_server(state, credentials=None):
-    # Isolate tests from the machine's installed router: without an explicit
-    # credential object the real openrouter.key would win the ordered lookup
-    # and every contract test would see the operator's live key.
-    server = Router(state, credentials=(credentials if credentials is not None
-                                        else _StubCredentials('test-key')))
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    return server
-
-def _start_auth_server(test):
-    auth = tempfile.NamedTemporaryFile('w', suffix='.json', delete=False)
-    json.dump({'openrouter': {'type': 'api', 'key': 'test-key'}}, auth)
-    auth.close()
-    server = _start_server(_test_state(auth.name))
-    test.addCleanup(server.shutdown)
-    test.addCleanup(os.unlink, auth.name)
-    return server
 
 class LoopbackBoundaryTests(unittest.TestCase):
     def test_health_requires_bearer_token_and_rejects_origin(self):
@@ -250,7 +253,7 @@ class CompactBranchTests(unittest.TestCase):
             time.sleep(0.01)
         self.assertEqual(server.inflight, 0)
     def test_compact_returns_v1_output(self):
-        with mock.patch.object(providers.OpenRouterProvider, 'summarize', lambda *a: 'progress and next steps'):
+        with mock.patch.object(providers.ExternalResponsesProvider, 'summarize', lambda *a: 'progress and next steps'):
             self._server()
             response = self._post('/responses/compact',
                 {'model': 'z-ai/glm-5.3', 'input': [
@@ -298,7 +301,7 @@ class CompactBranchTests(unittest.TestCase):
     def test_compact_transport_failure_is_502(self):
         def boom(*a):
             raise OSError('reset')
-        with mock.patch.object(providers.OpenRouterProvider, 'summarize', boom):
+        with mock.patch.object(providers.ExternalResponsesProvider, 'summarize', boom):
             self._server()
             response = self._post('/responses/compact',
                 {'model': 'z-ai/glm-5.3', 'input': [
@@ -317,7 +320,7 @@ class CompactBranchTests(unittest.TestCase):
         with mock.patch.object(providers.http.client, 'HTTPSConnection', _fake_conn_class(200, {'output': [
                 {'type': 'message', 'content': [
                     {'type': 'output_text', 'text': 'summary'}]}]}, seen)):
-            summary = providers.OpenRouterProvider().summarize('z-ai/glm-5.3', 'key', [
+            summary = _external_responses().summarize('z-ai/glm-5.3', 'key', [
                 {'type': 'message', 'role': 'user', 'content': 'user bit'},
                 {'type': 'function_call_output', 'call_id': 'c', 'output': 'tool bit'}])
         self.assertEqual(summary, 'summary')
@@ -326,7 +329,7 @@ class CompactBranchTests(unittest.TestCase):
         self.assertIn('tool bit', prompt)
 
     def test_compact_empty_summary_is_rejected(self):
-        with mock.patch.object(providers.OpenRouterProvider, 'summarize', lambda *a: '   '):
+        with mock.patch.object(providers.ExternalResponsesProvider, 'summarize', lambda *a: '   '):
             self._server()
             response = self._post('/responses/compact',
                 {'model': 'z-ai/glm-5.3', 'input': [
@@ -336,7 +339,7 @@ class CompactBranchTests(unittest.TestCase):
     def test_compact_ignores_rejected_effort(self):
         req = {'model': 'z-ai/glm-5.3', 'reasoning': {'effort': 'medium'}, 'input': [
             {'type': 'message', 'role': 'user', 'content': 'x'}]}
-        with mock.patch.object(providers.OpenRouterProvider, 'summarize', lambda *a: 'progress'):
+        with mock.patch.object(providers.ExternalResponsesProvider, 'summarize', lambda *a: 'progress'):
             self._server()
             out = json.loads(self._post('/responses/compact', req).read())
             self.assertIn('progress', out['output'][-1]['content'][0]['text'])
@@ -351,7 +354,7 @@ class CompactBranchTests(unittest.TestCase):
         def post():
             self._post('/responses/compact', job)
             responded.set()
-        with mock.patch.object(providers.OpenRouterProvider, 'summarize', slow):
+        with mock.patch.object(providers.ExternalResponsesProvider, 'summarize', slow):
             self._server()
             worker = threading.Thread(target=post)
             worker.start()
@@ -374,25 +377,25 @@ class SummarizerParsingTests(unittest.TestCase):
     def test_non_200_fails_closed(self):
         self._fake_conn(500, {'error': 'busy'})
         with self.assertRaises(OSError):
-            providers.OpenRouterProvider().summarize('z-ai/glm-5.3', 'key', [])
+            _external_responses().summarize('z-ai/glm-5.3', 'key', [])
 
     def test_malformed_output_shape_fails_closed(self):
         self._fake_conn(200, {'output': 'not-a-list'})
         with self.assertRaisesRegex(ValueError, 'no output list'):
-            providers.OpenRouterProvider().summarize('z-ai/glm-5.3', 'key', [])
+            _external_responses().summarize('z-ai/glm-5.3', 'key', [])
         self._fake_conn(200, {'output': ['not-an-object']})
         with self.assertRaisesRegex(ValueError, 'not an object'):
-            providers.OpenRouterProvider().summarize('z-ai/glm-5.3', 'key', [])
+            _external_responses().summarize('z-ai/glm-5.3', 'key', [])
 
     def test_message_and_output_text_extraction(self):
         self._fake_conn(200, {'output': [
             {'type': 'message', 'content': [{'type': 'output_text', 'text': 'part one'}]},
             {'type': 'output_text', 'text': 'part two'}]})
-        summary = providers.OpenRouterProvider().summarize('z-ai/glm-5.3', 'key', [])
+        summary = _external_responses().summarize('z-ai/glm-5.3', 'key', [])
         self.assertIn('part one', summary)
         self.assertIn('part two', summary)
 
     def test_empty_extraction_fails_closed(self):
         self._fake_conn(200, {'output': []})
         with self.assertRaisesRegex(ValueError, 'empty'):
-            providers.OpenRouterProvider().summarize('z-ai/glm-5.3', 'key', [])
+            _external_responses().summarize('z-ai/glm-5.3', 'key', [])

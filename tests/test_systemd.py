@@ -10,7 +10,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from tests.test_install import _craft_bundle, _ok_run, _patch_attrs, _static_fetch, install_mod
+from tests.install_fixtures import _craft_bundle, _ok_run, _patch_attrs, _static_fetch, install_mod
 from tests._platform import unix_only
 
 
@@ -41,6 +41,7 @@ class SystemdTests(unittest.TestCase):
 
     def install(self, version):
         blob, latest = _craft_bundle(version)
+        self.home.mkdir(parents=True, exist_ok=True)
         args = install_mod.build_parser().parse_args(
             ['--home', str(self.home), '--python', sys.executable])
         with contextlib.redirect_stdout(io.StringIO()):
@@ -81,6 +82,19 @@ class SystemdTests(unittest.TestCase):
         self.assertEqual(catalogue.read_text(), 'previous catalogue')
         self.assertEqual(self.calls[-1], ['systemctl', '--user', 'start', install_mod._linux.TIMER])
 
+    def test_refused_settings_merge_leaves_the_update_timer_running(self):
+        # A hand-edited Codex block refuses the settings rewrite after the
+        # router swap. That used to return before start_updates(), leaving
+        # the timer stopped: no scheduled check ran until a reinstall.
+        self.install('0.6.2.0')
+        config = self.root / 'user' / '.codex' / 'config.toml'
+        config.write_text(config.read_text().replace(
+            'openai_base_url', 'openai_base_url_edited'))
+        with self.assertRaisesRegex(SystemExit, 'edited by hand'):
+            self.install('0.6.6.0')
+        self.assertEqual(self.calls[-1],
+                         ['systemctl', '--user', 'start', install_mod._linux.TIMER])
+
     def test_rollback_and_uninstall_use_systemd_and_preserve_home(self):
         self.install('0.6.2.0')
         self.install('0.6.6.0')
@@ -108,7 +122,7 @@ class SystemdTests(unittest.TestCase):
         self.install('0.6.2.0')
         blob, latest = _craft_bundle('0.6.6.0')
         # check-update needs an installer member; the child invocation is mocked.
-        from tests.test_install import _tarball
+        from tests.install_fixtures import _tarball
         blob = _tarball(files=[('packaging/install.py', '# installer')])
         (self.home / 'update-etag').write_text('old')
         args = install_mod.build_parser().parse_args(['--home', str(self.home)])

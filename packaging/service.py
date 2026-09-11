@@ -10,7 +10,6 @@ import contextlib
 import io
 import json
 import os
-import plistlib
 import secrets
 import shutil
 import socket
@@ -79,75 +78,45 @@ DEFAULT_OPENAI_MODELS = list(_roster.SUBSCRIPTION_SLUGS)
 # relocated-tree reason as the roster).
 RETIRED_SUBSCRIPTION_SLUGS = frozenset(_retired.SUBSCRIPTION)
 
-LABEL = 'com.local.codex-mixed-model-router'
-UPDATE_LABEL = LABEL + '.update'
+LABEL = _launchd.LABEL
+UPDATE_LABEL = _launchd.UPDATE_LABEL
 FEED_URL = _feed.FEED_URL
 MIN_PYTHON = (3, 14)
 
 # Feed routing lives in feed.py; these are the names its callers read here.
-RELEASES_PREFIX = _feed.RELEASES_PREFIX
-feed_token = _feed.feed_token
-persist_feed_token = _feed.persist_feed_token
 trusted_origin = _feed.trusted_origin
+sibling_bundle = _feed.sibling_bundle
 channel_feed = _feed.channel_feed
 feed_source = _feed.feed_source
-gh_binary = _feed.gh_binary
 notice = _notice
 
 
-def github_asset(url):
-    route = _feed.github_route_parts(url)
-    if route is None:
-        return None
-    tag, asset = route
-    gh = _feed.gh_binary()
-    if gh is None:
-        raise SystemExit('Private router updates require GitHub CLI (gh), signed in as this user.')
-    result = run(_feed.github_command(gh, tag, asset), capture_output=True, timeout=120)
-    if result.returncode:
-        raise SystemExit('Cannot read private router release; check gh auth status and repository access.')
-    return result.stdout
-
-
-def fetch(url, home=None):
+def fetch(url):
     """Single network entry point; tests inject a fake.
 
-    The token header goes only to the feed origin. GitHub asset URLs keep
-    the gh path; anything off the trusted origins is refused before fetch
-    so a compromised feed cannot redirect a host elsewhere.
+    Only the public feed origin, or a local file for a manual install, is
+    accepted, so a compromised feed cannot redirect a host elsewhere.
     """
     if url.startswith('file://'):
         return Path(url[len('file://'):]).read_bytes()
     if not _feed.trusted_origin(url):
         raise SystemExit('refusing untrusted feed URL: %s' % _feed._safe_url(url))
-    asset = github_asset(url)
-    if asset is not None:
-        return asset
-    headers = _feed.feed_headers(home) if url.startswith(_feed.FEED_ORIGIN + '/') else {}
-    req = urllib.request.Request(url, headers=headers) if headers else url
-    with urllib.request.urlopen(req, timeout=30) as response:
+    with urllib.request.urlopen(url, timeout=30) as response:
         return response.read()
 
 
-def feed_read(fetcher, url, home):
-    """Fetch one feed/bundle URL, home-bound when the fetcher allows it.
-
-    The default fetch sends the stored feed token to the feed origin;
-    injected test fakes keep their one-argument shape.
-    """
+def feed_read(fetcher, url):
+    """Fetch one feed/bundle URL through the injected or default fetcher."""
     if fetcher is fetch and not trusted_origin(url):
         raise SystemExit('feed points off the trusted update origin; refusing')
-    try:
-        return fetcher(url, home)
-    except TypeError:
-        return fetcher(url)
+    return fetcher(url)
 
 
 def run(cmd, **kwargs):
     """Single subprocess entry point; tests inject a fake."""
     if sys.platform == 'win32':
         # The scheduled updater runs this installer under pythonw.exe; a
-        # console child (python, gh, schtasks, icacls) spawned from there
+        # console child (python, schtasks, icacls) spawned from there
         # would otherwise open a console window on the desktop.
         kwargs.setdefault('creationflags', getattr(subprocess, 'CREATE_NO_WINDOW', 0))
     return subprocess.run(cmd, **kwargs)
@@ -184,12 +153,53 @@ def find_python(explicit=None):
     return None
 
 
-def _require_absolute(python):
-    # launchd never sees a shell PATH: persist the validated interpreter
-    # identity, never a discovery token.
-    if not python or not os.path.isabs(python):
-        raise SystemExit(f'refusing non-absolute interpreter: {python!r}')
-    return python
+# --- launchd rendering/reload delegations (Plan 103) -------------------------
+# The implementations live in launchd.py; these thin wrappers keep the
+# packaging/install.py bindings and the installer test seams working. Move
+# the seams they read (run, _sleep, timeouts) at call time, never at import.
+
+def render_plist(python, home, state):
+    return _launchd.render_plist(python, home, state)
+
+
+def render_update_plist(python, home):
+    return _launchd.render_update_plist(python, home)
+
+
+def write_plist(path, content):
+    return _launchd.write_plist(path, content)
+
+
+def same_interpreter(left, right):
+    return _launchd.same_interpreter(left, right)
+
+
+def main_plist_needs_reload(uid, python, home, state, agents=None):
+    return _launchd.main_plist_needs_reload(run, uid, python, home, state,
+                                            _agents(agents))
+
+
+def ensure_updater(uid, python, home, agents=None):
+    return _launchd.ensure_updater(run, uid, python, home, _agents(agents),
+                                   sleep=_sleep,
+                                   unload_timeout=UNLOAD_TIMEOUT_S,
+                                   load_timeout=LOAD_TIMEOUT_S)
+
+
+def loaded_updater_release(uid, home):
+    return _launchd.loaded_updater_release(run, uid, home)
+
+
+def reload_main_service(uid, agents=None):
+    return _launchd.reload_main_service(run, uid, _agents(agents), sleep=_sleep,
+                                        unload_timeout=UNLOAD_TIMEOUT_S,
+                                        load_timeout=LOAD_TIMEOUT_S)
+
+
+def restart_service(uid, agents=None):
+    return _launchd.restart_service(run, uid, _agents(agents), sleep=_sleep,
+                                    unload_timeout=UNLOAD_TIMEOUT_S,
+                                    load_timeout=LOAD_TIMEOUT_S)
 
 
 def safe_extract(tarball, dest):
@@ -241,49 +251,6 @@ def swap_current(home, release_dir):
     return previous
 
 
-def render_plist(python, home, state):
-    python = _require_absolute(python)
-    return {'Label': LABEL,
-            'ProgramArguments': [python, str(home / 'router_launch.py')],
-            'Sockets': {'Listeners': {'SockNodeName': '127.0.0.1',
-                                      'SockServiceName': str(state['port']),
-                                      'SockFamily': 'IPv4',
-                                      'SockType': 'stream'}},
-            # No WorkingDirectory: the router resolves everything from
-            # ROUTER_HOME and its own file location, so the plist stays valid
-            # across releases and a plain TERM restarts into the new pointer.
-            # ExitTimeOut covers the router drain deadline so launchd stops wait
-            # instead of SIGKILLing mid-drain on bootout/uninstall.
-            'EnvironmentVariables': {'ROUTER_HOME': str(home)},
-            'KeepAlive': True, 'RunAtLoad': True, 'ThrottleInterval': 10, 'Umask': 63,
-            'ExitTimeOut': 150,
-            'StandardOutPath': str(home / 'logs' / 'launchd.log'),
-            'StandardErrorPath': str(home / 'logs' / 'launchd.log')}
-
-
-def render_update_plist(python, home):
-    python = _require_absolute(python)
-    # The stable home launcher, never a per-release install.py path. launchd
-    # keeps running its in-memory copy of a loaded plist, so a versioned path
-    # outlives the release it names: after a prune the updater keeps firing a
-    # deleted or obsolete installer every 15 minutes. update_launch.py
-    # resolves `current` at exec time instead, exactly like router_launch.py.
-    args = [python, str(home / 'update_launch.py')]
-    return {'Label': UPDATE_LABEL,
-            'ProgramArguments': args,
-            'RunAtLoad': True,
-            'StartInterval': 900,
-            'StandardOutPath': str(home / 'logs' / 'update.log'),
-            'StandardErrorPath': str(home / 'logs' / 'update.log')}
-
-
-def write_plist(path, content):
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, 'wb') as stream:
-        plistlib.dump(content, stream)
-
-
 def health(state, timeout=20):
     url = f"http://127.0.0.1:{state['port']}/{state['token']}/health"
     deadline = time.monotonic() + timeout
@@ -310,16 +277,15 @@ def wait_version(state, version, timeout=150, fetch_health=None):
     return None
 
 
-def fetch_feed(url, etag, _fetch=None, home=None):
+def fetch_feed(url, etag, _fetch=None):
     """Read a feed document, revalidating with a saved ETag.
 
-    Returns (status, body, etag). The default fetch sends the stored feed
-    token to the feed origin; injected fakes keep their old one-argument
-    shape and bypass the header path.
+    Returns (status, body, etag). Injected fakes keep their one-argument
+    shape and bypass the conditional-GET path.
     """
     if _fetch is None:
-        return _feed.live_feed(url, etag, home, fetch)
-    if url.startswith('file://') or url.startswith(RELEASES_PREFIX):
+        return _feed.live_feed(url, etag, fetch)
+    if url.startswith('file://'):
         return 200, _fetch(url), etag
     req = urllib.request.Request(url, headers={'If-None-Match': etag} if etag else {})
     try:
@@ -381,116 +347,6 @@ def install_lock(home):
         os.close(handle)
 
 
-def restart_service(uid, agents=None):
-    # First install: a reload rather than a plain load, because "no previous
-    # release" does not prove no job is loaded -- a half-finished earlier
-    # attempt can leave one behind running a release that is now gone.
-    agents = _agents(agents)
-    if not _launchd.reload_job(run, uid, LABEL, agents=agents,
-                               unload_timeout=UNLOAD_TIMEOUT_S,
-                               load_timeout=LOAD_TIMEOUT_S, sleep=_sleep):
-        raise SystemExit(f'bootstrap failed for {LABEL}')
-    if not _launchd.load(run, uid, UPDATE_LABEL, agents=agents,
-                         timeout=LOAD_TIMEOUT_S, sleep=_sleep):
-        raise SystemExit(f'bootstrap failed for {UPDATE_LABEL}')
-
-
-def same_interpreter(left, right):
-    """True when two paths name the same interpreter binary.
-
-    `/opt/homebrew/bin/python3.14` and
-    `/opt/homebrew/opt/python@3.14/bin/python3.14` are one binary reached by
-    two symlink spellings. A string compare calls them different and forces
-    the destructive reload path on a run that only needed a TERM handover.
-    """
-    if not left or not right:
-        return False
-    try:
-        return os.path.realpath(left) == os.path.realpath(right)
-    except OSError:
-        return left == right
-
-
-def command_matches(loaded, rendered):
-    """True when launchd's loaded command is the one we intend to run.
-
-    argv[0] is compared by resolved path because two symlink spellings name
-    one interpreter; every later argument must match exactly, so a changed
-    launcher path is never mistaken for no change at all.
-    """
-    if not loaded or not rendered or len(loaded) != len(rendered):
-        return False
-    if not same_interpreter(loaded[0], rendered[0]):
-        return False
-    return list(loaded[1:]) == list(rendered[1:])
-
-
-def running_under(label):
-    """True when this process is inside the launchd job for `label`.
-
-    launchd stamps XPC_SERVICE_NAME into the job's environment and children
-    inherit it, so the scheduled updater's own installer can tell that
-    booting out that label would kill the process issuing the bootout.
-    """
-    return os.environ.get('XPC_SERVICE_NAME') == label
-
-
-def plist_differs(path, content):
-    """True when the plist on disk does not already say exactly this."""
-    try:
-        return plistlib.loads(Path(path).read_bytes()) != content
-    except (OSError, ValueError):
-        return True
-
-
-def main_plist_needs_reload(uid, python, home, state, agents=None):
-    """True when launchd is running something other than what we will write.
-
-    Compared against launchd's in-memory program rather than the file: a
-    previous failed run may already have rewritten the plist while the loaded
-    job kept the old command.
-    """
-    agents = _agents(agents)
-    rendered = render_plist(python, home, state)
-    loaded = _launchd.loaded_command(run, uid, LABEL)
-    if loaded is None or not command_matches(loaded, rendered['ProgramArguments']):
-        return True
-    # Catches everything launchd owns that is not argv, the port above all.
-    return plist_differs(agents / (LABEL + '.plist'), rendered)
-
-
-def ensure_updater(uid, python, home, agents=None):
-    """Keep the scheduled updater loaded and running the current command.
-
-    Writing the file is not enough: launchd adopts a rewritten plist only on
-    reload, which is how the updater kept invoking an installer from a release
-    that had already been pruned.
-
-    But the scheduled updater is what runs this installer, so a bootout here
-    would kill the process issuing it and leave the job unloaded with no
-    bootstrap -- the same silent-loss failure this release fixes for the
-    router. When this run *is* that job, the rewritten file is left for the
-    next manual install or login to adopt; the plist now names a
-    release-independent launcher, so one adoption is final.
-    """
-    agents = _agents(agents)
-    rendered = render_update_plist(python, home)['ProgramArguments']
-    loaded = _launchd.loaded_command(run, uid, UPDATE_LABEL)
-    if loaded is None:
-        return _launchd.load(run, uid, UPDATE_LABEL, agents=agents,
-                             timeout=LOAD_TIMEOUT_S, sleep=_sleep)
-    if command_matches(loaded, rendered):
-        return True
-    if running_under(UPDATE_LABEL):
-        print('scheduled updater command changed; adopting it needs a reload '
-              'from outside its own job, so the next manual install or login '
-              'will pick it up')
-        return True
-    return _launchd.reload_job(run, uid, UPDATE_LABEL, agents=agents,
-                               unload_timeout=UNLOAD_TIMEOUT_S,
-                               load_timeout=LOAD_TIMEOUT_S, sleep=_sleep)
-
-
 def _read_failures(home):
     """State document plus its failure map; (None, {}) when unreadable.
 
@@ -530,20 +386,6 @@ def clear_update_failures(home, version):
     state['update_failures'] = failures
     _write_state(home, state)
 
-def loaded_updater_release(uid, home):
-    """Release name inside launchd's loaded updater command, or None.
-
-    Before this release the updater plist named a per-release installer, and
-    launchd runs the command it loaded until the job is reloaded -- which a
-    scheduled run deliberately defers, because it cannot bootout its own job.
-    Pruning that release would leave the updater firing a missing file.
-    """
-    prefix = str(Path(home) / 'releases') + os.sep
-    for token in (_launchd.loaded_command(run, uid, UPDATE_LABEL) or [])[1:]:
-        if token.startswith(prefix):
-            return token[len(prefix):].split(os.sep)[0] or None
-    return None
-
 
 def ensure_serving(uid, home, state, agents=None, timeout=180, version=None):
     """Guarantee a loaded main job that answers /health; returns the body.
@@ -558,19 +400,6 @@ def ensure_serving(uid, home, state, agents=None, timeout=180, version=None):
     if version is not None:
         return wait_version(state, version, timeout=timeout)
     return health(state, timeout=timeout)
-
-
-def reload_main_service(uid, agents=None):
-    """Make launchd adopt the rewritten main plist. True when loaded again.
-
-    Rewriting a loaded plist does not update launchd's in-memory copy; only a
-    reload picks up a changed interpreter or port. The updater is never
-    touched here. Returns False rather than raising so the caller can roll
-    back and then restore service on the previous release.
-    """
-    return _launchd.reload_job(run, uid, LABEL, agents=_agents(agents),
-                               unload_timeout=UNLOAD_TIMEOUT_S,
-                               load_timeout=LOAD_TIMEOUT_S, sleep=_sleep)
 
 
 def rotate_log(path, limit_bytes=1024 * 1024, backups=2):
@@ -689,9 +518,4 @@ def check_serial(home, latest, pinned=False):
     stored = feed_serial(home)
     if serial < stored:
         raise SystemExit(f'stale feed serial {serial} is older than {stored}')
-    # Learn the feed token after the serial check but before the version
-    # comparison, so a host that is already current still migrates: its
-    # next poll resolves the token-gated origin. A feed without a token
-    # leaves the host on its existing route untouched.
-    persist_feed_token(home, latest)
     return serial

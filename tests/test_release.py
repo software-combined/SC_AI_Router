@@ -5,7 +5,6 @@ import subprocess
 import sys
 import importlib.util
 import tarfile
-import tempfile
 import unittest
 from pathlib import Path
 
@@ -63,18 +62,6 @@ class ReleaseTests(unittest.TestCase):
             names = tar.getnames()
         self.assertFalse([n for n in names if '__pycache__' in n or n.endswith('.pyc')])
         self.assertIn('MANIFEST.json', names)
-
-    def test_release_embeds_feed_token_from_file(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            token_file = Path(tmp) / 'token'
-            token_file.write_text('tok-secret\n')
-            out = Path(tmp) / 'out'
-            release_mod.main(['--out', str(out), '--feed-token-file', str(token_file)])
-            latest = json.loads((out / 'latest.json').read_text())
-            self.assertEqual(latest['feed_token'], 'tok-secret')
-            out2 = Path(tmp) / 'out2'
-            release_mod.main(['--out', str(out2)])
-            self.assertNotIn('feed_token', json.loads((out2 / 'latest.json').read_text()))
 
     def test_runtimes_json_matches_runtime_lock(self):
         out = _ROOT / 'dist-test-runtimes'

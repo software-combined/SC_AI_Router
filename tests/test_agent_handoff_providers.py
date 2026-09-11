@@ -5,8 +5,14 @@ import json
 import unittest
 from unittest.mock import Mock
 
-from ai_router import agent_handoffs, compaction, providers
+from ai_router import agent_handoffs, compaction, providers, upstream
 from tests.test_agent_handoffs import alias_call, native_tools
+
+
+def _external_responses():
+    """OpenRouter Codes adapter; Plan 141 makes adapters per-provider."""
+    from ai_router import provider_defs as _defs
+    return providers.ExternalResponsesProvider(_defs.OPENROUTER)
 
 
 class Response(io.BytesIO):
@@ -28,7 +34,7 @@ def plaintext(text='SYNTH_ASSIGNMENT'):
 class ProviderTests(unittest.TestCase):
     def prepare(self, provider, tools=None, items=None):
         credentials = Mock()
-        credentials.openrouter_key.return_value = 'synthetic-router-key'
+        credentials.key_for.return_value = 'synthetic-router-key'
         payload = {'model': 'meta/muse-spark-1.3-contributor',
                    'tools': tools or [], 'input': items or []}
         original = deepcopy(payload)
@@ -47,18 +53,18 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(prepared.headers['Accept-Encoding'], 'identity')
         self.assertFalse(any(k.lower() in ('content-length', 'content-encoding')
                              for k in prepared.headers))
-        credentials.openrouter_key.assert_not_called()
+        credentials.key_for.assert_not_called()
 
     def test_native_without_collaboration_preserves_body_and_encoding(self):
         prepared, credentials, _ = self.prepare(providers.SubscriptionProvider())
         self.assertEqual(prepared.body, b'synthetic-compressed-body')
         self.assertEqual(prepared.headers['Content-Encoding'], 'zstd')
-        credentials.openrouter_key.assert_not_called()
+        credentials.key_for.assert_not_called()
 
     def test_plaintext_conversion_order_summary_and_openrouter_credentials(self):
         before = {'type': 'message', 'role': 'user', 'content': 'SYNTH_BEFORE'}
         after = {'type': 'message', 'role': 'assistant', 'content': 'SYNTH_AFTER'}
-        prepared, credentials, _ = self.prepare(providers.OpenRouterProvider(),
+        prepared, credentials, _ = self.prepare(_external_responses(),
             items=[before, plaintext('SYNTH_ASSIGNMENT\nDo not edit.'), after])
         items = json.loads(prepared.body)['input']
         self.assertEqual(items[0], before)
@@ -71,7 +77,7 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(prepared.headers, {'Authorization': 'Bearer synthetic-router-key',
             'Content-Type': 'application/json', 'Accept-Encoding': 'identity'})
         self.assertEqual(prepared.host, 'openrouter.ai')
-        credentials.openrouter_key.assert_called_once_with()
+        credentials.key_for.assert_called_once_with('openrouter')
 
     def test_opaque_initial_followup_and_compact_fail_before_key_lookup(self):
         opaque = plaintext()
@@ -80,12 +86,12 @@ class ProviderTests(unittest.TestCase):
             for items in ([opaque], [plaintext(), opaque]):
                 credentials = Mock()
                 with self.subTest(path=path), self.assertRaises(providers.PreparationError):
-                    providers.OpenRouterProvider().prepare('z-ai/glm-5.3', path,
+                    _external_responses().prepare('z-ai/glm-5.3', path,
                         {'input': items}, b'', {}, credentials)
-                credentials.openrouter_key.assert_not_called()
+                credentials.key_for.assert_not_called()
 
     def test_openrouter_json_and_sse_aliases_restore_native_call_ids(self):
-        provider = providers.OpenRouterProvider()
+        provider = _external_responses()
         prepared, _, _ = self.prepare(provider, native_tools('send_message'))
         wire = next(name for (_, name), info in prepared.tool_names.items()
                     if info['namespace'] == 'collaboration_plaintext')
@@ -106,12 +112,12 @@ class ProviderTests(unittest.TestCase):
             self.assertEqual(item['id'], call['id'])
 
     def test_adapted_responses_reject_unsupported_encoding(self):
-        for provider in (providers.SubscriptionProvider(), providers.OpenRouterProvider()):
+        for provider in (providers.SubscriptionProvider(), _external_responses()):
             prepared, _, _ = self.prepare(provider, native_tools('send_message'))
             for encoding in ('gzip', 'zstd', 'br'):
                 with self.subTest(provider=provider.name, encoding=encoding):
                     with self.assertRaisesRegex(ValueError, 'encoding'):
-                        providers.validate_response(Response(b'', encoding=encoding), prepared)
+                        upstream.validate_response(Response(b'', encoding=encoding), prepared)
 
 
 class NativeStreamTests(unittest.TestCase):
@@ -190,7 +196,7 @@ class SteerWiringTests(unittest.TestCase):
         self.assertEqual(item['call_id'], 'call_wake')
         self.assertIn('collaboration_plaintext.followup_task', item['output'])
         self.assertNotIn('SYNTH_WAKE', item['output'])
-        credentials.openrouter_key.assert_not_called()
+        credentials.key_for.assert_not_called()
 
     def test_subscription_leaves_native_followup_alone(self):
         credentials = Mock()

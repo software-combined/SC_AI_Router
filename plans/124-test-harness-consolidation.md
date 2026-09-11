@@ -14,23 +14,25 @@
 
 ## Why this matters
 
-The suite is 71 modules / ~13.6k lines, and its fixtures are spread across peer test files:
+The suite is ~90 modules / ~25k lines, and its fixtures are spread across peer test files
+(counts reconciled 2026-09-12; drifted since planning at `b642de9`):
 
-- `tests/test_mixed_router.py:143-169` defines `_test_state` / `_start_server` /
-  `_start_auth_server`; 10 test modules import from it. `tests/test_handler.py:23-35` defines
-  `_auth_file` / `_post`; 6 modules import from it. The same six-line `_server` body is
-  copy-pasted in 10 files (`test_handler.py:39`, `test_claude_ingress.py:34`,
-  `test_protocol_contracts.py:19`, `test_router_response.py:10`, `test_v2_compaction.py:105`,
-  `test_latency_metrics.py:67`, `test_setup.py:320`, `test_runtime.py:133`,
-  `test_mixed_router.py:203`, `test_lifecycle.py:25`), and `_post` is re-declared five times.
-  38 test modules import fixtures from another test module.
-- `tests/test_tool_adapter.py:18-26` and `tests/test_v2_compaction.py:33-41` are drifted copies of
-  `_isolated_home` (one returns the temp dir, the other `None` — `test_tool_adapter.py:279` depends
-  on the return value). The temp-home idiom (`mkdtemp` + `addCleanup(rmtree)` + `ROUTER_HOME`
+- `tests/test_mixed_router.py` (was `:143-169` at planning) defines `_test_state` /
+  `_start_server` / `_start_auth_server`; 14 test files import from it at `391b0ad`.
+  `tests/test_handler.py` (was `:23-35`) defines `_auth_file` / `_post`; 9 test files
+  import from it at `391b0ad`. The same `_server` body is copy-pasted across the server-based
+  suites, `_post(port, path, payload, headers=None)` is re-declared in
+  `test_handler.py` / `test_v2_compaction.py`, and the narrower `(port, path,
+  payload)` variant lives in `tests/test_lifecycle.py`.
+- `tests/test_tool_adapter.py` (was `:18-26`) and `tests/test_v2_compaction.py`
+  (was `:33-41`) are drifted copies of `_isolated_home` (one returns the temp
+  dir, the other `None` — `test_tool_adapter.py:337` depends on the return
+  value). The temp-home idiom (`mkdtemp` + `addCleanup(rmtree)` + `ROUTER_HOME`
   patch) appears ~40 times.
-- `tests/test_install.py` is exactly 500 lines — the tests HARD cap — and `:24-137` is pure fixture
-  code (`install_mod`, `_ok_run`, `_patch_attrs`, `_craft_bundle`, `_tarball`, `_run_install`);
-  20 modules import from it (`test_install_config.py`, `test_install_lifecycle.py`,
+- `tests/test_install.py` is 491 lines (was exactly 500 at planning) — near the
+  tests HARD cap — and `:24-131` is pure fixture code (`install_mod`, `_ok_run`,
+  `_patch_attrs`, `_craft_bundle`, `_tarball`, `_run_install`); 21 modules import
+  from it (`test_install_config.py`, `test_install_lifecycle.py`,
   `test_client_activation.py`, `test_systemd.py`, `test_feed_serial.py`, `test_windows_acl.py`,
   `test_interpreter_resolution.py`, …), some through a third layer. Because the checker requires
   an exact baseline match, the fixture API lives in a file that cannot change size.
@@ -58,31 +60,42 @@ or duplicate those helpers, `config/source-limits-baseline.json`.
 1. **Add `tests/harness.py`** containing: `auth_file`, `test_state`, `start_server`,
    `start_auth_server`, `post`, `get`, `stub_credentials`, `isolated_home(test) -> tmp` (the
    superset contract: returns the temp dir), `tmp_home(test) -> Path`. Copy semantics verbatim from
-   the existing definitions (`tests/test_mixed_router.py:143-169`, `tests/test_handler.py:23-35`,
-   `tests/test_tool_adapter.py:18-26`). Do not change behaviour; one module, one contract.
+   the existing definitions (`tests/test_mixed_router.py` `_test_state`/`_start_server`/
+   `_start_auth_server`, `tests/test_handler.py` `_auth_file`/`_post`,
+   `tests/test_tool_adapter.py` `_isolated_home`; line refs drifted since `b642de9`,
+   reconciled 2026-09-12). Do not change behaviour; one module, one contract.
+   Kept explicitly named: `StubCredentials` (mixed_router class contract, with `.key`)
+   alongside `stub_credentials` (SimpleNamespace lambda contract from agent/provdier
+   suites); `post` keeps the `(port, path, payload, headers=None)` contract shared by
+   handler/v2_compaction/lifecycle; `get` keeps the `(port, path)` contract. The
+   form-encoded setup `_post`/`_get` in `test_setup_handler.py` and the bound-method
+   narrow `_post` helpers stay local (out of scope).
 2. **Migrate importers in small batches** (one commit per batch), keeping aliases in
    `test_mixed_router.py`/`test_handler.py` until the last importer moves, then delete the local
    copies. Update `test_tool_adapter.py`/`test_v2_compaction.py` to the single `isolated_home`.
    Include `test_handler.py`'s new 092 tests in the first batch so they use the harness.
-3. **Extract `tests/install_fixtures.py`** from `tests/test_install.py:24-137` (plus the
-   `static_fetch` re-export at `:19`) and update its ~20 importers. `test_install.py` keeps only
+3. **Extract `tests/install_fixtures.py`** from `tests/test_install.py:24-131` (was `:24-137`
+   at planning; plus the `static_fetch` re-export) and update its ~20 importers (21 found
+   2026-09-12). `test_install.py` keeps only
    its test classes. Remove the `tests/test_install.py` baseline entry once its count drops below
    the soft limit; update the baseline via the checker.
 4. **Optional, only if step 3 leaves `test_install_lifecycle.py` awkward**: split its
    `SafeUpdateTests` class into its own module. Do not split any other file for size alone.
 
 **Verify**: after each batch, the focused list and the full suite pass; `rg -l "from tests\.test_(mixed_router|handler) import" tests/` empties batch by batch; final
-`wc -l tests/test_install.py` below the 500 hard cap (expect ~385) with no fixture definitions
-left.
+`wc -l tests/test_install.py` below the 500 hard cap (expect ~385; landed at 388) with no
+fixture definitions left.
 
 ## Done criteria
 
-- [ ] `tests/harness.py` is the only definition of the HTTP/auth/home helpers; no copies remain.
-- [ ] `tests/test_install.py` contains tests only; its baseline entry reflects the
-      post-extraction count (expect ~385, below the 500 hard cap).
-- [ ] Full suite, compile and limit gates pass; no assertion changed.
-- [ ] Only `tests/` and the baseline changed.
-- [ ] `plans/README.md` status row updated.
+- [x] `tests/harness.py` is the only definition of the HTTP/auth/home helpers; no copies remain
+      (`rg -l "from tests\.test_(mixed_router|handler) import" tests/` is empty; 14 + 9 importer files migrated).
+- [x] `tests/test_install.py` contains tests only; its baseline entry reflects the
+      post-extraction count (expect ~385, below the 500 hard cap; landed at 388).
+- [x] Full suite, compile and limit gates pass; no assertion changed (1041 tests OK; the one moved
+      `assertEqual` is byte-identical).
+- [x] Only `tests/`, the baseline and the two plan files changed.
+- [x] `plans/README.md` status row updated.
 
 ## STOP conditions
 

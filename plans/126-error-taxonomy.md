@@ -9,31 +9,33 @@
 - Priority P2; effort S-M; risk LOW-MED; confidence HIGH; category tech-debt; depends on 101
   (run after it, so both deletions land in a known baseline).
 - Planned at `b642de9`, 2026-09-11.
+- Implemented 2026-09-12; both halves landed in one commit (see the reconciled refs below).
 - First proof: subscription/unknown-model classification is by exception type, not message text,
   and every error constructor in `errors.py` has a caller.
 
 ## Why this matters
 
-- `ai_router/providers.py:385` raises a bare `ValueError` with the message
-  "Model is not available without a ChatGPT subscription"; `claude.py:155-156` raises the Claude
-  twin; `errors.py:283-292` re-derives the response code by substring-matching that text
-  (`'without a ChatGPT subscription' in text`, `'unknown model:' in lowered`). Rewording one message
-  silently reclassifies the client response, and the catalog message at `errors.py:194-202` can
-  drift from the raise site without a test noticing.
-- `errors.py:3-7` promises "CLI and tool exits print CODE: message", but `fail()` (`:54-56`) and the
-  code block at `:62-127` have zero callers repo-wide; meanwhile `packaging/install.py` and
-  `tools/*` raise raw `SystemExit`. The documented contract is unrealized, and a future editor
-  trusts a taxonomy that never runs.
+- `ai_router/providers.py` raised a bare `ValueError` with the message "Model is not available
+  without a ChatGPT subscription"; `claude.py` raised the Claude twin; `errors.map_client_error`
+  re-derived the response code by substring-matching that text (`'without a ChatGPT subscription'
+  in text`, `'unknown model:' in lowered`). Rewording one message silently reclassified the client
+  response. *Reconciled 2026-09-12: both raise sites now raise the typed errors and the two
+  substring branches are gone.*
+- `errors.py` promised "CLI and tool exits print CODE: message", but `fail()` and the code-constant
+  block had zero callers repo-wide; meanwhile `packaging/install.py` and `tools/*` raise raw
+  `SystemExit`. The documented contract was unrealized, and a future editor would trust a taxonomy
+  that never runs. *Reconciled 2026-09-12: the dead half is deleted and the docstring matches
+  reality; installer/tool coded errors stay deferred to 134.*
 - Plan 101 deletes four unrelated dead symbols and adds an F401/F811 gate; it explicitly excludes
   unused non-import names, so this cleanup needs its own owner.
 
-## Current state (verified at b642de9)
+## Current state (verified at b642de9; line refs reconciled 2026-09-12 at `424fb00`)
 
-- Substring classification: `errors.py:283-292`; raise sites `providers.py:385`,
-  `claude.py:155-156`; catalog messages `errors.py:194-202`, `:239`.
+- Substring classification: `errors.py:283-292` at planning; raise sites were `providers.py:385`
+  (rewritten to `:280` by plan 141) and `claude.py:155-156` (`:167-168`).
 - `errors.py:54` `fail()`; dead block `:62-127`; module docstring `:3-7`.
 - Router catches broad `(ValueError, ...)` at `router.py:244-246`; `map_client_error` converts to
-  `RouterError`.
+  `RouterError`. The raised types stay `ValueError` subclasses, so the catch is unchanged.
 
 ## Scope
 
@@ -59,23 +61,39 @@ maintenance), changing any response body or status, restructuring other error co
    classify by `isinstance` and delete the substring branches for these two cases; keep the
    `'not in the configured catalog'`/`unknown model:` handling unless it is also convertible
    (convert if cheap, preserve every existing response).
+   *Landed 2026-09-12: the classes live at `errors.py:47` and `:54`; the raise sites are
+   `providers.py:280` and `claude.py:168`; `map_client_error` (`errors.py:191`) checks the two
+   types before the generic `ValueError` branch. The catalog/unknown-model and `api key` branches
+   are kept unchanged: `UnknownModel` is already caught by `isinstance`, and the `api key` branch
+   still has a live caller (`credentials.py:64` raises `OpenCode credential is not an API key`,
+   mapping to `CREDENTIAL_PROBLEM`), so only the two subscription substring branches were removed.*
 2. **Dead half (commit 2).** Run `rg -n 'errors\.fail|from .errors import .*fail'` and
    `rg -n '<name>'` for every symbol in `errors.py:54-127`; delete only symbols with zero callers
    (including tests) and correct the module docstring lines 3-7 to match reality. If a symbol is
    used by a test as a contract, keep it and note why.
+   *Landed 2026-09-12: `fail()` and all 66 code constants deleted; no module imported any of them
+   (the only `fail` hits are unrelated `self.fail`/`test.fail` and `tools/verify_runtime_pins.py`
+   `_fail`). Docstring now states the HTTP/logs contract only. `errors.py` 280 → 218 lines, so its
+   `config/source-limits-baseline.json` entry was removed.*
 3. **Tests (same commits).** Add a classification test: raising the typed error from a provider
    select path yields the same status/code as today; a reworded message no longer changes the
    classification. Keep every existing response-body assertion green.
+   *Landed 2026-09-12: `tests/test_router_response.py`
+   `test_subscription_required_classification_is_type_based` exercises both `select` raise sites,
+   pins `400`/`SUBSCRIPTION_REQUIRED` and `400`/`CLAUDE_SUBSCRIPTION_REQUIRED`, and proves a
+   subclass with a reworded message still classifies by type.*
 
 **Verify**: focused tests; `rg -n "without a ChatGPT subscription' in" ai_router/errors.py` → no matches (the catalog/unknown-model branch may remain as-is); `rg -c 'def ' ai_router/errors.py` sanity.
 
 ## Done criteria
 
-- [ ] Subscription classification is type-based; no substring branch remains for it.
-- [ ] Every constructor/helper left in `errors.py` has a caller; docstring matches reality.
-- [ ] Response bodies/statuses unchanged (existing tests untouched).
-- [ ] Full suite, compile and limit gates pass; only in-scope files changed.
-- [ ] `plans/README.md` status row updated.
+- [x] Subscription classification is type-based; no substring branch remains for it
+      (`rg "without a ChatGPT subscription' in" ai_router/errors.py` → no matches).
+- [x] Every constructor/helper left in `errors.py` has a caller (each name is referenced at least
+      once inside or outside the module); the docstring now states the HTTP/logs contract only.
+- [x] Response bodies/statuses unchanged (existing tests untouched; one test added).
+- [x] Full suite, compile and limit gates pass; only in-scope files changed.
+- [x] `plans/README.md` status row updated.
 
 ## STOP conditions
 

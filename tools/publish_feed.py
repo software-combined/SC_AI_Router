@@ -1,23 +1,20 @@
-"""Publish one built release to the token-gated update feed (Plan 139).
+"""Publish one built release to the public update feed (Plan 139).
 
 Usage: python tools/publish_feed.py --dist dist --channel stable
-       [--bucket B] [--distribution-id D] [--token-parameter P] [--dry-run]
+       [--bucket B] [--distribution-id D] [--dry-run]
 
-The release workflow runs this before it creates the GitHub Release, so a
-host never learns a feed token for a feed that is not already serving. The
-token is read from SSM, written into the feed document, and uploaded from a
-local file: it is never an argv word, never printed, and never logged.
+The release workflow runs this before it creates the GitHub Release, so the
+feed always serves a release before the release page advertises it. The
+feed and its bundles are public: readers need no credential.
 """
 import argparse
 import hashlib
 import json
-import os
 import subprocess
 from pathlib import Path
 
 FEED_ORIGIN = 'https://dist.softwarecombined.com'
 DEFAULT_BUCKET = 'scg-router-feed-651116729473-apse2'
-DEFAULT_TOKEN_PARAMETER = '/scg/router-feed/current-token'
 FEED_DOCUMENT = 'feed-latest.json'
 RELEASE_DOCUMENT = 'release-latest.json'
 BUNDLE_PREFIX = 'bundles/'
@@ -30,7 +27,7 @@ run = subprocess.run
 
 
 def _clean(text):
-    """One bounded line of CLI error text; never used for token values."""
+    """One bounded line of CLI error text."""
     return ' '.join((text or '').split())[:300]
 
 
@@ -45,15 +42,6 @@ def _aws(args):
     return (result.stdout or '').strip()
 
 
-def feed_token(parameter):
-    """Read the current feed token from SSM; the value never leaves process."""
-    token = _aws(['ssm', 'get-parameter', '--name', parameter, '--with-decryption',
-                  '--query', 'Parameter.Value', '--output', 'text'])
-    if not token:
-        raise SystemExit(f'feed token parameter {parameter} is empty')
-    return token
-
-
 def bundle_name(latest):
     """Bundle file name for a feed document, after checking its shape."""
     for field in ('version', 'url', 'sha256', 'serial', 'min_python'):
@@ -65,21 +53,17 @@ def bundle_name(latest):
     return bundle
 
 
-def documents(latest, bundle, token, embed_token):
+def documents(latest, bundle):
     """Feed copy and release copy of the feed document.
 
-    The feed copy points at the feed origin and always carries the token.
-    The release copy keeps the URL packaging/release.py built (the GitHub
-    Release asset) and carries the token only while the transition switch
-    is on, so hosts already reading GitHub can migrate themselves.
+    The feed copy points at the feed origin; the release copy keeps the URL
+    packaging/release.py built (the GitHub Release asset). Both are public.
     """
     feed = dict(latest)
     feed['url'] = f'{FEED_ORIGIN}/{BUNDLE_PREFIX}{bundle}'
-    feed['feed_token'] = token
+    feed.pop('feed_token', None)
     release = dict(latest)
     release.pop('feed_token', None)
-    if embed_token:
-        release['feed_token'] = token
     return feed, release
 
 
@@ -90,9 +74,12 @@ def bundle_state(bucket, key):
     failure is fatal, because skipping the immutability check on a
     transient error could replace already-published bytes.
     """
-    result = run(['aws', 's3api', 'head-object', '--bucket', bucket,
-                  '--key', key, '--query', 'Metadata.sha256',
-                  '--output', 'text'], capture_output=True, text=True)
+    try:
+        result = run(['aws', 's3api', 'head-object', '--bucket', bucket,
+                      '--key', key, '--query', 'Metadata.sha256',
+                      '--output', 'text'], capture_output=True, text=True)
+    except OSError as exc:
+        raise SystemExit(f'cannot run the aws CLI: {exc}')
     if result.returncode:
         stderr = result.stderr or ''
         if '404' in stderr or 'Not Found' in stderr:
@@ -156,13 +143,8 @@ def _check_bundle(dist, bundle, sha256):
     return path
 
 
-def _embed_requested():
-    """Transition switch: also carry the token in the GitHub Release copy."""
-    return os.environ.get('ROUTER_FEED_EMBED_TOKEN', '').strip().lower() in ('1', 'true', 'yes')
-
-
 def _describe(args, latest, bundle):
-    """Dry-run plan: no AWS call, no token read, no file written."""
+    """Dry-run plan: no AWS call, no file written."""
     print(f'dry run: channel={args.channel} version={latest["version"]}')
     print(f'dry run: bundle {bundle} sha256 {latest["sha256"][:12]}')
     print(f'dry run: would publish s3://{args.bucket}/{BUNDLE_PREFIX}{bundle} when absent')
@@ -179,7 +161,6 @@ def main(argv=None):
     parser.add_argument('--channel', required=True, choices=CHANNELS)
     parser.add_argument('--bucket', default=DEFAULT_BUCKET)
     parser.add_argument('--distribution-id', default='')
-    parser.add_argument('--token-parameter', default=DEFAULT_TOKEN_PARAMETER)
     parser.add_argument('--dry-run', action='store_true')
     args = parser.parse_args(argv)
     dist = Path(args.dist)
@@ -188,16 +169,13 @@ def main(argv=None):
     path = _check_bundle(dist, bundle, latest['sha256'])
     if args.dry_run:
         return _describe(args, latest, bundle)
-    token = feed_token(args.token_parameter)
-    embed = _embed_requested()
-    feed_doc, release_doc = documents(latest, bundle, token, embed)
+    feed_doc, release_doc = documents(latest, bundle)
     (dist / FEED_DOCUMENT).write_text(json.dumps(feed_doc, indent=2) + '\n')
     (dist / RELEASE_DOCUMENT).write_text(json.dumps(release_doc, indent=2) + '\n')
     outcome = publish_bundle(args.bucket, BUNDLE_PREFIX + bundle, path, latest['sha256'])
     publish_document(args.bucket, f'{args.channel}/latest.json',
                      dist / FEED_DOCUMENT, FEED_CACHE_CONTROL)
-    carrier = 'also in the GitHub Release document' if embed else 'feed document only'
-    print(f'published {args.channel} {latest["version"]}: bundle {outcome}, token {carrier}')
+    print(f'published {args.channel} {latest["version"]}: bundle {outcome}')
     if args.distribution_id:
         target = f'/{args.channel}/latest.json'
         print(f'invalidated {target} ({invalidate(args.distribution_id, target)})')

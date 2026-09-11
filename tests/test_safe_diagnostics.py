@@ -9,7 +9,7 @@ import logging
 import unittest
 from unittest import mock
 
-from ai_router import errors, providers
+from ai_router import errors, upstream
 from ai_router.runtime import LOG
 
 MARKER = 'SYNTH-CANARY-060-9f2c'
@@ -41,7 +41,7 @@ class SafeDiagnosticsTests(unittest.TestCase):
         body = json.dumps({'error': {
             'message': f'Upstream blew up on {MARKER} with details',
             'metadata': {'provider_name': 'TestProv'}}}).encode()
-        described = providers.describe_failure(
+        described = upstream.describe_failure(
             None, {'status': 400, 'body': body},
             {'model': 'z-ai/glm-5.3', 'provider': 'openrouter',
              'elapsed_ms': 1.0, 'timeout_s': 120, 'has_image': False})
@@ -58,7 +58,7 @@ class SafeDiagnosticsTests(unittest.TestCase):
         body = json.dumps({'error': {'message': 'Provider returned error',
                                      'metadata': {'raw': raw,
                                                   'provider_name': 'TestProv'}}}).encode()
-        described = providers.describe_failure(
+        described = upstream.describe_failure(
             None, {'status': 400, 'body': body},
             {'model': 'z-ai/glm-5.3', 'provider': 'openrouter',
              'elapsed_ms': 1.0, 'timeout_s': 120, 'has_image': False})

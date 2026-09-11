@@ -1,20 +1,18 @@
 """First-run key window over loopback (Plan 047 G). No network: OpenRouter
 key checks run through an injected urlopen fake."""
-import http.client
 import io
 import json
 import os
 import shutil
 import tempfile
+import threading
 import unittest
 import urllib.error
-from tests._platform import requires_posix_perms
 import urllib.request
 from pathlib import Path
 from unittest import mock
-from ai_router import setup
-from ai_router.credentials import Credentials
-from tests.test_mixed_router import _start_server
+from ai_router import key_store, setup, setup_page
+from tests._platform import requires_posix_perms
 
 NOW = 1_700_000_000
 
@@ -40,6 +38,7 @@ def _key_ok(key='sk-test'):
             return payload
 
     def fake(req, timeout=None):
+        # The key must travel as a bearer header, never in the URL.
         assert req.get_header('Authorization', '').startswith('Bearer ')
         return Resp()
     return fake
@@ -73,7 +72,7 @@ class SetupUnitTests(unittest.TestCase):
     def test_form_wiring_survives_restyle(self):
         # The page markup is styled; these attributes are the contract the
         # browser POST depends on, so a later restyle must not drop one.
-        body = setup._form('n' * 16).decode()
+        body = setup_page.form('n' * 16, 'openrouter').decode()
         self.assertIn('<form method="post" action="./' + 'n' * 16 + '">', body)
         self.assertIn('type="password" name="key" autocomplete="off"', body)
         self.assertIn('<input type="radio" name="mode" value="subscription" checked>', body)
@@ -114,16 +113,51 @@ class SetupUnitTests(unittest.TestCase):
         self.assertEqual(saved['token'], 'test-token')
         self.assertNotIn('setup', state)
 
+    @requires_posix_perms
+    def test_json_post_reports_the_choices(self):
+        # The native popup submits here (Plan 139) and renders the result
+        # itself; the browser page keeps its own HTML contract.
+        home = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, home, True)
+        state = _state(home)
+        (home / 'mixed-router-state.json').write_text(json.dumps(state))
+        status, payload = setup.handle_setup_json(
+            state, home, 'n' * 16, b'key=sk-test&mode=none&profile=dev',
+            _urlopen=_key_ok(), _now=NOW)
+        self.assertEqual(status, 200)
+        self.assertEqual(payload['ok'], True)
+        self.assertEqual(payload['mode'], 'none')
+        self.assertEqual(payload['label'], 'probe')
+        self.assertEqual(payload['limit'], 10)
+        self.assertEqual(payload['usage'], 3)
+        self.assertEqual((home / 'openrouter.key').read_text(), 'sk-test\n')
+        self.assertNotIn('setup', json.loads(
+            (home / 'mixed-router-state.json').read_text()))
+
+    def test_json_post_reports_each_refusal(self):
+        home = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, home, True)
+        state = _state(home)
+        (home / 'mixed-router-state.json').write_text(json.dumps(state))
+        status, payload = setup.handle_setup_json(
+            state, home, 'wrong', b'key=sk-test', _urlopen=_key_ok(), _now=NOW)
+        self.assertEqual((status, payload['ok']), (404, False))
+        self.assertIn('re-run the installer', payload['error'])
+        status, payload = setup.handle_setup_json(
+            state, home, 'n' * 16, b'key=&mode=none', _urlopen=_key_ok(), _now=NOW)
+        self.assertEqual((status, payload['ok']), (422, False))
+        self.assertIn('paste a key', payload['error'])
+
     def test_post_with_none_mode_refreshes_picker_to_twins(self):
         # The setup window fires after the installer wrote the catalogue,
         # so the mode flip must refresh the picker file itself.
-        from ai_router.catalogue import check, openrouter_entry
+        from ai_router.catalogue import check, external_entry
         from ai_router.registry import by_slug
         home = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, home, True)
         state = _state(home)
         (home / 'mixed-router-state.json').write_text(json.dumps(state))
-        stale = dict(openrouter_entry(by_slug('z-ai/glm-5.3-flash')),
+        stale = dict(external_entry(by_slug('z-ai/glm-5.3-flash')),
                      slug='gpt-6-astra', display_name='GPT-6-Astra')
         (home / 'mixed-models.json').write_text(
             json.dumps({'models': [stale]}))
@@ -243,7 +277,6 @@ class SetupUnitTests(unittest.TestCase):
                 with self.assertRaisesRegex(SystemExit, 'credential problem'):
                     load(path)
 
-
 class KeyWindowTests(unittest.TestCase):
     # Plan 055 Stage 3: keyless boot, first-use window, revoked-key carve-out.
     def _home(self):
@@ -264,7 +297,7 @@ class KeyWindowTests(unittest.TestCase):
         os.chmod(home / 'openrouter.key', 0o600)
         form = b'key=sk-test&mode=none'
         with mock.patch.object(setup, '_ON_WINDOWS', False), \
-                mock.patch.object(setup, '_stored_key_live', return_value=live):
+                mock.patch.object(key_store, '_stored_key_live', return_value=live):
             status, body = setup.handle_setup(
                 state, home, 'n' * 16, True, form, _urlopen=_key_ok(), _now=NOW)
         return home, status, body
@@ -285,34 +318,37 @@ class KeyWindowTests(unittest.TestCase):
         self.assertEqual((home / 'openrouter.key').read_text(), 'sk-maybe\n')
 
     def test_stored_key_live_false_only_on_401_or_403(self):
-        self.assertFalse(setup._stored_key_live('sk-x', self._dead_fetch(401)))
-        self.assertFalse(setup._stored_key_live('sk-x', self._dead_fetch(403)))
-        self.assertTrue(setup._stored_key_live('sk-x', self._dead_fetch(429)))
-        self.assertTrue(setup._stored_key_live('sk-x', _key_ok()))
+        self.assertFalse(key_store._stored_key_live('openrouter', 'sk-x', self._dead_fetch(401)))
+        self.assertFalse(key_store._stored_key_live('openrouter', 'sk-x', self._dead_fetch(403)))
+        self.assertTrue(key_store._stored_key_live('openrouter', 'sk-x', self._dead_fetch(429)))
+        self.assertTrue(key_store._stored_key_live('openrouter', 'sk-x', _key_ok()))
         def boom(req, timeout=None):
             raise OSError('down')
-        self.assertTrue(setup._stored_key_live('sk-x', boom))
+        self.assertTrue(key_store._stored_key_live('openrouter', 'sk-x', boom))
 
     def test_open_key_window_mints_once_and_reuses_live_nonce(self):
         home = self._home()
         (home / 'mixed-router-state.json').write_text(json.dumps({'port': 1, 'token': 't'}))
-        import threading
         server = mock.Mock()
         server.lock = threading.Lock()
         server.state = {'port': 1, 'token': 't'}
         opened = []
-        self.assertTrue(setup.open_key_window(server, home, _opener=opened.append))
+        started = []
+        prompt = lambda url, **kw: started.append(url) or True  # noqa: E731
+        self.assertTrue(setup.open_key_window(server, home, _opener=opened.append,
+                                              _prompt=prompt))
         first = server.state['setup']['nonce']
-        self.assertTrue(setup.open_key_window(server, home, _opener=opened.append))
+        self.assertTrue(setup.open_key_window(server, home, _opener=opened.append,
+                                              _prompt=prompt))
         self.assertEqual(server.state['setup']['nonce'], first)
-        self.assertEqual(len(opened), 1)
+        self.assertEqual(len(started), 1)
+        self.assertEqual(opened, [], 'the popup replaces the browser window')
         saved = json.loads((home / 'mixed-router-state.json').read_text())
         self.assertEqual(saved['setup']['nonce'], first)
 
     def test_open_key_window_never_prints_url_off_tty(self):
         home = self._home()
         (home / 'mixed-router-state.json').write_text(json.dumps({'port': 1, 'token': 't'}))
-        import threading
         server = mock.Mock()
         server.lock = threading.Lock()
         server.state = {'port': 1, 'token': 't'}
@@ -321,11 +357,32 @@ class KeyWindowTests(unittest.TestCase):
             with mock.patch('ai_router.runtime.log_event') as logged:
                 import contextlib as _ctx
                 with _ctx.redirect_stdout(buf):
-                    setup.open_key_window(server, home, _opener=lambda url: True)
+                    setup.open_key_window(server, home, _opener=lambda url: True,
+                                          _prompt=lambda url, **kw: True)
         self.assertNotIn(server.state['setup']['nonce'], buf.getvalue())
         self.assertNotIn('test-token', buf.getvalue())
         logged.assert_called_once()
         self.assertNotIn('test-token', str(logged.call_args))
+
+    def test_open_key_window_keeps_the_browser_opener_out_of_the_post(self):
+        # The popup's POST seam must not be the browser opener: the router
+        # path broke when webbrowser.open was reused as a urlopen-shaped seam.
+        home = self._home()
+        (home / 'mixed-router-state.json').write_text(json.dumps({'port': 1, 'token': 't'}))
+        server = mock.Mock()
+        server.lock = threading.Lock()
+        server.state = {'port': 1, 'token': 't'}
+        seen = {}
+        opener = object()
+
+        def prompt(url, **kwargs):
+            seen.update(kwargs)
+            return True
+
+        self.assertTrue(setup.open_key_window(server, home, _opener=opener,
+                                              _prompt=prompt))
+        self.assertIs(seen['opener'], opener)
+        self.assertNotIn('post', seen)
 
 
     def test_atomic_replace_recovers_from_stale_tmp(self):
@@ -338,139 +395,3 @@ class KeyWindowTests(unittest.TestCase):
         setup._atomic_replace(path, {'port': 1, 'token': 't', 'setup': {'nonce': 'x', 'expires': 1}})
         self.assertEqual(json.loads(path.read_text())['setup']['nonce'], 'x')
         self.assertFalse(stale.exists())
-
-class SetupHandlerTests(unittest.TestCase):
-    def _server(self, home, **over):
-        state = {'port': 0, 'token': 'test-token', 'openai_models': [],
-                 'setup': {'nonce': 'n' * 16, 'expires': 9_999_999_999}}
-        state.update(over)
-        import json as _json
-        (home / 'mixed-router-state.json').write_text(_json.dumps(state))
-        server = _start_server(state, credentials=Credentials(state, home, env={}))
-        self.addCleanup(server.shutdown)
-        return server
-
-    def _get(self, port, path, origin=None):
-        conn = http.client.HTTPConnection('127.0.0.1', port, timeout=10)
-        headers = {}
-        if origin is not None:
-            headers['Origin'] = origin
-        conn.request('GET', path, headers=headers)
-        return conn.getresponse()
-
-    def _post(self, port, path, body, origin=None):
-        conn = http.client.HTTPConnection('127.0.0.1', port, timeout=10)
-        headers = {'Content-Type': 'application/x-www-form-urlencoded'}
-        if origin is not None:
-            headers['Origin'] = origin
-        conn.request('POST', path, body=body, headers=headers)
-        return conn.getresponse()
-
-    def test_get_form_and_unknown_nonce(self):
-        home = Path(tempfile.mkdtemp())
-        self.addCleanup(shutil.rmtree, home, True)
-        server = self._server(home)
-        response = self._get(server.server_port, '/test-token/setup/' + 'n' * 16)
-        self.assertEqual(response.status, 200)
-        self.assertIn('text/html', response.getheader('Content-Type'))
-        self.assertIn(b'<form', response.read())
-        response = self._get(server.server_port, '/test-token/setup/wrong')
-        self.assertEqual(response.status, 404)
-
-    def test_post_same_origin_stores_key(self):
-        home = Path(tempfile.mkdtemp())
-        self.addCleanup(shutil.rmtree, home, True)
-        server = self._server(home)
-        origin = f'http://127.0.0.1:{server.server_port}'
-        with mock.patch('urllib.request.urlopen', _key_ok()):
-            response = self._post(server.server_port,
-                                  '/test-token/setup/' + 'n' * 16,
-                                  b'key=sk-live&mode=subscription', origin)
-        self.assertEqual(response.status, 200)
-        self.assertIn(b'Connected', response.read())
-        self.assertEqual((home / 'openrouter.key').read_text(), 'sk-live\n')
-
-    def test_foreign_origin_rejected(self):
-        home = Path(tempfile.mkdtemp())
-        self.addCleanup(shutil.rmtree, home, True)
-        server = self._server(home)
-        response = self._post(server.server_port,
-                              '/test-token/setup/' + 'n' * 16,
-                              b'key=sk-live&mode=subscription',
-                              'https://evil.example')
-        self.assertEqual(response.status, 403)
-        self.assertFalse((home / 'openrouter.key').exists())
-
-    def test_setup_post_over_inherited_listener(self):
-        # Production boots socket-activated (no server_bind, no server_port):
-        # the setup POST must work there, not just on directly bound servers.
-        import socket
-        import threading
-        from ai_router.router import Router
-        home = Path(tempfile.mkdtemp())
-        self.addCleanup(shutil.rmtree, home, True)
-        listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.addCleanup(listener.close)
-        listener.bind(('127.0.0.1', 0))
-        listener.listen(5)
-        port = listener.getsockname()[1]
-        # Inherited fd must be for the configured port (production launchd
-        # declares SockServiceName = state port); foreign fds fall back.
-        state = _state(home, port=port,
-                       setup={'nonce': 'n' * 16, 'expires': 9_999_999_999})
-        (home / 'mixed-router-state.json').write_text(json.dumps(state))
-        server = Router(dict(state), fileno=listener.fileno(),
-                        credentials=Credentials(dict(state), home, env={}))
-        self.addCleanup(server.server_close)
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
-        self.addCleanup(server.shutdown)
-        with mock.patch('urllib.request.urlopen', _key_ok()):
-            conn = http.client.HTTPConnection('127.0.0.1', port, timeout=10)
-            conn.request('POST', '/test-token/setup/' + 'n' * 16,
-                         body=b'key=sk-live&mode=subscription',
-                         headers={'Content-Type': 'application/x-www-form-urlencoded',
-                                  'Origin': f'http://127.0.0.1:{port}'})
-            response = conn.getresponse()
-            self.assertEqual(response.status, 200)
-            response.read()
-        self.assertEqual((home / 'openrouter.key').read_text(), 'sk-live\n')
-
-    def test_keyless_state_rejects_billable_routes(self):
-        from tests.fakes import FakeUpstream, install_fake
-        home = Path(tempfile.mkdtemp())
-        self.addCleanup(shutil.rmtree, home, True)
-        env = mock.patch.dict(os.environ, {'OPENROUTER_API_KEY': ''})
-        env.start()
-        self.addCleanup(env.stop)
-        server = self._server(home)
-        recorded = install_fake(self, lambda: FakeUpstream(200, b'{"output": []}', []))
-        conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
-        conn.request('POST', '/test-token/responses',
-                     body=json.dumps({'model': 'z-ai/glm-5.3-flash',
-                                      'input': [{'type': 'message', 'role': 'user',
-                                                 'content': 'hi'}]}),
-                     headers={'Content-Type': 'application/json'})
-        response = conn.getresponse()
-        response.read()
-        self.assertEqual(response.status, 400)
-        self.assertEqual(recorded, [])
-
-    def test_nonce_single_use(self):
-        home = Path(tempfile.mkdtemp())
-        self.addCleanup(shutil.rmtree, home, True)
-        server = self._server(home)
-        with mock.patch('urllib.request.urlopen', _key_ok()):
-            first = self._post(server.server_port,
-                               '/test-token/setup/' + 'n' * 16,
-                               b'key=sk-live&mode=subscription')
-            self.assertEqual(first.status, 200)
-            first.read()
-            second = self._post(server.server_port,
-                                '/test-token/setup/' + 'n' * 16,
-                                b'key=sk-live&mode=subscription')
-            self.assertEqual(second.status, 404)
-
-
-if __name__ == '__main__':
-    unittest.main()

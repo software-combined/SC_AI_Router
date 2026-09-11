@@ -25,7 +25,7 @@ def _notice_mod():
 
 notice_mod = _notice_mod()
 
-MSG = ('SCG router updated to 1.0.1. '
+MSG = ('SCG Router was updated to 1.0.1. '
        'Quit and reopen Codex to use the new models.')
 
 
@@ -53,6 +53,73 @@ class RecordTests(unittest.TestCase):
             self.assertEqual(doc['version'], '1.0.1')
             self.assertNotIn('shown', doc)
 
+    def _catalogue(self, home, slugs):
+        (home / 'mixed-models.json').write_text(
+            json.dumps({'models': [{'slug': s} for s in slugs]}))
+
+    def _baseline(self, home, slugs):
+        (home / 'picker-baseline.json').write_text(json.dumps(slugs))
+
+    def test_version_change_without_a_new_picker_row_stays_silent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            home.mkdir()
+            self._catalogue(home, ['z-ai/glm-5.3', 'gpt-5.6-luna'])
+            self._baseline(home, ['gpt-5.6-luna', 'z-ai/glm-5.3'])
+            self.assertFalse(notice_mod.record(home, '1.0.0', '1.0.1'))
+            self.assertFalse((home / 'update-notice.json').exists())
+
+    def test_version_change_with_a_new_picker_row_stages_the_notice(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            home.mkdir()
+            self._baseline(home, ['gpt-5.6-luna'])
+            self._catalogue(home, ['gpt-5.6-luna', 'z-ai/glm-5.3'])
+            self.assertTrue(notice_mod.record(home, '1.0.0', '1.0.1'))
+            self.assertEqual(json.loads(
+                (home / 'picker-baseline.json').read_text()),
+                ['gpt-5.6-luna', 'z-ai/glm-5.3'])
+
+    def test_a_failed_notice_write_leaves_the_addition_pending(self):
+        # Rows are announced only once the notice is on disk: a write that
+        # fails must leave the baseline alone so the next install retries.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            home.mkdir()
+            self._baseline(home, ['gpt-5.6-luna'])
+            self._catalogue(home, ['gpt-5.6-luna', 'z-ai/glm-5.3'])
+            (home / 'update-notice.json').mkdir()
+            self.assertFalse(notice_mod.record(home, '1.0.0', '1.0.1'))
+            self.assertEqual(json.loads(
+                (home / 'picker-baseline.json').read_text()), ['gpt-5.6-luna'])
+
+    def test_a_pending_notice_is_refreshed_even_without_a_new_row(self):
+        # An unshown notice from an earlier release is still the reason to
+        # restart, so it follows this install instead of going stale.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            home.mkdir()
+            self._catalogue(home, ['gpt-5.6-luna'])
+            self._baseline(home, ['gpt-5.6-luna'])
+            (home / 'update-notice.json').write_text(
+                json.dumps({'version': '1.0.0', 'clients': 'codex'}))
+            self.assertTrue(notice_mod.record(home, '1.0.0', '1.0.1'))
+            doc = json.loads((home / 'update-notice.json').read_text())
+            self.assertEqual(doc['version'], '1.0.1')
+            self.assertNotIn('shown', doc)
+
+    def test_an_unusable_picker_file_keeps_the_old_behaviour(self):
+        # A home whose catalogue this comparison cannot read must not lose
+        # a real addition: fall back to staging, as before this change.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            home.mkdir()
+            (home / 'mixed-models.json').write_text('not json')
+            self._baseline(home, ['gpt-5.6-luna'])
+            self.assertTrue(notice_mod.record(home, '1.0.0', '1.0.1'))
+            self.assertEqual(json.loads(
+                (home / 'picker-baseline.json').read_text()), ['gpt-5.6-luna'])
+
     def test_shown_version_is_not_restaged(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
@@ -76,6 +143,24 @@ class RecordTests(unittest.TestCase):
             self.assertEqual(doc['version'], '1.0.2')
             self.assertEqual(doc['pid'], 4321)
             self.assertNotIn('shown', doc)
+
+    def test_notice_records_the_install_clients(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            home.mkdir()
+            self.assertTrue(notice_mod.record(home, '1.0.0', '1.0.1', 'claude'))
+            doc = json.loads((home / 'update-notice.json').read_text())
+            self.assertEqual(doc['clients'], 'claude')
+
+    def test_notice_reads_the_recorded_clients_for_a_scheduled_update(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            home.mkdir()
+            (home / 'mixed-router-state.json').write_text(
+                json.dumps({'clients': 'both'}))
+            self.assertTrue(notice_mod.record(home, '1.0.0', '1.0.1'))
+            doc = json.loads((home / 'update-notice.json').read_text())
+            self.assertEqual(doc['clients'], 'both')
 
     def test_dialog_pid_must_be_a_positive_int(self):
         for bogus in (None, True, 0, -3, '4321'):

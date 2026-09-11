@@ -1,5 +1,52 @@
 # Compatibility
 
+## Standalone delegation delivery, 2026-09-11
+
+Clients: ChatGPT.app `26.903.71938`, Codex Framework `152.0.7977.83`,
+bundled app-server codex-cli `0.153.4` (upstream tag `rust-v0.153.4`,
+commit `3d2ee51ca2d5db578f328aa75e20aa22c0197c9a`), feature gate
+`turnToolOutput: 0.151.0-alpha.4` read from the app bundle. Router source
+base `d440c3a` (0.6.24); fix commit `a300989` on
+`codex/router-handoff-outputs-20260911`, prepared for the `0.6.26` beta
+release, target `develop`. The `0.6.25` beta was tagged from `develop`
+before this fix and its release run failed on the feed publisher role, so
+this fix rides the next beta instead. `v0.6.26-beta` shipped the first
+iteration (assistant-role plaintext, commit `a300989`); the tool-pair
+shape below ships in the `0.6.27` beta from the
+`codex/router-handoff-tool-pair-20260911` follow-up, so an installed
+0.6.26 host does not yet carry the working shape.
+
+- Codex Desktop injects cross-task messages (`create_thread`,
+  `send_message_to_thread`) as a standalone `function_call_output` item
+  with no `call_id`; upstream treats it as a legitimate instruction turn,
+  but the router's scrub dropped it as an orphan, so tasks on OpenRouter
+  models never received the delegated message while tasks on OpenAI
+  models did.
+- Live probes against OpenRouter (`deepseek/deepseek-v4.1-flash`): the raw
+  standalone item returns HTTP 400 `invalid_prompt`; user-role text is
+  rejected by policy as authority elevation. Assistant-role plaintext was
+  first shipped (fix commit `a300989`) and returned 200, but live
+  acceptance on a fresh task rejected it: the child replied exactly
+  `NO-ASSIGNMENT`, and a router-level probe returned no output items at
+  all, while a matched `function_call` + `function_call_output` pair made
+  the model reason about the delegated assignment and emit the requested
+  token. The shipped shape is therefore the tool-result pair: one
+  synthesized complete `function_call` (deterministic `call_id`, no
+  `namespace`) immediately followed by the `function_call_output`
+  carrying the delegation text verbatim. A synthetic pair 400s when
+  `namespace` is present on both members, so neither member sets it.
+- Blast radius, read from the app's thread store: 164 delegated items
+  across 24 tasks, 15 on OpenRouter models and 9 on OpenAI models; all 8
+  OneDrive forensic tasks created 2026-09-11 12:10-12:11 were
+  `deepseek/deepseek-v4.1-flash` and received nothing.
+- Offline gates on the fix branch: full suite exit 0, compile exit 0,
+  source limits `failures=0`, `tools/probe_standalone_outputs.py` prints
+  `PASS`. Paid live acceptance was completed on 2026-09-11 with router
+  `0.6.27.44`: a fresh projectless task on `deepseek/deepseek-v4.1-flash`
+  received its `create_thread` delegation and replied exactly
+  `ROUTER-HANDOFF-OK-7f3a`, where the assistant-role iteration had replied
+  `NO-ASSIGNMENT`.
+
 ## Windows lifecycle acceptance, 2026-09-10 (Plan 116 first proof)
 
 Machine: Windows 11 Pro 10.0.26200 x64 staff laptop (AzureAD account, no
@@ -120,22 +167,25 @@ Per-model quirks, generated from the registry:
 
 | model | modalities | schema | max tools | excluded efforts | tier |
 |---|---|---|---|---|---|
-| meta/muse-spark-1.3 | text,image,audio | json_text | None | - | verified |
+| anthropic/claude-fable-5.1 | text,image | native | None | - | verified |
+| anthropic/claude-haiku-4.5 | text,image | native | None | - | verified |
+| anthropic/claude-opus-5 | text,image | native | None | - | verified |
+| anthropic/claude-sonnet-5 | text,image | native | None | - | verified |
+| deepseek/deepseek-v4-pro-0813 | text | native | None | - | verified |
+| deepseek/deepseek-v4.1-flash | text,image | native | None | - | verified |
+| google/gemini-3.1-pro-preview | text,image,audio | native | None | - | verified |
+| google/gemini-3.8-flash | text,image,audio | native | None | - | verified |
 | meta/muse-spark-1.3-contributor | text,image,audio | json_text | None | max | verified |
+| meta/muse-spark-1.3 | text,image,audio | json_text | None | - | verified |
+| moonshotai/kimi-k3 | text,image | native | None | - | verified |
+| openai/gpt-5.6-luna | text,image | native | None | - | verified |
+| openai/gpt-5.6-sol | text,image | native | None | - | verified |
+| openai/gpt-5.6-terra | text,image | native | None | - | verified |
+| openai/gpt-6-astra | text,image | native | None | - | verified |
+| qwen/qwen3.8-max-0902 | text,image | native | None | - | verified |
+| x-ai/grok-4.6 | text,image | json_text_root | 350 | - | verified |
 | z-ai/glm-5.3-flash | text,image | native | None | - | verified |
 | z-ai/glm-5.3 | text | native | None | - | verified |
-| moonshotai/kimi-k3 | text,image | native | None | - | verified |
-| ~x-ai/grok-latest | text,image | json_text_root | 350 | - | verified |
-| qwen/qwen3.8-max-0902 | text,image | native | None | - | verified |
-| ~google/gemini-flash-latest | text,image,audio | native | None | - | verified |
-| ~google/gemini-pro-latest | text,image,audio | native | None | - | verified |
-| openai/gpt-6-astra | text,image | native | None | - | verified |
-| openai/gpt-5.6-sol | text,image | native | None | - | verified |
-| openai/gpt-5.6-luna | text,image | native | None | - | verified |
-| openai/gpt-5.6-terra | text,image | native | None | - | verified |
-| ~anthropic/claude-sonnet-latest | text,image | native | None | - | verified |
-| anthropic/claude-opus-5 | text,image | native | None | - | preview |
-| anthropic/claude-fable-5.1 | text,image | native | None | - | preview |
 
 ## Probe runs 2026-09-08
 
@@ -221,3 +271,21 @@ the user or system location. Router `GET /v1/models` = 20 rows.
   readback through `install.py --desktop`. Both wait on release plus
   deploy of this source to the live router and an app relaunch, then
   this entry gets the observed picker count.
+
+## Pinned Claude rows, 2026-09-11
+
+`models add <slug> --probe`, base tool round trip through the isolated
+router (Codex CLI 0.153.1, OpenRouter key via OpenCode auth):
+
+| model | tier | date | probes |
+|---|---|---|---|
+| anthropic/claude-fable-5.1 | verified | 2026-09-11 | base round trip |
+| anthropic/claude-opus-5 | verified | 2026-09-11 | base round trip |
+| anthropic/claude-haiku-4.5 | verified | 2026-09-11 | base round trip at `--effort none`; the harness default `low` is refused by the router's effort gate because `none` is the only supported effort |
+
+The Haiku row was probed by hand with `--effort none` because
+`models add --probe` carries no effort flag. Sonnet 5, both Gemini rows and
+Grok 4.6 keep the `verified` tier their retired alias rows earned, since
+each alias resolved to the pinned id at the rename (Grok's 2026-09-08 base
+round trip is recorded above); no separate pinned-id probe is recorded for
+the other three.

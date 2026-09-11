@@ -1,8 +1,15 @@
 # Plan 103: Move launchd-specific helpers out of the 671-line service module
 
-> Planning only. Implement only under a later implementation instruction.
-> Drift check: `git diff --stat a985197..HEAD -- packaging/service.py packaging/launchd.py packaging/platforms/darwin.py tests/test_launchd.py tests/test_interpreter_resolution.py tests/test_install.py`
-> Read changed code and preserve current behavior before edits.
+> Implemented 2026-09-12; drift reconciled in the same change. The launchd helpers
+> moved verbatim into `packaging/launchd.py`, which now also owns `LABEL`/
+> `UPDATE_LABEL`; `service.py` keeps thin delegations for the nine names
+> `packaging/install.py` binds (all nine verified callable), and `platforms/darwin.py`
+> loads `launchd.py` directly the way `platforms/linux.py` loads `systemd.py`.
+> Result on the post-#92 base: `service.py` 661 -> 521 lines, `launchd.py` 114 -> 326,
+> `darwin.py` 87 -> 106.
+> The seam enumeration matched the plan's named sites exactly (no extra call sites),
+> and the installer test seams (`run`, `_sleep`, `UNLOAD_TIMEOUT_S`, `LOAD_TIMEOUT_S`)
+> are read at call time by the delegations, so **no test edits were needed**.
 
 ## Status and first proof
 
@@ -58,7 +65,7 @@ state helpers (stay in service.py), `packaging/systemd.py`, behavior of any plis
 | Focused | `python3.14 -B -m unittest tests.test_launchd tests.test_interpreter_resolution tests.test_install tests.test_install_lifecycle` | pass before and after |
 | Full suite | `python3.14 -m unittest discover -s tests -t .` | exit 0 |
 | Compile | `python3.14 -m compileall -q ai_router tools tests packaging` | exit 0 |
-| Limits | `python3.14 tools/check_source_limits.py` | exit 0; baseline updated for `service.py` (680 → new) |
+| Limits | `python3.14 tools/check_source_limits.py` | exit 0; baseline updated for `service.py` (661 → 521) |
 
 ## Steps
 
@@ -104,11 +111,12 @@ shows no implementation (delegation or nothing).
 
 ## Done criteria
 
-- [ ] Launchd rendering/reload/updater helpers live in `launchd.py`; `service.py` count is lower.
-- [ ] All nine `install.py` bindings resolve (`main_plist_needs_reload`, `same_interpreter`, `ensure_updater`, `loaded_updater_release`, `reload_main_service`, `render_plist`, `render_update_plist`, `restart_service`, `write_plist`); `_sync_seams` unchanged.
-- [ ] All launchd/installer suites pass with only the named call-site edits.
-- [ ] Compile and limit gates pass; only in-scope files changed.
-- [ ] `plans/README.md` status row updated.
+- [x] Launchd rendering/reload/updater helpers live in `launchd.py`; `service.py` count is lower (661 → 521).
+- [x] All nine `install.py` bindings resolve (`main_plist_needs_reload`, `same_interpreter`, `ensure_updater`, `loaded_updater_release`, `reload_main_service`, `render_plist`, `render_update_plist`, `restart_service`, `write_plist`); `_sync_seams` unchanged.
+- [x] All launchd/installer suites pass with no call-site edits (delegations keep every seam working); full suite 1067 tests OK.
+- [x] Compile, ruff and limit gates pass; only in-scope files changed.
+- [x] `plans/README.md` status row updated.
+- [x] `render_plist`/`render_update_plist` output proven byte-identical against the pre-move implementation.
 
 ## STOP conditions
 

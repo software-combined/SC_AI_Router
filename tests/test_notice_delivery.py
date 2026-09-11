@@ -17,7 +17,7 @@ from unittest import mock
 
 from tests._platform import unix_only
 from tests.fakes import launchd_in_sync
-from tests.test_install import (
+from tests.install_fixtures import (
     _craft_bundle,
     _ok_run,
     _patch_attrs,
@@ -26,6 +26,17 @@ from tests.test_install import (
 from tests.test_install_config import _fake_write_catalogue
 from tests.test_install_lifecycle import _run_install
 from tests.test_notice import notice_mod
+
+
+def _adding_catalogue(slug):
+    """A write_catalogue fake whose next install adds one picker row."""
+    def fake(home, release_dir, python):
+        _fake_write_catalogue(home, release_dir, python)
+        path = home / 'mixed-models.json'
+        doc = json.loads(path.read_text())
+        doc['models'].append({'slug': slug})
+        path.write_text(json.dumps(doc, indent=2))
+    return fake
 
 
 class ShowPendingTests(unittest.TestCase):
@@ -39,7 +50,7 @@ class ShowPendingTests(unittest.TestCase):
         test.addCleanup(setattr, notice_mod, 'dialog_command', real)
         test.addCleanup(setattr, install_mod._svc.notice,
                         'dialog_command', install_mod._svc.notice.dialog_command)
-        fake = lambda version, platform_name=None, which=None, icon=None: ['fake-dialog', version]  # noqa: E731
+        fake = lambda version, platform_name=None, which=None, icon=None, clients='codex': ['fake-dialog', version]  # noqa: E731
         setattr(notice_mod, 'dialog_command', fake)
         setattr(install_mod._svc.notice, 'dialog_command', fake)
 
@@ -94,13 +105,66 @@ class ShowPendingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             home.mkdir()
-            self._pending(home)
+            (home / 'update-notice.json').write_text(
+                json.dumps({'version': '1.0.1', 'pid': 4321}))
             self._with_dialog(self)
+            seen = []
             self.assertTrue(notice_mod.show_pending(
-                home, spawn=lambda cmd: 999, pid_alive=lambda pid: False))
+                home, spawn=lambda cmd: seen.append(cmd) or 999,
+                pid_alive=lambda pid: pid == 999))
+            self.assertEqual(len(seen), 1)
             doc = json.loads((home / 'update-notice.json').read_text())
             self.assertTrue(doc['shown'])
             self.assertEqual(doc['pid'], 999)
+
+    def test_dialog_that_dies_at_once_leaves_the_notice_pending(self):
+        # The scheduled updater runs as a service with no display: zenity
+        # dies at once (Failed to open display, reproduced in a Debian
+        # container), so the notice must stay pending for a run that can
+        # draw a dialog rather than being marked shown and lost.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            home.mkdir()
+            self._pending(home)
+            self._with_dialog(self)
+            real = notice_mod.PROBE_GRACE_S
+            self.addCleanup(setattr, notice_mod, 'PROBE_GRACE_S', real)
+            notice_mod.PROBE_GRACE_S = 0
+            seen = []
+            self.assertFalse(notice_mod.show_pending(
+                home, spawn=lambda cmd: seen.append(cmd) or 2357,
+                pid_alive=lambda pid: False))
+            self.assertEqual(len(seen), 1)
+            doc = json.loads((home / 'update-notice.json').read_text())
+            self.assertNotIn('shown', doc)
+            # A later run that can draw the dialog still shows it, once.
+            self.assertTrue(notice_mod.show_pending(
+                home, spawn=lambda cmd: seen.append(cmd) or 2358,
+                pid_alive=lambda pid: pid == 2358))
+            doc = json.loads((home / 'update-notice.json').read_text())
+            self.assertTrue(doc['shown'])
+            self.assertEqual(doc['pid'], 2358)
+
+    def test_notify_send_delivery_is_the_exit_status(self):
+        # notify-send exits as soon as the daemon answers, so pid liveness
+        # says nothing there: a zero exit is delivered, a non-zero one
+        # leaves the notice pending for a later run.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            home.mkdir()
+            self._pending(home)
+            for code, expected in ((0, True), (1, False)):
+                (home / 'update-notice.json').write_text(
+                    json.dumps({'version': '1.0.1'}))
+                with mock.patch.object(
+                        notice_mod, 'dialog_command',
+                        lambda *a, **k: ['notify-send', 'SCG Router', 'updated']), \
+                        mock.patch.object(
+                            notice_mod.subprocess, 'run',
+                            lambda *a, **k: mock.Mock(returncode=code)):
+                    self.assertIs(notice_mod.show_pending(home), expected)
+                doc = json.loads((home / 'update-notice.json').read_text())
+                self.assertEqual(bool(doc.get('shown')), expected)
 
     def test_recycled_pid_is_not_mistaken_for_a_dialog(self):
         # A live process that is not one of our dialogs must not swallow a
@@ -185,7 +249,7 @@ class ShowPendingTests(unittest.TestCase):
             self.addCleanup(setattr, notice_mod, 'dialog_command', real)
             self.addCleanup(setattr, install_mod._svc.notice, 'dialog_command',
                             install_mod._svc.notice.dialog_command)
-            fake = lambda version, platform_name=None, which=None, icon=None: None  # noqa: E731
+            fake = lambda version, platform_name=None, which=None, icon=None, clients='codex': None  # noqa: E731
             setattr(notice_mod, 'dialog_command', fake)
             setattr(install_mod._svc.notice, 'dialog_command', fake)
             seen = []
@@ -202,6 +266,33 @@ class ShowPendingTests(unittest.TestCase):
             self.assertFalse(
                 notice_mod.show_pending(home, spawn=lambda cmd: None))
 
+    def test_silent_install_env_never_spawns(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            home.mkdir()
+            self._pending(home)
+            self._with_dialog(self)
+            seen = []
+            with mock.patch.dict(os.environ, {'ROUTER_NO_NOTICE': '1'}):
+                self.assertFalse(notice_mod.show_pending(home, spawn=seen.append))
+            self.assertEqual(seen, [])
+            doc = json.loads((home / 'update-notice.json').read_text())
+            self.assertNotIn('shown', doc)
+
+    def test_claude_only_notice_has_no_codex_restart_button(self):
+        cmd = notice_mod.dialog_command('1.0.1', platform_name='darwin',
+                                        which=lambda name: '/usr/bin/' + name,
+                                        clients='claude')
+        script = cmd[cmd.index('-e') + 1]
+        self.assertIn('buttons {"OK"}', script)
+        self.assertIn('Restart Claude Code', script)
+        self.assertNotIn('to quit', script)
+
+    def test_both_clients_notice_names_both(self):
+        message = notice_mod._message('1.0.1', 'both')
+        self.assertIn('Quit and reopen Codex', message)
+        self.assertIn('restart Claude Code', message)
+
 
 class InstallNoticeTests(unittest.TestCase):
     @unix_only
@@ -213,15 +304,55 @@ class InstallNoticeTests(unittest.TestCase):
             self.assertFalse((home / 'update-notice.json').exists())
 
     @unix_only
-    def test_upgrade_stages_notice_with_new_version(self):
+    def test_upgrade_with_an_unchanged_picker_stays_silent(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             _run_install(self, tmp, home, '1.0.0')
             rc, _, _, _ = _run_install(self, tmp, home, '1.0.1')
             self.assertEqual(rc, 0)
+            self.assertFalse((home / 'update-notice.json').exists(),
+                             'a version bump alone is not worth a restart')
+
+    @unix_only
+    def test_upgrade_stages_notice_when_the_picker_gains_a_row(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            _run_install(self, tmp, home, '1.0.0')
+            rc, _, _, _ = _run_install(
+                self, tmp, home, '1.0.1',
+                write_catalogue=_adding_catalogue('openrouter/new-model'))
+            self.assertEqual(rc, 0)
             doc = json.loads((home / 'update-notice.json').read_text())
             self.assertEqual(doc['version'], '1.0.1')
             self.assertNotIn('shown', doc)
+
+    @unix_only
+    def test_a_failed_install_does_not_lose_the_next_prompt(self):
+        # A pre-swap failure has already merged the rows without activating
+        # anything; the retry must still see them as additions.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            _run_install(self, tmp, home, '1.0.0')
+            real_launcher = install_mod.install_launcher
+            calls = []
+
+            def flaky_launcher(home_dir, release):
+                calls.append(release)
+                if len(calls) == 1:
+                    raise OSError('launcher write failed')
+                return real_launcher(home_dir, release)
+
+            _patch_attrs(self, install_launcher=flaky_launcher)
+            with self.assertRaises(OSError):
+                _run_install(self, tmp, home, '1.0.1',
+                             write_catalogue=_adding_catalogue('openrouter/new-model'))
+            self.assertFalse((home / 'update-notice.json').exists())
+            rc, _, _, _ = _run_install(
+                self, tmp, home, '1.0.1',
+                write_catalogue=_adding_catalogue('openrouter/new-model'))
+            self.assertEqual(rc, 0)
+            doc = json.loads((home / 'update-notice.json').read_text())
+            self.assertEqual(doc['version'], '1.0.1')
 
     @unix_only
     def test_cli_path_shows_pending_after_install(self):
@@ -231,7 +362,7 @@ class InstallNoticeTests(unittest.TestCase):
             blob, latest = _craft_bundle('1.0.1')
             _patch_attrs(self, run=_ok_run,
                          self_test=lambda *a: None,
-                         write_catalogue=_fake_write_catalogue,
+                         write_catalogue=_adding_catalogue('openrouter/new-model'),
                          wait_version=lambda *a, **k: True)
             launchd_in_sync(home, install_mod.LABEL, install_mod.UPDATE_LABEL)
             # main() takes no fetch injector, so the feed and bundle live

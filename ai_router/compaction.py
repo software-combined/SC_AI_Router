@@ -117,7 +117,9 @@ def rewrite_input(items):
 # Calls the endpoint accepts, and outputs keyed by call. A fragment missing
 # these fields (interrupted call, orphan output) 400s the whole turn, so the
 # scrub drops fragments before anything is forwarded. A partial call never
-# executed, so the next turn regenerates it if still needed.
+# executed, so the next turn regenerates it if still needed. A standalone
+# output (no call_id) is the app-injected instruction shape, not an orphan,
+# and is never dropped here; providers materialize it before the scrub.
 CALL_TYPES = frozenset({'function_call', 'custom_tool_call', 'apply_patch_call',
                         'web_search_call', 'file_search_call', 'image_generation_call',
                         'code_interpreter_call', 'computer_call'})
@@ -153,7 +155,8 @@ def scrub_tool_fragments(items):
         kind = item.get('type')
         if kind in CALL_TYPES and not _call_complete(item):
             continue
-        if kind in OUTPUT_TYPES and item.get('call_id') not in calls:
+        if (kind in OUTPUT_TYPES and isinstance(item.get('call_id'), str)
+                and item['call_id'] not in calls):
             continue
         out.append(item)
     return out

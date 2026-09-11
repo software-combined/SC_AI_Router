@@ -13,6 +13,7 @@ import threading
 from copy import deepcopy
 from pathlib import Path
 from .compaction import SUMMARY_PREFIX, decode_summary
+from .tool_merge import merge_tool_defs
 
 _MEMORY, _LOCK, _MAX = {}, threading.Lock(), 16
 
@@ -114,70 +115,9 @@ def summaries_in(items):
     return found
 
 
-def _merge_entry(merged, tool):
-    """Fold one stored row into merged, keyed by (namespace, name)."""
-    key = (tool.get('namespace'), tool.get('name'))
-    if key not in merged:
-        merged[key] = tool
-    elif (merged[key].get('parameters') is None
-            and tool.get('parameters') is not None):
-        merged[key] = tool
-
-
-def _dedup(defs):
-    """One effective definition per (namespace, name) within one row shape.
-
-    Flat rows and wrapper-held tools dedup independently; a flat row and
-    a wrapper holding the same logical tool both survive (pre-existing
-    mixed representation, harmless downstream).
-    First occurrence wins.
-
-    Fresh entries precede recalled ones in the input order, so the first
-    full definition stands; a later entry supersedes an earlier one only
-    to complete a stub that lacks parameters, mirroring prepare_tools.
-    Namespace wrappers merge by their inner tools, never as one atomic
-    row: two wrappers for the same namespace combine their tools instead
-    of the newer wrapper discarding the older one."""
-    merged = {}
-    wrappers = {}
-    order = []
-    for tool in defs:
-        if not isinstance(tool, dict):
-            continue
-        if tool.get('type') == 'namespace' and isinstance(tool.get('tools'), list):
-            name = tool.get('name')
-            if name not in wrappers:
-                wrappers[name] = dict(tool, tools=[])
-                order.append(('wrapper', name))
-            for inner in tool.get('tools'):
-                if not isinstance(inner, dict):
-                    continue
-                namespaced = dict(inner, namespace=tool.get('name'))
-                key = (namespaced.get('namespace'), namespaced.get('name'))
-                if key not in merged:
-                    merged[key] = namespaced
-                    wrappers[name]['tools'].append(namespaced)
-                elif (merged[key].get('parameters') is None
-                        and namespaced.get('parameters') is not None):
-                    merged[key] = namespaced
-                    wrapped = wrappers[name]['tools']
-                    for i, existing in enumerate(wrapped):
-                        if (existing.get('namespace'), existing.get('name')) == key:
-                            wrapped[i] = namespaced
-            continue
-        _merge_entry(merged, tool)
-        key = (tool.get('namespace'), tool.get('name'))
-        if key not in order:
-            order.append(key)
-    out = []
-    for entry in order:
-        if entry[0] == 'wrapper':
-            wrapper = wrappers[entry[1]]
-            if wrapper['tools']:
-                out.append(wrapper)
-        else:
-            out.append(merged[entry])
-    return out
+# Plan 129: the keying/stub/wrapper rule lives in tool_merge; the public
+# name stays for callers and tests.
+_dedup = merge_tool_defs
 
 
 def remember(items, summary):

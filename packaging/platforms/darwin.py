@@ -2,10 +2,19 @@
 
 Owns plists, reload convergence, TERM handover, updater adoption, serving
 assertion, and uninstall. Knows nothing about feeds, bundles, or config.
-Runs on Python 3.9+ like the installer.
+Runs on Python 3.9+ like the installer. Plist rendering and reload live in
+packaging/launchd.py (Plan 103), loaded here the way linux.py loads
+systemd.py; service only supplies the patchable seams and the labels.
 """
 import os
 from pathlib import Path
+
+import importlib.util
+
+_spec = importlib.util.spec_from_file_location(
+    'router_launchd', Path(__file__).resolve().parent.parent / 'launchd.py')
+_launchd = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_launchd)
 
 
 class Backend:
@@ -24,25 +33,35 @@ class Backend:
     def _agents(self):
         return Path.home() / 'Library' / 'LaunchAgents'
 
+    def _seams(self):
+        """Patchable service seams for the launchd helpers, read at call time."""
+        svc = self._svc
+        return {'sleep': svc._sleep, 'unload_timeout': svc.UNLOAD_TIMEOUT_S,
+                'load_timeout': svc.LOAD_TIMEOUT_S}
+
     def install(self, python, home, state, release_dir, previous):
         """Write plists and hand over; mirrors the pre-split else-branch."""
-        svc, LABEL, UPDATE_LABEL = self._svc, self._svc.LABEL, self._svc.UPDATE_LABEL
+        svc = self._svc
         uid, agents = self._uid(), self._agents()
-        needs_reload = svc.main_plist_needs_reload(uid, python, home, state, agents)
-        svc.write_plist(agents / (LABEL + '.plist'), svc.render_plist(python, home, state))
-        svc.write_plist(agents / (UPDATE_LABEL + '.plist'), svc.render_update_plist(python, home))
+        needs_reload = _launchd.main_plist_needs_reload(
+            self._run, uid, python, home, state, agents)
+        _launchd.write_plist(agents / (svc.LABEL + '.plist'),
+                             _launchd.render_plist(python, home, state))
+        _launchd.write_plist(agents / (svc.UPDATE_LABEL + '.plist'),
+                             _launchd.render_update_plist(python, home))
         if previous is None:
-            svc.restart_service(uid, agents)
+            _launchd.restart_service(self._run, uid, agents, **self._seams())
         elif needs_reload:
-            if not svc.reload_main_service(uid, agents):
-                raise SystemExit(f'router service reload failed for {LABEL}')
+            if not _launchd.reload_main_service(self._run, uid, agents, **self._seams()):
+                raise SystemExit(f'router service reload failed for {svc.LABEL}')
         else:
             # Nothing launchd owns changed, so hand over in place. TERM lets
             # the old process drain in-flight requests while launchd keeps
             # the listening socket and respawns into the new pointer, so no
             # connection is refused and no bootout can strand the machine.
             self.restart(home)
-        if not svc.ensure_updater(uid, python, home, agents):
+        if not _launchd.ensure_updater(self._run, uid, python, home, agents,
+                                       **self._seams()):
             # The router is fine; only the update channel is not. Say so
             # rather than exiting clean over a machine that will never
             # update itself again.
@@ -70,7 +89,7 @@ class Backend:
         return bool(self.ensure_serving(home, state, version))
 
     def pinned_release(self, home):
-        return self._svc.loaded_updater_release(self._uid(), home)
+        return _launchd.loaded_updater_release(self._run, self._uid(), home)
 
     def protect_secret(self, path):
         del path  # POSIX mode bits (0600) already own this.

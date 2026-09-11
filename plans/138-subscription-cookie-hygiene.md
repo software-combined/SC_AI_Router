@@ -1,8 +1,12 @@
 # Plan 138: Drop Cookie on subscription passthrough and make the tests honest
 
-> **Executor instructions**: Follow this plan step by step. If any "STOP
-> conditions" item occurs, stop and report. When done, update this plan's status
-> row in `plans/README.md`.
+> Implemented 2026-09-12; drift reconciled in the same change. The three test
+> call sites still matched the plan's cited lines (the files moved but those
+> assertions were unchanged). `'cookie'` is now in `HOP_HEADERS`, all three
+> tests actually send `Cookie: c=1`, and removing the entry fails all three
+> (probed). Baselines synced: `tests/test_handler.py` 494 -> 495,
+> `tests/test_claude_ingress.py` 338 -> 339; `ai_router/transport.py` stays
+> under the module soft cap.
 >
 > **Drift check (run first)**: `git diff --stat 08aff1e..HEAD -- ai_router/transport.py ai_router/providers.py ai_router/claude.py tests/test_providers.py tests/test_handler.py tests/test_claude_ingress.py config/source-limits-baseline.json`
 > If any in-scope file changed, compare the "Current state" excerpts before
@@ -137,11 +141,10 @@ compile and limits exit 0.
 
 ## Done criteria
 
-- [ ] `'cookie'` is in `HOP_HEADERS`; both subscription providers drop it.
-- [ ] Every Cookie assertion sends a Cookie, so it can actually fail.
-- [ ] Full suite, compile and limits gates exit 0; any baseline count that
-      changed is synced.
-- [ ] `plans/README.md` status row updated.
+- [x] `'cookie'` is in `HOP_HEADERS`; both subscription providers drop it.
+- [x] Every Cookie assertion sends a Cookie, so it can actually fail (three failures without the entry, probed).
+- [x] Full suite, compile and limits gates exit 0; the two changed test baselines are synced.
+- [x] `plans/README.md` status row updated.
 
 ## STOP conditions
 

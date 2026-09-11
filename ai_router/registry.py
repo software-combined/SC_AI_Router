@@ -2,10 +2,16 @@
 
 Everything else derives from MODELS. Keep the loader pure (text in,
 validated registry out) so Plan 099 can reload it at runtime.
+
+`provider` is a key into the provider definition table
+(`ai_router/provider_defs.py`), the one owner of upstream facts; the
+registry only says which upstream serves a row.
 """
 import json
 from dataclasses import dataclass
 from pathlib import Path
+
+from . import provider_defs
 
 FIELDS = ('slug', 'provider', 'display_name', 'vendor', 'reasoning',
           'default_reasoning', 'modalities', 'excluded_efforts',
@@ -17,7 +23,7 @@ FIELDS = ('slug', 'provider', 'display_name', 'vendor', 'reasoning',
 @dataclass(frozen=True)
 class Model:
     slug: str
-    provider: str                 # 'openrouter' | 'openai'
+    provider: str                 # a provider_defs id, e.g. 'openrouter' | 'openai'
     display_name: str             # picker label, e.g. 'Z.ai: GLM 5.3 Flash · OpenRouter'
     vendor: str                   # 'Z.ai'
     reasoning: tuple              # last-known-good levels, canonical order
@@ -54,7 +60,8 @@ def load(text):
         if row['slug'] in seen:
             raise SystemExit(f'models.json duplicate slug: {row["slug"]}')
         seen.add(row['slug'])
-        if row['provider'] not in ('openrouter', 'openai'):
+        if not provider_defs.is_external(row['provider']) \
+                and row['provider'] not in provider_defs.subscription_ids():
             raise SystemExit(f'models.json {row["slug"]}: bad provider')
         if row['schema_mode'] not in ('native', 'json_text', 'json_text_root'):
             raise SystemExit(f'models.json {row["slug"]}: bad schema_mode')
@@ -120,5 +127,6 @@ def picker_key(vendor, tier, display_name, slug):
     return (vendor.casefold(), tier != 'verified', display_name.casefold(), slug)
 
 
-def openrouter_slugs():
-    return frozenset(m.slug for m in MODELS if m.provider == 'openrouter')
+def external_slugs():
+    """Every slug billed on an external provider's own key (Plan 141)."""
+    return frozenset(m.slug for m in MODELS if provider_defs.is_external(m.provider))

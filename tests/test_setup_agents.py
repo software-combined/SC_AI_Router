@@ -34,7 +34,7 @@ class SetupStarterTests(unittest.TestCase):
                 state, home, 'n' * 16, True, b'key=sk-test&mode=none&profile=dev',
                 _urlopen=_key_ok(), _now=NOW)
         self.assertEqual(status, 200)
-        self.assertIn(b'Development starter installed', body)
+        self.assertIn(b'Coding help installed', body)
         self.assertIn('small verified changes', (home / 'AGENTS.md').read_text())
         self.assertEqual(state.get('agents_profile'), 'dev')
         # A repeat run with the other profile leaves the owner's file alone.
@@ -67,6 +67,21 @@ class SetupStarterTests(unittest.TestCase):
         text = body.decode() if isinstance(body, bytes) else body
         self.assertIn('delete the key file', text)
         self.assertFalse(starter.exists())
+
+    def test_profile_less_close_failure_still_reports_500(self):
+        # A claude-only popup POST sends no profile, so no starter is
+        # installed - but a failed close must still fail the request.
+        home = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, home, True)
+        state = _state(home)
+        (home / 'mixed-router-state.json').write_text(json.dumps(state))
+        with mock.patch.object(setup, '_finish_setup', return_value=False):
+            status, payload = setup.handle_setup_json(
+                state, home, 'n' * 16, b'key=sk-test&claude_mode=none',
+                _urlopen=_key_ok(), _now=NOW)
+        self.assertEqual(status, 500)
+        self.assertFalse(payload['ok'])
+        self.assertIn('delete the key file', payload['error'])
 
     def test_starter_choice_is_persisted(self):
         home = Path(tempfile.mkdtemp())

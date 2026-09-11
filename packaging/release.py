@@ -23,7 +23,8 @@ REPO = 'software-combined/SC_OpenRouter_adapter'
 # bundle_files() and keeps an explicit required-files assertion, so a member
 # dropped from this list still fails the gate.
 PACKAGING_FILES = (
-    'packaging/VERSION', 'packaging/install.py', 'packaging/launchd.py',
+    'packaging/VERSION', 'packaging/install.py', 'packaging/bundle.py',
+    'packaging/launchd.py',
     'packaging/router_launch.py', 'packaging/service.py',
     'packaging/feed.py', 'packaging/atomic_write.py',
     'packaging/notice.py',
@@ -32,12 +33,15 @@ PACKAGING_FILES = (
     'packaging/updater.py', 'packaging/codex_config.py',
     'packaging/claude_config.py',
     'packaging/claude_desktop_config.py',
-    'packaging/diagnostics.py',
+    'packaging/diagnostics.py', 'packaging/provider_keys.py',
     'packaging/runtime.lock', 'packaging/runtime_lock.py',
     'packaging/platforms/__init__.py',
     'packaging/platforms/darwin.py', 'packaging/platforms/linux.py',
     'packaging/platforms/windows.py',
     'packaging/install.sh', 'packaging/install.ps1',
+    # Every installed release is a copy of the software delivered to a
+    # user, so the licence and notices travel with it (Apache-2.0).
+    'LICENSE', 'NOTICE', 'THIRD_PARTY_NOTICES.md',
 )
 
 
@@ -58,9 +62,6 @@ def main(argv=None):
     parser.add_argument('--sha', default='')
     parser.add_argument('--channel', default='stable')
     parser.add_argument('--url-base')
-    parser.add_argument('--feed-token-file', metavar='FILE',
-                        help='read the feed read-token and embed it as latest.json feed_token '
-                             '(publish-time only; never commit the file)')
     parser.add_argument('--gen-key', metavar='OUT',
                         help='write a fresh 32-byte hex release signing seed (owner-only file) and exit')
     parser.add_argument('--sign', metavar='SEEDFILE',
@@ -119,14 +120,6 @@ def main(argv=None):
               'sha256': hashlib.sha256(tarball).hexdigest(), 'min_python': MIN_PYTHON,
               'serial': args.build,
               'published': datetime.now(timezone.utc).isoformat(timespec='seconds')}
-    if args.feed_token_file:
-        try:
-            token = Path(args.feed_token_file).read_text().strip()
-        except OSError:
-            raise SystemExit('cannot read feed token file')
-        if not token:
-            raise SystemExit('feed token file is empty')
-        latest['feed_token'] = token
     (out_dir / 'latest.json').write_text(json.dumps(latest, indent=2) + '\n')
     # The bootstrap resolves its runtime from this table, never from a
     # hardcoded filename: pins land only through reviewed lock changes.

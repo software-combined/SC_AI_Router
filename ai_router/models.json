@@ -1,8 +1,8 @@
 [
   {
-    "slug": "~anthropic/claude-sonnet-latest",
+    "slug": "anthropic/claude-fable-5.1",
     "provider": "openrouter",
-    "display_name": "Anthropic: Claude Sonnet Latest \u00b7 OpenRouter",
+    "display_name": "Anthropic: Claude Fable 5.1 \u00b7 OpenRouter",
     "vendor": "Anthropic",
     "reasoning": [
       "low",
@@ -30,9 +30,35 @@
     "tier": "verified"
   },
   {
-    "slug": "~anthropic/claude-fable-latest",
+    "slug": "anthropic/claude-haiku-4.5",
     "provider": "openrouter",
-    "display_name": "Anthropic: Claude Fable Latest \u00b7 OpenRouter",
+    "display_name": "Anthropic: Claude Haiku 4.5 \u00b7 OpenRouter",
+    "vendor": "Anthropic",
+    "reasoning": [
+      "none"
+    ],
+    "default_reasoning": "none",
+    "modalities": [
+      "text",
+      "image"
+    ],
+    "excluded_efforts": [],
+    "schema_mode": "native",
+    "max_tools": null,
+    "drop_images": false,
+    "context_window": 200000,
+    "priority": 101,
+    "max_output_tokens": 64000,
+    "reasoning_summary": "none",
+    "apply_patch": "none",
+    "experimental_tools": [],
+    "web_search": true,
+    "tier": "verified"
+  },
+  {
+    "slug": "anthropic/claude-opus-5",
+    "provider": "openrouter",
+    "display_name": "Anthropic: Claude Opus 5 \u00b7 OpenRouter",
     "vendor": "Anthropic",
     "reasoning": [
       "low",
@@ -51,44 +77,18 @@
     "max_tools": null,
     "drop_images": false,
     "context_window": 1000000,
-    "priority": 101,
+    "priority": 102,
     "max_output_tokens": 128000,
     "reasoning_summary": "none",
     "apply_patch": "none",
     "experimental_tools": [],
     "web_search": true,
-    "tier": "preview"
+    "tier": "verified"
   },
   {
-    "slug": "~anthropic/claude-haiku-latest",
+    "slug": "anthropic/claude-sonnet-5",
     "provider": "openrouter",
-    "display_name": "Anthropic: Claude Haiku Latest \u00b7 OpenRouter",
-    "vendor": "Anthropic",
-    "reasoning": [
-      "none"
-    ],
-    "default_reasoning": "none",
-    "modalities": [
-      "text",
-      "image"
-    ],
-    "excluded_efforts": [],
-    "schema_mode": "native",
-    "max_tools": null,
-    "drop_images": false,
-    "context_window": 200000,
-    "priority": 102,
-    "max_output_tokens": 64000,
-    "reasoning_summary": "none",
-    "apply_patch": "none",
-    "experimental_tools": [],
-    "web_search": true,
-    "tier": "preview"
-  },
-  {
-    "slug": "~anthropic/claude-opus-latest",
-    "provider": "openrouter",
-    "display_name": "Anthropic: Claude Opus Latest \u00b7 OpenRouter",
+    "display_name": "Anthropic: Claude Sonnet 5 \u00b7 OpenRouter",
     "vendor": "Anthropic",
     "reasoning": [
       "low",
@@ -113,7 +113,7 @@
     "apply_patch": "none",
     "experimental_tools": [],
     "web_search": true,
-    "tier": "preview"
+    "tier": "verified"
   },
   {
     "slug": "deepseek/deepseek-v4-pro-0813",
@@ -171,9 +171,9 @@
     "tier": "verified"
   },
   {
-    "slug": "~google/gemini-flash-latest",
+    "slug": "google/gemini-3.1-pro-preview",
     "provider": "openrouter",
-    "display_name": "Google: Gemini Flash Latest \u00b7 OpenRouter",
+    "display_name": "Google: Gemini 3.1 Pro Preview \u00b7 OpenRouter",
     "vendor": "Google",
     "reasoning": [
       "low",
@@ -200,9 +200,9 @@
     "tier": "verified"
   },
   {
-    "slug": "~google/gemini-pro-latest",
+    "slug": "google/gemini-3.8-flash",
     "provider": "openrouter",
-    "display_name": "Google: Gemini Pro Latest \u00b7 OpenRouter",
+    "display_name": "Google: Gemini 3.8 Flash \u00b7 OpenRouter",
     "vendor": "Google",
     "reasoning": [
       "low",
@@ -472,9 +472,9 @@
     "tier": "verified"
   },
   {
-    "slug": "~x-ai/grok-latest",
+    "slug": "x-ai/grok-4.6",
     "provider": "openrouter",
-    "display_name": "SpaceXAI: Grok Latest \u00b7 OpenRouter",
+    "display_name": "SpaceXAI: Grok 4.6 \u00b7 OpenRouter",
     "vendor": "SpaceXAI",
     "reasoning": [
       "low",

@@ -1,6 +1,6 @@
 """Fresh-install picker catalogue: config flag and merge seeding (Plan 041/039).
 
-Reuses the tests.test_install rig so baseline-pinned tests.test_install.py stays untouched.
+Reuses the tests.install_fixtures rig, so test_install.py keeps tests only.
 """
 import hashlib
 import importlib.util
@@ -18,7 +18,7 @@ from unittest import mock
 from ai_router.catalogue import check, read_openai_mode
 from ai_router.clients import models_for
 from ai_router.registry import MODELS
-from tests.test_install import _ok_run, _patch_attrs, _static_fetch, install_mod
+from tests.install_fixtures import _ok_run, _patch_attrs, _static_fetch, install_mod
 
 _ROOT = Path(__file__).resolve().parents[1]
 
@@ -113,7 +113,7 @@ class InstallCatalogueTests(unittest.TestCase):
                     self.assertIn(model.slug, slugs)
             for slug in ('openai/gpt-6-astra', 'openai/gpt-5.6-sol',
                          'openai/gpt-5.6-luna', 'openai/gpt-5.6-terra'):
-                self.assertNotIn(slug, slugs)
+                self.assertIn(slug, slugs)
             self.assertTrue(check(str(home / 'mixed-models.json')))
 
     def test_install_catalogue_contains_subscription_roster(self):

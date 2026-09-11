@@ -5,6 +5,7 @@ import logging.handlers
 import os
 from datetime import datetime, timezone
 from pathlib import Path
+from . import provider_defs, registry
 from .setup import setup_pending
 from .credentials import Credentials, default_home
 
@@ -52,14 +53,21 @@ def load_state(path=STATE):
         raise SystemExit('anthropic_mode must be subscription or none')
     if 'openai_helper_fallback' in state and not isinstance(state['openai_helper_fallback'], bool):
         raise SystemExit('openai_helper_fallback must be true or false')
-    try:
-        Credentials(state, ROUTER_HOME).check()
-    except (LookupError, PermissionError, ValueError, OSError) as exc:
-        # A fresh unexpired setup nonce lets the router boot keyless so the
-        # first-run window can collect the key; everything billable still
-        # fails closed per request until one resolves.
-        if not setup_pending(state):
-            raise SystemExit(f'OpenRouter credential problem: {exc}')
+    # Every external provider the registry routes to needs its own key, but
+    # the router boots as soon as one resolves: a provider without a key
+    # fails its own requests closed instead of taking the service down. A
+    # fresh unexpired setup nonce still lets it boot keyless so the
+    # first-run window can collect one.
+    external = sorted({m.provider for m in registry.MODELS
+                       if provider_defs.is_external(m.provider)})
+    credentials = Credentials(state, ROUTER_HOME)
+    missing = [(pid, credentials.key_missing(pid)) for pid in external]
+    missing = [(pid, exc) for pid, exc in missing if exc is not None]
+    if external and len(missing) == len(external) and not setup_pending(state):
+        detail = '; '.join(f'{provider_defs.label_for(pid)}: {exc}'
+                           for pid, exc in missing)
+        raise SystemExit(f'{provider_defs.label_for(missing[0][0])} '
+                         f'credential problem: {detail}')
     # Plan 068: resolved portco allowlist rides alongside the roster. No
     # policy fetch may block startup: absent file means no policy (None),
     # and the loader fails closed to empty on malformed input.
