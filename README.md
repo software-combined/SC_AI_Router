@@ -259,6 +259,30 @@ Claude Code setup: `docs/claude-code.md`. Operator guide: `docs/operations.md`. 
 Monthly model allocation review: `model-allocation-review-process.md` (the process) and
 `model-allocation-suggestion.md` (its output, refreshed on the 1st of each month).
 
+## Licensing
+
+SC Router is source-available under the [PolyForm Shield License
+1.0.0](LICENSE). It is not an OSI-approved open-source licence.
+
+You can use, modify and redistribute the software subject to that licence,
+and internal use by organisations is permitted as long as the use complies
+with it. PolyForm Shield restricts using the software to provide products or
+services that compete with the licensor or its affiliates, including
+products and services they provide using this software. Uses outside the
+licence may be available under a separate commercial agreement with Software
+Combined, as described in [COMMERCIAL_LICENSE.md](COMMERCIAL_LICENSE.md).
+
+Attribution and licence notices must be preserved as the licence requires.
+Third-party material and its terms are listed in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+- Licence: [LICENSE](LICENSE)
+- Commercial licensing: [COMMERCIAL_LICENSE.md](COMMERCIAL_LICENSE.md)
+- Official licence text: <https://polyformproject.org/licenses/shield/1.0.0>
+
+Copyright 2026 Software Combined Pty Ltd. Primary author and maintainer:
+Cyril Allart <cyril@softwarecombined.com>.
+
 ## Runtime files
 
 A manual install copies ONLY these files beside the private state

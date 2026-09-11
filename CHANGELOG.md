@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Licensing groundwork: the repository now carries the verbatim PolyForm
+  Shield License 1.0.0 text with the `Required Notice: Copyright 2026
+  Software Combined Pty Ltd` line, `COMMERCIAL_LICENSE.md` explains when a
+  separate commercial licence may be needed, and `THIRD_PARTY_NOTICES.md`
+  records the MIT-licensed opencodex material in `ai_router/compaction.py`.
+  Package and plugin metadata move from `UNLICENSED` to
+  `LicenseRef-PolyForm-Shield-1.0.0`, and every release bundle now ships the
+  licence files. No runtime behaviour changes. The repository stays private;
+  publication remains an owner decision.
+
 - Nested cross-task messages now reach tasks running on OpenRouter models.
   Codex Desktop injects `create_thread` / `send_message_to_thread` turns as
   standalone tool outputs with no `call_id`; the router used to drop them

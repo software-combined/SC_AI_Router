@@ -4,9 +4,10 @@
   "version": "0.6.26",
   "description": "SCG OpenRouter Setup: install, check, update, and remove the local mixed-model router through the canonical installer.",
   "author": {
-    "name": "Software Combined"
+    "name": "Software Combined",
+    "email": "cyril@softwarecombined.com"
   },
-  "license": "UNLICENSED",
+  "license": "LicenseRef-PolyForm-Shield-1.0.0",
   "keywords": [
     "openrouter",
     "router",
