@@ -118,9 +118,10 @@ class RegistryTests(unittest.TestCase):
 
     def test_display_names_follow_qualified_naming_convention(self):
         # Picker labels must read '<Vendor>: <Model> <Version?>'; the vendor
-        # prefix always equals the row's vendor field, alias rows track with
-        # 'Latest' instead of a pinned snapshot, and pinned rows keep any
-        # version/snapshot token verbatim (AGENTS.md section 8).
+        # prefix always equals the row's vendor field, pinned rows keep any
+        # version/snapshot token verbatim, and a tilde alias row (none in the
+        # roster today) tracks with 'Latest' instead of a pinned snapshot
+        # (AGENTS.md section 8).
         for model in MODELS:
             if model.provider != 'openrouter':
                 continue
@@ -134,7 +135,6 @@ class RegistryTests(unittest.TestCase):
                                         f'{model.slug}: snapshots keep model context')
         alias_labels = {m.slug: m.display_name for m in MODELS
                         if m.slug.startswith('~')}
-        self.assertTrue(alias_labels)
         for slug, label in alias_labels.items():
             with self.subTest(slug=slug):
                 self.assertIn('Latest', label)
@@ -154,8 +154,8 @@ class RegistryTests(unittest.TestCase):
                           and not visible_for(m, 'codex')}, set())
         self.assertEqual({m.slug for m in MODELS if m.provider == 'openrouter'
                           and not visible_for(m, 'claude')},
-                         {'~anthropic/claude-sonnet-latest', '~anthropic/claude-fable-latest',
-                          '~anthropic/claude-haiku-latest', '~anthropic/claude-opus-latest'})
+                         {'anthropic/claude-sonnet-5', 'anthropic/claude-fable-5.1',
+                          'anthropic/claude-haiku-4.5', 'anthropic/claude-opus-5'})
 
     def test_visibility_keeps_subscription_and_other_vendor_rows(self):
         openai_sub = Model(slug='gpt-6-astra', provider='openai', display_name='G',
@@ -165,11 +165,17 @@ class RegistryTests(unittest.TestCase):
         self.assertTrue(visible_for(by_slug('moonshotai/kimi-k3'), 'codex'))
         self.assertTrue(visible_for(by_slug('moonshotai/kimi-k3'), 'claude'))
         self.assertTrue(visible_for(by_slug('openai/gpt-6-astra'), 'claude'))
-        self.assertTrue(visible_for(by_slug('~anthropic/claude-sonnet-latest'), 'codex'))
+        self.assertTrue(visible_for(by_slug('anthropic/claude-sonnet-5'), 'codex'))
 
     def test_visibility_tilde_and_plain_prefixes_both_hide(self):
-        self.assertFalse(visible_for(by_slug('~anthropic/claude-sonnet-latest'), 'claude'))
-        plain = Model(slug='anthropic/claude-sonnet-latest', provider='openrouter',
+        # The roster pins exact ids; the tilde normalization branch is kept
+        # for any future alias row, so exercise it with a synthetic one.
+        alias = Model(slug='~anthropic/claude-sonnet-5', provider='openrouter',
+                      display_name='X', vendor='Anthropic', reasoning=('low',),
+                      default_reasoning='low')
+        self.assertFalse(visible_for(alias, 'claude'))
+        self.assertTrue(visible_for(alias, 'codex'))
+        plain = Model(slug='anthropic/claude-sonnet-5', provider='openrouter',
                       display_name='X', vendor='Anthropic', reasoning=('low',),
                       default_reasoning='low')
         self.assertFalse(visible_for(plain, 'claude'))
@@ -177,11 +183,19 @@ class RegistryTests(unittest.TestCase):
         self.assertTrue(visible_for(by_slug('openai/gpt-6-astra'), 'codex'))
 
     def test_near_miss_offers_bare_tilde_alias_only(self):
+        # No registry row is an alias today, so the mechanism is exercised
+        # against a synthetic tilde row; the real roster must not match.
+        from unittest import mock
+        from ai_router import registry as registry_mod
         from ai_router.registry import near_miss
-        self.assertEqual(near_miss('anthropic/claude-opus-latest'),
-                         '~anthropic/claude-opus-latest')
+        alias = Model(slug='~x-ai/grok-latest', provider='openrouter',
+                      display_name='X', vendor='SpaceXAI', reasoning=('low',),
+                      default_reasoning='low')
+        with mock.patch.dict(registry_mod.BY_SLUG, {alias.slug: alias}):
+            self.assertEqual(near_miss('x-ai/grok-latest'), '~x-ai/grok-latest')
+            self.assertIsNone(near_miss('~x-ai/grok-latest'))
+        self.assertIsNone(near_miss('anthropic/claude-opus-latest'))
         self.assertIsNone(near_miss('nobody/none'))
-        self.assertIsNone(near_miss('~anthropic/claude-opus-latest'))
         self.assertIsNone(near_miss('z-ai/glm-5.3'))
         self.assertIsNone(near_miss(None))
         self.assertIsNone(near_miss(''))

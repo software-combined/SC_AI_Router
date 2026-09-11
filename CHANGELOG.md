@@ -14,12 +14,33 @@
   polls `https://dist.softwarecombined.com/<channel>/latest.json` with no
   token, no enrolment, no GitHub account and no repository access. Checks
   run every 4 hours (Linux also checks 5 minutes after the timer activates;
-  macOS checks when the job loads); the `channel` file in the router home
-  selects `stable` (default) or the
-  public pre-release document at `beta/latest.json`. Checksums, version
-  and identity checks, and the serial replay guard are unchanged, and
-  `--feed` remains the manual install and update route. A leftover
-  `feed-token` file on an older host is inert.
+  macOS checks when the job loads). The `channel` file in the router home
+  selects `stable` (default) or the public pre-release document at
+  `beta/latest.json`. Checksums, version and identity checks, and the
+  serial replay guard are unchanged, and `--feed` remains the manual
+  install and update route. A leftover `feed-token` file on an older host
+  is inert.
+
+- The restart notice is about the picker, not the version: it is staged only
+  when a release adds a picker row the last install did not announce, so a
+  routine update no longer asks for a Codex restart that would change
+  nothing. An attempt that merged rows and then failed still prompts on its
+  retry, an unshown notice is refreshed with the running version, a notice
+  that could not be written is retried by the next install, and a catalogue
+  or baseline this comparison cannot read keeps the previous behaviour and
+  stages the notice. Additions that never pass through an install (live
+  refresh, picker mode changes) still need Plan 135.
+
+- The picker pins exact model ids: `anthropic/claude-opus-5`,
+  `anthropic/claude-sonnet-5`, `anthropic/claude-fable-5.1`,
+  `anthropic/claude-haiku-4.5`, `google/gemini-3.8-flash`,
+  `google/gemini-3.1-pro-preview` and `x-ai/grok-4.6` replace the
+  `~...-latest` aliases, which are retired via `RETIRED_SLUGS` so upgrades
+  drop them. The router no longer follows upstream `latest` movement on its
+  own; a new version is a registry row plus a retirement. Opus 5, Fable 5.1
+  and Haiku 4.5 passed isolated base round trips and are verified (Haiku at
+  `none`, its only supported effort), and the Grok image-stall hint keeps
+  matching the pinned row.
 
 - Providers are now data, not code paths: `ai_router/provider_defs.py` holds
   one definition per upstream (host, endpoint prefixes, key location, model

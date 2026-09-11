@@ -37,16 +37,27 @@ class ModelPolicyTests(unittest.TestCase):
                              'subscription', allowed=ALLOWED)
 
     def test_disallowed_reject_leaks_no_candidate(self):
-        # The near-miss hint must not disclose a slug the portco policy
-        # excludes: a bare id for an allowlisted-out tilde row rejects
-        # with an empty candidate list.
+        # A portco-excluded row rejects with the closed error and an empty
+        # candidate list, so the reject never leaks an excluded slug. The
+        # alias case is synthesised because the roster pins exact ids today;
+        # it keeps the allowlist suppression of a near-miss candidate tested.
+        from ai_router import registry as registry_mod
         from ai_router.errors import UnknownModel
+        from ai_router.registry import Model
         with self.assertRaises(UnknownModel) as caught:
-            providers.select('anthropic/claude-opus-latest', '/responses', (),
+            providers.select('anthropic/claude-opus-5', '/responses', (),
                              'subscription', allowed=ALLOWED)
         self.assertEqual(caught.exception.candidates, ())
         self.assertIn('not in the configured catalog',
                       str(caught.exception))
+        alias = Model(slug='~z-ai/glm-5.3-flex', provider='openrouter',
+                      display_name='X', vendor='Z.ai', reasoning=('low',),
+                      default_reasoning='low')
+        with mock.patch.dict(registry_mod.BY_SLUG, {alias.slug: alias}):
+            with self.assertRaises(UnknownModel) as caught:
+                providers.select('z-ai/glm-5.3-flex', '/responses', (),
+                                 'subscription', allowed=ALLOWED)
+        self.assertEqual(caught.exception.candidates, ())
 
     def test_allowed_openrouter_slug_still_routes(self):
         provider = providers.select('z-ai/glm-5.3-flash', '/responses', (),

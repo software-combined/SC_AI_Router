@@ -18,7 +18,7 @@ class CapabilityTests(unittest.TestCase):
     def test_reasoning_matches_live_acceptance(self):
         self.assertNotIn('max', reasoning_levels('meta/muse-spark-1.3-contributor'))
         self.assertIn('max', reasoning_levels('meta/muse-spark-1.3'))
-        self.assertEqual(reasoning_levels('~x-ai/grok-latest'), ['low', 'medium', 'high', 'xhigh'])
+        self.assertEqual(reasoning_levels('x-ai/grok-4.6'), ['low', 'medium', 'high', 'xhigh'])
         self.assertEqual(reasoning_levels('deepseek/deepseek-v4-pro-0813'),
                          ['low', 'high', 'max'])
         self.assertEqual(reasoning_levels('deepseek/deepseek-v4.1-flash'),

@@ -163,7 +163,7 @@ connections queue for the incoming process too; on Linux there is no socket
 activation, so a connection attempted mid-handover fails until the new
 process binds the port. To update now, re-run the installer with
 `--check-update`. Machines on the `beta` channel follow pre-releases.
-After an update a desktop dialog offers to quit and reopen Codex (the
+After an update that adds a picker model, a desktop dialog offers to quit and reopen Codex (the
 macOS app, the Windows Store app, or the Linux preview app when it is
 installed) so the new models load, with a "Later" button for anyone who
 would rather keep working. Where the desktop app is not installed, the
