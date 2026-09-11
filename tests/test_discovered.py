@@ -142,6 +142,27 @@ class DiscoveredStoreTests(unittest.TestCase):
         again = recall([_summary_message('run one')])
         self.assertEqual([t['name'] for t in again], ['echo'])
 
+    def test_mutating_disk_backed_recall_leaves_store_intact(self):
+        home = _home(self)
+        remember([_search_output(_tool('echo'))], 'run one')
+        _MEMORY.clear()
+        defs = recall([_summary_message('run one')])
+        defs[0]['name'] = 'mutated'
+        again = recall([_summary_message('run one')])
+        self.assertEqual([t['name'] for t in again], ['echo'])
+        rows = json.loads(next(iter((home / 'discovered-tools').glob('*.json'))).read_text())
+        self.assertEqual([t['name'] for t in rows], ['echo'])
+
+    def test_evicted_key_still_resolves_from_disk(self):
+        from ai_router.discovered import _key
+        _home(self)
+        remember([_search_output(_tool('echo'))], 'run one')
+        # Simulate FIFO memory eviction with the disk file intact
+        # (a real _MAX overflow would also prune the oldest disk file).
+        _MEMORY.pop(_key('run one'))
+        defs = recall([_summary_message('run one')])
+        self.assertEqual([t['name'] for t in defs], ['echo'])
+
     def _ns_wrap(self, *names, **kwargs):
         full = kwargs.get('full', True)
         tools = []
