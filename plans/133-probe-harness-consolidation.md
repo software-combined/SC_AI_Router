@@ -4,6 +4,11 @@
 > Drift check: `git diff --stat b642de9..HEAD -- tools/appserver_probe.py tools/probe_codex_runtime.py tools/probe_context_budget.py tools/probe_agent_handoffs.py tests/test_probe_harness.py`
 > Read changed code and preserve current behavior before edits.
 
+> **Amendment 2026-09-12.** Plan 145 (model verification gate) runs its
+> capability-claim probe legs on this plan's `AppServer` client. Keep the
+> constructor, `rpc`, `turn` and `close` signatures stable so 145 can add legs
+> without touching the harness. Land this plan before 145.
+
 ## Status and first proof
 
 - Priority P3; effort M; risk MED; confidence HIGH; category tech-debt; depends on none; run before

@@ -4,6 +4,14 @@
 > Drift check: `git diff --stat b642de9..HEAD -- packaging/platforms/windows.py packaging/task_launch.py packaging/service.py packaging/release.py tests/test_windows_backend.py tests/test_windows_portability.py tests/test_packaging.py`
 > Read changed code and preserve current behavior before edits.
 
+> **Amendment 2026-09-12.** From the external router review
+> (`plans/2026-09-12-external-router-review.md`): add `packaging/task_launch.py`
+> to `packaging/release.py`'s inventory and the 3.9 parse-surface list in the
+> same commit that creates it, and to `tests/test_packaging.py`'s required list
+> so a dropped entry fails the bundle gate. CI now parses the shipped `.ps1`
+> files (`.github/workflows/check.yml`), so a syntax error in a touched Windows
+> script fails on the pull request instead of on a staff machine.
+
 ## Status and first proof
 
 - Priority P3; effort S-M; risk MED; confidence HIGH; category tech-debt; depends on 123 (single

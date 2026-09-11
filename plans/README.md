@@ -81,7 +81,7 @@ below interleaves them.
 | [131](131-service-state-writer-decomposition.md) | Service/state/writer decomposition | PARTIAL: writer leaf + all listed sinks landed 2026-09-12; state-read contract, service split and diagnostics/key privacy left | after 094/095/100/103/123; coordinate 106 |
 | [132](132-windows-backend-cleanup.md) | Windows backend cleanup | TODO | before/with 116; after 123 |
 | [133](133-probe-harness-consolidation.md) | One app-server probe harness | TODO | before 118/119 |
-| [134](134-repo-hygiene-feed-ci-docs.md) | feed_verify move, CI single owner, docs index, shim owner | TODO | after 101; before 106 (feed work) |
+| [134](134-repo-hygiene-feed-ci-docs.md) | feed_verify move, CI single owner, docs index, shim owner | PARTIAL 2026-09-12: docs index, bundled docs, troubleshooting page, per-PR unit suite and the shell/PowerShell parse gates landed (see its amendment); the verifier move, composite action, policy-scan script, kiro pointer, shim owner and tools/ rule remain | after 101; before 106 (feed work) |
 | [135](135-new-model-prompt.md) | New-model prompt: notify + one-click Codex restart only when new models appear | TODO | after 128/131; hooks into 099; coordinate 106 |
 
 ## Security wave (136-138)
@@ -139,6 +139,19 @@ repository before the visibility flip.
 | [143](143-enrolment-only-auto-update.md) | Enrolment-only auto-update | SUPERSEDED 2026-09-12: the public token-free feed replaced it; kept as history | superseded by the owner decision |
 | [144](144-public-repo-controls.md) | Public repository controls and visibility flip | TODO: owner-gated | after 142/143 |
 
+## External router review wave (145-148)
+
+Added 2026-09-12 from the read-only review of `duolahypercho/codex-router`
+(`2026-09-12-external-router-review.md`, which also records the explicit
+rejections, the no-copy rule and the client-catalogue spike).
+
+| Plan | Title | Status | Sequencing |
+|---|---|---|---|
+| [145](145-model-verification-gate.md) | Model verification gate: hidden until probed | TODO | after 133; before 135 stage 2 |
+| [146](146-ingress-hardening-wave-2.md) | Ingress hardening, second wave | TODO | after 137; serialize with 135 on `ai_router/router.py` |
+| [147](147-operator-surface-doctor-status-rollback-support.md) | Operator surface: doctor, status, rollback, support bundle | TODO | after 131; serialize with 134's CI step |
+| [148](148-claude-drift-and-contract.md) | Claude Code drift check and attachment contract | TODO | after 146's guard; coordinate 113/120/121 |
+
 ## Recommended overall order
 
 Work top to bottom; stop at owner gates and report. Phases 0-2 are local; 3-5 are largely
@@ -146,7 +159,8 @@ owner-gated.
 
 - **Phase 0 (prep):** 122, 123.
 - **Phase 1 (core backlog):** 090, 091, 092, 093, 094, 095, 096, 097, 098, 100, 101, 102, 103, 104.
-- **Phase 2 (refactor and feature wave):** 124, 125, 126, 127, 129, 128, 130, 131, 135, 134, 133, 132.
+- **Phase 2 (refactor and feature wave):** 124, 125, 126, 127, 129, 128, 130, 131, 134 (rest),
+  133, 145, 135 (stage 2), 132, 137, 146, 147, 148.
 - **Phase 3 (infrastructure, mostly owner-gated):** 105, 106, 107, 099, 108, 109, 110.
 - **Phase 4 (clients and OS acceptance, owner-gated):** 111, 112, 113, 114, 115, 116, 117.
 - **Phase 5 (paid probes and desktop, owner-gated):** 118, 119, 120, 121.
@@ -158,6 +172,16 @@ it lands, and needs no owner gate itself. The security wave rides Phase 1: 136 a
 independent, and 137 proceeds now that 090 has landed. The provider abstraction (141) rides
 Phase 2 and needs no owner gate: it changes no routing behaviour, and 126/127/128 must rebase on
 it rather than run alongside it.
+
+External-adoption notes: 135 stage 1 (the client-catalogue spike) is done and recorded in
+`2026-09-12-external-router-review.md`; its stage 2 waits for 145 so an unverified row never
+prompts a restart. 133 lands before 145 because 145 consumes its `AppServer` client. 137 and 146
+both edit the ingress file and its baseline entry: 137 first, then 146 rebases and re-syncs.
+135 and 146 both touch `ai_router/router.py`: serialize them in that order.
+147's `--check-update` change is a user-visible contract change and must also move the installed
+scheduler commands to `--update`. 148 is source and offline tests only; its live proof stays with
+113/115/120. Everything in this wave is local: no owner gate except the billed probe runs that
+145's harness can perform.
 
 ## Dependency and coordination notes
 
