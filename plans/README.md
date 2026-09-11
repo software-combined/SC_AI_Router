@@ -107,6 +107,12 @@ orphan tool fragment.
 |---|---|---|---|
 | [140](140-standalone-delegation-output-delivery.md) | Deliver standalone delegation outputs to OpenRouter models | DONE: live acceptance 2026-09-11 on router 0.6.27.44 (deepseek child echoed the marker) | P1; independent; OpenRouter prepare path only |
 
+## Tool alias resilience (145)
+
+| Plan | Title | Status | Sequencing |
+|---|---|---|---|
+| [145](145-router-tool-alias-repair.md) | Namespaced tool aliases: readable, repaired, self-explaining | DONE: tool-alias resilience 2026-09-12 (source) | independent; paid probe leg after deploy |
+
 ## Publication wave (139)
 
 Added 2026-09-11: the tag-driven feed publication that makes installed

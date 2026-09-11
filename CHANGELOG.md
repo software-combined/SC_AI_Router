@@ -1,6 +1,27 @@
 # Changelog
 
-## Unreleased
+## 0.6.33
+
+- Namespaced client tools are exposed to routed models under readable aliases
+  (`namespace__tool`) instead of `ns_<hash>_<tool>`; collisions and over-length
+  names fall back to the same readable stem plus a short digest, sanitised to
+  provider-legal characters, so a routed model can still read the tool it is
+  calling. The digest widens until the name is unique; a tool set that exhausts
+  that ladder fails the request instead of sharing a wire name.
+
+- A tool call is repaired before dispatch only when it is the plain native tool
+  name of exactly one exposed namespaced tool, the dotted `namespace.tool` form
+  shown in its description, or a fallback alias whose digest characters were
+  re-typed. A call that already carries a namespace, a readable-name typo, an
+  ambiguous name, a native name the per-model tool ceiling withheld, and an
+  unrelated name are never rewritten; they reach the client unchanged and the
+  guidance line then names the exact exposed tool. Repairs and unresolved names
+  are counted in content-free `tool_call_repaired` / `tool_call_unresolved` log
+  events.
+
+- When the client still answers `unsupported call: <name>`, the router adds one
+  line naming the exact exposed tool to the model-facing history, and the routed
+  base instructions now state that tool names must be copied verbatim.
 
 - Documentation now ships with every release: the bundle carries `README.md`
   and `docs/*.md`, `docs/troubleshooting.md` covers the staff-real failures
