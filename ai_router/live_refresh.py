@@ -1,20 +1,22 @@
-"""Refresh derived registry fields from live OpenRouter metadata.
+"""Refresh derived registry fields from each provider's live metadata.
 
 Derived (rewritten in place in models.json): modalities, context_window,
 max_output_tokens, reasoning. Pinned (never touched): identity,
 excluded_efforts, schema_mode, max_tools, drop_images, priority, and the
 capability flags, which only probes may enable.
+
+A refresh only rewrites rows owned by the provider whose catalogue it read
+(`provider_defs.external_catalogues`); a `manual`-shape provider has no live
+metadata and its rows stay untouched.
 """
 import json
 import sys
 import urllib.request
 from pathlib import Path
+from . import provider_defs
 from .apply_catalogue import write_guarded
 from .capabilities import CANONICAL_ORDER
 from .model_metadata import project_modalities, refresh_display_name
-
-MODELS_URL = 'https://openrouter.ai/api/v1/models'
-
 
 def derive(row, live):
     """Derived fields for one registry row from its live metadata entry."""
@@ -35,10 +37,22 @@ def derive(row, live):
             'display_name': refresh_display_name(row, live)}
 
 
-def refresh(rows, live_by_id):
-    """Return rows with derived fields rewritten; unknown live ids ignored."""
+def owned_by(row, provider_id):
+    """True when this row belongs to the provider whose catalogue was read."""
+    return (row.get('provider') or provider_defs.DEFAULT_EXTERNAL) == provider_id
+
+
+def refresh(rows, live_by_id, provider_id=provider_defs.DEFAULT_EXTERNAL):
+    """Return rows with derived fields rewritten; unknown live ids ignored.
+
+    Rows of any other provider pass through untouched, so one catalogue can
+    never relabel or re-derive another provider's model.
+    """
     out = []
     for row in rows:
+        if not owned_by(row, provider_id):
+            out.append(row)
+            continue
         live = live_by_id.get(row['slug'])
         if live is None:
             out.append(row)
@@ -51,16 +65,27 @@ def refresh(rows, live_by_id):
 
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
+    provider_id = provider_defs.DEFAULT_EXTERNAL
+    if argv[:1] == ['--provider']:
+        if len(argv) < 2 or provider_defs.get(argv[1]) is None:
+            raise SystemExit('usage: python3.14 -m ai_router.live_refresh '
+                             '[--provider ID] FILE|--fetch')
+        provider_id, argv = argv[1], argv[2:]
+    defn = provider_defs.get(provider_id)
     if argv == ['--fetch']:
-        with urllib.request.urlopen(MODELS_URL, timeout=20) as response:
+        if not defn.catalogue_url:
+            raise SystemExit(f'{defn.label} has no live model catalogue')
+        with urllib.request.urlopen(defn.catalogue_url, timeout=20) as response:
             live = {model['id']: model for model in json.load(response)['data']}
     elif len(argv) == 1:
         live = {model['id']: model for model in json.loads(Path(argv[0]).read_text())['data']}
     else:
-        raise SystemExit('usage: python3.14 -m ai_router.live_refresh FILE|--fetch')
+        raise SystemExit('usage: python3.14 -m ai_router.live_refresh '
+                         '[--provider ID] FILE|--fetch')
     path = Path(__file__).with_name('models.json')
     before = path.read_text()
-    write_guarded(path, before, json.dumps(refresh(json.loads(before), live), indent=2) + '\n')
+    write_guarded(path, before, json.dumps(
+        refresh(json.loads(before), live, provider_id), indent=2) + '\n')
 
 
 if __name__ == '__main__':

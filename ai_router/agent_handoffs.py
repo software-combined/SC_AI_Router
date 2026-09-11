@@ -2,7 +2,7 @@
 from copy import deepcopy
 import json
 
-from . import sse
+from . import provider_defs, sse
 from .registry import by_slug
 
 NATIVE_NAMESPACE = 'collaboration'
@@ -58,7 +58,8 @@ def spawn_models(items):
     Read from the request's own input history; keeps no state. Both alias
     and native spawns are recorded: what matters for steering is where the
     child runs, not which namespace created it. An encrypted handoff to a
-    child whose spawn names an OpenRouter model cannot arrive readably, no
+    child whose spawn names an external-provider model cannot arrive
+    readably, no
     matter which tool created the child. Pure.
     """
     models = {}
@@ -98,10 +99,11 @@ def add_plaintext_tools(payload):
             message['description'] = 'The complete readable assignment or message. Do not encrypt it.'
             alias['description'] = (
                 'PLAINTEXT HANDOFF: use collaboration_plaintext.' + tool['name']
-                + ' for OpenRouter agents. '
+                + ' for externally billed agents. '
                 + tool.get('description', '') +
                 '\nPlaintext handoff for mixed-provider agents. Use this variant '
-                'for OpenRouter recipients and keep using it for their follow-ups. '
+                'for externally billed recipients and keep using it for their '
+                'follow-ups. '
                 'Use the original collaboration tool for encrypted native handoffs. '
                 'Start mixed-provider children with fork_turns="none" when spawning; '
                 'encrypted inherited history cannot be translated.')
@@ -113,7 +115,8 @@ def add_plaintext_tools(payload):
     if aliases:
         payload['tools'] = [*tools, {'type': 'namespace', 'name': PLAINTEXT_NAMESPACE,
             'description': ('Use this namespace for every initial assignment and follow-up '
-                'to OpenRouter agents. Previous calls may appear under collaboration in '
+                'to externally billed agents. Previous calls may appear under '
+                'collaboration in '
                 'history because Codex executes the native tool; that does not change '
                 'the need to choose collaboration_plaintext for the next message.'),
             'tools': aliases}]
@@ -162,9 +165,9 @@ def steer_plaintext(item, names):
     """Replace a provably undeliverable encrypted handoff with a steer output.
 
     Fires only when the emitted native call cannot reach its child readably:
-    an encrypted spawn_agent naming an OpenRouter model, or an encrypted
+    an encrypted spawn_agent naming an external-provider model, or an encrypted
     followup_task/send_message targeting a child this thread spawned onto an
-    OpenRouter model. Everything else returns untouched, so native encrypted
+    external model. Everything else returns untouched, so native encrypted
     handoffs and unknown targets keep current behavior and the downstream
     guards remain the backstop. The steer names the exact alias call to make
     instead; no payload, ciphertext, or history is quoted. Pure.
@@ -180,15 +183,15 @@ def steer_plaintext(item, names):
     if item.get('name') == 'spawn_agent':
         model = args.get('model')
         entry = by_slug(model) if isinstance(model, str) else None
-        if entry is None or entry.provider != 'openrouter':
+        if entry is None or not provider_defs.is_external(entry.provider):
             return item
         detail = ('spawn via collaboration_plaintext.spawn_agent '
-                  'for OpenRouter models')
+                  'for externally billed models')
     else:
         target = args.get('target')
         model = _spawn_model(spawns, target)
         entry = by_slug(model) if isinstance(model, str) else None
-        if entry is None or entry.provider != 'openrouter':
+        if entry is None or not provider_defs.is_external(entry.provider):
             return item
         detail = ('call collaboration_plaintext.' + item['name']
                   + " with target '" + target + "'")

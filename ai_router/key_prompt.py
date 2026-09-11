@@ -21,7 +21,7 @@ import urllib.parse
 import urllib.request
 import webbrowser
 
-from . import key_dialog, setup_page
+from . import key_dialog, provider_defs, setup_page
 
 
 def submit(url, fields, opener=None):
@@ -71,19 +71,19 @@ def _confirm_text(payload, which='codex'):
                setup_page.RESTART[key_dialog.clients(which)].lower()))
 
 
-def _open_page(url, opener=None):
+def _open_page(url, opener=None, label='OpenRouter'):
     """Loopback-page fallback; the URL is printed only on a TTY."""
     try:
         opened = (opener or webbrowser.open)(url) is not False
     except OSError:
         opened = False
     if sys.stdout.isatty():
-        print('open %s to connect your OpenRouter key' % url)
+        print('open %s to connect your %s key' % (url, label))
     return opened
 
 
 def run_window(url, tool_path=None, platform_name=None, which=None, run=None,
-               opener=None, clients='codex', post=None):
+               opener=None, clients='codex', post=None, label='OpenRouter'):
     """Prompt, submit, confirm. 0 stored, 2 cancelled, 3 no GUI, 1 refused."""
     if platform_name is None:
         platform_name = sys.platform
@@ -91,19 +91,19 @@ def run_window(url, tool_path=None, platform_name=None, which=None, run=None,
     if tool_path is None:
         tool_path = key_dialog.tool(platform_name=platform_name, which=which)
     if tool_path is None:
-        _open_page(url, opener)
+        _open_page(url, opener, label)
         return 3
     while True:
         try:
             collected = key_dialog.collect(tool_path, platform_name=platform_name,
                                            run=run, which=clients)
         except (OSError, subprocess.SubprocessError):
-            _open_page(url, opener)
+            _open_page(url, opener, label)
             return 3
         if collected is None:
             return 2
         if not collected['key']:
-            key_dialog.message(tool_path, 'Paste an OpenRouter key before saving.',
+            key_dialog.message(tool_path, f'Paste an {label} key before saving.',
                                platform_name=platform_name, run=run)
             continue
         # Windows writes CRLF; the split above leaves the key without the
@@ -127,7 +127,7 @@ def run_window(url, tool_path=None, platform_name=None, which=None, run=None,
 
 
 def open_window(url, thread=False, which=None, opener=None, platform_name=None,
-                run=None, clients='codex', post=None):
+                run=None, clients='codex', post=None, provider_id=None):
     """Open the popup (or the page); True when a window was started.
 
     `thread=True` is the router path: the popup must not hold the request
@@ -135,16 +135,19 @@ def open_window(url, thread=False, which=None, opener=None, platform_name=None,
     browser fallback only; `post` is the HTTP seam, so a caller can never
     wire `webbrowser.open` into the key POST.
     """
+    label = provider_defs.label_for(provider_id or provider_defs.DEFAULT_EXTERNAL)
     if platform_name is None:
         platform_name = sys.platform
     if key_dialog.tool(platform_name=platform_name, which=which) is None:
-        return _open_page(url, opener)
+        return _open_page(url, opener, label)
     if not thread:
         return run_window(url, platform_name=platform_name, which=which, run=run,
-                          opener=opener, clients=clients, post=post) == 0
+                          opener=opener, clients=clients, post=post,
+                          label=label) == 0
     threading.Thread(target=run_window, args=(url,),
                      kwargs=dict(platform_name=platform_name, which=which,
-                                 run=run, opener=opener, clients=clients, post=post),
+                                 run=run, opener=opener, clients=clients, post=post,
+                                 label=label),
                      daemon=True).start()
     return True
 

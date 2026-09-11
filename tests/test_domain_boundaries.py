@@ -55,12 +55,20 @@ def _check_rules(rules, root=ROOT):
 
 # module -> local top-level names it must never import
 RULES = {
+    # Plan 141: the provider definition table is a leaf; it may import
+    # nothing at all (also enforced by tests/test_provider_defs.py).
+    'ai_router/provider_defs.py': ('router', 'providers', 'claude', 'registry',
+                                    'catalogue', 'models', 'setup', 'credentials',
+                                    'transport', 'capabilities'),
     'ai_router/registry.py': ('router', 'providers', 'catalogue', 'models',
                                  'claude', 'setup', 'activation'),
     'ai_router/capabilities.py': ('router', 'providers', 'claude', 'setup'),
     'ai_router/compaction.py': ('router', 'providers'),
     'ai_router/tool_adapter.py': ('router', 'providers'),
     'ai_router/providers.py': ('router', 'claude'),
+    'ai_router/claude.py': ('router', 'providers'),
+    'ai_router/upstream.py': ('router', 'claude', 'providers', 'transport'),
+    'ai_router/setup_page.py': ('router', 'providers', 'credentials', 'key_prompt'),
     'ai_router/transport.py': ('router', 'providers', 'claude', 'registry',
                                   'catalogue', 'models', 'setup'),
     'ai_router/protocols/__init__.py': ('router',),

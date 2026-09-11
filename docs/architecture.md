@@ -7,6 +7,9 @@ transitional owners name the plan that will move them.
 ## Domains and direction
 
 ```
+provider_defs (leaf: one definition per upstream, imports nothing)
+  ^
+  |
 registry / capabilities / image_items (leaves: model facts, stdlib + dataclasses only)
   ^            ^
   |            |
@@ -18,7 +21,7 @@ providers (Responses adapters) + claude (Messages adapters)
   |
 protocols (explicit method/path dispatch table; no policy of its own)
   |
-transport (Prepared, hop-header rules, raw stream, header relay)
+transport (Prepared, hop-header rules, raw stream, header relay) + upstream (failure policy)
   |
 router (HTTP control: auth, body limits, drain/inflight, relay)
 ```
@@ -28,15 +31,21 @@ Rules:
 `agent_handoffs.py` owns collaboration alias schemas and native-name restoration;
 `sse.py` owns shared event framing without provider-specific argument rewriting.
 
-1. `registry.py` imports stdlib only. Nothing in `ai_router/` may make it
-   import a client, CLI, installer, or HTTP module. Client listing and config
-   modules consume it; never the reverse.
+1. `provider_defs.py` owns every upstream fact (host, endpoint prefixes, key
+   location, model catalogue, key-info endpoint, failure dialect) and imports
+   nothing, so `packaging/` can spec-load it on Python 3.9. `registry.py`
+   imports only stdlib plus that leaf. Nothing in `ai_router/` may make the
+   registry import a client, CLI, installer, or HTTP module. Client listing
+   and config modules consume it; never the reverse.
 2. HTTP transport (`router.py`) owns loopback auth, body limits,
    drain/inflight, and connection cleanup. Protocol representation lives in
    `providers.py` (Responses/Messages) and `claude.py` (Messages ingress).
-3. Upstream adapters own target/credential construction. OpenRouter headers
-   start fresh every request; subscription headers never accompany an
-   OpenRouter request.
+3. Upstream adapters own target/credential construction and are
+   parameterized by one `ProviderDef`, never by a provider-name branch. A
+   new external provider is a table entry plus registry rows; a provider
+   with a different wire format is a new adapter class, never a branch in
+   the request path. External headers start fresh every request;
+   subscription headers never accompany an externally billed request.
 4. Installer orchestration (`packaging/install.py`, `service.py`,
    `updater.py`) calls one explicit platform backend. Unsupported OS is an
    explicit refusal. Backends do not import runtime providers or client
@@ -66,10 +75,9 @@ stays the client-side owner of origin, token and channel resolution.
   `systemd_manager()` two-valued flag (Plan 056 extracts `packaging/platforms/`).
 - `packaging/service.py` mixes launchd/plist/feed/state helpers (Plan 056
   re-homes the launchd half with the darwin backend).
-- `ai_router/providers.py` keeps Responses shaping plus failure
-  description; shared transport lives in `transport.py` and dispatch in
-  `protocols/` (Plan 062 landed the split; full protocol file moves remain
-  open).
+- `ai_router/providers.py` holds the Responses adapters and dispatch;
+  failure policy lives in `upstream.py`, page markup in `setup_page.py`,
+  shared transport in `transport.py`, and dispatch in `protocols/`.
 - `ai_router/catalogue.py` + `models.py` + `live_refresh.py` share client
   projection duties through `model_metadata.py` (pure normalization) and
   `clients/` (capability projection, picker visibility).

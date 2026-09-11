@@ -1,4 +1,4 @@
-"""Local trial: retain Codex subscription authentication; isolate OpenRouter keys."""
+"""Local trial: retain client subscription authentication; isolate provider keys."""
 import hmac
 import http.client
 import json
@@ -9,8 +9,9 @@ import threading
 import time
 from compression import zstd
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from .credentials import Credentials, ENV_VAR as _CREDENTIALS_ENV_VAR
-from . import capabilities, claude, errors, local_services, providers, setup, subscription_fallback, transport
+from .credentials import Credentials
+from . import (capabilities, claude, errors, local_services, provider_defs,
+               setup, subscription_fallback, transport, upstream)
 from .protocols import owned_paths, select as select_protocol
 from .errors import InvalidSize, PreparationError
 from .providers import NATIVE_SERVICE_PATHS
@@ -186,6 +187,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.server.inflight -= 1
 
     def _owned_post(self, path, via_path, started):
+        provider = None
         self.connection.settimeout(120)
         try:
             raw, payload, size = self.read_body()
@@ -200,14 +202,14 @@ class Handler(BaseHTTPRequestHandler):
             if policy is None:
                 return self.error(errors.unsupported_route())
             provider = policy.select_provider(model, path, self.server.state, mode)
-            if provider.name in ('openai-subscription', 'anthropic-subscription') and not via_path:
+            if provider.kind == provider_defs.SUBSCRIPTION and not via_path:
                 return self.error(errors.bearer_for_no_subscription_only())
             compact_call = policy.compaction_call(provider, model, path, payload)
             if compact_call is not None:
                 # Compact before prepare(): a rejected effort must not block it.
                 # Key lookup stays outside the send try so credential
                 # errors keep 401/400, not 502.
-                key = self.server.credentials.openrouter_key()
+                key = self.server.credentials.key_for(provider.defn.id)
                 try:
                     return self.send_json(200, {'output': compact_call(key)})
                 except PreparationError as exc:
@@ -232,9 +234,13 @@ class Handler(BaseHTTPRequestHandler):
                 # Malformed payload/tool-fragment indexing, not keylessness:
                 # keep the original payload-error mapping and open no window.
                 return self.error(errors.map_client_error(exc))
-            setup.open_key_window(self.server, self.server.credentials.home)
+            defn = provider.defn if provider is not None else None
+            setup.open_key_window(self.server, self.server.credentials.home,
+                                  defn.id if defn is not None else None)
             return self.error(errors.credential_problem(
-                '%s Open the key setup page to connect an OpenRouter key.' % exc))
+                '%s Open the key setup page to connect a %s key.'
+                % (exc, provider_defs.label_for(
+                    defn.id if defn is not None else provider_defs.DEFAULT_EXTERNAL))))
         except (ValueError, KeyError, OSError, zstd.ZstdError,
                 AttributeError, TypeError) as exc:
             err = errors.map_client_error(exc)
@@ -246,6 +252,7 @@ class Handler(BaseHTTPRequestHandler):
         _reasoning = payload.get('reasoning')
         prepare_done = time.monotonic()
         metrics = {'provider': prepared.provider,
+                   'protocol': policy.name,
                    'model': model, 'path': path, 'request_bytes': size,
                    'stream': payload.get('stream') is True,
                    'reasoning_effort': _reasoning.get('effort') if isinstance(_reasoning, dict) else None,
@@ -256,24 +263,6 @@ class Handler(BaseHTTPRequestHandler):
                    'prepare_ms': round((prepare_done - read_done) * 1000, 1)}
         log_event('request_started', **metrics)
         self.relay(provider, prepared, metrics, started, has_image)
-
-    def _stored_key_dead(self):
-        """True only when the stored key file itself fails check_key on 401/403."""
-        if self.server.credentials.env.get(_CREDENTIALS_ENV_VAR, '').strip():
-            return False  # The file is not the effective credential.
-        if setup.setup_pending(self.server.state):
-            return False  # A window is already open; answer the raw 401.
-        try:
-            stored = (self.server.credentials.home / 'openrouter.key').read_text().strip()
-        except OSError:
-            return False
-        if not stored:
-            return True
-        try:
-            setup.check_key(stored)
-        except (ValueError, OSError) as exc:
-            return isinstance(exc, setup.KeyRejected) and exc.status in (401, 403)
-        return False
 
     def read_body(self):
         size = int(self.headers.get('Content-Length', '-1'))
@@ -298,7 +287,7 @@ class Handler(BaseHTTPRequestHandler):
             # Phases land inside post_with_phases even on failure.
             response, headers_done = transport.post_with_phases(
                 conn, prepared, metrics)
-            if (prepared.provider == 'openai-subscription' and metrics['path'] in NATIVE_SERVICE_PATHS
+            if (provider.defn.dialect == 'openai' and metrics['path'] in NATIVE_SERVICE_PATHS
                     and response.status in (401, 403)):
                 response.read()
                 log_event('native_upstream_rejected', path=metrics['path'],
@@ -307,22 +296,30 @@ class Handler(BaseHTTPRequestHandler):
                     local_services.answer(metrics['path'])
                 except local_services.LocalAnswer as exc:
                     return self.error(exc)
-            retry_after = providers.upstream_retry_after(response, prepared, metrics)
+            retry_after = upstream.upstream_retry_after(response, prepared, metrics)
             if retry_after is not None:
                 return subscription_fallback.refused(self, prepared, retry_after, metrics, started)
             if response.status >= 400:
                 raw = response.read()
                 transport.note_first_data(metrics, headers_done)
-                if prepared.provider == 'openrouter' and providers.is_context_error(raw):
+                # Gate the terminal-frame path on the protocol as well: the
+                # Messages ingress shares the openrouter dialect but has no
+                # Responses failure frame to send.
+                if (provider.defn.dialect == 'openrouter'
+                        and metrics.get('protocol') == provider_defs.RESPONSES
+                        and upstream.is_context_error(raw)):
                     return self.context_error(metrics['stream'])
-                if (prepared.provider == 'openrouter'
+                if (provider.defn.dialect == 'openrouter'
                         and response.status in (401, 403)
-                        and self._stored_key_dead()):
-                    setup.open_key_window(self.server, self.server.credentials.home)
+                        and metrics.get('protocol') == provider_defs.RESPONSES
+                        and self.server.credentials.key_rejected(prepared.provider)):
+                    setup.open_key_window(self.server, self.server.credentials.home,
+                                          prepared.provider)
+                    label = provider_defs.label_for(prepared.provider)
                     return self.error(errors.credential_problem(
-                        'The stored OpenRouter key was rejected. '
+                        f'The stored {label} key was rejected. '
                         'Open the key setup page to connect a new one.'))
-                described = providers.describe_failure(
+                described = upstream.describe_failure(
                     None, {'status': response.status, 'body': raw},
                     {'model': metrics.get('model'), 'provider': prepared.provider,
                      'elapsed_ms': round((time.monotonic() - started) * 1000, 1),
@@ -344,7 +341,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             metrics['upstream_headers_ms'] = round((time.monotonic() - started) * 1000, 1)
             metrics['response_kind'], metrics['response_encoding'] = transport.describe_response(response)
-            providers.validate_response(response, prepared)
+            upstream.validate_response(response, prepared)
             self.send_response(response.status)
             transport.relay_headers(response, self.send_header, metrics.get('model'))
             self.send_header('Connection', 'close')
@@ -372,9 +369,9 @@ class Handler(BaseHTTPRequestHandler):
                         location=transport.describe_location(exc),
                         total_ms=total_ms)
             if sent:  # best-effort terminal frame on Responses SSE
-                transport.emit_terminal_failure(self.wfile, metrics, prepared.provider)
+                transport.emit_terminal_failure(self.wfile, metrics)
             else:
-                described = providers.describe_failure(
+                described = upstream.describe_failure(
                     exc, None,
                     {'model': metrics.get('model'), 'provider': prepared.provider,
                      'host': prepared.host, 'elapsed_ms': total_ms,
