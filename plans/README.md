@@ -36,7 +36,7 @@ Executor rules for every plan:
 | [097](097-router-discovered-lock-scope.md) | Narrow the discovered-recall lock scope | DONE: discovered lock scope 2026-09-11 | — |
 | [098](098-router-model-refresh-bindings.md) | Refresh-safe registry consumers | DONE: refresh-safe registry consumers 2026-09-11 | before 099 |
 | [099](099-codex-router-model-onboarding-at-scale.md) | Model onboarding: one-command add, data-driven dispatch, refresh wiring | PARTIAL | 098 landed; refresh wiring awaits 106's qualified feed, then publish `models_url`; wiring must also fix `model_refresh.apply()` swap publication order (see plan 098) |
-| [100](100-router-retired-slug-single-source.md) | Shared retired-subscription slug set | TODO | depends 094 |
+| [100](100-router-retired-slug-single-source.md) | Shared retired-subscription slug set | DONE: retired-slug single source 2026-09-11 | depends 094 |
 | [101](101-router-dead-code-and-lint-gate.md) | Delete dead code; add F401/F811 gate | TODO | before 102/103 |
 | [102](102-router-install-option-collapse.md) | Collapse installer option handling below the cap | TODO | serialize with 103 |
 | [103](103-router-darwin-backend-extraction.md) | Move launchd helpers out of service.py | TODO | serialize with 102; before 104 |
