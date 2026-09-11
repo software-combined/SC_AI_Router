@@ -1,377 +1,253 @@
 <img src="docs/assets/sc-logo-wide.png" alt="Software Combined" width="420">
 
-# Model router
+# SC Router
 
-A small program on your computer that serves the Codex picker and Claude
-Code from one place, offering subscription models and approved
-OpenRouter models side by side. The two logins stay separate:
-subscription traffic keeps using the existing ChatGPT or Claude
-sign-in, and OpenRouter traffic uses an API key that never leaves
-your machine.
+[![Check](https://github.com/software-combined/SC_OpenRouter_adapter/actions/workflows/check.yml/badge.svg?branch=develop)](https://github.com/software-combined/SC_OpenRouter_adapter/actions/workflows/check.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-## Requirements
+SC Router is a local model router for Codex and Claude Code. It serves both
+clients from one loopback endpoint and lists ChatGPT or Claude subscription
+models beside approved OpenRouter models in the picker.
 
-The Codex app and/or Claude Code, Python 3.14 (the installer finds it or
-tells you how to get it), and an OpenRouter API key for OpenRouter models.
-Every install updates itself from the public feed; no enrolment, no token,
-no account. Anyone can also install or update by hand from the published
-releases.
+The billing split is strict. Subscription models keep using the client's
+existing ChatGPT or Claude sign-in, OpenRouter models use an OpenRouter API
+key stored on the machine, and subscription credentials never accompany a
+request billed to OpenRouter.
+
+- One router for Codex and Claude Code, with per-turn model selection.
+- Subscription and OpenRouter billing kept separate and visible in the picker.
+- Loopback only, one per-install token, owner-only key file, and no request
+  content in logs.
+- Python 3.14 runtime with no third-party dependencies.
 
 ## Platform support
 
-| Platform | Router | Managed installer |
+| Platform | Service | Status |
 |---|---|---|
-| macOS | Supported | Supported (`launchd` user agent) |
-| Linux with a systemd user manager | Supported | Supported (`systemd` user units) |
-| Windows 11 x64 | Lifecycle-proven, pending sign-out/in | Per-user Scheduled Tasks: install, scheduled update, rollback and uninstall passed on a staff machine on 2026-09-10; sign-out/in re-launch pending. Staff rollout stays gated on the remaining sign-out/in proof |
+| macOS | launchd user agent | Supported |
+| Linux with a systemd user manager | systemd user units | Supported |
+| Windows 11 x64 | per-user Scheduled Tasks | Install, update, rollback and uninstall verified; sign-out and sign-in relaunch still to be confirmed |
 
-Windows support is per-user Scheduled Tasks; see the Windows section below
-and `docs/compatibility.md` for the acceptance record. A Linux install needs a
-running systemd user manager: run it in the signed-in desktop session, not
-over a bare SSH shell without one.
+Linux needs a running systemd user manager in the signed-in desktop session;
+the installer refuses a bare SSH session without one. Acceptance evidence and
+the client versions it was recorded against live in
+[docs/compatibility.md](docs/compatibility.md).
 
-### Linux: managed systemd user services
+## Requirements
 
-Run the installer below in your signed-in desktop user session. It checks
-that the user systemd manager is available before installation, writes the
-router service and update timer, and enables them for future logins. It
-does not create a root service or enable lingering.
-Automatic updates come from the public feed (see the update section
-below). A manual install passes `--feed` with a downloaded release
-document.
+- Codex (desktop app or CLI) and/or Claude Code, installed and signed in.
+- Python 3.14 for a source install. The bootstrap supplies a pinned runtime,
+  so no system Python 3.14 is needed; macOS and Linux still need any
+  `python3`, plus `curl`, `tar` and `shasum`. Windows needs no Python.
+- An OpenRouter API key for any model billed to OpenRouter.
 
-Older symlink installations are migrated to `router_launch.py` and a
-`current` pointer file. Existing state, credentials and model settings are
-preserved. The installer replaces legacy updater commands pointing at a
-checkout or local feed with the installed updater and normal release channel.
-A pre-existing `feed` file in the router home still explicitly overrides
-that channel; see [Linux upgrade and verification](docs/linux-upgrade.md).
+The router home is `~/.codex/mixed-model-router`
+(`%USERPROFILE%\.codex\mixed-model-router` on Windows). Installed releases,
+state, the key file and logs live there.
 
-```sh
-systemctl --user status codex-mixed-model-router.service
-systemctl --user list-timers codex-mixed-model-router-update.timer
-journalctl --user -u codex-mixed-model-router-update.service
-```
+## Install
 
-Updates do not wait for idle traffic; systemd restarts the router through
-the stable launcher and the outgoing process finishes the requests it has
-already accepted. Linux has no socket activation, so connections attempted
-during the handover fail until the new process binds the port. The service allows 150 seconds for the 120-second drain.
-The first update check runs five minutes after installation, then four hours
-after each check completes. Restart Codex after catalogue changes.
-
-### Arch Linux: install the ChatGPT desktop app first
-
-The adapter routes the Codex picker, so it needs the ChatGPT desktop app
-(`codex-desktop`) installed and signed in before the router is useful:
+The quickest install is the bootstrap. It needs no GitHub account, token or
+repository access: it downloads the pinned Python runtime and the release
+bundle from the public feed, verifies both checksums and installs the
+per-user service:
 
 ```sh
-yay -S codex-desktop-git   # provides `codex-desktop`
+curl -fsSL https://dist.softwarecombined.com/bootstrap/bootstrap.sh -o bootstrap.sh
+sh bootstrap.sh
 ```
 
-This is an AUR repack of OpenAI's official Linux build
-(`ilysenko/codex-desktop-linux`). Launch it once, sign in with ChatGPT,
-then install the router. The `openai-codex-bin` CLI package is optional
-and not required. (Use `paru -S codex-desktop-git` if you prefer paru.)
-
-## Install on macOS or Linux
-
-The friendliest first install is the bootstrap: download
-`https://dist.softwarecombined.com/bootstrap/bootstrap.sh` and run it. It
-fetches the pinned Python runtime and the release bundle from the public
-feed, verifies both checksums, and installs. No token, no account, no
-repository access. Add `--channel=beta` to follow pre-releases.
-
-Otherwise, install from the published release channel, not from
-a checkout. A maintainer hands you the release directory (the feed file and
-its bundle); install from the feed file so the installer verifies the
-bundle that travels beside it instead of fetching the default feed:
-
-```sh
-python3 packaging/install.py --feed file://$HANDOFF_DIR/latest.json
-```
-
-The exact download location is named at publication time.
-Before installing on a machine that has run the router before, check for
-a stale feed pin or beta channel: `cat` the `feed` and `channel` files in
-the router home (a leftover `feed` file overrides the channel), see
-[Linux upgrade and verification](docs/linux-upgrade.md). `--preflight`
-checks install prerequisites but does not read those files.
-
-Maintainers build a versioned bundle and install from it:
-
-```sh
-python3 packaging/release.py --out dist
-python3 packaging/install.py --feed file://$PWD/dist/latest.json
-```
-
-The installer asks for nothing interactively. It verifies the bundle,
-self-tests it, writes the service, and inserts the Codex config block.
-If no key is configured it creates an empty key file and tells you to
-paste the key in, then re-run. Restart Codex afterwards. `packaging/install.sh`
-is the same installer for POSIX shells; `packaging/install.ps1` is the
-PowerShell wrapper for Windows below.
-
-## Install on Windows
-
-Run the feed bootstrap instead of this path: download
-`https://dist.softwarecombined.com/bootstrap/bootstrap.ps1` and run it; it
-needs no Python preinstalled, because it fetches and verifies both the
-pinned runtime and the release bundle from the public feed.
-
-Requirements: Windows 11 x64, Python 3.14 from python.org (the installer
-finds it through the `py` launcher; never rely on the bare `python` alias,
-which a stock profile resolves to the Microsoft Store stub), and the Codex
-desktop app. Run in your signed-in desktop session from PowerShell:
-
-From the same handed-off release directory, in your signed-in desktop
-session:
+On Windows, run the PowerShell bootstrap instead:
 
 ```powershell
-py -3 packaging/install.py --feed file://$HANDOFF_DIR/latest.json
+Invoke-RestMethod https://dist.softwarecombined.com/bootstrap/bootstrap.ps1 -OutFile bootstrap.ps1
+.\bootstrap.ps1
 ```
 
-`packaging/install.ps1` is the same installer for PowerShell (it ships in
-release bundles built after this change; older bundles carry the installer
-only). The installer registers two per-user Scheduled Tasks: `CodexMixedModelRouter`
-runs at your logon (plus a one-minute
-recovery trigger) as the signed-in user with least privilege and no stored
-password, and `CodexMixedModelRouterUpdate` checks for releases every
-four hours. Both run `pythonw.exe`, so no console window appears, and
-their output goes to `logs\launchd.log` and `logs\update.log` under the
-router home. The router home, key file and state file are restricted to the
-installing user with `icacls`, verified after every write; the key file is
-checked again at every read.
+Add `--channel=beta` (PowerShell: `-Channel beta`) to follow pre-releases.
+
+From a checkout (needs Python 3.14):
+
+```sh
+git clone https://github.com/software-combined/SC_OpenRouter_adapter.git
+cd SC_OpenRouter_adapter
+python3.14 packaging/release.py --out dist --url-base "file://$PWD/dist"
+python3.14 packaging/install.py --feed "file://$PWD/dist/latest.json"
+```
+
+On Windows, run the same checkout commands from PowerShell with the Python
+launcher:
 
 ```powershell
-schtasks /query /tn CodexMixedModelRouter /fo list /v
-icacls $env:USERPROFILE\.codex\mixed-model-router\openrouter.key
+py -3 packaging/release.py --out dist --url-base "file://$PWD/dist"
+py -3 packaging/install.py --feed "file://$PWD/dist/latest.json"
 ```
 
-Windows has no socket activation: during an update the outgoing router
-drains, then the task relaunches into the new release, so a connection
-attempted in that window (about fifteen seconds) fails until the new process
-binds. Uninstall ends both tasks before deleting them.
+The installer commands later in this README run from a checkout. A bootstrap
+install ships the same installer at
+`<home>/releases/<version>/packaging/install.py`, where `<version>` is the
+version recorded in `<home>/current`; run it with the pinned interpreter at
+`<home>/runtime/python/bin/python3.14` (`python.exe` under the same path on
+Windows) when the host has no Python 3.14 of its own.
 
-## Updating
+The installer verifies the bundle checksum, self-tests the runtime, installs
+the per-user service and writes the client configuration. If no OpenRouter key
+is configured it creates an empty key file and tells you where to put the key;
+re-run the installer afterwards. Restart the client so the router's model
+catalogue is picked up.
 
-Releases install themselves within about four hours, whether or not
-the router is busy, and the outgoing process finishes the requests it has
-already accepted, so an in-flight chat is not dropped and nothing waits for
-an idle window. On macOS launchd holds the listening socket, so new
-connections queue for the incoming process too; on Linux there is no socket
-activation, so a connection attempted mid-handover fails until the new
-process binds the port. To update now, re-run the installer with
-`--check-update`. Machines on the `beta` channel follow pre-releases.
-After an update that adds a picker model, a desktop dialog offers to quit and reopen Codex (the
-macOS app, the Windows Store app, or the Linux preview app when it is
-installed) so the new models load, with a "Later" button for anyone who
-would rather keep working. Where the desktop app is not installed, the
-restart button simply does nothing.
+Before a checkout install, `--preflight` reports missing prerequisites without
+writing anything, and `--dry-run` shows what an install would do.
 
-Every install polls the public feed at
-`https://dist.softwarecombined.com/<channel>/latest.json`: `stable` serves
-`stable/latest.json`, and writing `beta` into the `channel` file in the
-router home selects the pre-release document at `beta/latest.json`. No
-token, no enrolment, no account, no repository access. Checks run every
-4 hours: Linux runs its first check 5 minutes after the timer activates,
-macOS runs one when the job loads, and Windows waits for its next 4-hour
-trigger. Each tagged release also publishes to GitHub Releases afterwards
-as a public mirror for humans.
-Security rests on HTTPS from the trusted feed origin, SHA-256 verification
-of every bundle, version and identity checks, and the feed serial replay
-guard. A leftover `feed-token` file on an older host is inert and can be
-ignored or deleted. `logs/update.log` records the source of each install.
+## Clients
 
-## Choosing a model
+Codex is attached by default: the installer registers the router as a model
+provider and adds its catalogue, so the models appear in the picker after a
+restart. Use `--client none` for a service-only install.
 
-Switch models mid-thread from the picker; the same thread continues
-with its text history and tools intact, subject to the new model's
-limits. Readable summaries carry over; opaque native compaction
-replays as a visible note rather than readable context. Image blocks
-do not carry over to text-only models. A model tool-count ceiling
-(Grok, 350 tools) loads tools on demand instead of failing: the turn
-goes out with the search tool, already-found tools stay, and the rest
-resolve through search. Grok image turns run text-only with a short
-note where each image was. Each turn routes on its own model,
-so if one model reports it is at capacity, switch to another
-and carry on. Reasoning levels differ per model and the thread's effort
-carries over; an effort the new model does not support is rejected with
-the allowed levels (change effort before switching). Models labelled
-Preview in the picker are not yet verified: they work, but report
-anything odd.
-The Codex picker lists both routes for the GPT twins: the ChatGPT
-subscription rows and the OpenRouter-billed Astra, Sol, Terra and Luna
-rows labelled `· OpenRouter`. Picking a subscription row keeps the
-ChatGPT subscription; picking its OpenRouter row bills the API key, so
-an exhausted allowance still leaves those models selectable. In
-no-subscription mode (`openai_mode: none`) only the OpenRouter rows
-list. This is Codex-only: nothing changes for Claude Code, whose
-`GET /v1/models` listing already includes every OpenRouter registry row,
-and the `--client claude` catalogue merge keeps its mirror rule for
-OpenRouter-billed Anthropic rows.
-In Claude Code, point `ANTHROPIC_BASE_URL` at the router and choose
-the model with `ANTHROPIC_MODEL`; see `docs/claude-code.md`.
+Claude Code support is in preview. Point it at the router with the port and
+token from `mixed-router-state.json` in the router home:
 
-Thread titles, descriptions and summaries are generated by a helper turn
-on the subscription model. When the ChatGPT allowance is exhausted those
-helpers are refused as well, and the client falls back to a slice of the
-prompt as the title. Setting `openai_helper_fallback` to `true` in
-`mixed-router-state.json` (default off, then restart the router) answers
-just those helper turns from the OpenRouter twin row
-(`openai/gpt-5.6-luna`), so generated titles survive an exhausted
-allowance; the helper prompt then reaches OpenRouter and bills that key.
-The portco allowlist still gates that row, and ordinary turns keep their
-refusal.
+```sh
+export ANTHROPIC_BASE_URL="http://127.0.0.1:<port>/<token>/"
+export CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=true
+```
 
-## Costs
+Do not set `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN`; either would override
+the subscription sign-in. See [docs/claude-code.md](docs/claude-code.md).
 
-OpenAI models use the ChatGPT subscription. OpenRouter models bill the
-API key per request. There is no local spend cap; watch usage in the
+## Models and billing
+
+Switch models mid-thread from the picker. The thread keeps its text history and
+tools, subject to the new model's limits; image blocks do not carry over to
+text-only models, and an unsupported reasoning level is rejected with the
+levels the model accepts.
+
+- Rows labelled `· OpenRouter` are billed to the OpenRouter API key. The
+  remaining rows use the ChatGPT or Claude subscription.
+- The GPT twins appear on both routes, so a subscription row and its
+  OpenRouter twin are selectable side by side.
+- Rows labelled Preview are usable but not yet verified; report anything odd.
+- `--openai-mode none --setup` installs without a ChatGPT subscription and
+  serves the picker entirely from OpenRouter.
+
+There is no local spend cap. Subscription usage follows the client's plan and
+OpenRouter usage is billed to the API key, so watch that spend in the
 OpenRouter dashboard.
 
-## Providers
+## Updates
 
-One definition per upstream lives in `ai_router/provider_defs.py`: host,
-endpoint prefixes, where its key resolves from, its live model catalogue,
-its key-info endpoint, and its failure dialect. OpenRouter is the built-in
-external provider; `openai` (the ChatGPT backend) and `anthropic`
-(`api.anthropic.com`) are the subscription definitions that carry no router
-key.
+Every install checks the public feed at
+`https://dist.softwarecombined.com/<channel>/latest.json`; `stable` is the
+default, and writing `beta` into the `channel` file in the router home selects
+pre-releases. Switching channels by hand also means deleting `feed-serial`
+beside it: the channels publish independently, so a higher serial left over
+from the other channel refuses the new channel's updates. A `feed` file left
+in the router home by an older install overrides the channel, so check or
+remove it before relying on automatic updates. Checks run every four hours:
+Linux also checks five minutes after the timer activates, and macOS checks
+when the job loads. The feed needs no token, account or repository access,
+and every bundle is verified by SHA-256 with version and identity checks;
+the channel path also enforces the serial replay guard.
 
-Several external providers can serve at once: each keeps its own owner-only
-key file, its own picker label (`Vendor: Model · <Label>`), and its own
-fail-closed state, so one missing or rejected key never stops the others.
-Adding one is a table entry plus registry rows, and the boundary test keeps
-provider host and key names out of the rest of the runtime.
+The outgoing process finishes requests it has already accepted before the
+service restarts; on macOS launchd queues new connections through the
+handover, while Linux and Windows refuse new connections until the new
+process binds the port.
 
-## Without a ChatGPT subscription
-
-Install with `--openai-mode none --setup`: a native window asks for one
-OpenRouter key, the subscription choice and an Everyday help or Coding help
-starter for the
-global instructions (the loopback page is used on hosts with no dialog tool),
-and Codex uses a custom provider (`scg_router`) whose
-`base_url` carries the per-install path token. No ChatGPT login is needed
-and no subscription traffic is sent: Astra, Sol, Terra and Luna are served
-from OpenRouter in the picker, a directly requested subscription id still
-answers 400, native service paths answer 404 locally, and OpenRouter models
-work with tools, compaction, and web search where the model supports it.
-Server-side thread titles and the approvals reviewer are unavailable; the
-installer writes `approvals_reviewer = "user"` inside the marked block.
-
-## Troubleshooting
-
-Logs live under `logs/` beside the state directory. Check health at
-`http://127.0.0.1:<port>/<token>/health` with the port and token from
-`mixed-router-state.json` (do not share that URL). A 400 means the
-model, payload, or local key configuration is invalid. A 409 means the
-provider cannot serve the request, for example an unsupported reasoning effort after switching models (the message names the allowed efforts). A 503 with `Retry-After` means the request was not served: either the router is draining for an update (`SERVER_DRAINING`) or an upstream 429 was mapped to a retryable answer (`UPSTREAM_RATE_LIMITED`); the JSON body names the code. Retry after the delay. If the router stays down,
-reinstall the previous release at an idle moment.
+- `python3.14 packaging/install.py --check-update` runs one check now.
+- `python3.14 packaging/install.py --version <version>` rolls back to a
+  previously installed release.
+- A `--feed <latest.json>` install uses that document for the run only; later
+  checks follow the channel.
 
 ## Uninstall
 
-Run the installer with `--uninstall`. It removes the config block and
-the services and leaves the state directory, including the key file and
-bearer token, in place for you to delete.
+`python3.14 packaging/install.py --uninstall` stops and removes the service,
+the update schedule and the client configuration. The state directory, key
+file and loopback token are left in place for you to delete.
+
+## Diagnostics
+
+- Health: `http://127.0.0.1:<port>/<token>/health`, with the port and token
+  from `mixed-router-state.json` in the router home. Keep that URL private.
+- `python3.14 packaging/install.py --status` reports the installed version,
+  service state, feed source, channel and key state.
+- A 400 means the model, payload or local key configuration is invalid. A 409
+  means the provider cannot serve the request, for example an unsupported
+  reasoning level after a model switch; the message names the allowed levels.
+- A 503 with `Retry-After` means the request was not served: either the router
+  is draining for an update (`SERVER_DRAINING`) or an upstream 429 was mapped
+  to a retryable answer (`UPSTREAM_RATE_LIMITED`). The JSON body names the
+  code; retry after the delay.
+- Logs live under `logs/` in the router home, and `update.log` records the
+  source of each install.
 
 ## Security
 
-The router listens on loopback only. Each install generates its own
-token, and logs carry request metadata, never keys or tokens. Subscription headers never accompany OpenRouter requests; the key travels only as a per-request `Bearer` header.
-The key file is owner-only on every platform: mode 600 on macOS and Linux,
-and on Windows an `icacls` grant to the installing user alone, applied to
-the router home before the key is written (so the state file holding the
-loopback token inherits it), with the key checked again at every read; a
-widened ACL makes the router refuse the key. Supervisor logs (`launchd.log`, `update.log`) rotate
-at service start (1 MB each, two backups on macOS and Linux, one on Windows); the structured `router.jsonl`
-rotates at 5 MB with three backups.
+- The router listens on `127.0.0.1` only, and every request needs the
+  per-install path token.
+- The provider key file is owner-only (mode 600 on macOS and Linux, an
+  `icacls` grant to the installing user on Windows), and the router refuses a
+  key file with a widened ACL.
+- Subscription headers never accompany an OpenRouter request.
+- Logs carry request metadata, never request content, keys or tokens.
 
-## Links
+Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
 
-Claude Code setup: `docs/claude-code.md`. Operator guide: `docs/operations.md`. Compatibility matrix:
-`docs/compatibility.md`. Adding a model: `docs/adding-a-model.md`.
+## Architecture
 
-Monthly model allocation review: `model-allocation-review-process.md` (the process) and
-`model-allocation-suggestion.md` (its output, refreshed on the 1st of each month).
+The request path is layered, and dependencies point inward:
 
-## Licensing
+| Layer | Owns |
+|---|---|
+| `ingress.py`, `relay.py`, `router.py` | Loopback HTTP: authentication and body limits, GET routes, upstream relay, drain and POST orchestration |
+| `protocols/` | Responses and Messages method and path dispatch |
+| `providers.py`, `claude.py` | Upstream adapters for subscription and OpenRouter traffic |
+| `provider_defs.py`, `registry.py` | One definition per upstream; model facts |
+| `transport.py`, `upstream.py` | Header rules, streaming and upstream failure policy |
+| `packaging/` | Installer, `bundle.py` release lifecycle, per-OS service backends and updater |
 
-SC Router is open source under the [Apache License 2.0](LICENSE). You can
-use, modify and redistribute it, including for commercial purposes, under
-the terms of that licence.
+- A new external provider is a definition plus registry rows. A provider with a
+  different wire format is a new adapter, never a branch in the request path.
+- Client, provider and operating system are separate concepts; installer
+  orchestration calls one explicit platform backend.
+- The full map, including the modules still moving between owners, is in
+  [docs/architecture.md](docs/architecture.md).
 
-Attribution and licence notices must be preserved as the licence requires.
-Third-party material and its terms are listed in
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+## Development
+
+```sh
+python3.14 -m unittest discover -s tests -t .
+python3.14 -m compileall -q ai_router tools tests packaging
+python3.14 tools/check_source_limits.py
+```
+
+The runtime is Python 3.14 with the standard library only; installer scripts
+stay Python 3.9-compatible. Branches start from `develop`, pull requests target
+`develop`, and user-visible changes update `CHANGELOG.md` and
+`packaging/VERSION`. Releases are cut by tagging the version as `v<VERSION>`.
+
+More documentation:
+
+- [Architecture](docs/architecture.md)
+- [Claude Code setup](docs/claude-code.md)
+- [Adding a model](docs/adding-a-model.md)
+- [Compatibility](docs/compatibility.md)
+- [Operations](docs/operations.md)
+- [Installed runtime files](docs/runtime-files.md)
+
+## Licence
+
+SC Router is open source under the [Apache License 2.0](LICENSE). You can use,
+modify and redistribute it, including commercially, under the terms of that
+licence. Attribution and licence notices must be preserved as the licence
+requires.
 
 - Licence: [LICENSE](LICENSE)
 - Notices: [NOTICE](NOTICE)
+- Third-party material: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
 - Official licence text: <https://www.apache.org/licenses/LICENSE-2.0>
 
 Copyright 2026 Software Combined Pty Ltd. Primary author and maintainer:
 Cyril Allart <cyril@softwarecombined.com>.
-
-## Runtime files
-
-A manual install copies ONLY these files beside the private state
-directory at an idle boundary:
-`ai_router/router.py`,
-`ai_router/ingress.py`,
-`ai_router/relay.py`,
-`ai_router/providers.py`,
-`ai_router/claude.py`,
-`ai_router/registry.py`,
-`ai_router/credentials.py`,
-`ai_router/tool_adapter.py`,
-`ai_router/tool_merge.py`,
-`ai_router/atomic_write.py`,
-`ai_router/agent_handoffs.py`, `ai_router/sse.py`,
-`ai_router/capabilities.py`,
-`ai_router/compaction.py`,
-`ai_router/standalone_outputs.py`,
-`ai_router/discovered.py`,
-`ai_router/errors.py`,
-`ai_router/feed_verify.py`,
-`ai_router/candidate.py`,
-`ai_router/setup.py`,
-`ai_router/key_store.py`,
-`ai_router/setup_page.py`,
-`ai_router/key_dialog.py`,
-`ai_router/key_prompt.py`,
-`ai_router/runtime.py`,
-`ai_router/catalogue.py`,
-`ai_router/local_services.py`,
-`ai_router/live_refresh.py`,
-`ai_router/models.py`,
-`ai_router/apply_catalogue.py`,
-`ai_router/activation.py`,
-`ai_router/__init__.py`,
-`ai_router/__main__.py`,
-`ai_router/model_metadata.py`,
-`ai_router/model_refresh.py`,
-`ai_router/winacl.py`,
-`ai_router/image_items.py`,
-`ai_router/model_policy.py`,
-`ai_router/subscription_roster.py`,
-`ai_router/retired_slugs.py`,
-`ai_router/clients/__init__.py`,
-`ai_router/clients/codex.py`,
-`ai_router/transport.py`,
-`ai_router/subscription_fallback.py`,
-`ai_router/provider_defs.py`,
-`ai_router/upstream.py`,
-`ai_router/protocols/__init__.py`,
-`ai_router/protocols/responses.py`,
-`ai_router/protocols/messages.py`,
-`ai_router/models.json`,
-`ai_router/openrouter_base_instructions.txt`,
-`ai_router/agents.py`,
-`ai_router/agents_general.txt`,
-`ai_router/agents_dev.txt`,
-`tools/probe_codex_runtime.py`,
-`tools/global_instructions.py`,
-`tools/disable.py`. The installer also places `packaging/router_launch.py`
-as `router_launch.py` beside the state directory and points the service at
-it, so restarts follow the pointer without symlinks. Never copy state,
-activation, catalogue, backup, or log files.

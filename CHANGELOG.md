@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- README: the router home path and the installed-release installer are
+  documented, installs and updates need no GitHub account, and switching
+  channels by hand requires clearing `feed-serial`.
+
+- Repository README rewritten for public consumption: an install quick start,
+  client and model guidance, updates, security, architecture and development
+  sections, with the installed-file inventory moved to
+  `docs/runtime-files.md`.
+
 - Repository relicensed to Apache-2.0 only: `LICENSE` carries the Apache
   License 2.0 text, `COMMERCIAL_LICENSE.md` is removed, a `NOTICE` file is
   added, and package and plugin metadata use the `Apache-2.0` SPDX
