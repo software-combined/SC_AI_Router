@@ -67,6 +67,11 @@ class IngressGuardTests(unittest.TestCase):
         self.assertEqual(recorded, [])
 
     def _raw_request(self, port, request_bytes):
+        """Read the full response: headers plus the declared Content-Length body.
+
+        Stopping at the header terminator would race the body, so the body
+        assertions below would flake.
+        """
         sock = socket.create_connection(('127.0.0.1', port), timeout=10)
         self.addCleanup(sock.close)
         sock.sendall(request_bytes)
@@ -74,9 +79,19 @@ class IngressGuardTests(unittest.TestCase):
         while b'\r\n\r\n' not in data:
             chunk = sock.recv(4096)
             if not chunk:
-                break
+                return data
             data += chunk
-        return data
+        head, body = data.split(b'\r\n\r\n', 1)
+        want = 0
+        for line in head.split(b'\r\n'):
+            if line.lower().startswith(b'content-length:'):
+                want = int(line.split(b':', 1)[1])
+        while len(body) < want:
+            chunk = sock.recv(4096)
+            if not chunk:
+                break
+            body += chunk
+        return head + b'\r\n\r\n' + body
 
     def test_non_ascii_path_is_rejected_not_crashed(self):
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))

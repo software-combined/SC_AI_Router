@@ -92,7 +92,7 @@ The report, its verifications and its rejected findings are in
 | Plan | Title | Status | Sequencing |
 |---|---|---|---|
 | [136](136-unauth-ingress-crash-containment.md) | Contain the unauthenticated ingress compare crash | DONE: unauth ingress compare containment 2026-09-11 | P1; independent; a few lines in router.py (398 today) |
-| [137](137-loopback-host-header-validation.md) | Validate the Host header on loopback ingress | TODO | 090 landed; headroom confirmed |
+| [137](137-loopback-host-header-validation.md) | Validate the Host header on loopback ingress | BLOCKED: STOP condition hit 2026-09-11 — router.py is 398/400, the 3-line guard needs 397 max; hand to 128's split | 090 landed; headroom exhausted by 096/136 |
 | [138](138-subscription-cookie-hygiene.md) | Drop Cookie on subscription passthrough and make the tests honest | TODO | independent |
 
 ## Recommended overall order

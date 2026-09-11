@@ -79,6 +79,13 @@ transport code, IPv6 support, and any port-matching rule for Host.
 - Commit subject: `fix: validate the Host header on loopback ingress`.
 - Run the shared `pre-commit-review` skill before committing.
 
+## STOP recorded 2026-09-11
+
+Step 1's headroom check failed: `ai_router/router.py` is 398 lines after Plans 096 and 136
+landed, so the three-line guard would land at 401, over the 400 hard cap. Per this plan's
+first STOP condition the work is handed to Plan 128's router split; re-execute this plan
+after 128 lands.
+
 ## Steps
 
 ### Step 1: confirm headroom
