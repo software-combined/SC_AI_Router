@@ -69,8 +69,11 @@ def _tarball(files=()):
 _FAKE_INSTALLER = (
     'import json, sys\n'
     'from pathlib import Path\n'
-    'Path(__file__).resolve().parents[2].joinpath(\n'
-    "    'installer-argv.txt').write_text(json.dumps(sys.argv))\n")
+    'home = Path(__file__).resolve().parents[2]\n'
+    "home.joinpath('installer-argv.txt').write_text(json.dumps(sys.argv))\n")
+_FAKE_LANDED = (
+    "home.joinpath('current').write_text(\n"
+    "    json.loads(home.joinpath('latest.json').read_text())['version'])\n")
 
 
 @unix_only
@@ -109,7 +112,7 @@ class BootstrapTokenTests(unittest.TestCase):
         proc = subprocess.run(argv, env=env, capture_output=True, text=True)
         return proc, home, Path(env['CURL_ARGV_LOG'])
 
-    def _full_run(self, tmp, channel, installer_exit=0):
+    def _full_run(self, tmp, channel, installer_exit=0, land=True):
         """Serve every download so the bootstrap reaches install.py."""
         home = Path(tmp) / 'home'
         serve = Path(tmp) / 'serve'
@@ -120,8 +123,9 @@ class BootstrapTokenTests(unittest.TestCase):
             link.type, link.linkname, link.mode = tarfile.SYMTYPE, sys.executable, 0o755
             tar.addfile(link)
         (serve / 'mirror.bin').write_bytes(mirror.getvalue())
+        body = _FAKE_INSTALLER + (_FAKE_LANDED if land else '')
         bundle = _tarball([('packaging/install.py',
-                            _FAKE_INSTALLER + 'sys.exit(%d)\n' % installer_exit)])
+                            body + 'sys.exit(%d)\n' % installer_exit)])
         (serve / 'bundle.bin').write_bytes(bundle)
         (serve / 'latest.json').write_text(json.dumps({
             'version': '9.9.9',
@@ -201,6 +205,54 @@ class BootstrapTokenTests(unittest.TestCase):
             proc, home = self._full_run(tmp, 'beta', installer_exit=3)
             self.assertEqual(proc.returncode, 3)
             self.assertFalse((home / 'channel').exists())
+
+    @unittest.skipUnless(shutil.which('shasum'), 'needs shasum for the checksums')
+    def test_channel_switch_clears_the_stale_feed_serial(self):
+        # The new channel's serial is unrelated to the old one's; keeping it
+        # would refuse every poll until that channel's next release.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            home.mkdir(parents=True)
+            (home / 'channel').write_text('stable\n')
+            (home / 'feed-serial').write_text('1240\n')
+            proc, home = self._full_run(tmp, 'beta')
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertEqual((home / 'channel').read_text(), 'beta\n')
+            self.assertFalse((home / 'feed-serial').exists())
+
+    @unittest.skipUnless(shutil.which('shasum'), 'needs shasum for the checksums')
+    def test_deferred_run_leaves_the_channel_alone(self):
+        # A lock-deferred install exits 0 without activating the feed's
+        # version, so the channel must not follow it.
+        with tempfile.TemporaryDirectory() as tmp:
+            proc, home = self._full_run(tmp, 'beta', land=False)
+            self.assertEqual(proc.returncode, 1)
+            self.assertIn('did not land', proc.stderr)
+            self.assertFalse((home / 'channel').exists())
+
+    @unittest.skipUnless(shutil.which('shasum'), 'needs shasum for the checksums')
+    def test_switch_to_an_older_channel_still_writes_it(self):
+        # Beta normally runs ahead of stable: moving back must work even
+        # though the installer finds nothing newer and leaves the pointer.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            home.mkdir(parents=True)
+            (home / 'channel').write_text('beta\n')
+            (home / 'current').write_text('9.9.10\n')
+            proc, home = self._full_run(tmp, 'stable', land=False)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertEqual((home / 'channel').read_text(), 'stable\n')
+
+    @unittest.skipUnless(shutil.which('shasum'), 'needs shasum for the checksums')
+    def test_same_channel_run_keeps_the_feed_serial(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            home.mkdir(parents=True)
+            (home / 'channel').write_text('beta\n')
+            (home / 'feed-serial').write_text('46\n')
+            proc, home = self._full_run(tmp, 'beta')
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertEqual((home / 'feed-serial').read_text(), '46\n')
 
     def test_unknown_channel_is_refused_before_any_fetch(self):
         with tempfile.TemporaryDirectory() as tmp:
