@@ -117,18 +117,23 @@ class RoutingTests(unittest.TestCase):
                                     payload).body)['input']
         self.assertEqual([i.get('type') for i in data], ['message'])
 
-    def test_standalone_delegation_reaches_openrouter_as_plaintext(self):
+    def test_standalone_delegation_reaches_openrouter_as_tool_pair(self):
         # Codex Desktop injects cross-task messages with no call_id; they
         # used to vanish in the scrub and never reach OpenRouter models.
+        # Assistant plaintext was read but not acted on, so the router
+        # now ships a matched call+output pair carrying the delegation.
         item = {'type': 'function_call_output', 'name': 'create_thread',
                 'namespace': 'codex_app',
                 'output': '<codex_delegation>SYNTH_HANDOFF_MARKER_719</codex_delegation>'}
         data = json.loads(_prepared(
             'deepseek/deepseek-v4.1-flash', '/responses',
             {'model': 'deepseek/deepseek-v4.1-flash', 'input': [item]}).body)['input']
-        self.assertEqual(len(data), 1)
-        self.assertEqual((data[0]['type'], data[0]['role']), ('message', 'assistant'))
-        self.assertIn('SYNTH_HANDOFF_MARKER_719', data[0]['content'][0]['text'])
+        self.assertEqual(len(data), 2)
+        call, result = data
+        self.assertEqual(call['type'], 'function_call')
+        self.assertEqual(result['type'], 'function_call_output')
+        self.assertEqual(call['call_id'], result['call_id'])
+        self.assertIn('SYNTH_HANDOFF_MARKER_719', result['output'])
 
     def test_contributor_rejects_max_effort_with_actionable_message(self):
         with self.assertRaisesRegex(ValueError, "does not support reasoning effort 'max'"):

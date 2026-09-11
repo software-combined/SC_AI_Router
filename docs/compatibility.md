@@ -10,7 +10,11 @@ base `d440c3a` (0.6.24); fix commit `a300989` on
 `codex/router-handoff-outputs-20260911`, prepared for the `0.6.26` beta
 release, target `develop`. The `0.6.25` beta was tagged from `develop`
 before this fix and its release run failed on the feed publisher role, so
-this fix rides the next beta instead.
+this fix rides the next beta instead. `v0.6.26-beta` shipped the first
+iteration (assistant-role plaintext, commit `a300989`); the tool-pair
+shape below ships in the `0.6.27` beta from the
+`codex/router-handoff-tool-pair-20260911` follow-up, so an installed
+0.6.26 host does not yet carry the working shape.
 
 - Codex Desktop injects cross-task messages (`create_thread`,
   `send_message_to_thread`) as a standalone `function_call_output` item
@@ -19,12 +23,18 @@ this fix rides the next beta instead.
   models never received the delegated message while tasks on OpenAI
   models did.
 - Live probes against OpenRouter (`deepseek/deepseek-v4.1-flash`): the raw
-  standalone item returns HTTP 400 `invalid_prompt`; a readable
-  assistant-role plaintext message returns 200 with the marker read. A
-  synthetic call+output pair is accepted in most attempts but 400s when
-  `namespace` is present on both members; user-role text is rejected by
-  policy as authority elevation. The fix renders the standalone output as
-  assistant-role plaintext before the scrub.
+  standalone item returns HTTP 400 `invalid_prompt`; user-role text is
+  rejected by policy as authority elevation. Assistant-role plaintext was
+  first shipped (fix commit `a300989`) and returned 200, but live
+  acceptance on a fresh task rejected it: the child replied exactly
+  `NO-ASSIGNMENT`, and a router-level probe returned no output items at
+  all, while a matched `function_call` + `function_call_output` pair made
+  the model reason about the delegated assignment and emit the requested
+  token. The shipped shape is therefore the tool-result pair: one
+  synthesized complete `function_call` (deterministic `call_id`, no
+  `namespace`) immediately followed by the `function_call_output`
+  carrying the delegation text verbatim. A synthetic pair 400s when
+  `namespace` is present on both members, so neither member sets it.
 - Blast radius, read from the app's thread store: 164 delegated items
   across 24 tasks, 15 on OpenRouter models and 9 on OpenAI models; all 8
   OneDrive forensic tasks created 2026-09-11 12:10-12:11 were
