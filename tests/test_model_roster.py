@@ -6,7 +6,14 @@ from types import SimpleNamespace
 from ai_router.apply_catalogue import apply
 from ai_router.catalogue import RETIRED_SLUGS, merge
 from ai_router.providers import ExternalResponsesProvider, PreparationError, select
-from ai_router.registry import by_slug
+from ai_router.registry import MODELS, by_slug
+
+PINNED_CLAUDE = ('anthropic/claude-fable-5.1', 'anthropic/claude-haiku-4.5',
+                 'anthropic/claude-opus-5', 'anthropic/claude-sonnet-5')
+RETIRED_LATEST = ('~anthropic/claude-sonnet-latest', '~anthropic/claude-fable-latest',
+                  '~anthropic/claude-haiku-latest', '~anthropic/claude-opus-latest',
+                  '~google/gemini-flash-latest', '~google/gemini-pro-latest',
+                  '~x-ai/grok-latest')
 
 PINNED_DEEPSEEK = (('deepseek/deepseek-v4-pro-0813', 1048576, 384000, ('text',)),
                    ('deepseek/deepseek-v4.1-flash', 1048576, 384000,
@@ -18,20 +25,34 @@ RETIRED_DEEPSEEK = ('deepseek/deepseek-v4-pro', 'deepseek/deepseek-v4-flash',
 
 
 class ModelRosterTests(unittest.TestCase):
-    def test_only_four_claude_aliases_reach_picker_and_router_after_upgrade(self):
-        slugs = ['~anthropic/claude-' + name + '-latest'
-                 for name in ('opus', 'sonnet', 'haiku', 'fable')]
-        base = {'models': [{'slug': 'anthropic/claude-opus-5'},
-                           {'slug': 'anthropic/claude-fable-5.1'},
+    def test_only_four_pinned_claude_rows_reach_picker_and_router_after_upgrade(self):
+        base = {'models': [{'slug': '~anthropic/claude-opus-latest'},
+                           {'slug': '~google/gemini-pro-latest'},
                            {'slug': 'gpt-6-astra'}]}
         entries = {m['slug']: m for m in merge(base)['models']}
         self.assertEqual(entries['gpt-6-astra']['slug'], 'gpt-6-astra')
         self.assertEqual(entries['gpt-6-astra']['display_name'], 'GPT-6-Astra')
-        self.assertEqual({s for s in entries if 'claude-' in s}, set(slugs))
-        for slug in slugs:
+        self.assertEqual({s for s in entries if 'claude-' in s}, set(PINNED_CLAUDE))
+        for slug in PINNED_CLAUDE:
             with self.subTest(slug=slug):
                 self.assertIsInstance(select(slug, '/responses', []), ExternalResponsesProvider)
                 self.assertIn('Anthropic', entries[slug]['description'])
+
+    def test_roster_pins_exact_ids_and_retires_every_latest_alias(self):
+        # AGENTS.md section 8: no row is a tilde alias today; the retired
+        # latest ids stay in RETIRED_SLUGS so upgrades drop them from the
+        # picker, and a stale catalogue cannot bring them back.
+        self.assertEqual([m.slug for m in MODELS if m.slug.startswith('~')], [])
+        stale = [{'slug': slug} for slug in RETIRED_LATEST]
+        merged = {m['slug'] for m in merge({'models': stale})['models']}
+        for slug in RETIRED_LATEST:
+            with self.subTest(slug=slug):
+                self.assertIn(slug, RETIRED_SLUGS)
+                self.assertIsNone(by_slug(slug))
+                self.assertNotIn(slug, merged)
+        for slug in PINNED_CLAUDE:
+            with self.subTest(pinned=slug):
+                self.assertIn(slug, merged)
 
     def test_pinned_deepseek_metadata_and_verified_status(self):
         for slug, context, output, modalities in PINNED_DEEPSEEK:
@@ -58,7 +79,7 @@ class ModelRosterTests(unittest.TestCase):
         self.assertIn('deepseek/deepseek-v4.1-flash', slugs)
 
     def test_claude_without_effort_control_survives_refresh_and_prepares_none(self):
-        slug = '~anthropic/claude-haiku-latest'
+        slug = 'anthropic/claude-haiku-4.5'
         entries = apply(merge({'models': []}), {slug: {'reasoning': {'mandatory': False}}})
         entry = next(m for m in entries['models'] if m['slug'] == slug)
         self.assertEqual(entry['supported_reasoning_levels'],

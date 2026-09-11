@@ -161,7 +161,7 @@ class HandlerCharacterisationTests(unittest.TestCase):
                                                 [('Content-Type', 'application/json')]))
         server = self._server()
         response = _post(server.server_port, '/test-token/responses',
-                         {'model': '~x-ai/grok-latest', 'input': []})
+                         {'model': 'x-ai/grok-4.6', 'input': []})
         self.assertEqual(response.status, 409)
         message = json.loads(response.read())['error']['message']
         self.assertIn('xAI', message)
@@ -176,7 +176,7 @@ class HandlerCharacterisationTests(unittest.TestCase):
         server = self._server()
         before = server.inflight
         response = _post(server.server_port, '/test-token/responses',
-                         {'model': '~x-ai/grok-latest', 'input': []})
+                         {'model': 'x-ai/grok-4.6', 'input': []})
         self.assertEqual(response.status, 400)
         self.assertEqual(response.read(), b'<html>bad gateway</html>')
         self.assertEqual(server.inflight, before)
@@ -200,10 +200,10 @@ class HandlerCharacterisationTests(unittest.TestCase):
         install_fake(self, stall)
         server = self._server()
         response = _post(server.server_port, '/test-token/responses',
-                         {'model': '~x-ai/grok-latest', 'input': []})
+                         {'model': 'x-ai/grok-4.6', 'input': []})
         self.assertEqual(response.status, 502)
         message = json.loads(response.read())['error']['message']
-        self.assertIn('~x-ai/grok-latest', message)
+        self.assertIn('x-ai/grok-4.6', message)
         self.assertIn('120', message)
 
     def test_upstream_429_becomes_retryable_503(self):
@@ -218,19 +218,21 @@ class HandlerCharacterisationTests(unittest.TestCase):
                 self.assertEqual(response.getheader('Retry-After'), expected)
 
     def test_health_reports_served_model(self):
+        # Upstream names a different id, so both sides of the served map are
+        # exercised rather than the request echoing itself.
         wire = (b'data: {"type": "response.completed", "response": '
-                b'{"model": "x-ai/grok-4.6", "output": []}}\n\n')
+                b'{"model": "x-ai/grok-4.7", "output": []}}\n\n')
         install_fake(self, lambda: FakeUpstream(200, wire, [('Content-Type', 'text/event-stream')]))
         server = self._server()
         response = _post(server.server_port, '/test-token/responses',
-            {'model': '~x-ai/grok-latest', 'input': [],
+            {'model': 'x-ai/grok-4.6', 'input': [],
              'tools': [{'type': 'custom', 'name': 'exec'}]})
         self.assertEqual(response.status, 200)
         response.read()
         conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
         conn.request('GET', '/test-token/health')
         served = json.loads(conn.getresponse().read())['served_models']
-        self.assertEqual(served, {'~x-ai/grok-latest': 'x-ai/grok-4.6'})
+        self.assertEqual(served, {'x-ai/grok-4.6': 'x-ai/grok-4.7'})
 
     def test_streaming_tool_call_is_adapted_end_to_end(self):
         item = {'id': 'item1', 'type': 'function_call', 'call_id': 'call1',
