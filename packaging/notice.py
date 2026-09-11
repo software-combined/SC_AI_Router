@@ -9,14 +9,18 @@ Linux preview app ``chatgpt``. Linux only offers the restart when that app
 is installed; on macOS and Windows the button is harmless without it, and
 the dialog always carries "Later". Only one dialog is ever on screen: the
 pid of the dialog we spawned is remembered, and a later notice is folded
-into that dialog instead of stacking a second one. Every failure is
-swallowed: the notice must never block, delay, or fail an update.
+into that dialog instead of stacking a second one. A dialog that dies at
+once -- a service context with no display or session bus -- leaves the
+notice pending instead of marking it shown, so a later run that can draw
+one still shows it. Every failure is swallowed: the notice must never
+block on the user or fail an update.
 """
 import json
 import os
 import shutil
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -29,6 +33,10 @@ CODEX_BUNDLE_ID = 'com.openai.codex'
 WINDOWS_PACKAGE = 'OpenAI.Codex'
 LINUX_APP = 'chatgpt'
 PROBE_TIMEOUT = 5
+# A dialog that cannot render exits within this grace (zenity without a
+# display, notify-send without a session bus, osascript without a GUI).
+# Long enough to catch that, short enough not to hold the updater.
+PROBE_GRACE_S = 1.0
 ICON = Path(__file__).resolve().parent / 'assets' / 'router-icon.png'
 ICON_NAME = 'router-icon.png'
 
@@ -353,15 +361,22 @@ def _spawn(cmd):
     return proc.pid
 
 
+def _dialog_up(pid, pid_alive):
+    """True when the spawned dialog is still running after a short grace."""
+    time.sleep(PROBE_GRACE_S)
+    return pid_alive(pid)
+
+
 def show_pending(home, spawn=None, pid_alive=None):
     """Show the pending restart notice; True once it is shown.
 
     A missing dialog tool leaves the notice pending so a later GUI run
-    retries; the file is marked shown only after spawn returns. While the
-    dialog from an earlier version is still open, this notice is marked
-    shown rather than stacked on top of it. Any failure returns False and
-    never surfaces to the installer. `ROUTER_NO_NOTICE=1` silences the
-    dialog for unattended installs and for tests that run the real CLI.
+    retries; the file is marked shown only once the spawned dialog is still
+    up after a short grace. While the dialog from an earlier version is
+    still open, this notice is marked shown rather than stacked on top of
+    it. Any failure returns False and never surfaces to the installer.
+    `ROUTER_NO_NOTICE=1` silences the dialog for unattended installs and for
+    tests that run the real CLI.
     """
     if os.environ.get('ROUTER_NO_NOTICE') == '1':
         return False
@@ -381,14 +396,31 @@ def show_pending(home, spawn=None, pid_alive=None):
                              clients=doc.get('clients', 'codex'))
         if cmd is None:
             return False
+        shown = {'version': version, 'shown': True, 'at': _utcnow()}
+        if cmd[0] == 'notify-send':
+            # It exits once the notification daemon accepts or refuses the
+            # notification, so the exit status is the delivery signal and
+            # pid liveness says nothing.
+            try:
+                sent = subprocess.run(cmd, stdin=subprocess.DEVNULL,
+                                      stdout=subprocess.DEVNULL,
+                                      stderr=subprocess.DEVNULL,
+                                      timeout=PROBE_TIMEOUT)
+            except (OSError, subprocess.SubprocessError):
+                return False
+            if sent.returncode:
+                return False
+            _write_notice(path, shown)
+            return True
         pid = _dialog_pid(doc)
         if pid and pid_alive(pid):
             _write_notice(path, {'version': version, 'shown': True,
                                  'pid': pid, 'at': _utcnow()})
             return False
-        shown = {'version': version, 'shown': True, 'at': _utcnow()}
         pid = _dialog_pid({'pid': spawn(cmd)})
         if pid:
+            if not _dialog_up(pid, pid_alive):
+                return False
             shown['pid'] = pid
         _write_notice(path, shown)
         return True

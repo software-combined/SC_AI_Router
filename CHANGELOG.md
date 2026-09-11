@@ -16,6 +16,41 @@
   `ai_router/upstream.py`; the setup page it shares with the native popup
   renders the provider's own label.
 
+- Linux keeps checking for updates after a failed install step: the systemd
+  backend stopped the timer to replace its units and restarted it only at
+  the very end of a successful install, so a refused settings merge or a
+  failed client attach left every later poll dead until a reinstall. The
+  timer now starts where it was stopped.
+
+- The restart notice survives a headless updater run: a dialog that dies at
+  once -- the scheduled systemd service has no display, so zenity exits
+  with "Failed to open display" -- was recorded as shown and never seen
+  again. The notice stays pending until a run that can actually draw the
+  dialog shows it.
+
+- `bootstrap.sh --channel=beta` (and the PowerShell equivalent) now writes
+  the router home's `channel` file. The flag previously chose only that
+  install's bundle, so the host silently followed stable on every later
+  poll.
+
+- A refused settings merge no longer hides the update it landed: when the
+  installer exits non-zero but the router is already serving the new
+  version, the scheduled updater records the pass, shows the pending
+  restart notice and stops parking a release that works here. A pointer
+  without a serving router is still parked, and the exit status stays
+  non-zero so the problem remains visible.
+
+- A bootstrap channel switch resets the anti-replay serial, whose old value
+  refused every poll until the new channel's next release. The channel file
+  is written only once the host runs the feed's version or newer: a
+  lock-deferred run exits 0 without installing and must not switch the
+  channel, while a host already ahead of the requested channel (beta ahead
+  of stable) still moves.
+
+- Release tags created by the workflow now name the commit the bundle was
+  built from (`gh release create --target "$GITHUB_SHA"`), so a tag's
+  commit and its assets agree.
+
 - The Codex picker lists the OpenRouter-billed GPT twins again: Astra,
   Sol, Terra and Luna appear beside their ChatGPT subscription rows, so a
   refused or exhausted allowance still leaves them selectable on the

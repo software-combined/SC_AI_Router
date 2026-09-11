@@ -152,11 +152,22 @@ def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None):
         print(result.stdout[-2000:] if result.stdout else '')
         if result.returncode != 0:
             print(result.stderr[-2000:] if result.stderr else '')
-            _park(home, etag, etag_path, latest['version'])
-            raise SystemExit(result.returncode)
+            # A child can fail after the swap and a healthy restart (a refused
+            # Codex settings merge). That release keeps serving, so record the
+            # pass, show the notice, and still report the failure; a pointer
+            # without a serving router is a release to retry and park.
+            landed = (_svc.current_version(home) == latest['version']
+                      and _svc.wait_version(state, latest['version']))
+            if not landed:
+                _park(home, etag, etag_path, latest['version'])
+                raise SystemExit(result.returncode)
+            _svc.notice.show_pending(home)
+            failure = result.returncode
+        else:
+            failure = 0
     if _svc.current_version(home) != latest['version']:
         print('deferred: installer did not activate the requested version')
-        return 0
+        return failure
     _svc.clear_update_failures(home, latest['version'])
     (home / 'logs').mkdir(exist_ok=True)
     with open(home / 'logs' / 'update.log', 'a') as stream:
@@ -165,5 +176,8 @@ def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None):
                                  'source': _svc.feed_source(feed)}) + '\n')
     if etag:
         etag_path.write_text(etag + '\n')
+    if failure:
+        print(f'installed {latest["version"]}; the installer exited {failure} after the swap')
+        return failure
     print(f"installed {latest['version']}")
     return 0
