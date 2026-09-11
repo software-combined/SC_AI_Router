@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Replayed reasoning history no longer disappears before OpenRouter turns.
+  `strip_reasoning_blobs` now strips only the provider blob field and keeps a
+  reasoning item whenever readable summary or `reasoning_text` content
+  remains, so DeepSeek thinking mode receives the prior reasoning the API
+  requires; the old key-presence test dropped every item even when
+  `encrypted_content` was null. Real blobs are still removed, items with no
+  readable text are still dropped, and compaction briefs now read reasoning
+  text from both `summary` and `content` instead of treating any
+  `encrypted_content` key as opaque.
+
 - The pre-flight context estimate no longer counts base64 image payloads in
   replayed history as text, so a turn carrying images inside tool outputs is
   no longer refused as over-context; image blocks now cost a flat per-block
