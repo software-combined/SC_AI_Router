@@ -30,5 +30,7 @@
   "tests/test_update_channel.py": 336,
   "tests/test_windows_acl.py": 324,
   "tests/test_windows_backend.py": 374,
-  "tools/probe_agent_handoffs.py": 496
+  "tools/probe_agent_handoffs.py": 496,
+  "packaging/notice.py": 428,
+  "tests/test_notice_delivery.py": 347
 }
