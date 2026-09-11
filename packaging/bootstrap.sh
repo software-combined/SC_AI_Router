@@ -16,6 +16,10 @@ for arg in "$@"; do
     *) echo "usage: SCG_FEED_TOKEN=<token> sh bootstrap.sh [--channel=beta]" >&2; exit 2 ;;
   esac
 done
+case "$CHANNEL" in
+  stable|beta) ;;
+  *) echo "error: channel must be stable or beta" >&2; exit 2 ;;
+esac
 if [ -z "$TOKEN" ]; then
   echo "error: set SCG_FEED_TOKEN from the Technology library page" >&2
   exit 2
@@ -67,4 +71,13 @@ echo "$SHA  $HOME_DIR/bundle.tar.gz" | shasum -a 256 -c -
 mkdir -p "$HOME_DIR/bootstrap"
 tar -xzf "$HOME_DIR/bundle.tar.gz" -C "$HOME_DIR/bootstrap"
 rm -f "$HEADERS"
-exec "$PY" "$HOME_DIR/bootstrap/packaging/install.py" --home "$HOME_DIR"
+# Pin this run to the channel the operator asked for: the installer resolves
+# its own feed from the router home, which may still name the old channel.
+# Persist the channel only once the install proves out, so an aborted
+# bootstrap cannot move a stable host onto pre-releases.
+if "$PY" "$HOME_DIR/bootstrap/packaging/install.py" --home "$HOME_DIR" \
+     --feed "$FEED_ORIGIN/$CHANNEL/latest.json"; then
+  printf '%s\n' "$CHANNEL" > "$HOME_DIR/channel"
+else
+  exit $?
+fi
