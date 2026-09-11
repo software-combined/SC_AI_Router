@@ -3,7 +3,6 @@
 Owns user units, timer, restart, and uninstall. Knows nothing about feeds,
 bundles, or config. Runs on Python 3.9+ like the installer.
 """
-import sys
 from pathlib import Path
 
 import importlib.util

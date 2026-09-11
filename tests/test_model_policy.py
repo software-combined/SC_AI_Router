@@ -147,11 +147,8 @@ class ModelPolicyTests(unittest.TestCase):
 
     def test_load_state_carries_allowed_models(self):
         import json
-        import os
-        import shutil
         import tempfile
         from pathlib import Path
-        from unittest import mock
         from ai_router.runtime import load_state
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)

@@ -20,7 +20,6 @@ from urllib.parse import parse_qsl
 
 _ON_WINDOWS = os.name == 'nt'
 
-SETUP_PREFIX = '/setup/'
 SETUP_TTL_S = 15 * 60
 FORM_LIMIT = 4096
 KEY_URL = 'https://openrouter.ai/api/v1/auth/key'
