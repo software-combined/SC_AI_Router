@@ -6,8 +6,11 @@ Clients: ChatGPT.app `26.903.71938`, Codex Framework `152.0.7977.83`,
 bundled app-server codex-cli `0.153.4` (upstream tag `rust-v0.153.4`,
 commit `3d2ee51ca2d5db578f328aa75e20aa22c0197c9a`), feature gate
 `turnToolOutput: 0.151.0-alpha.4` read from the app bundle. Router source
-at `d440c3a` (0.6.24), fix uncommitted on
-`codex/router-handoff-outputs-20260911`, target `develop`.
+base `d440c3a` (0.6.24); fix commit `a300989` on
+`codex/router-handoff-outputs-20260911`, prepared for the `0.6.26` beta
+release, target `develop`. The `0.6.25` beta was tagged from `develop`
+before this fix and its release run failed on the feed publisher role, so
+this fix rides the next beta instead.
 
 - Codex Desktop injects cross-task messages (`create_thread`,
   `send_message_to_thread`) as a standalone `function_call_output` item
