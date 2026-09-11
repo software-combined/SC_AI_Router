@@ -1,5 +1,35 @@
 # Compatibility
 
+## Standalone delegation delivery, 2026-09-11
+
+Clients: ChatGPT.app `26.903.71938`, Codex Framework `152.0.7977.83`,
+bundled app-server codex-cli `0.153.4` (upstream tag `rust-v0.153.4`,
+commit `3d2ee51ca2d5db578f328aa75e20aa22c0197c9a`), feature gate
+`turnToolOutput: 0.151.0-alpha.4` read from the app bundle. Router source
+at `d440c3a` (0.6.24), fix uncommitted on
+`codex/router-handoff-outputs-20260911`, target `develop`.
+
+- Codex Desktop injects cross-task messages (`create_thread`,
+  `send_message_to_thread`) as a standalone `function_call_output` item
+  with no `call_id`; upstream treats it as a legitimate instruction turn,
+  but the router's scrub dropped it as an orphan, so tasks on OpenRouter
+  models never received the delegated message while tasks on OpenAI
+  models did.
+- Live probes against OpenRouter (`deepseek/deepseek-v4.1-flash`): the raw
+  standalone item returns HTTP 400 `invalid_prompt`; a readable
+  assistant-role plaintext message returns 200 with the marker read. A
+  synthetic call+output pair is accepted in most attempts but 400s when
+  `namespace` is present on both members; user-role text is rejected by
+  policy as authority elevation. The fix renders the standalone output as
+  assistant-role plaintext before the scrub.
+- Blast radius, read from the app's thread store: 164 delegated items
+  across 24 tasks, 15 on OpenRouter models and 9 on OpenAI models; all 8
+  OneDrive forensic tasks created 2026-09-11 12:10-12:11 were
+  `deepseek/deepseek-v4.1-flash` and received nothing.
+- Offline gates on the fix branch: full suite exit 0, compile exit 0,
+  source limits `failures=0`, `tools/probe_standalone_outputs.py` prints
+  `PASS`. Paid live acceptance is orchestrator-owned and still pending.
+
 ## Windows lifecycle acceptance, 2026-09-10 (Plan 116 first proof)
 
 Machine: Windows 11 Pro 10.0.26200 x64 staff laptop (AzureAD account, no

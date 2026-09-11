@@ -59,6 +59,17 @@ class ScrubFragmentsTests(unittest.TestCase):
         self.assertEqual(scrub_tool_fragments(
             [{'type': 'custom_tool_call_output', 'call_id': 'c9', 'output': 'ok'}]), [])
 
+    def test_standalone_output_without_call_id_survives(self):
+        # Codex Desktop injects cross-task messages with no call_id; the
+        # scrub must not treat them as orphans (providers materialize them).
+        standalone = {'type': 'function_call_output', 'name': 'create_thread',
+                      'namespace': 'codex_app', 'output': 'delegated task'}
+        self.assertEqual(scrub_tool_fragments([standalone]), [standalone])
+        call = {'type': 'function_call', 'name': 'e', 'call_id': 'c1',
+                'arguments': '{"v": 1}'}
+        self.assertEqual(scrub_tool_fragments([call, standalone]),
+                         [call, standalone])
+
     def test_non_list_input_passes_through(self):
         self.assertEqual(scrub_tool_fragments('do the task'), 'do the task')
 

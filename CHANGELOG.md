@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Nested cross-task messages now reach tasks running on OpenRouter models.
+  Codex Desktop injects `create_thread` / `send_message_to_thread` turns as
+  standalone tool outputs with no `call_id`; the router used to drop them
+  as orphan tool fragments, so delegated tasks on OpenRouter models never
+  saw the message. Standalone app-injected outputs are now rendered as
+  readable assistant-role plaintext before the scrub instead.
+
 - Context size is the provider's call again: the OpenRouter pre-flight
   refused a turn whenever serialized characters divided by four exceeded
   the model window, but real tokenizer ratios run 4.4-5.8 chars/token over
