@@ -23,7 +23,9 @@ protocols (explicit method/path dispatch table; no policy of its own)
   |
 transport (Prepared, hop-header rules, raw stream, header relay) + upstream (failure policy)
   |
-router (HTTP control: auth, body limits, drain/inflight, relay)
+ingress (auth/rebinding, body limits, GET routes, error shaping) + relay (upstream loop)
+  |
+router (HTTP control: drain/inflight and POST orchestration)
 ```
 
 Rules:
@@ -37,9 +39,12 @@ Rules:
    imports only stdlib plus that leaf. Nothing in `ai_router/` may make the
    registry import a client, CLI, installer, or HTTP module. Client listing
    and config modules consume it; never the reverse.
-2. HTTP transport (`router.py`) owns loopback auth, body limits,
-   drain/inflight, and connection cleanup. Protocol representation lives in
-   `providers.py` (Responses/Messages) and `claude.py` (Messages ingress).
+2. HTTP transport owns loopback auth, body limits, drain/inflight, and
+   connection cleanup: `ingress.py` owns auth/rebinding, body limits, GET
+   routes and error shaping; `relay.py` owns the upstream relay loop; and
+   `router.py` keeps drain/inflight plus POST orchestration over both.
+   Protocol representation lives in `providers.py` (Responses/Messages) and
+   `claude.py` (Messages ingress).
 3. Upstream adapters own target/credential construction and are
    parameterized by one `ProviderDef`, never by a provider-name branch. A
    new external provider is a table entry plus registry rows; a provider

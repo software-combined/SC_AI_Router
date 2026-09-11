@@ -75,7 +75,7 @@ below interleaves them.
 | [125](125-runtime-shared-primitives.md) | Runtime primitives: path sets, image blocks, catalogue predicate, capability maps | DONE: runtime shared primitives 2026-09-12 | after 090/091/093/096/101 |
 | [126](126-error-taxonomy.md) | Typed error classification; drop the dead CLI error half | DONE: typed error classification 2026-09-12 | after 101 |
 | [127](127-providers-setup-module-splits.md) | Split upstream failure policy and setup pages out | DONE: landed by 141 2026-09-11 | after 101; before 128 |
-| [128](128-router-handler-decomposition.md) | Decompose router.py into ingress + relay | TODO | after 090/091/093/096 |
+| [128](128-router-handler-decomposition.md) | Decompose router.py into ingress + relay | DONE: router decomposition 2026-09-12 | after 090/091/093/096 |
 | [129](129-tool-merge-unification.md) | One tool-definition merge rule | DONE: shared tool-merge rule 2026-09-12 | after 091/096/097 |
 | [130](130-installer-bundle-split.md) | packaging/bundle.py: real installer headroom | TODO | after 102/123 |
 | [131](131-service-state-writer-decomposition.md) | Service/state/writer decomposition | TODO | after 094/095/100/103/123; coordinate 106 |
@@ -94,7 +94,7 @@ The report, its verifications and its rejected findings are in
 | Plan | Title | Status | Sequencing |
 |---|---|---|---|
 | [136](136-unauth-ingress-crash-containment.md) | Contain the unauthenticated ingress compare crash | DONE: unauth ingress compare containment 2026-09-11 | P1; independent; a few lines in router.py (398 today) |
-| [137](137-loopback-host-header-validation.md) | Validate the Host header on loopback ingress | BLOCKED: STOP condition hit 2026-09-11 — router.py is 398/400, the 3-line guard needs 397 max; hand to 128's split | 090 landed; headroom exhausted by 096/136 |
+| [137](137-loopback-host-header-validation.md) | Validate the Host header on loopback ingress | TODO: unblocked by 128 (router.py 204/400); the guard belongs in ingress.py | 090 landed; 128 landed |
 | [138](138-subscription-cookie-hygiene.md) | Drop Cookie on subscription passthrough and make the tests honest | DONE: subscription cookie hygiene 2026-09-12 | independent |
 
 ## Standalone delegation delivery (140)
