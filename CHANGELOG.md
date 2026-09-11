@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- First install no longer needs the repository: the pinned CPython runtimes
+  and both bootstrap wrappers are published to the token-gated feed, so a
+  machine holding only the feed token installs and then auto-updates with
+  no GitHub account, no `gh` and no repo access. The new
+  `tools/publish_first_install.py` verifies every runtime against
+  `packaging/runtime.lock` before upload and is idempotent.
+
 - First-run key setup is a native popup instead of a browser page: macOS,
   Windows and Linux are asked for the OpenRouter key, the ChatGPT-subscription
   choice and the starter in one flow, and the popup confirms the stored key

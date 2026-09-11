@@ -157,15 +157,39 @@ double 403 names the Technology library bootstrap as the remedy without
 leaking token bytes. `update.log` records each install with its source
 (`cloudfront`, `github`, or `local`).
 
-First install for no-repo-access users comes from the gated Technology
-site library: `packaging/bootstrap.sh` (macOS/Linux) or
-`packaging/bootstrap.ps1` (Windows) with `SCG_FEED_TOKEN` from the
-library page. The bootstrap resolves the pinned runtime from
-`runtimes.json`, verifies runtime and bundle checksums, writes the feed
-token, and runs the bundle installer. The distribution and the publish
-workflow are in this repository (see "Feed infrastructure and
-publishing"); mirroring the pinned runtimes onto the feed, the bootstrap
-endpoints and the gated library page remain the owner-gated follow-up,
+First install for no-repo-access users uses the two bootstrap wrappers
+(`packaging/bootstrap.sh` for macOS/Linux, `packaging/bootstrap.ps1` for
+Windows) with the feed token. The bootstrap resolves the pinned runtime
+from `runtimes.json`, verifies the runtime and bundle checksums, writes
+the feed token, and runs the bundle installer; every download comes from
+the token-gated feed, so the recipient never touches GitHub.
+
+The first-install assets are published by
+`tools/publish_first_install.py`: it reads `packaging/runtime.lock`,
+downloads each pinned CPython build, verifies its sha256 before anything
+is uploaded, and publishes the wrappers only after the runtimes and the
+`runtimes.json` table they read. Re-run it after a runtime-lock change;
+identical runtime artifacts are skipped and different bytes under a
+runtime key are refused. The two `bootstrap/*` wrappers are the one
+mutable entry point: they are replaced when they change and cached for
+five minutes, so a wrapper fix can still reach new installers.
+
+```sh
+python3.14 tools/publish_first_install.py --dry-run   # plan only
+python3.14 tools/publish_first_install.py             # download, verify, upload
+```
+
+Hand a recipient the bootstrap URL and the token. Until the gated library
+page and per-install tokens land, the shared feed token is the credential,
+so rotating it retires every holder at once:
+
+```sh
+curl -fsSL -H "X-SCG-Feed-Token: $TOKEN" \
+  https://dist.softwarecombined.com/bootstrap/bootstrap.sh -o bootstrap.sh
+SCG_FEED_TOKEN="$TOKEN" sh bootstrap.sh
+```
+
+The gated Technology site library page remains the self-serve follow-up,
 and a machine that cannot use the bootstrap's download path still gets
 its first install the old way.
 
