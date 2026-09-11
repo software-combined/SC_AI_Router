@@ -103,7 +103,7 @@ class UpdaterAdoptionTests(unittest.TestCase):
     def test_prune_keeps_the_release_launchd_still_names(self):
         # A scheduled run defers the updater reload, so launchd goes on
         # running the old per-release installer path. Pruning that release
-        # would leave it firing a missing file every 900s with nothing to
+        # would leave it firing a missing file on every poll with nothing to
         # report it -- the exact silent loss this release removes.
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
@@ -251,7 +251,7 @@ class InstallLockTests(unittest.TestCase):
 
 
 class UpdateBackoffTests(unittest.TestCase):
-    """A bad release must not restart the service every 15 minutes forever.
+    """A bad release must not restart the service on every poll forever.
 
     The incident ran this loop for hours: each pass re-fetched the same
     version, swapped the pointer, waited out the 150s health deadline and

@@ -166,6 +166,7 @@ class InstallConfigTests(unittest.TestCase):
     def test_update_plist_omits_feed_for_channel_resolution(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
+            home.mkdir()
             _install(self, tmp, home, '1.0.0', feed=None)
             agents = Path(tmp) / 'fakehome' / 'Library' / 'LaunchAgents'
             doc = plistlib.loads(
@@ -176,9 +177,10 @@ class InstallConfigTests(unittest.TestCase):
     def test_update_plist_never_names_a_release_path(self):
         # launchd runs its in-memory copy of a loaded plist, so a versioned
         # install.py path outlives the release it names: prune that release and
-        # the updater keeps firing a deleted installer every 15 minutes.
+        # the updater keeps firing a deleted installer every 4 hours.
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
+            home.mkdir()
             _install(self, tmp, home, '1.0.0', feed=None)
             agents = Path(tmp) / 'fakehome' / 'Library' / 'LaunchAgents'
             doc = plistlib.loads(

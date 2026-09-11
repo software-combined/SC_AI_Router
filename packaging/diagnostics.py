@@ -8,9 +8,9 @@ installer. Loaded via the installer's file-based import pattern, never
 a `packaging` distribution.
 
 The installer injects its seams after load: `bind(find_python=...,
-health=..., current_version=..., feed_url=..., route_prefix=...,
-codex_config=...)`. Until bound, module-level defaults read the shared
-service module the same way install.py does.
+health=..., current_version=..., codex_config=...)`. Until bound,
+module-level defaults read the shared service module the same way
+install.py does.
 """
 import importlib.util
 import json
@@ -38,11 +38,8 @@ _codex_config._atomic_write = _svc.load(
 find_python = _svc.find_python
 health = _svc.health
 current_version = _svc.current_version
-FEED_URL = _svc.FEED_URL
-github_route_prefix = _svc.RELEASES_PREFIX
 
-_SEAM_NAMES = {'feed_url': 'FEED_URL', 'route_prefix': 'github_route_prefix',
-               'codex_config': '_codex_config'}
+_SEAM_NAMES = {'codex_config': '_codex_config'}
 
 
 _winacl = _svc.load(
@@ -81,7 +78,7 @@ def _provider_defs():
 def bind(**overrides):
     for name, value in overrides.items():
         if name not in ('find_python', 'health', 'current_version',
-                        'feed_url', 'route_prefix', 'codex_config'):
+                        'codex_config'):
             raise AttributeError(f'unknown diagnostics seam: {name}')
         globals()[_SEAM_NAMES.get(name, name)] = value
 
@@ -91,10 +88,8 @@ def do_preflight(args):
 
     Plan 058 Stage 1: one check before anything is written, with a
     platform-correct remedy per missing item. Never creates the router
-    home, never touches the network: the feed check only reads which
-    route is selected (the transitional GitHub route needs the `gh`
-    binary; an explicit `--feed` needs nothing beyond this machine).
-    Sign-in itself is verified when the feed is actually fetched.
+    home and never touches the network: the public feed needs no
+    credential check here, and the bundle is verified when it is fetched.
     """
     missing = []
     if find_python(args.python) is None:
@@ -105,17 +100,6 @@ def do_preflight(args):
             missing.append('no Python 3.14 found: the managed install provisions '
                            'the pinned private runtime; otherwise install '
                            'Python 3.14 first')
-    home = Path(args.home).expanduser()
-    feed = args.feed or _svc.channel_feed(home)
-    # Same route decision as fetch(): only the pre-migration GitHub route
-    # needs the `gh` binary; the token-gated feed needs nothing beyond this
-    # machine. Prefix test only: github_asset() itself would spawn `gh`.
-    if feed.startswith(github_route_prefix):
-        if _svc.feed_token(home) is None and _svc.gh_binary() is None:
-            missing.append('GitHub CLI (gh) binary not found: install gh, sign it in '
-                           'with `gh auth login` as this user, or re-run the '
-                           'bootstrap from the Technology library to migrate '
-                           'this host to the token-gated feed')
     if (args.client or 'codex') == 'codex' and shutil.which('codex') is None:
         missing.append('Codex CLI not found: install Codex first, or pass '
                        '--client none for a service-only install')
@@ -123,7 +107,7 @@ def do_preflight(args):
         for line in missing:
             print('preflight: ' + line)
         raise SystemExit(2)
-    print('preflight: Python, feed-route, and client prerequisites present')
+    print('preflight: Python and client prerequisites present')
     return 0
 
 
@@ -174,8 +158,12 @@ def do_status(args):
     if not isinstance(receipt_clients, dict):
         receipt_clients = {}
     clients = {name: _client(entry) for name, entry in receipt_clients.items()}
+    feed = _svc.channel_feed(home)
     doc = {'installed': installed, 'version': version if installed else None,
            'serving': serving, 'key_present': present, 'key_usable': usable,
+           'feed': _svc.feed_source(feed),
+           'channel': ((home / 'channel').read_text().strip()
+                       if (home / 'channel').exists() else 'stable'),
            'providers': {pid: {'key_present': state_pair[0],
                                'key_usable': state_pair[1]}
                          for pid, state_pair in per_provider.items()},
@@ -190,5 +178,7 @@ def do_status(args):
         print('version: %s' % (doc['version'] or 'not installed'))
         print('service: %s' % ({True: 'serving', False: 'not serving', None: 'unknown'}[serving]))
         print('key: %s' % ('usable' if usable else 'present' if present else 'missing'))
+        print('feed: %s' % doc['feed'])
+        print('channel: %s' % doc['channel'])
         print('clients: %s' % (', '.join(sorted(clients)) or 'none'))
     return 0

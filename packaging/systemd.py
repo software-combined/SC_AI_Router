@@ -58,8 +58,8 @@ class Manager:
                      # control-group kill would reap it when the oneshot ends.
                      'KillMode=process\n'
                      'UMask=0077\n'),
-            TIMER: ('[Unit]\nDescription=Check SC router updates every 15 minutes\n'
-                    '[Timer]\nOnActiveSec=5min\nOnUnitInactiveSec=15min\n'
+            TIMER: ('[Unit]\nDescription=Check SC router updates every 4 hours\n'
+                    '[Timer]\nOnActiveSec=5min\nOnUnitInactiveSec=4h\n'
                     '[Install]\nWantedBy=timers.target\n'),
         }
         self.units.mkdir(parents=True, exist_ok=True)

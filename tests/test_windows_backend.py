@@ -129,7 +129,7 @@ class RouterXmlTests(unittest.TestCase):
             self.assertNotIn('python.exe</Command>', xml)
             self.assertIn('<Arguments>C:\\home\\task_launch.py %s %s</Arguments>'
                           % (log, script), xml)
-        self.assertIn('<Interval>PT15M</Interval>', update)
+        self.assertIn('<Interval>PT4H</Interval>', update)
         self.assertIn('<ExecutionTimeLimit>PT30M</ExecutionTimeLimit>', update)
 
     def test_paths_with_spaces_are_quoted_and_xml_escaped(self):

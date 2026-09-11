@@ -1,4 +1,4 @@
-"""Bootstrap token handling: off argv and persist-after-verify (Plan 054 T)."""
+"""Bootstrap downloads: public feed, channel pinning, checksums (Plan 054 T)."""
 import hashlib
 import io
 import json
@@ -31,8 +31,6 @@ i = 0
 while i < len(args):
     if args[i] == '-o':
         out = args[i + 1]
-        i += 2
-    elif args[i] == '-H':
         i += 2
     elif args[i].startswith('-'):
         i += 1
@@ -77,9 +75,8 @@ _FAKE_LANDED = (
 
 
 @unix_only
-class BootstrapTokenTests(unittest.TestCase):
-    def _env(self, tmp, mode, token='tok-new', mirror='runtimes/x.tar.gz',
-             serve=None):
+class BootstrapTests(unittest.TestCase):
+    def _env(self, tmp, mode, mirror='runtimes/x.tar.gz', serve=None):
         bin_dir = Path(tmp) / 'bin'
         bin_dir.mkdir(exist_ok=True)
         curl = bin_dir / 'curl'
@@ -92,7 +89,6 @@ class BootstrapTokenTests(unittest.TestCase):
             **os.environ,
             'PATH': str(bin_dir) + os.pathsep + os.environ['PATH'],
             'ROUTER_HOME': str(Path(tmp) / 'home'),
-            'SCG_FEED_TOKEN': token,
             'FEED_ORIGIN': 'https://feed.example',
             'CURL_MODE': mode,
             'CURL_ARGV_LOG': str(Path(tmp) / 'argv.log'),
@@ -102,10 +98,9 @@ class BootstrapTokenTests(unittest.TestCase):
                                       'sha256': '00', 'exec': 'python/bin/python3.14'}}}),
         }
 
-    def _run(self, tmp, mode, token='tok-new', mirror='runtimes/x.tar.gz',
-             channel=None):
+    def _run(self, tmp, mode, mirror='runtimes/x.tar.gz', channel=None):
         home = Path(tmp) / 'home'
-        env = self._env(tmp, mode, token=token, mirror=mirror)
+        env = self._env(tmp, mode, mirror=mirror)
         argv = ['sh', str(_ROOT / 'packaging' / 'bootstrap.sh')]
         if channel:
             argv.append('--channel=' + channel)
@@ -147,32 +142,26 @@ class BootstrapTokenTests(unittest.TestCase):
             env=self._env(tmp, 'full', serve=serve), capture_output=True, text=True)
         return proc, home
 
-    def test_failed_fetch_persists_nothing(self):
+    def test_failed_fetch_leaves_existing_files_alone(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             home.mkdir(parents=True)
+            # An old host may still carry the retired credential file; the
+            # bootstrap must neither read nor rewrite it.
             (home / 'feed-token').write_text('tok-old\n')
-            proc, home, argv_log = self._run(tmp, mode='fail-all')
+            proc, home, _ = self._run(tmp, mode='fail-all')
             self.assertNotEqual(proc.returncode, 0)
             self.assertEqual((home / 'feed-token').read_text(), 'tok-old\n')
-            self.assertFalse((home / 'feed-token.previous').exists())
-            self.assertNotIn('tok-new', argv_log.read_text())
-            self.assertFalse((home / 'feed-headers.tmp').exists())
-
-    def test_successful_fetch_persists_and_keeps_previous(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            home = Path(tmp) / 'home'
-            home.mkdir(parents=True)
-            (home / 'feed-token').write_text('tok-old\n')
-            proc, home, argv_log = self._run(tmp, mode='ok-first')
-            # The fake fails the runtime download after the token proof
-            # point, so the script exits later without running install.py.
-            self.assertNotEqual(proc.returncode, 0)
-            self.assertEqual((home / 'feed-token').read_text(), 'tok-new\n')
-            self.assertEqual((home / 'feed-token.previous').read_text(), 'tok-old\n')
-            self.assertNotIn('tok-new', argv_log.read_text())
             self.assertFalse((home / 'feed-headers.tmp').exists())
             self.assertFalse((home / 'channel').exists())
+
+    def test_bootstrap_sends_no_credential_header(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            proc, _home, argv_log = self._run(tmp, mode='ok-first')
+            self.assertNotEqual(proc.returncode, 0)
+            log = argv_log.read_text()
+            self.assertNotIn(' -H ', ' ' + log + ' ')
+            self.assertNotIn('X-SCG', log)
 
     def test_failed_bootstrap_does_not_switch_the_channel(self):
         # The channel is persisted only once install.py succeeds, so an
@@ -259,7 +248,6 @@ class BootstrapTokenTests(unittest.TestCase):
             proc, home, argv_log = self._run(tmp, mode='ok-first', channel='canary')
             self.assertEqual(proc.returncode, 2)
             self.assertFalse((home / 'channel').exists())
-            self.assertFalse((home / 'feed-token').exists())
             self.assertFalse(argv_log.exists())
 
     def test_runtime_url_percent_encodes_the_mirror(self):
