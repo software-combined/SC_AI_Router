@@ -12,6 +12,7 @@ FILES = [
          'ai_router/registry.py',
          'ai_router/credentials.py',
          'ai_router/tool_adapter.py',
+         'ai_router/tool_merge.py',
          'ai_router/agent_handoffs.py',
          'ai_router/sse.py',
          'ai_router/capabilities.py',

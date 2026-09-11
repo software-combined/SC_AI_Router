@@ -10,7 +10,7 @@ from copy import deepcopy
 from .capabilities import has_recursive_refs
 from .discovered import recall
 from .registry import by_slug
-from . import agent_handoffs, sse
+from . import agent_handoffs, sse, tool_merge
 SEARCH_NAME = 'codex_client_tool_search'
 # Bytes retained per body for the post-EOF identity parse. Overflow drops
 # the observation, never the forwarded bytes.
@@ -75,17 +75,17 @@ def prepare_tools(payload):
         if item.get('type') == 'tool_search_output':
             released.extend(deepcopy(item.get('tools', [])))
     released.extend(recall(payload.get('input', [])))
-    released_keys = {(namespace, tool.get('name')) for tool, namespace in tool_entries(released)}
+    released_keys = {tool_merge.key_of(tool, namespace)
+                     for tool, namespace in tool_entries(released)}
     declared = {}
     for tool, namespace in tool_entries(payload.get('tools', [])):
-        declared.setdefault((namespace, tool.get('name')), tool)
+        declared.setdefault(tool_merge.key_of(tool, namespace), tool)
     for tool, namespace in tool_entries(released):
-        key = (namespace, tool.get('name'))
+        key = tool_merge.key_of(tool, namespace)
         existing = declared.get(key)
         if existing is not None:
             # Complete a catalogue stub from the discovered schema; never clobber.
-            if existing.get('parameters') is None and tool.get('parameters') is not None:
-                existing['parameters'] = tool['parameters']
+            tool_merge.complete_parameters(existing, tool)
             continue
         if namespace:
             payload.setdefault('tools', []).append({'type': 'namespace', 'name': namespace, 'description': namespace + ' tools', 'tools': [tool]})

@@ -322,6 +322,7 @@ directory at an idle boundary:
 `ai_router/registry.py`,
 `ai_router/credentials.py`,
 `ai_router/tool_adapter.py`,
+`ai_router/tool_merge.py`,
 `ai_router/agent_handoffs.py`, `ai_router/sse.py`,
 `ai_router/capabilities.py`,
 `ai_router/compaction.py`,
