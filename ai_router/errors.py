@@ -27,12 +27,6 @@ class PreparationError(ValueError):
     """A well-formed request the provider cannot serve; maps to 409."""
 
 
-class ContextWindowExceeded(PreparationError):
-    """Context exhaustion must reach Codex's compaction recovery path."""
-
-    budget = None  # set by the raiser: {model, path, used, reserved, window}
-
-
 class LocalAnswer(RouterError):
     """A native path answered locally; never guess an upstream shape."""
 

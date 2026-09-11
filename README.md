@@ -272,7 +272,6 @@ directory at an idle boundary:
 `ai_router/model_metadata.py`,
 `ai_router/model_refresh.py`,
 `ai_router/winacl.py`,
-`ai_router/context_budget.py`,
 `ai_router/image_items.py`,
 `ai_router/model_policy.py`,
 `ai_router/subscription_roster.py`,

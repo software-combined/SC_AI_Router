@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Context size is the provider's call again: the OpenRouter pre-flight
+  refused a turn whenever serialized characters divided by four exceeded
+  the model window, but real tokenizer ratios run 4.4-5.8 chars/token over
+  long sessions, so the estimate refused turns the client still had room
+  for and Codex ended the thread instead of compacting. Live 2026-09-11
+  (thread 01a08ba0): a 4,324,328-byte turn billed 750,806 tokens upstream,
+  was estimated at 1,091,485, and was refused at 79% of the model window
+  with 193k tokens left in the client's compaction budget. Local refusals
+  are removed; a genuine upstream context error still arrives as the typed
+  `context_length_exceeded`, now also recognizing OpenRouter's explicit
+  top-level `error_type` shape. The output-reservation math is unchanged.
+
 - Replayed reasoning history no longer disappears before OpenRouter turns.
   `strip_reasoning_blobs` now strips only the provider blob field and keeps a
   reasoning item whenever readable summary or `reasoning_text` content
