@@ -274,7 +274,7 @@ def map_client_error(exc):
             return subscription_required()
         if 'without a Claude subscription' in text:
             return claude_subscription_required()
-        if 'openrouter' in lowered and 'key' in lowered:
+        if 'api key' in lowered:
             return credential_problem(text)
         return invalid_payload()
     return invalid_payload()

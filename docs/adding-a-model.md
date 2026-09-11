@@ -7,6 +7,13 @@ python3.14 -m ai_router.models add <slug> --dry-run   # inspect first
 python3.14 -m ai_router.models add <slug> --probe     # verify, then write
 ```
 
+Rows belong to a provider (`ai_router/provider_defs.py`); `--provider ID`
+picks a different one, and defaults to `openrouter`. A provider whose
+definition carries `catalogue_shape: manual` (no live model list) has its
+rows authored by hand, and `models add` refuses it rather than guessing.
+`models check` and `live_refresh` follow the same rule in reverse: a fetch
+only ever rewrites rows owned by the provider whose catalogue it read.
+
 Without `--probe` the row lands as `tier: preview`: it appears in the
 picker labelled Preview but is not trusted yet (an `openai/*` row lists
 in the Codex picker beside its subscription twin; the `--client claude`

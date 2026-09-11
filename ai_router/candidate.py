@@ -19,6 +19,9 @@ import time
 import urllib.request
 from pathlib import Path
 
+from . import provider_defs
+from .registry import by_slug
+
 ROOT = Path(__file__).resolve().parents[1]
 PROBE_TOOL = ROOT / 'tools' / 'probe_codex_runtime.py'
 ROUND_TRIP_MARKER = '"desktop_runtime_tool_round_trip": "passed"'
@@ -34,9 +37,10 @@ def _free_port():
 class IsolatedRouter:
     """Throwaway router plus catalogue; close() always tears it down."""
 
-    def __init__(self):
+    def __init__(self, slug=None):
         self.tmp = tempfile.TemporaryDirectory()
         self.home = Path(self.tmp.name)
+        self.slug = slug
         self.process = None
 
     def __enter__(self):
@@ -47,13 +51,16 @@ class IsolatedRouter:
 
     def boot(self):
         from .credentials import Credentials
+        entry = by_slug(self.slug) if isinstance(self.slug, str) else None
+        provider_id = entry.provider if entry is not None else provider_defs.DEFAULT_EXTERNAL
         state = {'port': _free_port(), 'token': secrets.token_urlsafe(32),
                  'openai_models': []}
         try:
-            Credentials(state, self.home).check()
+            Credentials(state, self.home).check(provider_id)
         except (LookupError, PermissionError, ValueError, OSError) as exc:
             self.close()
-            raise SystemExit(f'isolated probe has no OpenRouter credential: {exc}')
+            raise SystemExit(f'isolated probe has no '
+                             f'{provider_defs.label_for(provider_id)} credential: {exc}')
         state_path = self.home / 'mixed-router-state.json'
         fd = os.open(state_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(fd, 'w') as stream:
@@ -129,5 +136,5 @@ def run_probe(slug, scope, _run=subprocess.run):
 
 def verify(slug, _scope=IsolatedRouter, _run_probe=run_probe):
     """Boot an isolated router for the candidate and probe it. True on pass."""
-    with _scope() as scope:
+    with _scope(slug) as scope:
         return _run_probe(slug, scope)

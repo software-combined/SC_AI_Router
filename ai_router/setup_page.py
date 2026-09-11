@@ -6,6 +6,8 @@ single HTTP contract. Inline style only: the page must not fetch anything.
 """
 import html
 
+from . import provider_defs
+
 # Client-aware closing line, shared with the native popup's confirmation.
 RESTART = {'codex': 'Restart Codex',
            'claude': 'Restart Claude Code',
@@ -50,18 +52,21 @@ def not_found():
     return _page('Not found', '<p>Unknown or expired setup link.</p>')
 
 
-def form(nonce, error=None):
+def form(nonce, provider_id=None, error=None):
+    """Key form for one provider; the label and placeholder come from its def."""
+    defn = provider_defs.get(provider_id) or provider_defs.OPENROUTER
+    label = defn.label
     complaint = f'<p class="e"><strong>Error:</strong> {html.escape(error)}</p>' if error else ''
-    return _page('Connect OpenRouter', complaint + f'''<p>Paste an OpenRouter key. It is validated
+    return _page(f'Connect {label}', complaint + f'''<p>Paste an {label} key. It is validated
 before anything is stored, and kept in an owner-only file the router reads at request time.</p>
 <form method="post" action="./{html.escape(nonce, quote=True)}">
-<label class="f" for="key">OpenRouter key</label>
-<input id="key" type="password" name="key" autocomplete="off" placeholder="sk-or-v1-...">
+<label class="f" for="key">{label} key</label>
+<input id="key" type="password" name="key" autocomplete="off" placeholder="{html.escape(defn.key.example, quote=True)}">
 <fieldset><legend>ChatGPT subscription</legend>
 <label class="o"><input type="radio" name="mode" value="subscription" checked><span>I have one
 <em>Route OpenAI models on the subscription</em></span></label>
 <label class="o"><input type="radio" name="mode" value="none"><span>No subscription
-<em>OpenRouter models only</em></span></label>
+<em>{label} models only</em></span></label>
 </fieldset>
 <fieldset><legend>Starter instructions</legend>
 <label class="o"><input type="radio" name="profile" value="general" checked><span>Everyday help

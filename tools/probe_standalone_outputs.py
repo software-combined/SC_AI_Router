@@ -30,13 +30,13 @@ def captured_item():
 
 
 class _OfflineKey:
-    def openrouter_key(self):
+    def key_for(self, provider_id=None):
         return 'offline-probe-key'
 
 
 def prepare_offline():
     provider = providers.select(MODEL, '/responses', [])
-    assert type(provider).__name__ == 'OpenRouterProvider', 'wrong provider'
+    assert type(provider).__name__ == 'ExternalResponsesProvider', 'wrong provider'
     prepared = provider.prepare(
         MODEL, '/responses', {'model': MODEL, 'input': [captured_item()]},
         b'raw', {}, _OfflineKey())

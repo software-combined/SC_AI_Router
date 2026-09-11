@@ -104,7 +104,7 @@ def apply(models):
     registry.MODELS = models
     registry.BY_SLUG = {m.slug: m for m in models}
     from . import capabilities
-    capabilities.OPENROUTER_MODELS = registry.openrouter_slugs()
+    capabilities.EXTERNAL_MODELS = registry.external_slugs()
     capabilities.IMAGE_INPUT_MODELS = frozenset(
         m.slug for m in models if 'image' in m.modalities)
     capabilities.EXCLUDED_EFFORTS = {

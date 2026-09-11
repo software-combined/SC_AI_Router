@@ -2,12 +2,12 @@ import json
 import re
 import unittest
 from ai_router.capabilities import CANONICAL_ORDER
-from ai_router.catalogue import OPENROUTER_TEMPLATE, openrouter_entry
+from ai_router.catalogue import ROW_TEMPLATE, external_entry
 from ai_router.registry import (FIELDS, MODELS, Model, by_slug, load, picker_key,
-                                openrouter_slugs)
+                                external_slugs)
 from ai_router.clients import models_for, visible_for
 
-CATALOGUE_FIELDS = set(OPENROUTER_TEMPLATE) | {'slug', 'display_name', 'description',
+CATALOGUE_FIELDS = set(ROW_TEMPLATE) | {'slug', 'display_name', 'description',
     'default_reasoning_level', 'supported_reasoning_levels', 'priority',
     'context_window', 'max_context_window', 'input_modalities',
     'supports_reasoning_summary_parameter'}
@@ -33,10 +33,10 @@ class RegistryTests(unittest.TestCase):
         for model in MODELS:
             self.assertIn(model.provider, {'openrouter', 'openai'}, model.slug)
 
-    def test_openrouter_entry_has_every_catalogue_field(self):
+    def test_external_entry_has_every_catalogue_field(self):
         for model in MODELS:
             if model.provider == 'openrouter':
-                self.assertEqual(set(openrouter_entry(model)), CATALOGUE_FIELDS, model.slug)
+                self.assertEqual(set(external_entry(model)), CATALOGUE_FIELDS, model.slug)
 
     def test_bad_row_shape_is_refused(self):
         good = dict(zip(FIELDS, ['x/y', 'openrouter', 'X', 'V',
@@ -143,10 +143,10 @@ class RegistryTests(unittest.TestCase):
         self.assertTrue(any(re.search(r'\(0902\)|0423|0813', label)
                             for label in pinned.values()))
 
-    def test_by_slug_and_openrouter_slugs(self):
+    def test_by_slug_and_external_slugs(self):
         self.assertEqual(by_slug('moonshotai/kimi-k3').vendor, 'MoonshotAI')
         self.assertIsNone(by_slug('unknown/model'))
-        self.assertEqual(openrouter_slugs(),
+        self.assertEqual(external_slugs(),
                          {m.slug for m in MODELS if m.provider == 'openrouter'})
 
     def test_visibility_hides_only_the_claude_same_billing_rows(self):

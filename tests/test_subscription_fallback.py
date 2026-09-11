@@ -63,7 +63,7 @@ class HelperTurnTests(unittest.TestCase):
 
     def test_only_enabled_helper_turns_with_a_twin_get_a_plan(self):
         base = dict(state={'openai_helper_fallback': True},
-                    prepared=SimpleNamespace(provider='openai-subscription'),
+                    prepared=SimpleNamespace(provider='openai'),
                     path='/responses', payload={'model': HELPER},
                     raw_body=b'{}', headers=HEADERS, credentials=object())
         self.assertIsNotNone(subscription_fallback.plan(**base))
@@ -145,7 +145,7 @@ class RefusedHelperTurnTests(unittest.TestCase):
 
     def test_missing_key_falls_back_to_the_refusal(self):
         class _NoKey:
-            def openrouter_key(self):
+            def key_for(self, provider_id=None):
                 raise LookupError('no key')
 
         recorded = install_fake(self, self._refusal())
@@ -158,6 +158,30 @@ class RefusedHelperTurnTests(unittest.TestCase):
         events = [json.loads(record.getMessage()) for record in logs.records]
         self.assertIn('subscription_fallback_unavailable',
                       [event.get('event') for event in events])
+
+    def test_twin_fallback_carries_the_responses_protocol_in_its_metrics(self):
+        # Plan 141: transport.emit_terminal_failure keys on metrics['protocol'],
+        # so the twin hand-off must carry it or a mid-stream failure on the
+        # fallback loses its terminal frame (it emitted one before the move).
+        from ai_router.router import Handler
+        recorded = install_fake(self, self._refusal())
+        server = self._server(openai_helper_fallback=True)
+        calls = []
+        real_relay = Handler.relay
+
+        def relay(self, provider, prepared, metrics, started, has_image=False):
+            calls.append(dict(metrics))
+            return real_relay(self, provider, prepared, metrics, started, has_image)
+
+        import unittest.mock as mock
+        with mock.patch.object(Handler, 'relay', relay):
+            response = self._turn(server, HEADERS)
+        self.assertEqual(response.status, 200)
+        response.read()
+        twin = [c for c in calls if c.get('helper_fallback')]
+        self.assertEqual(len(twin), 1, calls)
+        self.assertEqual(twin[0].get('protocol'), 'responses')
+        self.assertEqual(twin[0].get('model'), 'openai/gpt-5.6-luna')
 
     def test_policy_excluded_twin_keeps_the_refusal(self):
         # Plan 068: the provisioned portco list gates the redispatch, so an
