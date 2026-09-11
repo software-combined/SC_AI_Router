@@ -10,7 +10,12 @@ import unittest
 from unittest import mock
 from ai_router import providers
 from ai_router.credentials import Credentials
-from ai_router.router import Router
+from tests.harness import (
+    StubCredentials as _StubCredentials,
+    start_auth_server as _start_auth_server,
+    start_server as _start_server,
+    test_state as _test_state,
+)
 
 
 def _external_responses():
@@ -19,12 +24,6 @@ def _external_responses():
     return providers.ExternalResponsesProvider(_defs.OPENROUTER)
 
 
-class _StubCredentials:
-    def __init__(self, key='router-secret'):
-        self.key = key
-
-    def key_for(self, provider_id=None):
-        return self.key
 
 
 def _prepared(model, path, payload, headers=None, openai_models=None):
@@ -197,33 +196,12 @@ class RoutingTests(unittest.TestCase):
                       {'model': 'meta/muse-spark-1.3-contributor', 'input': [],
                        'reasoning': {'effort': 'max'}})
 
-def _test_state(auth_path):
-    return {'port': 0, 'token': 'test-token',
-            'openai_models': [], 'opencode_auth': auth_path}
 
 # Broken-credential tests need the real lookup against a home whose key-file
 # leg always misses (this path never exists on any OS), so only the state's
 # opencode_auth contract is exercised.
 _ISOLATED_CREDENTIAL_HOME = pathlib.Path('/nonexistent-codex-router-home')
 
-
-def _start_server(state, credentials=None):
-    # Isolate tests from the machine's installed router: without an explicit
-    # credential object the real openrouter.key would win the ordered lookup
-    # and every contract test would see the operator's live key.
-    server = Router(state, credentials=(credentials if credentials is not None
-                                        else _StubCredentials('test-key')))
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    return server
-
-def _start_auth_server(test):
-    auth = tempfile.NamedTemporaryFile('w', suffix='.json', delete=False)
-    json.dump({'openrouter': {'type': 'api', 'key': 'test-key'}}, auth)
-    auth.close()
-    server = _start_server(_test_state(auth.name))
-    test.addCleanup(server.shutdown)
-    test.addCleanup(os.unlink, auth.name)
-    return server
 
 class LoopbackBoundaryTests(unittest.TestCase):
     def test_health_requires_bearer_token_and_rejects_origin(self):

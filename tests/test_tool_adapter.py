@@ -1,11 +1,7 @@
 import io
 import json
-import os
-import shutil
-import tempfile
 from pathlib import Path
 import unittest
-from unittest import mock
 from ai_router.compaction import SUMMARY_PREFIX
 from ai_router.discovered import _MEMORY, remember
 from ai_router.capabilities import has_recursive_refs
@@ -13,17 +9,9 @@ from ai_router.tool_adapter import (
     prepare_tools, snoop_response_identity, stream_events, ToolEvents,
     SEARCH_NAME, integer_json)
 from tests.fakes import FakeUpstream
+from tests.harness import isolated_home as _isolated_home
 
 
-def _isolated_home(test):
-    tmp = tempfile.mkdtemp()
-    test.addCleanup(shutil.rmtree, tmp, True)
-    _MEMORY.clear()
-    test.addCleanup(_MEMORY.clear)
-    patcher = mock.patch.dict(os.environ, {'ROUTER_HOME': tmp})
-    patcher.start()
-    test.addCleanup(patcher.stop)
-    return tmp
 
 class ToolAdapterTests(unittest.TestCase):
     def test_integral_provider_numbers_do_not_break_native_integer_arguments(self):

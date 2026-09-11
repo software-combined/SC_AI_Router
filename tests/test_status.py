@@ -14,7 +14,7 @@ import unittest
 from pathlib import Path
 
 from tests._platform import requires_posix_perms
-from tests.test_install import _patch_attrs, install_mod
+from tests.install_fixtures import _patch_attrs, install_mod
 
 
 class StatusTests(unittest.TestCase):

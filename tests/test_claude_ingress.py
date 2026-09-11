@@ -10,8 +10,13 @@ import json
 import unittest
 from compression import zstd
 from tests.fakes import FakeUpstream, install_fake
-from tests.test_handler import _auth_file, _post
-from tests.test_mixed_router import _start_server, _test_state
+from tests.harness import (
+    auth_file as _auth_file,
+    get as _get,
+    post as _post,
+    start_server as _start_server,
+    test_state as _test_state,
+)
 from ai_router import claude as claude_mod
 from ai_router.registry import MODELS
 
@@ -23,12 +28,6 @@ def _messages(model='z-ai/glm-5.3-flash'):
                            'content': [{'type': 'text', 'text': 'hi'}]}],
             'tools': [{'name': 'get_time',
                        'input_schema': {'type': 'object'}}]}
-
-
-def _get(port, target):
-    conn = http.client.HTTPConnection('127.0.0.1', port, timeout=10)
-    conn.request('GET', target)
-    return conn.getresponse()
 
 
 class ClaudeIngressTests(unittest.TestCase):

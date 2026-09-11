@@ -25,7 +25,7 @@ from unittest import mock
 
 from tests._platform import unix_only
 from tests.fakes import LAUNCHD, static_fetch as _static_fetch
-from tests.test_install import _craft_bundle, _ok_run, _patch_attrs, install_mod
+from tests.install_fixtures import _craft_bundle, _ok_run, _patch_attrs, install_mod
 from tests.test_install_config import _fake_write_catalogue
 
 LABEL = install_mod.LABEL

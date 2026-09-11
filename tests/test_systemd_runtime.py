@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest import mock
 
 from tests._platform import unix_only
-from tests.test_install import _install_mod
+from tests.install_fixtures import _install_mod
 from tests.test_release import _release_mod
 
 

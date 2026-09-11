@@ -67,7 +67,7 @@ class CatalogueFlagTests(unittest.TestCase):
             self.assertIn('instructions_template', item['model_messages'])
 
     def test_merge_orders_subscriptions_then_vendor_groups(self):
-        from tests.test_install import install_mod
+        from tests.install_fixtures import install_mod
         roster = list(install_mod.DEFAULT_OPENAI_MODELS)
         merged = merge({'models': []}, roster=tuple(roster))
         slugs = [m['slug'] for m in merged['models']]

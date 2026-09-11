@@ -19,22 +19,12 @@ from ai_router.credentials import Credentials
 from ai_router.registry import by_slug
 from ai_router.router import Handler, _payload_has_image
 from tests.fakes import FakeUpstream, install_fake
-from tests.test_mixed_router import _start_server, _test_state
-
-
-def _auth_file(test):
-    auth = tempfile.NamedTemporaryFile('w', suffix='.json', delete=False)
-    json.dump({'openrouter': {'type': 'api', 'key': 'test-key'}}, auth)
-    auth.close()
-    test.addCleanup(os.unlink, auth.name)
-    return auth.name
-
-
-def _post(port, path, payload, headers=None):
-    conn = http.client.HTTPConnection('127.0.0.1', port, timeout=10)
-    conn.request('POST', path, body=json.dumps(payload),
-                 headers={'Content-Type': 'application/json', **(headers or {})})
-    return conn.getresponse()
+from tests.harness import (
+    auth_file as _auth_file,
+    post as _post,
+    start_server as _start_server,
+    test_state as _test_state,
+)
 
 
 class HandlerCharacterisationTests(unittest.TestCase):

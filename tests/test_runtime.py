@@ -12,7 +12,11 @@ from unittest import mock
 from ai_router.credentials import Credentials
 from ai_router.runtime import LOG, load_state
 from tests.fakes import FakeUpstream, install_fake
-from tests.test_mixed_router import _start_auth_server, _start_server, _test_state
+from tests.harness import (
+    start_auth_server as _start_auth_server,
+    start_server as _start_server,
+    test_state as _test_state,
+)
 
 
 def _capture_log(test):

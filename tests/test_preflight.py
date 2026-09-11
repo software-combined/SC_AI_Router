@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from tests.test_install import _patch_attrs, install_mod
+from tests.install_fixtures import _patch_attrs, install_mod
 
 
 class PreflightTests(unittest.TestCase):

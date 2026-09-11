@@ -1,7 +1,7 @@
 """Mid-stream failure containment and SSE frame bound (Plan 096).
 
 Fake upstream only; never opens a real network connection. Reuses the
-handler helpers like tests/test_ingress_guards.py does.
+shared helpers in tests/harness.py.
 """
 import io
 import json
@@ -11,8 +11,12 @@ from unittest import mock
 from ai_router import router as router_mod
 from ai_router import sse, transport
 from tests.fakes import FakeUpstream, install_fake
-from tests.test_handler import _auth_file, _post
-from tests.test_mixed_router import _start_server, _test_state
+from tests.harness import (
+    auth_file as _auth_file,
+    post as _post,
+    start_server as _start_server,
+    test_state as _test_state,
+)
 
 
 class SseFrameBoundTests(unittest.TestCase):

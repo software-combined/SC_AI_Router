@@ -1,7 +1,6 @@
 """Plan 041 installer tests. install.py imports cleanly as a module."""
 import contextlib
 import hashlib
-import importlib.util
 import io
 import json
 import os
@@ -12,122 +11,20 @@ import tarfile
 import tempfile
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
 from unittest import mock
 
 from ai_router import feed_verify
-from tests.fakes import LAUNCHD, static_fetch as _static_fetch
+from tests.install_fixtures import (
+    _craft_bundle,
+    _ok_run,
+    _patch_attrs,
+    _real_bundle,
+    _run_install,
+    _static_fetch,
+    _tarball,
+    install_mod,
+)
 
-_ROOT = Path(__file__).resolve().parents[1]
-
-
-def _real_bundle(tmp):
-    """Build a real release bundle via packaging/release.py (slow; ~3s)."""
-    feeddir = Path(tmp) / 'feed'
-    feeddir.mkdir()
-    spec = importlib.util.spec_from_file_location(
-        'router_release', _ROOT / 'packaging' / 'release.py')
-    release_mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(release_mod)
-    release_mod.main(['--out', str(feeddir)])
-    tarball = next(iter(feeddir.glob('*.tar.gz')))
-    blob = tarball.read_bytes()
-    with tarfile.open(tarball, mode='r') as tar:
-        manifest = json.loads(tar.extractfile('MANIFEST.json').read())
-    return manifest['version'], _static_fetch(
-        {'version': manifest['version'], 'url': 'file:///bundle.tar.gz',
-         'sha256': hashlib.sha256(blob).hexdigest(), 'min_python': '3.14'}, blob), blob, manifest
-
-
-def _install_mod():
-    spec = importlib.util.spec_from_file_location('router_install', _ROOT / 'packaging' / 'install.py')
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    # This existing rig exercises launchd on every host. Linux lifecycle
-    # tests explicitly select linux and use the same installer seams.
-    module.PLATFORM = 'darwin'
-    return module
-
-
-install_mod = _install_mod()
-
-
-def _tarball(files=(), links=()):
-    buf = io.BytesIO()
-    with tarfile.open(fileobj=buf, mode='w') as tar:
-        for name, data in files:
-            raw = data if isinstance(data, bytes) else data.encode()
-            info = tarfile.TarInfo(name)
-            info.size = len(raw)
-            tar.addfile(info, io.BytesIO(raw))
-        for name, target in links:
-            info = tarfile.TarInfo(name)
-            info.type = tarfile.SYMTYPE
-            info.linkname = target
-            tar.addfile(info)
-    return buf.getvalue()
-
-
-def _ok_run(cmd, **kwargs):
-    if '-c' in cmd:
-        return SimpleNamespace(returncode=0, stdout='3 14\n/opt/homebrew/bin/python3.14\n',
-                               stderr='')
-    # launchctl goes through the stateful domain model: a fake that answered
-    # `print` with rc 0 for a booted-out label is what let the bootout/bootstrap
-    # defect reach a release.
-    answer = LAUNCHD(cmd, **kwargs)
-    if answer is not None:
-        return answer
-    return SimpleNamespace(returncode=0, stdout='', stderr='')
-
-
-def _craft_bundle(version):
-    """Crafted install bundle + feed doc (bytes only, no release build)."""
-    from tests.fakes import install_payloads
-    files = install_payloads(version)
-    manifest = {'version': version, 'files':
-                {name: hashlib.sha256(data).hexdigest() for name, data in files.items()}}
-    blob = _tarball(files=[('MANIFEST.json', json.dumps(manifest)), *files.items()])
-    latest = {'version': version, 'url': 'file:///bundle.tar.gz',
-              'sha256': None, 'min_python': '3.14'}
-    return blob, latest
-
-
-_SEAMS = ('run', 'health', 'wait_version', 'self_test',
-           'write_catalogue', 'fetch_feed', 'feed_serial')
-
-
-def _patch_attrs(test, **overrides):
-    test.addCleanup(LAUNCHD.reset)
-    LAUNCHD.reset()
-    # Real launchd settle windows are minutes long; tests must never wait on
-    # wall-clock time, and must never fall back to a real time.sleep.
-    for mod in (install_mod, install_mod._svc):
-        for name, value in (('UNLOAD_TIMEOUT_S', 2), ('LOAD_TIMEOUT_S', 2),
-                            ('_sleep', lambda *_a, **_k: None)):
-            if hasattr(mod, name):
-                test.addCleanup(setattr, mod, name, getattr(mod, name))
-                setattr(mod, name, value)
-    for name, value in overrides.items():
-        if name not in _SEAMS and not hasattr(install_mod, name):
-            raise AttributeError(f'unknown installer seam: {name}')
-        test.addCleanup(setattr, install_mod, name, getattr(install_mod, name))
-        setattr(install_mod, name, value)
-        # Call sites sync from install_mod._svc on entry; mirror there too.
-        if hasattr(install_mod._svc, name):
-            test.addCleanup(setattr, install_mod._svc, name,
-                            getattr(install_mod._svc, name))
-            setattr(install_mod._svc, name, value)
-
-
-def _run_install(test, tmp, home, fake_fetch, fake_run):
-    args = install_mod.build_parser().parse_args(
-        ['--feed', 'file:///latest.json', '--home', str(home)])
-    env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}
-    with mock.patch.dict(os.environ, env):
-        test.assertEqual(
-            install_mod.do_install(args, _fetch=fake_fetch, _run=fake_run), 0)
-    return args, env
 
 class PlatformRefusalTests(unittest.TestCase):
     # Unskipped on purpose: unknown platforms must refuse before any

@@ -7,9 +7,9 @@ no real credentials, no user data.
 """
 import json
 import unittest
-from types import SimpleNamespace
 
 from ai_router import providers
+from tests.harness import stub_credentials as _stub_credentials
 
 
 def _external_responses():
@@ -19,10 +19,6 @@ def _external_responses():
 
 
 MARKER = 'SYNTH-OPAQUE-066-4b1d'
-
-
-def _stub_credentials(key='router-secret'):
-    return SimpleNamespace(key_for=lambda _pid=None: key)
 
 
 def _opaque_item(marker=MARKER):
