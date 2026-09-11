@@ -41,6 +41,7 @@ class SystemdTests(unittest.TestCase):
 
     def install(self, version):
         blob, latest = _craft_bundle(version)
+        self.home.mkdir(parents=True, exist_ok=True)
         args = install_mod.build_parser().parse_args(
             ['--home', str(self.home), '--python', sys.executable])
         with contextlib.redirect_stdout(io.StringIO()):

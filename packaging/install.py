@@ -62,7 +62,6 @@ _write_state = _svc._write_state
 fetch = _svc.fetch
 fetch_feed = _svc.fetch_feed
 feed_serial = _svc.feed_serial
-github_route_prefix = _svc.RELEASES_PREFIX
 find_python = _svc.find_python
 install_launcher = _svc.install_launcher
 main_plist_needs_reload = _svc.main_plist_needs_reload
@@ -296,8 +295,7 @@ def _sync_seams():
     _updater.bind(svc=_svc, newer=newer, verify_sha256=verify_sha256,
                   sync_seams=_sync_seams)
     _diag.bind(find_python=find_python, health=health,
-               current_version=current_version, feed_url=FEED_URL,
-               route_prefix=github_route_prefix, codex_config=_codex_config)
+               current_version=current_version, codex_config=_codex_config)
 
 
 def _resolve_clients_and_modes(args, home, state):
@@ -376,8 +374,8 @@ def do_install(args, _fetch=fetch, _run=None):
                       if PLATFORM == 'win32' else 'brew install python@3.14')
             print(f'No Python 3.14 found: {remedy}')
             raise SystemExit(2)
-    feed = args.feed or channel_feed(home)
-    latest = json.loads(_svc.feed_read(_fetch, feed, home).decode())
+    feed = args.feed or _svc.channel_feed(home)
+    latest = json.loads(_svc.feed_read(_fetch, feed).decode())
     serial = check_serial(home, latest, pinned=bool(args.feed))
     if not newer(latest['version'], current_version(home)):
         print(f"up to date {current_version(home)}")
@@ -388,7 +386,7 @@ def do_install(args, _fetch=fetch, _run=None):
         return 0
     backend = platform_backend()
     backend.check(home)
-    tarball = _svc.feed_read(_fetch, latest['url'], home)
+    tarball = _svc.feed_read(_fetch, _svc.sibling_bundle(feed, latest['url']))
     if latest.get('sha256'):
         verify_sha256(tarball, latest['sha256'])
     manifest_doc = {'files': {}}
@@ -514,7 +512,7 @@ def do_install(args, _fetch=fetch, _run=None):
     _codex_config.write_receipt(home, config_path, block, rules_receipt, mode, before)
     # launchd keeps the updater command it loaded until the job is reloaded,
     # and a scheduled run defers that reload. Pruning the release that command
-    # names would leave the updater firing a missing file every 15 minutes.
+    # names would leave the updater firing a missing file every 4 hours.
     prune_releases(home, latest['version'], previous,
                    backend.pinned_release(home))
     if not args.feed:

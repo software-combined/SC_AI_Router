@@ -1,10 +1,9 @@
 # Third-Party Notices
 
-This project is distributed under the [PolyForm Shield License
-1.0.0](LICENSE). It also contains material from the projects below, which
-remains under those projects' own terms. Nothing in this file grants rights
-under PolyForm Shield, or restricts the rights those projects' licences
-already grant you.
+This project is distributed under the [Apache License 2.0](LICENSE). It also
+contains material from the projects below, which remains under those
+projects' own terms. Nothing in this file grants rights under the Apache
+License, or restricts the rights those projects' licences already grant you.
 
 ## opencodex
 

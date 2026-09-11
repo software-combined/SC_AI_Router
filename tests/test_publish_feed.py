@@ -1,16 +1,14 @@
 """Feed publication (Plan 139): offline against a recorded aws runner.
 
-No AWS call, no token in a log. Proves the feed document points at the feed
-origin and carries the token, the release document keeps the GitHub URL and
-only carries the token while the transition switch is on, bundles are
-immutable (an unreadable bundle state aborts), the channel feed is
+No AWS call. Proves the feed document points at the public feed origin, the
+release document keeps the GitHub URL, neither carries a credential, bundles
+are immutable (an unreadable bundle state aborts), the channel feed is
 invalidated, and --dry-run touches nothing.
 """
 import hashlib
 import importlib.util
 import io
 import json
-import os
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -18,7 +16,6 @@ from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
-TOKEN = 'f' * 32
 GITHUB_BASE = ('https://github.com/software-combined/SC_OpenRouter_adapter'
                '/releases/download')
 
@@ -42,18 +39,15 @@ class _Result:
 
 
 class _Aws:
-    """Recorded aws CLI: answers get-parameter and head-object, else ''."""
+    """Recorded aws CLI: answers head-object, else ''."""
 
-    def __init__(self, existing=None, token=TOKEN, head_error=None):
+    def __init__(self, existing=None, head_error=None):
         self.existing = existing
-        self.token = token
         self.head_error = head_error
         self.calls = []
 
     def __call__(self, argv, **kwargs):
         self.calls.append([str(word) for word in argv])
-        if 'get-parameter' in argv:
-            return _Result(self.token + '\n')
         if 'head-object' in argv:
             if self.head_error:
                 return _Result('', returncode=255, stderr=self.head_error)
@@ -63,9 +57,6 @@ class _Aws:
         if 'create-invalidation' in argv:
             return _Result('INV1\n')
         return _Result('')
-
-    def flat(self):
-        return [word for call in self.calls for word in call]
 
 
 class PublishFeedTests(unittest.TestCase):
@@ -94,30 +85,23 @@ class PublishFeedTests(unittest.TestCase):
             code = publish.main(list(argv) + list(extra))
         return code, out.getvalue()
 
-    def test_feed_document_points_at_feed_origin_and_carries_token(self):
+    def test_documents_are_public_and_keep_both_origins(self):
         dist = self._dist()
         latest = json.loads((dist / 'latest.json').read_text())
         bundle = publish.bundle_name(latest)
-        feed_doc, release_doc = publish.documents(latest, bundle, TOKEN, False)
+        feed_doc, release_doc = publish.documents(latest, bundle)
         self.assertEqual(feed_doc['url'],
                          publish.FEED_ORIGIN + '/bundles/' + bundle)
-        self.assertEqual(feed_doc['feed_token'], TOKEN)
         self.assertEqual(release_doc['url'], latest['url'])
+        self.assertNotIn('feed_token', feed_doc)
         self.assertNotIn('feed_token', release_doc)
 
-    def test_transition_embeds_token_in_release_document(self):
-        dist = self._dist()
-        latest = json.loads((dist / 'latest.json').read_text())
-        _, release_doc = publish.documents(latest, 'b.tar.gz', TOKEN, True)
-        self.assertEqual(release_doc['feed_token'], TOKEN)
-        self.assertEqual(release_doc['url'], latest['url'])
-
-    def test_stale_token_never_carries_into_the_release_copy(self):
+    def test_a_stale_embedded_token_never_survives_publication(self):
         latest = {'version': '1.0.0', 'url': GITHUB_BASE + '/v1.0.0/b.tar.gz',
                   'sha256': 'a' * 64, 'serial': 1, 'min_python': '3.14',
                   'feed_token': 'stale'}
-        feed_doc, release_doc = publish.documents(latest, 'b.tar.gz', TOKEN, False)
-        self.assertEqual(feed_doc['feed_token'], TOKEN)
+        feed_doc, release_doc = publish.documents(latest, 'b.tar.gz')
+        self.assertNotIn('feed_token', feed_doc)
         self.assertNotIn('feed_token', release_doc)
 
     def test_bundle_name_refuses_an_incomplete_document(self):
@@ -153,15 +137,12 @@ class PublishFeedTests(unittest.TestCase):
         """The channel document uploaded is the feed copy, not the release one.
 
         Bound at the CLI level and not only in the documents() unit test: a
-        swap of the two files would leave every repo-free host reading a
-        private GitHub URL with no token while CI stayed green.
+        swap of the two files would leave every host reading a GitHub Release
+        asset URL instead of the feed while CI stayed green.
         """
         dist = self._dist()
         runner = _Aws()
-        with mock.patch.dict(os.environ, {}, clear=False):
-            os.environ.pop('ROUTER_FEED_EMBED_TOKEN', None)
-            code, out = self._run(dist, runner,
-                                  extra=['--distribution-id', 'EDIST'])
+        code, out = self._run(dist, runner, extra=['--distribution-id', 'EDIST'])
         self.assertEqual(code, 0)
         bundle = 'ai-router-0.6.21.7.tar.gz'
         uploaded = [call for call in runner.calls if call[1:3] == ['s3', 'cp']]
@@ -177,10 +158,10 @@ class PublishFeedTests(unittest.TestCase):
         self.assertEqual([[call[call.index('--paths') + 1]] for call in invalidations],
                          [['/beta/latest.json']])
         feed_doc = json.loads((dist / 'feed-latest.json').read_text())
-        self.assertEqual(feed_doc['feed_token'], TOKEN)
+        self.assertNotIn('feed_token', feed_doc)
         release_doc = json.loads((dist / 'release-latest.json').read_text())
         self.assertNotIn('feed_token', release_doc)
-        self.assertIn('token feed document only', out)
+        self.assertIn('published beta 0.6.21.7', out)
 
     def test_stable_channel_key_and_contract_passthrough(self):
         """Stable publishes under stable/, and the client contract survives."""
@@ -200,32 +181,6 @@ class PublishFeedTests(unittest.TestCase):
         for field in ('version', 'sha256', 'serial', 'min_python'):
             self.assertEqual(feed_doc[field], original[field])
         self.assertIsInstance(feed_doc['serial'], int)
-
-    def test_transition_switch_reaches_the_release_document(self):
-        dist = self._dist()
-        runner = _Aws()
-        with mock.patch.dict(os.environ, {'ROUTER_FEED_EMBED_TOKEN': 'true'}):
-            code, out = self._run(dist, runner)
-        self.assertEqual(code, 0)
-        released = json.loads((dist / 'release-latest.json').read_text())
-        self.assertEqual(released['feed_token'], TOKEN)
-        self.assertIn('also in the GitHub Release document', out)
-
-    def test_token_never_reaches_argv_or_output(self):
-        dist = self._dist()
-        runner = _Aws()
-        code, out = self._run(dist, runner, extra=['--distribution-id', 'EDIST'])
-        self.assertEqual(code, 0)
-        self.assertNotIn(TOKEN, out)
-        self.assertNotIn(TOKEN, ' '.join(runner.flat()))
-
-    def test_empty_token_parameter_is_refused(self):
-        """A blank SSM value must not publish: it would stall every host."""
-        dist = self._dist()
-        with self.assertRaises(SystemExit) as caught:
-            self._run(dist, _Aws(token=''))
-        self.assertIn('empty', str(caught.exception))
-        self.assertFalse((dist / 'feed-latest.json').exists())
 
     def test_existing_identical_bundle_is_not_uploaded_twice(self):
         dist = self._dist()

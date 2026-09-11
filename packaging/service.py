@@ -85,69 +85,39 @@ FEED_URL = _feed.FEED_URL
 MIN_PYTHON = (3, 14)
 
 # Feed routing lives in feed.py; these are the names its callers read here.
-RELEASES_PREFIX = _feed.RELEASES_PREFIX
-feed_token = _feed.feed_token
-persist_feed_token = _feed.persist_feed_token
 trusted_origin = _feed.trusted_origin
+sibling_bundle = _feed.sibling_bundle
 channel_feed = _feed.channel_feed
 feed_source = _feed.feed_source
-gh_binary = _feed.gh_binary
 notice = _notice
 
 
-def github_asset(url):
-    route = _feed.github_route_parts(url)
-    if route is None:
-        return None
-    tag, asset = route
-    gh = _feed.gh_binary()
-    if gh is None:
-        raise SystemExit('Private router updates require GitHub CLI (gh), signed in as this user.')
-    result = run(_feed.github_command(gh, tag, asset), capture_output=True, timeout=120)
-    if result.returncode:
-        raise SystemExit('Cannot read private router release; check gh auth status and repository access.')
-    return result.stdout
-
-
-def fetch(url, home=None):
+def fetch(url):
     """Single network entry point; tests inject a fake.
 
-    The token header goes only to the feed origin. GitHub asset URLs keep
-    the gh path; anything off the trusted origins is refused before fetch
-    so a compromised feed cannot redirect a host elsewhere.
+    Only the public feed origin, or a local file for a manual install, is
+    accepted, so a compromised feed cannot redirect a host elsewhere.
     """
     if url.startswith('file://'):
         return Path(url[len('file://'):]).read_bytes()
     if not _feed.trusted_origin(url):
         raise SystemExit('refusing untrusted feed URL: %s' % _feed._safe_url(url))
-    asset = github_asset(url)
-    if asset is not None:
-        return asset
-    headers = _feed.feed_headers(home) if url.startswith(_feed.FEED_ORIGIN + '/') else {}
-    req = urllib.request.Request(url, headers=headers) if headers else url
-    with urllib.request.urlopen(req, timeout=30) as response:
+    with urllib.request.urlopen(url, timeout=30) as response:
         return response.read()
 
 
-def feed_read(fetcher, url, home):
-    """Fetch one feed/bundle URL, home-bound when the fetcher allows it.
-
-    The default fetch sends the stored feed token to the feed origin;
-    injected test fakes keep their one-argument shape.
-    """
+def feed_read(fetcher, url):
+    """Fetch one feed/bundle URL through the injected or default fetcher."""
     if fetcher is fetch and not trusted_origin(url):
         raise SystemExit('feed points off the trusted update origin; refusing')
-    try:
-        return fetcher(url, home)
-    except TypeError:
-        return fetcher(url)
+    return fetcher(url)
 
 
 def run(cmd, **kwargs):
     """Single subprocess entry point; tests inject a fake."""
     if sys.platform == 'win32':
         # The scheduled updater runs this installer under pythonw.exe; a
-        # console child (python, gh, schtasks, icacls) spawned from there
+        # console child (python, schtasks, icacls) spawned from there
         # would otherwise open a console window on the desktop.
         kwargs.setdefault('creationflags', getattr(subprocess, 'CREATE_NO_WINDOW', 0))
     return subprocess.run(cmd, **kwargs)
@@ -266,13 +236,13 @@ def render_update_plist(python, home):
     # The stable home launcher, never a per-release install.py path. launchd
     # keeps running its in-memory copy of a loaded plist, so a versioned path
     # outlives the release it names: after a prune the updater keeps firing a
-    # deleted or obsolete installer every 15 minutes. update_launch.py
+    # deleted or obsolete installer every 4 hours. update_launch.py
     # resolves `current` at exec time instead, exactly like router_launch.py.
     args = [python, str(home / 'update_launch.py')]
     return {'Label': UPDATE_LABEL,
             'ProgramArguments': args,
             'RunAtLoad': True,
-            'StartInterval': 900,
+            'StartInterval': 14400,
             'StandardOutPath': str(home / 'logs' / 'update.log'),
             'StandardErrorPath': str(home / 'logs' / 'update.log')}
 
@@ -310,16 +280,15 @@ def wait_version(state, version, timeout=150, fetch_health=None):
     return None
 
 
-def fetch_feed(url, etag, _fetch=None, home=None):
+def fetch_feed(url, etag, _fetch=None):
     """Read a feed document, revalidating with a saved ETag.
 
-    Returns (status, body, etag). The default fetch sends the stored feed
-    token to the feed origin; injected fakes keep their old one-argument
-    shape and bypass the header path.
+    Returns (status, body, etag). Injected fakes keep their one-argument
+    shape and bypass the conditional-GET path.
     """
     if _fetch is None:
-        return _feed.live_feed(url, etag, home, fetch)
-    if url.startswith('file://') or url.startswith(RELEASES_PREFIX):
+        return _feed.live_feed(url, etag, fetch)
+    if url.startswith('file://'):
         return 200, _fetch(url), etag
     req = urllib.request.Request(url, headers={'If-None-Match': etag} if etag else {})
     try:
@@ -689,9 +658,4 @@ def check_serial(home, latest, pinned=False):
     stored = feed_serial(home)
     if serial < stored:
         raise SystemExit(f'stale feed serial {serial} is older than {stored}')
-    # Learn the feed token after the serial check but before the version
-    # comparison, so a host that is already current still migrates: its
-    # next poll resolves the token-gated origin. A feed without a token
-    # leaves the host on its existing route untouched.
-    persist_feed_token(home, latest)
     return serial
