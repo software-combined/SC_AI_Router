@@ -73,6 +73,7 @@ REQUIRED_PACKAGING = (
     'packaging/platforms/linux.py',
     'packaging/platforms/windows.py',
     'packaging/install.sh', 'packaging/install.ps1',
+    'LICENSE', 'COMMERCIAL_LICENSE.md', 'THIRD_PARTY_NOTICES.md',
 )
 
 
