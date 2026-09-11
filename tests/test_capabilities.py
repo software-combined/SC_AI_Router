@@ -1,6 +1,6 @@
 import unittest
 from ai_router.capabilities import (OPENROUTER_MODELS, REASONING_LEVELS, catalogue_patch,
-    describe, input_modalities, live_levels, reasoning_levels)
+    check_images, describe, input_modalities, live_levels, reasoning_levels)
 from ai_router.registry import MODELS
 
 class CapabilityTests(unittest.TestCase):
@@ -52,6 +52,19 @@ class InvariantTests(unittest.TestCase):
     def test_unknown_model_fails_closed(self):
         with self.assertRaises(KeyError):
             catalogue_patch('unknown/model')
+
+
+class ImageDetectionTests(unittest.TestCase):
+    def test_tool_output_image_rejected_for_text_only_model(self):
+        slug = next(slug for slug in OPENROUTER_MODELS
+                    if 'image' not in input_modalities(slug))
+        items = [{'type': 'function_call_output', 'call_id': 'c1',
+                  'output': [{'type': 'input_image',
+                              'image_url': 'data:image/png;base64,AAA'}]}]
+        with self.assertRaisesRegex(ValueError, 'does not accept image input'):
+            check_images(slug, items)
+        check_images(slug, [{'type': 'message', 'role': 'user',
+                             'content': 'plain text'}])
 
 if __name__ == '__main__':
     unittest.main()

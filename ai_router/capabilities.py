@@ -7,6 +7,7 @@ REPL offered, and image input only where live metadata advertises it.
 GLM 5.3 and the DeepSeek v4 text models are text-only per live metadata. Contributor rejects max despite
 advertising it; Grok has no max/minimal. Defaults stay low.
 """
+from .image_items import has_images
 from .registry import MODELS, openrouter_slugs
 OPENROUTER_MODELS = openrouter_slugs()
 IMAGE_INPUT_MODELS = frozenset(m.slug for m in MODELS if 'image' in m.modalities)
@@ -75,19 +76,6 @@ def check_effort(slug, effort):
             slug + ' does not support reasoning effort ' + repr(effort)
             + '; use one of ' + ', '.join(levels)
             + ' (change effort before switching models).')
-
-
-def has_images(items):
-    """True when the turn carries image blocks a text-only model would lose."""
-    if not isinstance(items, list):
-        return False
-    for item in items:
-        if (isinstance(item, dict) and item.get('type') == 'message'
-                and isinstance(item.get('content'), list)
-                and any(isinstance(b, dict) and b.get('type') == 'input_image'
-                        for b in item['content'])):
-            return True
-    return False
 
 
 def check_images(slug, items):
