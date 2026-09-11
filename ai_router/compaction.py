@@ -159,15 +159,37 @@ def scrub_tool_fragments(items):
     return out
 
 
+REASONING_TEXT_BLOCKS = frozenset({'reasoning_text', 'text'})
+
+
+def _reasoning_text(item):
+    """Readable reasoning text; the provider blob value is never read."""
+    parts = []
+    for blocks, restricted in ((item.get('summary'), False), (item.get('content'), True)):
+        if isinstance(blocks, str) and blocks.strip():
+            parts.append(blocks.strip())
+        elif isinstance(blocks, list):
+            for block in blocks:
+                if not isinstance(block, dict):
+                    continue
+                if restricted and block.get('type') not in REASONING_TEXT_BLOCKS:
+                    continue
+                text = block.get('text')
+                if isinstance(text, str) and text.strip():
+                    parts.append(text.strip())
+    return ' '.join(parts)
+
+
 def strip_reasoning_blobs(items):
-    """Drop OpenAI-owned reasoning blobs other models cannot read; keep plaintext."""
+    """Strip OpenAI-owned reasoning blobs; keep items that still hold readable text."""
     if not isinstance(items, list):
         return items
     out = []
     for item in items:
-        if isinstance(item, dict) and item.get('type') == 'reasoning' and 'encrypted_content' in item:
+        if (isinstance(item, dict) and item.get('type') == 'reasoning'
+                and 'encrypted_content' in item):
             item = {k: v for k, v in item.items() if k != 'encrypted_content'}
-            if not item.get('summary'):
+            if not _reasoning_text(item):
                 continue
         out.append(item)
     return out
@@ -199,9 +221,11 @@ def _item_text(item):
                 return f'tool result{label}: ' + _block_text(item[key])[:2000]
         return ''
     if kind == 'reasoning':
-        if 'encrypted_content' in item:
-            return ''  # Provider-owned blob; never forward opaque content.
-        return 'reasoning: ' + _block_text(item.get('summary', ''))[:2000]
+        blob = item.get('encrypted_content')
+        if isinstance(blob, str) and blob:
+            return ''  # Real provider blob; opaque content never reaches summaries.
+        text = _reasoning_text(item)
+        return f'reasoning: {text}'[:2000] if text else ''
     if is_compaction_item(item):
         return compaction_text(item)
     if kind == 'agent_message':
