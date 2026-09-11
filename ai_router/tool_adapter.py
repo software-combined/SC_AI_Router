@@ -367,8 +367,8 @@ def stream_events(response, names, notes=None):
             if event is None:
                 continue
             if adapter.changed:
-                yield b'data: ' + json.dumps(event).encode() + b'\n\n'
+                yield sse.frame(json.dumps(event).encode())
             else:
-                yield b'data: ' + data + b'\n\n'
+                yield sse.frame(data)
         else:
             yield frame

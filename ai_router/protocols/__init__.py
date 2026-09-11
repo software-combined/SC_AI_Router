@@ -4,7 +4,12 @@ One small table maps method+path to a protocol policy. The HTTP handler
 reads/auths a request, asks for the protocol, invokes it, and relays; it no
 longer branches on client-specific provider tables. Each policy supplies its
 provider selector plus the retry/header callbacks the relay path needs.
+
+The path rows are built from their owners (Plan 125): `providers` owns the
+native service paths and `claude` owns the Messages paths, so a path added
+there is routable here without a second edit.
 """
+from .. import claude, providers
 from . import messages, responses
 
 POST = 'POST'
@@ -13,11 +18,10 @@ TABLE = (
     # Responses family: Codex turns, compaction, native service paths.
     {'methods': (POST,), 'paths': frozenset({'/responses', '/responses/compact'}),
      'policy': responses.POLICY},
-    {'methods': (POST,), 'paths': frozenset({'/alpha/search', '/alpha/notes/v2/thread_hint',
-                                             '/guardian', '/guardian-classifier'}),
+    {'methods': (POST,), 'paths': frozenset(providers.NATIVE_SERVICE_PATHS),
      'policy': responses.POLICY},
     # Messages family: Claude Code ingress.
-    {'methods': (POST,), 'paths': frozenset({'/v1/messages', '/v1/messages/count_tokens'}),
+    {'methods': (POST,), 'paths': claude.CLAUDE_POST_PATHS,
      'policy': messages.POLICY},
 )
 
