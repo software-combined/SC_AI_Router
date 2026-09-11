@@ -48,7 +48,8 @@ header.
 - Feed keys: `<channel>/latest.json` (`max-age=60`, ETag preserved for the
   updater's 304 path) and `bundles/ai-router-<version>.tar.gz`
   (`max-age=31536000, immutable`). `runtimes.json`, `runtimes/*` and
-  `bootstrap/*` are reserved for the first-install follow-up.
+  `bootstrap/*` are published by `tools/publish_first_install.py` (the
+  pinned runtimes and the two wrapper scripts).
 - The feed copy of `latest.json` carries `feed_token` and a `url` under the
   feed origin; the GitHub copy keeps the release-asset URL and carries
   `feed_token` only while the transition variable is set.
@@ -120,9 +121,10 @@ header.
 
 - Signatures stay off; checksum, serial, version and trusted-origin checks
   remain the client controls.
-- Scope is the update path. First install for new machines (runtime
-  mirroring, bootstrap endpoints, the gated library page) stays with Plan
-  106's remaining first-install stages and Plans 112/117.
+- Scope is the update path and the feed side of first install:
+  `tools/publish_first_install.py` publishes the pinned runtimes and both
+  bootstrap wrappers. The identity-gated library page and per-install
+  tokens stay with Plan 106's remaining stages and Plans 112/117.
 - One poll cycle plus jitter (about 20 minutes) is the rotation overlap.
 - CloudFront default price class; published volume is a few MB per release.
 

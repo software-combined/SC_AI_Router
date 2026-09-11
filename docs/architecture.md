@@ -52,9 +52,11 @@ Rules:
 
 `infra/` owns the update feed as code: the certificate stack, the private
 bucket, the CloudFront distribution with its viewer-request token gate, the
-DNS alias, and the tag-only publisher role. `tools/publish_feed.py` owns one
-publication: it turns a built `dist/` into the feed's `<channel>/latest.json`
-and the GitHub Release document, and it is the only writer of the feed. The
+DNS alias, and the tag-only publisher role. `tools/publish_feed.py` owns
+release publication: it turns a built `dist/` into the feed's
+`<channel>/latest.json` and the GitHub Release document.
+`tools/publish_first_install.py` owns the first-install assets: the pinned
+`runtimes.json` and `runtimes/*`, plus the `bootstrap/*` wrappers. The
 router imports neither: hosts read the feed through `packaging/feed.py`, which
 stays the client-side owner of origin, token and channel resolution.
 
