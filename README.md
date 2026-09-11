@@ -317,6 +317,8 @@ Cyril Allart <cyril@softwarecombined.com>.
 A manual install copies ONLY these files beside the private state
 directory at an idle boundary:
 `ai_router/router.py`,
+`ai_router/ingress.py`,
+`ai_router/relay.py`,
 `ai_router/providers.py`,
 `ai_router/claude.py`,
 `ai_router/registry.py`,

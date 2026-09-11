@@ -1,21 +1,18 @@
 """Local trial: retain client subscription authentication; isolate provider keys."""
-import hmac
 import http.client
-import json
-import io
 import os
 import socket
 import threading
 import time
 from compression import zstd
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from . import (capabilities, errors, ingress, local_services, provider_defs,
+               relay, setup, subscription_fallback, transport)
 from .credentials import Credentials
-from . import (capabilities, claude, errors, local_services, provider_defs,
-               setup, subscription_fallback, transport, upstream)
 from .protocols import owned_paths, select as select_protocol
 from .errors import InvalidSize, PreparationError
 from .providers import NATIVE_SERVICE_PATHS
-from .runtime import MAX_BODY, ROUTER_HOME, VERSION, log_event
+from .runtime import MAX_BODY, ROUTER_HOME, log_event
 
 
 class Router(ThreadingHTTPServer):
@@ -74,84 +71,19 @@ class Handler(BaseHTTPRequestHandler):
         pass  # Request URLs and upstream credentials must never enter access logs.
 
     def send_json(self, status, obj, headers=None):
-        body = json.dumps(obj).encode()
-        self.send_response(status)
-        self.send_header('Content-Type', 'application/json')
-        self.send_header('Content-Length', str(len(body)))
-        for k, v in (headers or {}).items():
-            self.send_header(k, v)
-        self.send_header('Connection', 'close')
-        self.end_headers()
-        self.wfile.write(body)
-        self.close_connection = True
+        return ingress.send_json(self, status, obj, headers)
 
     def error(self, err):
-        prefix = '/' + self.server.state.get('token', '')
-        raw = self.path
-        suffix = raw[len(prefix):] if prefix != '/' and raw.startswith(prefix) else '<unrouted>'
-        log_event('request_rejected', status=err.status, code=err.code,
-                  path=suffix.split('?')[0][:200])
-        try:
-            self.send_json(err.status, err.body())
-        except OSError:
-            pass  # Client already disconnected; the event log keeps the record.
+        return ingress.error(self, err, log_event=log_event)
 
     def authorized_path(self):
-        # Setup URLs carry their own token plus nonce and enforce same-origin
-        # themselves, so the generic rebinding rejection exempts their path.
-        if (self.headers.get('Origin')
-                and '/setup/' not in self.path.split('?', 1)[0]):
-            return None, False
-        prefix = '/' + self.server.state['token']
-        token = self.server.state['token'].encode()
-        candidate, sep, _ = self.path[1:].partition('/')
-        # Byte compares (Plan 136): compare_digest rejects non-ASCII str with
-        # TypeError, and latin-1 ingress input can carry bytes 0x80-0xFF.
-        if sep and hmac.compare_digest(candidate.encode('iso-8859-1'), token):
-            return self.path[len(prefix):].removeprefix('/backend-api/codex'), True
-        header = self.headers.get('Authorization', '')
-        if header.startswith('Bearer ') and hmac.compare_digest(
-                header[len('Bearer '):].encode('iso-8859-1'), token):
-            return self.path.removeprefix('/backend-api/codex'), False
-        return None, False
+        return ingress.authorized_path(self)
 
     def context_error(self, streaming):
-        err = errors.context_window()
-        if not streaming:
-            return self.error(err)
-        # Codex recognizes context_length_exceeded inside response.failed;
-        # a plain HTTP 400/409 does not mark its context full for recovery.
-        log_event('request_rejected', status=200, code=err.code)
-        body = ('event: response.failed\ndata: ' + json.dumps(
-            {'type': 'response.failed', 'response': err.body()}) + '\n\n').encode()
-        self.send_response(200)
-        self.send_header('Content-Type', 'text/event-stream')
-        self.send_header('Content-Length', str(len(body)))
-        self.send_header('Connection', 'close')
-        self.end_headers()
-        self.wfile.write(body)
-        self.close_connection = True
+        return ingress.context_error(self, streaming, log_event=log_event)
 
     def do_GET(self):
-        path, _ = self.authorized_path()
-        if path is None:
-            return self.error(errors.forbidden())
-        path = path.split('?', 1)[0]
-        if path.startswith('/setup/'):
-            return setup.serve(self, path[len('/setup/'):], False)
-        if path == '/health':
-            return self.send_json(200, {'status': 'ok', 'version': VERSION,
-                                        'inflight': self.server.inflight,
-                                        'draining': self.server.draining,
-                                        'served_models': dict(self.server.served_models)})
-        if path == '/v1/models':
-            return self.send_json(200, claude.models_listing())
-        if self.server.draining:
-            return self.drain_reject()
-        if self.headers.get('Upgrade', '').lower() == 'websocket':
-            # Codex explicitly handles 426 by switching this session to HTTP/SSE.
-            return self.error(errors.websocket_rejected())
-        return self.error(errors.unsupported_route())
+        return ingress.do_get(self)
 
     def drain_reject(self):
         return self.retryable_reject(errors.draining())
@@ -265,124 +197,8 @@ class Handler(BaseHTTPRequestHandler):
         self.relay(provider, prepared, metrics, started, has_image)
 
     def read_body(self):
-        size = int(self.headers.get('Content-Length', '-1'))
-        if size < 0 or size > MAX_BODY or self.headers.get('Transfer-Encoding'):
-            raise InvalidSize('Invalid request size')
-        body = self.rfile.read(size)
-        encoding = self.headers.get('Content-Encoding', '')
-        if encoding == 'zstd':
-            with zstd.ZstdFile(io.BytesIO(body)) as stream:
-                decoded = stream.read(MAX_BODY + 1)
-        else:
-            decoded = body
-        if len(decoded) > MAX_BODY:
-            raise InvalidSize('Decoded request is too large')
-        return body, json.loads(decoded), size
+        return ingress.read_body(self, MAX_BODY)
 
     def relay(self, provider, prepared, metrics, started, has_image=False):
-        conn = http.client.HTTPSConnection(prepared.host, timeout=120)
-        sent = False
-        response = None
-        try:
-            # Phases land inside post_with_phases even on failure.
-            response, headers_done = transport.post_with_phases(
-                conn, prepared, metrics)
-            if (provider.defn.dialect == 'openai' and metrics['path'] in NATIVE_SERVICE_PATHS
-                    and response.status in (401, 403)):
-                response.read()
-                log_event('native_upstream_rejected', path=metrics['path'],
-                          upstream_status=response.status)
-                try:
-                    local_services.answer(metrics['path'])
-                except local_services.LocalAnswer as exc:
-                    return self.error(exc)
-            retry_after = upstream.upstream_retry_after(response, prepared, metrics)
-            if retry_after is not None:
-                return subscription_fallback.refused(self, prepared, retry_after, metrics, started)
-            if response.status >= 400:
-                raw = response.read()
-                transport.note_first_data(metrics, headers_done)
-                # Gate the terminal-frame path on the protocol as well: the
-                # Messages ingress shares the openrouter dialect but has no
-                # Responses failure frame to send.
-                if (provider.defn.dialect == 'openrouter'
-                        and metrics.get('protocol') == provider_defs.RESPONSES
-                        and upstream.is_context_error(raw)):
-                    return self.context_error(metrics['stream'])
-                if (provider.defn.dialect == 'openrouter'
-                        and response.status in (401, 403)
-                        and metrics.get('protocol') == provider_defs.RESPONSES
-                        and self.server.credentials.key_rejected(prepared.provider)):
-                    setup.open_key_window(self.server, self.server.credentials.home,
-                                          prepared.provider)
-                    label = provider_defs.label_for(prepared.provider)
-                    return self.error(errors.credential_problem(
-                        f'The stored {label} key was rejected. '
-                        'Open the key setup page to connect a new one.'))
-                described = upstream.describe_failure(
-                    None, {'status': response.status, 'body': raw},
-                    {'model': metrics.get('model'), 'provider': prepared.provider,
-                     'elapsed_ms': round((time.monotonic() - started) * 1000, 1),
-                     'timeout_s': 120,
-                     'has_image': has_image})
-                if described is not None:
-                    status, message = described
-                    log_event('upstream_rejected', status=response.status,
-                              client_status=status, **metrics)
-                    return self.error(errors.upstream_described(message) if status == 502
-                                      else errors.preparation(message))
-                self.send_response(response.status)
-                transport.relay_headers(response, self.send_header, metrics.get('model'))
-                self.send_header('Connection', 'close')
-                self.end_headers()
-                self.wfile.write(raw)
-                self.wfile.flush()
-                self.close_connection = True
-                return
-            metrics['upstream_headers_ms'] = round((time.monotonic() - started) * 1000, 1)
-            metrics['response_kind'], metrics['response_encoding'] = transport.describe_response(response)
-            upstream.validate_response(response, prepared)
-            self.send_response(response.status)
-            transport.relay_headers(response, self.send_header, metrics.get('model'))
-            self.send_header('Connection', 'close')
-            self.end_headers()
-            sent = True
-            for chunk in provider.adapt(response, prepared.tool_names, metrics):
-                if 'first_chunk_ms' not in metrics:
-                    metrics['first_chunk_ms'] = round((time.monotonic() - started) * 1000, 1)
-                transport.note_first_data(metrics, headers_done)
-                self.wfile.write(chunk)
-                self.wfile.flush()
-                transport.note_first_write(metrics, headers_done)
-            log_event('request_completed', **metrics, status=response.status,
-                        total_ms=round((time.monotonic() - started) * 1000, 1))
-            if metrics.get('served_model'):
-                with self.server.lock:
-                    self.server.served_models[metrics['model']] = metrics['served_model']
-        except (OSError, http.client.HTTPException, ValueError, KeyError,
-                TypeError, AttributeError) as exc:
-            total_ms = round((time.monotonic() - started) * 1000, 1)
-            log_event('transport_error',
-                        status=response.status if response is not None else None,
-                        **metrics, error_type=type(exc).__name__,
-                        error_category=exc.msg if isinstance(exc, json.JSONDecodeError) else type(exc).__name__,
-                        location=transport.describe_location(exc),
-                        total_ms=total_ms)
-            if sent:  # best-effort terminal frame on Responses SSE
-                transport.emit_terminal_failure(self.wfile, metrics)
-            else:
-                described = upstream.describe_failure(
-                    exc, None,
-                    {'model': metrics.get('model'), 'provider': prepared.provider,
-                     'host': prepared.host, 'elapsed_ms': total_ms,
-                     'timeout_s': 120,
-                     'has_image': has_image})
-                if described is not None:
-                    status, message = described
-                    self.error(errors.upstream_described(message) if status == 502
-                               else errors.preparation(message))
-                else:
-                    self.error(errors.upstream_failed())
-        finally:
-            conn.close()
-            self.close_connection = True
+        return relay.relay(self, provider, prepared, metrics, started, has_image,
+                           log_event=log_event)
