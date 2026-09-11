@@ -5,10 +5,137 @@
 Work lands on `develop` via `fix/*`/`feat/*` branches, then `develop`
 merges to `main` via PR. Tag the merge `v$(cat packaging/VERSION)` (or
 `v*-beta` for pre-releases): the release workflow runs on `v*` tags
-only, builds the bundle, runs the suite, and publishes the release with
-`latest.json`. Every router on the stable channel installs it within
-about fifteen minutes. Never push to `main` directly for a release;
-a direct push runs checks but publishes nothing.
+only, runs the suite, builds the bundle, publishes the release to the
+token-gated feed, and then creates the GitHub Release with `latest.json`.
+Every router on the stable channel installs it within about fifteen
+minutes. Never push to `main` directly for a release; a direct push runs
+checks but publishes nothing.
+
+## Feed infrastructure and publishing
+
+Two stacks, both in this repository, hold the update path. Deploy the
+certificate first: CloudFront reads viewer certificates from `us-east-1`,
+and the deploy stays in progress until ACM validates the DNS record it
+creates in the `softwarecombined.com` zone.
+
+```sh
+aws cloudformation deploy --stack-name scg-router-feed-cert --region us-east-1 \
+  --template-file infra/feed-cert.yaml
+CERT="$(aws cloudformation describe-stacks --stack-name scg-router-feed-cert \
+  --region us-east-1 \
+  --query "Stacks[0].Outputs[?OutputKey=='CertificateArn'].OutputValue" --output text)"
+aws cloudformation deploy --stack-name scg-router-feed --region ap-southeast-2 \
+  --template-file infra/feed.yaml --capabilities CAPABILITY_NAMED_IAM \
+  --parameter-overrides CertificateArn="$CERT"
+```
+
+`infra/feed.yaml` owns the private versioned bucket, the CloudFront
+distribution and its viewer-request token gate, the DNS alias, and the
+publisher role. The role is assumable only by `token.actions.githubusercontent.com`
+for `repo:software-combined/SC_OpenRouter_adapter:ref:refs/tags/v*`, and it
+can read and write objects in the feed bucket, list the bucket, invalidate
+the feed, read the stack outputs and read the token parameter. It cannot
+delete objects, write the token stores, or touch any other resource.
+
+### Feed tokens
+
+The gate is a CloudFront KeyValueStore: a request is served only when
+`X-SCG-Feed-Token` is a store key whose value is `active`. Every other
+request, including a lookup error, gets 403. The workflow reads the current
+value from the SecureString `/scg/router-feed/current-token` and embeds it
+in the feed's `latest.json`; the value is never an argv word, never printed
+and never logged.
+
+The stack deliberately does not create the parameter, so a stack update
+cannot overwrite a live token. Seed both stores once, after the first
+deploy:
+
+```sh
+TOKEN="$(python3 -c 'import secrets;print(secrets.token_hex(32))')"
+aws cloudfront-keyvaluestore put-key --kvs-arn "<KeyValueStoreArn>" \
+  --key "$TOKEN" --value active --if-match "<etag>"
+aws ssm put-parameter --region ap-southeast-2 \
+  --name /scg/router-feed/current-token \
+  --type SecureString --value "$TOKEN" --overwrite
+```
+
+Verify the gate before trusting a release. Before the first publish the
+channel documents do not exist, so even a valid token gets 403; run the
+positive check after the first release.
+
+```sh
+curl -s -o /dev/null -w '%{http_code}\n' https://dist.softwarecombined.com/stable/latest.json
+# 403: no header, and also before the first publish. After a release, a
+# request with the token header returns the feed document.
+```
+
+Rotation keeps the fleet polling. Add the new value to the KeyValueStore as
+a second key (`aws cloudfront-keyvaluestore describe-key-value-store`
+returns the `--if-match` ETag, and the write fails on a stale one), put the
+new value in SSM, then republish the current release: re-run the release
+workflow for the latest release tag. A new tag only publishes when its
+version equals `packaging/VERSION`, and re-running an older tag replays that
+older document, which up-to-date hosts refuse; the release step of a re-run
+reports the existing GitHub Release, but the feed publish runs first.
+
+Record the version the channel serves before the republish, wait one poll
+cycle plus the updater's bounded jitter (900 s plus up to 120 s, so allow
+about 20 minutes), then confirm the edge accepts the new value, the served
+document carries it, and the document is still that release before deleting
+the retired key:
+
+```sh
+# Run this before the republish, while OLD is still active.
+BEFORE="$(curl -s -H "X-SCG-Feed-Token: $OLD" \
+  https://dist.softwarecombined.com/<channel>/latest.json \
+  | python3 -c 'import json,sys;print(json.load(sys.stdin)["version"])')"
+
+# OLD = retired token value, NEW = its replacement.
+test -n "$NEW" || { echo 'NEW is unset'; exit 1; }
+AFTER="$(curl -sf -H "X-SCG-Feed-Token: $NEW" \
+  https://dist.softwarecombined.com/<channel>/latest.json \
+  | python3 -c 'import json,sys;d=json.load(sys.stdin);print(d["version"], d["feed_token"])')"
+[ "$AFTER" = "$BEFORE $NEW" ] \
+  && echo "the edge accepts the new token and the channel serves it; safe to retire the old key"
+```
+
+Before retiring the key, all of these must hold: the edge accepts `$NEW`,
+the served document carries `$NEW`, and it is still the release you
+recorded. A failed request means the new key is not in the store; a version
+that differs means the republish was not that release — an older document
+is refused by up-to-date hosts, and a newer one means a release shipped
+alongside the rotation, so check against its version instead.
+
+Repeat for every channel in use (`stable` and `beta`) before retiring the
+key: a channel you do not republish still serves the old token, and its
+hosts lose updates when that key is deleted.
+
+A host keeps the previous value in `feed-token.previous` and retries a 403
+once with it, which is what makes the overlap invisible. Never retire the
+key before that check passes: a host that has not yet seen the new document
+has only the retired value. A host offline for the whole rotation needs the
+bootstrap again; a double 403 names the Technology library bootstrap as the
+remedy without leaking bytes.
+
+### Migration switch and rollback
+
+`ROUTER_FEED_EMBED_TOKEN` (repository variable) makes the publisher also
+carry the token in the GitHub Release copy of `latest.json`. Hosts that
+still read the private repository pick the token up on their next poll,
+persist it owner-only, and never read the release asset again. Set it for
+the transition release, unset it once the fleet has polled, then rotate the
+token so the value that appeared in a release asset is dead.
+
+Feed bundles are immutable and the updater refuses a feed whose serial is
+older than the last accepted one, so recovering from a bad release is
+roll-forward: revert the change on the publishing branch, bump
+`packaging/VERSION`, and tag again. Re-uploading a different bundle for an
+already-published version aborts instead of replacing bytes, and a failed
+workflow before the feed upload leaves the previous feed document serving.
+A single host rolls back locally with `install.py --version <version>` at
+an idle moment. Moving a host from `beta` back to `stable` needs
+`<home>/feed-serial` cleared first, or the lower stable serial is refused
+as stale.
 
 ## Update feed and repo-free auto-update
 
@@ -31,9 +158,12 @@ site library: `packaging/bootstrap.sh` (macOS/Linux) or
 `packaging/bootstrap.ps1` (Windows) with `SCG_FEED_TOKEN` from the
 library page. The bootstrap resolves the pinned runtime from
 `runtimes.json`, verifies runtime and bundle checksums, writes the feed
-token, and runs the bundle installer. The CloudFront distribution,
-branch-driven publish workflow, and library page are owner-gated; until
-they exist, releases publish to GitHub as today and carry no token.
+token, and runs the bundle installer. The distribution and the publish
+workflow are in this repository (see "Feed infrastructure and
+publishing"); mirroring the pinned runtimes onto the feed, the bootstrap
+endpoints and the gated library page remain the owner-gated follow-up,
+and a machine that cannot use the bootstrap's download path still gets
+its first install the old way.
 
 The library page also carries `docs/agent-install-prompt.md`: a
 paste-to-agent prompt so the user asks their own agent to run the
