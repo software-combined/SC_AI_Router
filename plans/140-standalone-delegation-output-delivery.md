@@ -1,4 +1,4 @@
-# Plan 139: Deliver standalone delegation outputs to OpenRouter models
+# Plan 140: Deliver standalone delegation outputs to OpenRouter models
 
 > **Executor instructions**: Follow this plan step by step. Run every
 > verification command and confirm the expected result before moving on. If any
