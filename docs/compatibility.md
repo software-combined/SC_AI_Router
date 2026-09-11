@@ -41,7 +41,11 @@ shape below ships in the `0.6.27` beta from the
   `deepseek/deepseek-v4.1-flash` and received nothing.
 - Offline gates on the fix branch: full suite exit 0, compile exit 0,
   source limits `failures=0`, `tools/probe_standalone_outputs.py` prints
-  `PASS`. Paid live acceptance is orchestrator-owned and still pending.
+  `PASS`. Paid live acceptance was completed on 2026-09-11 with router
+  `0.6.27.44`: a fresh projectless task on `deepseek/deepseek-v4.1-flash`
+  received its `create_thread` delegation and replied exactly
+  `ROUTER-HANDOFF-OK-7f3a`, where the assistant-role iteration had replied
+  `NO-ASSIGNMENT`.
 
 ## Windows lifecycle acceptance, 2026-09-10 (Plan 116 first proof)
 
