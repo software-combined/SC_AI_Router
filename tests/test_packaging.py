@@ -1,4 +1,5 @@
 import importlib.util
+import re
 import shutil
 import tarfile
 import json
@@ -139,11 +140,30 @@ class PackagingTests(unittest.TestCase):
                 continue
             self.assertIn(rel, bundled, 'packaging module missing from the release inventory')
 
-    def test_readme_runtime_list_matches_files(self):
-        import re
-        readme = (Path(__file__).resolve().parents[1] / 'README.md').read_text()
-        listed = set(re.findall(r'`((?:ai_router|tools)/[^`]+)`', readme))
+    def test_runtime_file_list_matches_files(self):
+        doc = (Path(__file__).resolve().parents[1] / 'docs' / 'runtime-files.md').read_text()
+        listed = set(re.findall(r'`((?:ai_router|tools)/[^`]+)`', doc))
         self.assertEqual(listed, set(FILES))
+
+    def test_readme_quick_start_installs_its_own_build(self):
+        # --url-base keeps the built feed pointing at the local tarball.
+        root = Path(__file__).resolve().parents[1]
+        blocks = re.findall(r'```(?:sh|powershell)\n(.*?)```',
+                            (root / 'README.md').read_text(), re.S)
+        release_blocks = [block for block in blocks if 'packaging/release.py' in block]
+        self.assertEqual(len(release_blocks), 2)
+        for block in release_blocks:
+            self.assertIn('--url-base "file://$PWD/dist"', block)
+        out = root / 'dist-test-readme-quick-start'
+        self.addCleanup(shutil.rmtree, str(out), True)
+        spec = importlib.util.spec_from_file_location(
+            'release_quick_start', root / 'packaging' / 'release.py')
+        release_mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(release_mod)
+        release_mod.main(['--out', str(out), '--url-base', 'file://' + str(out)])
+        latest = json.loads((out / 'latest.json').read_text())
+        self.assertTrue(latest['url'].startswith('file://'))
+        self.assertTrue(Path(latest['url'][len('file://'):]).is_file())
 
     def test_release_bundle_contains_deploy_list(self):
         root = Path(__file__).resolve().parents[1]

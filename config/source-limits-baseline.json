@@ -25,6 +25,7 @@
   "tests/test_mixed_router.py": 401,
   "tests/test_notice.py": 366,
   "tests/test_notice_delivery.py": 398,
+  "tests/test_packaging.py": 301,
   "tests/test_probe_harness.py": 362,
   "tests/test_setup.py": 397,
   "tests/test_tool_adapter.py": 439,
