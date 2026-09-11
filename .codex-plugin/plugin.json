@@ -1,12 +1,13 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "scg-openrouter",
-  "version": "0.6.25",
+  "version": "0.6.32",
   "description": "SCG OpenRouter Setup: install, check, update, and remove the local mixed-model router through the canonical installer.",
   "author": {
-    "name": "Software Combined"
+    "name": "Software Combined",
+    "email": "cyril@softwarecombined.com"
   },
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "keywords": [
     "openrouter",
     "router",

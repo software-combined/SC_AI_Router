@@ -10,12 +10,33 @@ import json
 import unittest
 
 from tests.fakes import FakeUpstream, install_fake
-from tests.test_handler import _auth_file, _post
-from tests.test_mixed_router import _start_server, _test_state
+from tests.harness import (
+    auth_file as _auth_file,
+    post as _post,
+    start_server as _start_server,
+    test_state as _test_state,
+)
 from tests.test_claude_ingress import _messages
 
 
 class ProtocolContractTests(unittest.TestCase):
+    def test_protocol_rows_derive_from_their_path_owners(self):
+        # Plan 125: a path added to providers/claude is routable here with
+        # no second edit, and the union stays exact.
+        from ai_router import claude as claude_mod
+        from ai_router import protocols, providers as providers_mod
+        from ai_router.protocols import messages as messages_mod
+        from ai_router.protocols import responses as responses_mod
+        for path in providers_mod.NATIVE_SERVICE_PATHS:
+            self.assertIs(protocols.select('POST', path), responses_mod.POLICY)
+        for path in claude_mod.CLAUDE_POST_PATHS:
+            self.assertIs(protocols.select('POST', path), messages_mod.POLICY)
+        self.assertEqual(
+            protocols.owned_paths(),
+            frozenset(providers_mod.NATIVE_SERVICE_PATHS)
+            | claude_mod.CLAUDE_POST_PATHS
+            | {'/responses', '/responses/compact'})
+
     def _server(self, **overrides):
         state = _test_state(_auth_file(self))
         state.update(overrides)
@@ -56,7 +77,7 @@ class ProtocolContractTests(unittest.TestCase):
         recorded = install_fake(self, lambda: FakeUpstream(
             200, b'{"id":"msg_1","type":"message","content":[]}', []))
         server = self._server()
-        payload = _messages('~anthropic/claude-sonnet-latest')
+        payload = _messages('anthropic/claude-sonnet-5')
         raw = json.dumps(payload)
         conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
         conn.request('POST', '/test-token/v1/messages', body=raw,

@@ -10,8 +10,13 @@ import json
 import unittest
 from compression import zstd
 from tests.fakes import FakeUpstream, install_fake
-from tests.test_handler import _auth_file, _post
-from tests.test_mixed_router import _start_server, _test_state
+from tests.harness import (
+    auth_file as _auth_file,
+    get as _get,
+    post as _post,
+    start_server as _start_server,
+    test_state as _test_state,
+)
 from ai_router import claude as claude_mod
 from ai_router.registry import MODELS
 
@@ -25,12 +30,6 @@ def _messages(model='z-ai/glm-5.3-flash'):
                        'input_schema': {'type': 'object'}}]}
 
 
-def _get(port, target):
-    conn = http.client.HTTPConnection('127.0.0.1', port, timeout=10)
-    conn.request('GET', target)
-    return conn.getresponse()
-
-
 class ClaudeIngressTests(unittest.TestCase):
     def _server(self, **overrides):
         state = _test_state(_auth_file(self))
@@ -40,9 +39,9 @@ class ClaudeIngressTests(unittest.TestCase):
         return server
 
     def test_openrouter_slug_reaches_openrouter_with_key_only_and_identical_body(self):
-        # Listing visibility never gates routing: the hidden Anthropic alias
+        # Listing visibility never gates routing: the hidden Anthropic row
         # takes the same byte-identical OpenRouter path as a visible slug.
-        for slug in ('z-ai/glm-5.3-flash', '~anthropic/claude-sonnet-latest'):
+        for slug in ('z-ai/glm-5.3-flash', 'anthropic/claude-sonnet-5'):
             with self.subTest(slug=slug):
                 self._check_openrouter_split(slug)
 
@@ -89,7 +88,7 @@ class ClaudeIngressTests(unittest.TestCase):
                          {'Authorization': 'Bearer subscription-secret',
                           'anthropic-version': '2023-06-01',
                           'anthropic-beta': 'prompt-caching-2024-07-31',
-                          'Connection': 'keep-alive'})
+                          'Connection': 'keep-alive', 'Cookie': 'c=1'})
         self.assertEqual(response.status, 200)
         host, _, path, _, headers = recorded[0]
         self.assertEqual(host, 'api.anthropic.com')
@@ -98,6 +97,7 @@ class ClaudeIngressTests(unittest.TestCase):
         self.assertEqual(headers.get('anthropic-version'), '2023-06-01')
         self.assertEqual(headers.get('anthropic-beta'), 'prompt-caching-2024-07-31')
         self.assertNotIn('Connection', headers)
+        self.assertNotIn('Cookie', headers)
         self.assertNotIn('test-key', json.dumps(headers))
 
     def test_subscription_accepts_api_key_auth(self):
@@ -154,11 +154,11 @@ class ClaudeIngressTests(unittest.TestCase):
         listed = {row['id']: row['display_name'] for row in body['data']}
         self.assertEqual(
             listed['claude/z-ai/glm-5.3-flash'], 'Z.ai: GLM 5.3 Flash \u00b7 OpenRouter')
-        self.assertIn('anthropic/claude-sonnet-latest', listed)
+        self.assertIn('anthropic/claude-sonnet-5', listed)
 
     def test_models_listing_projects_desktop_family_tier(self):
         # Desktop 1.49585.0 drops rows whose id looks non-Anthropic unless
-        # the row declares a valid anthropic_family_tier. Anthropic aliases
+        # the row declares a valid anthropic_family_tier. Anthropic rows
         # keep their own tier word; every other row stands in for sonnet.
         server = self._server()
         response = _get(server.server_port, '/test-token/v1/models')
@@ -166,10 +166,10 @@ class ClaudeIngressTests(unittest.TestCase):
         tiers = {row['id']: row['anthropic_family_tier'] for row in body['data']}
         self.assertTrue(tiers)
         self.assertTrue(all(t in claude_mod.FAMILY_TIERS for t in tiers.values()))
-        self.assertEqual(tiers['anthropic/claude-sonnet-latest'], 'sonnet')
-        self.assertEqual(tiers['anthropic/claude-opus-latest'], 'opus')
-        self.assertEqual(tiers['anthropic/claude-haiku-latest'], 'haiku')
-        self.assertEqual(tiers['anthropic/claude-fable-latest'], 'fable')
+        self.assertEqual(tiers['anthropic/claude-sonnet-5'], 'sonnet')
+        self.assertEqual(tiers['anthropic/claude-opus-5'], 'opus')
+        self.assertEqual(tiers['anthropic/claude-haiku-4.5'], 'haiku')
+        self.assertEqual(tiers['anthropic/claude-fable-5.1'], 'fable')
         for row_id, tier in tiers.items():
             if not row_id.startswith('anthropic/claude-'):
                 self.assertEqual(tier, 'sonnet')
@@ -209,8 +209,8 @@ class ClaudeIngressTests(unittest.TestCase):
             200, b'{"id":"msg_3","type":"message","content":[]}', []))
         server = self._server()
         for alias, slug in (('claude/z-ai/glm-5.3-flash', 'z-ai/glm-5.3-flash'),
-                            ('anthropic/claude-sonnet-latest',
-                             '~anthropic/claude-sonnet-latest')):
+                            ('anthropic/claude-sonnet-5',
+                             'anthropic/claude-sonnet-5')):
             with self.subTest(alias=alias):
                 recorded.clear()
                 response = _post(server.server_port, '/test-token/v1/messages',
@@ -220,6 +220,24 @@ class ClaudeIngressTests(unittest.TestCase):
                 host, _, path, body, _ = recorded[0]
                 self.assertEqual((host, path), ('openrouter.ai', '/api/v1/messages'))
                 self.assertEqual(json.loads(body)['model'], slug)
+
+    def test_openrouter_context_error_answers_a_json_error_not_a_responses_frame(self):
+        # Plan 141 regression: the context-error gate is Responses-only. An
+        # Anthropic client must get the JSON error, never a 200 SSE stream
+        # carrying `response.failed` (that envelope belongs to Codex).
+        body = json.dumps({'error': {'code': 'context_length_exceeded',
+                                     'message': 'too long'}}).encode()
+        install_fake(self, lambda: FakeUpstream(400, body, []))
+        server = self._server()
+        payload = _messages('z-ai/glm-5.3-flash')
+        payload['stream'] = True
+        response = _post(server.server_port, '/test-token/v1/messages',
+                         payload, {'Content-Type': 'application/json'})
+        payload = response.read()
+        self.assertEqual(response.status, 409)
+        self.assertIn('application/json', response.getheader('Content-Type', ''))
+        self.assertNotIn(b'response.failed', payload)
+        self.assertNotEqual(payload[:6], b'data: ')
 
     def test_direct_slug_still_routes_byte_identical(self):
         recorded = install_fake(self, lambda: FakeUpstream(

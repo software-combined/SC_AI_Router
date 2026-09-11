@@ -2,8 +2,12 @@
 import json
 import unittest
 from tests.fakes import FakeUpstream, install_fake
-from tests.test_handler import _auth_file, _post
-from tests.test_mixed_router import _start_server, _test_state
+from tests.harness import (
+    auth_file as _auth_file,
+    post as _post,
+    start_server as _start_server,
+    test_state as _test_state,
+)
 
 
 class RouterResponseTests(unittest.TestCase):
@@ -49,35 +53,57 @@ class RouterResponseTests(unittest.TestCase):
         self.assertEqual(body['error'].get('candidates'), [])
         self.assertEqual(recorded, [])
 
-    def test_bare_tilde_alias_names_canonical_candidate(self):
-        # Live 2026-09-10: discovery lists Opus without its `~`, so a
-        # parent can echo back an id Responses never owned. The 400 must
-        # name the requested id and offer the canonical slug, still 400
-        # (identity stays strict; selection never falls back).
+    def test_retired_latest_alias_is_a_strict_miss(self):
+        # The ~...-latest aliases are retired from the registry, so a
+        # parent echoing one back gets UNKNOWN_MODEL naming the id, with no
+        # candidate and no upstream call (identity stays strict).
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
         server = self._server()
         response = _post(server.server_port, '/test-token/responses',
-                         {'model': 'anthropic/claude-opus-latest', 'input': []})
+                         {'model': '~anthropic/claude-opus-latest', 'input': []})
         self.assertEqual(response.status, 400)
         body = json.loads(response.read())
         self.assertEqual(body['error']['code'], 'UNKNOWN_MODEL')
-        self.assertEqual(body['error']['model'], 'anthropic/claude-opus-latest')
-        self.assertEqual(body['error']['candidates'],
-                         ['~anthropic/claude-opus-latest'])
-        self.assertIn('~anthropic/claude-opus-latest',
-                      body['error']['message'])
+        self.assertEqual(body['error']['model'], '~anthropic/claude-opus-latest')
+        self.assertEqual(body['error']['candidates'], [])
         self.assertEqual(recorded, [])
 
     def test_openai_model_header_is_pinned_to_requested_model(self):
+        # Upstream names a different id; the router re-pins the header to
+        # the requested model, so the pair must stay different.
         install_fake(self, lambda: FakeUpstream(200, b'{"output": []}', [
-            ('Content-Type', 'application/json'), ('openai-model', 'x-ai/grok-4.6')]))
+            ('Content-Type', 'application/json'), ('openai-model', 'x-ai/grok-4.7')]))
         server = self._server()
         response = _post(server.server_port, '/test-token/responses',
-            {'model': '~x-ai/grok-latest', 'input': [],
+            {'model': 'x-ai/grok-4.6', 'input': [],
              'tools': [{'type': 'custom', 'name': 'exec'}]})
         self.assertEqual(response.status, 200)
         response.read()
-        self.assertEqual(response.getheader('openai-model'), '~x-ai/grok-latest')
+        self.assertEqual(response.getheader('openai-model'), 'x-ai/grok-4.6')
+
+    def test_subscription_required_classification_is_type_based(self):
+        # Plan 126: the raise sites and the mapper agree on the exception
+        # type, so rewording a message cannot silently reclassify the body.
+        from ai_router import claude as claude_mod
+        from ai_router import errors, providers
+        from ai_router.subscription_roster import SUBSCRIPTION_SLUGS
+        slug = SUBSCRIPTION_SLUGS[0]
+        with self.assertRaises(errors.SubscriptionRequired):
+            providers.select(slug, '/responses', [slug], 'none')
+        with self.assertRaises(errors.ClaudeSubscriptionRequired):
+            claude_mod.select(slug, '/v1/messages', 'none')
+        for exc, code in ((errors.SubscriptionRequired(), 'SUBSCRIPTION_REQUIRED'),
+                          (errors.ClaudeSubscriptionRequired(),
+                           'CLAUDE_SUBSCRIPTION_REQUIRED')):
+            mapped = errors.map_client_error(exc)
+            self.assertEqual((mapped.status, mapped.code), (400, code))
+
+        class _Reworded(errors.SubscriptionRequired):
+            def __init__(self):
+                ValueError.__init__(self, 'please attach a subscription first')
+
+        self.assertEqual(errors.map_client_error(_Reworded()).code,
+                         'SUBSCRIPTION_REQUIRED')
 
 
 if __name__ == '__main__':

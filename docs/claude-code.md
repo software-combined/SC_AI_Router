@@ -1,9 +1,12 @@
 # Claude Code via the local router (Preview)
 
 The router speaks the Anthropic Messages API alongside the Codex
-backend, with the same billing split: registry slugs owned by OpenRouter
-bill the OpenRouter key, everything else passes through to the Claude
-subscription untouched.
+backend, with the same billing split: registry slugs owned by an external
+provider bill that provider's key, everything else passes through to the
+Claude subscription untouched. A provider definition
+(`ai_router/provider_defs.py`) says which external providers speak
+Messages; one without a `messages_path` is refused here with a clear 400
+and stays a Codex-only model.
 
 ## Setup
 
@@ -73,7 +76,7 @@ third-party mode in separate profiles (`.../Claude` and `.../Claude-3p`).
 Pointing the third-party profile at the loopback router lists every
 registry row: the app drops discovery rows whose id looks non-Anthropic
 unless the row declares a valid `anthropic_family_tier`, so the router
-projects one (`sonnet` for non-Anthropic rows, each Anthropic alias's own
+projects one (`sonnet` for non-Anthropic rows, each Anthropic row's own
 tier word). No stored registry field is added. Attach with
 `packaging/install.py --desktop` (refuses when `claude_mode` is `none`);
 service-only install and uninstall detach again. The first-party

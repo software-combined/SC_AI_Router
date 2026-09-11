@@ -2,17 +2,160 @@
 
 ## Unreleased
 
-- Tagged releases now publish to the token-gated update feed at
+- Repository relicensed to Apache-2.0 only: `LICENSE` carries the Apache
+  License 2.0 text, `COMMERCIAL_LICENSE.md` is removed, a `NOTICE` file is
+  added, and package and plugin metadata use the `Apache-2.0` SPDX
+  identifier. `packaging/VERSION` remains the release authority, and
+  `pyproject.toml` now tracks it exactly (a test fails on drift). Publication
+  remains blocked until the provenance question for
+  `ai_router/openrouter_base_instructions.txt` is resolved.
+
+- Automatic updates come from the public token-free feed: every install
+  polls `https://dist.softwarecombined.com/<channel>/latest.json` with no
+  token, no enrolment, no GitHub account and no repository access. Checks
+  run every 4 hours (Linux also checks 5 minutes after the timer activates;
+  macOS checks when the job loads). The `channel` file in the router home
+  selects `stable` (default) or the public pre-release document at
+  `beta/latest.json`. Checksums, version and identity checks, and the
+  serial replay guard are unchanged, and `--feed` remains the manual
+  install and update route. A leftover `feed-token` file on an older host
+  is inert.
+
+- The restart notice is about the picker, not the version: it is staged only
+  when a release adds a picker row the last install did not announce, so a
+  routine update no longer asks for a Codex restart that would change
+  nothing. An attempt that merged rows and then failed still prompts on its
+  retry, an unshown notice is refreshed with the running version, a notice
+  that could not be written is retried by the next install, and a catalogue
+  or baseline this comparison cannot read keeps the previous behaviour and
+  stages the notice. Additions that never pass through an install (live
+  refresh, picker mode changes) still need Plan 135.
+
+- The picker pins exact model ids: `anthropic/claude-opus-5`,
+  `anthropic/claude-sonnet-5`, `anthropic/claude-fable-5.1`,
+  `anthropic/claude-haiku-4.5`, `google/gemini-3.8-flash`,
+  `google/gemini-3.1-pro-preview` and `x-ai/grok-4.6` replace the
+  `~...-latest` aliases, which are retired via `RETIRED_SLUGS` so upgrades
+  drop them. The router no longer follows upstream `latest` movement on its
+  own; a new version is a registry row plus a retirement. Opus 5, Fable 5.1
+  and Haiku 4.5 passed isolated base round trips and are verified (Haiku at
+  `none`, its only supported effort), and the Grok image-stall hint keeps
+  matching the pinned row.
+
+- Providers are now data, not code paths: `ai_router/provider_defs.py` holds
+  one definition per upstream (host, endpoint prefixes, key location, model
+  catalogue, key-info endpoint, failure dialect), and the Responses and
+  Messages adapters are parameterized by it. OpenRouter remains the built-in
+  external provider and behaves exactly as before. Several external
+  providers can serve at once, each with its own owner-only key file and its
+  own fail-closed state: one missing key no longer stops the others. Picker
+  labels and billing lines read the row's provider label, `models add` /
+  `live_refresh` / `models check` follow the row's provider (with
+  `--provider`), `--status` reports a `providers` key map, and the setup
+  window names the provider whose key it collects. Failure policy moved to
+  `ai_router/upstream.py`; the setup page it shares with the native popup
+  renders the provider's own label.
+
+- Linux keeps checking for updates after a failed install step: the systemd
+  backend stopped the timer to replace its units and restarted it only at
+  the very end of a successful install, so a refused settings merge or a
+  failed client attach left every later poll dead until a reinstall. The
+  timer now starts where it was stopped.
+
+- The restart notice survives a headless updater run: a dialog that dies at
+  once -- the scheduled systemd service has no display, so zenity exits
+  with "Failed to open display" -- was recorded as shown and never seen
+  again. The notice stays pending until a run that can actually draw the
+  dialog shows it.
+
+- `bootstrap.sh --channel=beta` (and the PowerShell equivalent) now writes
+  the router home's `channel` file. The flag previously chose only that
+  install's bundle, so the host silently followed stable on every later
+  poll.
+
+- A refused settings merge no longer hides the update it landed: when the
+  installer exits non-zero but the router is already serving the new
+  version, the scheduled updater records the pass, shows the pending
+  restart notice and stops parking a release that works here. A pointer
+  without a serving router is still parked, and the exit status stays
+  non-zero so the problem remains visible.
+
+- A bootstrap channel switch resets the anti-replay serial, whose old value
+  refused every poll until the new channel's next release. The channel file
+  is written only once the host runs the feed's version or newer: a
+  lock-deferred run exits 0 without installing and must not switch the
+  channel, while a host already ahead of the requested channel (beta ahead
+  of stable) still moves.
+
+- Release tags created by the workflow now name the commit the bundle was
+  built from (`gh release create --target "$GITHUB_SHA"`), so a tag's
+  commit and its assets agree.
+
+- The Codex picker lists the OpenRouter-billed GPT twins again: Astra,
+  Sol, Terra and Luna appear beside their ChatGPT subscription rows, so a
+  refused or exhausted allowance still leaves them selectable on the
+  OpenRouter key. The subscription rows are unchanged and still first in
+  the picker; the `· OpenRouter` label and the client's billing note keep
+  the two routes apart. Nothing changes on the Claude side: the gateway
+  listing already includes every registry row, and the mirror rule stays
+  in the `--client claude` catalogue merge.
+
+- First install no longer needs the repository: the pinned CPython runtimes
+  and both bootstrap wrappers are published to the public feed, so any
+  machine installs and then auto-updates with no token, no GitHub account
+  and no repo access. The new `tools/publish_first_install.py` verifies
+  every runtime against `packaging/runtime.lock` before upload and is
+  idempotent.
+
+- First-run key setup is a native popup instead of a browser page: macOS,
+  Windows and Linux are asked for the OpenRouter key, the ChatGPT-subscription
+  choice and the starter in one flow, and the popup confirms the stored key
+  with its remaining credit. It submits through the same single-use nonce
+  route as before, so validation and owner-only storage are unchanged; a host
+  with no dialog tool still gets the loopback page. The popup carries the same
+  product icon and plain-language wording as the update notice, and the new
+  popup-style rule in `AGENTS.md` (pinned by `tests/test_popup_style.py`) keeps
+  every future dialog consistent. `ROUTER_NO_NOTICE=1` silences the post-update
+  restart dialog for unattended installs, and the test suite no longer spawns
+  real dialogs.
+
+- The setup and update dialogs follow the install's client set: a Codex-only
+  machine is asked about ChatGPT and offered "Quit and reopen Codex", a
+  Claude-only machine is asked about Claude and told to restart Claude Code
+  (no Codex app button), and a both-clients machine gets both questions and
+  both instructions. The installer records the attachment set in the router
+  state, and a scheduled update reads it back for the notice.
+
+- Licensing groundwork: the repository now carries the verbatim PolyForm
+  Shield License 1.0.0 text with the `Required Notice: Copyright 2026
+  Software Combined Pty Ltd` line, `COMMERCIAL_LICENSE.md` explains when a
+  separate commercial licence may be needed, and `THIRD_PARTY_NOTICES.md`
+  records the MIT-licensed opencodex material in `ai_router/compaction.py`.
+  Package and plugin metadata move from `UNLICENSED` to
+  `LicenseRef-PolyForm-Shield-1.0.0`, and every release bundle now ships the
+  licence files. No runtime behaviour changes. The repository stays private;
+  publication remains an owner decision.
+
+- Nested cross-task messages now reach tasks running on OpenRouter models.
+  Codex Desktop injects `create_thread` / `send_message_to_thread` turns as
+  standalone tool outputs with no `call_id`; the router used to drop them
+  as orphan tool fragments, so delegated tasks on OpenRouter models never
+  saw the message. Each standalone app-injected output is now rendered
+  before the scrub as a matched tool-result pair -- a synthesized complete
+  `function_call` plus the `function_call_output` carrying the delegation
+  text verbatim -- which the model acts on as a tool result. Assistant-role
+  plaintext was tried first but live acceptance rejected it (the child
+  replied `NO-ASSIGNMENT` instead of acting on the assignment).
+
+- Tagged releases now publish to the public update feed at
   `dist.softwarecombined.com` as well as to GitHub Releases, so an
-  installed router updates with no GitHub account, no `gh` and no
+  installed router updates with no token, no GitHub account and no
   repository access. The feed stack lives in this repository
   (`infra/feed-cert.yaml` in us-east-1, `infra/feed.yaml` in
-  ap-southeast-2) behind an edge token gate, and a tag-only GitHub OIDC
-  role is the sole publisher. Existing hosts migrate themselves: the
-  transition release carries the feed token in the GitHub `latest.json`,
-  the updater persists it owner-only on its next poll and reads the feed
-  from then on. Bundles are immutable, the channel feed is invalidated on
-  publish, and no client request-path behaviour changes.
+  ap-southeast-2), and a tag-only GitHub OIDC role is the sole publisher.
+  GitHub Releases remain a public mirror of each release for humans,
+  published after the feed. Bundles are immutable, the channel feed is
+  invalidated on publish, and no client request-path behaviour changes.
 
 - Context size is the provider's call again: the OpenRouter pre-flight
   refused a turn whenever serialized characters divided by four exceeded
@@ -54,15 +197,14 @@
   no longer refused as over-context; image blocks now cost a flat per-block
   allowance, and text-only models detect images that sit inside tool outputs.
 
-- The updater now finds GitHub CLI under scheduler-minimal PATH on macOS,
-  Linux and Windows (brew, apt/dnf, snap, Linuxbrew, Program Files,
-  per-user, choco, scoop), with the resolver consolidated into one owner;
-  no behaviour change when gh is already on PATH.
+- Install and update need no GitHub CLI: the updater reads the public feed
+  directly, so the scheduler-minimal PATH resolver for `gh` is gone.
 
 - No-subscription installs (`openai_mode: none`) now list the
   OpenRouter-billed OpenAI rows (Astra, Sol, Terra, Luna) in the Codex
   picker instead of the dead subscription slugs; mode flips in the setup
-  window refresh the picker file. Subscription installs are unchanged.
+  window refresh the picker file. Subscription installs are otherwise
+  unchanged.
 
 - Models whose OpenRouter row carries no web-search capability no longer
   receive Codex's `web_search` server tool. OpenRouter cannot execute it
@@ -97,11 +239,10 @@
   `AGENTS.md` only when no global instructions file exists yet. Existing
   files are never overwritten, and updates and uninstall leave them alone.
 
-- Bootstrap token hygiene: the feed token no longer appears on the curl
-  command line (curl reads it from an owner-only header file that is
-  removed when the bootstrap exits), and it is persisted only after the
-  first authenticated fetch succeeds, keeping the prior value in
-  `feed-token.previous` for the updater's one-time 403 retry.
+- Bootstrap downloads need no token: `bootstrap.sh` and `bootstrap.ps1`
+  fetch the pinned runtime and the release bundle from the public feed
+  with plain requests and verify both checksums. The header-file and
+  `feed-token.previous` machinery is gone.
 
 - `--uninstall --dry-run` now previews: it reports the target home and
   exits before touching client settings or services, matching the other

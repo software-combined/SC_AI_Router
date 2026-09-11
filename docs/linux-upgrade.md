@@ -10,15 +10,11 @@ The machine's agent should:
    Fetch and fast-forward `develop` only when safe. If fixes are needed, use
    one owned worktree and open a PR back to `develop`; do not edit the primary
    checkout or leave machine-only patches behind.
-2. Confirm GitHub CLI (`gh`) is installed and signed in as the desktop user
-   with read access to this private repository. The new updater uses it for
-   release downloads; anonymous GitHub asset URLs return 404. Inspect the
-   existing unit definitions, pointer, installed version and
-   release channel. Keep keys, state tokens and private health URLs out of
-   reports. `gh` is required only while the host is on the transitional
-   GitHub route: once a release that carries the feed token has been
-   polled, the host stores it owner-only and reads
-   `dist.softwarecombined.com` from then on, with no repository access.
+2. Inspect the existing unit definitions, pointer, installed version and
+   release channel. No token, no GitHub account and no repository access
+   are needed: the updater reads the public feed at
+   `https://dist.softwarecombined.com/<channel>/latest.json`. Keep keys,
+   state tokens and private health URLs out of reports.
    Disable the old update timer while preparing the upgrade. Check
    for a `feed` override file in the router home: preserve intentional pins;
    if it is the obsolete local development feed, retain a backup and remove

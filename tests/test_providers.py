@@ -2,12 +2,17 @@ import json
 import unittest
 from types import SimpleNamespace
 from unittest import mock
-from ai_router import providers
-from tests.test_tool_adapter import _isolated_home
+from ai_router import provider_defs, providers, upstream
+from tests.harness import (
+    isolated_home as _isolated_home,
+    stub_credentials as _stub_credentials,
+)
 
 
-def _stub_credentials(key='router-secret'):
-    return SimpleNamespace(openrouter_key=lambda: key)
+def _external_responses():
+    """The OpenRouter Codes adapter; Plan 141 makes adapters per-provider."""
+    return providers.ExternalResponsesProvider(provider_defs.OPENROUTER)
+
 
 class SelectTests(unittest.TestCase):
     def test_select_prefers_native_paths_regardless_of_model(self):
@@ -22,15 +27,16 @@ class SelectTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'not in the configured catalog'):
             providers.select('unknown/model', '/responses', ['gpt-6-astra'])
 
-    def test_select_unknown_carries_id_and_tilde_candidate(self):
+    def test_select_unknown_carries_id_and_no_alias_candidate(self):
+        # The retired Claude aliases are gone from the registry, so there is
+        # no tilde candidate to offer; the requested id still travels.
         from ai_router.errors import UnknownModel
         with self.assertRaises(UnknownModel) as caught:
             providers.select('anthropic/claude-opus-latest', '/responses',
                              ['gpt-6-astra'])
         self.assertEqual(caught.exception.model,
                          'anthropic/claude-opus-latest')
-        self.assertEqual(caught.exception.candidates,
-                         ('~anthropic/claude-opus-latest',))
+        self.assertEqual(caught.exception.candidates, ())
         with self.assertRaises(UnknownModel) as caught:
             providers.select('unknown/model', '/responses', ['gpt-6-astra'])
         self.assertEqual(caught.exception.candidates, ())
@@ -38,7 +44,7 @@ class SelectTests(unittest.TestCase):
     def test_openrouter_prepare_emits_router_key_only(self):
         # Picker visibility never gates routing: hidden GPT slugs still route.
         hidden = providers.select('openai/gpt-6-astra', '/responses', [])
-        self.assertIsInstance(hidden, providers.OpenRouterProvider)
+        self.assertIsInstance(hidden, providers.ExternalResponsesProvider)
         provider = providers.select('z-ai/glm-5.3', '/responses', [])
         prepared = provider.prepare('z-ai/glm-5.3', '/responses',
             {'model': 'z-ai/glm-5.3', 'input': []}, b'raw',
@@ -52,7 +58,8 @@ class SelectTests(unittest.TestCase):
         provider = providers.select('gpt-6-astra', '/responses', ['gpt-6-astra'])
         prepared = provider.prepare('gpt-6-astra', '/responses', {'model': 'x'}, b'raw',
             {'Authorization': 'Bearer subscription-secret', 'ChatGPT-Account-ID': 'acct',
-             'Connection': 'keep-alive', 'Host': 'h', 'Content-Length': '3'}, None)
+             'Connection': 'keep-alive', 'Host': 'h', 'Content-Length': '3',
+             'Cookie': 'c=1'}, None)
         self.assertEqual(prepared.headers,
                          {'Authorization': 'Bearer subscription-secret',
                           'ChatGPT-Account-ID': 'acct'})
@@ -67,7 +74,7 @@ class SelectTests(unittest.TestCase):
 
 class OutputCapTests(unittest.TestCase):
     def test_output_cap_follows_registry(self):
-        provider = providers.OpenRouterProvider()
+        provider = _external_responses()
         fake = SimpleNamespace(max_output_tokens=1000, context_window=100000)
         payload = {'model': 'fake/model', 'input': [], 'max_output_tokens': 5000}
         prepared = provider.prepare(fake, '/responses', payload, b'raw', {}, _stub_credentials())
@@ -81,7 +88,7 @@ class OutputCapTests(unittest.TestCase):
         # for input, so a ~105k-input request blows the context. The router
         # must reserve at most half the window for output.
         from ai_router.registry import by_slug
-        provider = providers.OpenRouterProvider()
+        provider = _external_responses()
         entry = by_slug('meta/muse-spark-1.3-contributor')
         payload = {'model': 'meta/muse-spark-1.3-contributor', 'input': []}
         prepared = provider.prepare(entry, '/responses', payload, b'raw', {},
@@ -90,7 +97,7 @@ class OutputCapTests(unittest.TestCase):
         self.assertLessEqual(sent, entry.context_window // 2)
 
     def test_unknown_model_is_rejected(self):
-        provider = providers.OpenRouterProvider()
+        provider = _external_responses()
         with self.assertRaises(providers.PreparationError):
             provider.prepare('unknown/model', '/responses',
                              {'model': 'unknown/model', 'input': []},
@@ -98,7 +105,7 @@ class OutputCapTests(unittest.TestCase):
 
     def test_request_within_context_window_still_passes(self):
         from ai_router.registry import by_slug
-        provider = providers.OpenRouterProvider()
+        provider = _external_responses()
         entry = by_slug('meta/muse-spark-1.3-contributor')
         payload = {'model': 'meta/muse-spark-1.3-contributor',
                    'input': [{'type': 'message', 'role': 'user',
@@ -111,7 +118,7 @@ class OutputCapTests(unittest.TestCase):
     def test_unknown_window_keeps_default_output(self):
         # Registry default context_window=0: the default output still clamps
         # to the provider ceiling, and the endpoint enforces context.
-        provider = providers.OpenRouterProvider()
+        provider = _external_responses()
         fake = SimpleNamespace(max_output_tokens=1000, context_window=0,
                                slug='fake/model')
         payload = {'model': 'fake/model',
@@ -124,7 +131,7 @@ class OutputCapTests(unittest.TestCase):
     def test_non_list_input_never_escapes_as_500(self):
         # Wire input of any JSON shape is measured, never a TypeError leak.
         from ai_router.registry import by_slug
-        provider = providers.OpenRouterProvider()
+        provider = _external_responses()
         entry = by_slug('meta/muse-spark-1.3-contributor')
         for shape in ('do the task', {'text': 'do the task'}, None):
             payload = {'model': entry.slug, 'input': shape}
@@ -138,25 +145,33 @@ class OutputCapTests(unittest.TestCase):
 
 class FailureDescriptionTests(unittest.TestCase):
     def test_stall_before_headers_names_model_and_timeout(self):
-        status, message = providers.describe_failure(
+        status, message = upstream.describe_failure(
             TimeoutError('timed out'), None,
-            {'model': '~x-ai/grok-latest', 'provider': 'openrouter',
+            {'model': 'x-ai/grok-4.6', 'provider': 'openrouter',
              'elapsed_ms': 120001.0, 'timeout_s': 120, 'has_image': False})
         self.assertEqual(status, 502)
-        self.assertIn('~x-ai/grok-latest', message)
+        self.assertIn('x-ai/grok-4.6', message)
         self.assertIn('120', message)
         self.assertIn('shorter', message)
 
     def test_grok_image_stall_suggests_text_only(self):
-        status, message = providers.describe_failure(
+        # The hint matches the pinned id and any tilde alias of the vendor.
+        for model in ('x-ai/grok-4.6', '~x-ai/grok-latest'):
+            with self.subTest(model=model):
+                status, message = upstream.describe_failure(
+                    TimeoutError('timed out'), None,
+                    {'model': model, 'provider': 'openrouter',
+                     'elapsed_ms': 120001.0, 'timeout_s': 120, 'has_image': True})
+                self.assertEqual(status, 502)
+                self.assertIn('text-only', message)
+        _, message = upstream.describe_failure(
             TimeoutError('timed out'), None,
-            {'model': '~x-ai/grok-latest', 'provider': 'openrouter',
+            {'model': 'z-ai/glm-5.3', 'provider': 'openrouter',
              'elapsed_ms': 120001.0, 'timeout_s': 120, 'has_image': True})
-        self.assertEqual(status, 502)
-        self.assertIn('text-only', message)
+        self.assertNotIn('text-only', message)
 
     def test_dns_failure_names_host(self):
-        status, message = providers.describe_failure(
+        status, message = upstream.describe_failure(
             OSError('Name or service not known'), None,
             {'model': 'z-ai/glm-5.3', 'provider': 'openrouter',
              'host': 'openrouter.ai', 'elapsed_ms': 12.0, 'timeout_s': 120,
@@ -170,9 +185,9 @@ class FailureDescriptionTests(unittest.TestCase):
                'root must be an object type"}')
         body = json.dumps({'error': {'message': 'Provider returned error',
                                      'metadata': {'raw': raw, 'provider_name': 'xAI'}}})
-        status, message = providers.describe_failure(
+        status, message = upstream.describe_failure(
             None, {'status': 400, 'body': body.encode()},
-            {'model': '~x-ai/grok-latest', 'provider': 'openrouter',
+            {'model': 'x-ai/grok-4.6', 'provider': 'openrouter',
              'elapsed_ms': 1831.8, 'timeout_s': 120, 'has_image': False})
         self.assertEqual(status, 409)
         self.assertIn('xAI', message)
@@ -182,11 +197,11 @@ class FailureDescriptionTests(unittest.TestCase):
         self.assertNotIn('arguments_json', message)
 
     def test_unparseable_upstream_body_passes_through(self):
-        self.assertIsNone(providers.describe_failure(
+        self.assertIsNone(upstream.describe_failure(
             None, {'status': 400, 'body': b'not json at all'},
             {'model': 'z-ai/glm-5.3', 'provider': 'openrouter',
              'elapsed_ms': 500.0, 'timeout_s': 120, 'has_image': False}))
-        self.assertIsNone(providers.describe_failure(
+        self.assertIsNone(upstream.describe_failure(
             ValueError('odd shape'), None,
             {'model': 'z-ai/glm-5.3', 'provider': 'openrouter',
              'elapsed_ms': 500.0, 'timeout_s': 120, 'has_image': False}))
@@ -206,7 +221,7 @@ class SummarizerTests(unittest.TestCase):
             def close(self):
                 pass
         with mock.patch.object(providers.http.client, 'HTTPSConnection', FakeConn):
-            return providers.OpenRouterProvider().summarize(model, 'key', [])
+            return _external_responses().summarize(model, 'key', [])
 
     def test_summarizer_pins_lowest_supported_effort(self):
         for model, effort in (('deepseek/deepseek-v4.1-flash', 'low'),
@@ -232,8 +247,8 @@ class SummarizerTests(unittest.TestCase):
                   'execution': 'client', 'tools': [
                       {'type': 'function', 'name': 'echo', 'description': 'Echo',
                        'parameters': {'type': 'object'}}]}]
-        with mock.patch.object(providers.OpenRouterProvider, 'summarize', lambda *a: 'did stuff'):
-            out = providers.OpenRouterProvider().compact('z-ai/glm-5.3', {'input': items}, 'key')
+        with mock.patch.object(providers.ExternalResponsesProvider, 'summarize', lambda *a: 'did stuff'):
+            out = _external_responses().compact('z-ai/glm-5.3', {'input': items}, 'key')
         payload = {'tools': [], 'input': out}
         prepare_tools(payload)
         self.assertEqual(len(payload['tools']), 1)
@@ -249,7 +264,7 @@ class SummarizerTests(unittest.TestCase):
                 {'type': 'input_image', 'image_url': 'data:image/png;base64,AAA'}]}]}
         with self.assertRaisesRegex(providers.PreparationError,
                                     'does not accept image input.*image-capable'):
-            providers.OpenRouterProvider().prepare(
+            _external_responses().prepare(
                 'z-ai/glm-5.3', '/responses', payload, b'raw', {}, _stub_credentials())
 
     def test_image_capable_models_keep_image_blocks(self):
@@ -257,16 +272,16 @@ class SummarizerTests(unittest.TestCase):
             {'type': 'message', 'role': 'user', 'content': [
                 {'type': 'input_text', 'text': 'look'},
                 {'type': 'input_image', 'image_url': 'data:image/png;base64,AAA'}]}]}
-        prepared = providers.OpenRouterProvider().prepare(
+        prepared = _external_responses().prepare(
             'moonshotai/kimi-k3', '/responses', payload, b'raw', {}, _stub_credentials())
         kept = json.loads(prepared.body)['input'][0]['content']
         self.assertEqual(len(kept), 2)
-        grok_payload = {'model': '~x-ai/grok-latest', 'input': [
+        grok_payload = {'model': 'x-ai/grok-4.6', 'input': [
             {'type': 'message', 'role': 'user', 'content': [
                 {'type': 'input_text', 'text': 'look'},
                 {'type': 'input_image', 'image_url': 'data:image/png;base64,AAA'}]}]}
-        grok_prepared = providers.OpenRouterProvider().prepare(
-            '~x-ai/grok-latest', '/responses', grok_payload, b'raw', {}, _stub_credentials())
+        grok_prepared = _external_responses().prepare(
+            'x-ai/grok-4.6', '/responses', grok_payload, b'raw', {}, _stub_credentials())
         self.assertEqual(json.loads(grok_prepared.body)['input'][0]['content'],
             [{'type': 'input_text', 'text': 'look'},
              {'type': 'input_text', 'text': '[image omitted: this model runs text-only]'}])
@@ -274,7 +289,7 @@ class SummarizerTests(unittest.TestCase):
     def test_text_only_models_pass_without_images(self):
         payload = {'model': 'z-ai/glm-5.3', 'input': [
             {'type': 'message', 'role': 'user', 'content': 'look'}]}
-        prepared = providers.OpenRouterProvider().prepare(
+        prepared = _external_responses().prepare(
             'z-ai/glm-5.3', '/responses', payload, b'raw', {}, _stub_credentials())
         self.assertEqual(prepared.host, 'openrouter.ai')
 

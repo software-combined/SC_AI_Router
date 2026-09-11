@@ -18,8 +18,12 @@ from unittest import mock
 
 from ai_router.runtime import LOG
 from tests.fakes import FakeUpstream, install_fake
-from tests.test_handler import _auth_file, _post
-from tests.test_mixed_router import _start_server, _test_state
+from tests.harness import (
+    auth_file as _auth_file,
+    post as _post,
+    start_server as _start_server,
+    test_state as _test_state,
+)
 
 
 class _ListHandler(logging.Handler):

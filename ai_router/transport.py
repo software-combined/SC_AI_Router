@@ -8,9 +8,12 @@ import json
 import time
 import traceback
 
+from . import provider_defs
+
 
 HOP_HEADERS = {'host', 'connection', 'content-length', 'transfer-encoding',
-               'upgrade', 'keep-alive', 'proxy-authorization', 'proxy-authenticate', 'te', 'trailer'}
+               'upgrade', 'keep-alive', 'proxy-authorization', 'proxy-authenticate',
+               'te', 'trailer', 'cookie'}
 
 
 class Prepared:
@@ -98,9 +101,6 @@ def describe_response(response):
     return kind, encoding
 
 
-RESPONSES_STREAM_PROVIDERS = ('openrouter', 'openai-subscription')
-
-
 def describe_location(exc):
     """One-line traceback handle for the failing adapter frame."""
     return ';'.join(
@@ -108,17 +108,18 @@ def describe_location(exc):
         for frame in traceback.extract_tb(exc.__traceback__, limit=3))
 
 
-def emit_terminal_failure(wfile, metrics, provider):
+def emit_terminal_failure(wfile, metrics):
     """Best-effort mid-stream terminal frame on Responses SSE only.
 
-    No-op for Claude Messages streams and non-SSE bodies; a dead socket
-    never raises from the error path.
+    The protocol, not the provider name, decides: a Messages stream carries
+    no `response.failed` frame. No-op for non-SSE bodies; a dead socket never
+    raises from the error path.
     """
     from .errors import upstream_failed
     if not (metrics.get('stream') is True
             and metrics.get('response_kind') == 'sse'
             and metrics.get('response_encoding') == 'identity'
-            and provider in RESPONSES_STREAM_PROVIDERS):
+            and metrics.get('protocol') == provider_defs.RESPONSES):
         # Identity only: appending plaintext to an encoded stream would be
         # undecodable for the client.
         return

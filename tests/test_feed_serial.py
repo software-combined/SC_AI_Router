@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest import mock
 from tests._platform import unix_only
 from tests.fakes import static_fetch as _static_fetch
-from tests.test_install import _craft_bundle, _ok_run, _patch_attrs, install_mod
+from tests.install_fixtures import _craft_bundle, _ok_run, _patch_attrs, install_mod
 from tests.test_release import _release_mod
 
 

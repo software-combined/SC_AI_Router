@@ -12,7 +12,13 @@ import urllib.error
 from pathlib import Path
 from unittest import mock
 
-from ai_router import capabilities, claude, model_refresh, providers, registry
+from ai_router import (capabilities, claude, model_refresh, provider_defs,
+                       providers, registry)
+
+
+def _external_responses():
+    """The OpenRouter Codes adapter; Plan 141 makes adapters per-provider."""
+    return providers.ExternalResponsesProvider(provider_defs.OPENROUTER)
 
 
 def _row(slug='z-ai/glm-5.3'):
@@ -45,13 +51,13 @@ class ModelRefreshTests(unittest.TestCase):
     def setUp(self):
         self._models = registry.MODELS
         self._by_slug = registry.BY_SLUG
-        self._openrouter = capabilities.OPENROUTER_MODELS
+        self._openrouter = capabilities.EXTERNAL_MODELS
         self._image = capabilities.IMAGE_INPUT_MODELS
         self._excluded = capabilities.EXCLUDED_EFFORTS
         self._levels = capabilities.REASONING_LEVELS
         self.addCleanup(setattr, registry, 'MODELS', self._models)
         self.addCleanup(setattr, registry, 'BY_SLUG', self._by_slug)
-        self.addCleanup(setattr, capabilities, 'OPENROUTER_MODELS', self._openrouter)
+        self.addCleanup(setattr, capabilities, 'EXTERNAL_MODELS', self._openrouter)
         self.addCleanup(setattr, capabilities, 'IMAGE_INPUT_MODELS', self._image)
         self.addCleanup(setattr, capabilities, 'EXCLUDED_EFFORTS', self._excluded)
         self.addCleanup(setattr, capabilities, 'REASONING_LEVELS', self._levels)
@@ -71,7 +77,7 @@ class ModelRefreshTests(unittest.TestCase):
             def close(self):
                 pass
         with mock.patch.object(providers.http.client, 'HTTPSConnection', FakeConn):
-            return providers.OpenRouterProvider().summarize(model, 'key', [])
+            return _external_responses().summarize(model, 'key', [])
 
     def test_valid_payload_swaps_atomically_and_rebuilds_derived(self):
         body = json.dumps([_row(), _row('qwen/qwen-1')]).encode()

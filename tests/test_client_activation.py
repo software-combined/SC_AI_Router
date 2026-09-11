@@ -18,7 +18,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests._platform import unix_only
-from tests.test_install import _ok_run, _patch_attrs, install_mod
+from tests.install_fixtures import _ok_run, _patch_attrs, install_mod
 from tests.test_install_config import _install
 
 
@@ -64,7 +64,7 @@ class ClientActivationTests(unittest.TestCase):
             config, _, _, _ = _install(self, tmp, home, '1.0.0')
             config.write_text(config.read_text().replace(
                 'openai_base_url', 'openai_base_url_edited'))
-            from tests.test_install import _craft_bundle, _static_fetch
+            from tests.install_fixtures import _craft_bundle, _static_fetch
             blob, latest = _craft_bundle('1.0.1')
             _patch_attrs(self, run=lambda cmd, **kw: _ok_run(cmd, **kw),
                          self_test=lambda *args: None,
@@ -194,7 +194,7 @@ if __name__ == '__main__':
 @unix_only
 class ServiceOnlyTests(unittest.TestCase):
     def _install_service_only(self, test, tmp, home, version, *extra):
-        from tests.test_install import _craft_bundle, _static_fetch
+        from tests.install_fixtures import _craft_bundle, _static_fetch
         from tests.test_install_config import _fake_write_catalogue
         blob, latest = _craft_bundle(version)
         calls = []
@@ -380,8 +380,12 @@ class ServiceOnlyTests(unittest.TestCase):
 class SubscriptionModeTests(unittest.TestCase):
     def test_all_four_mode_combinations(self):
         from tests.fakes import FakeUpstream, install_fake
-        from tests.test_handler import _auth_file, _post
-        from tests.test_mixed_router import _start_server, _test_state
+        from tests.harness import (
+            auth_file as _auth_file,
+            post as _post,
+            start_server as _start_server,
+            test_state as _test_state,
+        )
         from tests.test_claude_ingress import _messages
         cases = [
             # (openai_mode, anthropic_mode, want_status, want_host)
@@ -418,8 +422,12 @@ class SubscriptionModeTests(unittest.TestCase):
 
     def test_anthropic_enabled_with_openai_disabled(self):
         from tests.fakes import FakeUpstream, install_fake
-        from tests.test_handler import _auth_file, _post
-        from tests.test_mixed_router import _start_server, _test_state
+        from tests.harness import (
+            auth_file as _auth_file,
+            post as _post,
+            start_server as _start_server,
+            test_state as _test_state,
+        )
         from tests.test_claude_ingress import _messages
         recorded = install_fake(
             self, lambda: FakeUpstream(

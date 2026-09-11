@@ -2,7 +2,7 @@
 import signal
 import threading
 from . import activation
-from .registry import openrouter_slugs
+from .registry import external_slugs
 from .router import Router
 from .runtime import VERSION, configure_logging, load_state, log_event
 
@@ -11,7 +11,7 @@ def main():
     configure_logging()
     state = load_state()
     log_event('router_started', version=VERSION, port=state['port'],
-              openrouter_models=len(openrouter_slugs()))
+              external_models=len(external_slugs()))
     server = Router(state, fileno=activation.inherited_listener())
     signal.signal(signal.SIGTERM, lambda signum, frame: _start_drain_thread(server))
     server.serve_forever()

@@ -14,27 +14,17 @@ import time
 import unittest
 from unittest import mock
 from compression import zstd
-from ai_router import setup
+from ai_router import key_store, setup
 from ai_router.credentials import Credentials
 from ai_router.registry import by_slug
 from ai_router.router import Handler, _payload_has_image
 from tests.fakes import FakeUpstream, install_fake
-from tests.test_mixed_router import _start_server, _test_state
-
-
-def _auth_file(test):
-    auth = tempfile.NamedTemporaryFile('w', suffix='.json', delete=False)
-    json.dump({'openrouter': {'type': 'api', 'key': 'test-key'}}, auth)
-    auth.close()
-    test.addCleanup(os.unlink, auth.name)
-    return auth.name
-
-
-def _post(port, path, payload, headers=None):
-    conn = http.client.HTTPConnection('127.0.0.1', port, timeout=10)
-    conn.request('POST', path, body=json.dumps(payload),
-                 headers={'Content-Type': 'application/json', **(headers or {})})
-    return conn.getresponse()
+from tests.harness import (
+    auth_file as _auth_file,
+    post as _post,
+    start_server as _start_server,
+    test_state as _test_state,
+)
 
 
 class HandlerCharacterisationTests(unittest.TestCase):
@@ -84,7 +74,8 @@ class HandlerCharacterisationTests(unittest.TestCase):
             {'model': 'gpt-6-astra',
              'input': [{'type': 'message', 'role': 'user', 'content': 'hi'}]},
             {'Authorization': 'Bearer subscription-secret',
-             'ChatGPT-Account-ID': 'acct', 'Connection': 'keep-alive'})
+             'ChatGPT-Account-ID': 'acct', 'Connection': 'keep-alive',
+             'Cookie': 'c=1'})
         self.assertEqual(response.status, 200)
         host, _, path, body, headers = recorded[0]
         self.assertEqual(host, 'chatgpt.com')
@@ -161,7 +152,7 @@ class HandlerCharacterisationTests(unittest.TestCase):
                                                 [('Content-Type', 'application/json')]))
         server = self._server()
         response = _post(server.server_port, '/test-token/responses',
-                         {'model': '~x-ai/grok-latest', 'input': []})
+                         {'model': 'x-ai/grok-4.6', 'input': []})
         self.assertEqual(response.status, 409)
         message = json.loads(response.read())['error']['message']
         self.assertIn('xAI', message)
@@ -176,7 +167,7 @@ class HandlerCharacterisationTests(unittest.TestCase):
         server = self._server()
         before = server.inflight
         response = _post(server.server_port, '/test-token/responses',
-                         {'model': '~x-ai/grok-latest', 'input': []})
+                         {'model': 'x-ai/grok-4.6', 'input': []})
         self.assertEqual(response.status, 400)
         self.assertEqual(response.read(), b'<html>bad gateway</html>')
         self.assertEqual(server.inflight, before)
@@ -200,10 +191,10 @@ class HandlerCharacterisationTests(unittest.TestCase):
         install_fake(self, stall)
         server = self._server()
         response = _post(server.server_port, '/test-token/responses',
-                         {'model': '~x-ai/grok-latest', 'input': []})
+                         {'model': 'x-ai/grok-4.6', 'input': []})
         self.assertEqual(response.status, 502)
         message = json.loads(response.read())['error']['message']
-        self.assertIn('~x-ai/grok-latest', message)
+        self.assertIn('x-ai/grok-4.6', message)
         self.assertIn('120', message)
 
     def test_upstream_429_becomes_retryable_503(self):
@@ -218,19 +209,21 @@ class HandlerCharacterisationTests(unittest.TestCase):
                 self.assertEqual(response.getheader('Retry-After'), expected)
 
     def test_health_reports_served_model(self):
+        # Upstream names a different id, so both sides of the served map are
+        # exercised rather than the request echoing itself.
         wire = (b'data: {"type": "response.completed", "response": '
-                b'{"model": "x-ai/grok-4.6", "output": []}}\n\n')
+                b'{"model": "x-ai/grok-4.7", "output": []}}\n\n')
         install_fake(self, lambda: FakeUpstream(200, wire, [('Content-Type', 'text/event-stream')]))
         server = self._server()
         response = _post(server.server_port, '/test-token/responses',
-            {'model': '~x-ai/grok-latest', 'input': [],
+            {'model': 'x-ai/grok-4.6', 'input': [],
              'tools': [{'type': 'custom', 'name': 'exec'}]})
         self.assertEqual(response.status, 200)
         response.read()
         conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
         conn.request('GET', '/test-token/health')
         served = json.loads(conn.getresponse().read())['served_models']
-        self.assertEqual(served, {'~x-ai/grok-latest': 'x-ai/grok-4.6'})
+        self.assertEqual(served, {'x-ai/grok-4.6': 'x-ai/grok-4.7'})
 
     def test_streaming_tool_call_is_adapted_end_to_end(self):
         item = {'id': 'item1', 'type': 'function_call', 'call_id': 'call1',
@@ -311,7 +304,8 @@ class HandlerCharacterisationTests(unittest.TestCase):
         server = _start_server(state, credentials=Credentials(state, home, env={}))
         self.addCleanup(server.shutdown)
         opened = []
-        def fake_open(srv, hm):
+        def fake_open(srv, hm, provider_id=None):
+            # Plan 141: the window names the provider whose key is missing.
             opened.append(hm)
             return True
         stub = mock.patch.object(setup, 'open_key_window', side_effect=fake_open)
@@ -339,9 +333,9 @@ class HandlerCharacterisationTests(unittest.TestCase):
         # rotation message. check_key is faked; no network is touched.
         server, home, opened = self._window_server('sk-dead\n')
         install_fake(self, lambda: FakeUpstream(401, b'{"error": {"code": 401}}', []))
-        def dead_key(key, _urlopen=None):
-            raise setup.KeyRejected('OpenRouter rejected the key', status=401)
-        with mock.patch.object(setup, 'check_key', side_effect=dead_key):
+        def dead_key(provider_id, key, _urlopen=None):
+            raise key_store.KeyRejected('OpenRouter rejected the key', status=401)
+        with mock.patch.object(key_store, 'check_key', side_effect=dead_key):
             response = _post(server.server_port, '/test-token/responses',
                              {'model': 'z-ai/glm-5.3', 'input': []})
             self.assertEqual(response.status, 400)
@@ -353,7 +347,7 @@ class HandlerCharacterisationTests(unittest.TestCase):
         # hostile): the raw 401 passes through and no window opens.
         server, home, opened = self._window_server('sk-live\n')
         install_fake(self, lambda: FakeUpstream(401, b'{"error": "expired"}', []))
-        with mock.patch.object(setup, 'check_key', return_value=('k', 10, 0)):
+        with mock.patch.object(key_store, 'check_key', return_value=('k', 10, 0)):
             response = _post(server.server_port, '/test-token/responses',
                              {'model': 'z-ai/glm-5.3', 'input': []})
             self.assertEqual(response.status, 401)
@@ -364,10 +358,10 @@ class HandlerCharacterisationTests(unittest.TestCase):
         # KeyError subclasses LookupError: a malformed-payload indexing bug
         # in prepare must keep the payload-error mapping, never the window.
         from unittest import mock as _mock
-        from ai_router import setup as _setup
+        from ai_router import key_store as _key_store
         server, home, opened = self._window_server('sk-live\n')
-        with _mock.patch.object(_setup, 'check_key', return_value=('k', 10, 0)):
-            with _mock.patch('ai_router.providers.OpenRouterProvider.prepare',
+        with _mock.patch.object(_key_store, 'check_key', return_value=('k', 10, 0)):
+            with _mock.patch('ai_router.providers.ExternalResponsesProvider.prepare',
                              side_effect=KeyError('fragments')):
                 response = _post(server.server_port, '/test-token/responses',
                                  {'model': 'z-ai/glm-5.3', 'input': []})
@@ -379,11 +373,11 @@ class HandlerCharacterisationTests(unittest.TestCase):
         # The file is not the effective credential when the env key is set:
         # no check_key probe, no window, raw 401 passes through.
         from unittest import mock as _mock
-        from ai_router import setup as _setup
+        from ai_router import key_store as _key_store
         server, home, opened = self._window_server('sk-file\n')
         server.credentials.env = {'OPENROUTER_API_KEY': 'sk-env'}
         install_fake(self, lambda: FakeUpstream(401, b'{"error": "expired"}', []))
-        with _mock.patch.object(_setup, 'check_key',
+        with _mock.patch.object(_key_store, 'check_key',
                                 side_effect=AssertionError('must not probe')):
             response = _post(server.server_port, '/test-token/responses',
                              {'model': 'z-ai/glm-5.3', 'input': []})
@@ -395,11 +389,11 @@ class HandlerCharacterisationTests(unittest.TestCase):
         # A live nonce already arms the window: answer the raw 401 instead
         # of paying a second check_key on every retry.
         from unittest import mock as _mock
-        from ai_router import setup as _setup
+        from ai_router import key_store as _key_store
         server, home, opened = self._window_server('sk-dead\n')
         server.state['setup'] = {'nonce': 'n' * 16, 'expires': 9_999_999_999}
         install_fake(self, lambda: FakeUpstream(401, b'{"error": "expired"}', []))
-        with _mock.patch.object(_setup, 'check_key',
+        with _mock.patch.object(_key_store, 'check_key',
                                 side_effect=AssertionError('must not probe')):
             response = _post(server.server_port, '/test-token/responses',
                              {'model': 'z-ai/glm-5.3', 'input': []})

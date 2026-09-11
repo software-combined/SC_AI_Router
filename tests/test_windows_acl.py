@@ -206,7 +206,7 @@ class WinBackendShapeTests(unittest.TestCase):
     def test_failed_state_protection_keeps_a_pre_existing_token(self):
         # Gap 0 (PR 55 review): a failed state-file ACL check unlinks only
         # a file this run minted, never a pre-existing live token.
-        from tests.test_install import _craft_bundle, _static_fetch, install_mod
+        from tests.install_fixtures import _craft_bundle, _static_fetch, install_mod
         from tests.test_install_lifecycle import _patch_attrs, _recording
         from tests.test_install_config import _fake_write_catalogue
         with tempfile.TemporaryDirectory() as tmp:
@@ -239,7 +239,7 @@ class WinBackendShapeTests(unittest.TestCase):
     def test_failed_protection_removes_the_placeholder(self):
         # A failed protect_secret must not leave an unprotected placeholder
         # that the next run's exists-early-return would trust.
-        from tests.test_install import install_mod
+        from tests.install_fixtures import install_mod
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             home.mkdir()
@@ -281,7 +281,7 @@ class WinBackendShapeTests(unittest.TestCase):
     def test_install_hardens_the_home_before_minting_the_state_file(self):
         # The state file carries the loopback token: it must be born inside
         # an already-restricted home, then verified, before the backend runs.
-        from tests.test_install import _craft_bundle, _ok_run, _patch_attrs, install_mod
+        from tests.install_fixtures import _craft_bundle, _ok_run, _patch_attrs, install_mod
         blob, latest = _craft_bundle('1.0.0')
         events = []
 

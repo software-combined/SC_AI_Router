@@ -17,7 +17,7 @@ from unittest import mock
 from ai_router import activation
 import ai_router.__main__ as router_main
 from ai_router.router import Router
-from tests.test_mixed_router import _start_auth_server
+from tests.harness import get as _get, post as _post, start_auth_server as _start_auth_server
 
 
 _ROOT = Path(__file__).resolve().parents[1]
@@ -32,19 +32,6 @@ def _server(test, **overrides):
     test.addCleanup(server.shutdown)
     test.addCleanup(server.server_close)
     return server
-
-
-def _get(port, path):
-    conn = http.client.HTTPConnection('127.0.0.1', port, timeout=10)
-    conn.request('GET', path)
-    return conn.getresponse()
-
-
-def _post(port, path, payload):
-    conn = http.client.HTTPConnection('127.0.0.1', port, timeout=10)
-    conn.request('POST', path, body=json.dumps(payload),
-                 headers={'Content-Type': 'application/json'})
-    return conn.getresponse()
 
 
 class ShutdownEndpointTests(unittest.TestCase):

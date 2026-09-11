@@ -37,21 +37,32 @@ class ModelPolicyTests(unittest.TestCase):
                              'subscription', allowed=ALLOWED)
 
     def test_disallowed_reject_leaks_no_candidate(self):
-        # The near-miss hint must not disclose a slug the portco policy
-        # excludes: a bare id for an allowlisted-out tilde row rejects
-        # with an empty candidate list.
+        # A portco-excluded row rejects with the closed error and an empty
+        # candidate list, so the reject never leaks an excluded slug. The
+        # alias case is synthesised because the roster pins exact ids today;
+        # it keeps the allowlist suppression of a near-miss candidate tested.
+        from ai_router import registry as registry_mod
         from ai_router.errors import UnknownModel
+        from ai_router.registry import Model
         with self.assertRaises(UnknownModel) as caught:
-            providers.select('anthropic/claude-opus-latest', '/responses', (),
+            providers.select('anthropic/claude-opus-5', '/responses', (),
                              'subscription', allowed=ALLOWED)
         self.assertEqual(caught.exception.candidates, ())
         self.assertIn('not in the configured catalog',
                       str(caught.exception))
+        alias = Model(slug='~z-ai/glm-5.3-flex', provider='openrouter',
+                      display_name='X', vendor='Z.ai', reasoning=('low',),
+                      default_reasoning='low')
+        with mock.patch.dict(registry_mod.BY_SLUG, {alias.slug: alias}):
+            with self.assertRaises(UnknownModel) as caught:
+                providers.select('z-ai/glm-5.3-flex', '/responses', (),
+                                 'subscription', allowed=ALLOWED)
+        self.assertEqual(caught.exception.candidates, ())
 
     def test_allowed_openrouter_slug_still_routes(self):
         provider = providers.select('z-ai/glm-5.3-flash', '/responses', (),
                                     'subscription', allowed=ALLOWED)
-        self.assertIsInstance(provider, providers.OpenRouterProvider)
+        self.assertIsInstance(provider, providers.ExternalResponsesProvider)
 
     def test_subscription_rows_unaffected(self):
         subset = {m['slug'] for m in merge(
@@ -179,7 +190,7 @@ class ModelPolicyTests(unittest.TestCase):
                 'meta/muse-spark-1.3', '/responses', state, 'subscription')
         provider = responses.POLICY.select_provider(
             'z-ai/glm-5.3-flash', '/responses', state, 'subscription')
-        self.assertIsInstance(provider, providers.OpenRouterProvider)
+        self.assertIsInstance(provider, providers.ExternalResponsesProvider)
         provider = responses.POLICY.select_provider(
             'gpt-6-astra', '/responses', state, 'subscription')
         self.assertIsInstance(provider, providers.SubscriptionProvider)
@@ -188,7 +199,7 @@ class ModelPolicyTests(unittest.TestCase):
         provider = messages.POLICY.select_provider(
             'claude/moonshotai/kimi-k3-x', '/v1/messages', state,
             'subscription')
-        self.assertEqual(provider.name, 'anthropic-subscription')
+        self.assertEqual(provider.name, 'anthropic')
         with self.assertRaisesRegex(ValueError, 'not in the configured catalog'):
             messages.POLICY.select_provider(
                 'claude/meta/muse-spark-1.3', '/v1/messages', state,

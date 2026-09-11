@@ -1,20 +1,26 @@
-"""Generate OpenRouter catalogue entries from the registry.
+"""Generate external-provider catalogue entries from the registry.
 
-Every non-model-specific field lives in OPENROUTER_TEMPLATE. Per-model
+Every non-model-specific field lives in ROW_TEMPLATE. Per-model
 values come from ai_router/registry.py rows. Pure: no network, no
 state; the instructions text is read once at import.
+
+The picker label suffix and billing line come from the row's provider
+definition (`provider_defs.label_for`), so a second provider reads as its
+own label with no code change here.
 """
 import json
 import sys
 from pathlib import Path
-from .capabilities import catalogue_patch, describe
+from . import provider_defs
+from .capabilities import (COMP_HASH, MULTI_AGENT_VERSION, NODE_REPL_DISABLED,
+                           catalogue_patch, describe)
 from .clients.codex import capability_fields as codex_projection
 from .clients import models_for
 from .registry import MODELS, picker_key
 from .retired_slugs import SUBSCRIPTION as RETIRED_SUBSCRIPTION_SLUGS
 from .subscription_roster import SUBSCRIPTION_SLUGS
 
-OPENROUTER_TEMPLATE = {
+ROW_TEMPLATE = {
     'shell_type': 'unified_exec',
     'visibility': 'list',
     'supported_in_api': True,
@@ -33,15 +39,15 @@ OPENROUTER_TEMPLATE = {
     'web_search_tool_type': 'text_and_image',
     'truncation_policy': {'mode': 'tokens', 'limit': 10000},
     'supports_image_detail_original': True,
-    'comp_hash': None,
+    'comp_hash': COMP_HASH,
     'effective_context_window_percent': 90,
     'experimental_supported_tools': [],
     'supports_search_tool': True,
     'use_responses_lite': False,
     'node_repl_auto_review_required': False,
-    'node_repl_disabled': False,
+    'node_repl_disabled': NODE_REPL_DISABLED,
     'tool_mode': None,
-    'multi_agent_version': 'v1',
+    'multi_agent_version': MULTI_AGENT_VERSION,
     'multi_agent_reasoning_effort': None,
     # Codex >=0.153.4 catalogue schema: every row must carry these or chat
     # creation fails with 'missing field' (2026-09-08, Codex 26.901.51231).
@@ -63,11 +69,16 @@ OPENROUTER_TEMPLATE = {
     'auto_review_model_override': None,
 }
 
-RETIRED_SLUGS = {'anthropic/claude-opus-5', 'anthropic/claude-fable-5.1',
+# Claude, Gemini and Grok pin exact ids, so their latest aliases retire.
+# DeepSeek keeps Pro 0813 + V4.1 Flash; its alias and Vision rows retire too.
+RETIRED_SLUGS = {'~anthropic/claude-sonnet-latest', '~anthropic/claude-fable-latest',
+                 '~anthropic/claude-haiku-latest', '~anthropic/claude-opus-latest',
+                 '~google/gemini-flash-latest', '~google/gemini-pro-latest',
+                 '~x-ai/grok-latest',
                  'deepseek/deepseek-v4-pro', 'deepseek/deepseek-v4-flash',
                  'deepseek/deepseek-v4-flash-0731',
                  '~deepseek/deepseek-v4-flash-latest',
-                 'deepseek/deepseek-v4-flash-vision-exp'}  # DeepSeek keeps Pro 0813 + V4.1 Flash; alias and Vision rows retired
+                 'deepseek/deepseek-v4-flash-vision-exp'}
 
 # Retired subscription slugs live in retired_slugs.py (Plan 100 single source,
 # shared with the installer prune); merge() drops them from stale machines.
@@ -116,7 +127,7 @@ def subscription_stub(slug):
     """
     name = SUBSCRIPTION_DISPLAY_NAMES.get(slug, slug)
     default, efforts = SUBSCRIPTION_REASONING.get(slug, ('medium', ('medium',)))
-    return {**OPENROUTER_TEMPLATE,
+    return {**ROW_TEMPLATE,
             'slug': slug,
             'display_name': name,
             'description': 'ChatGPT subscription billing.',
@@ -137,19 +148,26 @@ BASE_INSTRUCTIONS = (Path(__file__).with_name('openrouter_base_instructions.txt'
 def catalog_name(model):
     # display_name is stored qualified (<Vendor>: <Model> <Version?>), so this
     # is a pure suffix strip; bare legacy rows fail the registry test instead.
-    return model.display_name.removesuffix(' · OpenRouter')
+    return model.display_name.removesuffix(' · ' + label_of(model))
 
 
-def openrouter_entry(model):
+def label_of(row):
+    """Provider label for a registry row or a raw models.json row."""
+    provider_id = row.get('provider') if isinstance(row, dict) else getattr(row, 'provider', None)
+    return provider_defs.label_for(provider_id or provider_defs.DEFAULT_EXTERNAL)
+
+
+def external_entry(model):
     projected = codex_projection(model)
-    return {**OPENROUTER_TEMPLATE,
+    label = label_of(model)
+    return {**ROW_TEMPLATE,
             'slug': model.slug,
             'display_name': (model.display_name + ' · Preview'
                              if model.tier == 'preview' else model.display_name),
             'description': (('Preview, not yet verified with Codex. '
                              if model.tier == 'preview' else '')
-                            + 'OpenRouter billing. Switch to this model mid-thread; history carries over. '
-                            + 'OpenRouter: ' + catalog_name(model)),
+                            + f'{label} billing. Switch to this model mid-thread; history carries over. '
+                            + label + ': ' + catalog_name(model)),
             'default_reasoning_level': model.default_reasoning,
             'supported_reasoning_levels': projected['supported_reasoning_levels'],
             'priority': model.priority,
@@ -165,16 +183,35 @@ def openrouter_entry(model):
             'web_search_tool_type': 'text_and_image' if model.web_search else 'text'}
 
 
+def _visible_rows(client, allowed, include_twins=False):
+    """(visible, hidden) external registry rows for one client and allowlist.
+
+    `allowed` is the optional portco allowlist of registry slugs (Plan 068):
+    None preserves today's behavior exactly; a list drops visible
+    OpenRouter rows not in the list like hidden rows. Subscription rows
+    are unaffected. `merge` and `check` share this derivation so `check`
+    can never certify a catalogue `merge` would not produce.
+    """
+    allowset = None if allowed is None else frozenset(allowed)
+    visible = [m for m in models_for(MODELS, client, include_twins=include_twins)
+               if provider_defs.is_external(m.provider)
+               and (allowset is None or m.slug in allowset)]
+    shown = {m.slug for m in visible}
+    hidden = [m for m in MODELS
+              if provider_defs.is_external(m.provider) and m.slug not in shown]
+    return visible, hidden
+
+
 def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False):
     """Merge registry OpenRouter entries, dropping explicitly retired picker rows.
 
-    Only models_for(client) OpenRouter entries are emitted: the Codex
-    picker omits OpenRouter-billed GPT rows, so an upgrade merge also
-    drops a pre-existing hidden row instead of preserving it. Roster
-    slugs (the subscription side from runtime state) absent from the
+    Only models_for(client) OpenRouter entries are emitted, so an upgrade
+    merge drops a row hidden for this client (today only Claude's
+    OpenRouter-billed Anthropic rows); the Codex picker lists the GPT
+    twins beside their subscription rows. Roster slugs absent from the
     catalogue are appended as stubs so a fresh file still lists the
     approved picker. Existing rows gain missing schema defaults while
-    retaining their model-specific values, repairing older bare stubs.
+    retaining model-specific values, repairing older bare stubs.
     One exception: rows matching the exact 0.6.10.23 single-medium
     placeholder signature get their two reasoning fields upgraded.
     Order is subscription rows in roster order, then OpenRouter rows
@@ -194,13 +231,9 @@ def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False)
     subscription stubs are dropped and no existing non-registry row is
     carried, so the picker lists registry rows only, twins included.
     """
-    allowset = None if allowed is None else frozenset(allowed)
-    visible = [m for m in models_for(MODELS, client, include_twins=include_twins)
-               if m.provider == 'openrouter'
-               and (allowset is None or m.slug in allowset)]
+    visible, hidden_rows = _visible_rows(client, allowed, include_twins)
     shown = {m.slug for m in visible}
-    hidden = {m.slug for m in MODELS
-              if m.provider == 'openrouter' and m.slug not in shown}
+    hidden = {m.slug for m in hidden_rows}
     active = {m.slug for m in MODELS}
     models = [m for m in catalog.get('models', [])
               if (m['slug'] not in RETIRED_SLUGS or m['slug'] in active)
@@ -216,7 +249,7 @@ def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False)
             row['default_reasoning_level'] = fresh['default_reasoning_level']
             row['supported_reasoning_levels'] = fresh['supported_reasoning_levels']
     for model in visible:
-        entries[model.slug] = openrouter_entry(model)
+        entries[model.slug] = external_entry(model)
     # Retired subscription rows never come back: a roster or catalogue that
     # still names one loses it here, so the dead picker row cannot linger.
     for slug in RETIRED_SUBSCRIPTION_SLUGS:
@@ -286,14 +319,9 @@ def check(path, client='codex', allowed=None, include_twins=False):
         if missing:
             print(f'{slug}: missing schema fields: {", ".join(sorted(missing))}')
             return False
-    allowset = None if allowed is None else frozenset(allowed)
-    visible = [m for m in models_for(MODELS, client, include_twins=include_twins)
-               if m.provider == 'openrouter'
-               and (allowset is None or m.slug in allowset)]
-    shown = {m.slug for m in visible}
+    visible, hidden = _visible_rows(client, allowed, include_twins)
     identical, total = 0, 0
-    for model in (m for m in MODELS
-                  if m.provider == 'openrouter' and m.slug not in shown):
+    for model in hidden:
         if model.slug in existing:
             print(f'{model.slug}: hidden from the {client} picker but present')
             return False
@@ -303,7 +331,7 @@ def check(path, client='codex', allowed=None, include_twins=False):
         if old is None:
             print(f'{model.slug}: missing from catalogue')
             continue
-        new = openrouter_entry(model)
+        new = external_entry(model)
         diff = [k for k in set(old) | set(new) if not _same(old, new, k)]
         if diff:
             print(f'{model.slug}: differs in {", ".join(sorted(diff))}')

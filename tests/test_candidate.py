@@ -12,7 +12,8 @@ class VerifySequenceTests(unittest.TestCase):
         scopes = []
 
         class FakeScope:
-            def __init__(self):
+            def __init__(self, slug=None):
+                self.slug = slug
                 self.closed = False
                 scopes.append(self)
             def __enter__(self):

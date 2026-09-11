@@ -7,20 +7,28 @@ from pathlib import Path
 
 FILES = [
          'ai_router/router.py',
+         'ai_router/ingress.py',
+         'ai_router/relay.py',
          'ai_router/providers.py',
          'ai_router/claude.py',
          'ai_router/registry.py',
          'ai_router/credentials.py',
          'ai_router/tool_adapter.py',
+         'ai_router/tool_merge.py',
          'ai_router/agent_handoffs.py',
          'ai_router/sse.py',
          'ai_router/capabilities.py',
          'ai_router/compaction.py',
+         'ai_router/standalone_outputs.py',
 'ai_router/discovered.py',
 'ai_router/errors.py',
 'ai_router/feed_verify.py',
 'ai_router/candidate.py',
 'ai_router/setup.py',
+'ai_router/setup_page.py',
+         'ai_router/key_store.py',
+'ai_router/key_dialog.py',
+'ai_router/key_prompt.py',
          'ai_router/runtime.py',
          'ai_router/catalogue.py',
          'ai_router/local_services.py',
@@ -41,6 +49,8 @@ FILES = [
          'ai_router/clients/codex.py',
          'ai_router/transport.py',
          'ai_router/subscription_fallback.py',
+         'ai_router/provider_defs.py',
+         'ai_router/upstream.py',
          'ai_router/protocols/__init__.py',
          'ai_router/protocols/responses.py',
          'ai_router/protocols/messages.py',
@@ -62,20 +72,33 @@ REQUIRED_PACKAGING = (
     'packaging/launchd.py', 'packaging/service.py',
     'packaging/feed.py', 'packaging/atomic_write.py',
     'packaging/notice.py', 'packaging/assets/router-icon.png',
-    'packaging/install.py', 'packaging/updater.py',
+    'packaging/install.py', 'packaging/bundle.py', 'packaging/updater.py',
     'packaging/codex_config.py', 'packaging/claude_config.py',
     'packaging/claude_desktop_config.py', 'packaging/systemd.py',
-    'packaging/diagnostics.py',
+    'packaging/diagnostics.py', 'packaging/provider_keys.py',
     'packaging/runtime.lock', 'packaging/runtime_lock.py',
     'packaging/platforms/__init__.py',
     'packaging/platforms/darwin.py',
     'packaging/platforms/linux.py',
     'packaging/platforms/windows.py',
     'packaging/install.sh', 'packaging/install.ps1',
+    'LICENSE', 'NOTICE', 'THIRD_PARTY_NOTICES.md',
 )
 
 
 class PackagingTests(unittest.TestCase):
+    def test_apache_only_licence_gate(self):
+        root = Path(__file__).resolve().parents[1]
+        for rel in ('LICENSE', 'NOTICE', 'THIRD_PARTY_NOTICES.md',
+                    'pyproject.toml', 'README.md',
+                    '.codex-plugin/plugin.json', '.claude-plugin/plugin.json',
+                    'packaging/release.py'):
+            text = (root / rel).read_text().lower()
+            for token in ('polyform', 'licenseref-polyform',
+                          'commercial_license', 'unlicensed'):
+                self.assertNotIn(token, text, rel)
+        self.assertFalse((root / 'COMMERCIAL_LICENSE.md').exists())
+
     def test_wrappers_call_install_py(self):
         root = Path(__file__).resolve().parents[1] / 'packaging'
         sh, ps1 = (root / 'install.sh').read_text(), (root / 'install.ps1').read_text()
@@ -159,6 +182,15 @@ class PackagingTests(unittest.TestCase):
         version = (Path(__file__).resolve().parents[1] / 'packaging' / 'VERSION').read_text().strip()
         self.assertRegex(version, r'^\d+\.\d+\.\d+$')
 
+    def test_pyproject_version_matches_packaging_version(self):
+        # Plan 104: pyproject's version is a checked duplicate of the release
+        # version; nothing else reads it, so drift is otherwise invisible.
+        import tomllib
+        root = Path(__file__).resolve().parents[1]
+        version = (root / 'packaging' / 'VERSION').read_text().strip()
+        pyproject = tomllib.loads((root / 'pyproject.toml').read_text())
+        self.assertEqual(pyproject['project']['version'], version)
+
     def test_installer_surface_parses_as_python39(self):
         # Plan 061: the installer runs on Python 3.9+ while the router
         # needs 3.14. No 3.9 interpreter exists in CI, so pin the grammar
@@ -168,7 +200,7 @@ class PackagingTests(unittest.TestCase):
         import ast
         root = Path(__file__).resolve().parents[1]
         surface = [
-            'packaging/install.py', 'packaging/service.py',
+            'packaging/install.py', 'packaging/bundle.py', 'packaging/service.py',
             'packaging/feed.py', 'packaging/atomic_write.py',
             'packaging/notice.py',
             'packaging/launchd.py', 'packaging/router_launch.py',
@@ -180,6 +212,7 @@ class PackagingTests(unittest.TestCase):
             'packaging/platforms/windows.py', 'ai_router/feed_verify.py',
             'ai_router/subscription_roster.py',
             'ai_router/retired_slugs.py',
+            'ai_router/provider_defs.py', 'packaging/provider_keys.py',
             'tools/disable.py', 'tools/global_instructions.py',
         ]
         for name in surface:

@@ -80,8 +80,8 @@ def revert(installed):
         pass
 
 
-_DESCRIBE = {'dev': 'Development starter installed',
-             'general': 'General starter installed',
+_DESCRIBE = {'dev': 'Coding help installed',
+             'general': 'Everyday help installed',
              'skipped': 'Starter not installed (setup continued)'}
 
 

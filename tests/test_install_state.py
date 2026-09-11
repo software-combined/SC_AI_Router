@@ -10,7 +10,7 @@ from ai_router import catalogue
 from ai_router.runtime import load_state
 from ai_router.retired_slugs import SUBSCRIPTION as LEAF_RETIRED_SLUGS
 from ai_router.subscription_roster import SUBSCRIPTION_SLUGS
-from tests.test_install import install_mod
+from tests.install_fixtures import install_mod
 
 
 class InstallStateTests(unittest.TestCase):

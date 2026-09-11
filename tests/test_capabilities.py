@@ -1,24 +1,24 @@
 import unittest
-from ai_router.capabilities import (OPENROUTER_MODELS, REASONING_LEVELS, catalogue_patch,
+from ai_router.capabilities import (EXTERNAL_MODELS, REASONING_LEVELS, catalogue_patch,
     check_images, describe, input_modalities, live_levels, reasoning_levels)
 from ai_router.registry import MODELS
 
 class CapabilityTests(unittest.TestCase):
     def test_single_source_covers_registry_models(self):
-        self.assertEqual(OPENROUTER_MODELS,
+        self.assertEqual(EXTERNAL_MODELS,
                          {m.slug for m in MODELS if m.provider == 'openrouter'})
 
     def test_text_only_set_matches_live_metadata(self):
         for slug in ('z-ai/glm-5.3', 'deepseek/deepseek-v4-pro-0813'):
             self.assertEqual(input_modalities(slug), ['text'])
-        for slug in OPENROUTER_MODELS - {'z-ai/glm-5.3',
+        for slug in EXTERNAL_MODELS - {'z-ai/glm-5.3',
                                          'deepseek/deepseek-v4-pro-0813'}:
             self.assertIn('image', input_modalities(slug))
 
     def test_reasoning_matches_live_acceptance(self):
         self.assertNotIn('max', reasoning_levels('meta/muse-spark-1.3-contributor'))
         self.assertIn('max', reasoning_levels('meta/muse-spark-1.3'))
-        self.assertEqual(reasoning_levels('~x-ai/grok-latest'), ['low', 'medium', 'high', 'xhigh'])
+        self.assertEqual(reasoning_levels('x-ai/grok-4.6'), ['low', 'medium', 'high', 'xhigh'])
         self.assertEqual(reasoning_levels('deepseek/deepseek-v4-pro-0813'),
                          ['low', 'high', 'max'])
         self.assertEqual(reasoning_levels('deepseek/deepseek-v4.1-flash'),
@@ -33,7 +33,7 @@ class CapabilityTests(unittest.TestCase):
 
 class InvariantTests(unittest.TestCase):
     def test_every_model_resolves_in_every_map(self):
-        for slug in OPENROUTER_MODELS:
+        for slug in EXTERNAL_MODELS:
             self.assertIn(slug, REASONING_LEVELS)
             self.assertTrue(reasoning_levels(slug))
             patch = catalogue_patch(slug)
@@ -56,7 +56,7 @@ class InvariantTests(unittest.TestCase):
 
 class ImageDetectionTests(unittest.TestCase):
     def test_tool_output_image_rejected_for_text_only_model(self):
-        slug = next(slug for slug in OPENROUTER_MODELS
+        slug = next(slug for slug in EXTERNAL_MODELS
                     if 'image' not in input_modalities(slug))
         items = [{'type': 'function_call_output', 'call_id': 'c1',
                   'output': [{'type': 'input_image',

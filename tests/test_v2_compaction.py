@@ -7,43 +7,28 @@ Routed models cannot mint OpenAI blobs, so the router briefs locally and the
 summary rides the envelope replay already decodes. No network in these tests:
 the summarizer and the upstream are both stubbed.
 """
-import http.client
 import json
-import os
-import shutil
-import tempfile
 import unittest
 from unittest import mock
 from ai_router.compaction import decode_summary, encode_summary
-from ai_router.discovered import _MEMORY
+from ai_router import provider_defs
 from ai_router.providers import (
-    OpenRouterProvider, PreparationError, SubscriptionProvider, compaction_call)
+    ExternalResponsesProvider, PreparationError, SubscriptionProvider,
+    compaction_call)
 from tests.fakes import FakeUpstream, install_fake
-from tests.test_mixed_router import _start_server, _test_state
-
-
-def _auth_file(test):
-    auth = tempfile.NamedTemporaryFile('w', suffix='.json', delete=False)
-    json.dump({'openrouter': {'type': 'api', 'key': 'test-key'}}, auth)
-    auth.close()
-    test.addCleanup(os.unlink, auth.name)
-    return auth.name
-
-
-def _isolated_home(test):
-    tmp = tempfile.mkdtemp()
-    test.addCleanup(shutil.rmtree, tmp, True)
-    _MEMORY.clear()
-    test.addCleanup(_MEMORY.clear)
-    patcher = mock.patch.dict(os.environ, {'ROUTER_HOME': tmp})
-    patcher.start()
-    test.addCleanup(patcher.stop)
+from tests.harness import (
+    auth_file as _auth_file,
+    isolated_home as _isolated_home,
+    post as _post,
+    start_server as _start_server,
+    test_state as _test_state,
+)
 
 
 class CompactTriggerProviderTests(unittest.TestCase):
     def _provider(self, summary='handoff done'):
         _isolated_home(self)
-        provider = OpenRouterProvider()
+        provider = ExternalResponsesProvider(provider_defs.OPENROUTER)
         seen = {}
 
         def fake_summarize(model, key, items):
@@ -85,7 +70,7 @@ class CompactTriggerProviderTests(unittest.TestCase):
 
 class CompactionCallSelectionTests(unittest.TestCase):
     def test_only_openrouter_compact_turns_serve_locally(self):
-        provider = OpenRouterProvider()
+        provider = ExternalResponsesProvider(provider_defs.OPENROUTER)
         trigger = [{'type': 'message', 'role': 'user', 'content': 'hi'},
                    {'type': 'compaction_trigger'}]
         plain = [{'type': 'message', 'role': 'user', 'content': 'hi'}]
@@ -109,19 +94,13 @@ class CompactTriggerHandlerTests(unittest.TestCase):
         self.addCleanup(server.shutdown)
         return server
 
-    def _post(self, port, path, payload, headers=None):
-        conn = http.client.HTTPConnection('127.0.0.1', port, timeout=10)
-        conn.request('POST', path, body=json.dumps(payload),
-                     headers={'Content-Type': 'application/json', **(headers or {})})
-        return conn.getresponse()
-
     def test_trigger_turn_never_reaches_upstream(self):
         _isolated_home(self)
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{"output": []}', []))
         server = self._server()
-        with mock.patch.object(OpenRouterProvider, 'summarize',
+        with mock.patch.object(ExternalResponsesProvider, 'summarize',
                                return_value='handoff done'):
-            response = self._post(server.server_port, '/test-token/responses', {
+            response = _post(server.server_port, '/test-token/responses', {
                 'model': 'z-ai/glm-5.3-flash',
                 'input': [{'type': 'message', 'role': 'user', 'content': 'do it'},
                           {'type': 'compaction_trigger'}]})
@@ -137,7 +116,7 @@ class CompactTriggerHandlerTests(unittest.TestCase):
         recorded = install_fake(
             self, lambda: FakeUpstream(200, b'{"output": []}', []))
         server = self._server(openai_models=['gpt-6-astra'])
-        response = self._post(server.server_port, '/test-token/responses', {
+        response = _post(server.server_port, '/test-token/responses', {
             'model': 'gpt-6-astra',
             'input': [{'type': 'message', 'role': 'user', 'content': 'do it'},
                       {'type': 'compaction_trigger'}]},

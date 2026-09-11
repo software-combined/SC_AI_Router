@@ -2,12 +2,12 @@ import json
 import re
 import unittest
 from ai_router.capabilities import CANONICAL_ORDER
-from ai_router.catalogue import OPENROUTER_TEMPLATE, openrouter_entry
+from ai_router.catalogue import ROW_TEMPLATE, external_entry
 from ai_router.registry import (FIELDS, MODELS, Model, by_slug, load, picker_key,
-                                openrouter_slugs)
+                                external_slugs)
 from ai_router.clients import models_for, visible_for
 
-CATALOGUE_FIELDS = set(OPENROUTER_TEMPLATE) | {'slug', 'display_name', 'description',
+CATALOGUE_FIELDS = set(ROW_TEMPLATE) | {'slug', 'display_name', 'description',
     'default_reasoning_level', 'supported_reasoning_levels', 'priority',
     'context_window', 'max_context_window', 'input_modalities',
     'supports_reasoning_summary_parameter'}
@@ -33,10 +33,10 @@ class RegistryTests(unittest.TestCase):
         for model in MODELS:
             self.assertIn(model.provider, {'openrouter', 'openai'}, model.slug)
 
-    def test_openrouter_entry_has_every_catalogue_field(self):
+    def test_external_entry_has_every_catalogue_field(self):
         for model in MODELS:
             if model.provider == 'openrouter':
-                self.assertEqual(set(openrouter_entry(model)), CATALOGUE_FIELDS, model.slug)
+                self.assertEqual(set(external_entry(model)), CATALOGUE_FIELDS, model.slug)
 
     def test_bad_row_shape_is_refused(self):
         good = dict(zip(FIELDS, ['x/y', 'openrouter', 'X', 'V',
@@ -118,9 +118,10 @@ class RegistryTests(unittest.TestCase):
 
     def test_display_names_follow_qualified_naming_convention(self):
         # Picker labels must read '<Vendor>: <Model> <Version?>'; the vendor
-        # prefix always equals the row's vendor field, alias rows track with
-        # 'Latest' instead of a pinned snapshot, and pinned rows keep any
-        # version/snapshot token verbatim (AGENTS.md section 8).
+        # prefix always equals the row's vendor field, pinned rows keep any
+        # version/snapshot token verbatim, and a tilde alias row (none in the
+        # roster today) tracks with 'Latest' instead of a pinned snapshot
+        # (AGENTS.md section 8).
         for model in MODELS:
             if model.provider != 'openrouter':
                 continue
@@ -134,7 +135,6 @@ class RegistryTests(unittest.TestCase):
                                         f'{model.slug}: snapshots keep model context')
         alias_labels = {m.slug: m.display_name for m in MODELS
                         if m.slug.startswith('~')}
-        self.assertTrue(alias_labels)
         for slug, label in alias_labels.items():
             with self.subTest(slug=slug):
                 self.assertIn('Latest', label)
@@ -143,21 +143,19 @@ class RegistryTests(unittest.TestCase):
         self.assertTrue(any(re.search(r'\(0902\)|0423|0813', label)
                             for label in pinned.values()))
 
-    def test_by_slug_and_openrouter_slugs(self):
+    def test_by_slug_and_external_slugs(self):
         self.assertEqual(by_slug('moonshotai/kimi-k3').vendor, 'MoonshotAI')
         self.assertIsNone(by_slug('unknown/model'))
-        self.assertEqual(openrouter_slugs(),
+        self.assertEqual(external_slugs(),
                          {m.slug for m in MODELS if m.provider == 'openrouter'})
 
-    def test_visibility_hides_same_billing_rows_per_client(self):
+    def test_visibility_hides_only_the_claude_same_billing_rows(self):
         self.assertEqual({m.slug for m in MODELS if m.provider == 'openrouter'
-                          and not visible_for(m, 'codex')},
-                         {'openai/gpt-6-astra', 'openai/gpt-5.6-sol',
-                          'openai/gpt-5.6-luna', 'openai/gpt-5.6-terra'})
+                          and not visible_for(m, 'codex')}, set())
         self.assertEqual({m.slug for m in MODELS if m.provider == 'openrouter'
                           and not visible_for(m, 'claude')},
-                         {'~anthropic/claude-sonnet-latest', '~anthropic/claude-fable-latest',
-                          '~anthropic/claude-haiku-latest', '~anthropic/claude-opus-latest'})
+                         {'anthropic/claude-sonnet-5', 'anthropic/claude-fable-5.1',
+                          'anthropic/claude-haiku-4.5', 'anthropic/claude-opus-5'})
 
     def test_visibility_keeps_subscription_and_other_vendor_rows(self):
         openai_sub = Model(slug='gpt-6-astra', provider='openai', display_name='G',
@@ -167,23 +165,37 @@ class RegistryTests(unittest.TestCase):
         self.assertTrue(visible_for(by_slug('moonshotai/kimi-k3'), 'codex'))
         self.assertTrue(visible_for(by_slug('moonshotai/kimi-k3'), 'claude'))
         self.assertTrue(visible_for(by_slug('openai/gpt-6-astra'), 'claude'))
-        self.assertTrue(visible_for(by_slug('~anthropic/claude-sonnet-latest'), 'codex'))
+        self.assertTrue(visible_for(by_slug('anthropic/claude-sonnet-5'), 'codex'))
 
     def test_visibility_tilde_and_plain_prefixes_both_hide(self):
-        self.assertFalse(visible_for(by_slug('~anthropic/claude-sonnet-latest'), 'claude'))
-        plain = Model(slug='anthropic/claude-sonnet-latest', provider='openrouter',
+        # The roster pins exact ids; the tilde normalization branch is kept
+        # for any future alias row, so exercise it with a synthetic one.
+        alias = Model(slug='~anthropic/claude-sonnet-5', provider='openrouter',
+                      display_name='X', vendor='Anthropic', reasoning=('low',),
+                      default_reasoning='low')
+        self.assertFalse(visible_for(alias, 'claude'))
+        self.assertTrue(visible_for(alias, 'codex'))
+        plain = Model(slug='anthropic/claude-sonnet-5', provider='openrouter',
                       display_name='X', vendor='Anthropic', reasoning=('low',),
                       default_reasoning='low')
         self.assertFalse(visible_for(plain, 'claude'))
         self.assertTrue(visible_for(plain, 'codex'))
-        self.assertFalse(visible_for(by_slug('openai/gpt-6-astra'), 'codex'))
+        self.assertTrue(visible_for(by_slug('openai/gpt-6-astra'), 'codex'))
 
     def test_near_miss_offers_bare_tilde_alias_only(self):
+        # No registry row is an alias today, so the mechanism is exercised
+        # against a synthetic tilde row; the real roster must not match.
+        from unittest import mock
+        from ai_router import registry as registry_mod
         from ai_router.registry import near_miss
-        self.assertEqual(near_miss('anthropic/claude-opus-latest'),
-                         '~anthropic/claude-opus-latest')
+        alias = Model(slug='~x-ai/grok-latest', provider='openrouter',
+                      display_name='X', vendor='SpaceXAI', reasoning=('low',),
+                      default_reasoning='low')
+        with mock.patch.dict(registry_mod.BY_SLUG, {alias.slug: alias}):
+            self.assertEqual(near_miss('x-ai/grok-latest'), '~x-ai/grok-latest')
+            self.assertIsNone(near_miss('~x-ai/grok-latest'))
+        self.assertIsNone(near_miss('anthropic/claude-opus-latest'))
         self.assertIsNone(near_miss('nobody/none'))
-        self.assertIsNone(near_miss('~anthropic/claude-opus-latest'))
         self.assertIsNone(near_miss('z-ai/glm-5.3'))
         self.assertIsNone(near_miss(None))
         self.assertIsNone(near_miss(''))
@@ -197,10 +209,8 @@ class RegistryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             visible_for(by_slug('moonshotai/kimi-k3'), 'other')
 
-    def test_include_twins_reveals_openai_rows_in_codex_picker(self):
-        self.assertTrue(visible_for(by_slug('openai/gpt-6-astra'), 'codex',
-                                    include_twins=True))
-        twins = {m.slug for m in models_for(MODELS, 'codex', include_twins=True)
+    def test_codex_picker_lists_openai_twins_without_include_twins(self):
+        twins = {m.slug for m in models_for(MODELS, 'codex')
                  if m.slug.startswith('openai/')}
         self.assertEqual(twins, {'openai/gpt-6-astra', 'openai/gpt-5.6-sol',
                                  'openai/gpt-5.6-terra', 'openai/gpt-5.6-luna'})

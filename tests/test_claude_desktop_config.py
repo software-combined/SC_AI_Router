@@ -11,7 +11,7 @@ from unittest import mock
 from pathlib import Path
 
 from tests._platform import unix_only
-from tests.test_install import install_mod
+from tests.install_fixtures import install_mod
 
 desktop_config = install_mod._desktop_config
 
@@ -253,7 +253,7 @@ class DesktopMergeTests(unittest.TestCase):
     def test_uninstall_detaches_desktop_only_attachment(self):
         # Mirror of the CLI-only uninstall test: a desktop-only attachment
         # is restored instead of taking the service-only early return.
-        from tests.test_install import _patch_attrs as _pa, _ok_run
+        from tests.install_fixtures import _patch_attrs as _pa, _ok_run
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             home.mkdir()

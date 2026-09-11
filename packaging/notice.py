@@ -9,32 +9,60 @@ Linux preview app ``chatgpt``. Linux only offers the restart when that app
 is installed; on macOS and Windows the button is harmless without it, and
 the dialog always carries "Later". Only one dialog is ever on screen: the
 pid of the dialog we spawned is remembered, and a later notice is folded
-into that dialog instead of stacking a second one. Every failure is
-swallowed: the notice must never block, delay, or fail an update.
+into that dialog instead of stacking a second one. A dialog that dies at
+once -- a service context with no display or session bus -- leaves the
+notice pending instead of marking it shown, so a later run that can draw
+one still shows it. Every failure is swallowed: the notice must never
+block on the user or fail an update.
 """
 import json
 import os
 import shutil
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 NOTICE_FILE = 'update-notice.json'
+CATALOGUE_FILE = 'mixed-models.json'
+PICKER_BASELINE_FILE = 'picker-baseline.json'
 TITLE = 'SCG Router'
 DISMISS = 'Later'
 REOPEN = 'Quit and reopen'
+OK = 'OK'
 CODEX_BUNDLE_ID = 'com.openai.codex'
 WINDOWS_PACKAGE = 'OpenAI.Codex'
 LINUX_APP = 'chatgpt'
 PROBE_TIMEOUT = 5
+# A dialog that cannot render exits within this grace (zenity without a
+# display, notify-send without a session bus, osascript without a GUI).
+# Long enough to catch that, short enough not to hold the updater.
+PROBE_GRACE_S = 1.0
 ICON = Path(__file__).resolve().parent / 'assets' / 'router-icon.png'
 ICON_NAME = 'router-icon.png'
 
+# Which client(s) this install serves: the popup names them instead of
+# always talking about Codex. 'none' is a service-only install.
+CLIENTS = ('codex', 'claude', 'both', 'none')
 
-def _message(version):
-    return ('SCG router updated to %s. '
-            'Quit and reopen Codex to use the new models.') % (version,)
+
+def _clients(value):
+    return value if value in CLIENTS else 'codex'
+
+
+def _message(version, clients='codex'):
+    """Restart instruction for the clients this install actually serves."""
+    if clients == 'claude':
+        action = 'Restart Claude Code'
+    elif clients == 'both':
+        action = 'Quit and reopen Codex and restart Claude Code'
+    elif clients == 'none':
+        action = 'Restart your AI client'
+    else:
+        action = 'Quit and reopen Codex'
+    return ('SCG Router was updated to %s. %s to use the new models.'
+            % (version, action))
 
 
 def _utcnow():
@@ -103,47 +131,134 @@ def _pid_alive(pid):
         return False
 
 
-def record(home, previous, version):
-    """Stage a restart notice when an update lands a new version.
+def _picker_slugs(blob):
+    """Picker slugs in a merged-catalogue blob, or None when unusable."""
+    if not blob:
+        return None
+    try:
+        doc = json.loads(blob)
+        rows = doc.get('models') if isinstance(doc, dict) else None
+        if not isinstance(rows, list):
+            return None
+        return {str(row['slug']) for row in rows
+                if isinstance(row, dict) and row.get('slug')}
+    except (TypeError, ValueError):
+        return None
 
-    Returns True when a notice is staged. Fresh installs, reinstalls,
-    versions already shown, and any write failure return False without
-    touching the file. The pid of a dialog an earlier version left open is
-    carried over so the next show_pending() folds into it instead of
-    stacking a second dialog. A notice never affects installs.
+
+def _read_blob(path):
+    try:
+        return Path(path).read_bytes()
+    except OSError:
+        return None
+
+
+def _picker_baseline(home):
+    """Slugs left by the last install that reached the notice, or None."""
+    try:
+        doc = json.loads((Path(home) / PICKER_BASELINE_FILE).read_text())
+    except (OSError, ValueError):
+        return None
+    if not isinstance(doc, list):
+        return None
+    return {str(slug) for slug in doc if isinstance(slug, str)}
+
+
+def _remember_picker(home, slugs):
+    """Record the picker this install leaves behind; best effort."""
+    if slugs is None:
+        return
+    try:
+        _write_notice(Path(home) / PICKER_BASELINE_FILE, sorted(slugs))
+    except OSError:
+        pass
+
+
+def record(home, previous, version, clients=None):
+    """Stage a restart notice when an update adds a picker row.
+
+    The prompt is about the picker, not the version: a release that adds no
+    selectable row is not worth a Codex restart, so the notice is staged
+    only when the merged catalogue gained a slug since the last install
+    that reached this point. That baseline is recorded per install rather
+    than read from the pre-install file, so an attempt that merged rows and
+    then failed still prompts when it is retried. A staged but unshown
+    notice is refreshed with this version instead of left stale, and an
+    unreadable catalogue or baseline keeps the earlier behaviour and
+    stages the notice, so a home this comparison cannot read is never
+    silently skipped. Returns True when a notice is staged. Fresh
+    installs, reinstalls, and versions already shown return False; they
+    record the picker they leave only when nothing is waiting to be
+    announced, and rows that were found but not announced are never
+    recorded, so a failed write is retried by the next install. The pid of
+    a dialog an earlier version left open is carried over so the next
+    show_pending() folds into it instead of stacking a second dialog.
+    `clients` is the install run's attachment set when it knows one;
+    without it the previous notice's set is kept, and a legacy install
+    reads as Codex-only. A notice never affects installs.
     """
     try:
-        if not previous or previous == version:
-            return False
         path = Path(home) / NOTICE_FILE
         try:
             existing = json.loads(path.read_text())
         except (OSError, ValueError):
             existing = None
+        picker = _picker_slugs(_read_blob(Path(home) / CATALOGUE_FILE))
+        baseline = _picker_baseline(home)
+        added = None if picker is None or baseline is None else picker - baseline
+        if not previous or previous == version:
+            # Fresh installs and reinstalls prompt nothing; record what they
+            # leave behind so the next version compares against it.
+            if not added:
+                _remember_picker(home, picker)
+            return False
         if isinstance(existing, dict) and existing.get('version') == version \
                 and existing.get('shown'):
+            _remember_picker(home, picker)
             return False
-        doc = {'version': version, 'at': _utcnow()}
+        pending = isinstance(existing, dict) and not existing.get('shown')
+        if not pending and added is not None and not added:
+            _remember_picker(home, picker)
+            return False
+        if not clients:
+            # A scheduled update passes no --clients; the install recorded
+            # the attachment set in the router state.
+            try:
+                state = json.loads((Path(home) / 'mixed-router-state.json').read_text())
+                clients = state.get('clients')
+            except (OSError, ValueError, AttributeError):
+                clients = None
+        doc = {'version': version, 'at': _utcnow(),
+               'clients': _clients(clients) if clients
+               else (existing if isinstance(existing, dict) else {}).get('clients', 'codex')}
         pid = _dialog_pid(existing)
         if pid:
             doc['pid'] = pid
         _write_notice(path, doc)
+        # Only a staged notice marks rows as announced; a write that failed
+        # leaves the baseline alone so the next install retries.
+        _remember_picker(home, picker)
         return True
     except (OSError, ValueError):
         return False
 
 
-def _darwin_script(message, icon):
+def _darwin_script(message, icon, restart=True):
     """AppleScript for the dialog, restarting Codex when asked.
 
     The restart is the last thing the script does, so a failure to quit or
     relaunch can never take the dialog down with it. Strings stay raw
     UTF-8: AppleScript has no unicode escape, and the default json.dumps
-    escaping would emit one for any accented path.
+    escaping would emit one for any accented path. A Claude-only install has
+    no Codex app to reopen, so it gets the plain OK dialog.
     """
     quote = lambda text: json.dumps(text, ensure_ascii=False)  # noqa: E731
     icon_clause = (' with icon (POSIX file %s)' % quote(icon)
                    if icon else ' with icon note')
+    if not restart:
+        return ('display dialog %s buttons {"%s"} default button "%s" '
+                'with title "%s"%s'
+                % (quote(message), OK, OK, TITLE, icon_clause))
     return '\n'.join([
         'set answer to button returned of (display dialog %s with title "%s" '
         'buttons {"%s", "%s"} default button "%s" cancel button "%s"%s)'
@@ -194,7 +309,7 @@ def _windows_restart():
         "} catch { }" % WINDOWS_PACKAGE)
 
 
-def _linux_command(message, icon=None, app=None):
+def _linux_command(message, icon=None, app=None, restart=True):
     """argv for the Linux dialog, quitting and relaunching the app.
 
     zenity reports the choice through its exit status, so the restart runs
@@ -204,13 +319,13 @@ def _linux_command(message, icon=None, app=None):
     Without the desktop app installed the dialog is informational, exactly
     as before.
     """
-    dialog = ['zenity', '--question' if app else '--info',
+    dialog = ['zenity', '--question' if app and restart else '--info',
               '--title=' + TITLE]
     if icon:
         dialog.append('--window-icon=' + icon)
     dialog.append('--text=' + message)
-    if not app:
-        return dialog + ['--ok-label=' + DISMISS]
+    if not (app and restart):
+        return dialog + ['--ok-label=' + (DISMISS if restart else OK)]
     dialog += ['--ok-label=' + REOPEN, '--cancel-label=' + DISMISS]
     launch = ("if command -v setsid >/dev/null 2>&1; "
               "then setsid -f %(app)s; "
@@ -221,7 +336,7 @@ def _linux_command(message, icon=None, app=None):
     return ['sh', '-c', script, 'scg-router'] + dialog
 
 
-def _windows_script(message, icon=None):
+def _windows_script(message, icon=None, restart=True):
     quoted = message.replace("'", "''")
     picture = ''
     if icon:
@@ -234,12 +349,19 @@ def _windows_script(message, icon=None):
         "$r = New-Object System.Windows.Forms.Button; "
         "$r.Text = 'Quit and reopen'; $r.Dock = 'Bottom'; "
         "$r.Add_Click({ $f.Tag = 'reopen'; $f.Close() }); ")
-    restart = ("if ($f.Tag -eq 'reopen') { %s }" % _windows_restart())
+    if restart:
+        restart_block = ("if ($f.Tag -eq 'reopen') { %s }" % _windows_restart())
+        buttons = ("$f.Controls.Add($l); $f.Controls.Add($b); $f.Controls.Add($r); ")
+        dismiss = DISMISS
+    else:
+        reopen, restart_block = '', ''
+        buttons = "$f.Controls.Add($l); $f.Controls.Add($b); "
+        dismiss = OK
     return (
         "Add-Type -AssemblyName System.Windows.Forms; "
         "Add-Type -AssemblyName System.Drawing; "
         "$f = New-Object System.Windows.Forms.Form; "
-        "$f.Text = 'SCG Router'; $f.TopMost = $true; "
+        "$f.Text = '%s'; $f.TopMost = $true; "
         "$f.StartPosition = 'CenterScreen'; $f.AutoSize = $true; "
         "$l = New-Object System.Windows.Forms.Label; "
         "$l.Text = '%s'; $l.AutoSize = $true; $l.Dock = 'Top'; "
@@ -248,19 +370,22 @@ def _windows_script(message, icon=None):
         "$b.Text = '%s'; $b.Dock = 'Bottom'; "
         "$b.Add_Click({ $f.Close() }); "
         "%s"
-        "$f.Controls.Add($l); $f.Controls.Add($b); $f.Controls.Add($r); "
+        "%s"
         "[void]$f.ShowDialog(); "
-        "%s" % (quoted, picture, DISMISS, reopen, restart)
+        "%s" % (TITLE, quoted, picture, dismiss, reopen, buttons, restart_block)
     )
 
 
-def dialog_command(version, platform_name=None, which=None, icon=None):
+def dialog_command(version, platform_name=None, which=None, icon=None,
+                   clients='codex'):
     """argv for a one-shot dismissible restart dialog, or None.
 
     None means the platform is unknown or its dialog tool is missing, so
     the caller leaves the notice pending for a later GUI run. `which` and
     `icon` are injectable so tests never probe the host; the icon defaults
     to the bundled logo and is dropped when that asset is not installed.
+    `clients` names the attached client(s): only a Codex install gets the
+    app restart button, because that button relaunches the Codex app.
     """
     if platform_name is None:
         platform_name = sys.platform
@@ -268,15 +393,17 @@ def dialog_command(version, platform_name=None, which=None, icon=None):
         which = shutil.which
     if icon is None and ICON.is_file():
         icon = str(ICON)
-    message = _message(version)
+    clients = _clients(clients)
+    restart = clients in ('codex', 'both')
+    message = _message(version, clients)
     if platform_name == 'darwin':
         if which('osascript') is None:
             return None
-        return ['osascript', '-e', _darwin_script(message, icon)]
+        return ['osascript', '-e', _darwin_script(message, icon, restart)]
     if platform_name.startswith('linux'):
         if which('zenity') is not None:
-            app = LINUX_APP if which(LINUX_APP) is not None else None
-            return _linux_command(message, icon, app)
+            app = LINUX_APP if restart and which(LINUX_APP) is not None else None
+            return _linux_command(message, icon, app, restart)
         if which('notify-send') is not None:
             return ['notify-send', TITLE, message]
         return None
@@ -285,7 +412,7 @@ def dialog_command(version, platform_name=None, which=None, icon=None):
         if powershell is None:
             return None
         return [powershell, '-NoProfile', '-WindowStyle', 'Hidden',
-                '-Command', _windows_script(message, icon)]
+                '-Command', _windows_script(message, icon, restart)]
     return None
 
 
@@ -306,15 +433,25 @@ def _spawn(cmd):
     return proc.pid
 
 
+def _dialog_up(pid, pid_alive):
+    """True when the spawned dialog is still running after a short grace."""
+    time.sleep(PROBE_GRACE_S)
+    return pid_alive(pid)
+
+
 def show_pending(home, spawn=None, pid_alive=None):
     """Show the pending restart notice; True once it is shown.
 
     A missing dialog tool leaves the notice pending so a later GUI run
-    retries; the file is marked shown only after spawn returns. While the
-    dialog from an earlier version is still open, this notice is marked
-    shown rather than stacked on top of it. Any failure returns False and
-    never surfaces to the installer.
+    retries; the file is marked shown only once the spawned dialog is still
+    up after a short grace. While the dialog from an earlier version is
+    still open, this notice is marked shown rather than stacked on top of
+    it. Any failure returns False and never surfaces to the installer.
+    `ROUTER_NO_NOTICE=1` silences the dialog for unattended installs and for
+    tests that run the real CLI.
     """
+    if os.environ.get('ROUTER_NO_NOTICE') == '1':
+        return False
     if spawn is None:
         spawn = _spawn
     if pid_alive is None:
@@ -327,17 +464,35 @@ def show_pending(home, spawn=None, pid_alive=None):
         version = doc.get('version')
         if not isinstance(version, str) or not version:
             return False
-        cmd = dialog_command(version, icon=_home_icon(home) or '')
+        cmd = dialog_command(version, icon=_home_icon(home) or '',
+                             clients=doc.get('clients', 'codex'))
         if cmd is None:
             return False
+        shown = {'version': version, 'shown': True, 'at': _utcnow()}
+        if cmd[0] == 'notify-send':
+            # It exits once the notification daemon accepts or refuses the
+            # notification, so the exit status is the delivery signal and
+            # pid liveness says nothing.
+            try:
+                sent = subprocess.run(cmd, stdin=subprocess.DEVNULL,
+                                      stdout=subprocess.DEVNULL,
+                                      stderr=subprocess.DEVNULL,
+                                      timeout=PROBE_TIMEOUT)
+            except (OSError, subprocess.SubprocessError):
+                return False
+            if sent.returncode:
+                return False
+            _write_notice(path, shown)
+            return True
         pid = _dialog_pid(doc)
         if pid and pid_alive(pid):
             _write_notice(path, {'version': version, 'shown': True,
                                  'pid': pid, 'at': _utcnow()})
             return False
-        shown = {'version': version, 'shown': True, 'at': _utcnow()}
         pid = _dialog_pid({'pid': spawn(cmd)})
         if pid:
+            if not _dialog_up(pid, pid_alive):
+                return False
             shown['pid'] = pid
         _write_notice(path, shown)
         return True

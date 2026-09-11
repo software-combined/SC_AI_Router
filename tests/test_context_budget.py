@@ -3,10 +3,20 @@ import json
 import unittest
 from types import SimpleNamespace
 
-from ai_router import providers
+from ai_router import providers, upstream
 from tests.fakes import FakeUpstream, install_fake
-from tests.test_handler import _post
-from tests.test_mixed_router import _start_server, _test_state
+from tests.harness import (
+    post as _post,
+    start_server as _start_server,
+    test_state as _test_state,
+)
+
+
+def _external_responses():
+    """OpenRouter Codes adapter; Plan 141 makes adapters per-provider."""
+    from ai_router import provider_defs as _defs
+    return providers.ExternalResponsesProvider(_defs.OPENROUTER)
+
 
 MODEL = 'meta/muse-spark-1.3-contributor'
 
@@ -18,9 +28,9 @@ def request_of(chars):
 
 class ContextBudgetTests(unittest.TestCase):
     def prepare(self, payload, model=MODEL):
-        result = providers.OpenRouterProvider().prepare(
+        result = _external_responses().prepare(
             model, '/responses', payload, b'', {},
-            SimpleNamespace(openrouter_key=lambda: 'test-key'))
+            SimpleNamespace(key_for=lambda _pid=None: 'test-key'))
         return json.loads(result.body)
 
     def test_long_reported_turns_forward_with_default_output(self):
@@ -98,11 +108,11 @@ class ContextWireTests(unittest.TestCase):
         self.assertEqual(len(calls), 1)
 
     def test_explicit_error_type_fields_are_recognized(self):
-        self.assertTrue(providers.is_context_error(
+        self.assertTrue(upstream.is_context_error(
             b'{"error_type":"context_length_exceeded"}'))
-        self.assertTrue(providers.is_context_error(
+        self.assertTrue(upstream.is_context_error(
             b'{"error":{"error_type":"context_length_exceeded"}}'))
-        self.assertFalse(providers.is_context_error(
+        self.assertFalse(upstream.is_context_error(
             b'{"error":{"code":"invalid_prompt"},"error_type":"rate_limit_exceeded"}'))
 
     def test_other_preparation_and_upstream_errors_remain_409(self):
@@ -125,7 +135,7 @@ class ContextWireTests(unittest.TestCase):
         for body in (b'bad json', b'{"error":[]}', b'{"error":{"metadata":null}}',
                      b'{"error":{"message":"context_length_exceeded"}}',
                      b'{"error_type":"context_length_exceeded_extra"}'):
-            self.assertFalse(providers.is_context_error(body))
+            self.assertFalse(upstream.is_context_error(body))
 
 
 if __name__ == '__main__':

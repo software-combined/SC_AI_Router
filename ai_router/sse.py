@@ -36,3 +36,8 @@ def replace_data(frame, data):
         else:
             result.append(line)
     return b''.join(result)
+
+
+def frame(data):
+    """One freshly built data-only frame; the single owner of the envelope."""
+    return b'data: ' + data + b'\n\n'

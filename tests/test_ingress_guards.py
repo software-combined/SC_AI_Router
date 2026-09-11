@@ -3,7 +3,7 @@
 Fake upstream only; never opens a real network connection. Each test
 asserts the rejection status plus the stable error code and that no
 upstream call is recorded, so removing its guard branch fails the test.
-Reuses the handler helpers like tests/test_claude_ingress.py does.
+Reuses the shared helpers in tests/harness.py.
 """
 import http.client
 import json
@@ -13,8 +13,11 @@ from unittest import mock
 from compression import zstd
 from ai_router import router as router_mod
 from tests.fakes import FakeUpstream, install_fake
-from tests.test_handler import _auth_file
-from tests.test_mixed_router import _start_server, _test_state
+from tests.harness import (
+    auth_file as _auth_file,
+    start_server as _start_server,
+    test_state as _test_state,
+)
 
 
 class IngressGuardTests(unittest.TestCase):
@@ -128,7 +131,7 @@ class IngressGuardTests(unittest.TestCase):
             raise TimeoutError('timed out')
         install_fake(self, stall)
         server = self._server()
-        payload = {'model': '~x-ai/grok-latest', 'input': [
+        payload = {'model': 'x-ai/grok-4.6', 'input': [
             {'type': 'message', 'role': 'user', 'content': [
                 {'type': 'input_text', 'text': 'look'},
                 {'type': 'input_image', 'image_url': 'data:x'}]}]}

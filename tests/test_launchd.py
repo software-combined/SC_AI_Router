@@ -230,11 +230,27 @@ class UpdateLauncherTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
 
 
+class ServiceBindingTests(unittest.TestCase):
+    # Plan 103: the launchd helpers moved to launchd.py, but packaging/install.py
+    # binds them from service at import time. Pin all nine so a future move
+    # cannot silently break the installer's module-level seams.
+    BOUND = ('main_plist_needs_reload', 'same_interpreter', 'ensure_updater',
+             'loaded_updater_release', 'reload_main_service', 'render_plist',
+             'render_update_plist', 'restart_service', 'write_plist')
+
+    def test_installer_bindings_resolve_from_service(self):
+        from tests.install_fixtures import install_mod
+        for name in self.BOUND:
+            with self.subTest(name=name):
+                self.assertTrue(callable(getattr(install_mod._svc, name)), name)
+                self.assertTrue(callable(getattr(install_mod, name)), name)
+
+
 class InterpreterIdentityTests(unittest.TestCase):
     """Two spellings of one binary must not force a destructive reload."""
 
     def test_symlinked_spellings_are_the_same_interpreter(self):
-        from tests.test_install import install_mod
+        from tests.install_fixtures import install_mod
         if os.name == 'nt':
             self.skipTest('symlink creation needs elevation on Windows')
         with tempfile.TemporaryDirectory() as tmp:
@@ -256,7 +272,7 @@ class EnsureServingTests(unittest.TestCase):
     """The installer must never exit leaving no loaded router behind."""
 
     def test_bootstraps_a_missing_job_before_reporting_health(self):
-        from tests.test_install import _patch_attrs, install_mod
+        from tests.install_fixtures import _patch_attrs, install_mod
         with tempfile.TemporaryDirectory() as tmp:
             domain = LaunchdDomain().reset(unloaded={LABEL})
             calls = []

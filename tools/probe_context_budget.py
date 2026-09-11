@@ -21,7 +21,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from ai_router.catalogue import openrouter_entry
+from ai_router.catalogue import external_entry
 from ai_router.registry import by_slug
 
 MODEL = 'meta/muse-spark-1.3-contributor'
@@ -208,10 +208,11 @@ def run(binary, scenario, home):
         upstream = Upstream(scenario)
         with mock.patch.object(http.client, 'HTTPSConnection', upstream.connection):
             server = Router({'port': 0, 'token': 'probe-token', 'openai_models': []},
-                            credentials=SimpleNamespace(openrouter_key=lambda: 'synthetic-test-key'))
+                            credentials=SimpleNamespace(
+                                key_for=lambda _provider_id=None: 'synthetic-test-key'))
             threading.Thread(target=server.serve_forever, daemon=True).start()
             catalog = home / 'catalog.json'
-            catalog.write_text(json.dumps({'models': [openrouter_entry(by_slug(MODEL))]}))
+            catalog.write_text(json.dumps({'models': [external_entry(by_slug(MODEL))]}))
             url = f'http://127.0.0.1:{server.server_port}/probe-token/backend-api/codex'
             client = Client(binary, home, url, catalog)
             try:
