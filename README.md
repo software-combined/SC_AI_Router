@@ -266,8 +266,7 @@ Logs live under `logs/` beside the state directory. Check health at
 `http://127.0.0.1:<port>/<token>/health` with the port and token from
 `mixed-router-state.json` (do not share that URL). A 400 means the
 model, payload, or local key configuration is invalid. A 409 means the
-provider cannot serve the request, for example an unsupported reasoning effort after switching models (the message names the allowed efforts). A 503 with `Retry-After` means the
-router is draining for an update; retry. If the router stays down,
+provider cannot serve the request, for example an unsupported reasoning effort after switching models (the message names the allowed efforts). A 503 with `Retry-After` means the request was not served: either the router is draining for an update (`SERVER_DRAINING`) or an upstream 429 was mapped to a retryable answer (`UPSTREAM_RATE_LIMITED`); the JSON body names the code. Retry after the delay. If the router stays down,
 reinstall the previous release at an idle moment.
 
 ## Uninstall

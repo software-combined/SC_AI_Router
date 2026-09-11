@@ -42,7 +42,7 @@ Executor rules for every plan:
 | [101](101-router-dead-code-and-lint-gate.md) | Delete dead code; add F401/F811 gate | DONE: dead code + F401/F811 lint gate 2026-09-11 | before 102/103 |
 | [102](102-router-install-option-collapse.md) | Collapse installer option handling below the cap | DONE: installer option collapse 2026-09-11 | serialize with 103 |
 | [103](103-router-darwin-backend-extraction.md) | Move launchd helpers out of service.py | DONE: darwin backend extraction 2026-09-12 | serialize with 102; before 104 |
-| [104](104-router-docs-metadata-correction.md) | Version, architecture and README corrections | TODO | after 103; coordinates README with 117 |
+| [104](104-router-docs-metadata-correction.md) | Version, architecture and README corrections | DONE: docs/metadata corrections 2026-09-12 | after 103; coordinates README with 117 |
 | [105](105-python-314-interpreter-provisioning.md) | Provision and maintain a private CPython 3.14 runtime | PARTIAL | Stage 1 in; hardening + maintenance owner left |
 | [106](106-group-distribution-private-feed-and-auto-update.md) | Group distribution, private feed and auto-update | PARTIAL | publication split into 139 (tag-driven, GitHub Releases kept; runtime mirror and bootstrap published); group gating and the library page left here |
 | [107](107-central-key-federation-and-first-use-key-window.md) | Central per-user key federation and first-use key window | PARTIAL | Stage 4 depends 106; Stage 2 installer acceptance left |
@@ -55,7 +55,7 @@ Executor rules for every plan:
 | [114](114-claude-code-private-plugin.md) | Claude Code private plugin: validation and publication | PARTIAL | after 113; local validation then publication; amended 2026-09-11 (same-version attach/repair F1, preflight F2, key window F3, restore F4, desktop distribution W4) |
 | [115](115-claude-billing-probes-and-release-acceptance.md) | Claude billing and tool-execution probes | TODO | after 113; paid authority; amended 2026-09-11 (per-surface routes, real MCP proof, ingress contract F8/F9) |
 | [116](116-windows-install-and-service-support.md) | Windows install and service support (acceptance) | PARTIAL | sign-out/in + later stages left |
-| [117](117-recipient-readiness-for-windows-and-linux.md) | Linux and Windows recipient readiness | PARTIAL | native desktop acceptance + Stage 5b left |
+| [117](117-recipient-readiness-for-windows-and-linux.md) | Linux and Windows recipient readiness | PARTIAL | native desktop acceptance + Stage 5b left; the README 503/Claude-listing claims were corrected by plan 104 — do not re-edit those passages |
 | [118](118-codex-router-full-capability-parity.md) | Capability parity: paid per-model/client probes | PARTIAL | remaining paid per-model legs |
 | [119](119-mixed-provider-agent-instruction-delivery.md) | Mixed-provider agent instruction delivery | PARTIAL | paid live probe left |
 | [120](120-claude-desktop-gateway-discovery-and-attach.md) | Claude desktop gateway: release and live picker proof | PARTIAL | extends 113; source merged (PR 56); amended 2026-09-11 (safe lifecycle F4/F7, no promotion of the listener probe) |

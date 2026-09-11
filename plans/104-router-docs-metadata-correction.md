@@ -1,8 +1,14 @@
 # Plan 104: Correct stale version metadata, architecture notes, and README claims
 
-> Planning only. Implement only under a later implementation instruction.
-> Drift check: `git diff --stat a985197..HEAD -- pyproject.toml packaging/VERSION docs/architecture.md README.md tests/test_packaging.py`
-> Read changed code and preserve current behavior before edits.
+> Implemented 2026-09-12; drift reconciled in the same change. Since planning,
+> `packaging/VERSION` moved to 0.6.32 and the README was rewritten by the
+> public-release work, so: `pyproject.toml` version 0.6.9 -> 0.6.32 (with the new
+> parity test failing on mismatch, verified), the two stale `docs/architecture.md`
+> bullets replaced with the post-Plan-103 truth, and the README 503 passage
+> corrected. The README Claude-listing passage was already rewritten upstream and
+> is now accurate (`GET /v1/models` includes every OpenRouter registry row; the
+> mirror rule is a catalogue-merge rule), so it needed no edit. Plan 117's row now
+> records the 503 correction.
 
 ## Status and first proof
 
@@ -51,6 +57,7 @@ so the two workstreams never edit `README.md` concurrently.
 **In scope**: `pyproject.toml`, `docs/architecture.md`, `README.md` (the two passages only),
 `tests/test_packaging.py`, `plans/README.md` (status row only).
 **Out of scope**: `packaging/VERSION`, the release workflow, any other README section, the pinned
+(and the CHANGELOG's version-authority sentence, corrected here as a one-line consequence of step 1)
 runtime-file list test (`test_readme_runtime_list_matches_files`), Plan 117's other stages.
 
 ## Commands
@@ -93,11 +100,11 @@ README claims were corrected here.
 
 ## Done criteria
 
-- [ ] `pyproject.toml` version equals `packaging/VERSION`; new test fails on a mismatch.
-- [ ] Architecture notes match the code (no `systemd_manager`, no live Plan-056 pointer).
-- [ ] Both README claims are behavior-accurate; 117 row notes the correction.
-- [ ] Full suite and compile gates pass; only in-scope files changed.
-- [ ] `plans/README.md` status row updated.
+- [x] `pyproject.toml` version equals `packaging/VERSION` (0.6.32); the new test fails on a mismatch (probed).
+- [x] Architecture notes match the code (no `systemd_manager`, no live Plan-056 pointer; the service bullet now names the post-103 split).
+- [x] Both README claims are behavior-accurate (the 503 passage was corrected here; the Claude-listing passage was already corrected upstream and verified accurate); 117 row notes the correction.
+- [x] Full suite and compile gates pass; only in-scope files changed.
+- [x] `plans/README.md` status row updated.
 
 ## STOP conditions
 
