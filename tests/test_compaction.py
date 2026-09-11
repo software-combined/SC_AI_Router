@@ -235,6 +235,28 @@ class ReasoningAndShapeTests(unittest.TestCase):
         self.assertNotIn('leak', text)
         self.assertNotIn('opaque', text)
 
+    def test_reasoning_null_blob_reads_summary_and_content_text(self):
+        text = transcript_for_summary([
+            {'type': 'reasoning',
+             'summary': [{'type': 'summary_text', 'text': 'sum-marker'}],
+             'content': [{'type': 'reasoning_text', 'text': 'content-marker'},
+                         {'type': 'encrypted_content', 'encrypted_content': 'blob-marker'}],
+             'encrypted_content': None},
+        ])
+        self.assertIn('sum-marker', text)
+        self.assertIn('content-marker', text)
+        self.assertNotIn('blob-marker', text)
+
+    def test_reasoning_blob_only_item_stays_out_of_transcript(self):
+        text = transcript_for_summary([
+            {'type': 'message', 'role': 'user', 'content': 'keep me'},
+            {'type': 'reasoning', 'summary': [], 'content': [],
+             'encrypted_content': 'QkxPQg=='},
+        ])
+        self.assertIn('keep me', text)
+        self.assertNotIn('QkxPQg==', text)
+        self.assertNotIn('reasoning:', text)
+
     def test_alternate_result_keys_extracted(self):
         for key in ('output', 'result', 'content', 'text', 'data'):
             with self.subTest(key=key):
