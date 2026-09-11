@@ -1,11 +1,12 @@
 # Implementation Plans
 
-The router backlog. Renumbered 2026-09-10: the live set is **090-139** — the core
+The router backlog. Renumbered 2026-09-10: the live set is **090-140** — the core
 backlog **090-121**, the refactor wave **122-134** from the 2026-09-11 four-lane
 refactoring/reorganisation audit, the new-model prompt plan **135**, the
 security wave **136-138** from the 2026-09-11 router external security audit
 (`2026-09-11-router-external-security-audit.md`), and the publication wave
-**139**, plus the amended Claude plans 113-115 and 120-121 from the 2026-09-11
+**139**, the standalone delegation delivery plan **140**, plus the amended
+Claude plans 113-115 and 120-121 from the 2026-09-11
 Claude router development-branch review
 (`2026-09-11-claude-router-development-branch-review.md`). The
 recommended overall execution order is below the tables. The pre-renumbering 034-089 series is
@@ -95,6 +96,16 @@ The report, its verifications and its rejected findings are in
 | [136](136-unauth-ingress-crash-containment.md) | Contain the unauthenticated ingress compare crash | DONE: unauth ingress compare containment 2026-09-11 | P1; independent; a few lines in router.py (398 today) |
 | [137](137-loopback-host-header-validation.md) | Validate the Host header on loopback ingress | BLOCKED: STOP condition hit 2026-09-11 — router.py is 398/400, the 3-line guard needs 397 max; hand to 128's split | 090 landed; headroom exhausted by 096/136 |
 | [138](138-subscription-cookie-hygiene.md) | Drop Cookie on subscription passthrough and make the tests honest | TODO | independent |
+
+## Standalone delegation delivery (140)
+
+Added 2026-09-11 after cross-task messages stopped reaching tasks on
+OpenRouter models: the standalone app-injected output shape was dropped as an
+orphan tool fragment.
+
+| Plan | Title | Status | Sequencing |
+|---|---|---|---|
+| [140](140-standalone-delegation-output-delivery.md) | Deliver standalone delegation outputs to OpenRouter models | IN PROGRESS: offline proof complete 2026-09-11; live acceptance pending | P1; independent; OpenRouter prepare path only |
 
 ## Publication wave (139)
 

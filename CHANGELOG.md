@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Nested cross-task messages now reach tasks running on OpenRouter models.
+  Codex Desktop injects `create_thread` / `send_message_to_thread` turns as
+  standalone tool outputs with no `call_id`; the router used to drop them
+  as orphan tool fragments, so delegated tasks on OpenRouter models never
+  saw the message. Standalone app-injected outputs are now rendered as
+  readable assistant-role plaintext before the scrub instead.
+
 - Tagged releases now publish to the token-gated update feed at
   `dist.softwarecombined.com` as well as to GitHub Releases, so an
   installed router updates with no GitHub account, no `gh` and no

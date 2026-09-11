@@ -272,6 +272,7 @@ directory at an idle boundary:
 `ai_router/agent_handoffs.py`, `ai_router/sse.py`,
 `ai_router/capabilities.py`,
 `ai_router/compaction.py`,
+`ai_router/standalone_outputs.py`,
 `ai_router/discovered.py`,
 `ai_router/errors.py`,
 `ai_router/feed_verify.py`,
