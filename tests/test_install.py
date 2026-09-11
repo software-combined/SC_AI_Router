@@ -95,8 +95,6 @@ def _craft_bundle(version):
 
 _SEAMS = ('run', 'health', 'wait_version', 'self_test',
            'write_catalogue', 'fetch_feed', 'feed_serial')
-# webbrowser patches module-global stdlib handle via setattr on install_mod;
-# call sites use `webbrowser.open` so plain setattr suffices (no _svc mirror).
 
 
 def _patch_attrs(test, **overrides):
@@ -111,11 +109,6 @@ def _patch_attrs(test, **overrides):
                 test.addCleanup(setattr, mod, name, getattr(mod, name))
                 setattr(mod, name, value)
     for name, value in overrides.items():
-        if name == 'webbrowser':
-            # Module-global stdlib handle; call sites use webbrowser.open.
-            test.addCleanup(setattr, install_mod, name, getattr(install_mod, name))
-            setattr(install_mod, name, value)
-            continue
         if name not in _SEAMS and not hasattr(install_mod, name):
             raise AttributeError(f'unknown installer seam: {name}')
         test.addCleanup(setattr, install_mod, name, getattr(install_mod, name))

@@ -1,14 +1,14 @@
 """First-run key window over the loopback router (Plan 047 G, stdlib only).
 
-The daemon is already an authenticated HTTP server, so setup is one route on
-it instead of a native dialog: the installer opens the setup URL in a browser
-and the operator pastes one OpenRouter key. The URL carries a single-use
-short-lived nonce distinct from the long-lived path token. Browsers POST with
-an Origin header, so the route enforces same-origin itself; the generic
-DNS-rebinding rejection stays closed for everything else.
+The installer normally opens a native popup (`ai_router.key_prompt`) and the
+running router spawns one when a request arrives keyless. Both submit here,
+through the same single-use nonce route the HTML page uses, so validation,
+owner-only storage, the starter and nonce closure stay in one place. The URL
+carries a short-lived nonce distinct from the long-lived path token. Browsers
+POST with an Origin header, so the route enforces same-origin itself; the
+generic DNS-rebinding rejection stays closed for everything else.
 """
 import hmac
-import html
 import json
 import os
 import sys
@@ -17,6 +17,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from urllib.parse import parse_qsl
+
+from . import key_prompt, setup_page
 
 _ON_WINDOWS = os.name == 'nt'
 
@@ -107,105 +109,62 @@ def store_key(home, key, _check_live=None):
     raise KeyExists('a key file already exists; delete it to rotate keys')
 
 
-# Executive light theme lifted from SC_360 tokens (packages/ui/src/tokens.css): slate-50
-# canvas, white card, blue-600 primary, slate-200 hairlines, 0.75rem radius, 2.75rem
-# controls. Inline only: a loopback first-run page fetches no external asset or font.
-_STYLE = '''*{box-sizing:border-box}
-body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:2.5rem 1rem;background:hsl(210,40%,98%);color:hsl(222,47%,11%);font:1rem/1.55 Inter,"Helvetica Neue",Arial,sans-serif;-webkit-font-smoothing:antialiased}
-main{width:100%;max-width:32rem;background:#fff;border:1px solid hsl(214,32%,91%);border-radius:.75rem;overflow:hidden;box-shadow:0 1px 2px rgba(15,23,42,.05),0 10px 24px -12px rgba(15,23,42,.15)}
-h1{margin:0;padding:1.125rem 1.5rem;border-bottom:1px solid hsl(214,32%,91%);letter-spacing:-.025em;font:500 1.0625rem/1.4 "Space Grotesk",Inter,Arial,sans-serif}
-.b{padding:1.5rem}
-p{margin:0 0 1.5rem;color:hsl(215,16%,45%);font-size:.9375rem}
-label.f{display:block;margin-bottom:.5rem;font-size:.8125rem;font-weight:500}
-input[type=password]{width:100%;min-height:2.75rem;padding:0 .75rem;background:#fff;border:1px solid hsl(214,32%,91%);border-radius:.5rem;color:inherit;font:inherit}
-fieldset{margin:1.25rem 0 0;padding:0;border:0}
-legend{padding:0 0 .5rem;font-size:.8125rem;font-weight:500}
-.o{display:flex;gap:.625rem;align-items:flex-start;margin-bottom:.5rem;padding:.75rem;border:1px solid hsl(214,32%,91%);border-radius:.5rem;font-size:.9375rem;cursor:pointer}
-.o:hover{background:hsl(214,100%,97%);border-color:hsl(221,83%,53%)}
-.o em{display:block;margin-top:.125rem;color:hsl(215,16%,45%);font-size:.8125rem;font-style:normal}
-input[type=radio]{margin:.2rem 0 0;accent-color:hsl(221,83%,53%)}
-button{margin-top:1.5rem;width:100%;min-height:2.75rem;padding:0 1rem;border:0;border-radius:.5rem;background:hsl(221,83%,53%);color:#fff;cursor:pointer;font:500 .9375rem/1 Inter,Arial,sans-serif}
-button:hover{background:hsl(221,83%,47%)}
-:focus-visible{outline:2px solid hsl(221,83%,53%);outline-offset:2px}
-.e{margin:0 0 1.25rem;padding:.75rem 1rem;border:1px solid hsl(0,72%,85%);border-radius:.5rem;background:hsl(0,86%,97%);color:hsl(0,72%,41%);font-size:.875rem}
-dl{display:grid;grid-template-columns:auto 1fr;gap:.5rem 1rem;margin:0 0 1.5rem;font-size:.9375rem}
-dt{color:hsl(215,16%,45%)}
-dd{margin:0;font-weight:500;word-break:break-word}'''
-
-
-def _page(title, body):
-    return ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
-            '<meta name="viewport" content="width=device-width,initial-scale=1">'
-            f'<title>{html.escape(title)}</title><style>{_STYLE}</style>'
-            f'</head><body><main><h1>{html.escape(title)}</h1>'
-            f'<div class="b">{body}</div></main></body></html>').encode()
-
-
-def _form(nonce, error=None):
-    complaint = f'<p class="e"><strong>Error:</strong> {html.escape(error)}</p>' if error else ''
-    return _page('Connect OpenRouter', complaint + f'''<p>Paste an OpenRouter key. It is validated
-before anything is stored, and kept in an owner-only file the router reads at request time.</p>
-<form method="post" action="./{html.escape(nonce, quote=True)}">
-<label class="f" for="key">OpenRouter key</label>
-<input id="key" type="password" name="key" autocomplete="off" placeholder="sk-or-v1-...">
-<fieldset><legend>ChatGPT subscription</legend>
-<label class="o"><input type="radio" name="mode" value="subscription" checked><span>I have one
-<em>Route OpenAI models on the subscription</em></span></label>
-<label class="o"><input type="radio" name="mode" value="none"><span>No subscription
-<em>OpenRouter models only</em></span></label>
-</fieldset>
-<fieldset><legend>Starter instructions</legend>
-<label class="o"><input type="radio" name="profile" value="general" checked><span>General
-<em>Everyday help: careful, brief, plain language</em></span></label>
-<label class="o"><input type="radio" name="profile" value="dev"><span>Development
-<em>Coding help: read first, small verified changes, tests</em></span></label>
-</fieldset>
-<p style="margin:1rem 0 0">The starter is installed only when no global
-instructions file exists yet. An existing file is never overwritten.</p>
-<button type="submit">Save and connect</button></form>''')
-
-
-def _done(label, limit, usage, mode, starter):
-    try:
-        remaining = 'unlimited' if limit is None else str(limit - (usage or 0))
-    except TypeError:
-        remaining = 'unknown'
-    return _page('Connected', f'''<p>Your key is validated and stored.</p>
-<dl><dt>Key</dt><dd>{html.escape(str(label))}</dd>
-<dt>Remaining credit</dt><dd>{html.escape(remaining)}</dd>
-<dt>Mode</dt><dd>{html.escape(mode)}</dd>
-<dt>Starter</dt><dd>{html.escape(starter)}</dd></dl>
-<p>You can close this window and restart Codex.</p>''')
-
-
 def handle_setup(state, home, nonce, is_post, form, _urlopen=None, _now=None):
     """(status, html body) for an already-routed setup request."""
-    _fetch = _urlopen or urllib.request.urlopen
     if not valid_nonce(state, nonce, _now):
-        return 404, _page('Not found', '<p>Unknown or expired setup link.</p>')
+        return 404, setup_page.not_found()
     if not is_post:
-        return 200, _form(nonce)
+        return 200, setup_page.form(nonce)
+    status, result = _submit(state, home, form, _urlopen)
+    if result.get('ok'):
+        return status, setup_page.done(result.get('label'), result.get('limit'),
+                                       result.get('usage'),
+                                       result.get('mode') or state.get('openai_mode', ''),
+                                       result.get('starter', ''),
+                                       state.get('clients', 'codex'))
+    return status, setup_page.form(nonce, result.get('error'))
+
+
+def handle_setup_json(state, home, nonce, form, _urlopen=None, _now=None):
+    """(status, payload) for a popup POST; the same checks as the page."""
+    if not valid_nonce(state, nonce, _now):
+        return 404, {'ok': False, 'error': 'unknown or expired setup link; '
+                                           're-run the installer'}
+    return _submit(state, home, form, _urlopen)
+
+
+def _submit(state, home, form, _urlopen):
+    """(status, result) for a setup POST: one writer, both renderers."""
+    _fetch = _urlopen or urllib.request.urlopen
     fields = dict(parse_qsl(form.decode('utf-8', 'replace'), keep_blank_values=True))
     key = fields.get('key', '').strip()
-    mode = fields.get('mode', 'subscription')
-    profile = fields.get('profile', 'general')
+    # The native popup only sends the choices it actually asked; the HTML
+    # page always sends both. A claude-only setup therefore leaves Codex
+    # settings (openai_mode, agents_profile, starter) untouched.
+    mode = fields.get('mode')
+    profile = fields.get('profile')
+    claude_mode = fields.get('claude_mode')
     if not key:
-        return 422, _form(nonce, 'paste a key before saving')
-    if mode not in ('subscription', 'none') or profile not in ('general', 'dev'):
-        return 422, _form(nonce, 'unknown choice; resubmit the form')
+        return 422, {'ok': False, 'error': 'paste a key before saving'}
+    if mode is not None and mode not in ('subscription', 'none'):
+        return 422, {'ok': False, 'error': 'unknown choice; resubmit the form'}
+    if profile is not None and profile not in ('general', 'dev'):
+        return 422, {'ok': False, 'error': 'unknown choice; resubmit the form'}
+    if claude_mode is not None and claude_mode not in ('subscription', 'none'):
+        return 422, {'ok': False, 'error': 'unknown choice; resubmit the form'}
     try:
         label, limit, usage = check_key(key, _fetch)
     except ValueError as exc:
-        return 422, _form(nonce, str(exc))
+        return 422, {'ok': False, 'error': str(exc)}
     except OSError:
-        return 502, _form(nonce, 'could not reach OpenRouter; retry shortly')
+        return 502, {'ok': False, 'error': 'could not reach OpenRouter; retry shortly'}
     key_path = Path(home) / 'openrouter.key'
     try:
         fd = store_key(home, key, _check_live=lambda stored: _stored_key_live(stored, _fetch))
     except KeyExists as exc:
-        return 409, _form(nonce, str(exc))
+        return 409, {'ok': False, 'error': str(exc)}
     except OSError:
-        return 500, _form(nonce, 'could not store the key')
+        return 500, {'ok': False, 'error': 'could not store the key'}
     with os.fdopen(fd, 'w') as stream:
         stream.write(key + '\n')
     if _ON_WINDOWS:
@@ -220,21 +179,26 @@ def handle_setup(state, home, nonce, is_post, form, _urlopen=None, _now=None):
             try:
                 key_path.unlink()
             except OSError:
-                return 500, _form(
-                    nonce, 'could not protect %s; delete it and resubmit this page'
-                    % key_path)
-            return 500, _form(nonce, 'could not protect the key file')
+                return 500, {'ok': False, 'error':
+                             'could not protect %s; delete it and resubmit this page'
+                             % key_path}
+            return 500, {'ok': False, 'error': 'could not protect the key file'}
     from . import agents as _agents  # starter lives under ~/.codex
-    try:
-        starter = _agents.install(profile)
-    except Exception:
-        starter = 'skipped'
-    if not _finish_setup(state, home, mode, profile):
-        _agents.revert(starter)
-        return 500, _form(nonce, 'key stored but setup could not be closed; '
-                                 'delete the key file and resubmit this page')
+    starter = 'skipped'
+    if profile is not None:
+        try:
+            starter = _agents.install(profile)
+        except Exception:
+            starter = 'skipped'
+    if not _finish_setup(state, home, mode, profile, claude_mode):
+        if profile is not None:
+            _agents.revert(starter)
+        return 500, {'ok': False, 'error':
+                     'key stored but setup could not be closed; '
+                     'delete the key file and run the installer again'}
     line = _agents.describe(starter)
-    return 200, _done(label, limit, usage, mode, line)
+    return 200, {'ok': True, 'label': label, 'limit': limit, 'usage': usage,
+                 'mode': mode, 'claude_mode': claude_mode or '', 'starter': line}
 
 
 def _stored_key_live(stored, _fetch):
@@ -253,19 +217,23 @@ def _stored_key_live(stored, _fetch):
     return True
 
 
-def open_key_window(server, home, _opener=None):
-    """Mint one setup nonce and open the loopback key page; True when opened.
+def open_key_window(server, home, _opener=None, _prompt=None):
+    """Mint one setup nonce and open the key window; True when opened.
 
     Plan 055 Stage 3: at most one window per live nonce. When
     `setup_pending` already holds, the existing page is the window and no
     new nonce is minted. The nonce persists atomically (temp file plus
-    `os.replace`), never through a truncating rewrite. The URL carries the
-    per-install path token: it is opened in the browser, printed only on a
-    TTY, and otherwise recorded as a token-free lifecycle event.
+    `os.replace`), never through a truncating rewrite.
+
+    Plan 139: the native popup is the primary window and runs on its own
+    worker thread (it submits back to this server). The URL carries the
+    per-install path token: it is printed only on a TTY and otherwise
+    recorded as a token-free event.
     """
     import secrets as _secrets
     import webbrowser as _webbrowser
     opener = _opener or _webbrowser.open
+    prompt = _prompt or key_prompt.open_window
     state = server.state
     with server.lock:
         if setup_pending(state):
@@ -286,9 +254,13 @@ def open_key_window(server, home, _opener=None):
         url = ('http://127.0.0.1:%s/%s/setup/%s'
                % (state.get('port'), state.get('token'), nonce))
     try:
-        opened = opener(url) is not False
-    except OSError:
-        opened = False
+        opened = prompt(url, thread=True, opener=opener,
+                        clients=state.get('clients', 'codex')) is not False
+    except (OSError, ValueError):
+        try:
+            opened = opener(url) is not False
+        except OSError:
+            opened = False
     if sys.stdout.isatty():
         print('open %s to connect your OpenRouter key' % url)
     else:
@@ -319,8 +291,8 @@ def _atomic_replace(path, doc):
     os.replace(tmp, path)
 
 
-def _finish_setup(state, home, mode, profile='general'):
-    """Drop the nonce and persist mode plus profile; False on IO failure."""
+def _finish_setup(state, home, mode=None, profile=None, claude_mode=None):
+    """Drop the nonce and persist mode, profile and Claude's choice."""
     path = Path(home) / 'mixed-router-state.json'
     try:
         from . import catalogue
@@ -328,16 +300,27 @@ def _finish_setup(state, home, mode, profile='general'):
         if not isinstance(doc, dict):
             return False
         doc.pop('setup', None)
-        doc['openai_mode'] = mode
-        doc['agents_profile'] = profile if profile in ('general', 'dev') else 'general'
-        catalogue.merge_file(Path(home) / 'mixed-models.json', openai_mode=mode)
+        if mode in ('subscription', 'none'):
+            doc['openai_mode'] = mode
+        if profile in ('general', 'dev'):
+            doc['agents_profile'] = profile
+        if claude_mode in ('subscription', 'none'):
+            doc['claude_mode'] = claude_mode
+            doc['anthropic_mode'] = claude_mode
+        catalogue.merge_file(Path(home) / 'mixed-models.json',
+                             openai_mode=mode or doc.get('openai_mode', 'subscription'))
         _atomic_replace(path, doc)
     except (OSError, ValueError):
         return False
     if isinstance(state, dict):
         state.pop('setup', None)
-        state['openai_mode'] = mode
-        state['agents_profile'] = profile if profile in ('general', 'dev') else 'general'
+        if mode in ('subscription', 'none'):
+            state['openai_mode'] = mode
+        if profile in ('general', 'dev'):
+            state['agents_profile'] = profile
+        if claude_mode in ('subscription', 'none'):
+            state['claude_mode'] = claude_mode
+            state['anthropic_mode'] = claude_mode
     return True
 
 
@@ -369,9 +352,16 @@ def serve(handler, nonce, is_post):
             return _reject(handler, 403)
     else:
         form = None
-    status, body = handle_setup(state, home, nonce, is_post, form)
+    # The native popup asks for JSON; browsers keep the page unchanged.
+    if is_post and 'application/json' in (handler.headers.get('Accept') or ''):
+        status, payload = handle_setup_json(state, home, nonce, form)
+        body = json.dumps(payload).encode()
+        content_type = 'application/json; charset=utf-8'
+    else:
+        status, body = handle_setup(state, home, nonce, is_post, form)
+        content_type = 'text/html; charset=utf-8'
     handler.send_response(status)
-    handler.send_header('Content-Type', 'text/html; charset=utf-8')
+    handler.send_header('Content-Type', content_type)
     handler.send_header('Content-Length', str(len(body)))
     handler.send_header('Connection', 'close')
     handler.end_headers()

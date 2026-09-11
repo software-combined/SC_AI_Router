@@ -244,56 +244,118 @@ class InstallConfigTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             blob, latest = _craft_bundle('1.0.0')
-            opened = []
+            spawned = []
 
-            class FakeBrowser:
-                def open(self, url):
-                    opened.append(url)
-                    return True
+            class FakePopen:
+                def __init__(self, cmd, **kwargs):
+                    spawned.append((cmd, kwargs))
 
             _patch_attrs(self, run=lambda cmd, **kwargs: _ok_run(cmd, **kwargs),
                          self_test=lambda *args: None,
                          write_catalogue=_fake_write_catalogue,
-                         wait_version=lambda *args, **kwargs: True,
-                         webbrowser=FakeBrowser())
+                         wait_version=lambda *args, **kwargs: True)
             args = install_mod.build_parser().parse_args(
                 ['--feed', 'file:///latest.json', '--home', str(home), '--setup'])
             env = {'HOME': str(Path(tmp) / 'fakehome'), 'PATH': '/usr/bin:/bin'}
-            with mock.patch.dict(os.environ, env, clear=True):
+            with mock.patch.dict(os.environ, env, clear=True), \
+                    mock.patch.object(install_mod.subprocess, 'Popen', FakePopen):
                 self.assertEqual(
                     install_mod.do_install(args, _fetch=_static_fetch(latest, blob)), 0)
             state = json.loads((home / 'mixed-router-state.json').read_text())
             self.assertIn('setup', state)
             self.assertGreater(state['setup']['expires'], int(_time.time()))
-            self.assertEqual(len(opened), 1)
-            self.assertIn(f"/setup/{state['setup']['nonce']}", opened[0])
+            self.assertEqual(len(spawned), 1)
+            cmd, kwargs = spawned[0]
+            self.assertEqual(cmd[1:3], ['-m', 'ai_router.key_prompt'])
+            self.assertIn(f"/setup/{state['setup']['nonce']}", cmd[3])
+            self.assertEqual(kwargs['cwd'], str(install_mod.current_release_dir(home)))
+            # The popup must never hold the installer's pipes: an agent or
+            # script capturing the installer would block until the user
+            # answered the dialog.
+            self.assertEqual(kwargs['stdin'], install_mod.subprocess.DEVNULL)
+            self.assertEqual(kwargs['stdout'], install_mod.subprocess.DEVNULL)
+            self.assertEqual(kwargs['stderr'], install_mod.subprocess.DEVNULL)
             config = Path(env['HOME']) / '.codex' / 'config.toml'
             self.assertIn('# BEGIN local mixed model picker', config.read_text())
 
-    def test_setup_mode_with_key_still_opens_window(self):
+    def test_headless_terminal_still_gets_the_setup_link(self):
+        # The popup child's stdio is detached, so the installer prints the
+        # fallback link itself when it has a terminal (SSH and headless runs).
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             blob, latest = _craft_bundle('1.0.0')
-            opened = []
 
-            class FakeBrowser:
-                def open(self, url):
-                    opened.append(url)
+            class Tty(io.StringIO):
+                def isatty(self):
                     return True
 
             _patch_attrs(self, run=lambda cmd, **kwargs: _ok_run(cmd, **kwargs),
                          self_test=lambda *args: None,
                          write_catalogue=_fake_write_catalogue,
-                         wait_version=lambda *args, **kwargs: True,
-                         webbrowser=FakeBrowser())
+                         wait_version=lambda *args, **kwargs: True)
+            args = install_mod.build_parser().parse_args(
+                ['--feed', 'file:///latest.json', '--home', str(home), '--setup'])
+            env = {'HOME': str(Path(tmp) / 'fakehome'), 'PATH': '/usr/bin:/bin'}
+            out = Tty()
+            with mock.patch.dict(os.environ, env, clear=True), \
+                    mock.patch.object(install_mod.subprocess, 'Popen', lambda *a, **k: None), \
+                    mock.patch.object(install_mod.sys, 'stdout', out):
+                self.assertEqual(
+                    install_mod.do_install(args, _fetch=_static_fetch(latest, blob)), 0)
+            state = json.loads((home / 'mixed-router-state.json').read_text())
+            self.assertIn(f"/setup/{state['setup']['nonce']}", out.getvalue())
+
+    def test_setup_mode_with_key_still_opens_window(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            blob, latest = _craft_bundle('1.0.0')
+            spawned = []
+
+            class FakePopen:
+                def __init__(self, cmd, **kwargs):
+                    spawned.append(cmd)
+
+            _patch_attrs(self, run=lambda cmd, **kwargs: _ok_run(cmd, **kwargs),
+                         self_test=lambda *args: None,
+                         write_catalogue=_fake_write_catalogue,
+                         wait_version=lambda *args, **kwargs: True)
             args = install_mod.build_parser().parse_args(
                 ['--feed', 'file:///latest.json', '--home', str(home), '--setup'])
             env = {'HOME': str(Path(tmp) / 'fakehome'), 'PATH': '/usr/bin:/bin',
                    'OPENROUTER_API_KEY': 'test-key'}
-            with mock.patch.dict(os.environ, env, clear=True):
+            with mock.patch.dict(os.environ, env, clear=True), \
+                    mock.patch.object(install_mod.subprocess, 'Popen', FakePopen):
                 self.assertEqual(
                     install_mod.do_install(args, _fetch=_static_fetch(latest, blob)), 0)
-            self.assertEqual(len(opened), 1)
+            self.assertEqual(len(spawned), 1)
+            self.assertEqual(spawned[0][1:3], ['-m', 'ai_router.key_prompt'])
+
+    def test_claude_only_setup_still_asks_for_the_key(self):
+        # The key window is not a Codex-only step: a Claude-only --setup run
+        # must still prompt and pass its own client set through.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            blob, latest = _craft_bundle('1.0.0')
+            spawned = []
+
+            class FakePopen:
+                def __init__(self, cmd, **kwargs):
+                    spawned.append(cmd)
+
+            _patch_attrs(self, run=lambda cmd, **kwargs: _ok_run(cmd, **kwargs),
+                         self_test=lambda *args: None,
+                         write_catalogue=_fake_write_catalogue,
+                         wait_version=lambda *args, **kwargs: True)
+            args = install_mod.build_parser().parse_args(
+                ['--feed', 'file:///latest.json', '--home', str(home),
+                 '--setup', '--clients', 'claude'])
+            env = {'HOME': str(Path(tmp) / 'fakehome'), 'PATH': '/usr/bin:/bin'}
+            with mock.patch.dict(os.environ, env, clear=True), \
+                    mock.patch.object(install_mod.subprocess, 'Popen', FakePopen):
+                self.assertEqual(
+                    install_mod.do_install(args, _fetch=_static_fetch(latest, blob)), 0)
+            self.assertEqual(len(spawned), 1)
+            self.assertEqual(spawned[0][-2:], ['--clients', 'claude'])
 
     def test_no_setup_without_key_still_refuses(self):
         with tempfile.TemporaryDirectory() as tmp:
