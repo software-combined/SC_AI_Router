@@ -12,7 +12,8 @@ from . import provider_defs
 
 
 HOP_HEADERS = {'host', 'connection', 'content-length', 'transfer-encoding',
-               'upgrade', 'keep-alive', 'proxy-authorization', 'proxy-authenticate', 'te', 'trailer'}
+               'upgrade', 'keep-alive', 'proxy-authorization', 'proxy-authenticate',
+               'te', 'trailer', 'cookie'}
 
 
 class Prepared:

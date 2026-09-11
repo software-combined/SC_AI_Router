@@ -84,7 +84,8 @@ class HandlerCharacterisationTests(unittest.TestCase):
             {'model': 'gpt-6-astra',
              'input': [{'type': 'message', 'role': 'user', 'content': 'hi'}]},
             {'Authorization': 'Bearer subscription-secret',
-             'ChatGPT-Account-ID': 'acct', 'Connection': 'keep-alive'})
+             'ChatGPT-Account-ID': 'acct', 'Connection': 'keep-alive',
+             'Cookie': 'c=1'})
         self.assertEqual(response.status, 200)
         host, _, path, body, headers = recorded[0]
         self.assertEqual(host, 'chatgpt.com')

@@ -58,7 +58,8 @@ class SelectTests(unittest.TestCase):
         provider = providers.select('gpt-6-astra', '/responses', ['gpt-6-astra'])
         prepared = provider.prepare('gpt-6-astra', '/responses', {'model': 'x'}, b'raw',
             {'Authorization': 'Bearer subscription-secret', 'ChatGPT-Account-ID': 'acct',
-             'Connection': 'keep-alive', 'Host': 'h', 'Content-Length': '3'}, None)
+             'Connection': 'keep-alive', 'Host': 'h', 'Content-Length': '3',
+             'Cookie': 'c=1'}, None)
         self.assertEqual(prepared.headers,
                          {'Authorization': 'Bearer subscription-secret',
                           'ChatGPT-Account-ID': 'acct'})

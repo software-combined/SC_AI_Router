@@ -89,7 +89,7 @@ class ClaudeIngressTests(unittest.TestCase):
                          {'Authorization': 'Bearer subscription-secret',
                           'anthropic-version': '2023-06-01',
                           'anthropic-beta': 'prompt-caching-2024-07-31',
-                          'Connection': 'keep-alive'})
+                          'Connection': 'keep-alive', 'Cookie': 'c=1'})
         self.assertEqual(response.status, 200)
         host, _, path, _, headers = recorded[0]
         self.assertEqual(host, 'api.anthropic.com')
@@ -98,6 +98,7 @@ class ClaudeIngressTests(unittest.TestCase):
         self.assertEqual(headers.get('anthropic-version'), '2023-06-01')
         self.assertEqual(headers.get('anthropic-beta'), 'prompt-caching-2024-07-31')
         self.assertNotIn('Connection', headers)
+        self.assertNotIn('Cookie', headers)
         self.assertNotIn('test-key', json.dumps(headers))
 
     def test_subscription_accepts_api_key_auth(self):
