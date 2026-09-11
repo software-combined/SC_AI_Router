@@ -18,8 +18,9 @@
 - **Depends on**: none
 - **Category**: bug / compatibility
 - **Planned at**: commit `d440c3a`, 2026-09-11
-- **Status**: IN PROGRESS: tool-pair shape implemented 2026-09-11; live
-  acceptance pending
+- **Status**: DONE: tool-pair shape live-accepted 2026-09-11 on router
+  `0.6.27.44` (fresh `deepseek/deepseek-v4.1-flash` task replied
+  `ROUTER-HANDOFF-OK-7f3a`)
 
 First proof: a request containing the captured no-call_id `create_thread`
 item prepares an OpenRouter body with exactly one matched
@@ -40,8 +41,11 @@ adjacent items at the original position -- a synthesized complete
 preserves tool-result semantics and matches what OpenAI-routed children
 already receive. Offline proof for this shape: the prepared OpenRouter
 body contains the pair carrying the marker, and the full suite exits 0.
-Live acceptance of the pair shape is orchestrator-owned and still
-pending.
+Live acceptance of the pair shape passed on 2026-09-11: after
+installing router `0.6.27.44`, a fresh
+projectless task on `deepseek/deepseek-v4.1-flash` received the
+delegation and replied exactly `ROUTER-HANDOFF-OK-7f3a`; the earlier
+assistant-role iteration had replied `NO-ASSIGNMENT`.
 
 ## Outcome
 

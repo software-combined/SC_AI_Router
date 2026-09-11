@@ -105,7 +105,7 @@ orphan tool fragment.
 
 | Plan | Title | Status | Sequencing |
 |---|---|---|---|
-| [140](140-standalone-delegation-output-delivery.md) | Deliver standalone delegation outputs to OpenRouter models | IN PROGRESS: offline proof complete 2026-09-11; live acceptance pending | P1; independent; OpenRouter prepare path only |
+| [140](140-standalone-delegation-output-delivery.md) | Deliver standalone delegation outputs to OpenRouter models | DONE: live acceptance 2026-09-11 on router 0.6.27.44 (deepseek child echoed the marker) | P1; independent; OpenRouter prepare path only |
 
 ## Publication wave (139)
 
