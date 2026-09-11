@@ -203,17 +203,22 @@ def remember(items, summary):
 
 def recall(items):
     """Schemas for summaries replayed in this input, memory then disk."""
+    summaries = summaries_in(items)
+    if not summaries:
+        return []
     found = []
-    with _LOCK:
-        for summary in summaries_in(items):
-            key = _key(summary)
+    for summary in summaries:
+        key = _key(summary)
+        with _LOCK:
             defs = _MEMORY.get(key)
-            if defs is None:
-                defs = _read_disk(key)
-                if defs is not None:
-                    _MEMORY[key] = deepcopy(defs)
-            if defs:
-                # Legacy disk entries may already hold duplicates; apply
-                # the same normalisation on recall without rewriting files.
-                found.extend(deepcopy(_dedup(defs)))
+        if defs is None:
+            defs = _read_disk(key)
+            if defs is not None:
+                with _LOCK:
+                    # No eviction here: remember stays the only evictor.
+                    _MEMORY.setdefault(key, deepcopy(defs))
+        if defs:
+            # Legacy disk entries may already hold duplicates; apply
+            # the same normalisation on recall without rewriting files.
+            found.extend(deepcopy(_dedup(defs)))
     return found

@@ -33,7 +33,7 @@ Executor rules for every plan:
 | [094](094-router-atomic-write-consolidation.md) | One atomic writer for installer state/config | DONE: atomic writer consolidation 2026-09-11 | — |
 | [095](095-router-activation-receipt-consolidation.md) | One writer for the activation receipt | DONE: activation receipt consolidation 2026-09-11 | depends 094 |
 | [096](096-router-streaming-robustness.md) | SSE frame cap and mid-stream error containment | DONE: streaming robustness 2026-09-11 | — |
-| [097](097-router-discovered-lock-scope.md) | Narrow the discovered-recall lock scope | TODO | — |
+| [097](097-router-discovered-lock-scope.md) | Narrow the discovered-recall lock scope | DONE: discovered lock scope 2026-09-11 | — |
 | [098](098-router-model-refresh-bindings.md) | Refresh-safe registry consumers | TODO | before 099 |
 | [099](099-codex-router-model-onboarding-at-scale.md) | Model onboarding: one-command add, data-driven dispatch, refresh wiring | PARTIAL | needs 098; refresh wiring awaits 106's qualified feed; then publish `models_url` |
 | [100](100-router-retired-slug-single-source.md) | Shared retired-subscription slug set | TODO | depends 094 |

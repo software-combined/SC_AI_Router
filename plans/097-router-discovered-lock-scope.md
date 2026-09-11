@@ -3,6 +3,13 @@
 > Planning only. Implement only under a later implementation instruction.
 > Drift check: `git diff --stat a985197..HEAD -- ai_router/discovered.py tests/test_discovered.py`
 > Read changed code and preserve current behavior before edits.
+> Reconciliation 2026-09-11 (branch codex/router-plan-backlog-20260911, 122/123/090-096 and 136
+> landed): drift check is empty for both in-scope files. `remember` still stores
+> `deepcopy(defs)` under `_LOCK` and is the only evictor (`discovered.py:197-201`); `_read_disk`
+> still returns `None` on any error (`:85-89`); `_dedup` is still read-only over its input
+> (`:127-180`). The only stale ref is the `tool_adapter.py:75` call-site line, now `:77`
+> (`prepare_tools` moved from `:67` to `:69`); reconciled above. STOP conditions do not apply:
+> no in-place `_MEMORY` mutation outside `remember`, and FIFO eviction order is untouched.
 
 ## Status and first proof
 
@@ -15,8 +22,8 @@
 
 `discovered.recall` (`ai_router/discovered.py:204-219`) holds the single module lock `_LOCK` across
 the entire call: the input scan (`summaries_in`), `_read_disk`, the `_MEMORY` deep-copy and
-`deepcopy(_dedup(defs))`. It is called on every OpenRouter request (`ai_router/tool_adapter.py:75`
-via `prepare_tools`). With more than 16 active summaries (or a cold start), concurrent routed
+`deepcopy(_dedup(defs))`. It is called on every OpenRouter request (`ai_router/tool_adapter.py:77`
+via `prepare_tools`; `:75` at plan time). With more than 16 active summaries (or a cold start), concurrent routed
 requests queue behind one request's disk I/O and copies; a cache miss re-reads disk on every
 request because misses are not cached. `remember` only replaces `_MEMORY` values under the lock and
 never mutates stored entries, so the lock is needed only for the memory-map read/insert.
@@ -101,11 +108,21 @@ disk (simulating `_MAX` overflow as the existing tests do).
 
 ## Done criteria
 
-- [ ] `_read_disk`, `_dedup` and deep copies run outside `_LOCK`.
-- [ ] Returned data is still copy-isolated; disk round-trip behavior unchanged.
-- [ ] Existing restart/dedup/prune tests pass.
-- [ ] Full suite, compile and limit gates pass; only in-scope files changed.
-- [ ] `plans/README.md` status row updated.
+- [x] `_read_disk`, `_dedup` and deep copies run outside `_LOCK`.
+- [x] Returned data is still copy-isolated; disk round-trip behavior unchanged.
+- [x] Existing restart/dedup/prune tests pass.
+- [x] Full suite, compile and limit gates pass; only in-scope files changed.
+- [x] `plans/README.md` status row updated.
+
+Implemented 2026-09-11 (branch codex/router-plan-backlog-20260911): `recall` scans input and
+returns before touching the lock, takes `_MEMORY.get` and the recall-insert `setdefault`
+(each under `_LOCK`, no eviction on insert), and runs `_read_disk`/`_dedup`/deep-copies
+outside the lock. Semantics kept exactly: `remember` untouched and still the only evictor,
+disk values deep-copied into memory, every returned definition a deep copy. Regression tests:
+`test_mutating_disk_backed_recall_leaves_store_intact` (disk-path copy isolation) and
+`test_evicted_key_still_resolves_from_disk` (memory-evicted key re-reads disk). Negative
+checks: both mutation tests fail with the copies dropped (2 failures on the no-copy variant);
+the eviction test passes on old code, as expected for unchanged semantics.
 
 ## STOP conditions
 
