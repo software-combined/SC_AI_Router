@@ -26,6 +26,12 @@ Parameters:
     Type: String
     Default: software-combined/SC_OpenRouter_adapter
     Description: GitHub repository whose tag builds may assume the publisher role.
+  ImmutableSubjectPrefix:
+    Type: String
+    Default: software-combined@200868195/SC_OpenRouter_adapter@1360169840
+    Description: >-
+      Repository IDs GitHub emits in an immutable OIDC subject (owner@id/repo@id),
+      kept beside the classic form so either claim can assume the role.
   TokenParameterName:
     Type: String
     Default: /scg/router-feed/current-token
@@ -188,7 +194,9 @@ Resources:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
               StringLike:
-                token.actions.githubusercontent.com:sub: !Sub repo:${Repository}:ref:refs/tags/v*
+                token.actions.githubusercontent.com:sub:
+                  - !Sub repo:${Repository}:ref:refs/tags/v*
+                  - !Sub repo:${ImmutableSubjectPrefix}:ref:refs/tags/v*
       Policies:
         - PolicyName: publish-router-feed
           PolicyDocument:
