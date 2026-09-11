@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 
 from tests._platform import unix_only
-from tests.test_install import install_mod
+from tests.install_fixtures import install_mod
 
 claude_config = install_mod._claude_config
 
@@ -164,7 +164,7 @@ class ClaudeMergeTests(unittest.TestCase):
                               json.loads(settings.read_text())['env'])
                 args = install_mod.build_parser().parse_args(
                     ['--home', str(home), '--uninstall'])
-                from tests.test_install import _patch_attrs as _pa, _ok_run
+                from tests.install_fixtures import _patch_attrs as _pa, _ok_run
                 _pa(self, run=lambda cmd, **kw: _ok_run(cmd, **kw))
                 with _mock.patch.dict(os.environ, {'HOME': str(Path(tmp) / 'fakehome'),
                                                    'OPENROUTER_API_KEY': 'k'}):

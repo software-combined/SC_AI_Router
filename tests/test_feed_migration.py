@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from tests.test_install import _ok_run, _patch_attrs, install_mod
+from tests.install_fixtures import _ok_run, _patch_attrs, install_mod
 
 svc = install_mod._svc
 ORIGIN = 'https://dist.softwarecombined.com'

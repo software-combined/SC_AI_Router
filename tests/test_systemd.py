@@ -10,7 +10,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from tests.test_install import _craft_bundle, _ok_run, _patch_attrs, _static_fetch, install_mod
+from tests.install_fixtures import _craft_bundle, _ok_run, _patch_attrs, _static_fetch, install_mod
 from tests._platform import unix_only
 
 
@@ -122,7 +122,7 @@ class SystemdTests(unittest.TestCase):
         self.install('0.6.2.0')
         blob, latest = _craft_bundle('0.6.6.0')
         # check-update needs an installer member; the child invocation is mocked.
-        from tests.test_install import _tarball
+        from tests.install_fixtures import _tarball
         blob = _tarball(files=[('packaging/install.py', '# installer')])
         (self.home / 'update-etag').write_text('old')
         args = install_mod.build_parser().parse_args(['--home', str(self.home)])

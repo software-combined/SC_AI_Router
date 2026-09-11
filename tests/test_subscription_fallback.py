@@ -15,8 +15,12 @@ from ai_router import subscription_fallback
 from ai_router.registry import by_slug
 from ai_router.runtime import load_state
 from tests.fakes import FakeUpstream, install_fake
-from tests.test_handler import _auth_file, _post
-from tests.test_mixed_router import _start_server, _test_state
+from tests.harness import (
+    auth_file as _auth_file,
+    post as _post,
+    start_server as _start_server,
+    test_state as _test_state,
+)
 
 HELPER = 'gpt-5.6-luna'
 HEADERS = {'x-codex-turn-metadata': json.dumps({'thread_source': 'thread_title'})}

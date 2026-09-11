@@ -3,16 +3,16 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 from ai_router import provider_defs, providers, upstream
-from tests.test_tool_adapter import _isolated_home
+from tests.harness import (
+    isolated_home as _isolated_home,
+    stub_credentials as _stub_credentials,
+)
 
 
 def _external_responses():
     """The OpenRouter Codes adapter; Plan 141 makes adapters per-provider."""
     return providers.ExternalResponsesProvider(provider_defs.OPENROUTER)
 
-
-def _stub_credentials(key='router-secret'):
-    return SimpleNamespace(key_for=lambda _provider_id=None: key)
 
 class SelectTests(unittest.TestCase):
     def test_select_prefers_native_paths_regardless_of_model(self):

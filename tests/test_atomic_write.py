@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from tests.test_install import install_mod
+from tests.install_fixtures import install_mod
 
 
 def _mod():

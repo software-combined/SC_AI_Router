@@ -10,7 +10,7 @@ from pathlib import Path
 from unittest import mock
 from ai_router.credentials import Credentials
 from tests.test_setup import _key_ok, _state
-from tests.test_mixed_router import _start_server
+from tests.harness import start_server as _start_server
 
 
 class SetupHandlerTests(unittest.TestCase):

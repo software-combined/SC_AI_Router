@@ -15,7 +15,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests._platform import unix_only
-from tests.test_install import (
+from tests.install_fixtures import (
     _craft_bundle,
     _ok_run,
     _patch_attrs,
