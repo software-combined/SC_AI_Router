@@ -71,10 +71,11 @@ stays the client-side owner of origin and channel resolution.
 
 ## Transitional owners (do not entrench)
 
-- `packaging/install.py` still dispatches `darwin` vs `linux` inline with a
-  `systemd_manager()` two-valued flag (Plan 056 extracts `packaging/platforms/`).
-- `packaging/service.py` mixes launchd/plist/feed/state helpers (Plan 056
-  re-homes the launchd half with the darwin backend).
+- `packaging/service.py` keeps the feed/state/cross-platform helpers
+  (`health`, `wait_version`, `ensure_serving`, `install_lock`, `rotate_log`) and
+  thin delegations for the installer's launchd bindings; the launchd
+  rendering/reload half lives in `packaging/launchd.py` with the darwin backend
+  (`packaging/platforms/darwin.py`), landed by Plan 103.
 - `ai_router/providers.py` holds the Responses adapters and dispatch;
   failure policy lives in `upstream.py`, page markup in `setup_page.py`,
   shared transport in `transport.py`, and dispatch in `protocols/`.

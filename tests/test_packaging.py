@@ -179,6 +179,15 @@ class PackagingTests(unittest.TestCase):
         version = (Path(__file__).resolve().parents[1] / 'packaging' / 'VERSION').read_text().strip()
         self.assertRegex(version, r'^\d+\.\d+\.\d+$')
 
+    def test_pyproject_version_matches_packaging_version(self):
+        # Plan 104: pyproject's version is a checked duplicate of the release
+        # version; nothing else reads it, so drift is otherwise invisible.
+        import tomllib
+        root = Path(__file__).resolve().parents[1]
+        version = (root / 'packaging' / 'VERSION').read_text().strip()
+        pyproject = tomllib.loads((root / 'pyproject.toml').read_text())
+        self.assertEqual(pyproject['project']['version'], version)
+
     def test_installer_surface_parses_as_python39(self):
         # Plan 061: the installer runs on Python 3.9+ while the router
         # needs 3.14. No 3.9 interpreter exists in CI, so pin the grammar

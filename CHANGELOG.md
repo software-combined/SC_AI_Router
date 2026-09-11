@@ -5,8 +5,8 @@
 - Repository relicensed to Apache-2.0 only: `LICENSE` carries the Apache
   License 2.0 text, `COMMERCIAL_LICENSE.md` is removed, a `NOTICE` file is
   added, and package and plugin metadata use the `Apache-2.0` SPDX
-  identifier. `pyproject.toml` keeps its long-standing `0.6.9` project
-  version; `packaging/VERSION` remains the release authority. Publication
+  identifier. `packaging/VERSION` remains the release authority, and
+  `pyproject.toml` now tracks it exactly (a test fails on drift). Publication
   remains blocked until the provenance question for
   `ai_router/openrouter_base_instructions.txt` is resolved.
 
