@@ -90,7 +90,7 @@ def _provider_reason(body):
     if not isinstance(text, str) or not text.strip():
         return None
     tool = None
-    match = re.search(r'\bns_[0-9a-f]{12}_\S+|\b[a-z][\w.-]*\.[\w-]+\b', text)
+    match = re.search(r'\bns_[0-9a-f]{12}_\S+|\b[a-z][\w.-]*\.[\w-]+\b|\b[A-Za-z0-9_-]+__[A-Za-z0-9_-]+\b', text)
     if match:
         tool = match.group(0).rstrip(':,.')
     lowered = text.lower()

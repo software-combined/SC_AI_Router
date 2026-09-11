@@ -15,7 +15,8 @@ registry / capabilities / image_items (leaves: model facts, stdlib + dataclasses
   |            |
 catalogue / models / live_refresh / apply_catalogue (client projections)
   |
-agent_handoffs / compaction / tool_adapter / discovered (request normalization)
+agent_handoffs / compaction / tool_adapter / tool_aliases / discovered
+(request normalization)
   |
 providers (Responses adapters) + claude (Messages adapters)
   |
