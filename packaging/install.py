@@ -5,14 +5,13 @@ Shared launchd/plist/feed helpers live in packaging/service.py. This
 module owns first install, explicit upgrade, rollback and uninstall only.
 """
 import argparse
-import hashlib
 import io
+import shutil  # noqa: F401 (re-exported: tests patch install_mod.shutil.which)
 import json
 import os
 import secrets
 import subprocess
 import time
-import shutil
 import sys
 import tarfile
 from pathlib import Path
@@ -115,114 +114,45 @@ def stop_router(home):
     platform_backend().stop(home)
 
 
-def verify_sha256(data, want):
-    got = hashlib.sha256(data).hexdigest()
-    if got != want:
-        raise SystemExit('bundle checksum mismatch')
-    return True
+_bundle = _svc.load(
+    'router_bundle', Path(__file__).resolve().parent / 'bundle.py')
+
+# Bundle seams (Plan 130): _patch_attrs mirrors swaps onto _svc; _sync_seams
+# pushes run/safe_extract/install_launcher/swap_current into the bundle module,
+# while self_test/write_catalogue/provider_keys travel as explicit wrapper
+# arguments. The aliases below keep every test patch point resolving.
 
 
-def newer(a, b):
-    return tuple(int(x) for x in a.split('.')) > tuple(int(x) for x in b.split('.'))
-
-
-def check_manifest(release_dir, manifest):
-    for name, want in manifest['files'].items():
-        got = hashlib.sha256((release_dir / name).read_bytes()).hexdigest()
-        if got != want:
-            raise SystemExit('bundle manifest mismatch: ' + name)
-
-
-def check_identity(version, manifest_doc, release_dir):
-    """Fail closed when feed, manifest and bundled marker disagree.
-
-    The updater waits on the feed version and /health reports the manifest
-    version, so any mismatch strands the install in a failed-health loop.
-    """
-    manifest_version = manifest_doc.get('version')
-    try:
-        marker = (release_dir / 'packaging' / 'VERSION').read_text().strip()
-    except OSError:
-        marker = None
-    if manifest_version != version or marker != version:
-        raise SystemExit(
-            f'release identity mismatch: feed={version} '
-            f'manifest={manifest_version} marker={marker}')
+verify_sha256 = _bundle.verify_sha256
+newer = _bundle.newer
+check_manifest = _bundle.check_manifest
+check_identity = _bundle.check_identity
 
 
 def self_test(python, release_dir):
-    # Bundle smoke: the runtime import closure must load from the extraction.
-    # Full discover cannot run here: repo tests reference files outside the bundle.
-    result = run([python, '-c',
-                       'from ai_router import catalogue, registry; assert registry.MODELS'],
-                      cwd=str(release_dir), capture_output=True, text=True, timeout=120)
-    if result.returncode != 0:
-        raise SystemExit('bundle self-test failed')
-
-
-def _clear_current(home):
-    current = home / 'current'
-    try:
-        if current.is_symlink() or current.is_file():
-            current.unlink()
-    except OSError:
-        pass
+    return _bundle.self_test(python, release_dir, run=run)
 
 
 def ensure_credentials(home, state, env=None):
-    """Prompt for any missing external-provider key, then stop.
-
-    One key file per provider (Plan 141): the first provider without a
-    resolvable key gets an owner-only empty file and the instructions to
-    paste into it. Providers that resolve are skipped, so a second
-    provider's key is collected without disturbing the first.
-    """
-    env = os.environ if env is None else env
-    provider_keys().ensure(home, state, env,
-                           lambda path: platform_backend().protect_secret(path))
+    return _bundle.ensure_credentials(
+        home, state, env,
+        lambda path: platform_backend().protect_secret(path),
+        provider_keys=provider_keys)
 
 
-def provider_keys():
-    """The shared per-provider key walk (Plan 141), spec-loaded for 3.9."""
-    module = _svc.load(
-        'router_provider_keys', Path(__file__).resolve().parent / 'provider_keys.py')
-    module.bind(_svc.load(
-        'router_provider_defs',
-        Path(__file__).resolve().parents[1] / 'ai_router' / 'provider_defs.py'))
-    return module
+provider_keys = _bundle.provider_keys
 
 
 def install_bundle(home, version, tarball, manifest_doc, python):
-    releases = home / 'releases'
-    releases.mkdir(parents=True, exist_ok=True)
-    partial = releases / (version + '.partial')
-    if partial.exists():
-        shutil.rmtree(partial)
-    partial.mkdir()
-    safe_extract(tarball, partial)
-    try:
-        check_manifest(partial, manifest_doc)
-        check_identity(version, manifest_doc, partial)
-        self_test(python, partial)
-        write_catalogue(home, partial, python)
-    except (SystemExit, OSError):
-        shutil.rmtree(partial, ignore_errors=True)
-        raise
-    final = releases / version
-    if final.exists():
-        shutil.rmtree(final)
-    partial.rename(final)
-    install_launcher(home, final)
-    previous = swap_current(home, final)
-    return previous
+    return _bundle.install_bundle(
+        home, version, tarball, manifest_doc, python,
+        self_test=self_test, write_catalogue=write_catalogue,
+        safe_extract=safe_extract, install_launcher=install_launcher,
+        swap_current=swap_current)
 
 
 def write_catalogue(home, release_dir, python):
-    # Seed the picker file the config block points at; refresh owns it after.
-    result = run([python, '-m', 'ai_router.catalogue', '--merge', str(home / 'mixed-models.json')],
-                      cwd=str(release_dir), capture_output=True, text=True)
-    if result.returncode != 0:
-        raise SystemExit('catalogue merge failed')
+    return _bundle.write_catalogue(home, release_dir, python, run=run)
 
 
 _preserve_picker_selection = _codex_config.preserve_picker_selection
@@ -250,41 +180,11 @@ def _restore_owned_config(home):
 
 
 def do_rollback(args):
-    """Point current at a previously installed release and verify it serves.
-    Only releases still present under home/releases can be restored; the feed
-    carries the latest bundle only, so there is nothing to download a
-    rollback from. The feed serial is never touched.
-    """
     _sync_seams()
-    home = Path(args.home).expanduser()
-    if args.dry_run:
-        print(f'would roll back to {args.version} under {home}')
-        return 0
-    platform_backend().check(home)
-    target = home / 'releases' / args.version
-    if not target.is_dir() or not (target / 'packaging' / 'VERSION').exists():
-        raise SystemExit(f'version {args.version} is not installed under {home}')
-    current = current_version(home)
-    if current == args.version:
-        print(f'up to date {current}')
-        return 0
-    try:
-        state = json.loads((home / 'mixed-router-state.json').read_text())
-    except (OSError, ValueError):
-        raise SystemExit(f'router state is missing or unreadable under {home}')
-    previous = swap_current(home, target)
-    restart_router(home)
-    if not wait_version(state, args.version):
-        if previous is not None:
-            swap_current(home, home / 'releases' / previous)
-            print(f'rollback to {args.version} failed health check; restored {previous}')
-        else:
-            _clear_current(home)
-            print(f'rollback to {args.version} failed health check; no previous release')
-        restart_router(home)
-        raise SystemExit(1)
-    print(f'rolled back to {args.version}; health ok; restart Codex to load the router')
-    return 0
+    return _bundle.do_rollback(
+        args, platform_backend=platform_backend, restart_router=restart_router,
+        wait_version=wait_version, current_version=current_version,
+        swap_current=swap_current)
 
 
 def _sync_seams():
@@ -292,6 +192,9 @@ def _sync_seams():
     global run, health, wait_version, ensure_serving
     run, health, wait_version, ensure_serving = (
         _svc.run, _svc.health, _svc.wait_version, _svc.ensure_serving)
+    _bundle.bind_seams(run=run, safe_extract=safe_extract,
+                       install_launcher=install_launcher,
+                       swap_current=swap_current)
     _updater.bind(svc=_svc, newer=newer, verify_sha256=verify_sha256,
                   sync_seams=_sync_seams)
     _diag.bind(find_python=find_python, health=health,
@@ -352,7 +255,8 @@ def _rollback_failed_install(home, state, backend, latest, previous, catalog_pat
         else: print(f'{rolled_back}; router is NOT serving on port '
                     f'{state["port"]}, run the installer again')
     else:
-        if current_release_dir(home) == home / 'releases' / latest['version']: _clear_current(home)
+        if current_release_dir(home) == home / 'releases' / latest['version']:
+            _bundle._clear_current(home)
         stop_router(home); print('new version failed health check; inspect the service logs')
     raise SystemExit(1)
 
@@ -534,22 +438,8 @@ def detach_claude(home, settings_path=None, env=None):
     return _claude_config.detach(home, _codex_config, settings_path_override=settings_path, env=env)
 
 
-def _release_key(name):
-    try:
-        return [int(x) for x in name.split('.')]
-    except ValueError:
-        return None  # operator dirs sort out of version pruning entirely
-
-
-def prune_releases(home, *keep):
-    """Keep current plus two prior verified releases for rollback depth."""
-    names = [p.name for p in (home / 'releases').glob('*') if p.is_dir()
-             and not p.name.endswith('.partial')]
-    versions = sorted((n for n in names if _release_key(n) is not None),
-                      key=_release_key, reverse=True)
-    for stale in versions[3:]:
-        if stale not in keep:
-            shutil.rmtree(home / 'releases' / stale, ignore_errors=True)
+_release_key = _bundle._release_key
+prune_releases = _bundle.prune_releases
 
 
 MAX_VERSION_FAILURES = _updater.MAX_VERSION_FAILURES

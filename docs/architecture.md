@@ -51,10 +51,11 @@ Rules:
    with a different wire format is a new adapter class, never a branch in
    the request path. External headers start fresh every request;
    subscription headers never accompany an externally billed request.
-4. Installer orchestration (`packaging/install.py`, `service.py`,
-   `updater.py`) calls one explicit platform backend. Unsupported OS is an
-   explicit refusal. Backends do not import runtime providers or client
-   catalogue policy.
+4. Installer orchestration (`packaging/install.py`, `bundle.py`,
+   `service.py`, `updater.py`) calls one explicit platform backend;
+   `bundle.py` owns the release lifecycle (verify, install, prune,
+   rollback). Unsupported OS is an explicit refusal. Backends do not import
+   runtime providers or client catalogue policy.
 5. A client is not a provider and an OS is neither. New clients reuse a
    proven wire protocol; a new protocol lands only after its contract is
    verified against the installed client version.

@@ -83,6 +83,29 @@ class InstallTests(unittest.TestCase):
                 install_mod.install_bundle(home, '9.9.9', blob, manifest, '/nonexistent/python')
             self.assertFalse((home / 'releases' / '9.9.9.partial').exists())
 
+    def test_direct_install_bundle_call_reads_every_patched_seam(self):
+        # Plan 130: the install_bundle wrapper must forward every bundle seam,
+        # not just self_test/write_catalogue. Without the forwarding this call
+        # silently ran the real extraction, launcher install and pointer swap.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            calls = []
+
+            def fake_extract(blob, dest):
+                calls.append('extract')
+                (dest / 'packaging').mkdir(parents=True, exist_ok=True)
+                (dest / 'packaging' / 'VERSION').write_text('9.9.9\n')
+
+            _patch_attrs(self, self_test=lambda *a: None,
+                         write_catalogue=lambda *a: None,
+                         safe_extract=fake_extract,
+                         install_launcher=lambda *a: calls.append('launcher'),
+                         swap_current=lambda *a: (calls.append('swap'), None)[1])
+            install_mod.install_bundle(home, '9.9.9', b'blob',
+                                       {'version': '9.9.9', 'files': {}},
+                                       '/nonexistent/python')
+            self.assertEqual(calls, ['extract', 'launcher', 'swap'])
+
     def test_newer_compares_tuples(self):
         self.assertTrue(install_mod.newer('0.10.0', '0.9.9'))
         self.assertTrue(install_mod.newer('0.4.0', '0.3.0'))
