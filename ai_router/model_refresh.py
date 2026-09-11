@@ -1,8 +1,8 @@
-"""Hourly model-data refresh (Plan 046 residual, offline-testable).
+"""Hourly model-data refresh (Plan 099 residual, offline-testable).
 
 Wiring note: start() has no caller yet. The router keeps serving the
 bundled registry until the first authenticated-update qualification wires
-the thread behind models_url (Plan 046 step 4); landing the module and its
+the thread behind models_url (Plan 099 Step 3); landing the module and its
 contract first keeps that step to one call site.
 
 
@@ -97,7 +97,7 @@ def poll_once(models_url, home, etag, _urlopen=urllib.request.urlopen):
 def apply(models):
     """Swap the live registry and rebuild import-time derived maps.
 
-    capabilities.* and claude.ordered snapshot MODELS at import; a swap
+    capabilities.* and claude.models_listing snapshot MODELS at import; a swap
     without a rebuild would serve new slugs with stale gates. The rebuild
     below mirrors each derived definition next to its source.
     """

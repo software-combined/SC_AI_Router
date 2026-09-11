@@ -1,4 +1,4 @@
-"""Plan 046 residual: hourly model-data refresh (isolated, no network).
+"""Plan 099 residual: hourly model-data refresh (isolated, no network).
 
 Proves: bundled-first with valid-cache overlay; 304 keeps current; a valid
 payload swaps atomically with the cache written and derived maps rebuilt;
@@ -13,7 +13,7 @@ import urllib.error
 from pathlib import Path
 from unittest import mock
 
-from ai_router import capabilities, model_refresh, registry
+from ai_router import capabilities, claude, model_refresh, providers, registry
 
 
 def _row(slug='z-ai/glm-5.3'):
@@ -57,6 +57,23 @@ class ModelRefreshTests(unittest.TestCase):
         self.addCleanup(setattr, capabilities, 'EXCLUDED_EFFORTS', self._excluded)
         self.addCleanup(setattr, capabilities, 'REASONING_LEVELS', self._levels)
 
+    def _summarize(self, model, seen):
+        from types import SimpleNamespace
+
+        class FakeConn:
+            def __init__(self, *a, **k):
+                pass
+            def request(self, method, path, body=None, headers=None):
+                seen.update(json.loads(body))
+            def getresponse(self):
+                payload = {'output': [{'type': 'message', 'content': [
+                    {'type': 'output_text', 'text': 's'}]}]}
+                return SimpleNamespace(status=200, read=lambda: json.dumps(payload).encode())
+            def close(self):
+                pass
+        with mock.patch.object(providers.http.client, 'HTTPSConnection', FakeConn):
+            return providers.OpenRouterProvider().summarize(model, 'key', [])
+
     def test_valid_payload_swaps_atomically_and_rebuilds_derived(self):
         body = json.dumps([_row(), _row('qwen/qwen-1')]).encode()
         with tempfile.TemporaryDirectory() as tmp:
@@ -67,6 +84,14 @@ class ModelRefreshTests(unittest.TestCase):
             model_refresh.apply(models)
             self.assertIsNotNone(registry.by_slug('qwen/qwen-1'))
             self.assertIn('qwen/qwen-1', capabilities.REASONING_LEVELS)
+            # Dynamic consumers see the swap: the listing gains the new slug
+            # and drops removed ones, and summarize pins the new levels.
+            ids = {row['id'] for row in claude.models_listing()['data']}
+            self.assertIn('claude/qwen/qwen-1', ids)
+            self.assertNotIn('claude/deepseek/deepseek-v4.1-flash', ids)
+            seen = {}
+            self.assertEqual(self._summarize('qwen/qwen-1', seen), 's')
+            self.assertEqual(seen.get('reasoning'), {'effort': 'low'})
             cache = json.loads((Path(tmp) / 'models-cache.json').read_text())
             self.assertEqual(len(cache), 2)
 
