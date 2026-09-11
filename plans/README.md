@@ -41,7 +41,7 @@ Executor rules for every plan:
 | [100](100-router-retired-slug-single-source.md) | Shared retired-subscription slug set | DONE: retired-slug single source 2026-09-11 | depends 094 |
 | [101](101-router-dead-code-and-lint-gate.md) | Delete dead code; add F401/F811 gate | DONE: dead code + F401/F811 lint gate 2026-09-11 | before 102/103 |
 | [102](102-router-install-option-collapse.md) | Collapse installer option handling below the cap | DONE: installer option collapse 2026-09-11 | serialize with 103 |
-| [103](103-router-darwin-backend-extraction.md) | Move launchd helpers out of service.py | TODO | serialize with 102; before 104 |
+| [103](103-router-darwin-backend-extraction.md) | Move launchd helpers out of service.py | DONE: darwin backend extraction 2026-09-12 | serialize with 102; before 104 |
 | [104](104-router-docs-metadata-correction.md) | Version, architecture and README corrections | TODO | after 103; coordinates README with 117 |
 | [105](105-python-314-interpreter-provisioning.md) | Provision and maintain a private CPython 3.14 runtime | PARTIAL | Stage 1 in; hardening + maintenance owner left |
 | [106](106-group-distribution-private-feed-and-auto-update.md) | Group distribution, private feed and auto-update | PARTIAL | publication split into 139 (tag-driven, GitHub Releases kept; runtime mirror and bootstrap published); group gating and the library page left here |
