@@ -87,6 +87,15 @@ def user_message_item(text):
 
 PORTABLE_SEARCH_NOTE = ('[tool search result replayed as declared tools; '
                         'the search call itself is omitted on this model]')
+PORTABLE_REASONING_NOTE = '[reasoning summary from the previous model] '
+
+
+def _summary_text(item):
+    """Readable summary text only; a provider blob value is never read."""
+    blocks = item.get('summary')
+    if not isinstance(blocks, (str, list)):
+        return ''
+    return _block_text(blocks).strip()
 
 
 def _has_model_switch(items):
@@ -106,15 +115,21 @@ def _has_model_switch(items):
     return False
 
 
-def portablize_search_history(items, search_name, history_mode):
-    """Collapse the discovery pair into one note on portable turns.
+def portable_history(items, search_name, history_mode):
+    """History a model switch cannot carry: the discovery pair and reasoning.
 
     Trigger: `history_mode == 'portable'` (the caller's registry quirk)
-    or the client's `<model_switch>` marker. Only the search call/output
-    matched by call_id collapses; a half without its mate falls away so
-    no orphan rides along. Discovery outputs ride nameless from the
-    rewrite loop, so they join by call_id. Released schemas stay
-    declared in payload['tools']; every other item passes through.
+    or the client's `<model_switch>` marker. In that mode the search
+    call/output matched by call_id collapses into one visible note; a
+    half without its mate falls away so no orphan rides along, and
+    discovery outputs ride nameless from the rewrite loop, so they join
+    by call_id. A provider-scoped reasoning item never rides along: an
+    upstream that did not produce it refuses the whole turn (Meta answers
+    a carried reasoning item with a bare HTTP 400, measured 2026-09-12),
+    so one with a readable summary replays as that visible note and one
+    without is dropped.
+    Released schemas stay declared in payload['tools']; every other item
+    passes through.
     """
     if not isinstance(items, list):
         return items
@@ -134,6 +149,11 @@ def portablize_search_history(items, search_name, history_mode):
             out.append(item)
             continue
         kind, name, call_id = item.get('type'), item.get('name'), item.get('call_id')
+        if kind == 'reasoning':
+            note = _summary_text(item)
+            if note:
+                out.append(user_message_item(PORTABLE_REASONING_NOTE + note[:2000]))
+            continue
         discovery = ((kind == 'function_call' and name == search_name)
                      or (kind == 'function_call_output'
                          and (name == search_name or (not name and call_id in calls))))
