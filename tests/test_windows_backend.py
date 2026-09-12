@@ -24,6 +24,17 @@ def _load():
 
 
 backend = _load()
+
+
+def _load_service():
+    spec = importlib.util.spec_from_file_location(
+        'router_service_for_windows_backend', ROOT / 'packaging' / 'service.py')
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+service = _load_service()
 PY = 'C:\\Python314\\python.exe'
 USER = 'CORP\\cyril'
 
@@ -74,7 +85,7 @@ def _fake_run(state=None, calls=None, fail=(), end_fails=False):
 
 
 def _backend(state=None, calls=None, fail=(), end_fails=False):
-    obj = backend.Backend(None, _fake_run(state, calls, fail, end_fails))
+    obj = backend.Backend(service, _fake_run(state, calls, fail, end_fails))
     obj._sleep = lambda seconds: None
     return obj
 
@@ -84,7 +95,8 @@ def _verbs(calls):
 
 
 def _install(obj, home):
-    obj.install(PY, home, {}, 'rel', None)
+    home.mkdir(parents=True, exist_ok=True)  # the installer creates it first
+    obj.install(PY, home, {}, ROOT, None)
 
 
 def _state_file(home):
@@ -141,8 +153,9 @@ class RouterXmlTests(unittest.TestCase):
 
 class TaskLauncherTests(unittest.TestCase):
     def _run(self, home, log='update.log'):
-        launcher = backend.write_task_launcher(home)
-        return subprocess.run([sys.executable, str(launcher), log, 'update_launch.py'],
+        service.install_task_launcher(home, ROOT)
+        return subprocess.run([sys.executable, str(home / backend.TASK_LAUNCHER),
+                               log, 'update_launch.py'],
                               capture_output=True, text=True)
 
     def test_launcher_routes_stdout_and_stderr_to_the_home_log(self):
@@ -184,6 +197,25 @@ class TaskLauncherTests(unittest.TestCase):
 
 
 class InstallTests(unittest.TestCase):
+    def test_repair_keeps_the_installed_launcher_when_the_release_lacks_it(self):
+        # A repair run can name a release that predates the packaged
+        # launcher; the home copy is then already the right file.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            home.mkdir()
+            installed = home / 'task_launch.py'
+            installed.write_text('from the previous install\n')
+            service.install_task_launcher(home, Path(tmp) / 'older-release')
+            self.assertEqual(installed.read_text(), 'from the previous install\n')
+            service.install_task_launcher(home, None)  # no release named
+            self.assertEqual(installed.read_text(), 'from the previous install\n')
+            # Neither a packaged member nor an installed copy: fail closed.
+            installed.unlink()
+            with self.assertRaisesRegex(SystemExit, 'task_launch.py'):
+                service.install_task_launcher(home, None)
+            with self.assertRaisesRegex(SystemExit, 'task_launch.py'):
+                service.install_task_launcher(home, Path(tmp) / 'older-release')
+
     def test_fresh_install_writes_launcher_registers_runs_and_verifies(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
@@ -195,7 +227,8 @@ class InstallTests(unittest.TestCase):
             # nothing serves yet; the connection is refused and ignored.
             shutdown.assert_not_called()
             self.assertEqual((home / 'task_launch.py').read_text(encoding='utf-8'),
-                             backend.TASK_LAUNCHER_SOURCE)
+                             (ROOT / 'packaging' / 'task_launch.py'
+                              ).read_text(encoding='utf-8'))
             self.assertIn('<UserId>CORP\\cyril</UserId>', state['xml_CodexMixedModelRouter'])
             self.assertIn('xml_CodexMixedModelRouterUpdate', state)
             for verb in ('/create', '/run', '/query'):
@@ -241,25 +274,31 @@ class InstallTests(unittest.TestCase):
             home = Path(tmp)
             _state_file(home)
             obj = _backend({'query': QUERY_LOCALISED})
-            with mock.patch.object(backend, '_health',
+            with mock.patch.object(service, 'health',
                                    return_value={'status': 'ok'}):
                 self.assertTrue(obj._running('CodexMixedModelRouter', home))
-            with mock.patch.object(backend, '_health', return_value=None):
+            with mock.patch.object(service, 'health', return_value=None):
                 self.assertFalse(obj._running('CodexMixedModelRouter', home))
 
     def test_explicit_creation_flags_survive_the_windowless_default(self):
-        with mock.patch.object(backend.subprocess, 'run',
-                               return_value=SimpleNamespace(returncode=0)) as ran:
-            backend._run(['whoami'], creationflags=1234)
-            self.assertEqual(ran.call_args.kwargs.get('creationflags'), 1234)
-            backend._run(['whoami'])
-            self.assertEqual(ran.call_args.kwargs.get('creationflags'),
-                             backend._NO_WINDOW['creationflags'])
+        seen = []
+
+        def run(cmd, **kwargs):
+            seen.append(kwargs)
+            return SimpleNamespace(returncode=0)
+
+        obj = backend.Backend(service, run)
+        obj._call(['whoami'], creationflags=1234)
+        self.assertEqual(seen[0].get('creationflags'), 1234)
+        obj._call(['whoami'])
+        self.assertEqual(seen[1].get('creationflags'),
+                         backend._NO_WINDOW['creationflags'])
 
     def test_launcher_refuses_a_bare_invocation(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
-            launcher = backend.write_task_launcher(home)
+            service.install_task_launcher(home, ROOT)
+            launcher = home / backend.TASK_LAUNCHER
             result = subprocess.run([sys.executable, str(launcher)],
                                     capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0)
@@ -292,7 +331,7 @@ class InstallTests(unittest.TestCase):
             return SimpleNamespace(returncode=0, stdout=USER, stderr='')
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaisesRegex(SystemExit, 'CodexMixedModelRouter'):
-                _install(backend.Backend(None, run), Path(tmp) / 'home')
+                _install(backend.Backend(service, run), Path(tmp) / 'home')
 
     def test_every_console_child_is_spawned_windowless(self):
         seen = []
@@ -302,7 +341,7 @@ class InstallTests(unittest.TestCase):
             out = USER if cmd[:1] == ['whoami'] else QUERY_READY
             return SimpleNamespace(returncode=0, stdout=out, stderr='')
         with tempfile.TemporaryDirectory() as tmp:
-            backend.Backend(None, run).install(PY, Path(tmp), {}, 'rel', None)
+            backend.Backend(service, run).install(PY, Path(tmp), {}, ROOT, None)
         self.assertTrue(seen)
         self.assertTrue(all(flag == backend._NO_WINDOW['creationflags'] for flag in seen))
 

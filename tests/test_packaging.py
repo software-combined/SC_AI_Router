@@ -73,6 +73,7 @@ FILES = [
 # of release.py's inventory so a dropped member fails the bundle gate.
 REQUIRED_PACKAGING = (
     'packaging/router_launch.py', 'packaging/update_launch.py',
+    'packaging/task_launch.py',
     'packaging/launchd.py', 'packaging/service.py',
     'packaging/feed.py', 'packaging/feed_verify.py',
     'packaging/atomic_write.py',
@@ -229,6 +230,7 @@ class PackagingTests(unittest.TestCase):
             'packaging/notice.py',
             'packaging/launchd.py', 'packaging/router_launch.py',
             'packaging/systemd.py', 'packaging/update_launch.py',
+            'packaging/task_launch.py',
             'packaging/updater.py', 'packaging/codex_config.py',
             'packaging/claude_config.py', 'packaging/diagnostics.py',
             'packaging/runtime_lock.py', 'packaging/platforms/__init__.py',

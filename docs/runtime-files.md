@@ -47,4 +47,6 @@ engages only once `FEED_PUBLIC_KEY` is configured (Plan 106's decision).
 The installer also places `packaging/router_launch.py` and
 `packaging/update_launch.py` beside the state directory as `router_launch.py`
 and `update_launch.py`, so restarts and scheduled updates follow the pointer
-without symlinks.
+without symlinks. Windows Task Scheduler runs those through the packaged
+`packaging/task_launch.py` copied to `task_launch.py`, which routes the
+task's output into `logs/`.
