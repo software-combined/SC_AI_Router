@@ -10,10 +10,12 @@ stays the router: new ingress validation goes here.
 the injected object, never a fresh import.
 """
 import hmac
+import http.client
 import io
 import json
+import secrets
 from compression import zstd
-from . import claude, errors, model_prompt_page, setup
+from . import claude, errors, model_prompt_page, setup, sse
 from .errors import InvalidSize
 from .runtime import VERSION
 
@@ -29,6 +31,34 @@ def send_json(handler, status, obj, headers=None):
     handler.end_headers()
     handler.wfile.write(body)
     handler.close_connection = True
+
+
+def send_compaction_stream(handler, output):
+    """Send one local V2 compaction item in the Responses event stream."""
+    if not isinstance(output, list) or len(output) != 1 \
+            or not isinstance(output[0], dict):
+        raise ValueError('Compaction output must contain one item')
+    item = output[0]
+    response = {'id': 'resp_' + secrets.token_hex(8),
+                'object': 'response', 'status': 'completed',
+                'output': [item]}
+    events = ({'type': 'response.output_item.done', 'output_index': 0,
+               'item': item},
+              {'type': 'response.completed', 'response': response})
+    # Serialize every frame before sending headers: post-start failures cannot
+    # be remapped to a second JSON response.
+    body = b''.join(sse.frame(json.dumps(event).encode()) for event in events)
+    try:
+        handler.send_response(200)
+        handler.send_header('Content-Type', 'text/event-stream')
+        handler.send_header('Content-Length', str(len(body)))
+        handler.send_header('Connection', 'close')
+        handler.end_headers()
+        handler.wfile.write(body)
+    except (OSError, http.client.HTTPException):
+        pass  # Client already disconnected after the single response began.
+    finally:
+        handler.close_connection = True
 
 
 def error(handler, err, *, log_event):
