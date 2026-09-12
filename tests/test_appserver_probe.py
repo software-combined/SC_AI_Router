@@ -117,11 +117,18 @@ class AppServerTests(unittest.TestCase):
 
     def test_kill_group_close_terminates_the_child(self):
         # The context-budget probe spawns in its own session and closes the
-        # whole group; the shared close must do the same on request.
+        # whole group; patch killpg so plain terminate() cannot pass this.
+        from tools import appserver_probe as probe_mod
+        calls = []
+        real = probe_mod.os.killpg
+        self.addCleanup(setattr, probe_mod.os, 'killpg', real)
+        probe_mod.os.killpg = lambda pid, sig: (calls.append((pid, sig)),
+                                                 real(pid, sig))[1]
         server = self._spawn(kill_group=True, start_new_session=True)
         process = server.process
         server.close()
         self.assertIsNone(server.process)
+        self.assertTrue(calls and calls[0][0] == process.pid)
         self.assertIsNotNone(process.poll())
 
     def test_stderr_drain_does_not_block_rpc(self):
@@ -165,6 +172,24 @@ class AppServerTests(unittest.TestCase):
         server.rpc('ping', {})
         server.close()
         server.close()
+
+    def test_close_does_not_block_on_a_descendant_holding_stdout(self):
+        # A grandchild that inherits stdout keeps the pipe open after the
+        # direct child exits; close() must still return promptly instead of
+        # blocking on the reader thread's stream lock.
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        script = Path(tmp) / 'orphan.py'
+        script.write_text(
+            "import subprocess, sys, time\n"
+            "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'])\n"
+            "time.sleep(30)\n")
+        server = AppServer([sys.executable, str(script)], cwd=tmp,
+                           env=dict(os.environ), stderr=subprocess.PIPE)
+        time.sleep(0.5)
+        started = time.monotonic()
+        server.close()
+        self.assertLess(time.monotonic() - started, 5.0)
 
     def test_scrub_ambient_passes_through(self):
         env = {'OPENAI_API_KEY': 'x', 'CODEX_HOME': 'y', 'PLAIN': 'z'}
