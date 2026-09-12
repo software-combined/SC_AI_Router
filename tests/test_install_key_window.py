@@ -207,6 +207,67 @@ class InstallKeyWindowTests(unittest.TestCase):
             # release, so anything inside it survives.
             self.assertEqual(sentinel.read_text(), 'keep\n')
 
+    def test_setup_refreshes_a_missing_claude_snapshot(self):
+        # An attachment from before the snapshot existed (or one whose fetch
+        # failed) can only be refreshed through the --setup repair: a plain
+        # re-run returns "up to date" before the client stage.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            blob, latest = _craft_bundle('1.0.0')
+            _patch_attrs(self, run=lambda cmd, **kwargs: _ok_run(cmd, **kwargs),
+                         self_test=lambda *args: None,
+                         write_catalogue=_fake_write_catalogue,
+                         wait_version=lambda *args, **kwargs: True)
+            env = {'HOME': str(Path(tmp) / 'fakehome'), 'PATH': '/usr/bin:/bin'}
+            base = ['--feed', 'file:///latest.json', '--home', str(home)]
+            with mock.patch.dict(os.environ, dict(env, ROUTER_NO_KEY_WINDOW='1'),
+                                 clear=True):
+                self.assertEqual(install_mod.do_install(
+                    install_mod.build_parser().parse_args(base),
+                    _fetch=_static_fetch(latest, blob)), 0)
+            install_mod._codex_config.write_client_receipt(home, 'claude', {
+                'config_path': str(Path(tmp) / 'settings.json'),
+                'inserted_block': '{}', 'claude_mode': 'subscription'})
+            original = install_mod._claude_config.release_listing
+            self.addCleanup(setattr, install_mod._claude_config,
+                            'release_listing', original)
+            install_mod._claude_config.release_listing = (
+                lambda release, python, runner: {'data': [{'id': 'served-model'}]})
+            with mock.patch.dict(os.environ, dict(env, ROUTER_NO_KEY_WINDOW='1'),
+                                 clear=True):
+                self.assertEqual(install_mod.do_install(
+                    install_mod.build_parser().parse_args(base + ['--setup']),
+                    _fetch=_static_fetch(latest, blob)), 0)
+            entry = install_mod._codex_config.read_receipt(
+                home)['clients']['claude']
+        self.assertEqual([row['id'] for row in entry['listing']['models']],
+                         ['served-model'])
+
+    def test_setup_repair_survives_a_corrupt_activation_receipt(self):
+        # --setup must repair a host whose receipt is unreadable, not crash:
+        # the snapshot refresh is best-effort.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            blob, latest = _craft_bundle('1.0.0')
+            _patch_attrs(self, run=lambda cmd, **kwargs: _ok_run(cmd, **kwargs),
+                         self_test=lambda *args: None,
+                         write_catalogue=_fake_write_catalogue,
+                         wait_version=lambda *args, **kwargs: True)
+            env = {'HOME': str(Path(tmp) / 'fakehome'), 'PATH': '/usr/bin:/bin'}
+            base = ['--feed', 'file:///latest.json', '--home', str(home)]
+            with mock.patch.dict(os.environ, dict(env, ROUTER_NO_KEY_WINDOW='1'),
+                                 clear=True):
+                self.assertEqual(install_mod.do_install(
+                    install_mod.build_parser().parse_args(base),
+                    _fetch=_static_fetch(latest, blob)), 0)
+                (home / 'activation.json').write_text('{broken json')
+                out = io.StringIO()
+                with contextlib.redirect_stdout(out):
+                    self.assertEqual(install_mod.do_install(
+                        install_mod.build_parser().parse_args(base + ['--setup']),
+                        _fetch=_static_fetch(latest, blob)), 0)
+        self.assertIn('health ok', out.getvalue())
+
     def test_repair_restart_failure_leaves_the_release_intact(self):
         # A failed repair reload must not touch the installed release or the
         # current pointer, and must report failure instead of a fake success.

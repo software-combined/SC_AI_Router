@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.41
+
+- Claude Code drift check (plan 148): attaching Claude Code records the
+  served listing snapshot (ids, display names, tiers and the served-at time)
+  inside the existing activation receipt, and `--doctor` now reports whether
+  the live `GET /v1/models` listing still matches it - `match`, `drift` with
+  the added and removed ids, `unknown` when the router is not answering, or a
+  warning when the attachment predates snapshots. The contract note in
+  `docs/claude-code.md` records why `ANTHROPIC_AUTH_TOKEN` and
+  `ANTHROPIC_API_KEY` must stay unset and why a launcher alias was rejected.
+
 ## 0.6.40
 
 - Codex windows that declare a previous context window now receive explicit

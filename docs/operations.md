@@ -213,7 +213,8 @@ python3 packaging/install.py --support   # 0600 redacted bundle for a support re
 
 `--doctor` exits 1 when any row fails. Its rows cover the Python runtime, the
 installed release, the serving version, each provider key, the picker
-catalogue (one `ai_router.catalogue --check` run), the scheduled command
+catalogue (one `ai_router.catalogue --check` run), the Claude Code attach
+snapshot against the live `GET /v1/models` listing, the scheduled command
 carrier and update recency; a host whose launcher or systemd unit still runs
 the read-only `--check-update` fails that row until the installer re-renders
 it. `--status` reports `last_check_at`, `last_applied_version`, `last_error`

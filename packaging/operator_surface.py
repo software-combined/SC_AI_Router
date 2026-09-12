@@ -11,6 +11,7 @@ import os
 import re
 import sys
 import time
+import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -36,14 +37,37 @@ _BUNDLE_CLIENTS = ('codex', 'claude', 'claude-desktop')
 # before anything from the state document reaches it.
 _STAMP = re.compile(r'[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z')
 _VERSION = re.compile(r'[0-9A-Za-z._+-]{1,32}')
+# Listing ids come from the registry or the loopback answer; anything else
+# is not printable in a doctor row (Plan 148 review).
+_ID_SHAPE = re.compile(r'[A-Za-z0-9._/~+-]{1,128}')
 
 # Installer-owned subprocess seam; rebound via bind() after file-based load.
 run = _svc.run
 
 
+def _default_listing(state):
+    """The live GET /v1/models answer over loopback, or None."""
+    port, token = state.get('port'), state.get('token')
+    if not isinstance(port, int) or not 0 < port < 65536:
+        return None
+    if not isinstance(token, str) or not token:
+        return None
+    # No proxy handling: the path token stays on the loopback.
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({})).open
+    url = 'http://127.0.0.1:%d/%s/v1/models' % (port, token)
+    try:
+        with opener(url, timeout=5) as response:
+            return json.loads(response.read(1 << 20).decode())
+    except (OSError, ValueError):
+        return None
+
+
+listing = _default_listing
+
+
 def bind(**overrides):
     for name, value in overrides.items():
-        if name not in ('run', 'diag'):
+        if name not in ('run', 'diag', 'listing'):
             raise AttributeError(f'unknown operator seam: {name}')
         globals()[name if name != 'diag' else '_diag'] = value
 
@@ -143,6 +167,45 @@ def _catalogue_row(home, interpreter):
                 '%d rows; ai_router.catalogue --check passed' % counts['rows'])
 
 
+def _claude_drift(home, state):
+    """('absent'|'nosnapshot'|'unknown'|'match'|'drift', detail) for the doctor.
+
+    The snapshot is the served listing recorded at attach; the live answer
+    comes from the running router, so a registry or client change shows up
+    as added or removed ids instead of a silent surprise in the picker.
+    """
+    try:
+        receipt = _diag._codex_config.read_receipt(home)
+    except (OSError, ValueError):
+        receipt = {}
+    if not receipt and _diag._codex_config.receipt_path_for(home).exists():
+        # read_receipt also degrades a shape-invalid document (a list, an
+        # unknown version, a non-object clients value) to {}, so screen the
+        # file's existence outside the except branch to cover both.
+        return 'unknown', 'the activation receipt is unreadable'
+    entry = (receipt.get('clients', {}).get('claude')
+             if isinstance(receipt, dict) else None)
+    if not isinstance(entry, dict):
+        return 'absent', 'Claude Code is not attached'
+    snapshot = entry.get('listing')
+    rows = snapshot.get('models') if isinstance(snapshot, dict) else None
+    if not isinstance(rows, list):
+        return 'nosnapshot', 'no listing snapshot recorded at attach'
+    served = [row['id'] for row in rows if isinstance(row, dict)
+              and isinstance(row.get('id'), str) and _ID_SHAPE.fullmatch(row['id'])]
+    live_doc = listing(state) if isinstance(state, dict) else None
+    if not isinstance(live_doc, dict) or not isinstance(live_doc.get('data'), list):
+        return 'unknown', 'the router did not answer GET /v1/models'
+    live = [row['id'] for row in live_doc['data'] if isinstance(row, dict)
+            and isinstance(row.get('id'), str) and _ID_SHAPE.fullmatch(row['id'])]
+    added = sorted(set(live) - set(served))
+    removed = sorted(set(served) - set(live))
+    if not added and not removed:
+        return 'match', 'listing matches the attach snapshot (%d models)' % len(served)
+    return 'drift', 'drift since attach: +%s -%s' % (
+        ', '.join(added[:5]) or 'none', ', '.join(removed[:5]) or 'none')
+
+
 def _doctor_rows(args, home, state):
     """Every doctor row, read-only and offline except the loopback health probe."""
     rows = []
@@ -188,6 +251,15 @@ def _doctor_rows(args, home, state):
             fix = 'open the key window: run the installer with --setup'
         rows.append(_row('key:' + provider_id, row_status, detail, fix))
     rows.append(_catalogue_row(home, interpreter))
+    claude_state, claude_detail = _claude_drift(home, state)
+    if claude_state in ('match', 'absent'):
+        claude_fix = None
+    elif claude_state == 'nosnapshot':
+        claude_fix = 'run the installer with --setup to record the snapshot'
+    else:
+        claude_fix = 'check --status; restart Claude Code after a listing change'
+    rows.append(_row('claude', OK if claude_fix is None else WARN,
+                     claude_detail, claude_fix))
     sched_status, sched_detail = _scheduler_state(home)
     # A missing or unreadable carrier means automatic updates are not proven
     # to run, so the doctor fails rather than warns.

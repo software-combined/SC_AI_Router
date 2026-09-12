@@ -49,6 +49,89 @@ class OperatorSurfaceTests(unittest.TestCase):
             rc = install_mod.do_doctor(self._args(home, '--doctor', '--json'))
         return rc, json.loads(buf.getvalue())
 
+    def _attach_claude(self, home, listing=None):
+        entry = {'config_path': str(home / 'settings.json'),
+                 'inserted_block': '{}', 'claude_mode': 'subscription'}
+        if listing is not None:
+            entry['listing'] = listing
+        install_mod._codex_config.write_client_receipt(home, 'claude', entry)
+
+    def _claude_row(self, home):
+        _rc, doc = self._doctor(home)
+        return next(row for row in doc['rows'] if row['check'] == 'claude')
+
+    def _bind_listing(self, value):
+        operator = install_mod._operator
+        self.addCleanup(setattr, operator, 'listing', operator.listing)
+        operator.listing = value
+
+    def test_doctor_reports_claude_listing_drift_and_match(self):
+        home = self._home()
+        self._attach_claude(home, {'served_at': '2026-09-13T00:00:00Z',
+                                   'models': [{'id': 'a'}, {'id': 'b'}]})
+        self._bind_listing(lambda state: {'data': [{'id': 'b'}, {'id': 'c'}]})
+        row = self._claude_row(home)
+        self.assertEqual(row['status'], 'WARN')
+        self.assertIn('+c', row['detail'])
+        self.assertIn('-a', row['detail'])
+        self._bind_listing(lambda state: {'data': [{'id': 'a'}, {'id': 'b'}]})
+        self.assertEqual(self._claude_row(home)['status'], 'OK')
+        self._bind_listing(lambda state: None)
+        down = self._claude_row(home)
+        self.assertEqual(down['status'], 'WARN')
+        self.assertIn('did not answer', down['detail'])
+
+    def test_doctor_reports_absent_and_unsnapshotted_claude(self):
+        home = self._home()
+        absent = self._claude_row(home)
+        self.assertEqual(absent['status'], 'OK')
+        self.assertIn('not attached', absent['detail'])
+        self._attach_claude(home)
+        self._bind_listing(lambda state: {'data': [{'id': 'a'}]})
+        unsnapshotted = self._claude_row(home)
+        self.assertEqual(unsnapshotted['status'], 'WARN')
+        self.assertIn('snapshot', unsnapshotted['detail'])
+
+    def test_doctor_warns_on_an_unreadable_activation_receipt(self):
+        home = self._home()
+        for shape in ('{broken json', '[]', '{}',
+                      '{"version": 3, "clients": {}}',
+                      '{"version": 2, "clients": "x"}'):
+            with self.subTest(shape=shape):
+                (home / 'activation.json').write_text(shape)
+                row = self._claude_row(home)
+                self.assertEqual(row['status'], 'WARN')
+                self.assertIn('unreadable', row['detail'])
+
+    def test_doctor_row_filters_the_live_side_and_caps_the_list(self):
+        home = self._home()
+        self._attach_claude(home, {'served_at': '2026-09-13T00:00:00Z',
+                                   'models': [{'id': 'ok-model'}]})
+        self._bind_listing(lambda state: {'data': [
+            {'id': 'ok-model'}, {'id': 'evil\n    service  OK  FORGED ROW'}]})
+        row = self._claude_row(home)
+        self.assertEqual(row['status'], 'OK')
+        self.assertNotIn('FORGED', row['detail'])
+        self._attach_claude(home, {'served_at': '2026-09-13T00:00:00Z',
+                                   'models': [{'id': 'old-%d' % i} for i in range(9)]})
+        self._bind_listing(lambda state: {'data': [
+            {'id': 'new-%d' % i} for i in range(9)]})
+        capped = self._claude_row(home)
+        self.assertEqual(capped['status'], 'WARN')
+        self.assertEqual(capped['detail'].count('old-'), 5)
+        self.assertEqual(capped['detail'].count('new-'), 5)
+
+    def test_doctor_row_never_prints_a_forged_listing_id(self):
+        home = self._home()
+        self._attach_claude(home, {'served_at': '2026-09-13T00:00:00Z', 'models': [
+            {'id': 'ok-model'},
+            {'id': 'evil\n    service  OK  FORGED ROW'}]})
+        self._bind_listing(lambda state: {'data': [{'id': 'ok-model'}, {'id': 'new-model'}]})
+        row = self._claude_row(home)
+        self.assertEqual(row['status'], 'WARN')
+        self.assertNotIn('\n', row['detail'])
+        self.assertNotIn('FORGED', row['detail'])
+
     def test_doctor_fails_with_a_fix_line_per_failing_row_and_writes_nothing(self):
         home = self._home()
         _patch_attrs(self, health=lambda *a, **k: None)
