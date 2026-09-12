@@ -156,6 +156,30 @@ class ClaudeIngressTests(unittest.TestCase):
             listed['claude/z-ai/glm-5.3-flash'], 'Z.ai: GLM 5.3 Flash \u00b7 OpenRouter')
         self.assertIn('anthropic/claude-sonnet-5', listed)
 
+    def test_models_listing_drops_unlisted_rows_but_still_routes_them(self):
+        # The alias path resolves through the import-time BY_SLUG, so patch
+        # an existing row: a vacuous synthetic row would pass without the fix.
+        from dataclasses import replace
+        from unittest import mock
+        from ai_router import registry as registry_mod
+        target = replace(registry_mod.by_slug('moonshotai/kimi-k3'), listed=False)
+        rows = tuple(target if m.slug == target.slug else m
+                     for m in registry_mod.MODELS)
+        with mock.patch.dict(registry_mod.BY_SLUG, {'moonshotai/kimi-k3': target}), \
+                mock.patch.object(registry_mod, 'MODELS', rows):
+            server = self._server()
+            response = _get(server.server_port, '/test-token/v1/models')
+            self.assertEqual(response.status, 200)
+            ids = [row['id'] for row in json.loads(response.read())['data']]
+            self.assertNotIn('claude/moonshotai/kimi-k3', ids)
+            recorded = install_fake(self, lambda: FakeUpstream(
+                200, b'{"id":"msg_9","type":"message","content":[]}', []))
+            routed = _post(server.server_port, '/test-token/v1/messages',
+                           _messages('moonshotai/kimi-k3'),
+                           {'Authorization': 'Bearer test-key-bearer'})
+            self.assertEqual(routed.status, 200)
+            self.assertEqual(recorded[0][0], 'openrouter.ai')
+
     def test_models_listing_projects_desktop_family_tier(self):
         # Desktop 1.49585.0 drops rows whose id looks non-Anthropic unless
         # the row declares a valid anthropic_family_tier. Anthropic rows

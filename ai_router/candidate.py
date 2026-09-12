@@ -122,19 +122,77 @@ class IsolatedRouter:
         self.tmp.cleanup()
 
 
-def run_probe(slug, scope, _run=subprocess.run):
-    """Desktop tool round trip through the isolated router; True on pass."""
+def legs_for(slug, row=None):
+    """Probe legs the registry row implies: tool and stream always run.
+
+    The image leg runs when the row's modalities include image; the
+    compaction leg runs when the row declares a context window. Unknown
+    slugs probe the base legs only. Pure: names what would run, bills
+    nothing. Pass `row` - the raw models.json dict - when the slug is not
+    yet in the import-time registry (the add path writes the row before
+    probing it); a non-dict falls back to the registry lookup.
+    """
+    entry = row if row is not None else (
+        by_slug(slug) if isinstance(slug, str) else None)
+    legs = ['tool', 'stream']
+    if entry is None:
+        return legs
+    modalities = (entry.get('modalities') if isinstance(entry, dict)
+                  else entry.modalities) or ()
+    context_window = (entry.get('context_window') if isinstance(entry, dict)
+                      else entry.context_window) or 0
+    if 'image' in modalities:
+        legs.append('image')
+    if context_window > 0:
+        legs.append('compact')
+    return legs
+
+
+def run_probe(slug, scope, _run=subprocess.run, row=None):
+    """Implied legs through the isolated router; True when all pass."""
     cmd = [sys.executable, str(PROBE_TOOL), slug,
            '--router-state', str(scope.home / 'mixed-router-state.json'),
            '--catalog', str(scope.catalog)]
+    legs = legs_for(slug, row)
+    if 'image' in legs:
+        cmd.append('--image')
+    if 'compact' in legs:
+        cmd.append('--compact')
     try:
-        proc = _run(cmd, capture_output=True, text=True, timeout=150)
+        proc = _run(cmd, capture_output=True, text=True, timeout=300)
     except (OSError, subprocess.SubprocessError):
         return False
-    return ROUND_TRIP_MARKER in (proc.stdout or '')
+    # A later leg (image/compact) can fail after the base marker is printed,
+    # so the exit status is part of the pass contract, not just the marker.
+    return proc.returncode == 0 and ROUND_TRIP_MARKER in (proc.stdout or '')
 
 
-def verify(slug, _scope=IsolatedRouter, _run_probe=run_probe):
+def verify(slug, _scope=IsolatedRouter, _run_probe=run_probe, row=None):
     """Boot an isolated router for the candidate and probe it. True on pass."""
     with _scope(slug) as scope:
-        return _run_probe(slug, scope)
+        return _run_probe(slug, scope, row=row)
+
+
+def main(argv=None):
+    """Print the legs a probe would run; bill only with --probe --confirm."""
+    args = list(sys.argv[1:] if argv is None else argv)
+    probe = '--probe' in args
+    confirm = '--confirm' in args
+    slugs = [a for a in args if not a.startswith('-')]
+    if len(slugs) != 1:
+        raise SystemExit('usage: python3.14 -m ai_router.candidate SLUG '
+                         '[--probe --confirm]')
+    slug = slugs[0]
+    legs = legs_for(slug)
+    if not (probe and confirm):
+        print(json.dumps({'slug': slug, 'legs': legs, 'billed': False,
+                          'note': 'rerun with --probe --confirm to bill the legs'}))
+        return 0
+    passed = verify(slug)
+    print(json.dumps({'slug': slug, 'legs': legs,
+                      'result': 'passed' if passed else 'failed'}))
+    return 0 if passed else 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())

@@ -236,6 +236,17 @@ class CatalogueFlagTests(unittest.TestCase):
                          {m['slug'] for m in merge({'models': [hid]},
                                                    client='claude')['models']})
 
+    def test_merge_drops_unlisted_rows(self):
+        from unittest import mock
+        from dataclasses import replace
+        from ai_router import catalogue as catalogue_mod
+        target = replace(by_slug('moonshotai/kimi-k3'), listed=False)
+        rows = tuple(target if m.slug == target.slug else m for m in MODELS)
+        with mock.patch.object(catalogue_mod, 'MODELS', rows):
+            merged = merge({'models': []}, client='codex')
+            self.assertNotIn('moonshotai/kimi-k3',
+                             {m['slug'] for m in merged['models']})
+
     def test_check_rejects_hidden_rows_left_in_catalogue(self):
         stale = dict(external_entry(by_slug('anthropic/claude-sonnet-5')),
                      description='stale-install')

@@ -70,6 +70,8 @@ def models_listing():
                                             m.display_name.casefold()))
     rows = []
     for entry in ordered:
+        if not entry.listed:
+            continue
         alias = claude_alias(entry.slug)
         if alias is not None:
             rows.append({'id': alias, 'display_name': entry.display_name,
