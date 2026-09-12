@@ -453,7 +453,7 @@ class SubscriptionModeTests(unittest.TestCase):
         import tempfile
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'state.json'
-            path.write_text(json.dumps({'port': 1, 'token': 'x',
+            path.write_text(json.dumps({'port': 1, 'token': 'x' * 32,
                                         'openai_models': [],
                                         'anthropic_mode': 'sometimes'}))
             with self.assertRaisesRegex(SystemExit, 'anthropic_mode'):

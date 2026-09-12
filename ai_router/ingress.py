@@ -112,6 +112,7 @@ def do_get(handler):
     if path == '/health':
         return handler.send_json(200, {'status': 'ok', 'version': VERSION,
                                        'inflight': handler.server.inflight,
+                                       'max_inflight': handler.server.max_inflight,
                                        'draining': handler.server.draining,
                                        'served_models': dict(handler.server.served_models)})
     if path == '/v1/models':

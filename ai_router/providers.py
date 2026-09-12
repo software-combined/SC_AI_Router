@@ -127,6 +127,9 @@ class ExternalResponsesProvider:
             raise PreparationError(str(exc))
         payload.pop('service_tier', None)
         if entry is None:
+            # Defence in depth: select()/owns() already refuses a slug that is
+            # not a matching registry row, so this only fires for a direct
+            # prepare() call and never for a routed request.
             raise PreparationError(f'unknown model: {model}')
         limit = entry.max_output_tokens
         window = getattr(entry, 'context_window', 0) or 0
