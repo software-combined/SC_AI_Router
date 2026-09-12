@@ -115,13 +115,13 @@ class ContextWireTests(unittest.TestCase):
         self.assertFalse(upstream.is_context_error(
             b'{"error":{"code":"invalid_prompt"},"error_type":"rate_limit_exceeded"}'))
 
-    def test_other_preparation_and_upstream_errors_remain_409(self):
+    def test_preparation_stays_409_but_upstream_validation_is_400(self):
         self.assertEqual(self.post({'model': MODEL, 'input': [], 'stream': True,
                                     'reasoning': {'effort': 'invalid'}})[0], 409)
         install_fake(self, lambda: FakeUpstream(400, b'{"error":{"code":"bad_schema",'
                                                b'"message":"schema invalid"}}'))
         status, content_type, body = self.post({'model': MODEL, 'input': [], 'stream': True})
-        self.assertEqual((status, content_type), (409, 'application/json'))
+        self.assertEqual((status, content_type), (400, 'application/json'))
         self.assertEqual(json.loads(body)['error']['code'], 'PROVIDER_REJECTED')
 
     def test_subscription_context_error_keeps_existing_handling(self):

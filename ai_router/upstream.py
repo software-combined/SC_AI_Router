@@ -63,6 +63,28 @@ def upstream_retry_after(response, prepared, metrics):
 
 
 _CODE_SHAPE = re.compile(r'^[A-Za-z0-9_.-]{1,40}$')
+_PARAM_SHAPE = re.compile(
+    r'(?:input|tools)(?:\[[0-9]{1,6}\])?'
+    r'(?:\.(?:content|summary|type|parameters|items|required|enum|name|arguments)'
+    r'(?:\[[0-9]{1,6}\])?){0,4}|model|reasoning\.effort')
+
+
+def rejection_parameter(body):
+    """Only allowlisted schema paths, never arbitrary property names or prose."""
+    for _ in range(2):  # Direct error or the provider's nested raw envelope.
+        try:
+            payload = json.loads(body)
+        except (ValueError, TypeError):
+            return None
+        error = payload.get('error') if isinstance(payload, dict) else None
+        if not isinstance(error, dict):
+            return None
+        param = error.get('param')
+        if isinstance(param, str) and len(param) <= 96 and _PARAM_SHAPE.fullmatch(param):
+            return param
+        metadata = error.get('metadata')
+        body = metadata.get('raw') if isinstance(metadata, dict) else None
+    return None
 
 
 def _error_code(error, inner_error):
@@ -167,7 +189,7 @@ def _refusal_key(provider, model, body):
 
 
 def recall_refusal(provider, model, body, now=None):
-    """The cached 409 message for an identical refused body, else None."""
+    """The cached (client status, message) for an identical body, else None."""
     clock = now if now is not None else time.monotonic()
     with _REFUSAL_LOCK:
         hit = _REFUSALS.get(_refusal_key(provider, model, body))
@@ -176,12 +198,12 @@ def recall_refusal(provider, model, body, now=None):
     return hit[0]
 
 
-def remember_refusal(provider, model, body, message, now=None):
-    """Cache a described 409 message; evict oldest writes past 8 entries."""
+def remember_refusal(provider, model, body, message, now=None, *, status=409):
+    """Cache a described refusal; evict oldest writes past 8 entries."""
     clock = now if now is not None else time.monotonic()
     key = _refusal_key(provider, model, body)
     with _REFUSAL_LOCK:
-        _REFUSALS[key] = (message, clock)
+        _REFUSALS[key] = ((status, message), clock)
         while len(_REFUSALS) > _REFUSAL_MAX:
             oldest = min(_REFUSALS, key=lambda candidate: _REFUSALS[candidate][1])
             _REFUSALS.pop(oldest, None)
@@ -235,7 +257,13 @@ def describe_failure(exc, response, info):
         message += 'Do not retry the unchanged request'
         if tool:
             message += f'; offending tool: {tool}'
-        return 409, message, code
+        param = rejection_parameter(response.get('body', b''))
+        if param:
+            message += f'; field: {param}'
+        status = (400 if response.get('status') == 400
+                  and info.get('protocol') == provider_defs.RESPONSES
+                  and not is_context_error(response.get('body', b'')) else 409)
+        return status, message, code
     if isinstance(exc, TimeoutError):
         elapsed = round((info.get('elapsed_ms') or 0) / 1000)
         message = (f'{model} did not answer within {timeout}s '
