@@ -31,7 +31,39 @@ def default_id():
     return _defs.DEFAULT_EXTERNAL
 
 
-def key_state(home, state, env, defn, private=None):
+def _opencode_auth_path(env=None):
+    """Same client rule as ai_router/credentials.py, for the 3.9 tree.
+
+    The two trees cannot share the function; they must agree on which file
+    the OpenCode client owns, or the installer would count a key handled
+    that the router then refuses. HOME only: the installed service carries
+    no XDG_DATA_HOME, so honouring one here would let the two disagree.
+    """
+    env = os.environ if env is None else env
+    return (Path(env.get('HOME') or Path.home())
+            / '.local' / 'share' / 'opencode' / 'auth.json')
+
+
+def _owns_opencode_auth(state, env=None):
+    """The client's own auth path when the state names it, else None."""
+    auth_path = state.get('opencode_auth') if isinstance(state, dict) else None
+    if not isinstance(auth_path, str) or not auth_path:
+        return None
+    env = os.environ if env is None else env
+    if auth_path == '~':
+        expanded = Path(env.get('HOME') or Path.home())
+    elif auth_path.startswith('~/'):
+        expanded = Path(env.get('HOME') or Path.home()) / auth_path[2:]
+    else:
+        expanded = Path(auth_path)
+    if expanded != _opencode_auth_path(env):
+        return None
+    # Return the expanded path: the readers below must open exactly what was
+    # compared, or a `~`-form state key would count here and read elsewhere.
+    return str(expanded)
+
+
+def key_state(home, state, env, defn, private=None, client_env=None):
     """(present, usable) for one provider; no value ever leaves this call.
 
     Precedence mirrors credentials.key_for(): env wins; else an existing key
@@ -52,8 +84,12 @@ def key_state(home, state, env, defn, private=None):
         text = ''
     private_ok = bool(private(key_file)) if (exists and private is not None) else bool(text.strip())
     auth_key = ''
-    auth_path = state.get('opencode_auth') if isinstance(state, dict) else None
-    if defn.key.state_key and isinstance(auth_path, str) and auth_path:
+    # The key env and the client's own data directory are separate inputs:
+    # `unhandled` ignores the shell's provider variables but must still
+    # resolve the same auth file the service will read.
+    auth_path = (_owns_opencode_auth(state, client_env or env)
+                 if defn.key.state_key else None)
+    if auth_path:
         try:
             doc = json.loads(Path(auth_path).read_text())
             entry = doc.get(defn.key.state_key) if isinstance(doc, dict) else None
@@ -149,7 +185,8 @@ def unhandled(home, state, private):
     """
     missing = []
     for defn in external_defs():
-        _, usable = key_state(home, state, {}, defn, private)
+        _, usable = key_state(home, state, {}, defn, private,
+                              client_env=os.environ)
         if usable:
             continue
         key_file = home / defn.key.file
@@ -187,6 +224,5 @@ def supplied(home, state, env, defn):
             return True
     except OSError:
         return False
-    auth_path = state.get('opencode_auth') if isinstance(state, dict) else None
-    return bool(defn.key.state_key and isinstance(auth_path, str) and auth_path
-                and Path(auth_path).exists())
+    auth_path = _owns_opencode_auth(state, env) if defn.key.state_key else None
+    return bool(auth_path and Path(auth_path).exists())

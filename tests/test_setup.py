@@ -269,9 +269,10 @@ class SetupUnitTests(unittest.TestCase):
             with mock.patch('ai_router.runtime.ROUTER_HOME', home):
                 from ai_router.runtime import load_state as load
                 fresh = _state(home)
+                fresh['token'] = 'test-token'.ljust(32, 'x')
                 fresh['setup']['expires'] = int(_time.time()) + 900
                 path.write_text(json.dumps(fresh))
-                self.assertEqual(load(path)['token'], 'test-token')
+                self.assertEqual(load(path)['token'], 'test-token'.ljust(32, 'x'))
                 fresh['setup']['expires'] = int(_time.time()) - 1
                 path.write_text(json.dumps(fresh))
                 with self.assertRaisesRegex(SystemExit, 'credential problem'):

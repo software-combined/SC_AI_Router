@@ -70,6 +70,39 @@ WIDENED = ('C:\\keys\\openrouter.key\n'
 
 
 class WinAclCheckTests(unittest.TestCase):
+    def setUp(self):
+        winacl.reset()  # verdicts are cached per file across calls
+
+    def _counting(self, responses):
+        calls = []
+        inner = _ok(responses)
+
+        def run(cmd, **kwargs):
+            calls.append(list(cmd))
+            return inner(cmd, **kwargs)
+        return run, calls
+
+    def test_the_verdict_is_cached_for_a_short_interval(self):
+        run, calls = self._counting(
+            [(['icacls'], SimpleNamespace(returncode=0, stdout=OWNER_ONLY, stderr='')),
+             (['whoami'], _ok_acl())])
+        winacl.check('C:\\keys\\openrouter.key', run=run, _now=100.0)
+        winacl.check('C:\\keys\\openrouter.key', run=run, _now=100.0 + 5)
+        self.assertEqual(len(calls), 2, 'one icacls plus one whoami, then cached')
+        winacl.check('C:\\keys\\openrouter.key', run=run,
+                     _now=100.0 + winacl.VERDICT_TTL_S + 1)
+        self.assertEqual(len(calls), 4, 'the cache expires and re-checks')
+
+    def test_a_cached_refusal_is_raised_without_respawning(self):
+        run, calls = self._counting(
+            [(['icacls'], SimpleNamespace(returncode=0, stdout=WIDENED, stderr='')),
+             (['whoami'], _ok_acl())])
+        with self.assertRaisesRegex(SystemExit, 'readable by'):
+            winacl.check('C:\\keys\\openrouter.key', run=run, _now=200.0)
+        with self.assertRaisesRegex(SystemExit, 'readable by'):
+            winacl.check('C:\\keys\\openrouter.key', run=run, _now=200.0 + 1)
+        self.assertEqual(len(calls), 2, 'the refusal is cached too')
+
     def test_owner_only_acl_passes(self):
         run = _ok([(['icacls'], SimpleNamespace(returncode=0, stdout=OWNER_ONLY, stderr='')),
                    (['whoami'], _ok_acl())])

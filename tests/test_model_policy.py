@@ -163,22 +163,24 @@ class ModelPolicyTests(unittest.TestCase):
         from ai_router.runtime import load_state
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
-            auth = home / 'auth.json'
+            auth = home / '.local' / 'share' / 'opencode' / 'auth.json'
+            auth.parent.mkdir(parents=True)
             auth.write_text(json.dumps(
                 {'openrouter': {'type': 'api', 'key': 'k'}}))
             state_path = home / 'mixed-router-state.json'
             state_path.write_text(json.dumps(
-                {'port': 0, 'token': 't', 'openai_models': [],
+                {'port': 0, 'token': 't' * 32, 'openai_models': [],
                  'opencode_auth': str(auth)}))
             policy = home / 'model-policy.json'
             policy.write_text(json.dumps(
                 {'portco': 'acme', 'department': None,
                  'allowed_models': list(ALLOWED)}))
             policy.chmod(0o600)
-            state = load_state(state_path)
-            self.assertEqual(state['allowed_models'], list(ALLOWED))
-            policy.unlink()
-            plain = load_state(state_path)
+            with mock.patch.dict(os.environ, {'HOME': str(home)}):
+                state = load_state(state_path)
+                self.assertEqual(state['allowed_models'], list(ALLOWED))
+                policy.unlink()
+                plain = load_state(state_path)
             self.assertNotIn('allowed_models', plain)
 
     def test_protocol_threading_rejects_disallowed_model(self):
