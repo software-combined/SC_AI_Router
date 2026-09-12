@@ -3,7 +3,7 @@ import http.client
 import json
 from . import capabilities, compaction as comp, local_services, agent_handoffs, provider_defs
 from .standalone_outputs import materialize_outputs
-from . import subscription_history
+from . import subscription_history, context_recovery
 from .capabilities import CANONICAL_ORDER, check_effort, check_images, input_modalities
 from .image_items import note_images, strip_images
 from .errors import PreparationError, SubscriptionRequired, UnknownModel
@@ -57,6 +57,8 @@ class SubscriptionProvider:
         fwd = {k: v for k, v in headers.items() if k.lower() not in HOP_HEADERS}
         normalized = (subscription_history.normalize(payload)
                       if path in ('/responses', '/responses/compact') else payload)
+        if path == '/responses':
+            normalized = context_recovery.normalize(normalized)
         history_changed = normalized is not payload
         payload = normalized
         try:
@@ -106,6 +108,8 @@ class ExternalResponsesProvider:
         # credential lookup or upstream dispatch, where a child would infer
         # its assignment from inherited context instead.
         reject_opaque_agent_items(payload.get('input', []))
+        if path == '/responses':
+            payload = context_recovery.normalize(payload)
         # Standalone outputs (no call_id) are delegated messages, not orphans.
         payload['input'] = materialize_outputs(payload.get('input', []))
         # Scrub before prepare_tools: fragments KeyError its indexing, and
