@@ -211,8 +211,8 @@ class AppServer:
         (the probe_context_budget shape, which spawns with
         `start_new_session`); otherwise plain `terminate()` (the
         probe_codex_runtime / probe_agent_handoffs shape). Either way the
-        child's stdio streams and any caller-supplied stderr file are
-        closed, matching what each probe's `close`/teardown does today.
+        child's stdin and any caller-supplied stderr file are closed; the
+        reader threads own stdout/stderr and exit with the process.
         """
         if self.process is None:
             return
@@ -231,12 +231,15 @@ class AppServer:
                 process.kill()
                 process.wait(timeout=5)
         finally:
-            for stream in (process.stdin, process.stdout, process.stderr):
-                try:
-                    if stream is not None:
-                        stream.close()
-                except (OSError, ValueError):
-                    pass
+            # Close only stdin: the daemon reader/drain threads own stdout and
+            # stderr, and closing those here blocks on their lock while a
+            # descendant still holds the write end (a hang the probes must not
+            # inherit). The threads exit with the process.
+            try:
+                if process.stdin is not None:
+                    process.stdin.close()
+            except (OSError, ValueError):
+                pass
             if self._stderr_file is not None:
                 try:
                     self._stderr_file.close()
