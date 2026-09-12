@@ -1,5 +1,22 @@
 # Compatibility
 
+## Streamed context refusals, 2026-09-13
+
+Candidate 0.6.42, macOS Codex CLI `0.154.0-alpha.6.2`:
+`python3.14 tools/probe_context_budget.py` passed all four offline scenarios.
+Synthetic upstream replies exercise threshold compaction, HTTP context errors,
+HTTP 200 SSE numeric context refusals, and SSE metadata context codes. The two
+new stream scenarios produce `contextWindowExceeded`, then explicit compaction
+and continuation preserve the marker with one compaction and three inference
+requests per scenario. No paid inference or installed-router mutation occurred.
+
+The incident's Linux CLI `0.153.4` was source-inspected at `rust-v0.153.4`
+(`3d2ee51ca2d5db578f328aa75e20aa22c0197c9a`):
+`codex-rs/codex-api/src/sse/responses.rs` recognizes the canonical error code;
+`codex-rs/core/src/session/turn.rs` marks context full and returns an error.
+This is not a Linux runtime replay or proof of automatic same-turn recovery.
+The original provider accounting discrepancy remains unverified.
+
 ## Sonnet parent switches and retained subagents, 2026-09-12
 
 Candidate 0.6.37, installed Codex CLI 0.153.4, same pinned source and desktop

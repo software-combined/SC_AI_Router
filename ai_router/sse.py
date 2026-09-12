@@ -4,6 +4,20 @@
 MAX_FRAME_BYTES = 16 * 1024 * 1024
 
 
+def lines(chunks):
+    """Turn arbitrary byte chunks into lines for the bounded frame parser."""
+    pending = bytearray()
+    for chunk in chunks:
+        pending.extend(chunk)
+        while (newline := pending.find(b'\n')) >= 0:
+            yield bytes(pending[:newline + 1])
+            del pending[:newline + 1]
+        if len(pending) > MAX_FRAME_BYTES:
+            raise ValueError('upstream SSE frame exceeds %d bytes' % MAX_FRAME_BYTES)
+    if pending:
+        yield bytes(pending)
+
+
 def blocks(response):
     """Yield each original SSE frame and its joined data fields."""
     lines = []

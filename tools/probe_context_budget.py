@@ -87,6 +87,13 @@ class Upstream:
         if self.scenario == 'context_error' and self.calls == 2:
             return Reply(400, b'{"error":{"code":"context_length_exceeded"}}',
                          'application/json')
+        if self.scenario in ('stream_context_error', 'metadata_context_error') and self.calls == 2:
+            error = {'message': 'The prompt is too long: 4290688, model maximum context length: 1048571'}
+            if self.scenario == 'metadata_context_error':
+                error = {'code': 'invalid_prompt', 'metadata': {'error_type': 'context_length_exceeded'}}
+            event = {'type': 'response.failed', 'response': {'error': error}}
+            return Reply(200, ('data: ' + json.dumps(event) + '\n\n').encode(),
+                         'text/event-stream')
         if self.calls > 1:
             assert self.compactions == 1, 'client did not compact before resuming'
             assert MARKER in json.dumps(payload['input']), 'post-compact request lost marker'
@@ -187,14 +194,14 @@ def run(binary, scenario, home):
                     'cwd': str(home), 'approvalPolicy': 'never', 'sandbox': 'read-only'})
                 thread = result['thread']['id']
                 client.turn(thread)
-                if scenario == 'context_error':
+                if scenario != 'threshold':
                     client.turn(thread, expect_error=True)
                     # This client recognizes the error but does not reliably
                     # auto-compact next turn; prove its explicit recovery path.
                     client.compact(thread)
                 client.turn(thread)
                 assert upstream.compactions == 1, 'wrong compaction count'
-                assert upstream.calls == (3 if scenario == 'context_error' else 2), 'unexpected retries'
+                assert upstream.calls == (2 if scenario == 'threshold' else 3), 'unexpected retries'
                 assert not upstream.failures, upstream.failures
                 print(json.dumps({'scenario': scenario, 'passed': True,
                                   'compactions': upstream.compactions, 'marker_preserved': True}))
@@ -209,7 +216,7 @@ def main():
     parser.add_argument('--codex-bin', default='/Applications/ChatGPT.app/Contents/Resources/codex')
     args = parser.parse_args()
     print(subprocess.check_output([args.codex_bin, '--version'], text=True).strip(), flush=True)
-    for scenario in ('threshold', 'context_error'):
+    for scenario in ('threshold', 'context_error', 'stream_context_error', 'metadata_context_error'):
         with tempfile.TemporaryDirectory(prefix='context-probe-') as tmp:
             run(args.codex_bin, scenario, Path(tmp))
 

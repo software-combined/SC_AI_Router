@@ -41,6 +41,9 @@ subscription Responses requests; it never edits persisted client history.
 resets on either Responses route. Codex owns saved history and executes its
 retrieval tools; the router stores no assignment or transcript cache.
 It also owns the exact legacy paragraph migration used by catalogue upgrades.
+`stream_errors.py` owns shared HTTP/SSE context-error classification and applies
+it to external Responses terminal events after tool adaptation. It preserves
+successful frames and records semantic failure separately from the HTTP status.
 
 1. `provider_defs.py` owns every upstream fact (host, endpoint prefixes, key
    location, model catalogue, key-info endpoint, failure dialect) and imports
