@@ -153,6 +153,12 @@ class FakeUpstream:
 
 def install_fake(test, responder):
     """Patch HTTPSConnection; record (host, method, path, body, headers)."""
+    # A fake upstream answers from stubs, so process-local refusal verdicts
+    # cached against the real upstream no longer apply; drop them with the
+    # patch (and on cleanup) so stubbed responses are actually dispatched.
+    from ai_router import upstream as _upstream
+    _upstream.clear_refusals()
+    test.addCleanup(_upstream.clear_refusals)
     recorded = []
 
     class FakeConn:

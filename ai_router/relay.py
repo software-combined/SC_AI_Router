@@ -17,6 +17,14 @@ from .providers import NATIVE_SERVICE_PATHS
 
 
 def relay(handler, provider, prepared, metrics, started, has_image=False, *, log_event):
+    routed = (prepared.provider == provider_defs.OPENROUTER.id
+              and metrics.get('protocol') == provider_defs.RESPONSES)
+    if routed:
+        cached = upstream.recall_refusal(prepared.provider, metrics.get('model'), prepared.body)
+        if cached is not None:
+            log_event('upstream_rejected_cached', provider=prepared.provider,
+                      model=metrics.get('model'), status=409, category='PROVIDER_REJECTED')
+            return handler.error(errors.preparation(cached))
     conn = http.client.HTTPSConnection(prepared.host, timeout=120)
     sent = False
     response = None
@@ -61,11 +69,18 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
                 {'model': metrics.get('model'), 'provider': prepared.provider,
                  'elapsed_ms': round((time.monotonic() - started) * 1000, 1),
                  'timeout_s': 120,
-                 'has_image': has_image})
+                 'has_image': has_image, 'routed': routed})
             if described is not None:
-                status, message = described
+                status, message, code = described
+                # A transient upstream failure is retryable; only a
+                # deterministic client-side rejection is worth remembering.
+                if status == 409 and routed and response.status < 500:
+                    upstream.remember_refusal(prepared.provider, metrics.get('model'),
+                                              prepared.body, message)
                 log_event('upstream_rejected', status=response.status,
-                          client_status=status, **metrics)
+                          client_status=status, code=code,
+                          category='PROVIDER_REJECTED',
+                          **metrics, **upstream.rejection_fingerprint(prepared.body))
                 return handler.error(errors.upstream_described(message) if status == 502
                                      else errors.preparation(message))
             handler.send_response(response.status)
@@ -115,7 +130,7 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
                  'timeout_s': 120,
                  'has_image': has_image})
             if described is not None:
-                status, message = described
+                status, message, _ = described
                 handler.error(errors.upstream_described(message) if status == 502
                               else errors.preparation(message))
             else:

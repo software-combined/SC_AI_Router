@@ -40,8 +40,8 @@ class RegistryTests(unittest.TestCase):
 
     def test_bad_row_shape_is_refused(self):
         good = dict(zip(FIELDS, ['x/y', 'openrouter', 'X', 'V',
-            ['low'], 'low', ['text'], [], 'native', None, False, 1, 100,
-            32768, 'none', 'none', [], True, 'verified']))
+            ['low'], 'low', ['text'], [], 'native', 'native', None, False, 1,
+            100, 32768, 'none', 'none', [], True, 'verified']))
         for bad in ({k: v for k, v in good.items() if k != 'vendor'},
                     {k: v for k, v in good.items() if k != 'web_search'},
                     {**good, 'provider': 'other'},
@@ -61,13 +61,34 @@ class RegistryTests(unittest.TestCase):
         for model in MODELS:
             self.assertIn(model.tier, ('verified', 'preview'), model.slug)
         good = dict(zip(FIELDS, ['x/y', 'openrouter', 'X', 'V',
-            ['low'], 'low', ['text'], [], 'native', None, False, 1, 100,
-            32768, 'none', 'none', [], True, 'verified']))
+            ['low'], 'low', ['text'], [], 'native', 'native', None, False, 1,
+            100, 32768, 'none', 'none', [], True, 'verified']))
         for bad in ({k: v for k, v in good.items() if k != 'tier'},
                     {**good, 'tier': 'beta'}):
             with self.subTest(bad=bad):
                 with self.assertRaises(SystemExit):
                     load(json.dumps([bad]))
+
+    def test_history_mode_defaults_native_and_validates(self):
+        model = Model(slug='x/y', provider='openrouter', display_name='X',
+                      vendor='V', reasoning=('low',), default_reasoning='low')
+        self.assertEqual(model.history_mode, 'native')
+        good = dict(zip(FIELDS, ['x/y', 'openrouter', 'X', 'V',
+            ['low'], 'low', ['text'], [], 'native', 'portable', None, False, 1,
+            100, 32768, 'none', 'none', [], True, 'verified']))
+        self.assertEqual(load(json.dumps([good]))[0].history_mode, 'portable')
+        for bad in ({k: v for k, v in good.items() if k != 'history_mode'},
+                    {**good, 'history_mode': 'sometimes'}):
+            with self.subTest(bad=bad):
+                with self.assertRaises(SystemExit):
+                    load(json.dumps([bad]))
+
+    def test_muse_contributor_is_the_only_portable_row(self):
+        self.assertEqual(by_slug('meta/muse-spark-1.3-contributor').history_mode,
+                         'portable')
+        self.assertEqual(by_slug('meta/muse-spark-1.3').history_mode, 'native')
+        portable = [m.slug for m in MODELS if m.history_mode == 'portable']
+        self.assertEqual(portable, ['meta/muse-spark-1.3-contributor'])
 
     def test_capability_flags_default_conservative(self):
         model = Model(slug='x/y', provider='openrouter', display_name='X',

@@ -158,6 +158,16 @@ rejections, the no-copy rule and the client-catalogue spike).
 | [147](147-operator-surface-doctor-status-rollback-support.md) | Operator surface: doctor, status, rollback, support bundle | TODO | after 131; serialize with 134's CI step |
 | [148](148-claude-drift-and-contract.md) | Claude Code drift check and attachment contract | TODO | after 146's guard; coordinate 113/120/121 |
 
+## Carried-history portability (150)
+
+Added 2026-09-12 from the Muse Contributor refusal incident: a ~21 h
+DeepSeek thread swapped to Muse was refused twelve times by OpenRouter's
+Meta upstream on the carried turn.
+
+| Plan | Title | Status | Sequencing |
+|---|---|---|---|
+| [150](150-carried-history-portability.md) | Carried-history portability for routed models | PARTIAL: slice 2a + coded 409 + refusal cache landed 2026-09-12; capture-and-bisect, slices 2b/2c/2d, then the Muse row probe owner-gated; two paid replays accepted, cause still open | independent; re-probe after client upgrades |
+
 ## First-run key window (149)
 
 Added 2026-09-12: the native key window is the intended first-run flow but is
@@ -180,7 +190,7 @@ owner-gated.
   133, 145, 135 (stage 2), 132, 137, 146, 147, 148.
 - **Phase 3 (infrastructure, mostly owner-gated):** 105, 106, 107, 099, 108, 109, 110.
 - **Phase 4 (clients and OS acceptance, owner-gated):** 111, 112, 113, 114, 115, 116, 117.
-- **Phase 5 (paid probes and desktop, owner-gated):** 118, 119, 120, 121.
+- **Phase 5 (paid probes and desktop, owner-gated):** 118, 119, 120, 121, 150.
 
 Phase notes: 099 executes only after 139's feed is qualified; 134's feed_verify move lands before
 106 and its CI step after 101; 133 and 132 land before Phase 5 paid probes and Phase 4 Windows
