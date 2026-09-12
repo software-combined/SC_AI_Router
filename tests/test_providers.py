@@ -1,5 +1,7 @@
 import json
+import io
 import unittest
+from contextlib import ExitStack
 from types import SimpleNamespace
 from unittest import mock
 from ai_router import provider_defs, providers
@@ -189,6 +191,138 @@ class SummarizerTests(unittest.TestCase):
         prepare_tools(payload)
         self.assertEqual(len(payload['tools']), 1)
         self.assertEqual(payload['tools'][0]['parameters'], {'type': 'object'})
+
+
+class SummarizerRetryTests(unittest.TestCase):
+    @staticmethod
+    def _result(text='summary', status=None, **extra):
+        payload = {'output': [{'type': 'message', 'content': [
+            {'type': 'output_text', 'text': text}]}]}
+        if status is not None:
+            payload['status'] = status
+        payload.update(extra)
+        return 200, payload
+
+    @classmethod
+    def _truncated(cls):
+        result = cls._result('partial', status='incomplete',
+                             incomplete_details={'reason': 'max_output_tokens'})
+        result[1]['output'][0]['status'] = 'incomplete'
+        return result
+
+    def _run(self, responses, model='z-ai/glm-5.3', ceiling=None):
+        queue, calls, closed = list(responses), [], []
+
+        class Response:
+            def __init__(self, status, payload):
+                self.status = status
+                self.body = io.BytesIO(json.dumps(payload).encode())
+
+            def read(self, *args):
+                return self.body.read(*args)
+
+        class Connection:
+            def __init__(self, *args, **kwargs):
+                calls.append({'timeout': kwargs.get('timeout')})
+
+            def request(self, method, path, body=None, headers=None):
+                calls[-1]['body'] = json.loads(body)
+
+            def getresponse(self):
+                if not queue:
+                    raise AssertionError('summarizer retried beyond the fixture')
+                response = queue.pop(0)
+                if isinstance(response, BaseException):
+                    raise response
+                return Response(*response)
+
+            def close(self):
+                closed.append(True)
+
+        with ExitStack() as stack:
+            stack.enter_context(mock.patch.object(
+                providers.http.client, 'HTTPSConnection', Connection))
+            if ceiling is not None:
+                stack.enter_context(mock.patch.object(
+                    providers, 'by_slug',
+                    return_value=SimpleNamespace(max_output_tokens=ceiling)))
+            try:
+                result = _external_responses().summarize(model, 'key', [
+                    {'type': 'message', 'role': 'user', 'content': 'marker'}])
+            except Exception as exc:  # Return the result so every path checks closure.
+                result = exc
+        return result, calls, closed
+
+    def test_truncated_summary_retries_once_and_keeps_request(self):
+        with mock.patch.object(providers, 'log_event') as logged:
+            result, calls, closed = self._run([
+                self._truncated(), self._result('complete')])
+        self.assertEqual(result, 'complete')
+        self.assertEqual([call['body']['max_output_tokens'] for call in calls],
+                         [4000, 8000])
+        self.assertEqual(calls[0]['body']['input'], calls[1]['body']['input'])
+        self.assertEqual(calls[0]['body']['reasoning'], {'effort': 'low'})
+        self.assertEqual(len(calls), len(closed))
+        events = [call.kwargs for call in logged.call_args_list
+                  if call.args and call.args[0] == 'compact_summary_attempt']
+        self.assertEqual([event['outcome'] for event in events],
+                         ['retry', 'completed'])
+        self.assertTrue(all(set(event) <= {
+            'model', 'attempt', 'max_output_tokens', 'outcome'} for event in events))
+
+    def test_retry_ceiling_clamps_or_disables_second_attempt(self):
+        result, calls, closed = self._run([
+            self._truncated(), self._result('complete')], ceiling=6000)
+        self.assertEqual(result, 'complete')
+        self.assertEqual([call['body']['max_output_tokens'] for call in calls],
+                         [4000, 6000])
+        self.assertEqual(len(calls), len(closed))
+        result, calls, closed = self._run([self._truncated()], ceiling=4000)
+        self.assertIsInstance(result, providers.comp.IncompleteSummary)
+        self.assertEqual([call['body']['max_output_tokens'] for call in calls],
+                         [4000])
+        self.assertEqual(len(calls), len(closed))
+
+    def test_truncation_twice_is_rejected_after_two_attempts(self):
+        result, calls, closed = self._run([self._truncated(), self._truncated()])
+        self.assertIsInstance(result, providers.comp.IncompleteSummary)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(len(calls), len(closed))
+
+    def test_retry_uses_one_shared_deadline(self):
+        with mock.patch.object(providers.time, 'monotonic',
+                               side_effect=[0, 1, 2, 3]):
+            result, calls, closed = self._run([
+                self._truncated(), self._result('complete')])
+        self.assertEqual(result, 'complete')
+        self.assertLess(calls[1]['timeout'], calls[0]['timeout'])
+        self.assertLessEqual(calls[0]['timeout'], providers.SUMMARY_DEADLINE_S)
+        self.assertEqual(len(calls), len(closed))
+        with mock.patch.object(providers.time, 'monotonic',
+                               side_effect=[0, 1, 120]):
+            result, calls, closed = self._run([self._truncated()])
+        self.assertIsInstance(result, TimeoutError)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(len(calls), len(closed))
+
+    def test_other_failures_do_not_retry(self):
+        valid = self._result('partial')
+        cases = {
+            'failed status': self._result(status='failed'),
+            'in progress': self._result(status='in_progress'),
+            'embedded error': (200, {**valid[1], 'error': {'code': 'bad'}}),
+            'empty': (200, {'output': []}),
+            'malformed': (200, {'output': 'bad'}),
+            'auth': (401, {'error': 'unauthorized'}),
+            'timeout': TimeoutError('timed out'),
+        }
+        for name, response in cases.items():
+            with self.subTest(name=name):
+                result, calls, closed = self._run([response])
+                self.assertIsInstance(result, Exception)
+                self.assertNotIsInstance(result, providers.comp.IncompleteSummary)
+                self.assertEqual(len(calls), 1)
+                self.assertEqual(len(calls), len(closed))
 
     def test_text_only_models_reject_image_blocks(self):
         # Fail closed like the effort path: a mid-thread switch to a

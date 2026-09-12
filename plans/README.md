@@ -4,7 +4,7 @@ The router backlog. Every numbered file is a self-contained brief an agent can
 execute in one session, and the tables below hold only open work. Completed
 plans leave the tree when they land: git history keeps their text and the
 removal log at the bottom of this file records each one with its landing date.
-The live numbering runs 099-160; the pre-renumbering 034-089 series is archived
+The live numbering runs 099-161; the pre-renumbering 034-089 series is archived
 and mapped at the bottom. Dated audit, review and brief files in this directory
 are historical snapshots and keep their original numbering.
 
@@ -206,6 +206,10 @@ in-repo importers of the old name today: none outside `codex_router/` itself
 name stays so existing installs keep working.
 
 ## Completed and removed
+
+Plan 161's source fix and delivery sequence are retained in
+[`2026-09-13-compaction-recovery.md`](2026-09-13-compaction-recovery.md);
+publication and installed acceptance are separate post-integration gates.
 
 Removed 2026-09-12 after landing on `develop` (the date is the landing date
 each status row recorded): 090, 091, 092, 093, 094, 095, 096, 097, 098, 100,
