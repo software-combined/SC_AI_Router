@@ -53,6 +53,55 @@ class IngressGuardTests(unittest.TestCase):
         self.assertEqual(json.loads(response.read())['error']['code'], 'INVALID_REQUEST_SIZE')
         self.assertEqual(recorded, [])
 
+    def test_a_foreign_host_is_forbidden_before_routing(self):
+        recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
+        server = self._server()
+        for host in ('evil.example', '127.0.0.1.evil.example',
+                     'localhost.evil.example', '[::1]'):
+            with self.subTest(host=host):
+                conn = http.client.HTTPConnection('127.0.0.1', server.server_port,
+                                                  timeout=10)
+                self.addCleanup(conn.close)
+                conn.request('GET', '/test-token/health', headers={'Host': host})
+                response = conn.getresponse()
+                self.assertEqual(response.status, 403)
+                self.assertEqual(json.loads(response.read())['error']['code'],
+                                 'FORBIDDEN')
+        self.assertEqual(recorded, [])
+
+    def test_a_foreign_host_is_refused_even_with_a_loopback_origin(self):
+        # The guard runs before the Origin exemption, so a page that does send
+        # an Origin still cannot reach a route through a rebound name.
+        server = self._server()
+        conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
+        self.addCleanup(conn.close)
+        conn.request('GET', '/test-token/health', headers={
+            'Host': 'evil.example',
+            'Origin': f'http://127.0.0.1:{server.server_port}'})
+        response = conn.getresponse()
+        self.assertEqual(response.status, 403)
+        self.assertEqual(json.loads(response.read())['error']['code'], 'FORBIDDEN')
+
+    def test_loopback_hosts_still_answer(self):
+        server = self._server()
+        for host in (f'127.0.0.1:{server.server_port}',
+                     f'localhost:{server.server_port}', '127.0.0.1',
+                     'LOCALHOST'):
+            with self.subTest(host=host):
+                conn = http.client.HTTPConnection('127.0.0.1', server.server_port,
+                                                  timeout=10)
+                self.addCleanup(conn.close)
+                conn.request('GET', '/test-token/health', headers={'Host': host})
+                response = conn.getresponse()
+                self.assertEqual(response.status, 200)
+                self.assertEqual(json.loads(response.read())['status'], 'ok')
+
+    def test_a_hostless_http10_request_still_answers(self):
+        server = self._server()
+        raw = self._raw_request(
+            server.server_port, b'GET /test-token/health HTTP/1.0\r\n\r\n')
+        self.assertIn(b'200', raw.split(b'\r\n', 1)[0])
+
     def test_zstd_decoded_too_large_is_413_and_never_reaches_upstream(self):
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
         server = self._server()
