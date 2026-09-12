@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.35
+
+- Carried-history portability, second slice: a portable turn (the Muse
+  Contributor row, or any turn carrying the client's `<model_switch>`
+  marker) now drops carried reasoning items instead of replaying them.
+  Measured on 2026-09-12: Meta answers a carried deepseek reasoning item
+  with a bare HTTP 400 while the identical turn without it is accepted.
+  Native, marker-free turns keep their reasoning items.
+
 ## 0.6.34
 
 - A fresh install opens the first-run key window by itself whenever the

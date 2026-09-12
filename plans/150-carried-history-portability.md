@@ -10,19 +10,27 @@
   router/reliability; depends on none.
 - Planned at `3515c6a`, 2026-09-12; rebased onto `7ebdb85` when develop took 145-148.
 - Shipped 2026-09-12: the `history_mode` registry field, the portable
-  discovery-pair replay (slice 2a), the coded 409 with the switch-back or
-  new-thread recovery, the content-free rejection fingerprint, and the
-  repeat-refusal cache (8 entries, 60 s TTL).
+  discovery-pair replay (slice 2a), the carried-reasoning drop (slice 2b),
+  the coded 409 with the switch-back or new-thread recovery, the
+  content-free rejection fingerprint, and the repeat-refusal cache
+  (8 entries, 60 s TTL).
 - Trigger: a turn is portable when its registry row carries
   `history_mode: portable`, or when the input carries the client's
   `<model_switch>` developer marker. Only `meta/muse-spark-1.3-contributor`
   is `portable`; every other row stays `native` (no evidence for them yet).
 - First proof: a portable turn replaces the `codex_client_tool_search`
   call/output pair with one visible note while the released schemas stay
-  declared, and a repeated identical refusal answers 409 without dispatch.
-- Owner-gated remainder: capture a failing carried turn and bisect which
-  history item the Meta upstream rejects, then slices 2b/2c/2d, then the
-  Muse Contributor row probe on a real thread.
+  declared, drops carried reasoning items, and a repeated identical
+  refusal answers 409 without dispatch.
+- Bisect evidence 2026-09-12 (owner-authorised paid probes): a captured
+  refused turn (14 items, 21 tools, 31,953 bytes) reproduces Meta's
+  `HTTP 400` with 409 at the client, and the identical turn with its two
+  carried reasoning items removed is accepted (`200`); the DeepSeek
+  control answers `200` on both. A 21-hour rebuilt tail without reasoning
+  was accepted earlier, so the reasoning item is the trigger, not the
+  discovery pair alone.
+- Remainder: slices 2c/2d stay unproven (no evidence yet), and the Muse
+  Contributor row probe repeats on any client upgrade.
 
 ## Why this matters
 
@@ -74,20 +82,27 @@ on shape alone.
 `test_muse_contributor_is_the_only_portable_row` in
 `tests/test_registry.py`.
 
-### Step 2: portable discovery-pair replay (slice 2a)
+### Step 2: portable history replay (slices 2a and 2b)
 
-- `portablize_search_history` (`ai_router/compaction.py`, the history
+- `portable_history` (`ai_router/compaction.py`, the history
   shaping module) collapses the `codex_client_tool_search` call and its
   matching output (by `call_id`) into one visible user note; either half
-  without its mate is dropped. `prepare_tools` (`ai_router/tool_adapter.py`)
-  calls it after the rewrite loop with the row's `history_mode`. Released
-  schemas stay declared in `payload['tools']`; plain declared pairs and
-  every other item are untouched. (The helper lives in compaction, not
-  tool_adapter: the ~55-line addition would have pushed tool_adapter past
-  its 400-line hard cap; the call site there is two lines.)
+  without its mate is dropped. In the same pass it drops carried
+  `reasoning` items: one with a readable summary replays as that summary
+  note, one without is dropped, because an upstream that did not produce
+  the item refuses the turn (measured above).
+  `prepare_tools` (`ai_router/tool_adapter.py`) calls it after the rewrite
+  loop with the row's `history_mode`. Released schemas stay declared in
+  `payload['tools']`; plain declared pairs and every other item are
+  untouched. (The helper lives in compaction, not tool_adapter: the
+  addition would have pushed tool_adapter past its 400-line hard cap; the
+  call site there is two lines.)
 
 **Verify**: the portable tests in `tests/test_history_portability.py`,
-especially `test_native_declared_pair_survives_with_discovery_intact`.
+especially `test_native_declared_pair_survives_with_discovery_intact`,
+`test_portable_turn_drops_carried_reasoning` and
+`test_wire_body_carries_no_reasoning_for_a_portable_row` (both fail
+against the 0.6.34.51 release, which keeps the item).
 
 ### Step 3: coded 409, fingerprint, and repeat-refusal cache
 
@@ -116,13 +131,15 @@ especially `test_native_declared_pair_survives_with_discovery_intact`.
 - [x] Portable turns replay the discovery pair as a note; native output unchanged.
 - [x] 409 names the provider code (when present) and the recovery.
 - [x] Rejection logs and the cached path carry counts only.
-- [ ] Owner capture-and-bisect of a failing carried turn; slices 2b/2c/2d.
+- [x] Owner capture-and-bisect of a failing carried turn (reasoning item).
+- [ ] Slices 2c/2d: no evidence yet; reopen only on a new refusal shape.
 - [ ] Muse Contributor row probe on a real thread.
 
 ## STOP conditions
 
-- A portable replay drops or rewrites anything but the discovery pair:
-  STOP, narrow the pass, re-prove the native regression test.
+- A portable replay drops or rewrites anything but the discovery pair and
+  carried reasoning items: STOP, narrow the pass, re-prove the native
+  regression test.
 - A refusal message or log line carries upstream prose, schema text, or
   argument text: STOP, the content-free rule owns this path.
 - A second model shows the same carried-history refusal: STOP, do not widen

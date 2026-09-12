@@ -95,3 +95,70 @@ class HistoryPortabilityTests(unittest.TestCase):
                              [('message', None), ('function_call', SEARCH_NAME),
                               ('function_call_output', None), ('function_call', 'exec'),
                               ('function_call_output', 'exec')])
+
+        @staticmethod
+        def _reasoning_item():
+            # A carried reasoning item as Codex replays it: readable text, no
+            # summary, owned by the model that produced it.
+            return {'type': 'reasoning', 'id': 'rs_tmp_probe', 'summary': [],
+                    'encrypted_content': 'blob',
+                    'content': [{'type': 'reasoning_text', 'text': 'prior model thinking'}]}
+
+        def test_portable_turn_drops_carried_reasoning(self):
+            # Measured 2026-09-12: Meta answers a carried reasoning item with a
+            # bare HTTP 400, so a portable turn must not replay one. Native,
+            # marker-free turns keep the item (its blob is stripped later).
+            marker = {'type': 'message', 'role': 'developer', 'content': [
+                {'type': 'input_text', 'text': '<model_switch> hop'}]}
+            for model, with_marker in (('meta/muse-spark-1.3-contributor', False),
+                                       ('deepseek/deepseek-v4.1-flash', True)):
+                with self.subTest(model=model, marker=with_marker):
+                    payload = self._history_payload(model)
+                    payload['input'].insert(0, self._reasoning_item())
+                    if with_marker:
+                        payload['input'].insert(0, marker)
+                    prepare_tools(payload)
+                    self.assertEqual(
+                        [item for item in payload['input'] if item.get('type') == 'reasoning'], [])
+            native = self._history_payload('deepseek/deepseek-v4.1-flash')
+            native['input'].insert(0, self._reasoning_item())
+            prepare_tools(native)
+            self.assertEqual(
+                [item.get('id') for item in native['input'] if item.get('type') == 'reasoning'],
+                ['rs_tmp_probe'])
+
+        def test_wire_body_carries_no_reasoning_for_a_portable_row(self):
+            # End-to-end through the provider this incident used: the refused
+            # body had a carried reasoning item and Meta rejected it, while the
+            # same body without that item is accepted.
+            from ai_router import provider_defs
+            from ai_router.providers import ExternalResponsesProvider
+            from tests.harness import stub_credentials
+
+            def wire(model):
+                payload = self._history_payload(model)
+                payload['input'].insert(0, self._reasoning_item())
+                provider = ExternalResponsesProvider(provider_defs.OPENROUTER)
+                prepared = provider.prepare(payload['model'], '/responses', payload,
+                                            json.dumps(payload).encode(), {}, stub_credentials())
+                return json.loads(prepared.body)
+
+            portable = wire('meta/muse-spark-1.3-contributor')
+            self.assertEqual([i for i in portable['input'] if i.get('type') == 'reasoning'], [])
+            native = wire('deepseek/deepseek-v4.1-flash')
+            self.assertEqual(len([i for i in native['input'] if i.get('type') == 'reasoning']), 1)
+
+        def test_portable_turn_replays_a_readable_reasoning_summary(self):
+            # A summary is context the previous model wrote for replay: it
+            # survives as a visible note instead of a foreign reasoning item.
+            summarised = dict(self._reasoning_item(), id='rs_tmp_summary',
+                              summary=[{'type': 'text', 'text': 'ten-call cap'}])
+            payload = self._history_payload()
+            payload['input'].insert(0, summarised)
+            prepare_tools(payload)
+            self.assertEqual([i for i in payload['input'] if i.get('type') == 'reasoning'], [])
+            notes = [i for i in payload['input']
+                     if i.get('type') == 'message' and i.get('role') == 'user']
+            text = ' '.join(b.get('text', '') for note in notes
+                            for b in (note.get('content') or []))
+            self.assertIn('ten-call cap', text)
