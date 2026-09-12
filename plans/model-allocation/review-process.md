@@ -2,7 +2,7 @@
 
 **Software Combined | process version 1.0 | owner: Cyril Allart | cadence: monthly**
 
-This process produces and maintains `model-allocation-suggestion.md`. It fixes the
+This process produces and maintains `plans/model-allocation/suggestion.md`. It fixes the
 evidence, the calculation, the decision rules and the output format so that every
 monthly review reaches the same conclusions from the same facts. A review produces a
 written proposal only. Nothing in this process deploys a model, edits the router
@@ -448,8 +448,8 @@ shape when the owner asks "what is each role actually best served by?" rather th
 
 ## 9. The suggestion file
 
-The canonical file is `model-allocation-suggestion.md` at the repository root, updated
-in place. A dated snapshot copy (`model-allocation-suggestion-YYYY-MM-DD.md`) is made
+The canonical file is `plans/model-allocation/suggestion.md`, updated
+in place. A dated snapshot copy (`plans/model-allocation/suggestion-YYYY-MM-DD.md`) is made
 only when something outside git needs one; the canonical file stays canonical.
 
 Required header block:
@@ -460,7 +460,7 @@ Required header block:
 Generated: <YYYY-MM-DDThh:mm+offset> (Australia/Sydney)
 Evidence window: <YYYY-MM-DD> to <YYYY-MM-DD>
 FX basis: A$1 = US$<rate> (RBA F11.1, published <date>, retrieved <date>)
-Process: model-allocation-review-process.md v<version>
+Process: plans/model-allocation/review-process.md v<version>
 Previous review: <date or none> | Next review due: <date>
 ```
 
@@ -505,7 +505,7 @@ process changes on evidence, not preference.
 - RBA F11.1 exchange rates: https://www.rba.gov.au/statistics/tables/csv/f11.1-data.csv
 - Source analysis for version 1.0: KnowledgeVault
   `agent/Model Routing Cost Analysis 2026-09.md`, summarised in
-  `model-allocation-suggestion.md`.
+  `plans/model-allocation/suggestion.md`.
 
 ## Appendix B: process log
 
