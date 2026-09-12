@@ -2,7 +2,7 @@
 
 > Planning only. Settings are owner-applied; do not change repository
 > visibility or protections without an explicit owner instruction.
-> Drift check: `git diff --stat 28a1af4..HEAD -- .github/workflows/check.yml .github/workflows/release.yml .github/workflows/refresh.yml CODEOWNERS docs/operations.md README.md`
+> Drift check: `git diff --stat 28a1af4..HEAD -- .github/workflows/check.yml .github/workflows/release.yml .github/workflows/refresh.yml .github/CODEOWNERS docs/operations.md README.md`
 > Verify each live setting below again before acting; this plan records what
 > was true on 2026-09-11, and GitHub settings can change outside the repo.
 
@@ -119,6 +119,10 @@ public feed and updates itself automatically.
 - A control cannot be enabled without paying for a GitHub plan the owner has
   not approved: STOP and record the gap (this is an owner decision, not a
   code workaround).
+- The publish job has no `release` environment gate and the workflow still
+  creates its own tags: do not flip and do not widen push access. Any
+  push-capable account can otherwise publish to the public feed (see the
+  applied section below).
 
 ## Maintenance notes
 
@@ -126,3 +130,45 @@ public feed and updates itself automatically.
   change; protections can be silently overridden by upper-level rulesets.
 - Keep the release environment's reviewers current; it is the only gate
   between a tag push and a published feed document.
+
+## Applied 2026-09-12 (owner instruction, readback recorded)
+
+On the owner's instruction that only the two repository admins (Cyril and
+Brent) may update `main`, create tags and cut releases, these settings were
+applied through the GitHub API and read back:
+
+- Repository ruleset `Protect main` (id 23034914, active): `deletion`,
+  `non_fast_forward`, `update`, `pull_request` (0 approvals),
+  `required_status_checks` (`Test` from `check.yml`); bypass: repository
+  admins, always. Non-admins cannot push to or merge into `main`.
+- Repository ruleset `Protect develop` (id 23034916, active): `deletion`,
+  `non_fast_forward`; bypass: repository admins.
+- Repository ruleset `Protect tags and releases` (id 23035086, active):
+  `creation`, `update`, `deletion` on every tag except `refs/tags/v*.*.*.*`;
+  bypass: repository admins. The exclusion keeps the release workflow's
+  build-numbered tags (`gh release create v<version>.<build>`) working, because
+  GitHub refused the Actions integration as a repository-level bypass actor.
+  That exclusion leaves a gap: any account with push access can still create
+  a four-part tag, and the workflow's `packaging/VERSION` comparison reads the
+  file from the tagged tree that pusher controls, so it does not constrain
+  them. Until the `release` environment below gates the publish job, a
+  push-capable account can publish to the public feed by tagging its own
+  commit. The maintenance note above already names that environment as the
+  only gate between a tag push and a published feed document.
+- Secret scanning and push protection enabled (readback: both `enabled`).
+- Description, homepage, topics and delete-branch-on-merge set.
+
+Deviations from Step 1 as planned: zero required approvals instead of one, so
+the two admins can merge each other's release pull requests without a second
+reviewer; `develop` is not pull-request gated because the working branches
+integrate into it directly.
+
+STOP before the flip, and before any widening of push access: attach a
+`release` environment with required reviewers (the two admins) to
+`release.yml`'s publish job, or change the workflow to publish only from a
+tag an admin created (no build-numbered tag creation by the workflow, so the
+tag rule can cover every tag). Either closes the gap above; neither is in
+place. Also not yet applied: immutable releases, Gitleaks in CI, the
+`cfn-lint` hash pin, `CODEOWNERS` review for `.github/` (the file now lives
+at `.github/CODEOWNERS`), the Step 3 text audit (plan 160 owns the
+identifiers in source), and the flip itself.
