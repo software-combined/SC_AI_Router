@@ -86,7 +86,7 @@ repository before the visibility flip.
 |---|---|---|---|
 | [142](142-apache-2-public-licence.md) | Relicense the repository to Apache-2.0 only | PARTIAL: source landed 2026-09-11; owner approval and prompt-file provenance before merge | before 143/144 |
 | [143](143-enrolment-only-auto-update.md) | Enrolment-only auto-update | SUPERSEDED 2026-09-12: the public token-free feed replaced it; kept as history | superseded by the owner decision |
-| [144](144-public-repo-controls.md) | Public repository controls and visibility flip | PARTIAL: rulesets on `main`, `develop` and tags, secret scanning with push protection, and the repository metadata applied 2026-09-12 on the owner's instruction (readback in the plan); release environment, immutable releases, Gitleaks in CI, `cfn-lint` pin, text audit and the flip remain owner-gated | after 142; 160 owns the identifiers in source |
+| [144](144-public-repo-controls.md) | Public repository controls and visibility flip | PARTIAL: rulesets on `main`, `develop` and tags, secret scanning with push protection, and the repository metadata applied 2026-09-12 on the owner's instruction (readback in the plan); all-tag protection and Cyril/Brent-only merge/release access applied; existing-tag workflow prepared; next beta acceptance, immutable releases, Gitleaks in CI, `cfn-lint` pin, text audit and the flip remain | after 142; 160 owns the identifiers in source |
 
 ## External router review wave (146-148)
 
@@ -138,7 +138,7 @@ that executes this wave; it carries the execution order and the owner gates.
 | [153](153-model-identity-and-upstream-ids.md) | Model identity: separate the client slug from the upstream id | TODO | after 152; serialize with 154 on `ai_router/catalogue.py` |
 | [154](154-catalogue-size-budget.md) | Catalogue size budget: a roster that can grow | TODO | after 153; serialize with 135 and 151 on `ai_router/catalogue.py` |
 | [155](155-client-contract.md) | The client contract: one owner for who sees what | TODO | after 153/154; coordinate 113/120/121/148 |
-| [156](156-ci-and-test-hardening-for-a-public-repo.md) | CI and test hardening for a public repository | TODO | independent; serialize with 146 on `tests/test_ingress_guards.py` |
+| [156](156-ci-and-test-hardening-for-a-public-repo.md) | CI and test hardening for a public repository | TODO: targeted platform checks; blanket three-OS push matrix superseded by owner-requested minimal CI | independent; serialize with 146 on `tests/test_ingress_guards.py` |
 | [157](157-source-reference-hygiene.md) | Source reference hygiene: every plan pointer resolves | TODO | after 159; quiet tree, one session |
 | [158](158-changelog-and-docs-restructure.md) | Changelog and docs restructure for a first-time reader | TODO | after the public-readiness documentation pass merges |
 | [159](159-backlog-consolidation-and-acceptance-split.md) | Backlog consolidation and the acceptance split | TODO | after the public-readiness backlog pass merges; before 157 |
