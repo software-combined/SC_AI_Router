@@ -158,11 +158,36 @@ caller audit still holds:
 
 ## Done criteria
 
-- [ ] Rebound `Host` values get 403 before routing.
-- [ ] `127.0.0.1`, `localhost` and Host-less requests behave as before.
-- [ ] `ai_router/router.py` is at or below 400 lines; limits gate exits 0.
-- [ ] Full suite and compile gate exit 0; router.py baseline synced.
-- [ ] `plans/README.md` status row updated.
+- [x] Rebound `Host` values get 403 before routing.
+- [x] `127.0.0.1`, `localhost` and Host-less requests behave as before.
+- [x] `ai_router/router.py` is at or below 400 lines; limits gate exits 0.
+- [x] Full suite and compile gate exit 0; router.py baseline synced.
+- [x] `plans/README.md` status row updated.
+
+## Landed notes, 2026-09-12
+
+- The guard landed where plan 128 left the choke point: the first check in
+  `ai_router/ingress.py::authorized_path`, so both GET and POST pass it before
+  any routing and before the Origin exemption. It keys on the Host name only:
+  a missing Host stays allowed (HTTP/1.0), `localhost` is kept for manual
+  convenience, every other name is refused, and no IPv6 branch was added.
+- `ai_router/router.py` is untouched, so its baseline entry needs no sync
+  (the Step 1 STOP was resolved by plan 128's split; the guard is in the
+  142-line `ingress.py`, under the runtime soft cap, and the tests file stays
+  under 300 lines).
+- `tests/test_ingress_guards.py` pins the four plan cases plus a suffix
+  attack (`127.0.0.1.evil.example`) and case-insensitive `LOCALHOST`; removing
+  the guard fails four of them.
+- Rejected in review: a duplicate or malformed `Host` authority
+  (`Host: 127.0.0.1` plus `Host: evil.example`, `Host: :1234`,
+  `Host: 127.0.0.1:8080:junk`) still passes, because the guard reads the
+  first value and the plan deliberately compares the name only. That is
+  pre-existing acceptance rather than a regression, and a raw client that can
+  craft a second `Host` can already omit `Host` altogether, which the plan
+  keeps allowed. The path token remains the primary control; tightening the
+  authority belongs to plan 146 if the owner wants it.
+- The ordering claim is now pinned: a foreign Host carrying a loopback
+  `Origin` is refused before the Origin exemption.
 
 ## STOP conditions
 

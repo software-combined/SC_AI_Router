@@ -44,6 +44,8 @@ def error(handler, err, *, log_event):
 
 
 def authorized_path(handler):
+    if not _loopback_host(handler):
+        return None, False
     # Setup and prompt URLs carry their own token plus nonce and enforce
     # same-origin themselves, so the generic rebinding rejection exempts
     # their paths.
@@ -63,6 +65,18 @@ def authorized_path(handler):
             header[len('Bearer '):].encode('iso-8859-1'), token):
         return handler.path.removeprefix('/backend-api/codex'), False
     return None, False
+
+
+def _loopback_host(handler):
+    """False when Host names anything but the loopback interface.
+
+    Rebinding reaches the loopback through a name the attacker controls, and
+    a browser always sends Host even on the GETs that carry no Origin. This
+    is defence in depth: the path token stays the primary control, and a
+    Host-less HTTP/1.0 client is still answered.
+    """
+    name = (handler.headers.get('Host') or '').split(':', 1)[0].strip().lower()
+    return not name or name in ('127.0.0.1', 'localhost')
 
 
 def context_error(handler, streaming, *, log_event):

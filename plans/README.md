@@ -94,7 +94,7 @@ The report, its verifications and its rejected findings are in
 | Plan | Title | Status | Sequencing |
 |---|---|---|---|
 | [136](136-unauth-ingress-crash-containment.md) | Contain the unauthenticated ingress compare crash | DONE: unauth ingress compare containment 2026-09-11 | P1; independent; a few lines in router.py (398 today) |
-| [137](137-loopback-host-header-validation.md) | Validate the Host header on loopback ingress | TODO: unblocked by 128 (router.py 204/400); the guard belongs in ingress.py | 090 landed; 128 landed |
+| [137](137-loopback-host-header-validation.md) | Validate the Host header on loopback ingress | DONE: Host guard first in `ingress.authorized_path` 2026-09-12 | 090 landed; 128 landed |
 | [138](138-subscription-cookie-hygiene.md) | Drop Cookie on subscription passthrough and make the tests honest | DONE: subscription cookie hygiene 2026-09-12 | independent |
 
 ## Standalone delegation delivery (140)
