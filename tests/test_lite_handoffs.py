@@ -94,9 +94,10 @@ class LiteHandoffTests(unittest.TestCase):
             self.assertEqual(items[0], {**alias_call(), 'namespace': 'collaboration',
                                        'encrypted_function_args': []})
             self.assertEqual(items[1], native)
-            self.assertEqual(items[2]['type'], 'function_call_output')
+            self.assertEqual(items[2]['type'], 'function_call')
             self.assertEqual(items[2]['call_id'], external['call_id'])
-            self.assertNotIn('opaque-control', items[2]['output'])
+            self.assertIsInstance(json.loads(items[2]['arguments']), str)
+            self.assertNotIn('opaque-control', items[2]['arguments'])
 
     def test_lite_without_handoff_keeps_compressed_bytes(self):
         payload = lite([])

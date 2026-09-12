@@ -43,7 +43,7 @@ class PolicyScanTests(unittest.TestCase):
                     root / 'tools' / 'check_policy_scans.py')
         shutil.copy(ROOT / '.github' / 'actions' / 'setup' / 'action.yml',
                     root / '.github' / 'actions' / 'setup' / 'action.yml')
-        for name in ('check.yml', 'release.yml', 'refresh.yml'):
+        for name in ('check.yml', 'release.yml'):
             (root / '.github' / 'workflows' / name).write_text(
                 'steps:\n  - uses: ./.github/actions/setup\n')
         (root / 'ai_router' / 'ok.py').write_text('x = 1\n')

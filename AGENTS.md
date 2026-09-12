@@ -5,7 +5,8 @@
 Local loopback router that keeps ChatGPT subscription traffic on OpenAI and
 Claude subscription traffic on Anthropic, and routes approved OpenRouter
 models with a separate key. Runtime Python 3.14+, stdlib only, no
-third-party dependencies, no network calls in tests.
+third-party dependencies, no network calls in the unit suite. Explicit live
+probes run separately under section 5's verification rules.
 
 ## 2. Worktree discipline
 
@@ -70,6 +71,24 @@ Run `python3.14 -m unittest discover -s tests -t .`,
 `python3.14 tools/check_policy_scans.py`, then the shared
 `pre-commit-review` skill. Commit subjects use `<type>: <short summary>`
 with type `feat`, `fix`, `refactor`, `test`, `chore` or `docs`.
+
+### Bounded live regression probes
+
+When a regression depends on real client or model behavior that offline tests
+cannot prove, add a separately invoked live probe using synthetic task data.
+Paid probes are permitted when necessary for authorized work. Keep the unit
+suite offline; require hard caps on call count and token or cost spend, and
+never add unbounded retries.
+
+Use the cheapest suitable model and low reasoning effort where supported.
+Prefer Luna, DeepSeek Flash or GLM Flash; use Sonnet at low effort when the
+Anthropic-specific contract needs it. Resolve current IDs and supported effort
+from the catalogue; expand model coverage only for a demonstrated need.
+Record the client version, requested model and effort, served identity when
+exposed, call count, and result. Reuse passing evidence for unchanged paths;
+rerun only after a relevant change or failure. These probe defaults do not
+change mandatory fixed-effort pre-commit reviewer routing or waive section 7's
+compatibility checks.
 
 ## 6. Release rule
 
