@@ -5,7 +5,7 @@
 Generated: 2026-09-11T08:18+10:00 (Australia/Sydney)
 Evidence window: 2026-09-11 to 2026-09-11
 FX basis: A$1 = US$0.7220 (RBA F11.1, published 10 Sep 2026, retrieved 11 Sep 2026)
-Process: model-allocation-review-process.md v1.0
+Process: plans/model-allocation/review-process.md v1.0
 Previous review: none | Next review due: 2026-10-01
 
 Not deployed. No router, catalogue or client configuration has been changed by this
@@ -89,7 +89,7 @@ The DeepSeek scenarios preserve the source report's time-based pricing compariso
 
 ## 5. Evidence re-read, 11 September 2026
 
-The review process (`model-allocation-review-process.md` v1.0) was exercised end to end
+The review process (`plans/model-allocation/review-process.md` v1.0) was exercised end to end
 for the first time after this summary was written. What the live read found:
 
 - **Artificial Analysis Intelligence Index v4.3** is unchanged as the scoring version,
@@ -115,7 +115,7 @@ This summary originally preserved the recommendations and price scenarios in the
 - [SCG reviewer model policy at the reviewed commit](https://github.com/software-combined/SC_Agent_plugins/blob/c76fd886958fb417f039861f886010bf3bef76e6/plugins/scg-review/references/reviewer-models.md): the policy reviewed by the source analysis; repository access is required.
 
 The review cadence, evidence rules and calculation method live in
-`model-allocation-review-process.md` (v1.0). This file is updated in place each month
+`plans/model-allocation/review-process.md` (v1.0). This file is updated in place each month
 and git history is its archive.
 
 ## Review log

@@ -142,7 +142,7 @@ focused and full suites pass; limits pass.
 
 Audit repository text that is safe while private but not for a public
 repository: internal `plans/` feed/account detail, the private-repository link
-in `model-allocation-suggestion.md`, token-gated feed URLs and SSM parameter
+in `plans/model-allocation/suggestion.md`, token-gated feed URLs and SSM parameter
 names in `README.md` / `docs/operations.md` / `docs/linux-upgrade.md`, and the
 infra identifiers in `infra/feed.yaml`. Decide per item: keep, genericise, or
 move to an internal-only document.

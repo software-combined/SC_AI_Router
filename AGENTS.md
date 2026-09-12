@@ -1,4 +1,4 @@
-# SC_OpenRouter_adapter Agent Instructions
+# SC Router agent instructions
 
 ## 1. Purpose
 
@@ -65,8 +65,9 @@ across the platforms, so a new dialog cannot drift from this style.
 ## 5. Verification before commit
 
 Run `python3.14 -m unittest discover -s tests -t .`,
-`python3.14 -m compileall -q ai_router tools tests packaging`, and
-`python3.14 tools/check_source_limits.py`, then the shared
+`python3.14 -m compileall -q ai_router tools tests packaging`,
+`python3.14 tools/check_source_limits.py` and
+`python3.14 tools/check_policy_scans.py`, then the shared
 `pre-commit-review` skill. Commit subjects use `<type>: <short summary>`
 with type `feat`, `fix`, `refactor`, `test`, `chore` or `docs`.
 
