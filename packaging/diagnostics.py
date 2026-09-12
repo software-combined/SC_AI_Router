@@ -34,6 +34,8 @@ _codex_config = _svc.load(
 # future write path must not hit the un-injected guard (Plan 094).
 _codex_config._atomic_write = _svc.load(
     'router_atomic_write', Path(__file__).resolve().parent / 'atomic_write.py')
+_state = _svc.load(
+    'router_state', Path(__file__).resolve().parents[1] / 'ai_router' / 'state.py')
 
 find_python = _svc.find_python
 health = _svc.health
@@ -121,10 +123,7 @@ def do_status(args):
     Nothing secret is printed: no tokens, keys, URLs, or config bodies.
     """
     home = Path(args.home).expanduser()
-    try:
-        state = json.loads((home / 'mixed-router-state.json').read_text())
-    except (OSError, ValueError):
-        state = None
+    state = _state.read(_state.path(home))
     version = current_version(home)
     installed = version != '0.0.0'
     serving = None

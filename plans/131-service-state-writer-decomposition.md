@@ -9,9 +9,9 @@
 - Priority P2; effort L; risk MED; confidence HIGH; category tech-debt; depends on 094, 095, 100,
   103, 123; coordinate with 106 (feed) and 099 (cache writers).
 - Planned at `b642de9`, 2026-09-11.
-- In progress: **step 1 (one writer contract) landed 2026-09-12 on top of `2011de0`**; steps 2-4
-  (state-read contract, service decomposition, diagnostics/key privacy) are outstanding and the
-  plan row stays PARTIAL until they land.
+- In progress: **step 1 (one writer contract) landed 2026-09-12 on top of `2011de0`, and step 2
+  (state-read contract) landed 2026-09-12 on top of `2ec4993`**; steps 3-4 (service decomposition,
+  diagnostics/key privacy) are outstanding and the plan row stays PARTIAL until they land.
 - First proof: each state file has one reader contract and one writer contract; `service.py` owns
   service/lock/health only; `--preflight` shares the installer's service instance.
 
@@ -84,6 +84,25 @@ behaviour/format change to state documents, the receipt writer (095 owns it), re
    through it; route `service._read_failures`/`ensure_state`, `install.py` loads, `updater.py`,
    `diagnostics.py`, `platforms/windows.py`, `catalogue.py`, `setup.py`. Preserve each site's
    current tolerance (fail-closed at startup, tolerant elsewhere) explicitly.
+   *Landed 2026-09-12 on top of `2ec4993`: `ai_router/state.py` owns
+   `read(path) -> dict|None`, `read_strict(path) -> dict` (`StateUnreadable` carrying
+   `missing`/`unreadable`/`invalid` and the parse detail), `required_keys(doc, spec)` and the state
+   file name/path. Routed: `runtime.load_state` (fail-closed through `read_strict` +
+   `required_keys`, same messages; a non-object document now fails closed with the invalid-JSON
+   message instead of an `AttributeError`), `service._read_failures`, `service.ensure_state`
+   (through the installer's file-based loader), `diagnostics` status, `catalogue._state_doc`, and
+   `setup.py`'s three read-modify-write paths. `service._write_state`/`ensure_state` also moved to
+   `replace_json` (step 1 leftover). `migrate(doc)` was deliberately NOT added: there is no shared
+   migration, and injecting the per-site defaults (`client`, `openai_mode`) would change written
+   state documents, which the plan's scope forbids - the STOP bullet's "encode the difference
+   explicitly" is met by `read`/`read_strict`; an existing-but-unreadable path reports its own
+   reason/message rather than "missing". Still direct-parsing the document, deliberately and for
+   later steps: `updater.py` and `platforms/windows.py` (abort vs raise is part of their callers'
+   contract), `packaging/bundle.py`'s rollback (its own abort message), `packaging/notice.py`
+   (tolerant `clients` read), `ai_router/candidate.py` and the probe tools; `install.py` reads
+   state via `service.ensure_state`. Tests: `tests/test_state.py`; `tests/test_install_state.py`'s
+   layout fixture carries the new leaf; FILES, the 3.9 surface list and `docs/runtime-files.md`
+   list it.*
 3. **Service decomposition.** Move feed serial/fetch helpers into `feed.py` (service re-exports so
    patched names still resolve); move update-failure state into `updater.py` (or a small
    `update_state.py`). Verify whether `service.fetch`'s missing previous-token retry is deliberate

@@ -56,6 +56,8 @@ _retired = load('router_retired_slugs',
                 Path(__file__).resolve().parents[1] / 'ai_router' / 'retired_slugs.py')
 _atomic_write = load('router_atomic_write',
                      Path(__file__).resolve().parent / 'atomic_write.py')
+_state = load('router_state',
+              Path(__file__).resolve().parents[1] / 'ai_router' / 'state.py')
 _notice = load('router_notice',
                 Path(__file__).resolve().parent / 'notice.py')
 
@@ -354,9 +356,8 @@ def _read_failures(home):
     run: the child installer writes the same file, and merging onto a stale
     copy would drop its changes.
     """
-    try:
-        state = json.loads((home / 'mixed-router-state.json').read_text())
-    except (OSError, ValueError):
+    state = _state.read(_state.path(home))
+    if state is None:
         return None, {}
     failures = state.get('update_failures')
     return state, dict(failures) if isinstance(failures, dict) else {}
@@ -455,23 +456,23 @@ def install_launcher(home, release_dir):
 
 
 def _write_state(home, state):
-    _atomic_write.replace_text(home / 'mixed-router-state.json', json.dumps(state, indent=2) + '\n')
+    _atomic_write.replace_json(_state.path(home), state)
 
 
 def ensure_state(home):
-    path = home / 'mixed-router-state.json'
+    path = _state.path(home)
     if path.exists():
-        state = json.loads(path.read_text())
+        state = _state.read_strict(path)
         if not isinstance(state.get('openai_models'), list):
             state['openai_models'] = list(DEFAULT_OPENAI_MODELS)
-            _atomic_write.replace_text(path, json.dumps(state, indent=2) + '\n')
+            _atomic_write.replace_json(path, state)
         elif any(slug in state['openai_models'] for slug in RETIRED_SUBSCRIPTION_SLUGS):
             # Retired slugs: prune so routing stops authorizing them on update.
             # Type-check first: a corrupt non-string element must not be hashed.
             state['openai_models'] = [
                 s for s in state['openai_models']
                 if not (isinstance(s, str) and s in RETIRED_SUBSCRIPTION_SLUGS)]
-            _atomic_write.replace_text(path, json.dumps(state, indent=2) + '\n')
+            _atomic_write.replace_json(path, state)
         return state
     port = 18749
     probe = socket.socket()

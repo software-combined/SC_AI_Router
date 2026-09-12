@@ -18,7 +18,7 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import parse_qsl
 
-from . import key_prompt, key_store, provider_defs, setup_page
+from . import key_prompt, key_store, provider_defs, setup_page, state as state_mod
 from .atomic_write import StaleTmp, replace_json
 
 _ON_WINDOWS = os.name == 'nt'
@@ -175,10 +175,10 @@ def open_key_window(server, home, provider_id=None, _opener=None, _prompt=None):
             return _repoint_window(state, home, provider_id)
         nonce = _secrets.token_urlsafe(32)
         expires = int(time.time()) + SETUP_TTL_S
-        path = Path(home) / 'mixed-router-state.json'
+        path = state_mod.path(home)
         try:
-            doc = json.loads(path.read_text())
-            if not isinstance(doc, dict):
+            doc = state_mod.read(path)
+            if doc is None:
                 return False
             doc['setup'] = {'nonce': nonce, 'expires': expires,
                             'provider': provider_id}
@@ -221,9 +221,9 @@ def _repoint_window(state, home, provider_id):
     if key_store.window_provider(state) == provider_id:
         return True
     try:
-        path = Path(home) / 'mixed-router-state.json'
-        doc = json.loads(path.read_text())
-        if not isinstance(doc, dict) or not isinstance(doc.get('setup'), dict):
+        path = state_mod.path(home)
+        doc = state_mod.read(path)
+        if doc is None or not isinstance(doc.get('setup'), dict):
             return False
         doc['setup']['provider'] = provider_id
         _atomic_replace(path, doc)
@@ -251,11 +251,11 @@ def _atomic_replace(path, doc):
 
 def _finish_setup(state, home, mode=None, profile=None, claude_mode=None):
     """Drop the nonce and persist mode, profile and Claude's choice."""
-    path = Path(home) / 'mixed-router-state.json'
+    path = state_mod.path(home)
     try:
         from . import catalogue
-        doc = json.loads(path.read_text())
-        if not isinstance(doc, dict):
+        doc = state_mod.read(path)
+        if doc is None:
             return False
         doc.pop('setup', None)
         if mode in ('subscription', 'none'):

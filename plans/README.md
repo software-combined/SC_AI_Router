@@ -78,7 +78,7 @@ below interleaves them.
 | [128](128-router-handler-decomposition.md) | Decompose router.py into ingress + relay | DONE: router decomposition 2026-09-12 | after 090/091/093/096 |
 | [129](129-tool-merge-unification.md) | One tool-definition merge rule | DONE: shared tool-merge rule 2026-09-12 | after 091/096/097 |
 | [130](130-installer-bundle-split.md) | packaging/bundle.py: real installer headroom | DONE: installer bundle split 2026-09-12 | after 102/123 |
-| [131](131-service-state-writer-decomposition.md) | Service/state/writer decomposition | PARTIAL: writer leaf + all listed sinks landed 2026-09-12; state-read contract, service split and diagnostics/key privacy left | after 094/095/100/103/123; coordinate 106 |
+| [131](131-service-state-writer-decomposition.md) | Service/state/writer decomposition | PARTIAL: writer leaf, sinks and the state-read contract landed 2026-09-12; service split and diagnostics/key privacy left | after 094/095/100/103/123; coordinate 106 |
 | [132](132-windows-backend-cleanup.md) | Windows backend cleanup | TODO | before/with 116; after 123 |
 | [133](133-probe-harness-consolidation.md) | One app-server probe harness | TODO | before 118/119 |
 | [134](134-repo-hygiene-feed-ci-docs.md) | feed_verify move, CI single owner, docs index, shim owner | PARTIAL 2026-09-12: docs index, bundled docs, troubleshooting page, per-PR unit suite and the shell/PowerShell parse gates landed (see its amendment); the verifier move, composite action, policy-scan script, kiro pointer, shim owner and tools/ rule remain | after 101; before 106 (feed work) |
