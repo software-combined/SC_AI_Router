@@ -7,6 +7,8 @@ and shipped in the release bundle. No runtime/protocol import here.
 """
 import json
 import os
+import subprocess
+import time
 import importlib.util as _ilu
 from pathlib import Path
 
@@ -108,7 +110,50 @@ def restore_settings(path, previous):
     write_settings(path, doc)
 
 
-def attach(home, state, receipts, settings_path_override=None, env=None):
+def _listing_snapshot(listing):
+    """The served rows the client was told about, or None when unknown.
+
+    Stored inside the claude attachment entry (not a second receipt): the
+    doctor compares it with the live GET /v1/models answer to report drift
+    after a registry or client change.
+    """
+    rows = listing.get('data') if isinstance(listing, dict) else None
+    if not isinstance(rows, list):
+        return None
+    models = [{'id': row['id'],
+               'display_name': row.get('display_name', ''),
+               'anthropic_family_tier': row.get('anthropic_family_tier')}
+              for row in rows
+              if isinstance(row, dict) and isinstance(row.get('id'), str)]
+    return {'served_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+            'models': models}
+
+
+def release_listing(release, python, runner):
+    """The served Claude listing from an installed release, or None.
+
+    Best-effort: a repair or an unusual home must never fail an attach over
+    a diagnostic snapshot. The release's own python renders the same rows
+    GET /v1/models serves, and the doctor compares them later.
+    """
+    if release is None or python is None:
+        return None
+    try:
+        result = runner([python, '-m', 'ai_router.claude', '--listing'],
+                        cwd=str(release), capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    try:
+        doc = json.loads(result.stdout or '')
+    except ValueError:
+        return None
+    return doc if isinstance(doc, dict) else None
+
+
+def attach(home, state, receipts, settings_path_override=None, env=None,
+           listing=None):
     """Attach Claude Code without touching Codex settings or native login.
 
     Merges only the two owned env keys; conflicting effective overrides
@@ -129,6 +174,14 @@ def attach(home, state, receipts, settings_path_override=None, env=None):
     entry = {'config_path': str(path),
              'inserted_block': json.dumps(previous, sort_keys=True),
              'claude_mode': state.get('claude_mode', 'subscription')}
+    snapshot = _listing_snapshot(listing)
+    if snapshot is not None:
+        entry['listing'] = snapshot
+    elif isinstance(existing, dict) and 'listing' in existing:
+        # A re-attach whose listing fetch failed must not erase the snapshot:
+        # the doctor's drift signal would otherwise be lost until a manual
+        # re-install that may fail the same way.
+        entry['listing'] = existing['listing']
     receipts.write_client_receipt(home, 'claude', entry)
     return path
 
@@ -148,3 +201,29 @@ def detach(home, receipts, settings_path_override=None, env=None):
     previous = receipts.parse_snapshot(entry.get('inserted_block', '{}'))
     restore_settings(path, previous)
     receipts.drop_client(home, 'claude')
+
+
+def refresh_snapshot(home, state, receipts, listing_source):
+    """Best-effort snapshot refresh for an existing Claude attachment.
+
+    Used by the installer's --setup repair on a current release, where a
+    plain re-run returns "up to date" before the client stage. Both the
+    receipt read and the attach are guarded: a corrupt receipt or a refused
+    settings merge must never turn the repair into a traceback.
+    """
+    try:
+        attached = receipts.read_receipt(home).get('clients', {}).get('claude')
+    except (OSError, ValueError):
+        return False
+    if not attached:
+        return False
+    try:
+        listing = listing_source()
+    except (OSError, SystemExit):
+        listing = None
+    try:
+        attach(home, state, receipts, listing=listing)
+    except (OSError, SystemExit) as exc:
+        print(f'Claude snapshot refresh skipped: {exc}')
+        return False
+    return True
