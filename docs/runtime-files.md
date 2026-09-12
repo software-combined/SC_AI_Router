@@ -2,14 +2,17 @@
 
 An install unpacks the release bundle into its release directory. This page
 lists the runtime modules in that bundle; the bundle also carries the
-packaging modules that install and update the router, plus the licence and
-notice files. `packaging/release.py` holds the full bundle inventory. State,
-activation receipts, catalogues, backups and logs are never part of a release
-bundle and are never copied between machines.
+packaging modules that install and update the router, the licence and notice
+files, and the markdown documentation (`README.md` and `docs/*.md`) so an
+installed host can read the same pages the repository shows.
+`packaging/release.py` holds the full bundle inventory. State, activation
+receipts, catalogues, backups and logs are never part of a release bundle and
+are never copied between machines.
 
 `ai_router/router.py`, `ai_router/providers.py`, `ai_router/claude.py`,
 `ai_router/registry.py`, `ai_router/credentials.py`,
-`ai_router/tool_adapter.py`, `ai_router/agent_handoffs.py`, `ai_router/sse.py`,
+`ai_router/tool_adapter.py`, `ai_router/tool_aliases.py`,
+`ai_router/agent_handoffs.py`, `ai_router/sse.py`,
 `ai_router/capabilities.py`, `ai_router/compaction.py`,
 `ai_router/standalone_outputs.py`, `ai_router/discovered.py`,
 `ai_router/errors.py`, `ai_router/feed_verify.py`, `ai_router/candidate.py`,

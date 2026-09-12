@@ -51,6 +51,11 @@ def bundle_files(root):
         + sorted(p.relative_to(root).as_posix() for p in (root / 'ai_router').glob('*.txt'))
         + sorted(p.relative_to(root).as_posix() for p in (root / 'ai_router').glob('*.json'))
         + sorted(p.relative_to(root).as_posix() for p in (root / 'tools').glob('*.py'))
+        # Plan 134: an installed host had no documentation at all. The README
+        # and the markdown docs travel with the release so an operator reads
+        # the same page the repository shows.
+        + sorted(p.relative_to(root).as_posix() for p in (root / 'docs').rglob('*.md'))
+        + ['README.md']
         + list(PACKAGING_FILES)
     )
 

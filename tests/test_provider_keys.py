@@ -126,5 +126,85 @@ class KeyStateParityTests(unittest.TestCase):
         self.assertFalse((self.home / self.defn.key.file).exists())
 
 
+class ServiceVisibleTests(unittest.TestCase):
+    """The installed service inherits no shell variables: only the key
+    file and opencode_auth count as service configuration."""
+
+    def setUp(self):
+        self.keys = _load()
+        self.home = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, str(self.home), True)
+        self.defn = provider_defs.OPENROUTER
+        self.state = {'port': 0, 'token': 't', 'openai_models': []}
+
+    def _private(self, path):
+        return not (path.stat().st_mode & 0o077)
+
+    def test_env_only_key_is_not_service_visible(self):
+        # key_state() still sees the env key (foreground runs stay valid);
+        # the service read ignores it.
+        env = {self.defn.key.env: 'sk-env'}
+        self.assertTrue(self.keys.key_state(
+            self.home, self.state, env, self.defn)[1])
+        self.assertEqual(
+            [d.id for d in self.keys.unhandled(
+                self.home, self.state, self._private)],
+            [self.defn.id])
+
+    def test_empty_placeholder_is_not_handled(self):
+        (self.home / self.defn.key.file).write_text('\n')
+        os.chmod(self.home / self.defn.key.file, 0o600)
+        self.assertEqual(
+            [d.id for d in self.keys.unhandled(
+                self.home, self.state, self._private)],
+            [self.defn.id])
+
+    @requires_posix_perms
+    def test_owner_only_key_file_is_handled(self):
+        (self.home / self.defn.key.file).write_text('sk-file\n')
+        os.chmod(self.home / self.defn.key.file, 0o600)
+        self.assertEqual(
+            self.keys.unhandled(self.home, self.state, self._private), [])
+
+    def test_valid_opencode_auth_is_handled(self):
+        auth = self.home / 'opencode-auth.json'
+        auth.write_text(json.dumps({'openrouter': {'type': 'api', 'key': 'sk-oc'}}))
+        state = dict(self.state, opencode_auth=str(auth))
+        self.assertEqual(
+            self.keys.unhandled(self.home, state, self._private), [])
+
+    def test_blank_placeholder_with_auth_is_unhandled_not_refused(self):
+        # The empty placeholder is terminal for the router, so it shadows a
+        # valid opencode_auth. The window claims the placeholder; the read
+        # must report it as unhandled rather than as a permission problem.
+        (self.home / self.defn.key.file).write_text('\n')
+        os.chmod(self.home / self.defn.key.file, 0o600)
+        auth = self.home / 'opencode-auth.json'
+        auth.write_text(json.dumps({'openrouter': {'type': 'api', 'key': 'sk-oc'}}))
+        state = dict(self.state, opencode_auth=str(auth))
+        self.assertEqual(
+            [d.id for d in self.keys.unhandled(self.home, state, self._private)],
+            [self.defn.id])
+
+    @requires_posix_perms
+    def test_widened_key_file_is_refused_not_armed(self):
+        (self.home / self.defn.key.file).write_text('sk-wide\n')
+        os.chmod(self.home / self.defn.key.file, 0o644)
+        with self.assertRaisesRegex(SystemExit, 'openrouter.key'):
+            self.keys.unhandled(self.home, self.state, self._private)
+
+    def test_key_state_and_status_semantics_are_unchanged(self):
+        # key_state() keeps its contract: env counts, the blank placeholder
+        # is terminal, and a third-party credential counts without a file.
+        env = {self.defn.key.env: 'sk-env'}
+        self.assertEqual(
+            self.keys.key_state(self.home, self.state, env, self.defn),
+            (True, True))
+        (self.home / self.defn.key.file).write_text('\n')
+        self.assertEqual(
+            self.keys.key_state(self.home, self.state, env, self.defn),
+            (True, True))
+
+
 if __name__ == '__main__':
     unittest.main()

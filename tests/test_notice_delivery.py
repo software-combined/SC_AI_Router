@@ -380,6 +380,7 @@ class InstallNoticeTests(unittest.TestCase):
             install_mod._svc.notice.show_pending = seen.append
             env = {'HOME': str(Path(tmp) / 'fakehome'),
                    'OPENROUTER_API_KEY': 'test-key',
+                   'ROUTER_NO_KEY_WINDOW': '1',
                    'ROUTER_LIVE_RUN': '1'}
             with mock.patch.dict(os.environ, env):
                 buf = io.StringIO()

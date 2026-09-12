@@ -25,7 +25,8 @@ class SystemdTests(unittest.TestCase):
         for patcher in (
                 mock.patch.object(install_mod, 'PLATFORM', 'linux'),
                 mock.patch.dict(os.environ, {'HOME': str(self.root / 'user'),
-                    'XDG_CONFIG_HOME': str(self.root / 'config'), 'OPENROUTER_API_KEY': 'test-key'})):
+                    'XDG_CONFIG_HOME': str(self.root / 'config'), 'OPENROUTER_API_KEY': 'test-key',
+                    'ROUTER_NO_KEY_WINDOW': '1'})):
             patcher.start()
             self.addCleanup(patcher.stop)
         _patch_attrs(self, run=self.run_command, self_test=lambda *a: None,
@@ -52,11 +53,16 @@ class SystemdTests(unittest.TestCase):
         current = self.home / 'current'
         current.unlink()
         current.symlink_to(self.home / 'releases' / '0.6.2.0')
-        before_state = (self.home / 'mixed-router-state.json').read_bytes()
+        before = json.loads((self.home / 'mixed-router-state.json').read_text())
         self.install('0.6.6.0')
         self.assertFalse(current.is_symlink())
         self.assertEqual(current.read_text().strip(), '0.6.6.0')
-        self.assertEqual((self.home / 'mixed-router-state.json').read_bytes(), before_state)
+        after = json.loads((self.home / 'mixed-router-state.json').read_text())
+        self.assertEqual({k: v for k, v in after.items() if k != 'setup'},
+                         {k: v for k, v in before.items() if k != 'setup'})
+        # Env-only key: the upgrade mints a fresh setup nonce for the window.
+        self.assertIn('setup', after)
+        self.assertNotEqual(after['setup'], before.get('setup'))
         units = self.root / 'config' / 'systemd' / 'user'
         service = (units / install_mod._linux.SERVICE).read_text()
         self.assertIn(str(self.home / 'router_launch.py'), service)

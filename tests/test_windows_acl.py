@@ -229,7 +229,7 @@ class WinBackendShapeTests(unittest.TestCase):
             live.write_text('{"port": 1, "token": "live"}')
             args = install_mod.build_parser().parse_args(
                 ['--feed', 'file:///latest.json', '--home', str(home)])
-            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'k'}
+            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'k', 'ROUTER_NO_KEY_WINDOW': '1'}
             with mock.patch.dict(os.environ, env), mock.patch.object(
                     install_mod, 'platform_backend', return_value=FailingBackend()):
                 with self.assertRaisesRegex(SystemExit, 'cannot protect state'):
@@ -312,7 +312,7 @@ class WinBackendShapeTests(unittest.TestCase):
                 ['--home', str(home), '--client', 'none'])
             with mock.patch.object(install_mod, 'platform_backend', return_value=StubBackend()), \
                     mock.patch.object(install_mod, 'find_python', return_value=sys.executable), \
-                    mock.patch.dict(os.environ, {'OPENROUTER_API_KEY': 'env-key-for-test'}):
+                    mock.patch.dict(os.environ, {'OPENROUTER_API_KEY': 'env-key-for-test', 'ROUTER_NO_KEY_WINDOW': '1'}):
                 self.assertEqual(install_mod.do_install(args, _fetch=fetch), 0)
         self.assertEqual(events, [('protect', 'home', False),
                                   ('protect', 'mixed-router-state.json', None),

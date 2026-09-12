@@ -4,6 +4,17 @@
 > Drift check: `git diff --stat 4584a1e..HEAD -- ai_router/model_prompt.py ai_router/router.py ai_router/setup.py packaging/updater.py tests/ docs/operations.md`
 > Read changed code and preserve current behavior before edits.
 
+> **Amendment 2026-09-12.** The Step 0 spike has run; its result is recorded in
+> `plans/2026-09-12-external-router-review.md`: Codex reads `model_catalog_json`
+> once at startup and does **not** pick up a rewritten catalogue, verified
+> against `codex-cli 0.153.4`. The prompt and restart work stands, with two
+> changes:
+> 1. Stage 2 (steps 1-7 below) is sequenced **after plan 145**. Its visibility
+>    function must treat a `listed: false` row as absent, so an unverified model
+>    never triggers a restart prompt.
+> 2. The trigger stays model-set based and remains silent for a version bump.
+> Do not repeat the spike.
+
 ## Status and first proof
 
 - Priority P2; effort M; risk MED; confidence MED-HIGH; category direction/dx; depends on 128
@@ -48,9 +59,10 @@ The signal should be about the *model set*, not the version:
   router interpreter (`install.py:234`).
 - The setup key window is the trust/UI pattern to reuse: `setup_pending` nonce (`setup.py:29`),
   `open_key_window` with an injectable opener (`:257-290`), `serve` GET/POST (`:352`),
-  `_atomic_replace` (`:302`). `router.py` exempts `/setup/` from the Origin rejection
-  (`:109-111`) and routes it (`:148-149`, `:185-186`), and `router.py` is exactly 400/400 lines —
-  the hard cap.
+  `_atomic_replace` (`:302`). `router.py` exempts `/setup/` from the Origin rejection and routes
+  it; its 2026-09-12 count is 204 lines against the 400 hard cap
+  (`config/source-limits-baseline.json`), so plan 128's headroom is already in hand and the
+  route edit is not cap-blocked.
 - No notification or client-restart code exists (`rg 'osascript|notify-send' ai_router packaging`
   → none).
 

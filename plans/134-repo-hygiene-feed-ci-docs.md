@@ -4,6 +4,28 @@
 > Drift check: `git diff --stat b642de9..HEAD -- ai_router/feed_verify.py packaging/feed_verify.py packaging/feed.py packaging/release.py tests/test_feed_verify.py tests/test_install.py tests/test_packaging.py .github/ docs/ README.md codex_router/`
 > Read changed code and preserve current behavior before edits.
 
+> **Amendment 2026-09-12 (from `plans/2026-09-12-external-router-review.md`).**
+> Step 2's CI and Step 3's docs intent partly landed early in the external-adoption
+> wave, so reconcile before editing rather than repeating them:
+> - Landed: `README.md` and `docs/*.md` are in the release bundle
+>   (`packaging/release.py`, asserted by `tests/test_bundle_docs.py`); a
+>   symptom-led `docs/troubleshooting.md` and `docs/README.md` index exist and are
+>   mirrored into `skills/manage-router`; the README has a Common commands block
+>   and links `docs/PROVENANCE.md` and `docs/architecture.md`;
+>   `.github/workflows/check.yml` runs the offline unit suite on pull requests,
+>   runs `sh -n` over `packaging/*.sh`, parses `packaging/*.ps1` with the
+>   PowerShell parser, and the inline secrets scan covers
+>   `*.py,*.md,*.json,*.toml,*.yml,*.yaml,*.sh,*.ps1,*.txt`.
+> - Still open in this plan: the `feed_verify` move to `packaging/`, the
+>   `.github/actions/setup/action.yml` composite, `tools/check_policy_scans.py`,
+>   the kiro reopen pointer, the `codex_router/` shim owner and the `tools/` rule.
+>   The composite and the policy-scan script should absorb the inline steps now in
+>   `check.yml` rather than leaving two owners for the same scan.
+> - Note for the docs step: bundled pages still reference repository-only files
+>   (`docs/assets/sc-logo-wide.png`, `SECURITY.md`, `infra/*.yaml`). Either ship
+>   the asset or mark those references repository-only when this plan's docs step
+>   runs.
+
 ## Status and first proof
 
 - Priority P3; effort M; risk MED; confidence HIGH; category tech-debt/docs; depends on 101 (CI edit order) and 122; coordinates 106 (land the feed_verify move before its feed work, or rebase onto it).
