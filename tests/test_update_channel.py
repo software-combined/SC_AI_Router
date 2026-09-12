@@ -48,7 +48,8 @@ class UpdaterAdoptionTests(unittest.TestCase):
                      write_catalogue=_fake_write_catalogue,
                      wait_version=lambda *a, **k: {'status': 'ok'})
         env = dict({'HOME': str(Path(tmp) / 'fakehome'),
-                    'OPENROUTER_API_KEY': 'k'}, **(env_extra or {}))
+                    'OPENROUTER_API_KEY': 'k',
+                    'ROUTER_NO_KEY_WINDOW': '1'}, **(env_extra or {}))
         with mock.patch.dict(os.environ, env):
             args = install_mod.build_parser().parse_args(
                 ['--feed', 'file:///latest.json', '--home', str(home)])
@@ -115,6 +116,7 @@ class UpdaterAdoptionTests(unittest.TestCase):
                          write_catalogue=_fake_write_catalogue,
                          wait_version=lambda *a, **k: {'status': 'ok'})
             env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'k',
+                   'ROUTER_NO_KEY_WINDOW': '1',
                    'XPC_SERVICE_NAME': UPDATE_LABEL}
             with mock.patch.dict(os.environ, env):
                 args = install_mod.build_parser().parse_args(
@@ -159,7 +161,8 @@ class UpdaterAdoptionTests(unittest.TestCase):
                          write_catalogue=_fake_write_catalogue,
                          wait_version=lambda *a, **k: {'status': 'ok'})
             LAUNCHD.reset(unloaded={LABEL, UPDATE_LABEL})
-            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'k'}
+            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'k',
+                   'ROUTER_NO_KEY_WINDOW': '1'}
             with mock.patch.dict(os.environ, env):
                 args = install_mod.build_parser().parse_args(
                     ['--feed', 'file:///latest.json', '--home', str(home)])

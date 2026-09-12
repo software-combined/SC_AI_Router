@@ -198,7 +198,11 @@ def collect(tool_path, platform_name=None, run=None, which='codex'):
             raise OSError('the key dialog has no display')
         return None
     if result.returncode:
-        if 'User canceled' in (result.stderr or ''):
+        stderr = result.stderr or ''
+        # AppleScript reports cancel as error -128, and macOS spells it
+        # "cancelled" in some versions; match either, since a missed cancel
+        # is treated as a dialog failure and opens the browser fallback.
+        if 'User cancel' in stderr or '(-128)' in stderr:
             return None
         raise OSError('the key dialog did not complete')
     asked = questions(which)

@@ -66,7 +66,7 @@ class FeedSerialTests(unittest.TestCase):
             latest = {**latest, 'serial': 9}
             version = latest['version']
             _patch_attrs(self, health=lambda state, timeout=20: {'status': 'ok', 'version': version})
-            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}
+            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key', 'ROUTER_NO_KEY_WINDOW': '1'}
             with mock.patch.dict(os.environ, env):
                 self.assertEqual(
                     install_mod.do_install(_unpinned_args(home),
@@ -88,7 +88,7 @@ class FeedSerialTests(unittest.TestCase):
             latest = {**latest, 'serial': 99}
             version = latest['version']
             _patch_attrs(self, health=lambda state, timeout=20: {'status': 'ok', 'version': version})
-            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}
+            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key', 'ROUTER_NO_KEY_WINDOW': '1'}
             with mock.patch.dict(os.environ, env):
                 self.assertEqual(
                     install_mod.do_install(_install_args(home),
@@ -110,7 +110,7 @@ class FeedSerialTests(unittest.TestCase):
             latest = {**latest, 'serial': 0}
             version = latest['version']
             _patch_attrs(self, health=lambda state, timeout=20: {'status': 'ok', 'version': version})
-            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}
+            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key', 'ROUTER_NO_KEY_WINDOW': '1'}
             with mock.patch.dict(os.environ, env):
                 self.assertEqual(
                     install_mod.do_install(_install_args(home),
@@ -130,7 +130,7 @@ class FeedSerialTests(unittest.TestCase):
         # or its serial: the old path unpacked the feed document as a bundle.
         with tempfile.TemporaryDirectory() as tmp:
             home = _home_with_serial(tmp)
-            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}
+            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key', 'ROUTER_NO_KEY_WINDOW': '1'}
             for version, serial in (('0.4.2.0', 10), ('0.4.2.1', 11)):
                 blob, latest = _craft_bundle(version)
                 latest = {**latest, 'serial': serial}

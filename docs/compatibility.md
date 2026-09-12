@@ -72,9 +72,8 @@ acceptance.
 
 Researched before wiring the update notice's "Quit and reopen" action, so
 the restart targets the installed client rather than a guessed process
-name. Sources are the official documentation and the open-source clients
-listed in `AGENTS.md` section 9; re-check them before relying on the
-identities below.
+name. Sources are the evidence named in the table below; re-check them
+before relying on the identities.
 
 | platform | client identity | evidence |
 |---|---|---|

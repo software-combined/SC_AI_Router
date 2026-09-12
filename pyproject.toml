@@ -1,6 +1,6 @@
 [project]
 name = "ai-router"
-version = "0.6.33"
+version = "0.6.34"
 requires-python = ">=3.14"
 dependencies = []
 license = "Apache-2.0"

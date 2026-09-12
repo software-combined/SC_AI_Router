@@ -91,10 +91,14 @@ version recorded in `<home>/current`; run it with the pinned interpreter at
 Windows) when the host has no Python 3.14 of its own.
 
 The installer verifies the bundle checksum, self-tests the runtime, installs
-the per-user service and writes the client configuration. If no OpenRouter key
-is configured it creates an empty key file and tells you where to put the key;
-re-run the installer afterwards. Restart the client so the router's model
-catalogue is picked up.
+the per-user service and writes the client configuration. If the installed
+service has no OpenRouter key, a key window opens by itself and collects it;
+the agent must never handle the key. If no window appears, re-run the
+installer with `--setup`: it restarts the current release with a fresh setup
+link, never re-extracting it. A key exported in the invoking shell is not
+passed to the installed service, so it does not count as configured.
+`ROUTER_NO_KEY_WINDOW=1` suppresses only the dialog for unattended installs.
+Restart the client so the router's model catalogue is picked up.
 
 Before a checkout install, `--preflight` reports missing prerequisites without
 writing anything, and `--dry-run` shows what an install would do.
@@ -170,8 +174,9 @@ file and loopback token are left in place for you to delete.
 ## Common commands
 
 ```sh
-# Install or reinstall for the invoking client (add --clients both to attach both)
-python3.14 packaging/install.py --setup
+# Install or reinstall for the invoking client (add --clients both to attach both).
+# With no key installed the key window opens by itself; --setup forces it.
+python3.14 packaging/install.py
 
 # Read-only checks: prerequisites, then installed state (add --json for machines)
 python3.14 packaging/install.py --preflight

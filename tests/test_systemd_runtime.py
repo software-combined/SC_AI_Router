@@ -27,6 +27,7 @@ class SystemdRuntimeTests(unittest.TestCase):
                    # The restart notice is a GUI side effect; this suite must
                    # never pop dialogs (the child installer inherits this).
                    'ROUTER_NO_NOTICE': '1',
+                   'ROUTER_NO_KEY_WINDOW': '1',
                    # Deliberate live run: HOME is faked hermetic and only
                    # systemctl is stubbed, so main() may use this home.
                    'ROUTER_LIVE_RUN': '1'}

@@ -83,6 +83,16 @@ one replaces the subscription credential the router forwards.
 
 ## The key is missing or was revoked
 
+A fresh install opens the native key window by itself when the installed
+service has no key; the agent must never handle the key. If no window
+appears, re-run the installer with `--setup`: it restarts the current release
+with a fresh setup link and opens the window, without re-extracting the
+release. A key exported in the invoking shell is not passed to the installed
+service, so the installer collects a key file instead. Scheduled and manual
+`--check-update` runs never pop the window; the next request opens it
+instead. `ROUTER_NO_KEY_WINDOW=1` suppresses only the dialog for unattended
+installs.
+
 On Codex, a missing or rejected key opens the native key window on the next
 request; on a host with no dialog tool the loopback setup page opens instead.
 A rejected key is only detected on that path, so a Claude Code (Messages)

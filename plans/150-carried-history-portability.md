@@ -1,4 +1,4 @@
-# Plan 149: Carried-history portability for routed models
+# Plan 150: Carried-history portability for routed models
 
 > Planning only. Implement only under a later implementation instruction.
 > Drift check: `git diff --stat 7ebdb85..HEAD -- ai_router/registry.py ai_router/models.json ai_router/compaction.py ai_router/tool_adapter.py ai_router/upstream.py ai_router/relay.py tests/test_history_portability.py tests/test_upstream_failures.py tests/test_registry.py tests/test_safe_diagnostics.py`

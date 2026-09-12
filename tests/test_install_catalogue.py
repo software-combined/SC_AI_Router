@@ -59,7 +59,8 @@ def _recording_run(calls, fail_catalogue=False):
 
 
 def _env(tmp):
-    return {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}
+    return {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key',
+            'ROUTER_NO_KEY_WINDOW': '1'}
 
 
 def _args(home, *extra_args):

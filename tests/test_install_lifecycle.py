@@ -90,7 +90,8 @@ def _run_install(test, tmp, home, version, *extra_args, feed='file:///latest.jso
     if feed is not None:
         argv = ['--feed', feed, *argv]
     args = install_mod.build_parser().parse_args(argv)
-    env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}
+    env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key',
+           'ROUTER_NO_KEY_WINDOW': '1'}
     with mock.patch.dict(os.environ, env):
         rc = install_mod.do_install(args, _fetch=_static_fetch(latest, blob),
                                     _run=fake_run)
@@ -268,7 +269,7 @@ class InstallLifecycleTests(unittest.TestCase):
                          wait_version=lambda *args, **kwargs: None)
             args = install_mod.build_parser().parse_args(
                 ['--feed', 'file:///latest.json', '--home', str(home)])
-            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}
+            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key', 'ROUTER_NO_KEY_WINDOW': '1'}
             with mock.patch.dict(os.environ, env):
                 with self.assertRaises(SystemExit):
                     install_mod.do_install(args, _fetch=fake_fetch)
@@ -388,7 +389,7 @@ class SafeUpdateTests(unittest.TestCase):
             # Unpinned: only that path records a serial, so only there does
             # "aborted before the serial write" assert anything.
             args = install_mod.build_parser().parse_args(['--home', str(home)])
-            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}
+            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key', 'ROUTER_NO_KEY_WINDOW': '1'}
             with mock.patch.dict(os.environ, env):
                 with self.assertRaisesRegex(SystemExit, 'release identity mismatch'):
                     install_mod.do_install(args, _fetch=_static_fetch(latest, bad_blob))
@@ -419,7 +420,7 @@ class SafeUpdateTests(unittest.TestCase):
             launchd_in_sync(home, install_mod.LABEL, install_mod.UPDATE_LABEL)
             args = install_mod.build_parser().parse_args(
                 ['--feed', 'file:///latest.json', '--home', str(home)])
-            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}
+            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key', 'ROUTER_NO_KEY_WINDOW': '1'}
             n_calls = len(calls)
             with mock.patch.dict(os.environ, env):
                 buf = io.StringIO()
@@ -452,7 +453,7 @@ class SafeUpdateTests(unittest.TestCase):
             launchd_in_sync(home, install_mod.LABEL, install_mod.UPDATE_LABEL)
             args = install_mod.build_parser().parse_args(
                 ['--feed', 'file:///latest.json', '--home', str(home)])
-            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}
+            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key', 'ROUTER_NO_KEY_WINDOW': '1'}
             with mock.patch.dict(os.environ, env):
                 with self.assertRaises(SystemExit):
                     install_mod.do_install(args, _fetch=_static_fetch(latest, blob))

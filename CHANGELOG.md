@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.6.34
+
+- A fresh install opens the first-run key window by itself whenever the
+  installed service has no key: the installer mints the setup nonce and
+  spawns the native popup without needing `--setup`, which stays as the
+  explicit force and now also works on an up-to-date home by restarting the
+  current release with a fresh setup link, never re-extracting it. A
+  shell-exported `OPENROUTER_API_KEY` no longer counts as configured (the
+  service does not receive the invoking shell's environment), so it prints
+  one non-secret notice and still opens the window. A non-blank key file
+  with widened permissions refuses before install with the file and the
+  required permission. Scheduled and manual `--check-update` runs never pop
+  the window (`ROUTER_NO_KEY_WINDOW=1` on the installer child, also the
+  unattended opt-out); the next request opens it through the request path.
+  Cancelling the native key dialog now counts as a cancel instead of a
+  dialog failure, so it no longer opens the browser setup page (macOS
+  reports the cancel as "cancelled" with AppleScript error -128).
+  `--setup` also repairs when the feed lags the installed release, without
+  downgrading it.
+
+- Carried-history portability (plan 150, slice 2a): turns on the
+  `meta/muse-spark-1.3-contributor` row, or turns carrying the
+  client's `<model_switch>` developer marker, replay a carried tool-search
+  call as its declared tools with the search call itself omitted.
+  Refusals on a routed turn now name the provider code when the field
+  is already code-shaped and say to switch the thread back or start a
+  new thread; an identical deterministic refusal answers 409 once more
+  without dispatching again (8 entries, 60 s, never a 5xx). Rejection
+  logs carry counts only.
+
 ## 0.6.33
 
 - Namespaced client tools are exposed to routed models under readable aliases
@@ -29,16 +59,6 @@
   routing, request error codes) and `docs/README.md` indexes the set. CI runs
   the offline unit suite on every pull request, parses the shipped shell and
   PowerShell scripts, and the secrets scan covers `*.yml`, `*.sh` and `*.ps1`.
-
-- Carried-history portability (plan 149, slice 2a): turns on the
-  `meta/muse-spark-1.3-contributor` row, or turns carrying the
-  client's `<model_switch>` developer marker, replay a carried tool-search
-  call as its declared tools with the search call itself omitted.
-  Refusals on a routed turn now name the provider code when the field
-  is already code-shaped and say to switch the thread back or start a
-  new thread; an identical deterministic refusal answers 409 once more
-  without dispatching again (8 entries, 60 s, never a 5xx). Rejection
-  logs carry counts only.
 
 - README: the router home path and the installed-release installer are
   documented, installs and updates need no GitHub account, and switching

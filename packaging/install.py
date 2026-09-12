@@ -261,6 +261,21 @@ def _rollback_failed_install(home, state, backend, latest, previous, catalog_pat
     raise SystemExit(1)
 
 
+def _open_key_window(python, home, setup_url, clients):
+    """Open the native key window; the setup URL prints only on a TTY."""
+    if sys.stdout.isatty():
+        print(f'open {setup_url} to connect your OpenRouter key')
+    try:
+        subprocess.Popen([python, '-m', 'ai_router.key_prompt', setup_url, '--clients', clients],
+                         cwd=str(current_release_dir(home)), start_new_session=True,
+                         creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL)
+    except OSError:
+        if not sys.stdout.isatty():
+            print('could not open the key window; the next request opens it')
+
+
 def do_install(args, _fetch=fetch, _run=None):
     if _run is not None:
         _svc.run = _run
@@ -281,8 +296,14 @@ def do_install(args, _fetch=fetch, _run=None):
     feed = args.feed or _svc.channel_feed(home)
     latest = json.loads(_svc.feed_read(_fetch, feed).decode())
     serial = check_serial(home, latest, pinned=bool(args.feed))
-    if not newer(latest['version'], current_version(home)):
-        print(f"up to date {current_version(home)}")
+    current = current_version(home)
+    # --setup on a current install is a repair run: it restarts the current
+    # release with a fresh setup nonce and never re-extracts or downgrades
+    # anything, so it also works when the feed lags the installed version.
+    # Only a newer feed version takes the full install path.
+    repair = bool(args.setup) and not newer(latest['version'], current)
+    if not newer(latest['version'], current) and not repair:
+        print(f'up to date {current}')
         return 0
     if args.dry_run:
         print(f'would fetch {feed}; interpreter {python}')
@@ -317,22 +338,52 @@ def do_install(args, _fetch=fetch, _run=None):
             (home / 'mixed-router-state.json').unlink(missing_ok=True)
         raise
     client, clients, claude_mode, mode = _resolve_clients_and_modes(args, home, state)
+    # First-run window: the router boots keyless on a single-use link and
+    # the operator pastes one key there instead of into the terminal. TTL
+    # mirrors ai_router.setup.SETUP_TTL_S; kept literal so the 3.9-compatible
+    # installer never imports the router package. --setup forces the window;
+    # otherwise a fresh install arms it whenever the installed service has
+    # no service-visible key.
+    missing = provider_keys().unhandled(home, state, _diag._key_private)
+    env_named = [defn.key.env for defn in missing
+                 if os.environ.get(defn.key.env, '').strip()]
     setup_url = None
-    if args.setup:
-        # First-run window: the router boots keyless on this single-use link
-        # and the operator pastes one key there instead of into the terminal.
-        # TTL mirrors ai_router.setup.SETUP_TTL_S; kept literal so the
-        # 3.9-compatible installer never imports the router package.
+    if args.setup or missing:
         state['setup'] = {'nonce': secrets.token_urlsafe(32),
                           'expires': int(time.time()) + 15 * 60}
         _write_state(home, state)
         setup_url = (f"http://127.0.0.1:{state['port']}/{state['token']}"
                      f"/setup/{state['setup']['nonce']}")
+    if env_named:
+        # The service environment carries only ROUTER_HOME, so a key that
+        # lives only in the shell never reaches it; the window collects it.
+        # The value itself is never printed.
+        print('%s is set in this shell; the installer passes only ROUTER_HOME '
+              'to the installed service, so the key window collects the key '
+              'instead' % ', '.join(env_named))
     try:
         ensure_credentials(home, state)
     except SystemExit as exc:
         if exc.code != 3 or setup_url is None:
             raise
+    if repair:
+        # --setup on a current install changes no code: restart the current
+        # release so the service reads the fresh setup nonce, then open the
+        # window. Never re-extract a release the running service is using.
+        try:
+            backend.install(python, home, state, current_release_dir(home), None)
+            healthy = wait_version(state, current)
+        except (OSError, subprocess.CalledProcessError, SystemExit) as exc:
+            print(f'service restart failed: {exc}')
+            healthy = False
+        if not healthy:
+            print('the service did not come back with the fresh setup link; '
+                  're-run the installer')
+            return 1
+        if setup_url is not None and os.environ.get('ROUTER_NO_KEY_WINDOW') != '1':
+            _open_key_window(python, home, setup_url, clients)
+        print(f'installed {current}; health ok; key window ready')
+        return 0
     # No idle gate. A version swap is a pointer write plus a TERM: launchd
     # owns the listening socket, so new connections queue for the incoming
     # process while the outgoing one finishes the requests it already
@@ -359,18 +410,8 @@ def do_install(args, _fetch=fetch, _run=None):
     # installs are a no-op); notice failures never surface.
     _svc.notice.record(home, previous, latest['version'], args.clients)
     previous_receipt = _codex_config.codex_attachment(home)
-    if setup_url is not None:
-        # Native key popup; the child's detached stdio means a TTY fallback link is printed here.
-        if sys.stdout.isatty():
-            print(f'open {setup_url} to connect your OpenRouter key')
-        try:
-            subprocess.Popen([python, '-m', 'ai_router.key_prompt', setup_url, '--clients', clients],
-                             cwd=str(current_release_dir(home)), start_new_session=True,
-                             creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
-                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                             stderr=subprocess.DEVNULL)
-        except OSError:
-            print(f'open {setup_url} to connect your OpenRouter key')
+    if setup_url is not None and os.environ.get('ROUTER_NO_KEY_WINDOW') != '1':
+        _open_key_window(python, home, setup_url, clients)
     if clients == 'none' and previous_receipt.get('inserted_block'):
         # Never silently detach an active Codex configuration: restore the
         # exact owned settings first, or refuse when the block was edited.
@@ -526,8 +567,8 @@ def build_parser():
     parser.add_argument('--static-catalogue', action='store_true',
                         help='No-op: the static catalogue file is now always configured.')
     parser.add_argument('--setup', action='store_true',
-                        help='First-run key window: mint a setup link and open it instead of '
-                             'requiring the key up front.')
+                        help='First-run key window: mint a setup link and open it even when '
+                             'a key is already configured.')
     parser.add_argument('--openai-mode', default=None)
     parser.add_argument('--anthropic-mode', default=None,
                         choices=('subscription', 'none'),

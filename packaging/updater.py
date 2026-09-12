@@ -10,6 +10,7 @@ provide the same behavior for direct/extracted use.
 """
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -133,11 +134,15 @@ def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None):
             raise SystemExit('downloaded bundle has no installer')
         # Only forward an explicitly pinned feed; a channel-resolved feed must
         # not pin home/'feed', or beta would freeze on one release asset URL.
+        # Scheduled and manual update checks never pop the first-run key
+        # window; the next request opens it through the request path. The
+        # nonce is still minted so a keyless service can boot.
         cmd = [sys.executable, str(installer), '--home', str(home)]
         if args.feed:
             cmd += ['--feed', feed]
         try:
-            result = _svc.run(cmd, capture_output=True, text=True, timeout=900)
+            result = _svc.run(cmd, capture_output=True, text=True, timeout=900,
+                              env=dict(os.environ, ROUTER_NO_KEY_WINDOW='1'))
         except subprocess.SubprocessError as exc:
             # A child that is killed or never starts reports nothing itself,
             # so count it here or a hanging release retries every poll
