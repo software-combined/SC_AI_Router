@@ -362,7 +362,7 @@ class ToolAdapterTests(unittest.TestCase):
                         'call_id': 'c1', 'output': 'hi'}]}
         names = prepare_tools(payload)
         wire = payload['tools'][0]['name']
-        self.assertTrue(wire.startswith('ns_'))
+        self.assertEqual(wire, 'probe__exec')
         call, result = payload['input']
         self.assertEqual(call['type'], 'function_call')
         self.assertEqual(call['name'], wire)

@@ -14,7 +14,7 @@ FILES = [
          'ai_router/claude.py',
          'ai_router/registry.py',
          'ai_router/credentials.py',
-         'ai_router/tool_adapter.py',
+         'ai_router/tool_adapter.py', 'ai_router/tool_aliases.py',
          'ai_router/tool_merge.py',
          'ai_router/atomic_write.py',
          'ai_router/agent_handoffs.py',
