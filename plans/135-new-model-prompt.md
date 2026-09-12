@@ -192,3 +192,34 @@ planned call sites; full suite green.
   note it in the 099 row at integration.
 - Reviewers: confirm no token/nonce/URL reaches logs or notifications, that a rejected policy
   mutates nothing, and that every prompt step failing leaves update and refresh outcomes unchanged.
+
+## Landed notes, 2026-09-12
+
+- Steps 1-2 landed as `0844c5d` (effective visibility) and `f4bfef4` (snapshot,
+  pending, acknowledge). The snapshot is `model-prompt.json` with
+  `{'scope', 'client', 'seen'}`; a present-but-unresolvable policy is rejected
+  through the `scope == 'none' and allowed == ()` sentinel, so a valid policy
+  that allows no models still seeds its own scope and a later grant announces.
+- Steps 3 and 6 land together: a page whose Restart button did nothing would be
+  a defect, so the route, the note and the macOS restart action ship in one
+  commit. The HTML, the HTTP handler and the restart action live in
+  `ai_router/model_prompt_page.py`, so `ai_router/model_prompt.py` stays the
+  visibility/snapshot owner (canonical setup keeps its handler in `setup.py`
+  and only the HTML in `setup_page.py`; this page keeps its three related
+  pieces together).
+- The single-use link is `notice: {'nonce', 'expires'}` inside the same
+  snapshot document, TTL 48 h, reused while live and dropped by the
+  acknowledge write a click performs. `check_notice` is read-only, so a GET
+  never consumes the link, and a POST with nothing pending neither restarts
+  nor consumes it.
+- The page carries the displayed slugs in hidden `m` fields and passes them to
+  `acknowledge`, so a row that appears between render and click is not marked
+  seen unseen.
+- Restart is macOS only (`osascript` quit by app name, then `open -a Codex`)
+  behind an injected runner; other platforms report that a manual restart is
+  needed. Nothing runs without the nonce-authenticated POST click. A quit
+  that errors reports failure rather than letting `open` activate the still-
+  running app.
+- Deviation from step 3's wording: an unknown or expired nonce renders a
+  404 "Link expired" page rather than the 200 nothing-to-do page; it carries
+  no actions and never restarts, matching the setup route's 404 contract.

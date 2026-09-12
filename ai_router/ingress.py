@@ -13,7 +13,7 @@ import hmac
 import io
 import json
 from compression import zstd
-from . import claude, errors, setup
+from . import claude, errors, model_prompt_page, setup
 from .errors import InvalidSize
 from .runtime import VERSION
 
@@ -44,11 +44,13 @@ def error(handler, err, *, log_event):
 
 
 def authorized_path(handler):
-    # Setup URLs carry their own token plus nonce and enforce same-origin
-    # themselves, so the generic rebinding rejection exempts their path.
-    if (handler.headers.get('Origin')
-            and '/setup/' not in handler.path.split('?', 1)[0]):
-        return None, False
+    # Setup and prompt URLs carry their own token plus nonce and enforce
+    # same-origin themselves, so the generic rebinding rejection exempts
+    # their paths.
+    if handler.headers.get('Origin'):
+        target = handler.path.split('?', 1)[0]
+        if '/setup/' not in target and '/model-prompt/' not in target:
+            return None, False
     prefix = '/' + handler.server.state['token']
     token = handler.server.state['token'].encode()
     candidate, sep, _ = handler.path[1:].partition('/')
@@ -88,6 +90,9 @@ def do_get(handler):
     path = path.split('?', 1)[0]
     if path.startswith('/setup/'):
         return setup.serve(handler, path[len('/setup/'):], False)
+    if path.startswith('/model-prompt/'):
+        return model_prompt_page.handle_page(
+            handler, path[len('/model-prompt/'):], False)
     if path == '/health':
         return handler.send_json(200, {'status': 'ok', 'version': VERSION,
                                        'inflight': handler.server.inflight,

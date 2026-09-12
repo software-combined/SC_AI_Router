@@ -28,11 +28,12 @@ def _write_policy(home, allowed, portco='acme', department=None):
     return path
 
 
-def _with_extra(slug=EXTRA):
-    """Registry rows plus one synthetic visible row (an added model)."""
-    extra = replace(by_slug('z-ai/glm-5.3-flash'), slug=slug,
-                    display_name='Acme: Test Model · OpenRouter')
-    return tuple(MODELS) + (extra,)
+def _with_extra(*slugs):
+    """Registry rows plus one synthetic visible row per slug."""
+    added = tuple(replace(by_slug('z-ai/glm-5.3-flash'), slug=slug,
+                          display_name='Acme: Test Model · OpenRouter')
+                  for slug in (slugs or (EXTRA,)))
+    return tuple(MODELS) + added
 
 
 class VisibleModelsTests(unittest.TestCase):
@@ -185,6 +186,95 @@ class SnapshotTests(unittest.TestCase):
         (self.home / 'model-policy.json').symlink_to(target)
         self.assertEqual({slug for slug, _ in model_prompt.visible_models(self.home)},
                          set(ALLOWED))
+
+
+class NoticeTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.home = Path(self._tmp.name) / 'home'
+        self.home.mkdir()
+
+    def _doc(self):
+        return json.loads((self.home / 'model-prompt.json').read_text())
+
+    def test_notice_mints_only_while_rows_are_pending(self):
+        self.assertEqual(model_prompt.notice(self.home), (None, []))  # seeds
+        with mock.patch.object(catalogue, 'MODELS', _with_extra()):
+            nonce, rows = model_prompt.notice(self.home)
+            self.assertTrue(nonce)
+            self.assertEqual([slug for slug, _ in rows], [EXTRA])
+            # A second trigger reuses the live nonce and never marks seen.
+            again, rows2 = model_prompt.notice(self.home)
+        self.assertEqual(again, nonce)
+        self.assertEqual(rows2, rows)
+        self.assertNotIn(EXTRA, self._doc()['seen'])
+
+    def test_expired_notice_is_replaced_and_check_enforces_expiry(self):
+        model_prompt.pending(self.home)
+        ttl = model_prompt.NOTICE_TTL_S
+        with mock.patch.object(catalogue, 'MODELS', _with_extra()):
+            nonce, _ = model_prompt.notice(self.home, now=1000.0)
+            self.assertIsNotNone(
+                model_prompt.check_notice(self.home, 'codex', nonce, now=1000.0))
+            self.assertIsNone(model_prompt.check_notice(
+                self.home, 'codex', nonce, now=1000.0 + ttl + 1))
+            replaced, _ = model_prompt.notice(self.home, now=1000.0 + ttl + 1)
+        self.assertNotEqual(replaced, nonce)
+        self.assertEqual(self._doc()['notice']['expires'], 1000.0 + 2 * ttl + 1)
+
+    def test_check_notice_refuses_wrong_and_missing_nonce(self):
+        model_prompt.pending(self.home)
+        with mock.patch.object(catalogue, 'MODELS', _with_extra()):
+            nonce, _ = model_prompt.notice(self.home)
+            self.assertIsNone(model_prompt.check_notice(self.home, 'codex', 'wrong'))
+            self.assertIsNone(model_prompt.check_notice(self.home, 'codex', ''))
+            self.assertIsNone(model_prompt.check_notice(self.home, 'codex', None))
+            self.assertIsNone(model_prompt.check_notice(self.home, 'codex', 'n\u00ff'))
+            self.assertIsNotNone(model_prompt.check_notice(self.home, 'codex', nonce))
+
+    @unix_only
+    def test_notice_without_a_writable_home_returns_nothing(self):
+        model_prompt.pending(self.home)  # seed so rows are pending below
+        with mock.patch.object(catalogue, 'MODELS', _with_extra()):
+            self.addCleanup(self.home.chmod, 0o700)
+            self.home.chmod(0o500)
+            self.assertEqual(model_prompt.notice(self.home), (None, []))
+
+    def test_acknowledge_uses_the_displayed_set_and_consumes_the_notice(self):
+        model_prompt.pending(self.home)
+        with mock.patch.object(catalogue, 'MODELS', _with_extra()):
+            nonce, _ = model_prompt.notice(self.home)
+            shown = model_prompt.acknowledge(self.home, displayed=[EXTRA])
+        self.assertEqual([slug for slug, _ in shown], [EXTRA])
+        self.assertIn(EXTRA, self._doc()['seen'])
+        self.assertNotIn('notice', self._doc())  # single use
+        with mock.patch.object(catalogue, 'MODELS', _with_extra()):
+            self.assertIsNone(model_prompt.check_notice(self.home, 'codex', nonce))
+
+    def test_acknowledge_displayed_ignores_rows_that_are_not_visible(self):
+        model_prompt.pending(self.home)
+        with mock.patch.object(catalogue, 'MODELS', _with_extra()):
+            model_prompt.notice(self.home)
+            shown = model_prompt.acknowledge(
+                self.home, displayed=[EXTRA, 'not/a-registry-row'])
+        self.assertEqual([slug for slug, _ in shown], [EXTRA])
+        self.assertNotIn('not/a-registry-row', self._doc()['seen'])
+
+    def test_acknowledge_displayed_ignores_a_row_added_after_the_render(self):
+        second = 'openrouter/acme-second-model'
+        model_prompt.pending(self.home)  # seed the real rows
+        with mock.patch.object(catalogue, 'MODELS', _with_extra()):
+            _nonce, rows = model_prompt.notice(self.home)
+        self.assertEqual([slug for slug, _ in rows], [EXTRA])
+        # The second model appears between the page render and the click.
+        with mock.patch.object(catalogue, 'MODELS', _with_extra(EXTRA, second)):
+            shown = model_prompt.acknowledge(self.home, displayed=[EXTRA])
+            acked = [s for s in self._doc()['seen'] if s.startswith('openrouter/acme')]
+            still_pending = [slug for slug, _ in model_prompt.pending(self.home)]
+        self.assertEqual([slug for slug, _ in shown], [EXTRA])
+        self.assertEqual(acked, [EXTRA])
+        self.assertEqual(still_pending, [second])
 
 
 if __name__ == '__main__':

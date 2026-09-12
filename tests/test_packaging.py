@@ -45,6 +45,7 @@ FILES = [
          'ai_router/winacl.py',
          'ai_router/image_items.py',
          'ai_router/model_prompt.py',
+         'ai_router/model_prompt_page.py',
          'ai_router/model_policy.py',
          'ai_router/subscription_roster.py',
          'ai_router/retired_slugs.py',

@@ -82,7 +82,7 @@ below interleaves them.
 | [132](132-windows-backend-cleanup.md) | Windows backend cleanup | TODO | before/with 116; after 123 |
 | [133](133-probe-harness-consolidation.md) | One app-server probe harness | DONE: shared AppServer harness 2026-09-12 | before 118/119 |
 | [134](134-repo-hygiene-feed-ci-docs.md) | feed_verify move, CI single owner, docs index, shim owner | DONE: repo hygiene 2026-09-12 (verifier in packaging/, one setup composite + policy-scan script, kiro pointer, shim owner, tools/ rule); CI-side run of the composite pends the first push | after 101; before 106 (feed work) |
-| [135](135-new-model-prompt.md) | New-model prompt: notify + one-click Codex restart only when new models appear | TODO | after 128/131; hooks into 099; coordinate 106 |
+| [135](135-new-model-prompt.md) | New-model prompt: notify + one-click Codex restart only when new models appear | PARTIAL: steps 1-3 and the restart action landed (`0844c5d`, `f4bfef4`); triggers, notification and docs remain | after 128/131; hooks into 099; coordinate 106 |
 
 ## Security wave (136-138)
 
