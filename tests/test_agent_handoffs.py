@@ -1,5 +1,6 @@
 """Plaintext aliases preserve the native execution and encryption contracts."""
 from copy import deepcopy
+import json
 import unittest
 
 from ai_router import agent_handoffs as handoffs
@@ -146,11 +147,11 @@ class PlaintextSteerTests(unittest.TestCase):
         names = handoffs.AliasTools({'followup_task'},
             spawn_models={'plain': 'meta/muse-spark-1.3-contributor'})
         result = handoffs.steer_plaintext(encrypted_call(), names)
-        self.assertEqual(result['type'], 'function_call_output')
+        self.assertEqual(result['type'], 'function_call')
         self.assertEqual(result['call_id'], 'call_synthetic')
-        self.assertIn('collaboration_plaintext.followup_task', result['output'])
-        self.assertIn('plain', result['output'])
-        self.assertNotIn('synthetic', result['output'])
+        self.assertIsInstance(json.loads(result['arguments']), str)
+        self.assertIn('collaboration_plaintext.followup_task', result['arguments'])
+        self.assertNotIn('synthetic', result['arguments'])
 
     def test_native_followups_and_unknown_targets_pass_through(self):
         names = handoffs.AliasTools({'followup_task'},
@@ -169,9 +170,9 @@ class PlaintextSteerTests(unittest.TestCase):
         openrouter = encrypted_call(name='spawn_agent',
             arguments='{"task_name":"x","model":"meta/muse-spark-1.3-contributor"}')
         result = handoffs.steer_response({'output': [openrouter]}, names)
-        self.assertEqual(result['output'][0]['type'], 'function_call_output')
+        self.assertEqual(result['output'][0]['type'], 'function_call')
         self.assertIn('collaboration_plaintext.spawn_agent',
-                      result['output'][0]['output'])
+                      result['output'][0]['arguments'])
         self.assertEqual(result['output'][0]['call_id'], 'call_synthetic')
 
     def test_path_targets_resolve_by_unique_suffix(self):
@@ -180,8 +181,9 @@ class PlaintextSteerTests(unittest.TestCase):
             spawn_models={'synth_agent': 'meta/muse-spark-1.3-contributor'})
         rooted = encrypted_call(arguments='{"target":"/root/synth_agent","message":"x"}')
         result = handoffs.steer_plaintext(rooted, names)
-        self.assertEqual(result['type'], 'function_call_output')
-        self.assertIn('/root/synth_agent', result['output'])
+        self.assertEqual(result['type'], 'function_call')
+        self.assertIn('collaboration_plaintext.followup_task', result['arguments'])
+        self.assertNotIn('/root/synth_agent', result['arguments'])
         ambiguous = handoffs.AliasTools(
             {'followup_task'},
             spawn_models={'a/synth_agent': 'meta/muse-spark-1.3-contributor',
@@ -197,10 +199,11 @@ class PlaintextSteerTests(unittest.TestCase):
         response = {'output': [native, encrypted_call()]}
         result = handoffs.steer_response(response, names)
         self.assertIs(result['output'][0], native)
-        self.assertEqual(result['output'][1]['type'], 'function_call_output')
+        self.assertEqual(result['output'][1]['type'], 'function_call')
+        self.assertIsInstance(json.loads(result['output'][1]['arguments']), str)
         event = {'type': 'response.output_item.done', 'item': encrypted_call()}
         self.assertEqual(handoffs.steer_event(event, names)['item']['type'],
-                         'function_call_output')
+                         'function_call')
         other = {'type': 'response.created', 'response': {}}
         self.assertIs(handoffs.steer_event(other, names), other)
 
