@@ -1,7 +1,7 @@
 {
   "ai_router/agent_handoffs.py": 274,
   "ai_router/catalogue.py": 366,
-  "ai_router/compaction.py": 375,
+  "ai_router/compaction.py": 395,
   "ai_router/key_dialog.py": 260,
   "ai_router/models.py": 255,
   "ai_router/providers.py": 291,
@@ -17,6 +17,7 @@
   "tests/test_claude_ingress.py": 338,
   "tests/test_client_activation.py": 464,
   "tests/test_handler.py": 485,
+  "tests/test_history_portability.py": 164,
   "tests/test_install.py": 411,
   "tests/test_install_config.py": 417,
   "tests/test_install_key_window.py": 409,
