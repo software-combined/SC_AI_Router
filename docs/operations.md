@@ -66,8 +66,8 @@ roll-forward: revert the change on the publishing branch, bump
 `packaging/VERSION`, and tag again. Re-uploading a different bundle for an
 already-published version aborts instead of replacing bytes, and a failed
 workflow before the feed upload leaves the previous feed document serving.
-A single host rolls back locally with `install.py --version <version>` at
-an idle moment. Moving a host from `beta` back to `stable` needs
+A single host rolls back locally with `install.py --rollback --to <version>`
+at an idle moment. Moving a host from `beta` back to `stable` needs
 `<home>/feed-serial` cleared first, or the lower stable serial is refused
 as stale.
 
@@ -184,9 +184,11 @@ watch its `/health` version and `logs/update.log` before merging
 
 Revert through `develop` to `main` and tag (the next release supersedes
 the bad one), or pin one machine with
-`python3 packaging/install.py --version X`. The installer itself
+`python3 packaging/install.py --rollback --to X`. The installer itself
 restores the old pointer automatically when the new release fails its
-health check.
+health check. Scheduled updates keep running after a rollback, so the
+channel offers the newer release again at the next pass; stop the scheduled
+update job if the rollback has to persist until a fix ships.
 
 A release before 0.6.9 recorded a `--feed` install's own build number in
 `<home>/feed-serial`, so a local build could leave a number the published
@@ -194,6 +196,31 @@ feed has not reached. Every scheduled check then refuses the real feed with
 `stale feed serial N is older than M`. Delete `<home>/feed-serial` to clear
 it; the next unpinned update records the channel's own serial. Installs from
 0.6.9 on leave that file alone.
+
+## Operator surface
+
+Every command is read-only unless it says otherwise, and none prints a
+token, key or URL:
+
+```sh
+python3 packaging/install.py --doctor    # helper rows, a Fix line per WARN/FAIL
+python3 packaging/install.py --status    # version, service, keys, channel, update recency
+python3 packaging/install.py --check-update   # installed and available versions only
+python3 packaging/install.py --update    # apply what the channel offers (scheduled action)
+python3 packaging/install.py --rollback  # list installed releases; --to VERSION restores one
+python3 packaging/install.py --support   # 0600 redacted bundle for a support request
+```
+
+`--doctor` exits 1 when any row fails. Its rows cover the Python runtime, the
+installed release, the serving version, each provider key, the picker
+catalogue (one `ai_router.catalogue --check` run), the scheduled command
+carrier and update recency; a host whose launcher or systemd unit still runs
+the read-only `--check-update` fails that row until the installer re-renders
+it. `--status` reports `last_check_at`, `last_applied_version`, `last_error`
+(a code from a closed set) and the per-version failure counts from state, so
+a parked release is visible without reading the log. `--support` writes only
+booleans, enums, versions, counts and timestamps to
+`<home>/logs/support-<UTC>.json` and prints the path.
 
 ## Safe update, restart, reinstall
 
@@ -321,8 +348,8 @@ provider's key under `providers`, with the legacy `key_present` /
    `OPENROUTER_API_KEY` does not count as configured and still opens the
    window. Re-run with `--setup` only if no window appears; it restarts the
    current release with a fresh link, without re-extracting it. Scheduled
-   and manual `--check-update` runs never pop the window; the next request
-   opens it instead.
+   `--update` runs and manual `--check-update` runs never pop the window; the
+   next request opens it instead.
 3. Rotation: delete `openrouter.key` first (the setup window refuses to
    overwrite a file holding a real key with 409), then re-run the installer
    with `--setup` and paste the replacement. File-level alternative is under
@@ -415,10 +442,10 @@ widened ACL makes the router refuse the key at read time.
 
 ## Incidents
 
-Check `/health`, then `logs/launchd.log`, then
-`launchctl print` for the router agent (`schtasks /query` on Windows). Roll
-back by re-running the installer with `--version` pointing at the previous
-release.
+Check `install.py --doctor` first, then `/health`, then `logs/launchd.log`,
+then `launchctl print` for the router agent (`schtasks /query` on Windows).
+Roll back by re-running the installer with `--rollback --to` naming the
+previous release.
 
 ## Decision log
 

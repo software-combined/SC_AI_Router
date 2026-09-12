@@ -368,7 +368,7 @@ class InstallConfigTests(unittest.TestCase):
             self.assertEqual(install_mod.channel_feed(home),
                              'file:///pinned.json')
 
-    def test_check_update_reinvoke_does_not_pin_channel_feed(self):
+    def test_update_reinvoke_does_not_pin_channel_feed(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             home.mkdir()
@@ -400,7 +400,7 @@ class InstallConfigTests(unittest.TestCase):
             buf = io.StringIO()
             with mock.patch.dict(os.environ, {'OPENROUTER_API_KEY': 'k', 'ROUTER_NO_KEY_WINDOW': '1'}):
                 with contextlib.redirect_stdout(buf):
-                    rc = install_mod.do_check_update(
+                    rc = install_mod.do_update(
                         args, _fetch=_static_fetch(latest, blob),
                         _read_feed=lambda feed, etag: (
                             200, json.dumps(latest).encode(), None),

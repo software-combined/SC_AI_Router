@@ -364,7 +364,7 @@ class UpdateKeyWindowTests(unittest.TestCase):
             args = install_mod.build_parser().parse_args(
                 ['--feed', 'file:///latest.json', '--home', str(home)])
             with contextlib.redirect_stdout(io.StringIO()):
-                install_mod.do_check_update(
+                install_mod.do_update(
                     args, _fetch=lambda url: blob,
                     _read_feed=lambda feed, etag: (
                         200, json.dumps(latest).encode(), None),
