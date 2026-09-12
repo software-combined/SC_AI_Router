@@ -1,5 +1,35 @@
 # Compatibility
 
+## Subagent model list is capped by the client, 2026-09-12
+
+Clients: bundled app-server codex-cli `0.153.4` (upstream tag
+`rust-v0.153.4`); the same cap is present at `rust-v0.155.0-alpha.3.10`.
+Router source base `48d5bae` (0.6.35), plan 151 on
+`codex/subagent-model-visibility-20260912`, target `develop`; the
+instruction fix ships in the `0.6.36` beta.
+
+- `spawn_agent`'s "Available model overrides" text is built from the first
+  five picker-visible models that support the active multi-agent backend,
+  in catalogue order (`MAX_SPAWN_AGENT_MODEL_OVERRIDES = 5`,
+  `codex-rs/core/src/tools/handlers/multi_agents_common.rs:33` and
+  `multi_agents_spec.rs:763-772` in `rust-v0.153.4`).
+- The router catalogue lists the subscription roster first, so those five
+  rows are all OpenAI models and every router model is invisible in that
+  list. The picker is unaffected: the same client's `model/list` returns
+  all 26 visible rows of the 27-row catalogue.
+- Validation is not capped: `find_spawn_agent_model_name` searches the full
+  model list, so an explicitly passed router id reaches routing; a portco
+  policy can still reject it and the 0.6.36 instructions require reporting
+  that rejection. The 0.6.36 instructions tell routed sessions the roster
+  and that rule; the starter profiles carry it for subscription-model
+  sessions. The upstream cap is unchanged, so a future client can still
+  hide the list; plan 151 stage 5 tracks the upstream report.
+- Observed failure 2026-09-12 (task 01a09477): asked for Muse Contributor
+  subagents, the agent spawned `gpt-6-astra` twice, `gpt-5.6-sol`,
+  `gpt-5.6-terra` and `gpt-5.6-luna`; five of that day's 156
+  `upstream_rate_limited` events (all `provider: openai`) are those
+  children.
+
 ## Standalone delegation delivery, 2026-09-11
 
 Clients: ChatGPT.app `26.903.71938`, Codex Framework `152.0.7977.83`,

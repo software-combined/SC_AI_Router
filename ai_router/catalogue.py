@@ -120,7 +120,7 @@ if (set(SUBSCRIPTION_REASONING) != set(SUBSCRIPTION_SLUGS)
     raise ValueError('subscription roster and catalogue tables disagree')
 
 
-def subscription_stub(slug):
+def subscription_stub(slug, instructions=None):
     """Full-schema placeholder row for a subscription-side picker slug.
 
     Routing ignores these fields (the subscription provider owns the slug),
@@ -128,6 +128,8 @@ def subscription_stub(slug):
     """
     name = SUBSCRIPTION_DISPLAY_NAMES.get(slug, slug)
     default, efforts = SUBSCRIPTION_REASONING.get(slug, ('medium', ('medium',)))
+    if instructions is None:
+        instructions = instructions_for(_visible_rows('codex', None)[0])
     return {**ROW_TEMPLATE,
             'slug': slug,
             'display_name': name,
@@ -140,10 +142,23 @@ def subscription_stub(slug):
             'max_context_window': 272000,
             'input_modalities': ['text', 'image'],
             'priority': 1,
-            'model_messages': {'instructions_template': BASE_INSTRUCTIONS}}
+            'model_messages': {'instructions_template': instructions}}
 
 
 BASE_INSTRUCTIONS = (Path(__file__).with_name('openrouter_base_instructions.txt')).read_text()
+SUBAGENT_MODEL_PLACEHOLDER = '{{SUBAGENT_MODEL_IDS}}'
+
+
+def instructions_for(visible):
+    """Served instructions with one roster line of visible model ids.
+
+    The Codex client shows at most five spawn_agent model overrides, in
+    catalogue order, so this line is how a routed session learns the ids it
+    may still pass explicitly (Plan 151). Rendered from the picker's own
+    projection, so a portco allowlist can never be widened by the text.
+    """
+    roster = ', '.join(f'`{model.slug}`' for model in visible)
+    return BASE_INSTRUCTIONS.replace(SUBAGENT_MODEL_PLACEHOLDER, roster)
 
 
 def catalog_name(model):
@@ -158,9 +173,11 @@ def label_of(row):
     return provider_defs.label_for(provider_id or provider_defs.DEFAULT_EXTERNAL)
 
 
-def external_entry(model):
+def external_entry(model, instructions=None):
     projected = codex_projection(model)
     label = label_of(model)
+    if instructions is None:
+        instructions = instructions_for(_visible_rows('codex', None)[0])
     return {**ROW_TEMPLATE,
             'slug': model.slug,
             'display_name': (model.display_name + ' · Preview'
@@ -174,7 +191,7 @@ def external_entry(model):
             'priority': model.priority,
             'context_window': model.context_window,
             'max_context_window': model.context_window,
-            'model_messages': {'instructions_template': BASE_INSTRUCTIONS},
+            'model_messages': {'instructions_template': instructions},
             **catalogue_patch(model.slug),
             'input_modalities': projected['input_modalities'],
             'default_reasoning_summary': model.reasoning_summary,
@@ -233,13 +250,15 @@ def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False)
     carried, so the picker lists registry rows only, twins included.
     """
     visible, hidden_rows = _visible_rows(client, allowed, include_twins)
+    instructions = instructions_for(visible)
     shown = {m.slug for m in visible}
     hidden = {m.slug for m in hidden_rows}
     active = {m.slug for m in MODELS}
     models = [m for m in catalog.get('models', [])
               if (m['slug'] not in RETIRED_SLUGS or m['slug'] in active)
               and m['slug'] not in hidden]
-    entries = {m['slug']: {**subscription_stub(m['slug']), **m} for m in models}
+    entries = {m['slug']: {**subscription_stub(m['slug'], instructions), **m}
+               for m in models}
     for slug, row in entries.items():
         # Frozen 0.6.10.23 single-medium signature, exact match only.
         if (slug in SUBSCRIPTION_REASONING
@@ -250,14 +269,14 @@ def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False)
             row['default_reasoning_level'] = fresh['default_reasoning_level']
             row['supported_reasoning_levels'] = fresh['supported_reasoning_levels']
     for model in visible:
-        entries[model.slug] = external_entry(model)
+        entries[model.slug] = external_entry(model, instructions)
     # Retired subscription rows never come back: a roster or catalogue that
     # still names one loses it here, so the dead picker row cannot linger.
     for slug in RETIRED_SUBSCRIPTION_SLUGS:
         entries.pop(slug, None)
     for slug in roster:
         if slug not in entries and slug not in RETIRED_SUBSCRIPTION_SLUGS:
-            entries[slug] = subscription_stub(slug)
+            entries[slug] = subscription_stub(slug, instructions)
     if include_twins:
         subs = []
     else:
@@ -314,19 +333,24 @@ def check(path, client='codex', allowed=None, include_twins=False):
         if missing:
             print(f'{slug}: missing schema fields: {", ".join(sorted(missing))}')
             return False
+        template = (row.get('model_messages') or {}).get('instructions_template') or ''
+        if SUBAGENT_MODEL_PLACEHOLDER in template:
+            print(f'{slug}: unrendered model roster placeholder')
+            return False
     visible, hidden = _visible_rows(client, allowed, include_twins)
     identical, total = 0, 0
     for model in hidden:
         if model.slug in existing:
             print(f'{model.slug}: hidden from the {client} picker but present')
             return False
+    instructions = instructions_for(visible)
     for model in visible:
         total += 1
         old = existing.get(model.slug)
         if old is None:
             print(f'{model.slug}: missing from catalogue')
             continue
-        new = external_entry(model)
+        new = external_entry(model, instructions)
         diff = [k for k in set(old) | set(new) if not _same(old, new, k)]
         if diff:
             print(f'{model.slug}: differs in {", ".join(sorted(diff))}')

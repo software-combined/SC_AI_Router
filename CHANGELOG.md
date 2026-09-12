@@ -1,7 +1,20 @@
 # Changelog
 
-## Unreleased
+## 0.6.36
 
+- Subagent model visibility (plan 151): Codex builds the `spawn_agent`
+  "Available model overrides" text from the first five picker-visible
+  multi-agent models in catalogue order, and the catalogue lists the
+  subscription roster first, so every router model was hidden from that
+  list even though the picker showed them all. The served model
+  instructions now carry the visible router roster plus the rule that an
+  id missing from that list can still be passed, with any router
+  rejection reported, and the starter global instructions carry the same
+  rule for subscription-model sessions. A fresh merge renders the roster
+  from the picker's own projection, so it never names an allowlisted-out
+  or client-hidden model; `catalogue --check` compares the rendered form.
+  The client cap itself is unchanged upstream, so plan 151 stages 3-5
+  stay open.
 - Model verification gate (plan 145): `models add` now writes new rows as
   unlisted preview (`listed: false`), hidden from the Codex picker and
   `GET /v1/models` while staying routable for their own probe. Only a
