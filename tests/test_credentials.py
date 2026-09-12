@@ -23,11 +23,13 @@ class CredentialLookupTests(unittest.TestCase):
         return path
 
     def _auth(self, payload):
-        auth = tempfile.NamedTemporaryFile('w', suffix='.json', delete=False)
-        auth.write(payload if isinstance(payload, str) else json.dumps(payload))
-        auth.close()
-        self.addCleanup(os.unlink, auth.name)
-        return auth.name
+        """The client's own auth file under a temp HOME: (path, env)."""
+        env_home = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, str(env_home), True)
+        auth = env_home / '.local' / 'share' / 'opencode' / 'auth.json'
+        auth.parent.mkdir(parents=True)
+        auth.write_text(payload if isinstance(payload, str) else json.dumps(payload))
+        return str(auth), {'HOME': str(env_home)}
 
     def creds(self, env=None):
         return Credentials(self.state, self.home, env if env is not None else {})
@@ -64,14 +66,35 @@ class CredentialLookupTests(unittest.TestCase):
             self.creds().key_for()
 
     def test_opencode_fallback(self):
-        auth = self._auth({'openrouter': {'type': 'api', 'key': 'k-oc'}})
+        auth, env = self._auth({'openrouter': {'type': 'api', 'key': 'k-oc'}})
         self.assertEqual(Credentials({**self.state, 'opencode_auth': auth},
-                                     self.home, {}).key_for(), 'k-oc')
+                                     self.home, env).key_for(), 'k-oc')
 
     def test_opencode_non_api_type_is_value_error(self):
-        auth = self._auth({'openrouter': {'type': 'oauth', 'key': 'k'}})
+        auth, env = self._auth({'openrouter': {'type': 'oauth', 'key': 'k'}})
         with self.assertRaises(ValueError):
-            Credentials({**self.state, 'opencode_auth': auth}, self.home, {}).key_for()
+            Credentials({**self.state, 'opencode_auth': auth},
+                        self.home, env).key_for()
+
+    def test_opencode_auth_outside_the_client_path_is_refused(self):
+        other = self.home / 'auth.json'
+        other.write_text(json.dumps({'openrouter': {'type': 'api', 'key': 'k'}}))
+        creds = Credentials({**self.state, 'opencode_auth': str(other)},
+                            self.home, {'HOME': str(self.home)})
+        with self.assertRaisesRegex(LookupError, 'opencode_auth must name'):
+            creds.key_for()
+
+    def test_an_xdg_data_home_path_is_not_the_client_path(self):
+        # The installed service has no XDG_DATA_HOME, so both readers resolve
+        # from HOME; an XDG path is refused rather than followed.
+        xdg = self.home / 'data' / 'opencode' / 'auth.json'
+        xdg.parent.mkdir(parents=True)
+        xdg.write_text(json.dumps({'openrouter': {'type': 'api', 'key': 'k'}}))
+        creds = Credentials({**self.state, 'opencode_auth': str(xdg)},
+                            self.home, {'HOME': str(self.home),
+                                        'XDG_DATA_HOME': str(self.home / 'data')})
+        with self.assertRaisesRegex(LookupError, 'opencode_auth must name'):
+            creds.key_for()
 
     def test_nothing_configured_is_lookup_error_naming_all_sources(self):
         with self.assertRaises(LookupError) as ctx:

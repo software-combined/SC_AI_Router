@@ -80,7 +80,7 @@ class LauncherBootTests(unittest.TestCase):
             probe.bind(('127.0.0.1', 0))
             port = probe.getsockname()[1]
             probe.close()
-            token = 'launch-proof-token'
+            token = 'launch-proof-token'.ljust(32, 'x')
             (home / 'mixed-router-state.json').write_text(json.dumps({
                 'port': port, 'token': token, 'openai_models': [],
                 'setup': {'nonce': 'n' * 16,

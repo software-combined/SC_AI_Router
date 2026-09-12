@@ -4,8 +4,33 @@ HTTP keeps its current message text and gains a stable code; logs record the
 same code. Callers select a case, never invent wording. Never include keys,
 tokens, paths carrying tokens, or request content in a message.
 """
+import re
 
 ROUTER_TYPE = 'router_error'
+
+_PART = r"[^\\/\s,;:'\"]+"        # one path segment, no separator or delimiter
+_SPACED = rf"{_PART}(?:\s+{_PART})*"   # a segment that may contain spaces
+_TAIL = rf"{_SPACED}?"
+_PATH = re.compile(
+    rf"(?<![\w:./])"                            # not inside a word, URL or path
+    rf"(?:"
+    rf"\\\\\?\\[A-Za-z]:\\(?:{_SPACED}\\)*{_TAIL}"      # \\?\C:\dir\file
+    rf"|(?:\\\\|//)(?:{_SPACED}[\\/])+{_TAIL}"          # \\server\share or //server/share
+    rf"|[A-Za-z]:\\(?:{_SPACED}\\)*{_TAIL}"             # C:\dir\file
+    rf"|~?/(?:{_SPACED}/)*{_TAIL}"                      # /dir/file or ~/dir/file
+    rf")")
+
+
+def redact(text):
+    """Replace filesystem paths in a diagnostic with a fixed marker.
+
+    Error bodies and logs must stay useful without naming where a key or
+    credential file lives. Path components may contain spaces; a trailing
+    explanation after the path is kept.
+    """
+    if not isinstance(text, str):
+        return text
+    return _PATH.sub('[path]', text)
 
 
 class RouterError(Exception):
@@ -95,15 +120,16 @@ def bearer_for_no_subscription_only():
 
 
 class _UnknownModelError(RouterError):
-    """UNKNOWN_MODEL body also naming the id and its tilde candidate."""
+    """UNKNOWN_MODEL body; never echoes the caller-supplied id back."""
 
     def __init__(self, model, candidates=()):
         listed = tuple(s for s in candidates if isinstance(s, str) and s)[:1]
         hint = f" (did you mean '{listed[0]}'?)" if listed else ''
         super().__init__(400, 'UNKNOWN_MODEL',
-                         f'Model is not in the configured catalog: {model}' + hint
-                         if model else 'Model is not in the configured catalog')
-        self.details = {'model': model, 'candidates': list(listed)} if model else {}
+                         'Model is not in the configured catalog' + hint)
+        # The shape stays as it was minus the caller's id: a named model gets
+        # a candidates list (possibly empty), an unnamed one gets nothing.
+        self.details = {'candidates': list(listed)} if model else {}
 
     def body(self):
         payload = super().body()
@@ -128,10 +154,21 @@ def claude_subscription_required():
 
 
 def credential_problem(detail):
+    detail = redact(detail)
     return _error(400, 'CREDENTIAL_PROBLEM',
                   f'Invalid model, payload, or local authentication configuration: {detail}'
                   if detail else
                   'Invalid model, payload, or local authentication configuration')
+
+
+def too_many_inflight():
+    return _error(429, 'TOO_MANY_REQUESTS',
+                  'Too many concurrent requests; retry shortly')
+
+
+def unsupported_media_type():
+    return _error(415, 'UNSUPPORTED_MEDIA_TYPE',
+                  'Content-Type must be application/json')
 
 
 def invalid_payload():
@@ -197,7 +234,7 @@ def map_client_error(exc):
     if isinstance(exc, (AttributeError, TypeError)):
         return internal_error()
     if isinstance(exc, PermissionError):
-        return _error(401, 'CREDENTIAL_PERMISSION', str(exc) or
+        return _error(401, 'CREDENTIAL_PERMISSION', redact(str(exc)) or
                       'Invalid model, payload, or local authentication configuration')
     if isinstance(exc, LookupError):
         return credential_problem(str(exc))

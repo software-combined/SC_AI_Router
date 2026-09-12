@@ -6,6 +6,15 @@ the Windows platform backend. `run` is injectable so tests never touch a
 real ACL.
 """
 import subprocess
+import time
+
+VERDICT_TTL_S = 30
+_VERDICTS = {}
+
+
+def reset():
+    """Drop cached verdicts (tests and diagnostics reruns)."""
+    _VERDICTS.clear()
 
 
 def _run(cmd, **kwargs):
@@ -15,9 +24,33 @@ def _run(cmd, **kwargs):
     return subprocess.run(cmd, **kwargs)
 
 
-def check(path, run=None):
-    """Refuse a file whose ACL grants anyone but the current user."""
+def check(path, run=None, _now=None):
+    """Refuse a file whose ACL grants anyone but the current user.
+
+    The verdict is cached per file for a short interval so one key read does
+    not spawn icacls and whoami every time; the entry expires and re-checks,
+    so a permission change is honoured at the next expiry. The key includes
+    the runner identity, and the entry holds a reference to it, so two
+    different seams probing one path never share a verdict.
+    """
     run = run or _run
+    key = (str(path), id(run))
+    now = time.monotonic() if _now is None else _now
+    cached = _VERDICTS.get(key)
+    if (cached is not None and cached[0] is run
+            and now - cached[1] < VERDICT_TTL_S):
+        if cached[2] is not None:
+            raise SystemExit(cached[2])
+        return
+    try:
+        _verify(path, run)
+    except SystemExit as exc:
+        _VERDICTS[key] = (run, now, str(exc))
+        raise
+    _VERDICTS[key] = (run, now, None)
+
+
+def _verify(path, run):
     result = run(['icacls', str(path)], capture_output=True, text=True)
     if result.returncode != 0:
         raise SystemExit('cannot verify %s: %s'
