@@ -9,9 +9,7 @@ import io
 import json
 import os
 from pathlib import Path
-import queue
 import re
-import signal
 import subprocess
 import sys
 import tempfile
@@ -23,6 +21,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ai_router.catalogue import external_entry
 from ai_router.registry import by_slug
+from tools.appserver_probe import AppServer, CONTEXT_BUDGET, scrub_env
 
 MODEL = 'meta/muse-spark-1.3-contributor'
 MARKER = 'CONTEXT_BUDGET_MARKER_719'
@@ -102,6 +101,13 @@ class Upstream:
 
 
 class Client:
+    """Thin scenario driver over the shared AppServer harness.
+
+    Keeps this probe's exact behaviour: the same `-c` config list, the
+    CONTEXT_BUDGET scrub (strip then inject, in that order), the client.log
+    stderr file re-read on EOF, the 30s RPC / 40s turn timeouts, and the
+    process-group SIGTERM teardown.
+    """
     def __init__(self, binary, home, url, catalog):
         config = {'model': MODEL, 'model_provider': 'openai', 'openai_base_url': url,
                   'model_catalog_json': str(catalog),
@@ -114,68 +120,34 @@ class Client:
         command = [binary, 'app-server', '--stdio']
         for key, value in config.items():
             command += ['-c', key + '=' + json.dumps(value)]
-        env = {k: v for k, v in os.environ.items()
-               if not k.startswith(('OPENAI_', 'CODEX_', 'CHATGPT_'))}
-        env.update(CODEX_HOME=str(home), OPENAI_API_KEY='synthetic-test-key', OPENAI_BASE_URL=url)
+        env = scrub_env(os.environ, CONTEXT_BUDGET, inject={
+            'CODEX_HOME': str(home), 'OPENAI_API_KEY': 'synthetic-test-key',
+            'OPENAI_BASE_URL': url})
         self.diagnostics = (home / 'client.log').open('w+')
-        self.process = subprocess.Popen(command, cwd=home, env=env, text=True,
-                                        start_new_session=os.name != 'nt',
-                                        stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                        stderr=self.diagnostics)
-        self.events = queue.Queue()
-        self.sequence = 0
-        threading.Thread(target=self.read, daemon=True).start()
+        self.diagnostics_path = home / 'client.log'
+        self.server = AppServer(command, cwd=home, env=env, stderr=self.diagnostics,
+                                start_new_session=os.name != 'nt', kill_group=True,
+                                rpc_timeout=30.0, eof_detail=self._eof_detail,
+                                strict_lines=True)
 
-    def read(self):
-        for line in self.process.stdout:
-            self.events.put(json.loads(line))
-        self.events.put({'eof': True})
+    def _eof_detail(self):
+        with open(self.diagnostics_path) as handle:
+            detail = handle.read()[-1500:]
+        return re.sub(r'https?://\S+', '[URL]', detail)
 
     def send(self, obj):
-        self.process.stdin.write(json.dumps(obj) + '\n')
-        self.process.stdin.flush()
+        self.server.send(obj)
 
     def next_event(self, deadline):
-        event = self.events.get(timeout=max(0.01, deadline - time.monotonic()))
-        if event.get('eof'):
-            self.diagnostics.seek(0)
-            detail = re.sub(r'https?://\S+', '[URL]', self.diagnostics.read()[-1500:])
-            raise RuntimeError('Codex exited: ' + detail)
-        return event
+        return self.server.next_event(deadline=deadline)
 
     def rpc(self, method, params):
-        self.sequence += 1
-        self.send({'id': self.sequence, 'method': method, 'params': params})
-        deadline = time.monotonic() + 30
-        while True:
-            event = self.next_event(deadline)
-            if event.get('id') == self.sequence and 'method' not in event:
-                assert 'error' not in event, str(event.get('error'))
-                return event['result']
+        return self.server.rpc(method, params)
 
     def turn(self, thread, expect_error=False):
-        self.rpc('turn/start', {'threadId': thread, 'input': [
-            {'type': 'text', 'text': 'Continue the synthetic probe.', 'text_elements': []}]})
-        deadline = time.monotonic() + 40
-        answer = ''
-        while True:
-            event = self.next_event(deadline)
-            if event.get('method') == 'error':
-                if not expect_error:
-                    raise RuntimeError(re.sub(r'https?://\S+', '[URL]', str(event['params'])))
-            if event.get('method') == 'item/completed':
-                item = event['params']['item']
-                if item.get('type') == 'agentMessage':
-                    answer = item.get('text', '')
-            if event.get('method') == 'turn/completed':
-                turn = event['params']['turn']
-                if expect_error:
-                    assert turn['status'] == 'failed', 'expected context exhaustion'
-                    assert turn['error']['codexErrorInfo'] == 'contextWindowExceeded', turn['error']
-                else:
-                    assert turn['status'] == 'completed', str(turn.get('error'))
-                    assert MARKER in answer, 'client did not retain the synthetic marker'
-                return
+        self.server.turn(thread, 'Continue the synthetic probe.', timeout=40.0,
+                         expect_error=expect_error,
+                         marker=None if expect_error else MARKER)
 
     def compact(self, thread):
         self.rpc('thread/compact/start', {'threadId': thread})
@@ -187,18 +159,7 @@ class Client:
                 return
 
     def close(self):
-        if os.name != 'nt':
-            os.killpg(self.process.pid, signal.SIGTERM)
-        else:
-            self.process.terminate()
-        try:
-            self.process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            self.process.kill()
-            self.process.wait(timeout=5)
-        self.process.stdin.close()
-        self.process.stdout.close()
-        self.diagnostics.close()
+        self.server.close()
 
 
 def run(binary, scenario, home):
