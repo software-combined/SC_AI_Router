@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.42
+
+- External Responses streams now translate context-limit refusals into Codex's
+  recognized error code, including nested metadata codes and the exact numeric
+  "The prompt is too long" refusal. Terminal stream failures are logged as
+  failed requests even when the upstream HTTP status is 200. Successful output
+  and usage are preserved; this does not guarantee automatic in-turn compaction.
+
 ## 0.6.41
 
 - Claude Code drift check (plan 148): attaching Claude Code records the
