@@ -29,6 +29,7 @@ are never copied between machines.
 `ai_router/transport.py`, `ai_router/subscription_fallback.py`,
 `ai_router/provider_defs.py`, `ai_router/upstream.py`, `ai_router/ingress.py`,
 `ai_router/relay.py`, `ai_router/tool_merge.py`, `ai_router/atomic_write.py`,
+`ai_router/state.py`,
 `ai_router/protocols/__init__.py`, `ai_router/protocols/responses.py`,
 `ai_router/protocols/messages.py`, `ai_router/models.json`,
 `ai_router/openrouter_base_instructions.txt`, `ai_router/agents.py`,

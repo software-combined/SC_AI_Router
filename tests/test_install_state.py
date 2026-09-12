@@ -75,7 +75,7 @@ class InstallStateTests(unittest.TestCase):
                          'atomic_write.py', 'notice.py'):
                 shutil.copy(root / 'packaging' / name, tmp / 'packaging' / name)
             for name in ('subscription_roster.py', 'retired_slugs.py',
-                         'feed_verify.py', 'atomic_write.py'):
+                         'feed_verify.py', 'atomic_write.py', 'state.py'):
                 shutil.copy(root / 'ai_router' / name, tmp / 'ai_router' / name)
             spec = importlib.util.spec_from_file_location(
                 'relocated_service', tmp / 'packaging' / 'service.py')

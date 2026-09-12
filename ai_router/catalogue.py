@@ -11,7 +11,7 @@ own label with no code change here.
 import json
 import sys
 from pathlib import Path
-from . import provider_defs
+from . import provider_defs, state as state_mod
 from .atomic_write import replace_json
 from .capabilities import (COMP_HASH, MULTI_AGENT_VERSION, NODE_REPL_DISABLED,
                            catalogue_patch, describe)
@@ -273,11 +273,7 @@ def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False)
 
 def _state_doc(catalog_path):
     """State dict beside the catalogue; {} when missing or unreadable."""
-    try:
-        state = json.loads((Path(catalog_path).parent / 'mixed-router-state.json').read_text())
-    except (OSError, ValueError):
-        return {}
-    return state if isinstance(state, dict) else {}
+    return state_mod.read(state_mod.path(Path(catalog_path).parent)) or {}
 
 
 def read_roster(catalog_path):

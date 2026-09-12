@@ -55,6 +55,18 @@ class LoadStateTests(unittest.TestCase):
         for key in ('token', 'openai_models'):
             self.assertIn(key, str(ctx.exception))
 
+    def test_load_state_reports_an_unreadable_path_as_such(self):
+        # A state path that exists but cannot be read is not a missing file;
+        # the operator must not be sent looking for a file that is right there.
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        path = Path(tmp) / 'state-dir'
+        path.mkdir()
+        with self.assertRaises(SystemExit) as ctx:
+            load_state(path)
+        self.assertIn('could not be read', str(ctx.exception))
+        self.assertIn(str(path), str(ctx.exception))
+
     def test_load_state_rejects_unusable_credential_file(self):
         for name, payload in (
                 ('missing', None),
