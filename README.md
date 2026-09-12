@@ -12,7 +12,7 @@ One local endpoint for Codex and Claude Code. Your ChatGPT or Claude subscriptio
 </p>
 
 <p align="center">
-  <a href="https://github.com/software-combined/SC_Unlimited_ai/actions/workflows/check.yml"><img alt="Check" src="https://github.com/software-combined/SC_Unlimited_ai/actions/workflows/check.yml/badge.svg?branch=main"></a>
+  <a href="https://github.com/software-combined/SC_OpenRouter_adapter/actions/workflows/check.yml"><img alt="Checks on GitHub Actions" src="https://img.shields.io/badge/checks-GitHub_Actions-blue"></a>
   <a href="https://github.com/software-combined/SC_Unlimited_ai/releases/latest"><img alt="Releases on GitHub" src="https://img.shields.io/badge/releases-GitHub-blue"></a>
   <a href="LICENSE"><img alt="Licence: Apache-2.0" src="https://img.shields.io/badge/licence-Apache--2.0-blue"></a>
   <img alt="Python 3.14, standard library only" src="https://img.shields.io/badge/python-3.14%20stdlib%20only-3776AB">
