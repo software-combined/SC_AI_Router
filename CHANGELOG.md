@@ -19,6 +19,17 @@
 
 ## 0.6.36
 
+- Ingress hardening, second wave (plan 146): the router refuses a state
+  token that is not at least 32 characters of `[A-Za-z0-9_-]` (the installer
+  already mints one), answers 429 with `Retry-After` beyond 32 concurrent
+  turns and reports `inflight`/`max_inflight` on `/health`, answers 415 for a
+  non-JSON body before parsing, and strips filesystem paths and the caller's
+  model id from credential and unknown-model errors. `opencode_auth` must
+  name the OpenCode client's own `~/.local/share/opencode/auth.json`; a
+  state key pointing elsewhere is refused, and the installer resolves the
+  same path so it never counts a key the service cannot read. A Windows ACL
+  verdict is cached for 30 seconds per file instead of spawning icacls and
+  whoami on every key read.
 - New-model prompt (plan 135): when an update adds models for the machine's
   policy scope, the scheduled updater asks the running router over loopback
   and offers a Codex restart. A desktop notification names up to three of

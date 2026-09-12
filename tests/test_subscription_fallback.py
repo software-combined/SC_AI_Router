@@ -6,10 +6,12 @@ subscription slug, so an exhausted allowance must either keep the existing
 and nothing else may be redirected.
 """
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 
 from ai_router import subscription_fallback
 from ai_router.registry import by_slug
@@ -225,10 +227,11 @@ class RefusedHelperTurnTests(unittest.TestCase):
 class StateValidationTests(unittest.TestCase):
     def test_flag_must_be_boolean(self):
         state = tempfile.NamedTemporaryFile('w', suffix='.json', delete=False)
-        json.dump({'port': 1, 'token': 't', 'openai_models': [],
-                   'opencode_auth': _auth_file(self), 'openai_helper_fallback': 'yes'}, state)
+        json.dump({'port': 1, 'token': 't' * 32, 'openai_models': [],
+                   'openai_helper_fallback': 'yes'}, state)
         state.close()
         self.addCleanup(Path(state.name).unlink)
-        with self.assertRaises(SystemExit) as ctx:
-            load_state(Path(state.name))
+        with mock.patch.dict(os.environ, {'OPENROUTER_API_KEY': 'sk-or'}):
+            with self.assertRaises(SystemExit) as ctx:
+                load_state(Path(state.name))
         self.assertIn('openai_helper_fallback', str(ctx.exception))

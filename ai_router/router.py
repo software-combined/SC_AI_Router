@@ -14,10 +14,13 @@ from .errors import InvalidSize, PreparationError
 from .providers import NATIVE_SERVICE_PATHS
 from .runtime import MAX_BODY, ROUTER_HOME, log_event
 
+MAX_INFLIGHT = 32
+
 
 class Router(ThreadingHTTPServer):
     daemon_threads = True
     drain_deadline_s = 120
+    max_inflight = MAX_INFLIGHT
 
     def __init__(self, state, fileno=None, credentials=None):
         sock = (None if fileno is None else
@@ -112,9 +115,18 @@ class Handler(BaseHTTPRequestHandler):
                 return model_prompt_page.handle_page(
                     self, path[len('/model-prompt/'):], True)
             return self.error(errors.unsupported_route())
+        if (self.headers.get('Content-Type') or '').split(';', 1)[0].strip().lower() \
+                != 'application/json':
+            return self.error(errors.unsupported_media_type())
         # One slot spans read_body, prepare and relay; rejects above return first.
         with self.server.lock:
-            self.server.inflight += 1
+            if self.server.inflight >= self.server.max_inflight:
+                over = True
+            else:
+                self.server.inflight += 1
+                over = False
+        if over:
+            return self.retryable_reject(errors.too_many_inflight(), retry_after='1')
         try:
             return self._owned_post(path, via_path, started)
         finally:

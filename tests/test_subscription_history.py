@@ -97,7 +97,9 @@ class ReplayHandlerTests(unittest.TestCase):
             conn = http.client.HTTPConnection('127.0.0.1', self.server.server_port, timeout=10)
             self.addCleanup(conn.close)
             conn.request('POST', '/test-token' + path,
-                         zstd.compress(json.dumps(payload).encode()), {'Content-Encoding': 'zstd'})
+                         zstd.compress(json.dumps(payload).encode()),
+                         {'Content-Encoding': 'zstd',
+                          'Content-Type': 'application/json'})
             response = conn.getresponse()
             self.assertEqual(response.status, 200)
             response.read()

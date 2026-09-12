@@ -8,6 +8,7 @@ Reuses the shared helpers in tests/harness.py.
 import http.client
 import json
 import socket
+import threading
 import unittest
 from unittest import mock
 from compression import zstd
@@ -101,6 +102,94 @@ class IngressGuardTests(unittest.TestCase):
         raw = self._raw_request(
             server.server_port, b'GET /test-token/health HTTP/1.0\r\n\r\n')
         self.assertIn(b'200', raw.split(b'\r\n', 1)[0])
+
+    def test_a_non_json_content_type_is_415_before_parsing(self):
+        recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
+        server = self._server()
+        conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
+        self.addCleanup(conn.close)
+        conn.request('POST', '/test-token/responses',
+                     body=json.dumps({'model': 'z-ai/glm-5.3', 'input': []}),
+                     headers={'Content-Type': 'text/plain'})
+        response = conn.getresponse()
+        self.assertEqual(response.status, 415)
+        self.assertEqual(json.loads(response.read())['error']['code'],
+                         'UNSUPPORTED_MEDIA_TYPE')
+        self.assertEqual(recorded, [])
+
+    def test_a_json_charset_parameter_is_still_accepted(self):
+        recorded = install_fake(self, lambda: FakeUpstream(200, b'{"output": []}', []))
+        server = self._server()
+        conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
+        self.addCleanup(conn.close)
+        conn.request('POST', '/test-token/responses',
+                     body=json.dumps({'model': 'z-ai/glm-5.3', 'input': []}),
+                     headers={'Content-Type': 'application/json; charset=utf-8'})
+        self.assertEqual(conn.getresponse().status, 200)
+        self.assertEqual(len(recorded), 1)
+
+    def test_the_concurrency_cap_answers_429_with_retry_after(self):
+        server = self._server()
+        server.max_inflight = 0
+        conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
+        self.addCleanup(conn.close)
+        conn.request('POST', '/test-token/responses',
+                     body=json.dumps({'model': 'z-ai/glm-5.3', 'input': []}),
+                     headers={'Content-Type': 'application/json'})
+        response = conn.getresponse()
+        self.assertEqual(response.status, 429)
+        self.assertEqual(response.getheader('Retry-After'), '1')
+        self.assertEqual(json.loads(response.read())['error']['code'],
+                         'TOO_MANY_REQUESTS')
+
+    def test_health_reports_the_concurrency_cap_and_count(self):
+        server = self._server()
+        conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
+        self.addCleanup(conn.close)
+        conn.request('GET', '/test-token/health')
+        body = json.loads(conn.getresponse().read())
+        self.assertEqual(body['max_inflight'], router_mod.MAX_INFLIGHT)
+        self.assertEqual(body['inflight'], 0)
+
+    def test_a_second_request_over_the_cap_is_rejected_while_one_is_in_flight(self):
+        released = threading.Event()
+        started = threading.Event()
+
+        class Blocking(FakeUpstream):
+            def read(self, amt=None):
+                started.set()
+                released.wait(5)
+                return super().read(amt)
+
+        install_fake(self, lambda: Blocking(200, b'{"output": []}', []))
+        server = self._server()
+        server.max_inflight = 1
+        first = {}
+
+        def slow_request():
+            conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
+            conn.request('POST', '/test-token/responses',
+                         body=json.dumps({'model': 'z-ai/glm-5.3', 'input': []}),
+                         headers={'Content-Type': 'application/json'})
+            first['status'] = conn.getresponse().status
+            conn.close()
+
+        thread = threading.Thread(target=slow_request, daemon=True)
+        thread.start()
+        try:
+            self.assertTrue(started.wait(5), 'the first request never reached upstream')
+            conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
+            self.addCleanup(conn.close)
+            conn.request('POST', '/test-token/responses',
+                         body=json.dumps({'model': 'z-ai/glm-5.3', 'input': []}),
+                         headers={'Content-Type': 'application/json'})
+            response = conn.getresponse()
+            self.assertEqual(response.status, 429)
+            response.read()
+        finally:
+            released.set()
+            thread.join(5)
+        self.assertEqual(first.get('status'), 200)
 
     def test_zstd_decoded_too_large_is_413_and_never_reaches_upstream(self):
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))

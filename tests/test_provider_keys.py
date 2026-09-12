@@ -11,6 +11,7 @@ import os
 import shutil
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from ai_router import provider_defs
@@ -50,9 +51,13 @@ class KeyStateParityTests(unittest.TestCase):
         return path
 
     def _with_auth(self, entry):
-        path = self.home / 'opencode-auth.json'
+        """(state, env) for the client's own auth file under a temp HOME."""
+        env_home = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, str(env_home), True)
+        path = env_home / '.local' / 'share' / 'opencode' / 'auth.json'
+        path.parent.mkdir(parents=True)
         path.write_text(json.dumps({'openrouter': entry}))
-        return {**self.state, 'opencode_auth': str(path)}
+        return {**self.state, 'opencode_auth': str(path)}, {'HOME': str(env_home)}
 
     def _private(self, path):
         return not (path.stat().st_mode & 0o077)
@@ -88,16 +93,53 @@ class KeyStateParityTests(unittest.TestCase):
         self.assertFalse(self._router_resolves({}))
 
     def test_third_party_credential_is_counted_and_the_router_agrees(self):
-        state = self._with_auth({'type': 'api', 'key': 'sk-oc'})
+        state, env = self._with_auth({'type': 'api', 'key': 'sk-oc'})
         self.assertEqual(
-            self.keys.key_state(self.home, state, {}, self.defn), (True, True))
-        self.assertTrue(self._router_resolves({}, state))
+            self.keys.key_state(self.home, state, env, self.defn), (True, True))
+        self.assertTrue(self._router_resolves(env, state))
 
     def test_non_api_third_party_credential_is_refused_and_the_router_agrees(self):
-        state = self._with_auth({'type': 'oauth', 'key': 'sk-oc'})
+        state, env = self._with_auth({'type': 'oauth', 'key': 'sk-oc'})
         self.assertEqual(
-            self.keys.key_state(self.home, state, {}, self.defn), (False, False))
-        self.assertFalse(self._router_resolves({}, state))
+            self.keys.key_state(self.home, state, env, self.defn), (False, False))
+        self.assertFalse(self._router_resolves(env, state))
+
+    def test_an_opencode_auth_pointing_elsewhere_is_not_counted(self):
+        other = self.home / 'auth.json'
+        other.write_text(json.dumps({'openrouter': {'type': 'api', 'key': 'k'}}))
+        state = {**self.state, 'opencode_auth': str(other)}
+        self.assertEqual(
+            self.keys.key_state(self.home, state, {'HOME': str(self.home)}, self.defn),
+            (False, False))
+
+    def test_an_xdg_data_home_path_is_not_counted_for_the_service(self):
+        # The service carries no XDG_DATA_HOME, so the installer must not
+        # count a file the router can never read.
+        env_home = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, str(env_home), True)
+        xdg = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, str(xdg), True)
+        auth = xdg / 'opencode' / 'auth.json'
+        auth.parent.mkdir(parents=True)
+        auth.write_text(json.dumps({'openrouter': {'type': 'api', 'key': 'sk-oc'}}))
+        state = {**self.state, 'opencode_auth': str(auth)}
+        env = {'HOME': str(env_home), 'XDG_DATA_HOME': str(xdg)}
+        self.assertEqual(
+            self.keys.key_state(self.home, state, env, self.defn), (False, False))
+
+    def test_a_tilde_form_auth_path_counts_the_same_on_both_sides(self):
+        env_home = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, str(env_home), True)
+        auth = env_home / '.local' / 'share' / 'opencode' / 'auth.json'
+        auth.parent.mkdir(parents=True)
+        auth.write_text(json.dumps({'openrouter': {'type': 'api', 'key': 'sk-oc'}}))
+        state = {**self.state,
+                 'opencode_auth': '~/.local/share/opencode/auth.json'}
+        env = {'HOME': str(env_home)}
+        with mock.patch.dict(os.environ, env):
+            self.assertEqual(
+                self.keys.key_state(self.home, state, env, self.defn), (True, True))
+        self.assertTrue(self._router_resolves(env, state))
 
     def test_ensure_creates_one_owner_only_placeholder_then_stops(self):
         protected = []
@@ -140,6 +182,15 @@ class ServiceVisibleTests(unittest.TestCase):
     def _private(self, path):
         return not (path.stat().st_mode & 0o077)
 
+    def _auth(self, entry):
+        """The client's auth file under a temp HOME; (path, env)."""
+        env_home = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, str(env_home), True)
+        path = env_home / '.local' / 'share' / 'opencode' / 'auth.json'
+        path.parent.mkdir(parents=True)
+        path.write_text(json.dumps({'openrouter': entry}))
+        return str(path), {'HOME': str(env_home)}
+
     def test_env_only_key_is_not_service_visible(self):
         # key_state() still sees the env key (foreground runs stay valid);
         # the service read ignores it.
@@ -167,11 +218,11 @@ class ServiceVisibleTests(unittest.TestCase):
             self.keys.unhandled(self.home, self.state, self._private), [])
 
     def test_valid_opencode_auth_is_handled(self):
-        auth = self.home / 'opencode-auth.json'
-        auth.write_text(json.dumps({'openrouter': {'type': 'api', 'key': 'sk-oc'}}))
-        state = dict(self.state, opencode_auth=str(auth))
-        self.assertEqual(
-            self.keys.unhandled(self.home, state, self._private), [])
+        auth, env = self._auth({'type': 'api', 'key': 'sk-oc'})
+        state = dict(self.state, opencode_auth=auth)
+        with mock.patch.dict(os.environ, env):
+            self.assertEqual(
+                self.keys.unhandled(self.home, state, self._private), [])
 
     def test_blank_placeholder_with_auth_is_unhandled_not_refused(self):
         # The empty placeholder is terminal for the router, so it shadows a
@@ -179,12 +230,12 @@ class ServiceVisibleTests(unittest.TestCase):
         # must report it as unhandled rather than as a permission problem.
         (self.home / self.defn.key.file).write_text('\n')
         os.chmod(self.home / self.defn.key.file, 0o600)
-        auth = self.home / 'opencode-auth.json'
-        auth.write_text(json.dumps({'openrouter': {'type': 'api', 'key': 'sk-oc'}}))
-        state = dict(self.state, opencode_auth=str(auth))
-        self.assertEqual(
-            [d.id for d in self.keys.unhandled(self.home, state, self._private)],
-            [self.defn.id])
+        auth, env = self._auth({'type': 'api', 'key': 'sk-oc'})
+        state = dict(self.state, opencode_auth=auth)
+        with mock.patch.dict(os.environ, env):
+            self.assertEqual(
+                [d.id for d in self.keys.unhandled(self.home, state, self._private)],
+                [self.defn.id])
 
     @requires_posix_perms
     def test_widened_key_file_is_refused_not_armed(self):

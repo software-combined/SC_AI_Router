@@ -97,7 +97,7 @@ rejections, the no-copy rule and the client-catalogue spike). Plan 145
 
 | Plan | Title | Status | Sequencing |
 |---|---|---|---|
-| [146](146-ingress-hardening-wave-2.md) | Ingress hardening, second wave | TODO | after 137; serialize with 135 on `ai_router/router.py` |
+| [146](146-ingress-hardening-wave-2.md) | Ingress hardening, second wave | DONE: token strength, 32-request cap, redaction, 415 guard, opencode confinement, ACL verdict TTL 2026-09-12 | after 137; serialize with 135 on `ai_router/router.py` |
 | [147](147-operator-surface-doctor-status-rollback-support.md) | Operator surface: doctor, status, rollback, support bundle | TODO | after 131; serialize with 134's CI step (landed) |
 | [148](148-claude-drift-and-contract.md) | Claude Code drift check and attachment contract | TODO | after 146's guard; coordinate 113/120/121 |
 
