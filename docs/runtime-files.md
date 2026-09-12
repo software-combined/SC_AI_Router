@@ -14,6 +14,7 @@ are never copied between machines.
 `ai_router/tool_adapter.py`, `ai_router/tool_aliases.py`,
 `ai_router/agent_handoffs.py`, `ai_router/sse.py`, `ai_router/stream_errors.py`,
 `ai_router/capabilities.py`, `ai_router/compaction.py`,
+`ai_router/compaction_result.py`,
 `ai_router/standalone_outputs.py`, `ai_router/discovered.py`,
 `ai_router/errors.py`, `ai_router/candidate.py`,
 `ai_router/setup.py`, `ai_router/setup_page.py`, `ai_router/key_store.py`,
@@ -37,7 +38,8 @@ are never copied between machines.
 `ai_router/protocols/messages.py`, `ai_router/models.json`,
 `ai_router/openrouter_base_instructions.txt`, `ai_router/agents.py`,
 `ai_router/agents_general.txt`, `ai_router/agents_dev.txt`,
-`tools/probe_codex_runtime.py`, `tools/global_instructions.py`,
+`tools/probe_codex_runtime.py`, `tools/probe_context_budget.py`,
+`tools/global_instructions.py`,
 `tools/disable.py`.
 
 The feed-signature module lives with its consumers as

@@ -76,6 +76,9 @@ class Handler(BaseHTTPRequestHandler):
     def send_json(self, status, obj, headers=None):
         return ingress.send_json(self, status, obj, headers)
 
+    def send_compaction_stream(self, output):
+        return ingress.send_compaction_stream(self, output)
+
     def error(self, err):
         return ingress.error(self, err, log_event=log_event)
 
@@ -158,7 +161,10 @@ class Handler(BaseHTTPRequestHandler):
                 # errors keep 401/400, not 502.
                 key = self.server.credentials.key_for(provider.defn.id)
                 try:
-                    return self.send_json(200, {'output': compact_call(key)})
+                    output = compact_call(key)
+                    if path == '/responses' and payload.get('stream') is True:
+                        return self.send_compaction_stream(output)
+                    return self.send_json(200, {'output': output})
                 except PreparationError as exc:
                     return self.error(errors.preparation(str(exc)))
                 except (OSError, http.client.HTTPException):

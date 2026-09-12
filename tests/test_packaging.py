@@ -22,6 +22,7 @@ FILES = [
          'ai_router/sse.py', 'ai_router/stream_errors.py',
          'ai_router/capabilities.py',
          'ai_router/compaction.py',
+         'ai_router/compaction_result.py',
          'ai_router/context_recovery.py',
          'ai_router/standalone_outputs.py',
 'ai_router/discovered.py',
@@ -66,6 +67,7 @@ FILES = [
          'ai_router/agents_general.txt',
          'ai_router/agents_dev.txt',
          'tools/probe_codex_runtime.py',
+         'tools/probe_context_budget.py',
          'tools/global_instructions.py',
          'tools/disable.py',
          ]
