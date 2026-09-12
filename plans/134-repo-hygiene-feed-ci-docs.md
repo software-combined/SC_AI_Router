@@ -98,11 +98,42 @@ removing `codex_router/` (needs the external-consumer search and owner decision)
 
 ## Done criteria
 
-- [ ] Verifier moved with all lists updated; no ai_router reference remains.
-- [ ] One composite setup action; policy scans runnable locally and from CI with widened coverage.
-- [ ] Docs index in place; kiro pointer resolvable; shim owner recorded; tools/ rule documented.
-- [ ] Full suite, compile, limit and surface gates pass; only in-scope files changed.
-- [ ] `plans/README.md` status row updated.
+- [x] Verifier moved with all lists updated; no ai_router reference remains.
+  (`ai_router/feed_verify.py` -> `packaging/feed_verify.py`, contents unchanged;
+  sibling loaders in `packaging/feed.py` and `packaging/release.py`;
+  `PACKAGING_FILES`, `REQUIRED_PACKAGING`, the 3.9 surface list,
+  `tests/test_feed_verify.py`, `tests/test_install.py`,
+  `tests/test_install_state.py`, and `docs/runtime-files.md` updated.
+  `rg -n 'feed_verify' ai_router/` returns nothing; no file references
+  `ai_router/feed_verify.py` outside historical plan text.)
+- [x] One composite setup action; policy scans runnable locally and from CI with widened coverage.
+  (`.github/actions/setup/action.yml` owns the pinned setup-python step;
+  `tools/check_policy_scans.py` implements the request-cap and secrets scans
+  plus the single-owner pin check; `check.yml` calls it in place of the inline
+  shell. The secrets include list already covered `*.yml,*.sh,*.ps1` at
+  amendment time, so coverage is preserved, not widened. The request-cap scan
+  covers the whole repository and fails when a scanned path is missing; the
+  pin check globs every workflow so a new one cannot carry its own pin.
+  CI-side execution of the composite and this step is pending the first push.)
+- [x] Docs index in place; kiro pointer resolvable; shim owner recorded; tools/ rule documented.
+  (Index, bundled docs, troubleshooting page, per-PR suite and shell/PowerShell
+  gates landed earlier per the amendment. New: kiro reopen condition stated
+  without the removed plan number; `codex_router/` deprecation note names Plan
+  134 as transitional owner with the external-consumer-search removal condition
+  plus a `plans/README.md` owner row; `docs/architecture.md` rule 7 defines
+  `tools/` vs `packaging/`; bundled-only references to `docs/assets/`,
+  `SECURITY.md` and `infra/*.yaml` marked repository-only.)
+- [x] Full suite, compile, limit and surface gates pass; only in-scope files changed.
+  (Full suite 1137 tests, compile, limits checked=184, ruff and policy scans
+  green; the surface gate parses the moved verifier as 3.9.)
+- [x] `plans/README.md` status row updated.
+  (Row reads DONE with the CI-side execution of the composite and policy scan
+  recorded as pending the first push.)
+
+> Execution note 2026-09-12: steps 1-3 implemented. No CHANGELOG entry added:
+> the move is behaviour-preserving and internal, not user-visible. CI-side
+> execution of the composite action and the policy-scan step is pending the
+> first push (the STOP condition's recorded fallback).
 
 ## STOP conditions
 

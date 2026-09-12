@@ -1,6 +1,7 @@
 """Plan 041 installer tests. install.py imports cleanly as a module."""
 import contextlib
 import hashlib
+import importlib.util as _ilu
 import io
 import json
 import os
@@ -13,7 +14,6 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ai_router import feed_verify
 from tests.install_fixtures import (
     _craft_bundle,
     _ok_run,
@@ -24,6 +24,12 @@ from tests.install_fixtures import (
     _tarball,
     install_mod,
 )
+
+_feed_verify_spec = _ilu.spec_from_file_location(
+    'router_feed_verify',
+    Path(__file__).resolve().parents[1] / 'packaging' / 'feed_verify.py')
+feed_verify = _ilu.module_from_spec(_feed_verify_spec)
+_feed_verify_spec.loader.exec_module(feed_verify)
 
 
 class PlatformRefusalTests(unittest.TestCase):

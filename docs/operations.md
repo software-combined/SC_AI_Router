@@ -14,8 +14,10 @@ checks but publishes nothing.
 
 ## Feed infrastructure and publishing
 
-Two stacks, both in this repository, hold the update path. Deploy the
-certificate first: CloudFront reads viewer certificates from `us-east-1`,
+Two stacks, both in this repository, hold the update path. The `infra/`
+templates are repository-only: deploy them from a checkout, not from an
+installed host (the release bundle carries `README.md` and `docs/*.md` only).
+Deploy the certificate first: CloudFront reads viewer certificates from `us-east-1`,
 and the deploy stays in progress until ACM validates the DNS record it
 creates in the `softwarecombined.com` zone.
 

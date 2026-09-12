@@ -81,7 +81,7 @@ below interleaves them.
 | [131](131-service-state-writer-decomposition.md) | Service/state/writer decomposition | PARTIAL: writer leaf, sinks and the state-read contract landed 2026-09-12; service split and diagnostics/key privacy left | after 094/095/100/103/123; coordinate 106 |
 | [132](132-windows-backend-cleanup.md) | Windows backend cleanup | TODO | before/with 116; after 123 |
 | [133](133-probe-harness-consolidation.md) | One app-server probe harness | TODO | before 118/119 |
-| [134](134-repo-hygiene-feed-ci-docs.md) | feed_verify move, CI single owner, docs index, shim owner | PARTIAL 2026-09-12: docs index, bundled docs, troubleshooting page, per-PR unit suite and the shell/PowerShell parse gates landed (see its amendment); the verifier move, composite action, policy-scan script, kiro pointer, shim owner and tools/ rule remain | after 101; before 106 (feed work) |
+| [134](134-repo-hygiene-feed-ci-docs.md) | feed_verify move, CI single owner, docs index, shim owner | DONE: repo hygiene 2026-09-12 (verifier in packaging/, one setup composite + policy-scan script, kiro pointer, shim owner, tools/ rule); CI-side run of the composite pends the first push | after 101; before 106 (feed work) |
 | [135](135-new-model-prompt.md) | New-model prompt: notify + one-click Codex restart only when new models appear | TODO | after 128/131; hooks into 099; coordinate 106 |
 
 ## Security wave (136-138)
@@ -257,6 +257,17 @@ scheduler commands to `--update`. 148 is source and offline tests only; its live
 `rejected-muse-retry/` holds rejected retry drafts kept for provenance only.
 Never execute them; their filenames reuse the old number series (its `056-...`
 draft is unrelated to the removed router plan 056).
+
+## Transitional shim owner (Plan 134, 2026-09-12)
+
+`codex_router/` stays as a deprecated alias re-exporting `ai_router` (owner:
+Plan 134 until a dedicated removal plan names its own owner). A removal plan
+may delete it only after an external-consumer search finds no live importer
+outside this repository and records the result. Live in-repo importers of the
+old name today: none outside `codex_router/` itself (`packaging/router_launch.py`
+prefers `ai_router` and falls back to `codex_router` only for pre-rename
+installed releases); the `codex_router` log name stays so existing installs
+keep working.
 
 ## Completed and removed (archived 2026-09-10)
 
