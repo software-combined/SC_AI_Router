@@ -362,6 +362,8 @@ try:
     compact_then_switch = '--compact-then-switch' in sys.argv
     if '--switch' in sys.argv and not compact_then_switch:
         run_switch_leg(thread, switch_target())
+        if '--switch-back' in sys.argv:
+            run_switch_leg(thread, model)
     if '--compact' in sys.argv or compact_then_switch:
         run_compact(thread)
         if '--compact-twice' in sys.argv:

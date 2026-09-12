@@ -1,6 +1,7 @@
 """Plaintext aliases for native collaboration; Codex still executes every tool."""
 from copy import deepcopy
 import json
+import uuid
 
 from . import provider_defs, sse
 from .registry import by_slug
@@ -79,11 +80,33 @@ def spawn_models(items):
     return models
 
 
+def _tool_container(payload):
+    """Find one native declaration, including the client's Lite prefix."""
+    containers = [(payload, None)]
+    items = payload.get('input', [])
+    containers.extend((item, index) for index, item in enumerate(items if isinstance(items, list) else [])
+                      if isinstance(item, dict) and item.get('type') == 'additional_tools'
+                      and item.get('role') == 'developer')
+    matches = []
+    for container, index in containers:
+        tools = container.get('tools', [])
+        if index is not None and (not isinstance(tools, list)
+                                  or any(not isinstance(t, dict) for t in tools)):
+            raise ValueError('unsupported tool declaration shape')
+        for tool in tools:
+            if tool.get('name') == PLAINTEXT_NAMESPACE:
+                raise ValueError('plaintext collaboration namespace collision')
+            if tool.get('type') == 'namespace' and tool.get('name') == NATIVE_NAMESPACE:
+                matches.append((container, index))
+    if len(matches) > 1:
+        raise ValueError('duplicate native collaboration namespace')
+    return matches[0] if matches else (payload, None)
+
+
 def add_plaintext_tools(payload):
     """Offer aliases only for native tools present in this request."""
-    tools = payload.get('tools', [])
-    if any(t.get('name') == PLAINTEXT_NAMESPACE for t in tools):
-        raise ValueError('plaintext collaboration namespace collision')
+    container, input_index = _tool_container(payload)
+    tools = container.get('tools', [])
     aliases = []
     for namespace in tools:
         if namespace.get('type') != 'namespace' or namespace.get('name') != NATIVE_NAMESPACE:
@@ -113,13 +136,23 @@ def add_plaintext_tools(payload):
     if len(names) != len(aliases):
         raise ValueError('duplicate native collaboration tool')
     if aliases:
-        payload['tools'] = [*tools, {'type': 'namespace', 'name': PLAINTEXT_NAMESPACE,
+        augmented = [*tools, {'type': 'namespace', 'name': PLAINTEXT_NAMESPACE,
             'description': ('Use this namespace for every initial assignment and follow-up '
                 'to externally billed agents. Previous calls may appear under '
                 'collaboration in '
                 'history because Codex executes the native tool; that does not change '
                 'the need to choose collaboration_plaintext for the next message.'),
             'tools': aliases}]
+        if input_index is None:
+            payload['tools'] = augmented
+        else:
+            # Codex hashes prefix payloads into IDs; changed tools need a new,
+            # stable identity too. Never modify the client's saved prefix.
+            identity = json.dumps([container.get('id'), augmented], sort_keys=True)
+            ident = 'at_' + str(uuid.uuid5(uuid.NAMESPACE_URL, 'scg-plaintext:' + identity))
+            items = list(payload['input'])
+            items[input_index] = {**container, 'tools': augmented, 'id': ident}
+            payload['input'] = items
     return AliasTools(names, payload.get('stream') is True, children)
 
 
@@ -149,6 +182,16 @@ def restore_event(event, names):
         if restored is not response:
             mapped = {**mapped, 'response': restored}
     return mapped
+
+
+def external_plaintext_call(item, names):
+    """External upstreams emit plaintext; keep advertised native calls executable."""
+    if (item.get('type') != 'function_call' or item.get('namespace') != NATIVE_NAMESPACE
+            or item.get('name') not in HANDOFF_TOOLS or item.get('name') not in names):
+        return item
+    if item.get('encrypted_function_args', []) != []:
+        raise ValueError('unsupported encrypted external handoff')
+    return {**item, 'encrypted_function_args': []}
 
 
 def restore_response(response, names):

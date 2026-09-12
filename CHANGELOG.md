@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.6.37
+
+- Mixed-provider subagent assignments now work with native Responses Lite
+  tool declarations. Plaintext aliases and encrypted-handoff steering apply
+  to both wire formats; native OpenAI handoffs keep their encryption.
+  The handoff probe now uses the actual installed subscription metadata.
+- Child messages use matched tool results on external routes, avoiding
+  Sonnet assistant-prefill rejections. External parents also produce
+  executable plaintext calls when they select the native handoff tools.
+- Switching from an external model to a ChatGPT subscription model now
+  normalizes reasoning records in the outgoing request, including compaction
+  requests. Foreign plaintext reasoning items are omitted; native encrypted
+  reasoning, messages, tool results, and saved task history are preserved.
+- Codex Responses validation failures retain HTTP 400 instead of becoming
+  retryable 409 errors. Diagnostics include only validated structural field
+  paths, and cached refusals retain the original client status.
+
 ## 0.6.36
 
 - New-model prompt (plan 135): when an update adds models for the machine's

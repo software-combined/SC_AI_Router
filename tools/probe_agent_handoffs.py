@@ -24,12 +24,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ai_router.agent_handoffs import add_plaintext_tools, restore_event
-from ai_router.catalogue import external_entry
+from ai_router.catalogue import external_entry, subscription_stub
 from ai_router.registry import by_slug
 from tools.appserver_probe import AppServer, AGENT_HANDOFFS, scrub_env
 
 PARENT = 'gpt-6-astra'
-CHILD = 'meta/muse-spark-1.3-contributor'
+CHILD = 'deepseek/deepseek-v4.1-flash'
 MARKERS = ('SYNTH_066_INITIAL', 'SYNTH_066_FOLLOWUP', 'SYNTH_066_MESSAGE')
 ALL_MARKERS = (*MARKERS, 'SYNTH_NATIVE_CONTROL')
 
@@ -95,7 +95,7 @@ class Probe:
         step = self.parent_calls
         self.parent_calls += 1
         calls = [
-            ('spawn_agent', {'task_name': 'plain', 'model': CHILD, 'fork_turns': 'none', 'message': MARKERS[0]}),
+            ('spawn_agent', {'task_name': 'plain', 'model': CHILD, 'fork_turns': 'none', 'reasoning_effort': 'max', 'message': MARKERS[0]}),
             ('followup_task', {'target': 'plain', 'message': MARKERS[1]}),
             ('send_message', {'target': 'plain', 'message': MARKERS[2]}),
             ('followup_task', {'target': 'plain', 'message': 'SYNTH_WAKE_READ_QUEUED_MESSAGE'}),
@@ -131,7 +131,14 @@ class Probe:
             'input_kinds': sorted({i.get('type') for i in body.get('input', [])
                                    if isinstance(i, dict)}),
         })
-        body['tools'] = [t for t in offered if t.get('name') == 'collaboration']
+        containers = [body, *(i for i in body.get('input', [])
+            if i.get('type') == 'additional_tools' and i.get('role') == 'developer')]
+        self.facts['turns'][-1]['tool_location'] = (
+            'additional_tools' if len(containers) > 1 else 'tools')
+        for container in containers:
+            if isinstance(container.get('tools'), list):
+                container['tools'] = [t for t in container['tools']
+                                      if t.get('name') == 'collaboration']
         if self.live_children:
             if body.get('model') != PARENT:
                 self.scripted(body, ordinal)  # Observe input shape only; discard scripted reply.
@@ -169,6 +176,8 @@ class Probe:
                             self.facts['replies'].append(marker)
             return raw
         aliases = add_plaintext_tools(body)
+        if body.get('model') == PARENT and not aliases:
+            raise ValueError('parent collaboration aliases were not advertised')
         if self.live and body.get('model') == PARENT:
             raw = self.forward(body, headers)
         else:
@@ -292,25 +301,20 @@ def run(args):
         threading.Thread(target=server.serve_forever, daemon=True).start()
         child = external_entry(by_slug(CHILD))
         child['prefer_websockets'] = False
-        if PARENT.startswith('gpt-'):
-            # Subscription parents keep their live multi-agent contract.
-            # The installed catalogue serves Astra v2 but Luna v1 (Codex
-            # 0.153.4, 2026-09-10); forcing v2 would mask that difference.
-            # Plan 066 covers the v2 parent route; v1 parents stay fail-closed
-            # on opaque follow-ups and need their own plan if pursued.
-            # Isolated default must run without the installed catalogue.
-            try:
-                installed = (Path.home() / '.codex/mixed-model-router'
-                             / 'mixed-models.json').read_text()
-            except OSError:
-                installed = '{"models": []}'
-            live = {m.get('slug'): m.get('multi_agent_version')
-                    for m in json.loads(installed).get('models', [])}
-            parent = dict(child, slug=PARENT, display_name='Synthetic parent',
-                          multi_agent_version=live.get(PARENT, 'v2'))
+        if args.live:
+            installed = json.loads((Path.home() / '.codex/mixed-model-router'
+                                    / 'mixed-models.json').read_text())
+            rows = {m['slug']: m for m in installed['models']}
+            parent = dict(rows[PARENT])
+            native = dict(rows['gpt-5.6-sol'])
         else:
-            parent = external_entry(by_slug(PARENT))
-        native = dict(parent, slug='gpt-5.6-sol')
+            parent = (subscription_stub(PARENT) if PARENT.startswith('gpt-')
+                      else external_entry(by_slug(PARENT)))
+            parent['use_responses_lite'] = args.wire_mode == 'lite'
+            parent['multi_agent_version'] = 'v2'
+            native = dict(parent, slug='gpt-5.6-sol')
+        probe.facts['parent_wire_mode'] = 'lite' if parent['use_responses_lite'] else 'classic'
+        probe.facts['child_effort'] = 'max'
         catalog = root / 'catalog.json'
         catalog.write_text(json.dumps({'models': [parent, child, native]}))
         if args.live:
@@ -380,7 +384,7 @@ def run(args):
                 'developerInstructions': 'Use only the collaboration tools requested by the user.'})['thread']['id']
             prompts = [
                 f'Use collaboration_plaintext.spawn_agent once to create plain on {CHILD}, '
-                f'fork_turns none, message "Reply exactly {MARKERS[0]}". Then finish this turn.',
+                f'fork_turns none, reasoning_effort max, message "Reply exactly {MARKERS[0]}". Then finish this turn.',
                 'The plain child uses OpenRouter. Call collaboration_plaintext.followup_task '
                 f'once with target plain, message "Reply exactly {MARKERS[1]}". Then finish this turn.',
                 'The plain child uses OpenRouter. Call collaboration_plaintext.send_message '
@@ -475,6 +479,8 @@ def run(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--codex', default='/Applications/ChatGPT.app/Contents/Resources/codex')
+    parser.add_argument('--wire-mode', choices=('classic', 'lite'), default='lite',
+                        help='Offline variant; live always uses installed catalogue metadata.')
     parser.add_argument('--live', action='store_true')
     parser.add_argument('--live-children', action='store_true')
     parser.add_argument('--native-only', action='store_true')

@@ -6,6 +6,14 @@
 
 ## Status and first proof
 
+- Owner-authorized 0.6.37 follow-up: subscription history normalization
+  now makes DeepSeek -> Astra switches independent of compaction, and
+  Responses HTTP 400 validation errors stay final rather than becoming
+  retryable 409s. Cache entries preserve the client status. See
+  `docs/compatibility.md`, "Subscription history replay and validation
+  retries", for synthetic and live acceptance. The external registry
+  portability scope below is unchanged.
+
 - Priority P1; effort S; risk MED (refusal path and wire history); category
   router/reliability; depends on none.
 - Planned at `3515c6a`, 2026-09-12; rebased onto `7ebdb85` when develop took 145-148.
