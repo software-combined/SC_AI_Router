@@ -21,6 +21,15 @@ except (OSError, ValueError):
 installer = home / 'releases' / name / 'packaging' / 'install.py'
 if not installer.is_file():
     raise SystemExit('router release missing: reinstall the router')
+# The home launcher outlives the release that installed it: an explicit
+# rollback points `current` at an older installer, and only 0.6.37+ takes
+# --update. Ask the resolved release which applying verb it advertises so a
+# rolled-back host keeps updating instead of exiting 2 every four hours.
+try:
+    installer_text = installer.read_text(encoding='utf-8')
+except OSError:
+    installer_text = ''
+verb = '--update' if "'--update'" in installer_text else '--check-update'
 try:
     import importlib.util as _ilu
     _rotate_spec = _ilu.spec_from_file_location(
@@ -30,5 +39,5 @@ try:
     _rotate_mod.rotate_log(home / 'logs' / 'update.log')
 except (OSError, ImportError, AttributeError):
     pass  # Rotation is hygiene; an older release without it still boots.
-sys.argv = [str(installer), '--check-update', '--home', str(home)]
+sys.argv = [str(installer), verb, '--home', str(home)]
 runpy.run_path(str(installer), run_name='__main__')

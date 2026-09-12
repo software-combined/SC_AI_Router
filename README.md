@@ -192,9 +192,14 @@ offers a client restart and never forces one; the prompts each platform
 shows are described in
 [docs/operations.md](docs/operations.md#new-model-notifications).
 
-- `python3.14 packaging/install.py --check-update` runs one check now.
-- `python3.14 packaging/install.py --version <version>` rolls back to a
-  previously installed release.
+- `python3.14 packaging/install.py --check-update` reports the installed and
+  available versions without changing anything; `--update` applies one now.
+- `python3.14 packaging/install.py --doctor` explains an unhealthy host in
+  WARN/FAIL rows with a Fix line; `--support` writes a redacted bundle to
+  attach to a support request.
+- `python3.14 packaging/install.py --rollback --to <version>` (or its older
+  spelling `--version <version>`) rolls back to a previously installed
+  release; `--rollback` alone lists them.
 - A `--feed <latest.json>` install uses that document for the run only; later
   checks follow the channel.
 
@@ -211,20 +216,31 @@ file and loopback token are left in place for you to delete.
 # With no key installed the key window opens by itself; --setup forces it.
 python3.14 packaging/install.py
 
-# Read-only checks: prerequisites, then installed state (add --json for machines)
+# Read-only checks: prerequisites, installed state, then the full doctor
+# report with a Fix line per failing row (each takes --json for machines)
 python3.14 packaging/install.py --preflight
 python3.14 packaging/install.py --status
+python3.14 packaging/install.py --doctor
 
-# Update now, or return to a previously installed version
+# Apply an update now (the scheduled action), or read what the channel offers
+python3.14 packaging/install.py --update
 python3.14 packaging/install.py --check-update
-python3.14 packaging/install.py --version <installed version>
+
+# List the installed releases, or return to one of them
+python3.14 packaging/install.py --rollback
+python3.14 packaging/install.py --rollback --to <installed version>
+
+# Write a redacted bundle to attach to a support request
+python3.14 packaging/install.py --support
 
 # Detach every client and remove the service (state and key stay behind)
 python3.14 packaging/install.py --uninstall
 ```
 
-`--check-update` is not a dry run: it installs a newer release when the channel
-has one. If something looks wrong, start at
+`--update` installs a newer release when the channel has one; `--check-update`
+only reports the installed and available versions. `--version <version>` stays
+as the older spelling of `--rollback --to <version>`. If something looks wrong,
+`--doctor` names the failing component and the fix, then read
 [docs/troubleshooting.md](docs/troubleshooting.md).
 
 ## Diagnostics

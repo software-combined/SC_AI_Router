@@ -94,6 +94,7 @@ class ReleaseTests(unittest.TestCase):
                     'packaging/codex_config.py',
                     'packaging/claude_config.py',
                     'packaging/diagnostics.py',
+                    'packaging/operator_surface.py',
                      'packaging/runtime.lock', 'packaging/runtime_lock.py',
                     'packaging/platforms/__init__.py',
                     'packaging/platforms/darwin.py',

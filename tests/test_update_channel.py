@@ -206,7 +206,7 @@ class InstallLockTests(unittest.TestCase):
             self.assertEqual(rc, 0)
             self.assertIn('another router operation', buf.getvalue())
 
-    def test_check_update_never_takes_the_lock_its_own_child_needs(self):
+    def test_update_never_takes_the_lock_its_own_child_needs(self):
         # The scheduled parent must stay unlocked: the installer it spawns is
         # a fresh main() that takes the lock itself. A parent holding it would
         # make the child defer, the parent report "did not activate", and
@@ -235,11 +235,11 @@ class InstallLockTests(unittest.TestCase):
                 with mock.patch('time.sleep'), contextlib.redirect_stdout(buf), \
                         mock.patch.dict(os.environ, {'ROUTER_LIVE_RUN': '1'}):  # deliberate scratch-home run
                     rc = install_mod.main(
-                        ['--check-update', '--home', str(home),
+                        ['--update', '--home', str(home),
                          '--feed', 'file://' + str(feed_doc)])
             self.assertEqual(rc, 0)
             self.assertNotIn('another router operation', buf.getvalue(),
-                             'a scheduled check must not be blocked by the lock')
+                             'a scheduled update must not be blocked by the lock')
             self.assertTrue([c for c in child if '--home' in c],
                             'the check must still reach the child installer')
 
@@ -284,7 +284,7 @@ class UpdateBackoffTests(unittest.TestCase):
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             try:
-                rc = install_mod.do_check_update(
+                rc = install_mod.do_update(
                     args, _fetch=fetch,
                     _read_feed=lambda f, e: (200, json.dumps(latest).encode(), 'etag-1'),
                     _sleep=lambda s: None, _announce=_announce)
