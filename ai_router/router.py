@@ -6,8 +6,8 @@ import threading
 import time
 from compression import zstd
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from . import (capabilities, errors, ingress, local_services, provider_defs,
-               relay, setup, subscription_fallback, transport)
+from . import (capabilities, errors, ingress, local_services, model_prompt_page,
+               provider_defs, relay, setup, subscription_fallback, transport)
 from .credentials import Credentials
 from .protocols import owned_paths, select as select_protocol
 from .errors import InvalidSize, PreparationError
@@ -108,6 +108,9 @@ class Handler(BaseHTTPRequestHandler):
         if path not in owned_paths():
             if path.startswith('/setup/'):
                 return setup.serve(self, path[len('/setup/'):], True)
+            if path.startswith('/model-prompt/'):
+                return model_prompt_page.handle_page(
+                    self, path[len('/model-prompt/'):], True)
             return self.error(errors.unsupported_route())
         # One slot spans read_body, prepare and relay; rejects above return first.
         with self.server.lock:
