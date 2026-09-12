@@ -425,6 +425,35 @@ the user or system location. Router `GET /v1/models` = 20 rows.
   deploy of this source to the live router and an app relaunch, then
   this entry gets the observed picker count.
 
+## Context recovery and desktop upgrade, 2026-09-13
+
+Desktop `26.908.40834` (build 8881), bundled Codex
+`0.154.0-alpha.6.2`; matched source tag `rust-v0.154.0-alpha.6.2`,
+commit `a1bc283c327568149d7a29d5fbd304cc471a981a`. Claude Code `2.1.223`.
+
+- `tools/probe_context_recovery.py` passed scripted native and external legs
+  against the new installed binary. The real `new_context` tool removed the
+  synthetic assignment; the next request carried the recovery note, and the
+  exact previous-window history was retrieved before completing the same turn.
+- Live recovery passed for `gpt-5.6-luna` on the subscription route and
+  `deepseek/deepseek-v4.1-flash` on OpenRouter: one history retrieval and two
+  live calls each, capped at four. Those legs used the candidate router and
+  a local synthetic history tool, not another user's task history.
+- `tools/probe_context_budget.py` passed both threshold compaction and
+  explicit recovery after a context error, with the marker preserved.
+- `tools/probe_codex_runtime.py` passed a real dynamic-tool round trip on
+  both models through the installed `0.6.38.55` router after the client upgrade.
+- Real Claude Code sessions through the installed router returned the exact
+  synthetic marker on the subscription and OpenRouter paths. Requested
+  native alias `haiku` was reported by the CLI as `claude-opus-4-6`;
+  external usage reported `deepseek/deepseek-v4.1-flash`. No exact Haiku
+  identity claim is made. Tools, hooks and persistence were disabled for
+  these bounded routing checks; neither checks Claude desktop or MCP tools.
+
+See [the root cause, plan and acceptance limits](context-recovery.md).
+Recovery remains model-executed; the router does not change Codex's persisted
+history or claim it can reconstruct history that is no longer accessible.
+
 ## Pinned Claude rows, 2026-09-11
 
 `models add <slug> --probe`, base tool round trip through the isolated

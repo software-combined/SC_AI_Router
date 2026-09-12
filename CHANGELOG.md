@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.40
+
+- Codex windows that declare a previous context window now receive explicit
+  assignment-recovery guidance on both subscription and external Responses
+  routes. The shipped instructions distinguish summarized compaction from
+  `new_context`, which can omit the brief. Agents must retrieve their prior
+  assignment and progress before treating a reset as an unassigned task.
+- Upgrades replace the exact legacy context paragraph in retained subscription
+  templates while preserving custom instructions and model settings.
+- A real-client probe exercises initial delivery, unsummarized reset,
+  read-only history retrieval and completion of the recovered assignment.
+  Its default is scripted; optional live acceptance has a strict call cap.
+
 ## 0.6.39
 
 - Releases serialize publication to the shared update feed and verify the
