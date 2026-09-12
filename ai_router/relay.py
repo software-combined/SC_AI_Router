@@ -12,7 +12,7 @@ the injected object, never a fresh import.
 import http.client
 import json
 import time
-from . import errors, local_services, provider_defs, setup, subscription_fallback, transport, upstream
+from . import errors, local_services, provider_defs, setup, stream_errors, subscription_fallback, transport, upstream
 from .providers import NATIVE_SERVICE_PATHS
 
 
@@ -105,14 +105,21 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
         handler.send_header('Connection', 'close')
         handler.end_headers()
         sent = True
-        for chunk in provider.adapt(response, prepared.tool_names, metrics):
+        chunks = provider.adapt(response, prepared.tool_names, metrics)
+        if (provider.defn.dialect == 'openrouter'
+                and metrics.get('protocol') == provider_defs.RESPONSES
+                and metrics['response_kind'] == 'sse'
+                and metrics['response_encoding'] == 'identity'):
+            chunks = stream_errors.normalize(chunks, metrics)
+        for chunk in chunks:
             if 'first_chunk_ms' not in metrics:
                 metrics['first_chunk_ms'] = round((time.monotonic() - started) * 1000, 1)
             transport.note_first_data(metrics, headers_done)
             handler.wfile.write(chunk)
             handler.wfile.flush()
             transport.note_first_write(metrics, headers_done)
-        log_event('request_completed', **metrics, status=response.status,
+        log_event('request_failed' if metrics.get('code') else 'request_completed',
+                  **metrics, status=response.status,
                   total_ms=round((time.monotonic() - started) * 1000, 1))
         if metrics.get('served_model'):
             with handler.server.lock:
