@@ -29,6 +29,7 @@
   "tests/test_notice.py": 366,
   "tests/test_notice_delivery.py": 399,
   "tests/test_packaging.py": 303,
+  "tests/test_appserver_probe.py": 189,
   "tests/test_probe_harness.py": 362,
   "tests/test_setup.py": 397,
   "tests/test_tool_adapter.py": 440,
@@ -37,5 +38,5 @@
   "tests/test_upstream_failures.py": 302,
   "tests/test_windows_acl.py": 324,
   "tests/test_windows_backend.py": 374,
-  "tools/probe_agent_handoffs.py": 496
+  "tools/probe_agent_handoffs.py": 486
 }

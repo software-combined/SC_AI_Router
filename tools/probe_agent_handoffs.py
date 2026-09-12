@@ -26,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ai_router.agent_handoffs import add_plaintext_tools, restore_event
 from ai_router.catalogue import external_entry
 from ai_router.registry import by_slug
+from tools.appserver_probe import AppServer, AGENT_HANDOFFS, scrub_env
 
 PARENT = 'gpt-6-astra'
 CHILD = 'meta/muse-spark-1.3-contributor'
@@ -333,30 +334,13 @@ def run(args):
         command = [args.codex, 'app-server', '--stdio']
         for key, value in config.items():
             command.extend(['-c', key + '=' + json.dumps(value)])
-        env = {k: v for k, v in os.environ.items() if not any(
-            word in k.upper() for word in ('API_KEY', 'TOKEN', 'SECRET', 'AUTH'))}
-        env['CODEX_HOME'] = temp
-        process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE, text=True, cwd=temp, env=env)
-        events = queue.Queue()
-        def read_events():
-            for line in process.stdout:
-                try:
-                    events.put(json.loads(line))
-                except ValueError:
-                    pass
-        def drain_errors():
-            for _ in process.stderr:
-                pass
-        threading.Thread(target=read_events, daemon=True).start()
-        threading.Thread(target=drain_errors, daemon=True).start()
+        env = scrub_env(os.environ, AGENT_HANDOFFS, inject={'CODEX_HOME': temp})
         deadline = time.monotonic() + (600 if args.live else 40)
         sequence = 0
-        def send(value):
-            process.stdin.write(json.dumps(value) + '\n')
-            process.stdin.flush()
-        def next_event():
-            event = events.get(timeout=max(.1, deadline - time.monotonic()))
+        def record_failure(event):
+            # Probe policy: every dequeued event is scanned for failures and
+            # recorded in facts. Lives in the probe via the on_event hook so
+            # the shared class never learns this probe's fact shape.
             params = event.get('params', {})
             failure = params.get('error') if event.get('method') == 'error' else None
             if event.get('method') == 'turn/completed' and params.get('turn', {}).get('status') == 'failed':
@@ -366,7 +350,16 @@ def run(args):
                         'code': failure.get('codexErrorInfo') if isinstance(failure, dict) else None}
                 if safe not in probe.facts['tool_failures']:
                     probe.facts['tool_failures'].append(safe)
-            return event
+        # Piped stderr drained silently, plain terminate, ambient-adjacent
+        # scrub above: the shared AppServer default. The global deadline is
+        # threaded through next_event: this probe keeps its own reply loop and
+        # never calls the shared rpc, so the shared cap is left at its default.
+        server_process = AppServer(command, cwd=temp, env=env, stderr=subprocess.PIPE,
+                                   on_event=record_failure)
+        def send(value):
+            server_process.send(value)
+        def next_event():
+            return server_process.next_event(deadline=deadline)
         def rpc(method, params):
             nonlocal sequence
             sequence += 1
@@ -422,7 +415,9 @@ def run(args):
                 if args.live_children and expected_replies <= set(probe.facts['replies']):
                     break
                 try:
-                    events.get(timeout=.1)
+                    # Raw dequeue-and-discard, exactly as before: the
+                    # failure-recording hook must not see settle events.
+                    server_process.events.get(timeout=.1)
                 except queue.Empty:
                     pass
             if args.lifecycle:
@@ -469,12 +464,7 @@ def run(args):
                               'facts': probe.facts, 'errors': probe.errors}), flush=True)
             return 1
         finally:
-            process.terminate()
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait()
+            server_process.close()
             server.shutdown()
             server.server_close()
             if candidate is not None:
