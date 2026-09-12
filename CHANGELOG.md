@@ -34,6 +34,16 @@
   landing that first runs the trigger only seeds the snapshot, so
   announcements begin with the next landing that adds models. The hourly
   model refresh gains the same call when plan 099 wires it.
+- Public repository readiness: the README is rewritten around the
+  product with screenshots of the Codex picker row, the first-run key
+  window and the update notice, a logo that switches to a white
+  wordmark in dark mode, and a maintainer contact. `SECURITY.md` names
+  the reporting address and scope, `CONTRIBUTING.md` carries the branch
+  rules and gates, issue templates steer vulnerability reports away
+  from public issues, `CODEOWNERS` moves under `.github/`, the model
+  allocation review moves to `plans/model-allocation/`, and
+  `pyproject.toml` gains the project URLs. Documentation only; the
+  installed router is unchanged.
 - Subagent model visibility (plan 151): Codex builds the `spawn_agent`
   "Available model overrides" text from the first five picker-visible
   multi-agent models in catalogue order, and the catalogue lists the
@@ -647,7 +657,7 @@
   over SSE for streaming requests and HTTP 400 JSON otherwise. Other
   preparation errors remain 409. Native compaction thresholds are unchanged.
 
-## 0.6.9 (unreleased)
+## 0.6.9
 
 - Make `--feed` one-shot for the anti-replay serial as well as the URL. A
   local bundle carries its own build number as its serial, so a pinned
@@ -835,7 +845,7 @@
   non-absolute interpreters, and upgrades detect a legacy bare-python
   plist and reload the main agent (updater untouched) to heal it.
 
-## 0.6.5 (unreleased)
+## 0.6.5
 
 - Remove feed signature enforcement: the installer accepts unsigned
   feeds again, trusting version, URL, checksum and serial plus the

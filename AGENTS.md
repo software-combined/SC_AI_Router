@@ -1,4 +1,4 @@
-# SC_OpenRouter_adapter Agent Instructions
+# SC Router agent instructions
 
 ## 1. Purpose
 
