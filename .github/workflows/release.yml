@@ -43,7 +43,8 @@ jobs:
           if [ "$TAG_VERSION" != "$BASE_VERSION" ]; then
             echo "tag $GITHUB_REF_NAME != packaging/VERSION $BASE_VERSION"; exit 1
           fi
-          python packaging/release.py --out dist --build "$GITHUB_RUN_NUMBER" --sha "$GITHUB_SHA" --channel "$CHANNEL"
+          python packaging/release.py --out dist --build "$GITHUB_RUN_NUMBER" --sha "$GITHUB_SHA" --channel "$CHANNEL" \
+            --url-base "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
           echo "CHANNEL=$CHANNEL" >> "$GITHUB_ENV"
       - name: Configure feed publishing credentials
         uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c
@@ -71,8 +72,8 @@ jobs:
           VERSION=$(python -c "import json;print(json.load(open('dist/latest.json'))['version'])")
           if [ "$CHANNEL" = stable ]; then
             cp dist/release-latest.json dist/latest.json
-            gh release create "v$VERSION" dist/*.tar.gz dist/latest.json --generate-notes --latest --target "$GITHUB_SHA"
+            gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/latest.json --verify-tag --title "v$VERSION" --generate-notes --latest
           else
             cp dist/release-latest.json dist/latest-beta.json
-            gh release create "v$VERSION-beta" dist/*.tar.gz dist/latest-beta.json --prerelease --generate-notes --target "$GITHUB_SHA"
+            gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/latest-beta.json --verify-tag --title "v$VERSION-beta" --prerelease --generate-notes
           fi

@@ -1,5 +1,5 @@
 {
-  "ai_router/agent_handoffs.py": 317,
+  "ai_router/agent_handoffs.py": 314,
   "ai_router/catalogue.py": 390,
   "ai_router/compaction.py": 395,
   "ai_router/errors.py": 260,
@@ -39,5 +39,5 @@
   "tests/test_upstream_failures.py": 302,
   "tests/test_windows_acl.py": 366,
   "tests/test_windows_backend.py": 413,
-  "tools/probe_agent_handoffs.py": 492
+  "tools/probe_agent_handoffs.py": 505
 }
