@@ -168,8 +168,9 @@ already-pinned CI inputs.
 ## Acceptance checklist
 
 - [ ] The `Test` gate job runs `if: always()`, depends on every other job and
-      fails when any of them is not `success`; a deliberately failed leg and
-      a deliberately failed single-host step were each shown to fail it.
+      fails when any of them is not `success`; a deliberately failed matrix
+      leg, single-host step and `installer-py39` run were each shown to fail
+      the `Test` gate.
 - [ ] The unit suite runs on push and pull request, on Ubuntu, macOS and
       Windows, with `fail-fast: false`.
 - [ ] Single-host checks still run exactly once, on Ubuntu, through the setup

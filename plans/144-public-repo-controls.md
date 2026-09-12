@@ -2,7 +2,7 @@
 
 > Planning only. Settings are owner-applied; do not change repository
 > visibility or protections without an explicit owner instruction.
-> Drift check: `git diff --stat 28a1af4..HEAD -- .github/workflows/check.yml .github/workflows/release.yml .github/workflows/refresh.yml .github/CODEOWNERS docs/operations.md README.md`
+> Drift check: `git diff --stat 28a1af4..HEAD -- .github/workflows/check.yml .github/workflows/release.yml .github/workflows/refresh.yml .github/CODEOWNERS infra/feed.yaml tests/test_feed_infra.py docs/operations.md README.md`
 > Verify each live setting below again before acting; this plan records what
 > was true on 2026-09-11, and GitHub settings can change outside the repo.
 
@@ -62,7 +62,10 @@ pre-flip cleanup owned by plans 142 and 143.
   immutable forms) and remove the two `ref:refs/tags/v*` entries, then
   redeploy the stack before the first gated release. Keeping the tag
   entries would let any push-capable account assume the publisher role from
-  a workflow of its own on a four-part tag, bypassing the gate.
+  a workflow of its own on a four-part tag, bypassing the gate. Re-point
+  `tests/test_feed_infra.py`'s trust assertions (currently around lines 60-72)
+  at the two `environment:release` subjects and assert `ref:refs/tags/` is
+  absent from the trust policy.
 - Enable immutable releases only after the `v0.6.25.42` token-bearing asset
   has been removed or superseded (retired as hygiene; there is no token to
   rotate).
@@ -192,3 +195,15 @@ from a workflow of its own and bypass the gate. Also not yet applied: immutable 
 `cfn-lint` hash pin, `CODEOWNERS` review for `.github/` (the file now lives
 at `.github/CODEOWNERS`), the Step 3 text audit (plan 160 owns the
 identifiers in source), and the flip itself.
+
+## Repository name selected, 2026-09-12
+
+The owner selected **SC Unlimited AI** as the display name and
+`SC_Unlimited_ai` as the future repository URL slug, and asked for the README
+to use them now. Its title uses the display name; GitHub links and clone
+commands use the slug in preparation; those links will resolve after the GitHub rename.
+The live repository is still `software-combined/SC_OpenRouter_adapter`.
+Coordinate the rename with the repository-name references and publisher OIDC
+trust in `infra/feed.yaml`, then redeploy and verify the trust before the
+next release. The name selection does not apply the GitHub rename or change
+the installed dialog title, which remains a separate product-naming decision.

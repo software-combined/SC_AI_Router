@@ -5,20 +5,20 @@
   </picture>
 </p>
 
-<h1 align="center">SC Router</h1>
+<h1 align="center">SC Unlimited AI</h1>
 
 <p align="center">
 One local endpoint for Codex and Claude Code. Your ChatGPT or Claude subscription models and OpenRouter models, side by side in the picker, with the billing kept apart.
 </p>
 
 <p align="center">
-  <a href="https://github.com/software-combined/SC_OpenRouter_adapter/actions/workflows/check.yml"><img alt="Check" src="https://github.com/software-combined/SC_OpenRouter_adapter/actions/workflows/check.yml/badge.svg?branch=main"></a>
-  <a href="https://github.com/software-combined/SC_OpenRouter_adapter/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/software-combined/SC_OpenRouter_adapter?label=release"></a>
+  <a href="https://github.com/software-combined/SC_Unlimited_ai/actions/workflows/check.yml"><img alt="Check" src="https://github.com/software-combined/SC_Unlimited_ai/actions/workflows/check.yml/badge.svg?branch=main"></a>
+  <a href="https://github.com/software-combined/SC_Unlimited_ai/releases/latest"><img alt="Releases on GitHub" src="https://img.shields.io/badge/releases-GitHub-blue"></a>
   <a href="LICENSE"><img alt="Licence: Apache-2.0" src="https://img.shields.io/badge/licence-Apache--2.0-blue"></a>
   <img alt="Python 3.14, standard library only" src="https://img.shields.io/badge/python-3.14%20stdlib%20only-3776AB">
 </p>
 
-SC Router is a small service that runs on your own machine. It speaks the
+SC Unlimited AI is a small service that runs on your own machine. It speaks the
 Codex and Claude Code wire protocols on a loopback port, so both clients see
 one model list: the models your existing ChatGPT or Claude sign-in already
 includes, plus approved models billed to an OpenRouter API key. You choose
@@ -85,33 +85,13 @@ state, the key file and logs live there.
 
 ## Install
 
-### Bootstrap (recommended)
-
-The bootstrap needs no GitHub account, token or repository access. It
-downloads the pinned Python runtime and the release bundle from the public
-feed, verifies both checksums and installs the per-user service:
-
-```sh
-curl -fsSL https://dist.softwarecombined.com/bootstrap/bootstrap.sh -o bootstrap.sh
-sh bootstrap.sh
-```
-
-On Windows, run the PowerShell bootstrap instead:
-
-```powershell
-Invoke-RestMethod https://dist.softwarecombined.com/bootstrap/bootstrap.ps1 -OutFile bootstrap.ps1
-.\bootstrap.ps1
-```
-
-Add `--channel=beta` (PowerShell: `-Channel beta`) to follow pre-releases.
-
 ### From a checkout
 
 Needs Python 3.14. Build a local release, then install from it:
 
 ```sh
-git clone https://github.com/software-combined/SC_OpenRouter_adapter.git
-cd SC_OpenRouter_adapter
+git clone https://github.com/software-combined/SC_Unlimited_ai.git
+cd SC_Unlimited_ai
 python3.14 packaging/release.py --out dist --url-base "file://$PWD/dist"
 python3.14 packaging/install.py --feed "file://$PWD/dist/latest.json"
 ```
@@ -122,6 +102,15 @@ On Windows, run the same commands from PowerShell with the Python launcher:
 py -3 packaging/release.py --out dist --url-base "file://$PWD/dist"
 py -3 packaging/install.py --feed "file://$PWD/dist/latest.json"
 ```
+
+### Bootstrap for Software Combined staff
+
+Ask a maintainer for the bootstrap script through Software Combined's
+internal channels. It needs no GitHub account, token or repository access:
+it downloads the pinned Python runtime and release bundle from the release
+feed, verifies both checksums and installs the per-user service.
+
+`--channel=beta` (PowerShell: `-Channel beta`) follows pre-releases.
 
 ### What the installer does
 
@@ -183,8 +172,7 @@ OpenRouter dashboard.
 
 ## Updates
 
-Every install checks the public feed at
-`https://dist.softwarecombined.com/<channel>/latest.json`; `stable` is the
+Installs check their release feed for the selected channel. `stable` is the
 default, and writing `beta` into the `channel` file in the router home selects
 pre-releases. Switching channels by hand also means deleting `feed-serial`
 beside it: the channels publish independently, so a higher serial left over
@@ -327,7 +315,7 @@ the repository, including `CONTRIBUTING.md`, `SECURITY.md`, `docs/assets/`,
 
 ## Licence
 
-SC Router is open source under the [Apache License 2.0](LICENSE). You can use,
+SC Unlimited AI is open source under the [Apache License 2.0](LICENSE). You can use,
 modify and redistribute it, including commercially, under the terms of that
 licence. Attribution and licence notices must be preserved as the licence
 requires.

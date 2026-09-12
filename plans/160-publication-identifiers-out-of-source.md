@@ -42,6 +42,19 @@ with no arguments today targets the real bucket by default.
 decision. This plan does the code half so that, whichever way the owner
 decides, the value lives in one place.
 
+## Feed-domain owner decision
+
+The release-feed domain `dist.softwarecombined.com` is also a publication
+identifier for the owner to accept explicitly. It is public by design:
+installed routers must know the feed origin, so removing it from the README
+cannot hide it fully. Keep the origin in the canonical
+constant (`FEED_ORIGIN` in `packaging/feed.py`) and out of the README while
+the owner decides whether to retain the domain in the public repository. The
+bootstrap scripts, infrastructure templates, publisher, tests, changelog and
+operator documentation also carry it today. Consolidating those copies would
+be separate approved work; this plan does not remove or change the domain in
+code or operator documentation.
+
 ## Scope
 
 **In scope**: the files named in the drift check.
