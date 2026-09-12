@@ -2,6 +2,24 @@
 
 ## 0.6.37
 
+- Operator surface (plan 147): `--doctor` prints one read-only row per
+  component (runtime, install, service, each provider's key, picker
+  catalogue, scheduled command, update recency) with a `Fix:` line on every
+  WARN or FAIL, `--json` for machines and exit 1 when a row fails.
+  `--status` now reports the last update check, the last applied version,
+  the last error code and any parked versions from state. `--support`
+  writes a 0600 bundle containing booleans, enums, versions, counts and
+  timestamps only, and prints just the path. `--check-update` is now
+  read-only: it names the installed and available versions and never
+  installs or writes the ETag; the applying command is `--update`, which
+  the home launcher, the systemd unit and the Windows task now run.
+  The home launcher picks the applying verb the release `current` points
+  at advertises, so a scheduled pass keeps working after a rollback to an
+  older release (the channel then offers the newer release again, as
+  before).
+  `--rollback` with no argument lists the installed releases, and
+  `--rollback --to VERSION` performs the switch `--version VERSION` still
+  performs as an alias.
 - Mixed-provider subagent assignments now work with native Responses Lite
   tool declarations. Plaintext aliases and encrypted-handoff steering apply
   to both wire formats; native OpenAI handoffs keep their encryption.

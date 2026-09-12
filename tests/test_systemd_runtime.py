@@ -62,7 +62,7 @@ class SystemdRuntimeTests(unittest.TestCase):
                     build(3)
                     args = installer.build_parser().parse_args(argv)
                     with mock.patch.dict(os.environ, {'ROUTER_UPDATE_SERVICE': '1'}):
-                        installer.do_check_update(args, _sleep=lambda s: None)
+                        installer.do_update(args, _sleep=lambda s: None)
                     third = installer.current_version(self.home)
                     self.assertNotEqual(second, third)
                     self.assertEqual(installer.health(state)['version'], third)

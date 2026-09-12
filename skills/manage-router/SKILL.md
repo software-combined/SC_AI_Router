@@ -19,8 +19,10 @@ this skill never edits client settings or router state by hand.
 1. Report the exact proposed target first: which clients, which home,
    which feed. Wait for confirmation on first setup.
 2. Run the read-only probes and show their redacted summary:
-   `python3 packaging/install.py --preflight --home <home>` and
-   `python3 packaging/install.py --status --home <home>`.
+   `python3 packaging/install.py --preflight --home <home>`,
+   `python3 packaging/install.py --status --home <home>` and
+   `python3 packaging/install.py --doctor --home <home>` (the doctor names a
+   fix per failing row).
 3. Respect the host approval policy. Do not demand a second generic
    confirmation and do not grant new tool permissions.
 
@@ -39,7 +41,9 @@ this skill never edits client settings or router state by hand.
   release with a fresh setup link, without re-extracting it.
 - Status: `python3 packaging/install.py --status --json --home <home>`.
   Health alone is not successful setup; a model round trip proves it.
-- Update: `python3 packaging/install.py --check-update --home <home>`.
+- Update: `python3 packaging/install.py --update --home <home>` applies what
+  the channel offers; `--check-update` only reports the installed and
+  available versions.
 - Detach Claude: uninstall detaches every client; `--client none`
   drops to service-only and restores Claude settings too. A plain
   `--clients codex` reinstall never silently detaches Claude.
@@ -58,8 +62,9 @@ this skill never edits client settings or router state by hand.
 
 ## When something is wrong
 
-Work from `docs/troubleshooting.md` in the installed release. The common
-staff cases and their first check:
+Work from `docs/troubleshooting.md` in the installed release. Run
+`python3 packaging/install.py --doctor` first: it names the component that is
+WARN or FAIL and the fix. The common staff cases and their first check:
 
 - No OpenRouter models in the Codex picker: Codex reads its catalogue only at
   startup, so quit and reopen it before investigating anything else.

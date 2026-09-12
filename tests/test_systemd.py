@@ -124,6 +124,30 @@ class SystemdTests(unittest.TestCase):
             self.install('0.6.6.0')
         self.assertNotIn(['systemctl', '--user', 'stop', install_mod._linux.UPDATE], self.calls)
 
+    def test_update_unit_asks_the_release_it_names_for_its_verb(self):
+        # A --setup repair re-renders the unit around the release already
+        # current, which can predate --update; the unit must not strand it.
+        units = self.root / 'config' / 'systemd' / 'user'
+        legacy = self.home / 'releases' / '0.6.36' / 'packaging'
+        legacy.mkdir(parents=True)
+        (legacy / 'VERSION').write_text('0.6.36\n')
+        (legacy / 'install.py').write_text(
+            "parser.add_argument('--check-update', action='store_true')\n")
+        manager = install_mod._linux.Manager(self.home, self.run_command)
+        manager.install(sys.executable, self.home / 'releases' / '0.6.36')
+        update = (units / install_mod._linux.UPDATE).read_text()
+        self.assertIn('--check-update --home', update)
+        self.assertNotIn('--update --home', update)
+        current = self.home / 'releases' / '0.6.37' / 'packaging'
+        current.mkdir(parents=True)
+        (current / 'VERSION').write_text('0.6.37\n')
+        (current / 'install.py').write_text(
+            "parser.add_argument('--update', action='store_true')\n")
+        manager.install(sys.executable, self.home / 'releases' / '0.6.37')
+        update = (units / install_mod._linux.UPDATE).read_text()
+        self.assertIn('--update --home', update)
+        self.assertNotIn('--check-update --home', update)
+
     def test_deferred_child_keeps_etag_and_does_not_report_success(self):
         self.install('0.6.2.0')
         blob, latest = _craft_bundle('0.6.6.0')
@@ -134,7 +158,7 @@ class SystemdTests(unittest.TestCase):
         args = install_mod.build_parser().parse_args(['--home', str(self.home)])
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
-            install_mod.do_check_update(args, _fetch=_static_fetch(latest, blob),
+            install_mod.do_update(args, _fetch=_static_fetch(latest, blob),
                 _read_feed=lambda *a: (200, json.dumps(latest).encode(), 'new'), _sleep=lambda s: None)
         self.assertIn('deferred:', output.getvalue())
         self.assertEqual((self.home / 'update-etag').read_text(), 'old')
