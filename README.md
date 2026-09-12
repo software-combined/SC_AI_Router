@@ -1,3 +1,4 @@
+<!-- Repository-only asset: docs/assets/ is not shipped in the release bundle. -->
 <img src="docs/assets/sc-logo-wide.png" alt="Software Combined" width="420">
 
 # SC Router
@@ -223,7 +224,7 @@ has one. If something looks wrong, start at
 - Subscription headers never accompany an OpenRouter request.
 - Logs carry request metadata, never request content, keys or tokens.
 
-Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
+Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md) (repository-only; the release bundle carries `README.md` and `docs/*.md`).
 
 ## Architecture
 

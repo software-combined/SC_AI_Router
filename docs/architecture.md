@@ -63,10 +63,18 @@ Rules:
 6. `packaging/` file-based imports (`spec_from_file_location`) avoid
    depending on a third-party distribution named `packaging`. Installer
    scripts stay Python 3.9-compatible; the runtime requires 3.14.
+7. `tools/` holds checkout-run helpers (local probes, scans, key ceremonies)
+   that are invoked by the developer or by CI, not by an installed router;
+   `packaging/` holds the modules an installed host executes. A new
+   host-run script belongs in `packaging/`, even if nothing in `ai_router/`
+   imports it. `packaging/release.py` globs every `tools/*.py` into the
+   bundle, so a repo-only helper placed there ships to recipients; the one
+   deliberate exception is `tools/disable.py`, the installed-host remover
+   that `packaging/install.py` runs.
 
 ## Distribution (outside the request path)
 
-`infra/` owns the update feed as code: the certificate stack, the private
+`infra/` owns the update feed as code (repository-only templates, deployed from a checkout): the certificate stack, the private
 bucket, the CloudFront distribution, the DNS alias, and the tag-only
 publisher role. `tools/publish_feed.py` owns
 release publication: it turns a built `dist/` into the feed's

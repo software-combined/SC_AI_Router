@@ -15,7 +15,7 @@ are never copied between machines.
 `ai_router/agent_handoffs.py`, `ai_router/sse.py`,
 `ai_router/capabilities.py`, `ai_router/compaction.py`,
 `ai_router/standalone_outputs.py`, `ai_router/discovered.py`,
-`ai_router/errors.py`, `ai_router/feed_verify.py`, `ai_router/candidate.py`,
+`ai_router/errors.py`, `ai_router/candidate.py`,
 `ai_router/setup.py`, `ai_router/setup_page.py`, `ai_router/key_store.py`,
 `ai_router/key_dialog.py`, `ai_router/key_prompt.py`, `ai_router/runtime.py`,
 `ai_router/catalogue.py`, `ai_router/local_services.py`,
@@ -36,6 +36,11 @@ are never copied between machines.
 `ai_router/agents_general.txt`, `ai_router/agents_dev.txt`,
 `tools/probe_codex_runtime.py`, `tools/global_instructions.py`,
 `tools/disable.py`.
+
+The feed-signature module lives with its consumers as
+`packaging/feed_verify.py`: `packaging/feed.py` and `packaging/release.py`
+load it as a sibling, never from the runtime tree. Signature enforcement
+engages only once `FEED_PUBLIC_KEY` is configured (Plan 106's decision).
 
 The installer also places `packaging/router_launch.py` and
 `packaging/update_launch.py` beside the state directory as `router_launch.py`

@@ -18,7 +18,7 @@
   "tests/test_client_activation.py": 464,
   "tests/test_handler.py": 485,
   "tests/test_history_portability.py": 164,
-  "tests/test_install.py": 411,
+  "tests/test_install.py": 417,
   "tests/test_install_config.py": 417,
   "tests/test_install_key_window.py": 409,
   "tests/test_install_lifecycle.py": 487,

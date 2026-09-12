@@ -5,14 +5,15 @@ import hashlib
 import io
 import json
 import os
-import sys
 import tarfile
 import importlib.util
 from datetime import datetime, timezone
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from ai_router import feed_verify
+_feed_verify_spec = importlib.util.spec_from_file_location(
+    'router_feed_verify', Path(__file__).resolve().parent / 'feed_verify.py')
+feed_verify = importlib.util.module_from_spec(_feed_verify_spec)
+_feed_verify_spec.loader.exec_module(feed_verify)
 
 MIN_PYTHON = '3.14'
 REPO = 'software-combined/SC_OpenRouter_adapter'
@@ -26,7 +27,8 @@ PACKAGING_FILES = (
     'packaging/VERSION', 'packaging/install.py', 'packaging/bundle.py',
     'packaging/launchd.py',
     'packaging/router_launch.py', 'packaging/service.py',
-    'packaging/feed.py', 'packaging/atomic_write.py',
+    'packaging/feed.py', 'packaging/feed_verify.py',
+    'packaging/atomic_write.py',
     'packaging/notice.py',
     'packaging/assets/router-icon.png',
     'packaging/systemd.py', 'packaging/update_launch.py',
