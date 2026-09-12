@@ -199,8 +199,10 @@ the channel path also enforces the serial replay guard.
 The outgoing process finishes requests it has already accepted before the
 service restarts; on macOS launchd queues new connections through the
 handover, while Linux and Windows refuse new connections until the new
-process binds the port. After an update that adds picker models, a desktop
-dialog offers to quit and reopen the client, with a "Later" button.
+process binds the port. After an update that adds picker models, the router
+offers a client restart and never forces one; the prompts each platform
+shows are described in
+[docs/operations.md](docs/operations.md#new-model-notifications).
 
 - `python3.14 packaging/install.py --check-update` runs one check now.
 - `python3.14 packaging/install.py --version <version>` rolls back to a
