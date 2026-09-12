@@ -193,7 +193,7 @@ class InstallTests(unittest.TestCase):
 
             args = install_mod.build_parser().parse_args(
                 ['--feed', 'file:///latest.json', '--home', str(home)])
-            env = {'HOME': tmp, 'OPENROUTER_API_KEY': 'test-key'}
+            env = {'HOME': tmp, 'OPENROUTER_API_KEY': 'test-key', 'ROUTER_NO_KEY_WINDOW': '1'}
             with mock.patch.dict(os.environ, env):
                 with self.assertRaises(SystemExit) as ctx:
                     install_mod.do_install(args, _fetch=fake_fetch, _run=fake_run)

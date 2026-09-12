@@ -287,14 +287,20 @@ provider's key under `providers`, with the legacy `key_present` /
 1. IT creates the key in the OpenRouter dashboard with a monthly allowance
    and hands it to the user over an existing trusted channel (never commit
    it, never paste it into chat or email threads beyond that handoff).
-2. The user installs with `--setup` and a native window asks for the key, the
-   subscription choice for the client(s) being set up (ChatGPT for Codex,
+2. The user installs and a native window opens by itself to ask for the key,
+   the subscription choice for the client(s) being set up (ChatGPT for Codex,
    Claude for Claude Code, both when both are attached) and the starter. It
    validates the key against OpenRouter before storing anything and shows
    remaining credit; the key lands in `openrouter.key` (mode 600), which the
    router reads per request. A host with no dialog tool (headless Linux, SSH)
-   opens the loopback page instead, and the installer prints the link on its
-   own terminal so the operator can paste it into a browser.
+   opens the loopback page instead, and an interactive terminal prints the
+   link so the operator can paste it into a browser. The installed
+   service does not receive the invoking shell's environment, so an exported
+   `OPENROUTER_API_KEY` does not count as configured and still opens the
+   window. Re-run with `--setup` only if no window appears; it restarts the
+   current release with a fresh link, without re-extracting it. Scheduled
+   and manual `--check-update` runs never pop the window; the next request
+   opens it instead.
 3. Rotation: delete `openrouter.key` first (the setup window refuses to
    overwrite a file holding a real key with 409), then re-run the installer
    with `--setup` and paste the replacement. File-level alternative is under
