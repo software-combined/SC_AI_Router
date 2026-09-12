@@ -37,6 +37,10 @@ Rules:
 into matched tool results for external requests; client history stays unchanged.
 `subscription_history.py` owns the pure outgoing reasoning projection for
 subscription Responses requests; it never edits persisted client history.
+`context_recovery.py` adds fixed recovery guidance for client-declared context
+resets on either Responses route. Codex owns saved history and executes its
+retrieval tools; the router stores no assignment or transcript cache.
+It also owns the exact legacy paragraph migration used by catalogue upgrades.
 
 1. `provider_defs.py` owns every upstream fact (host, endpoint prefixes, key
    location, model catalogue, key-info endpoint, failure dialect) and imports

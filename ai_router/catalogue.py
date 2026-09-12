@@ -11,7 +11,7 @@ own label with no code change here.
 import json
 import sys
 from pathlib import Path
-from . import provider_defs, state as state_mod
+from . import context_recovery, provider_defs, state as state_mod
 from .atomic_write import replace_json
 from .capabilities import (COMP_HASH, MULTI_AGENT_VERSION, NODE_REPL_DISABLED,
                            catalogue_patch, describe)
@@ -260,6 +260,9 @@ def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False)
     entries = {m['slug']: {**subscription_stub(m['slug'], instructions), **m}
                for m in models}
     for slug, row in entries.items():
+        if slug in SUBSCRIPTION_SLUGS:
+            row['model_messages'] = context_recovery.refresh_model_messages(
+                row.get('model_messages'), instructions)
         # Frozen 0.6.10.23 single-medium signature, exact match only.
         if (slug in SUBSCRIPTION_REASONING
                 and row.get('default_reasoning_level') == 'medium'
