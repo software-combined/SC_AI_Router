@@ -166,7 +166,7 @@ Meta upstream on the carried turn.
 
 | Plan | Title | Status | Sequencing |
 |---|---|---|---|
-| [150](150-carried-history-portability.md) | Carried-history portability for routed models | PARTIAL: slice 2a + coded 409 + refusal cache landed 2026-09-12; capture-and-bisect, slices 2b/2c/2d, then the Muse row probe owner-gated; two paid replays accepted, cause still open | independent; re-probe after client upgrades |
+| [150](150-carried-history-portability.md) | Carried-history portability for routed models | PARTIAL: slices 2a+2b + coded 409 + refusal cache landed 2026-09-12; bisect complete (a carried reasoning item is the trigger); slices 2c/2d and the Muse row probe stay owner-gated on new evidence | independent; re-probe after client upgrades |
 
 ## First-run key window (149)
 
