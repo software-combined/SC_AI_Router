@@ -268,7 +268,7 @@ class UpdateBackoffTests(unittest.TestCase):
             json.dumps({'port': 1, 'token': 'x'}))
         return home
 
-    def _check(self, home, blob, latest, fetches, run=None, child_rc=1):
+    def _check(self, home, blob, latest, fetches, run=None, child_rc=1, _announce=None):
         def fake_run(cmd, **kwargs):
             if cmd[:1] == ['launchctl']:
                 return _ok_run(cmd, **kwargs)
@@ -287,7 +287,7 @@ class UpdateBackoffTests(unittest.TestCase):
                 rc = install_mod.do_check_update(
                     args, _fetch=fetch,
                     _read_feed=lambda f, e: (200, json.dumps(latest).encode(), 'etag-1'),
-                    _sleep=lambda s: None)
+                    _sleep=lambda s: None, _announce=_announce)
             except SystemExit as exc:
                 rc = exc.code
         return rc, buf.getvalue()
@@ -363,7 +363,8 @@ class UpdateBackoffTests(unittest.TestCase):
             with mock.patch.object(install_mod._svc.notice, 'show_pending',
                                    wraps=honest) as shown, \
                     mock.patch.dict(os.environ, {'ROUTER_NO_NOTICE': '1'}):
-                rc, out = self._check(home, blob, latest, [], run=run)
+                rc, out = self._check(home, blob, latest, [], run=run,
+                                      _announce=lambda _state: None)
             self.assertEqual(rc, 1, 'the failure must stay visible')
             self.assertEqual(shown.call_count, 1, 'the notice module is asked')
             self.assertEqual(install_mod._update_failures(home), {},
@@ -387,6 +388,29 @@ class UpdateBackoffTests(unittest.TestCase):
             self.assertEqual(install_mod._update_failures(home), {'9.9.9': 1})
             self.assertFalse((home / 'logs' / 'update.log').exists())
             self.assertNotIn('after the swap', out)
+
+    def test_the_announce_runs_after_the_update_log_is_written(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = self._home(tmp)
+            blob, latest = _craft_bundle('9.9.9')
+            seen = {}
+
+            def fake_run(cmd, **kwargs):
+                if cmd[:1] == ['launchctl']:
+                    return _ok_run(cmd, **kwargs)
+                (home / 'releases' / '9.9.9').mkdir(parents=True)
+                (home / 'current').write_text('9.9.9')
+                return SimpleNamespace(returncode=0, stdout='', stderr='')
+
+            def fake_announce(state):
+                seen['log'] = (home / 'logs' / 'update.log').read_text()
+                seen['state'] = state
+
+            rc, _out = self._check(home, blob, latest, [], run=fake_run,
+                                   child_rc=0, _announce=fake_announce)
+            self.assertEqual(rc, 0)
+            self.assertIn('9.9.9', seen['log'])
+            self.assertEqual(seen['state']['port'], 1)
 
 
 if __name__ == '__main__':

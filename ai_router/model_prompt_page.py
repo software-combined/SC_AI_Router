@@ -15,6 +15,7 @@ from .setup import same_origin
 
 FORM_LIMIT = 4096
 LIST_LIMIT = 12
+CODEX_BUNDLE_ID = 'com.openai.codex'
 
 _STYLE = (
     '*{box-sizing:border-box}'
@@ -91,7 +92,7 @@ def later():
 def restart_codex(run=None, platform=None):
     """Quit and reopen the Codex app; True when both commands succeed.
 
-    macOS only: the app is addressed by name, never by process pattern, and
+    macOS only: the app is addressed by bundle id, not by process pattern, and
     nothing runs unless the POST click reached this module. A refused quit
     (missing Automation consent, app busy) reports failure: `open` would
     only raise the running app and the client would keep its old catalogue.
@@ -100,11 +101,12 @@ def restart_codex(run=None, platform=None):
         return False
     runner = run or subprocess.run
     try:
-        quit_result = runner(['osascript', '-e', 'quit app "Codex"'],
+        quit_result = runner(['osascript', '-e',
+                              'tell application id "%s" to quit' % CODEX_BUNDLE_ID],
                              check=False, capture_output=True)
         if getattr(quit_result, 'returncode', 1) != 0:
             return False
-        opened = runner(['open', '-a', 'Codex'],
+        opened = runner(['open', '-b', CODEX_BUNDLE_ID],
                         check=False, capture_output=True)
     except OSError:
         return False
@@ -127,6 +129,26 @@ def _reject(handler, status):
     handler.send_header('Content-Length', '0')
     handler.end_headers()
     handler.close_connection = True
+    return True
+
+
+def handle_check(handler):
+    """JSON offer for a trigger: the pending rows and the single-use link.
+
+    Mints (or reuses) the notice and answers on the bare `/model-prompt`
+    path, so the 3.9 updater never imports the runtime. The URL carries the
+    per-install token; callers must not log it.
+    """
+    home = handler.server.credentials.home
+    nonce, rows = model_prompt.notice(home)
+    url = None
+    if nonce:
+        port = handler.server.socket.getsockname()[1]
+        url = 'http://127.0.0.1:%d/%s/model-prompt/%s' % (
+            port, handler.server.state['token'], nonce)
+    handler.send_json(200, {
+        'pending': [{'slug': slug, 'name': name} for slug, name in rows],
+        'url': url})
     return True
 
 

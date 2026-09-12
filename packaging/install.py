@@ -486,8 +486,9 @@ prune_releases = _bundle.prune_releases
 MAX_VERSION_FAILURES = _updater.MAX_VERSION_FAILURES
 
 
-def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None):
-    return _updater.do_check_update(args, _fetch=_fetch, _read_feed=_read_feed, _sleep=_sleep)
+def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None, _announce=None):
+    return _updater.do_check_update(args, _fetch=_fetch, _read_feed=_read_feed,
+                                    _sleep=_sleep, _announce=_announce)
 
 
 def do_uninstall(args):

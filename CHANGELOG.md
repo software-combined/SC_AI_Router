@@ -2,6 +2,21 @@
 
 ## 0.6.36
 
+- New-model prompt (plan 135): when an update adds models for the machine's
+  policy scope, the scheduled updater asks the running router over loopback
+  and offers a Codex restart. A desktop notification names up to three of
+  the new models and the single-use approval page (48 h link, Restart Codex
+  or Later) opens in the browser; only the Restart click quits and reopens
+  Codex, on macOS. Notifications and the page are macOS and Linux (with the
+  platform tools present); Windows records the offer in the update log. The
+  first run, removals and version-only updates stay
+  silent, an unverified or out-of-policy row is never announced, and the
+  offer is best-effort: a failed notification or browser can never change
+  the update result. A Claude-only or service-only install is never told to
+  restart Codex, and `ROUTER_NO_NOTICE=1` silences this offer too. The
+  landing that first runs the trigger only seeds the snapshot, so
+  announcements begin with the next landing that adds models. The hourly
+  model refresh gains the same call when plan 099 wires it.
 - Subagent model visibility (plan 151): Codex builds the `spawn_agent`
   "Available model overrides" text from the first five picker-visible
   multi-agent models in catalogue order, and the catalogue lists the
