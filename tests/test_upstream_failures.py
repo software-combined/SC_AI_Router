@@ -167,7 +167,7 @@ class RefusalCacheTests(unittest.TestCase):
         handler = SimpleNamespace(
             server=SimpleNamespace(credentials=SimpleNamespace(
                 key_rejected=lambda provider: False)),
-            error=lambda err: seen.setdefault('err', err))
+            error=lambda err: seen.update(err=err))
         provider = SimpleNamespace(defn=provider_defs.OPENROUTER)
         body = json.dumps({'model': 'm', 'input': [], 'tools': []}).encode()
         prepared = Prepared('openrouter.ai', '/responses', {}, body, {}, 'openrouter')
@@ -181,7 +181,7 @@ class RefusalCacheTests(unittest.TestCase):
             relay.relay(handler, provider, prepared, metrics, 0.0,
                         log_event=lambda event, **f: events.append((event, f)))
         self.assertEqual(len(dispatches), 1)
-        self.assertEqual(seen['err'].status, 409)
+        self.assertEqual(seen['err'].status, 400)
         self.assertEqual(seen['err'].message, first.message)
         cached = [e for e, _ in events if e == 'upstream_rejected_cached']
         self.assertEqual(len(cached), 1)
@@ -191,14 +191,14 @@ class RefusalCacheTests(unittest.TestCase):
     def test_changed_body_dispatches_again(self):
         body = json.dumps({'input': []}).encode()
         upstream.remember_refusal('openrouter', 'm', body, 'MSG', now=10.0)
-        self.assertEqual(upstream.recall_refusal('openrouter', 'm', body, now=20.0), 'MSG')
+        self.assertEqual(upstream.recall_refusal('openrouter', 'm', body, now=20.0), (409, 'MSG'))
         self.assertIsNone(upstream.recall_refusal(
             'openrouter', 'm', json.dumps({'input': [1]}).encode(), now=20.0))
 
     def test_entries_expire_after_60_seconds(self):
         body = b'same'
         upstream.remember_refusal('openrouter', 'm', body, 'MSG', now=100.0)
-        self.assertEqual(upstream.recall_refusal('openrouter', 'm', body, now=160.0), 'MSG')
+        self.assertEqual(upstream.recall_refusal('openrouter', 'm', body, now=160.0), (409, 'MSG'))
         self.assertIsNone(upstream.recall_refusal('openrouter', 'm', body, now=160.1))
 
     def test_cache_caps_at_8_entries(self):
@@ -208,7 +208,7 @@ class RefusalCacheTests(unittest.TestCase):
         self.assertEqual(len(upstream._REFUSALS), 8)
         self.assertIsNone(upstream.recall_refusal('openrouter', 'm', b'body-0', now=110.0))
         self.assertEqual(upstream.recall_refusal('openrouter', 'm', b'body-8', now=110.0),
-                         'MSG-8')
+                         (409, 'MSG-8'))
 
     def test_transient_upstream_failure_dispatches_again(self):
         from ai_router import relay

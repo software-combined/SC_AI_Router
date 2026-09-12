@@ -33,6 +33,10 @@ Rules:
 
 `agent_handoffs.py` owns collaboration alias schemas and native-name restoration;
 `sse.py` owns shared event framing without provider-specific argument rewriting.
+`standalone_outputs.py` projects readable peer messages and standalone outputs
+into matched tool results for external requests; client history stays unchanged.
+`subscription_history.py` owns the pure outgoing reasoning projection for
+subscription Responses requests; it never edits persisted client history.
 
 1. `provider_defs.py` owns every upstream fact (host, endpoint prefixes, key
    location, model catalogue, key-info endpoint, failure dialect) and imports

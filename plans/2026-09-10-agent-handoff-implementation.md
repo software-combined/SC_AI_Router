@@ -48,6 +48,13 @@ until final reconciliation. No other worktree is adopted.
 
 ## Evidence
 
+- Evidence correction, 2026-09-12: the Astra parent in these probes was
+  constructed from the external-model template and therefore had
+  `use_responses_lite: false`. The successes below cover classic Responses;
+  they do not establish native desktop Lite delivery. The current follow-up
+  adds Lite declarations and requires the installed subscription row in live
+  probes. See `2026-09-12-responses-lite-agent-handoffs.md`.
+
 - Isolated scripted probe: exit 0. All three plaintext markers delivered,
   alias emitted, canonical replay true, no errors.
 - Astra v2 parent with scripted children (installed router, Codex 0.153.4,
