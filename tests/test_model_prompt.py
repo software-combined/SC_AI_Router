@@ -14,8 +14,10 @@ from unittest import mock
 from ai_router import catalogue, model_prompt, provider_defs
 from ai_router.clients import models_for
 from ai_router.registry import MODELS, by_slug
+from tests._platform import unix_only
 
 ALLOWED = ('z-ai/glm-5.3-flash', 'moonshotai/kimi-k3')
+EXTRA = 'openrouter/acme-test-model'
 
 
 def _write_policy(home, allowed, portco='acme', department=None):
@@ -24,6 +26,13 @@ def _write_policy(home, allowed, portco='acme', department=None):
                                 'allowed_models': list(allowed)}))
     path.chmod(0o600)
     return path
+
+
+def _with_extra(slug=EXTRA):
+    """Registry rows plus one synthetic visible row (an added model)."""
+    extra = replace(by_slug('z-ai/glm-5.3-flash'), slug=slug,
+                    display_name='Acme: Test Model · OpenRouter')
+    return tuple(MODELS) + (extra,)
 
 
 class VisibleModelsTests(unittest.TestCase):
@@ -87,6 +96,95 @@ class VisibleModelsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaises(ValueError):
                 model_prompt.visible_models(tmp, client='claude')
+
+
+class SnapshotTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.home = Path(self._tmp.name) / 'home'
+        self.home.mkdir()
+
+    def _snapshot(self):
+        return json.loads((self.home / 'model-prompt.json').read_text())
+
+    def test_first_run_seeds_silently(self):
+        self.assertEqual(model_prompt.pending(self.home), [])
+        self.assertEqual(self._snapshot()['scope'], 'none')
+        self.assertEqual(self._snapshot()['client'], 'codex')
+        self.assertEqual(self._snapshot()['seen'],
+                         [slug for slug, _ in model_prompt.visible_models(self.home)])
+        self.assertEqual(model_prompt.pending(self.home), [])
+
+    def test_added_row_is_pending_then_silent_after_acknowledge(self):
+        model_prompt.pending(self.home)  # seed
+        with mock.patch.object(catalogue, 'MODELS', _with_extra()):
+            shown = model_prompt.pending(self.home)
+            self.assertEqual(shown, [(EXTRA, 'Acme: Test Model · OpenRouter')])
+            acked = model_prompt.acknowledge(self.home)
+            self.assertEqual(acked, shown)
+            self.assertEqual(model_prompt.pending(self.home), [])
+
+    def test_rejected_policy_returns_empty_and_writes_nothing(self):
+        (self.home / 'model-policy.json').write_text('not json{')
+        self.assertEqual(model_prompt.pending(self.home), [])
+        self.assertEqual(model_prompt.acknowledge(self.home), [])
+        self.assertFalse((self.home / 'model-prompt.json').exists())
+
+    def test_scope_change_reseeds_silently(self):
+        _write_policy(self.home, ALLOWED, portco='acme')
+        self.assertEqual(model_prompt.pending(self.home), [])
+        self.assertEqual(set(self._snapshot()['seen']), set(ALLOWED))
+        _write_policy(self.home, ALLOWED, portco='other', department='sales')
+        self.assertEqual(model_prompt.pending(self.home), [])
+        self.assertEqual(self._snapshot()['scope'], 'other/sales')
+        self.assertTrue(self._snapshot()['seen'])
+
+    def test_unusable_snapshot_reseeds_silently(self):
+        (self.home / 'model-prompt.json').write_text('{broken')
+        self.assertEqual(model_prompt.pending(self.home), [])
+        self.assertEqual(self._snapshot()['seen'],
+                         [slug for slug, _ in model_prompt.visible_models(self.home)])
+
+    def test_seen_never_keeps_out_of_policy_slugs(self):
+        _write_policy(self.home, ALLOWED)
+        model_prompt.pending(self.home)
+        _write_policy(self.home, (ALLOWED[0],))
+        model_prompt.acknowledge(self.home)
+        self.assertEqual(self._snapshot()['seen'], [ALLOWED[0]])
+        # Widening again announces the row the narrowed policy dropped.
+        _write_policy(self.home, ALLOWED)
+        self.assertEqual({slug for slug, _ in model_prompt.pending(self.home)},
+                         set(ALLOWED) - {ALLOWED[0]})
+
+    def test_empty_allowlist_scope_seeds_and_a_later_grant_announces(self):
+        _write_policy(self.home, ())
+        self.assertEqual(model_prompt.pending(self.home), [])
+        self.assertEqual(self._snapshot(),
+                         {'scope': 'acme/-', 'client': 'codex', 'seen': []})
+        _write_policy(self.home, ALLOWED)
+        self.assertEqual({slug for slug, _ in model_prompt.pending(self.home)},
+                         set(ALLOWED))
+
+    def test_missing_home_announces_nothing(self):
+        missing = Path(self._tmp.name) / 'missing'
+        self.assertEqual(model_prompt.pending(missing), [])
+        self.assertEqual(model_prompt.acknowledge(missing), [])
+
+    @unix_only
+    def test_broken_policy_symlink_is_rejected_not_unfiltered(self):
+        (self.home / 'model-policy.json').symlink_to(
+            Path(self._tmp.name) / 'missing.json')
+        self.assertEqual(model_prompt.visible_models(self.home), [])
+        self.assertEqual(model_prompt.pending(self.home), [])
+        self.assertFalse((self.home / 'model-prompt.json').exists())
+
+    @unix_only
+    def test_readable_policy_symlink_still_filters(self):
+        target = _write_policy(self._tmp.name, ALLOWED)
+        (self.home / 'model-policy.json').symlink_to(target)
+        self.assertEqual({slug for slug, _ in model_prompt.visible_models(self.home)},
+                         set(ALLOWED))
 
 
 if __name__ == '__main__':
