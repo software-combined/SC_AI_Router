@@ -254,10 +254,11 @@ class SteerWiringTests(unittest.TestCase):
         result = b''.join(providers.SubscriptionProvider().adapt(
             Response(raw, 'text/event-stream'), prepared.tool_names))
         item = json.loads(result[6:])['item']
-        self.assertEqual(item['type'], 'function_call_output')
+        self.assertEqual(item['type'], 'function_call')
         self.assertEqual(item['call_id'], 'call_wake')
-        self.assertIn('collaboration_plaintext.followup_task', item['output'])
-        self.assertNotIn('SYNTH_WAKE', item['output'])
+        self.assertIsInstance(json.loads(item['arguments']), str)
+        self.assertIn('collaboration_plaintext.followup_task', item['arguments'])
+        self.assertNotIn('SYNTH_WAKE', item['arguments'])
         credentials.key_for.assert_not_called()
 
     def test_subscription_leaves_native_followup_alone(self):
