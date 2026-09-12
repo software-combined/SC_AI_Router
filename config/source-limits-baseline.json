@@ -29,7 +29,7 @@
   "tests/test_models_cmd.py": 358,
   "tests/test_notice.py": 366,
   "tests/test_notice_delivery.py": 399,
-  "tests/test_packaging.py": 303,
+  "tests/test_packaging.py": 304,
   "tests/test_probe_harness.py": 362,
   "tests/test_setup.py": 397,
   "tests/test_tool_adapter.py": 440,
