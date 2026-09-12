@@ -98,55 +98,6 @@ _UPDATE_XML = (_TASK_HEAD + _repeat_trigger('PT4H') + _TASK_MID
                + '<ExecutionTimeLimit>PT30M</ExecutionTimeLimit>'
                + _TASK_TAIL)
 
-# Task Scheduler captures no stdout, and an InteractiveToken console task
-# shows its window on the desktop for its whole run. Both tasks therefore run
-# pythonw.exe through this home-root launcher (regenerated on every install,
-# like the task XML): rotate the supervisor log once it passes 1 MB (one
-# backup; hygiene that never blocks the launch), append stdout and stderr to
-# it, then run the stable home launcher named on the command line exactly as
-# the plist/unit would. argv: LOG SCRIPT.
-TASK_LAUNCHER_SOURCE = '''"""Windows task entry point, written by the installer. Not imported.
-
-Routes the task's stdout/stderr to the supervisor log under logs/, then
-runs the stable home launcher (router_launch.py or update_launch.py).
-"""
-import os
-import runpy
-import sys
-
-home = os.path.dirname(os.path.abspath(__file__))
-if len(sys.argv) != 3:
-    raise SystemExit('task launcher needs LOG and SCRIPT arguments')
-log, script = sys.argv[1], sys.argv[2]
-logs = os.path.join(home, 'logs')
-os.makedirs(logs, exist_ok=True)
-path = os.path.join(logs, log)
-try:
-    if os.path.getsize(path) > 1048576:
-        os.replace(path, path + '.1')
-except OSError:
-    pass  # rotation is hygiene; a held-open log must not stop the launch
-fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND)
-os.dup2(fd, 1)
-os.dup2(fd, 2)
-os.close(fd)
-sys.stdout = open(1, 'w', 1, 'utf-8', 'replace')
-sys.stderr = open(2, 'w', 1, 'utf-8', 'replace')
-sys.argv = [os.path.join(home, script), '--home=' + home]
-runpy.run_path(sys.argv[0], run_name='__main__')
-'''
-
-
-def write_task_launcher(home):
-    """Install the task launcher beside router_launch.py; returns its path."""
-    path = Path(home) / TASK_LAUNCHER
-    tmp = Path(home) / (TASK_LAUNCHER + '.tmp')
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp.write_text(TASK_LAUNCHER_SOURCE, encoding='utf-8')
-    os.replace(tmp, path)
-    return path
-
-
 def _quote(arg):
     # schtasks /xml carries no shell, but the Task Scheduler command line
     # does: quote any argument containing a space or quote.
@@ -183,22 +134,16 @@ def render_update_xml(python, home):
     return _render(_UPDATE_XML, python, home, 'update_launch.py', UPDATE_LOG)
 
 
-def _run(cmd, **kwargs):
-    kwargs.setdefault('creationflags', _NO_WINDOW['creationflags'])
-    return subprocess.run(cmd, **kwargs)
-
-
 def _tail(text):
     return (text or '').strip()[-500:]
 
 
-def _grantee(run=None):
+def _grantee(run):
     """Installing account for icacls grants, qualified as whoami reports it.
 
     The qualified name is what icacls prints back, so the post-write check
     compares like with like; %USERNAME% is the fallback, never a literal.
     """
-    run = run or _run
     whoami = run(['whoami'], capture_output=True, text=True)
     owner = (whoami.stdout or '').strip()
     if owner:
@@ -216,7 +161,7 @@ def _grant(run, path, grantee, verb):
         raise SystemExit('cannot %s %s: %s' % (verb, path, _tail(result.stderr)))
 
 
-def protect_file(path, run=None):
+def protect_file(path, run):
     """Restrict path to the installing user via icacls; verify afterwards.
 
     Given the router home itself (an existing directory), hardens it in
@@ -226,7 +171,6 @@ def protect_file(path, run=None):
     if missing, grants it explicitly, then verifies. Raises SystemExit
     naming the exact failure; never silently leaves an exposed secret.
     """
-    run = run or _run
     path = Path(path)
     grantee = _grantee(run)
     if path.is_dir():
@@ -240,20 +184,6 @@ def protect_file(path, run=None):
         os.close(fd)
     _grant(run, path, grantee + ':F', 'protect')
     _winacl.check(path, run=run)
-
-
-def _health(state, timeout=20):
-    url = 'http://127.0.0.1:%s/%s/health' % (state['port'], state['token'])
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        try:
-            with urllib.request.urlopen(url, timeout=2) as response:
-                body = json.loads(response.read())
-                if response.status == 200 and body.get('status') == 'ok':
-                    return body
-        except (OSError, ValueError):
-            time.sleep(0.5)
-    return None
 
 
 def _post_shutdown(state):
@@ -276,6 +206,7 @@ class Backend:
         self._sleep = time.sleep
 
     def _call(self, cmd, **kwargs):
+        """Run one console child windowless; an explicit flag wins."""
         kwargs.setdefault('creationflags', _NO_WINDOW['creationflags'])
         return self._run(cmd, **kwargs)
 
@@ -328,7 +259,7 @@ class Backend:
         if 'running' in state.get('status', '').lower():
             return True
         try:
-            probe = _health(self._state(home), timeout=2)
+            probe = self._svc.health(self._state(home), timeout=2)
         except (OSError, ValueError, KeyError):
             return False
         return probe is not None
@@ -346,8 +277,13 @@ class Backend:
         return state
 
     def install(self, python, home, state, release_dir, previous):
-        del release_dir, previous  # launchers resolve `current` at exec time.
-        write_task_launcher(home)
+        del previous  # the launchers resolve `current` at exec time.
+        # Task Scheduler captures no stdout, and an InteractiveToken console
+        # task shows its window for its whole run, so both tasks run pythonw
+        # through this packaged launcher: it rotates the supervisor log,
+        # appends stdout/stderr to it, then runs the home launcher named on
+        # the command line (argv: LOG SCRIPT).
+        self._svc.install_task_launcher(home, release_dir)
         self._register(ROUTER_TASK,
                        render_router_xml(python, home, _grantee(self._call)), home)
         self._register(UPDATE_TASK, render_update_xml(python, home), home)
@@ -411,7 +347,7 @@ class Backend:
         # control cannot recover a task that is not registered, so verify
         # registration before trusting /health.
         self._registered_and_running(ROUTER_TASK)
-        body = _health(state, timeout=180)
+        body = self._svc.health(state, timeout=180)
         if version is not None:
             return bool(body and body.get('version') == version)
         return bool(body)

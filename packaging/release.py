@@ -32,6 +32,7 @@ PACKAGING_FILES = (
     'packaging/notice.py',
     'packaging/assets/router-icon.png',
     'packaging/systemd.py', 'packaging/update_launch.py',
+    'packaging/task_launch.py',
     'packaging/updater.py', 'packaging/codex_config.py',
     'packaging/claude_config.py',
     'packaging/claude_desktop_config.py',

@@ -79,7 +79,7 @@ below interleaves them.
 | [129](129-tool-merge-unification.md) | One tool-definition merge rule | DONE: shared tool-merge rule 2026-09-12 | after 091/096/097 |
 | [130](130-installer-bundle-split.md) | packaging/bundle.py: real installer headroom | DONE: installer bundle split 2026-09-12 | after 102/123 |
 | [131](131-service-state-writer-decomposition.md) | Service/state/writer decomposition | PARTIAL: writer leaf, sinks and the state-read contract landed 2026-09-12; service split and diagnostics/key privacy left | after 094/095/100/103/123; coordinate 106 |
-| [132](132-windows-backend-cleanup.md) | Windows backend cleanup | TODO | before/with 116; after 123 |
+| [132](132-windows-backend-cleanup.md) | Windows backend cleanup | DONE: real task_launch.py in the bundle and parse surface, shared svc.health, one windowless wrapper 2026-09-12 | before/with 116; after 123 |
 | [133](133-probe-harness-consolidation.md) | One app-server probe harness | DONE: shared AppServer harness 2026-09-12 | before 118/119 |
 | [134](134-repo-hygiene-feed-ci-docs.md) | feed_verify move, CI single owner, docs index, shim owner | DONE: repo hygiene 2026-09-12 (verifier in packaging/, one setup composite + policy-scan script, kiro pointer, shim owner, tools/ rule); CI-side run of the composite pends the first push | after 101; before 106 (feed work) |
 | [135](135-new-model-prompt.md) | New-model prompt: notify + one-click Codex restart only when new models appear | PARTIAL: steps 1-6 landed (`0844c5d`, `f4bfef4`, `27abff5`, trigger commit 2026-09-12), trigger only in the updater; the hourly refresh call lands with 099 | after 128/131; hooks into 099; coordinate 106 |

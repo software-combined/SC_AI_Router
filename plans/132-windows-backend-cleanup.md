@@ -66,11 +66,44 @@ comment); `wc -l packaging/platforms/windows.py` reduced.
 
 ## Done criteria
 
-- [ ] Launcher is a real file, listed in the inventory and surface lists, parse-checked.
-- [ ] Windows backend uses `svc.health`; one subprocess wrapper remains.
-- [ ] No Windows behaviour change; offline tests green.
-- [ ] Full suite, compile and limit gates pass; only in-scope files changed.
-- [ ] `plans/README.md` status row updated.
+- [x] Launcher is a real file, listed in the inventory and surface lists, parse-checked.
+- [x] Windows backend uses `svc.health`; one subprocess wrapper remains.
+- [x] No Windows behaviour change; offline tests green.
+- [x] Full suite, compile and limit gates pass; only in-scope files changed.
+- [x] `plans/README.md` status row updated.
+
+## Landed notes, 2026-09-12
+
+- Steps 1-3 landed as one commit: they are one cleanup of the same module and
+  the first proof covers all three, so three review cycles bought nothing.
+- `packaging/task_launch.py` is byte-identical to the string the backend used
+  to embed (verified before deleting the constant), was added to
+  `packaging/release.py`'s inventory, `tests/test_packaging.py`'s required
+  list and 3.9 parse surface, and is installed by the new
+  `service.install_task_launcher(home, release_dir)`; the Windows backend now
+  calls that seam instead of writing an embedded string.
+- `_health` is gone: both probes call the injected `self._svc.health` with
+  the same timeouts (2 s and 180 s). The module-level `_run` is gone; the
+  single `Backend._call` wrapper keeps the CREATE_NO_WINDOW default and an
+  explicit flag still wins. Windows tests load the real service module so the
+  seam they exercise is the shipped one.
+- `packaging/platforms/windows.py` fell from 440 to 376 lines, so its
+  source-limit baseline entry was dropped; the `packaging/service.py`,
+  `tests/test_packaging.py`, `tests/test_windows_backend.py` and
+  `tests/test_windows_acl.py` baselines moved with their counts.
+  `docs/runtime-files.md` names the task launcher.
+- `install_task_launcher` keeps an existing `<home>/task_launch.py` when the
+  named release predates the packaged file (a `--setup` repair against an
+  older current release) or when no release is named; it fails closed only
+  when neither a packaged member nor an installed copy exists.
+- With the module-level `_run` gone, `_grantee` and `protect_file` take
+  `run` as a required parameter instead of falling back to a wrapper that no
+  longer exists; every call site already passed the seam (the backend passes
+  its windowless `_call`), so no Windows path changes.
+- No CHANGELOG or version entry: the launcher bytes, task XML, health
+  semantics and every console spawn are unchanged, and the repair-path guard
+  only preserves work the previous install already did, so no user-visible
+  behaviour changed (AGENTS section 6 judgement).
 
 ## STOP conditions
 

@@ -34,8 +34,17 @@ def _load_backend():
     return mod
 
 
+def _load_service():
+    spec = importlib.util.spec_from_file_location(
+        'router_service_for_windows_acl', ROOT / 'packaging' / 'service.py')
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
 winacl = _load_winacl()
 backend = _load_backend()
+service = _load_service()
 
 
 def _ok(cmd_responses):
@@ -201,7 +210,7 @@ class WinBackendShapeTests(unittest.TestCase):
             return SimpleNamespace(returncode=0, stdout='', stderr='')
 
         with self.assertRaisesRegex(SystemExit, 'CodexMixedModelRouterUpdate'):
-            backend.Backend(None, fake_run).uninstall('/home/x')
+            backend.Backend(service, fake_run).uninstall('/home/x')
 
     def test_failed_state_protection_keeps_a_pre_existing_token(self):
         # Gap 0 (PR 55 review): a failed state-file ACL check unlinks only

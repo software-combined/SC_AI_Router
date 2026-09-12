@@ -455,6 +455,25 @@ def install_launcher(home, release_dir):
     _install_home_file(home, release_dir, 'update_launch.py')
 
 
+def install_task_launcher(home, release_dir):
+    """Install the Windows Task Scheduler entry point beside the state dir.
+
+    The task XML names `<home>/task_launch.py`; copying the packaged file
+    keeps the installed launcher byte-identical to the one CI parses. A
+    repair run can name a release that predates the packaged launcher (or no
+    release at all): the home copy the previous install wrote is then already
+    correct, so it is kept instead of failing the repair.
+    """
+    if release_dir is not None:
+        try:
+            _install_home_file(home, release_dir, 'task_launch.py')
+            return
+        except SystemExit:
+            pass
+    if not (Path(home) / 'task_launch.py').is_file():
+        raise SystemExit('bundle has no task_launch.py')
+
+
 def _write_state(home, state):
     _atomic_write.replace_json(_state.path(home), state)
 
