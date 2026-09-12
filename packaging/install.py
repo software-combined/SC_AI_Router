@@ -36,8 +36,12 @@ _desktop_config = _svc.load(
     'router_claude_desktop_config', Path(__file__).resolve().parent / 'claude_desktop_config.py')
 _diag = _svc.load(
     'router_diagnostics', Path(__file__).resolve().parent / 'diagnostics.py')
+# Never name a packaging module after a standard-library one: scripts run with
+# packaging/ as sys.path[0] (python packaging/install.py), so packaging/operator.py
+# shadowed the stdlib operator that collections imports, breaking every entry
+# point with a circular import.
 _operator = _svc.load(
-    'router_operator', Path(__file__).resolve().parent / 'operator.py')
+    'router_operator_surface', Path(__file__).resolve().parent / 'operator_surface.py')
 _linux = _platforms._linux_mod().systemd
 _updater = _svc.load(
     'router_updater', Path(__file__).resolve().parent / 'updater.py')

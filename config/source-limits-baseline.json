@@ -10,7 +10,7 @@
   "ai_router/setup.py": 328,
   "ai_router/tool_adapter.py": 394,
   "ai_router/upstream.py": 281,
-  "packaging/install.py": 681,
+  "packaging/install.py": 685,
   "packaging/notice.py": 500,
   "packaging/service.py": 541,
   "packaging/updater.py": 442,
