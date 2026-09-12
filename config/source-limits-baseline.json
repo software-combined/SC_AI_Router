@@ -1,6 +1,6 @@
 {
   "ai_router/agent_handoffs.py": 274,
-  "ai_router/catalogue.py": 366,
+  "ai_router/catalogue.py": 390,
   "ai_router/compaction.py": 395,
   "ai_router/key_dialog.py": 260,
   "ai_router/models.py": 321,
@@ -13,7 +13,7 @@
   "packaging/notice.py": 500,
   "packaging/platforms/windows.py": 440,
   "packaging/service.py": 522,
-  "tests/test_catalogue.py": 494,
+  "tests/test_catalogue.py": 495,
   "tests/test_claude_ingress.py": 362,
   "tests/test_client_activation.py": 464,
   "tests/test_handler.py": 485,
