@@ -1,4 +1,4 @@
-"""Standalone app-injected tool outputs become matched tool pairs.
+"""App-injected outputs and readable peer messages become matched tool pairs.
 
 Codex Desktop injects cross-task messages (create_thread,
 send_message_to_thread) as Responses items shaped like tool outputs but
@@ -10,9 +10,12 @@ matched pair -- a synthesized complete `function_call` plus the
 `function_call_output` carrying the delegation text verbatim -- which
 the model treats as a tool result and the scrub in compaction.py passes
 through untouched. No `namespace` is set on either member: OpenRouter
-400s when it is present on both members of the pair.
+400s when it is present on both members of the pair. Peer messages use the
+same projection: a terminal assistant message is also rejected as prefill by
+Sonnet. Readable peer text stays tool-level data, never a user instruction.
 """
 from .compaction import OUTPUT_TYPES
+from .agent_handoffs import plaintext_agent_message
 from .errors import PreparationError
 
 TEXT_KEYS = ('output', 'result', 'content', 'text', 'data')
@@ -35,8 +38,9 @@ def _readable_text(item):
 
 
 def _is_standalone(item):
-    return (isinstance(item, dict) and item.get('type') in OUTPUT_TYPES
-            and not isinstance(item.get('call_id'), str))
+    return (isinstance(item, dict) and (item.get('type') == 'agent_message'
+            or (item.get('type') in OUTPUT_TYPES
+                and not isinstance(item.get('call_id'), str))))
 
 
 def _call_id(item, index):
@@ -48,6 +52,10 @@ def _call_id(item, index):
 
 
 def _materialize(item, index):
+    if item.get('type') == 'agent_message':
+        message = plaintext_agent_message(item)
+        item = {'id': item.get('id'), 'name': 'codex_agent_message',
+                'output': ''.join(block['text'] for block in message['content'])}
     text = _readable_text(item)
     if not text:
         raise PreparationError(

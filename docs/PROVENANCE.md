@@ -12,9 +12,10 @@ An earlier migration commit (`3481b8e`) created this repository from the
 same source at `749a6b8d`; this layout supersedes it with the current
 source plus package structure, governance and CI.
 
-Repository visibility is private (operator decision 2026-09-07), so the
-auto-updater release feed must be an S3 plus CloudFront bucket provisioned
-from SC_Infrastructure; Plan 110 uses that feed instead of GitHub Releases.
+The repository was created private on 2026-09-07, so the auto-updater's
+release feed is an S3 plus CloudFront distribution (`infra/`) rather than
+GitHub Releases; that feed is now public and token-free (see
+`CHANGELOG.md`).
 
 Licensing: the repository converted to Apache-2.0 only on 2026-09-11.
 `LICENSE` carries the verbatim Apache License 2.0 text, `NOTICE` carries the

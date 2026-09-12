@@ -1,5 +1,129 @@
 # Compatibility
 
+## Sonnet parent switches and retained subagents, 2026-09-12
+
+Candidate 0.6.37, installed Codex CLI 0.153.4, same pinned source and desktop
+version as the Lite entry below. Sonnet means OpenRouter
+`anthropic/claude-sonnet-5` in Codex; this does not verify Claude Code.
+
+The owner requested parent-model changes midway through the same task with
+subagent tools on both sides. Disposable client homes and an isolated candidate
+router were used; existing user tasks and the installed router were untouched.
+Each sequence kept one DeepSeek V4.1 Flash child alive through all three parent
+turns. The first parent spawned it, the second followed up with that same child,
+and the final Sonnet parent sent a queued message then woke the child again.
+The child and parent both returned all expected synthetic markers.
+
+| Parent sequence | Calls (cap 24 per sequence) | Result |
+|---|---:|---|
+| Sonnet 5 -> DeepSeek V4.1 Flash -> Sonnet 5 | 13 | PASS |
+| Sonnet 5 -> GPT-6 Astra -> Sonnet 5 | 16 | PASS |
+
+All 29 candidate requests returned HTTP 200 and observed serving identities
+matched requested models. The three handoff actions executed as native client
+tools with explicit plaintext metadata. Astra used its actual Lite catalogue
+row. There was no compaction, recreated child or final-step reminder in either
+passing sequence; marker checks were scoped to parent/child and turn IDs.
+
+Earlier expanded runs exposed Sonnet's rejection of a terminal assistant
+prefill and the external handoff metadata gap. Readable peer messages now use
+the existing matched-tool-result projection. An interim response-only steering
+attempt completed Codex turns without executing a tool, confirmed in the pinned
+client source; it was replaced before approval by executable plaintext calls.
+Explicit opaque metadata remains rejected and subscription encryption is intact.
+
+Final offline suite: 1,255 tests passed. Compile, lint, source limits, policy,
+classic/Lite handoff probes and history-switch/400/transient-retry probes passed.
+The isolated router and disposable clients were stopped after acceptance.
+
+## Responses Lite agent handoffs, 2026-09-12
+
+Candidate 0.6.37 on `cyril/cross-provider-history-fix`, base `ed55ced`
+(after the unrelated loopback Host-header fix).
+Clients: ChatGPT.app 26.903.71938 (8576), bundled Codex CLI 0.153.4.
+Pinned source: `rust-v0.153.4`, `3d2ee51ca2d5db578f328aa75e20aa22c0197c9a`.
+
+- The running 0.6.36.53 router contains the earlier alias/steering fixes,
+  but they inspect only top-level `tools`. The actual Astra row enables
+  `use_responses_lite`, which inserts developer `additional_tools` items
+  in `input` instead (`core/src/client.rs:929-977`). With no discovered
+  aliases, the subscription response adapter also skips steering.
+- Both failed DeepSeek review spawns carried an opaque message and omitted
+  `encrypted_function_args`; the native executor requires an explicit
+  empty list to select plaintext delivery (`core/src/tools/router.rs:44-62`).
+  The external guard rejected the unreadable assignment before dispatch.
+- A synthetic loopback capture with the installed binary and actual Astra
+  row found zero top-level tools, one `additional_tools` item containing
+  all six native collaboration functions, and zero aliases before the fix.
+- The candidate discovers the existing namespace in either location,
+  adds aliases in that same container, and derives a stable new `at_` ID
+  for the changed Lite prefix. Original tool schemas, native encryption,
+  client history and downstream opaque-input containment remain intact.
+- Corrected offline installed-client probes passed for both `--wire-mode
+  lite` and `--wire-mode classic`: all three assignment markers delivered,
+  canonical native-name replay true, aliases emitted, encrypted native
+  control preserved, and no probe errors. Neither run called a model.
+- Earlier Plan 066 Astra live evidence used a parent copied from the external
+  template with Lite disabled; it proves classic Responses only. The live
+  probe now requires the installed native row and reports its wire mode.
+- Bounded live candidate lifecycle passed with the actual Astra Lite row
+  and DeepSeek/max child: 20 model calls under a cap of 24, all three
+  plaintext markers received and returned, native encrypted Sol control
+  returned, canonical replay true, router restart/resume true, compaction
+  and two recall turns true, no probe errors. The recorded initial
+  WebSocket 404 fallback was expected; subsequent HTTP delivery completed.
+
+See `plans/2026-09-12-responses-lite-agent-handoffs.md` for the failure chain
+and implementation scope. This source change does not deploy the router.
+
+## Subscription history replay and validation retries, 2026-09-12
+
+Candidate source: 0.6.37, initially based on `develop` at `4b9cdf4`,
+refreshed to `c177f17`, then `ed55ced` before review. Clients:
+ChatGPT.app 26.903.71938 (8576), bundled Codex CLI 0.153.4;
+Claude Code 2.1.223 (version readback only, no Claude acceptance in this
+Codex-only change). Upstream Codex source: `rust-v0.153.4`, commit
+`3d2ee51ca2d5db578f328aa75e20aa22c0197c9a`.
+
+- A task switched from DeepSeek to Astra with 19 plaintext reasoning
+  records and no compaction. OpenAI rejected `input[0].content` with
+  `array_above_max_length`: maximum 0, received 1. A synthetic control
+  without the reasoning item returned 200. Removing only its content
+  caused an unknown-item 404, so the complete foreign item must be omitted.
+  The working Beacon task had compacted immediately before its switch,
+  leaving no foreign reasoning records to replay.
+- The outgoing subscription projection omits plaintext-only reasoning,
+  preserves native encrypted reasoning without plaintext content, and
+  leaves client history, messages, and tool pairs intact. It applies to
+  Responses turns and compaction; existing external portability policy
+  is unchanged.
+- The pinned client's `api_bridge.rs` maps HTTP 400 to non-retryable
+  `InvalidRequest`; `protocol/src/error.rs` maps that to protocol `other`.
+  HTTP 409 instead becomes retryable `UnexpectedStatus`. Validation
+  refusals now retain 400, including cached refusals. Existing context
+  error handling is preserved.
+- `python3.14 tools/probe_history_switch.py` passed with the installed
+  client and fake upstream: DeepSeek -> Astra -> DeepSeek, no compaction,
+  preserved marker; permanent rejection exactly one attempt; transient
+  rejection then success exactly two attempts. The fake upstream sees no
+  foreign reasoning on the Astra leg, while the adapter's incoming history
+  still contains it.
+- `python3.14 tools/probe_context_budget.py` passed both threshold
+  compaction and explicit context-error recovery, preserving the marker.
+  Its fake connection gained the no-op `connect()` required by the current
+  transport contract.
+- Owner-authorized live candidate acceptance passed using
+  `tools/probe_codex_runtime.py` with DeepSeek at max, `--switch --switch-to
+  gpt-6-astra --switch-back`: a real reasoning item and dynamic-tool round
+  trip preceded the switches, and both retained the tool result. A separate
+  Astra dynamic-tool round trip passed. All candidate requests reported
+  HTTP 200; DeepSeek served identity matched. The candidate used a separate
+  loopback port and disposable client home and was stopped afterward.
+
+No deployed router or existing task was changed. The source-size baseline
+keeps the existing adapter/failure-policy owners (296/281 lines), both below
+the 400-line hard cap; history normalization lives in its own small leaf.
+
 ## Subagent model list is capped by the client, 2026-09-12
 
 Clients: bundled app-server codex-cli `0.153.4` (upstream tag

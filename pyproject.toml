@@ -1,13 +1,21 @@
 [project]
 name = "ai-router"
-version = "0.6.36"
+version = "0.6.37"
 requires-python = ">=3.14"
 dependencies = []
+description = "Local model router for Codex and Claude Code: subscription models and OpenRouter models side by side from one loopback endpoint."
+readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md"]
 authors = [
     { name = "Cyril Allart", email = "cyril@softwarecombined.com" },
 ]
+
+[project.urls]
+Homepage = "https://www.softwarecombined.com"
+Repository = "https://github.com/software-combined/SC_OpenRouter_adapter"
+Changelog = "https://github.com/software-combined/SC_OpenRouter_adapter/blob/main/CHANGELOG.md"
+Issues = "https://github.com/software-combined/SC_OpenRouter_adapter/issues"
 
 [tool.ruff]
 target-version = "py39"

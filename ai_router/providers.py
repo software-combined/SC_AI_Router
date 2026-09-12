@@ -3,6 +3,7 @@ import http.client
 import json
 from . import capabilities, compaction as comp, local_services, agent_handoffs, provider_defs
 from .standalone_outputs import materialize_outputs
+from . import subscription_history
 from .capabilities import CANONICAL_ORDER, check_effort, check_images, input_modalities
 from .image_items import note_images, strip_images
 from .errors import PreparationError, SubscriptionRequired, UnknownModel
@@ -54,11 +55,15 @@ class SubscriptionProvider:
         # The URL path token is the loopback auth; Codex >=0.153.4 omits the
         # subscription Authorization header, so forward client headers unchanged.
         fwd = {k: v for k, v in headers.items() if k.lower() not in HOP_HEADERS}
+        normalized = (subscription_history.normalize(payload)
+                      if path in ('/responses', '/responses/compact') else payload)
+        history_changed = normalized is not payload
+        payload = normalized
         try:
             names = agent_handoffs.add_plaintext_tools(payload) if path == '/responses' else set()
         except ValueError as exc:
             raise PreparationError(str(exc)) from exc
-        if names:
+        if names or history_changed:
             fwd = {k: v for k, v in fwd.items() if k.lower() not in ('content-encoding', 'accept-encoding')}
             fwd['Accept-Encoding'] = 'identity'
             raw_body = json.dumps(payload).encode()
@@ -107,8 +112,9 @@ class ExternalResponsesProvider:
         # tool_search_output items (released-tool discovery) are never scrubbed.
         payload['input'] = comp.scrub_tool_fragments(payload.get('input', []))
         try:
-            agent_handoffs.add_plaintext_tools(payload)
+            aliases = agent_handoffs.add_plaintext_tools(payload)
             tool_names = prepare_tools(payload)
+            tool_names.handoffs = aliases
             rewritten = comp.strip_reasoning_blobs(comp.rewrite_input(payload.get('input', [])))
         except ValueError as exc:
             raise PreparationError(str(exc))

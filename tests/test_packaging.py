@@ -53,6 +53,7 @@ FILES = [
          'ai_router/clients/codex.py',
          'ai_router/transport.py',
          'ai_router/subscription_fallback.py',
+         'ai_router/subscription_history.py',
          'ai_router/provider_defs.py',
          'ai_router/upstream.py',
          'ai_router/protocols/__init__.py',

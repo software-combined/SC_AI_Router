@@ -185,6 +185,11 @@ def preparation(message):
     return _error(409, 'PROVIDER_REJECTED', message)
 
 
+def upstream_invalid_request(message):
+    """Codex treats HTTP 400 as final; HTTP 409 triggers stream retries."""
+    return _error(400, 'PROVIDER_REJECTED', message)
+
+
 def context_window(message='The model context window is full; compact or shorten the turn.'):
     return _error(400, 'context_length_exceeded', message)
 

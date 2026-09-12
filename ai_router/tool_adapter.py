@@ -208,6 +208,12 @@ class ToolEvents:
         self.logged = set()
         self.changed = False
 
+    def _plaintext(self, item):
+        aliases = getattr(self.names, 'handoffs', ())
+        restored = agent_handoffs.external_plaintext_call(item, aliases)
+        self.changed |= restored is not item
+        return restored
+
     def item(self, item, started=False):
         if not started and item.get('type') == 'function_call' and isinstance(item.get('arguments'), str):
             trimmed = integer_json(item['arguments'])
@@ -218,7 +224,7 @@ class ToolEvents:
             return item
         if tool_key(item) not in self.names:
             if item.get('namespace') is not None:
-                return item  # native shape: the client owns its resolution
+                return self._plaintext(item)
             if not tool_aliases.repair_item(item, self.names, self.notes, self.logged):
                 return item
             self.changed = True
@@ -242,7 +248,7 @@ class ToolEvents:
             if not had_arguments:
                 self.changed = True
             item['arguments'] = arguments
-            return item
+            return self._plaintext(item)
         self.changed = True
         if kind == 'search':
             item.pop('name')
