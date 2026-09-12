@@ -22,9 +22,11 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
     if routed:
         cached = upstream.recall_refusal(prepared.provider, metrics.get('model'), prepared.body)
         if cached is not None:
+            status, message = cached
             log_event('upstream_rejected_cached', provider=prepared.provider,
-                      model=metrics.get('model'), status=409, category='PROVIDER_REJECTED')
-            return handler.error(errors.preparation(cached))
+                      model=metrics.get('model'), status=status, category='PROVIDER_REJECTED')
+            return handler.error(errors.upstream_invalid_request(message) if status == 400
+                                 else errors.preparation(message))
     conn = http.client.HTTPSConnection(prepared.host, timeout=120)
     sent = False
     response = None
@@ -67,6 +69,7 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
             described = upstream.describe_failure(
                 None, {'status': response.status, 'body': raw},
                 {'model': metrics.get('model'), 'provider': prepared.provider,
+                 'protocol': metrics.get('protocol'),
                  'elapsed_ms': round((time.monotonic() - started) * 1000, 1),
                  'timeout_s': 120,
                  'has_image': has_image, 'routed': routed})
@@ -74,13 +77,16 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
                 status, message, code = described
                 # A transient upstream failure is retryable; only a
                 # deterministic client-side rejection is worth remembering.
-                if status == 409 and routed and response.status < 500:
+                if status in (400, 409) and routed and response.status < 500:
                     upstream.remember_refusal(prepared.provider, metrics.get('model'),
-                                              prepared.body, message)
+                                              prepared.body, message, status=status)
                 log_event('upstream_rejected', status=response.status,
                           client_status=status, code=code,
+                          parameter=upstream.rejection_parameter(raw),
                           category='PROVIDER_REJECTED',
                           **metrics, **upstream.rejection_fingerprint(prepared.body))
+                if status == 400:
+                    return handler.error(errors.upstream_invalid_request(message))
                 return handler.error(errors.upstream_described(message) if status == 502
                                      else errors.preparation(message))
             handler.send_response(response.status)

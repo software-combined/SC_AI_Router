@@ -143,7 +143,7 @@ class HandlerCharacterisationTests(unittest.TestCase):
         self.assertEqual(response.status, 400)
         self.assertEqual(json.loads(response.read()), {'error': 'slow down'})
 
-    def test_nested_provider_400_becomes_409_before_headers(self):
+    def test_nested_provider_400_stays_400_before_headers(self):
         inner = ('{"code": "invalid-argument", "error": "Failed to start sampling: '
                  '[invalid_client_tool_schema] ns_abc123def456_tool_update: root must be object"}')
         body = json.dumps({'error': {'message': 'Provider returned error',
@@ -153,7 +153,7 @@ class HandlerCharacterisationTests(unittest.TestCase):
         server = self._server()
         response = _post(server.server_port, '/test-token/responses',
                          {'model': 'x-ai/grok-4.6', 'input': []})
-        self.assertEqual(response.status, 409)
+        self.assertEqual(response.status, 400)
         message = json.loads(response.read())['error']['message']
         self.assertIn('xAI', message)
         self.assertIn('ns_abc123def456_tool_update', message)

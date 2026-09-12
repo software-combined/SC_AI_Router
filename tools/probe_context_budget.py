@@ -56,6 +56,9 @@ class Upstream:
         owner = self
 
         class Connection:
+            def connect(self):
+                pass
+
             def request(self, method, path, body=None, headers=None):
                 assert path == '/api/v1/responses', 'unexpected upstream path'
                 self.payload = json.loads(body)
