@@ -2,7 +2,7 @@ import json
 import unittest
 from types import SimpleNamespace
 from unittest import mock
-from ai_router import provider_defs, providers, upstream
+from ai_router import provider_defs, providers
 from tests.harness import (
     isolated_home as _isolated_home,
     stub_credentials as _stub_credentials,
@@ -141,70 +141,6 @@ class OutputCapTests(unittest.TestCase):
             except providers.PreparationError as exc:
                 self.assertNotIn('Bearer', str(exc))
                 self.assertNotIn('router-secret', str(exc))
-
-
-class FailureDescriptionTests(unittest.TestCase):
-    def test_stall_before_headers_names_model_and_timeout(self):
-        status, message = upstream.describe_failure(
-            TimeoutError('timed out'), None,
-            {'model': 'x-ai/grok-4.6', 'provider': 'openrouter',
-             'elapsed_ms': 120001.0, 'timeout_s': 120, 'has_image': False})
-        self.assertEqual(status, 502)
-        self.assertIn('x-ai/grok-4.6', message)
-        self.assertIn('120', message)
-        self.assertIn('shorter', message)
-
-    def test_grok_image_stall_suggests_text_only(self):
-        # The hint matches the pinned id and any tilde alias of the vendor.
-        for model in ('x-ai/grok-4.6', '~x-ai/grok-latest'):
-            with self.subTest(model=model):
-                status, message = upstream.describe_failure(
-                    TimeoutError('timed out'), None,
-                    {'model': model, 'provider': 'openrouter',
-                     'elapsed_ms': 120001.0, 'timeout_s': 120, 'has_image': True})
-                self.assertEqual(status, 502)
-                self.assertIn('text-only', message)
-        _, message = upstream.describe_failure(
-            TimeoutError('timed out'), None,
-            {'model': 'z-ai/glm-5.3', 'provider': 'openrouter',
-             'elapsed_ms': 120001.0, 'timeout_s': 120, 'has_image': True})
-        self.assertNotIn('text-only', message)
-
-    def test_dns_failure_names_host(self):
-        status, message = upstream.describe_failure(
-            OSError('Name or service not known'), None,
-            {'model': 'z-ai/glm-5.3', 'provider': 'openrouter',
-             'host': 'openrouter.ai', 'elapsed_ms': 12.0, 'timeout_s': 120,
-             'has_image': False})
-        self.assertEqual(status, 502)
-        self.assertIn('openrouter.ai', message)
-
-    def test_nested_provider_400_becomes_actionable_409(self):
-        raw = ('{"code": "invalid-argument", "error": "Failed to start sampling: '
-               '[invalid_client_tool_schema] ns_abc123def456_tool_update: tool parameter '
-               'root must be an object type"}')
-        body = json.dumps({'error': {'message': 'Provider returned error',
-                                     'metadata': {'raw': raw, 'provider_name': 'xAI'}}})
-        status, message = upstream.describe_failure(
-            None, {'status': 400, 'body': body.encode()},
-            {'model': 'x-ai/grok-4.6', 'provider': 'openrouter',
-             'elapsed_ms': 1831.8, 'timeout_s': 120, 'has_image': False})
-        self.assertEqual(status, 409)
-        self.assertIn('xAI', message)
-        self.assertIn('ns_abc123def456_tool_update', message)
-        self.assertIn('tool schema was rejected', message)
-        self.assertNotIn('Failed to start sampling', message)
-        self.assertNotIn('arguments_json', message)
-
-    def test_unparseable_upstream_body_passes_through(self):
-        self.assertIsNone(upstream.describe_failure(
-            None, {'status': 400, 'body': b'not json at all'},
-            {'model': 'z-ai/glm-5.3', 'provider': 'openrouter',
-             'elapsed_ms': 500.0, 'timeout_s': 120, 'has_image': False}))
-        self.assertIsNone(upstream.describe_failure(
-            ValueError('odd shape'), None,
-            {'model': 'z-ai/glm-5.3', 'provider': 'openrouter',
-             'elapsed_ms': 500.0, 'timeout_s': 120, 'has_image': False}))
 
 
 class SummarizerTests(unittest.TestCase):

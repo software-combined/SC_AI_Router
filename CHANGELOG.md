@@ -20,6 +20,16 @@
   `--setup` also repairs when the feed lags the installed release, without
   downgrading it.
 
+- Carried-history portability (plan 150, slice 2a): turns on the
+  `meta/muse-spark-1.3-contributor` row, or turns carrying the
+  client's `<model_switch>` developer marker, replay a carried tool-search
+  call as its declared tools with the search call itself omitted.
+  Refusals on a routed turn now name the provider code when the field
+  is already code-shaped and say to switch the thread back or start a
+  new thread; an identical deterministic refusal answers 409 once more
+  without dispatching again (8 entries, 60 s, never a 5xx). Rejection
+  logs carry counts only.
+
 ## 0.6.33
 
 - Namespaced client tools are exposed to routed models under readable aliases

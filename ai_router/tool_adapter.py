@@ -7,6 +7,7 @@ import json
 import re
 from copy import deepcopy
 from .capabilities import has_recursive_refs
+from .compaction import portablize_search_history
 from .discovered import recall
 from .registry import by_slug
 from . import agent_handoffs, sse, tool_aliases, tool_merge
@@ -194,6 +195,9 @@ def prepare_tools(payload):
                 item['arguments'] = json.dumps({'arguments_json': item['arguments']})
         elif item.get('type') == 'function_call_output' and isinstance(item.get('output'), str):
             item['output'] = tool_aliases.annotate(item['output'], names)
+    if isinstance(payload.get('input'), list):
+        payload['input'] = portablize_search_history(
+            payload['input'], SEARCH_NAME, _quirk(payload, 'history_mode'))
     return names
 
 class ToolEvents:
