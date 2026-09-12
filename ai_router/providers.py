@@ -156,7 +156,7 @@ class ExternalResponsesProvider:
                 result = json.load(response)
                 if notes is not None and isinstance(result.get('model'), str):
                     notes['served_model'] = result['model']
-                adapter = ToolEvents(tool_names)
+                adapter = ToolEvents(tool_names, notes)
                 result['output'] = [adapter.item(item) for item in result.get('output', [])]
                 yield json.dumps(result).encode()
         else:

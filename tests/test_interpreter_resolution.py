@@ -87,7 +87,7 @@ class LegacyReloadTests(unittest.TestCase):
             _patch_attrs(self, run=fake_run, self_test=lambda *a: None,
                          write_catalogue=_fake_write_catalogue,
                          wait_version=lambda *a, **k: {'status': 'ok', 'version': '1.0.1'})
-            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'k'}
+            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'k', 'ROUTER_NO_KEY_WINDOW': '1'}
             with mock.patch.dict(os.environ, env):
                 args = install_mod.build_parser().parse_args(
                     ['--feed', 'file:///latest.json', '--home', str(home)])
@@ -134,7 +134,7 @@ class LegacyReloadTests(unittest.TestCase):
         _patch_attrs(self, run=fake_run, self_test=lambda *a: None,
                      write_catalogue=_fake_write_catalogue,
                      wait_version=lambda *a, **k: {'status': 'ok'})
-        env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'k'}
+        env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'k', 'ROUTER_NO_KEY_WINDOW': '1'}
         with mock.patch.dict(os.environ, env):
             args = install_mod.build_parser().parse_args(
                 ['--feed', 'file:///latest.json', '--home', str(home)])

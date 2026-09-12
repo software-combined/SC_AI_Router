@@ -11,6 +11,7 @@ router package.
 """
 import json
 import os
+import time
 from pathlib import Path
 
 _defs = None
@@ -106,9 +107,70 @@ def ensure(home, state, env, protect):
             except OSError:
                 pass
             raise
+    if _setup_armed(state):
+        # The installer already minted the first-run window: it collects the
+        # key, so the placeholder is created silently and the install
+        # proceeds instead of stopping with the paste-and-re-run instruction.
+        return
     print(f'Paste your {defn.label} key into {key_file} '
           '(owner-only file) and re-run the installer')
     raise SystemExit(3)
+
+
+def _setup_armed(state):
+    """True while a fresh installer-minted setup nonce is pending.
+
+    Same shape as ai_router.setup.setup_pending, kept literal so this
+    3.9-compatible module never imports the router package.
+    """
+    cfg = state.get('setup') if isinstance(state, dict) else None
+    nonce = cfg.get('nonce') if isinstance(cfg, dict) else None
+    expires = cfg.get('expires') if isinstance(cfg, dict) else None
+    if not isinstance(nonce, str) or not nonce:
+        return False
+    if isinstance(expires, bool) or not isinstance(expires, (int, float)):
+        return False
+    return expires > time.time()
+
+
+def unhandled(home, state, private):
+    """External defs the installed service cannot serve yet.
+
+    A service-visible read: the environment is ignored because the installer
+    passes only ROUTER_HOME to the service and never the invoking shell's
+    environment, so a provider counts as handled only through a non-blank
+    owner-only key file, or opencode_auth carrying an API key when no key
+    file exists. An empty placeholder is not handled.
+
+    A non-blank key file that fails the owner-only check raises SystemExit
+    naming the file and the required permission instead of arming a window:
+    the setup route would return 409 on that file. A blank placeholder
+    never refuses; the window claims it.
+    """
+    missing = []
+    for defn in external_defs():
+        _, usable = key_state(home, state, {}, defn, private)
+        if usable:
+            continue
+        key_file = home / defn.key.file
+        try:
+            non_blank = bool(key_file.read_text().strip()) if key_file.is_file() else False
+        except OSError:
+            non_blank = False
+        if non_blank:
+            # A non-blank file can be unusable only when the owner-only check
+            # failed; the setup route would return 409 on that file, so
+            # refuse instead of arming a window.
+            if os.name == 'nt':
+                raise SystemExit(
+                    '%s is not owner-only; restrict it to the installing user '
+                    'with icacls, or delete it and re-run the installer'
+                    % key_file)
+            raise SystemExit(
+                '%s must be readable by the owner only (chmod 600); fix the '
+                'permission or delete it and re-run the installer' % key_file)
+        missing.append(defn)
+    return missing
 
 
 def supplied(home, state, env, defn):

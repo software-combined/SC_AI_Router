@@ -75,7 +75,8 @@ class ClientActivationTests(unittest.TestCase):
             args = install_mod.build_parser().parse_args(
                 ['--feed', 'file:///latest.json', '--home', str(home)])
             with mock.patch.dict(os.environ, {'HOME': str(Path(tmp) / 'fakehome'),
-                                              'OPENROUTER_API_KEY': 'k'}):
+                                              'OPENROUTER_API_KEY': 'k',
+                                              'ROUTER_NO_KEY_WINDOW': '1'}):
                 with self.assertRaisesRegex(SystemExit, 'edited by hand'):
                     install_mod.do_install(args, _fetch=_static_fetch(latest, blob))
 
@@ -219,7 +220,8 @@ class ServiceOnlyTests(unittest.TestCase):
         args = install_mod.build_parser().parse_args(
             ['--feed', 'file:///latest.json', '--home', str(home),
              '--client', 'none', *extra])
-        env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'k'}
+        env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'k',
+               'ROUTER_NO_KEY_WINDOW': '1'}
         with mock.patch.dict(os.environ, env):
             with contextlib.redirect_stdout(io.StringIO()):
                 rc = install_mod.do_install(args, _fetch=_static_fetch(latest, blob))

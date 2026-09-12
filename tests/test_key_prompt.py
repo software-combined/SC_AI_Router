@@ -101,11 +101,14 @@ class CollectTests(unittest.TestCase):
     def test_cancelling_each_platform(self):
         darwin = lambda argv, **kw: subprocess.CompletedProcess(  # noqa: E731
             [], 1, stdout='', stderr='execution error: User canceled. (-128)')
+        darwin_british = lambda argv, **kw: subprocess.CompletedProcess(  # noqa: E731
+            [], 1, stdout='', stderr='execution error: User cancelled. (-128)')
         linux = lambda argv, **kw: subprocess.CompletedProcess(  # noqa: E731
             [], 1, stdout='', stderr='')
         win32 = lambda argv, **kw: subprocess.CompletedProcess(  # noqa: E731
             [], 2, stdout='', stderr='')
         self.assertIsNone(key_dialog.collect('/a', 'darwin', darwin))
+        self.assertIsNone(key_dialog.collect('/a', 'darwin', darwin_british))
         self.assertIsNone(key_dialog.collect('/a', 'linux', linux))
         self.assertIsNone(key_dialog.collect('/a', 'win32', win32))
 

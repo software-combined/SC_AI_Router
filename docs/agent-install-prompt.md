@@ -10,10 +10,11 @@ The agent runs everything; you only approve restarts.
 >
 > Steps: run the bootstrap for my OS, then verify with the
 > installer `--preflight` and `--status` probes against the default home
-> and show me the redacted summary. If the OpenRouter key is missing, open
-> the local setup page it prints and tell me to paste my key there, never
-> ask me for the key in chat. If anything fails, stop and show me the
-> exact error, do not retry with different flags.
+> and show me the redacted summary. A key window opens by itself when the
+> key is missing: never handle the key yourself, never ask me for it in
+> chat, and tell me to paste it in the window. If no window appears,
+> re-run the installer with `--setup`. If anything fails, stop and show me
+> the exact error, do not retry with different flags.
 >
 > Rules: use the production router home only, never a `--home` under /tmp
 > (the installer refuses scratch homes unless ROUTER_LIVE_RUN=1, and that
