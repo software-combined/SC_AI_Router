@@ -8,8 +8,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-feed
   cancel-in-progress: false
+  queue: max
 
 env:
   AWS_REGION: ap-southeast-2
@@ -20,6 +21,10 @@ env:
 jobs:
   release:
     name: Build and publish
+    # Check both identities: reruns use the original actor's privileges.
+    if: >-
+      contains(fromJSON('["SC-Cyril", "BrentJMaxwell"]'), github.actor) &&
+      contains(fromJSON('["SC-Cyril", "BrentJMaxwell"]'), github.triggering_actor)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -27,6 +32,8 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup
       - run: python -m unittest discover -s tests -t .
       - name: Verify runtime pins
@@ -62,7 +69,13 @@ jobs:
           fi
           echo "FEED_DISTRIBUTION_ID=$DIST_ID" >> "$GITHUB_ENV"
       - name: Publish to the update feed
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          TAG_SHA=$(gh api "repos/$GITHUB_REPOSITORY/commits/refs%2Ftags%2F$GITHUB_REF_NAME" --jq .sha)
+          if [ "$TAG_SHA" != "$GITHUB_SHA" ]; then
+            echo "release tag changed; start a new release run"; exit 1
+          fi
           python tools/publish_feed.py --dist dist --channel "$CHANNEL" \
             --bucket "$FEED_BUCKET" --distribution-id "$FEED_DISTRIBUTION_ID"
       - name: Create release

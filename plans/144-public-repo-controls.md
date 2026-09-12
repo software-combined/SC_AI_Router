@@ -27,7 +27,7 @@ issues and pull requests into untrusted input, and makes every published
 release asset world-readable. The workflows themselves are already
 well-shaped (read-only default token, no `pull_request_target` or
 `workflow_run`, SHA-pinned actions), so the work is mostly protection
-settings, secret scanning and the release-environment gate - plus the
+settings, secret scanning and the release authority gate - plus the
 pre-flip cleanup owned by plans 142 and 143.
 
 ## Current live state (verified 2026-09-11)
@@ -48,33 +48,27 @@ pre-flip cleanup owned by plans 142 and 143.
 
 ### Step 1: branch, tag and release protections
 
-- Protect `main` and `develop`: require a pull request, at least one
-  approving review, dismissal of stale approvals, the CI checks from
-  `.github/workflows/check.yml` to pass, linear history if the team agrees,
-  and block force pushes and branch deletion.
-- Protect tags `v*`: only the release workflow or an owner may create or move
-  them.
-- Add a `release` environment with required reviewers (owner: `SC-Cyril`)
-  and a tag-only deployment rule; attach it to `release.yml`'s publish job.
-  Attaching it changes the job's OIDC subject to
-  `repo:<owner>/<repo>:environment:release`, so in the same change move the
-  `StringLike` condition in `infra/feed.yaml` to that subject (classic and
-  immutable forms) and remove the two `ref:refs/tags/v*` entries, then
-  redeploy the stack before the first gated release. Keeping the tag
-  entries would let any push-capable account assume the publisher role from
-  a workflow of its own on a four-part tag, bypassing the gate. Re-point
-  `tests/test_feed_infra.py`'s trust assertions (currently around lines 60-72)
-  at the two `environment:release` subjects and assert `ref:refs/tags/` is
-  absent from the trust policy.
-- Enable immutable releases only after the `v0.6.25.42` token-bearing asset
-  has been removed or superseded (retired as hygiene; there is no token to
-  rotate).
+The owner selected admin-created tags on 2026-09-12. Only Cyril (`SC-Cyril`)
+and Brent (`BrentJMaxwell`) may merge PRs, create tags, and deploy or rerun
+releases. Keep both as repository admins and all other users and teams at
+read or triage. GitHub write access includes workflow reruns, so granting
+write or maintain would widen release authority.
 
-**Verify**: `gh api repos/software-combined/SC_OpenRouter_adapter/branches/main/protection`,
-the tag ruleset, the environment, and the immutable-releases setting each
-read back as configured; `aws iam get-role --role-name
-scg-router-feed-publisher` shows only the environment subjects; and the
-first beta release after the change assumes the role from the gated job.
+- Protect `main` and `develop` with the `Test` check, pull requests, deletion
+  and force-push restrictions. Restrict updates to admins through PRs only.
+- Protect every tag, with no build-number exception. The workflow publishes
+  assets on the existing tag with `gh release create --verify-tag`; bundle
+  versions still include the run number. Both the initiating and rerunning
+  actor must be Cyril or Brent. Serialize publication against the shared feed.
+- Keep the existing tag-scoped AWS OIDC trust. No approval environment or AWS
+  trust migration is needed for this selected approach.
+- Enable immutable releases only after retiring the inert `v0.6.25.42`
+  token-bearing asset. This cleanup does not create a release or tag.
+
+**Verify**: read back both branch rulesets, the all-tag ruleset and effective
+collaborator permissions. Confirm the current workflow uses the existing tag
+and its download URL. The next authorised beta release must prove role
+assumption, feed publication and GitHub asset download end to end.
 
 ### Step 2: secret scanning and supply chain
 
@@ -117,9 +111,10 @@ public feed and updates itself automatically.
 
 ## Done criteria
 
-- [ ] Branch, tag, environment and immutable-release protections read back.
-- [ ] `infra/feed.yaml` trusts only the `environment:release` subjects (both
-      forms), the stack is redeployed, and one gated release assumed the role.
+- [ ] Branch and all-tag protections plus effective collaborator permissions read back.
+- [ ] Existing-tag workflow integrated; next authorised beta release verifies
+      tag-scoped role assumption, feed publication and GitHub asset download.
+- [ ] Immutable releases enabled after the legacy asset is retired.
 - [ ] Secret scanning + push protection enabled; Gitleaks in required checks.
 - [ ] Workflow inputs hash-pinned; CODEOWNERS review required for `.github/`.
 - [ ] Public text audit recorded.
@@ -133,68 +128,39 @@ public feed and updates itself automatically.
 - A control cannot be enabled without paying for a GitHub plan the owner has
   not approved: STOP and record the gap (this is an owner decision, not a
   code workaround).
-- Any tag a non-admin can create still triggers `release.yml`'s publish job:
-  do not flip and do not widen push access. Today that is true because the
-  `refs/tags/v*.*.*.*` exclusion stands in ruleset 23035086 and no `release`
-  environment gates the job; it stays true until either the environment gate
-  is in place or the workflow creates no tags of its own and the exclusion is
-  removed (see the applied section below).
+- Any non-maintainer can merge, create tags, or run/rerun publishing: do not
+  flip or widen access. Recheck effective access, not just direct grants.
 
-## Maintenance notes
+## Applied 2026-09-12: selected release control
 
-- Re-run the settings readback after any GitHub plan or organisation policy
-  change; protections can be silently overridden by upper-level rulesets.
-- Keep the release environment's reviewers current; it is the only gate
-  between a tag push and a published feed document.
+Owner instruction: only Cyril and Brent merge, tag and deploy. Live GitHub
+readback after the cleanup shows:
 
-## Applied 2026-09-12 (owner instruction, readback recorded)
+- `Protect main` (23034914) and `Protect develop` (23034916): deletion,
+  non-fast-forward, update restriction, pull request (0 approvals), and
+  required `Test` check. Admin bypass is available through PRs only.
+- `Protect tags and releases` (23035086): creation, update and deletion
+  restrictions on every tag, with no exclusions; admin bypass only.
+- Cyril and Brent are the only effective users with write, maintain or admin
+  rights. Other direct collaborators retain triage. Repository-specific team
+  grants were removed after GitHub did not retain API permission downgrades;
+  GraphQL readback confirms no team grants remain. Organisation base access
+  remains read.
+- Actions remains read-only by default. The organisation rejected enabling
+  Actions-created PRs; the broken refresh workflow is removed from source.
+  Maintainers use the existing CLI and normal PR process in `CONTRIBUTING.md`.
+- The repository remains private. No tag, release, visibility flip, rename,
+  AWS deployment, or change to publisher trust was performed by this cleanup.
 
-On the owner's instruction that only the two repository admins (Cyril and
-Brent) may update `main`, create tags and cut releases, these settings were
-applied through the GitHub API and read back:
+The workflow source lands on `develop`; `main` receives it through the next
+release PR. Do not cut a tag from the older workflow: all-tag protection will
+reject its attempt to create a second tag. The next beta publication remains
+an explicit acceptance gate. Recheck effective permissions after any team or
+organisation ownership change; adding an admin widens tag-rule bypass.
 
-- Repository ruleset `Protect main` (id 23034914, active): `deletion`,
-  `non_fast_forward`, `update`, `pull_request` (0 approvals),
-  `required_status_checks` (`Test` from `check.yml`); bypass: repository
-  admins, always. Non-admins cannot push to or merge into `main`.
-- Repository ruleset `Protect develop` (id 23034916, active): `deletion`,
-  `non_fast_forward`; bypass: repository admins.
-- Repository ruleset `Protect tags and releases` (id 23035086, active):
-  `creation`, `update`, `deletion` on every tag except `refs/tags/v*.*.*.*`;
-  bypass: repository admins. The exclusion keeps the release workflow's
-  build-numbered tags (`gh release create v<version>.<build>`) working, because
-  GitHub refused the Actions integration as a repository-level bypass actor.
-  That exclusion leaves a gap: any account with push access can still create
-  a four-part tag, and the workflow's `packaging/VERSION` comparison reads the
-  file from the tagged tree that pusher controls, so it does not constrain
-  them. Until the `release` environment below gates the publish job, a
-  push-capable account can publish to the public feed by tagging its own
-  commit. The maintenance note above already names that environment as the
-  only gate between a tag push and a published feed document.
-- Secret scanning and push protection enabled (readback: both `enabled`).
-- Description, homepage, topics and delete-branch-on-merge set.
-
-Deviations from Step 1 as planned: zero required approvals instead of one, so
-the two admins can merge each other's release pull requests without a second
-reviewer; `develop` is not pull-request gated because the working branches
-integrate into it directly.
-
-STOP before the flip, and before any widening of push access: attach a
-`release` environment with required reviewers (the two admins) to
-`release.yml`'s publish job, or change the workflow to publish only from a
-tag an admin created (no build-numbered tag creation by the workflow, so the
-tag rule can cover every tag, with the exclusion removed from ruleset
-23035086 in the same change). Either closes the gap above; neither is in
-place. Attaching an environment changes the job's OIDC subject to
-`repo:<owner>/<repo>:environment:release`, so `infra/feed.yaml`'s trust
-condition must move to that subject (classic and immutable forms), with the
-two `ref:refs/tags/v*` entries removed in the same deploy, before the first
-gated release: without the move the role assumption fails, and with the tag
-entries kept a non-admin four-part tag can still assume the publisher role
-from a workflow of its own and bypass the gate. Also not yet applied: immutable releases, Gitleaks in CI, the
-`cfn-lint` hash pin, `CODEOWNERS` review for `.github/` (the file now lives
-at `.github/CODEOWNERS`), the Step 3 text audit (plan 160 owns the
-identifiers in source), and the flip itself.
+Secret scanning and push protection were enabled earlier. Immutable releases,
+Gitleaks in CI, the `cfn-lint` hash pin, required CODEOWNERS review, the public
+text audit (plan 160), and the visibility flip remain open.
 
 ## Repository name selected, 2026-09-12
 
