@@ -36,6 +36,8 @@ _desktop_config = _svc.load(
     'router_claude_desktop_config', Path(__file__).resolve().parent / 'claude_desktop_config.py')
 _diag = _svc.load(
     'router_diagnostics', Path(__file__).resolve().parent / 'diagnostics.py')
+_operator = _svc.load(
+    'router_operator', Path(__file__).resolve().parent / 'operator.py')
 _linux = _platforms._linux_mod().systemd
 _updater = _svc.load(
     'router_updater', Path(__file__).resolve().parent / 'updater.py')
@@ -199,6 +201,7 @@ def _sync_seams():
                   sync_seams=_sync_seams)
     _diag.bind(find_python=find_python, health=health,
                current_version=current_version, codex_config=_codex_config)
+    _operator.bind(run=run, diag=_diag)
 
 
 def _resolve_clients_and_modes(args, home, state):
@@ -486,9 +489,28 @@ prune_releases = _bundle.prune_releases
 MAX_VERSION_FAILURES = _updater.MAX_VERSION_FAILURES
 
 
-def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None, _announce=None):
+def do_update(args, _fetch=None, _read_feed=None, _sleep=None, _announce=None):
+    _sync_seams()
+    return _updater.do_update(args, _fetch=_fetch, _read_feed=_read_feed,
+                              _sleep=_sleep, _announce=_announce)
+
+
+def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None):
+    _sync_seams()
     return _updater.do_check_update(args, _fetch=_fetch, _read_feed=_read_feed,
-                                    _sleep=_sleep, _announce=_announce)
+                                    _sleep=_sleep)
+
+
+def do_doctor(args):
+    _sync_seams(); return _operator.do_doctor(args)
+
+
+def do_support(args):
+    _sync_seams(); return _operator.do_support(args)
+
+
+def do_rollback_list(args):
+    _sync_seams(); return _operator.do_rollback_list(args)
 
 
 def do_uninstall(args):
@@ -557,14 +579,25 @@ def build_parser():
     parser.add_argument('--python', default=None)
     parser.add_argument('--install-python', action='store_true')
     parser.add_argument('--dry-run', action='store_true')
-    parser.add_argument('--check-update', action='store_true')
+    parser.add_argument('--check-update', action='store_true',
+                        help='Read-only: print the installed and available versions.')
+    parser.add_argument('--update', action='store_true',
+                        help='Apply an available update (the scheduled action).')
+    parser.add_argument('--rollback', action='store_true',
+                        help='List installed releases; with --to, restore one.')
+    parser.add_argument('--to', default=None,
+                        help='With --rollback: the installed release version to restore.')
+    parser.add_argument('--doctor', action='store_true',
+                        help='Read-only health report with one Fix line per failing row.')
+    parser.add_argument('--support', action='store_true',
+                        help='Write a redacted support bundle and print its path.')
     parser.add_argument('--uninstall', action='store_true')
     parser.add_argument('--preflight', action='store_true',
                         help='Report missing install prerequisites and exit.')
     parser.add_argument('--status', action='store_true',
                         help='Print installed version, service, client, and key status.')
     parser.add_argument('--json', action='store_true',
-                        help='With --status, print machine-readable JSON.')
+                        help='With --status, --check-update or --doctor: machine-readable JSON.')
     parser.add_argument('--static-catalogue', action='store_true',
                         help='No-op: the static catalogue file is now always configured.')
     parser.add_argument('--setup', action='store_true',
@@ -591,21 +624,40 @@ def build_parser():
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
-    action = do_status if args.status else do_preflight if args.preflight else do_uninstall if args.uninstall else do_check_update if args.check_update else do_install
-    if not (args.status or args.preflight):
-        # Plan 057 Stage 1: refuse before any router home or bundle work.
-        # Read-only --status/--preflight run everywhere; everything else
-        # (install, update, rollback, uninstall) stays refused.
-        require_supported_platform()
+    if args.to and not args.rollback:
+        raise SystemExit('--to needs --rollback')
+    if args.rollback and args.to:
+        args.version = args.to  # --version stays the pre-147 alias
+    list_rollback = args.rollback and not args.version
+    action = (do_status if args.status else
+              do_preflight if args.preflight else
+              do_uninstall if args.uninstall else
+              do_doctor if args.doctor else
+              do_support if args.support else
+              do_rollback_list if list_rollback else
+              do_update if args.update else
+              do_check_update if args.check_update else
+              do_install)
+    # Plan 057 Stage 1: read-only verbs run everywhere and take no lock; a
+    # dry run mutates nothing and keeps its historic exemptions. --update is
+    # the scheduled applying pass: it spawns the installer as a child and
+    # that child takes the lock itself, so a parent holding it would make
+    # every automatic update defer. Everything else (install, rollback,
+    # uninstall) is refused before any router home or bundle work.
+    read_only = (args.status or args.preflight or args.doctor or args.support
+                 or list_rollback or args.check_update or args.dry_run)
     home = Path(args.home).expanduser()
-    backend = platform_backend()
-    # --check-update spawns the installer as a child, and that child takes the
-    # lock itself; holding it here would deadlock every scheduled update. A
-    # dry run mutates nothing, so it takes no lock and creates no home.
-    if args.status or args.preflight or args.check_update or args.dry_run:
-        if args.check_update or (args.uninstall and action is do_uninstall):
+    if args.update:
+        require_supported_platform()
+        require_live_home(home, '--update')
+        return action(args)
+    if not read_only:
+        require_supported_platform()
+    if read_only:
+        if args.check_update or args.uninstall:
             require_live_home(home, '--uninstall' if args.uninstall else '--check-update')
         return action(args)
+    backend = platform_backend()
     # Before the lock: a host with no service manager must be refused
     # without leaving a router home behind.
     backend.check(home)

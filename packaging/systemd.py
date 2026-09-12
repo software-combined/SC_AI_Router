@@ -44,8 +44,18 @@ class Manager:
             self.ctl('stop', UPDATE, check=False)
         env = quote('ROUTER_HOME=' + str(self.home))
         command = quote(python, True) + ' ' + quote(self.home / 'router_launch.py', True)
-        updater = (quote(python, True) + ' ' + quote(release / 'packaging' / 'install.py', True)
-                   + ' --check-update --home ' + quote(self.home, True))
+        installer = release / 'packaging' / 'install.py'
+        # The unit may be rendered around a release older than this installer
+        # (the --setup repair path): ask that release which applying verb it
+        # advertises, exactly as the home launcher does, so a pre-147 release
+        # keeps updating instead of exiting 2 on every timer pass.
+        try:
+            installer_text = installer.read_text(encoding='utf-8')
+        except OSError:
+            installer_text = ''
+        verb = '--update' if "'--update'" in installer_text else '--check-update'
+        updater = (quote(python, True) + ' ' + quote(installer, True)
+                   + ' ' + verb + ' --home ' + quote(self.home, True))
         units = {
             SERVICE: ('[Unit]\nDescription=SC mixed model router\nAfter=network.target\n'
                       '[Service]\nExecStart=' + command + '\nEnvironment=' + env + '\n'

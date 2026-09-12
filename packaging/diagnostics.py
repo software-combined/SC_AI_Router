@@ -46,6 +46,10 @@ _SEAM_NAMES = {'codex_config': '_codex_config'}
 
 _winacl = _svc.load(
     'router_winacl', Path(__file__).resolve().parents[1] / 'ai_router' / 'winacl.py')
+_updater = _svc.load(
+    'router_updater', Path(__file__).resolve().parent / 'updater.py')
+
+_MAX_FAILURES = _updater.MAX_VERSION_FAILURES
 
 
 def _key_private(key_file):
@@ -113,8 +117,8 @@ def do_preflight(args):
     return 0
 
 
-def do_status(args):
-    """Print installed version, service state, clients, and key booleans.
+def _status_document(home):
+    """Read-only status facts for one router home.
 
     Plan 049: read-only diagnostics for the manage-router skill. Exit 0
     even when nothing is installed. Key validity is never probed here;
@@ -122,7 +126,6 @@ def do_status(args):
     owner-only key file, or opencode_auth when no key file shadows it).
     Nothing secret is printed: no tokens, keys, URLs, or config bodies.
     """
-    home = Path(args.home).expanduser()
     state = _state.read(_state.path(home))
     version = current_version(home)
     installed = version != '0.0.0'
@@ -170,14 +173,59 @@ def do_status(args):
                                 and isinstance(state.get('setup'), dict)
                                 and isinstance(state['setup'].get('expires'), (int, float))
                                 and state['setup']['expires'] > time.time()),
-           'clients': clients}
+           'clients': clients,
+           'update': _update_summary(state)}
+    return doc
+
+
+def do_status(args):
+    """Print the status document, including update recency and park counts."""
+    home = Path(args.home).expanduser()
+    doc = _status_document(home)
     if args.json:
         print(json.dumps(doc, indent=2, sort_keys=True))
     else:
         print('version: %s' % (doc['version'] or 'not installed'))
-        print('service: %s' % ({True: 'serving', False: 'not serving', None: 'unknown'}[serving]))
-        print('key: %s' % ('usable' if usable else 'present' if present else 'missing'))
+        print('service: %s' % ({True: 'serving', False: 'not serving',
+                                None: 'unknown'}[doc['serving']]))
+        print('key: %s' % ('usable' if doc['key_usable']
+                           else 'present' if doc['key_present'] else 'missing'))
         print('feed: %s' % doc['feed'])
         print('channel: %s' % doc['channel'])
-        print('clients: %s' % (', '.join(sorted(clients)) or 'none'))
+        print('clients: %s' % (', '.join(sorted(doc['clients'])) or 'none'))
+        print('update: %s' % _update_line(doc['update']))
     return 0
+def _update_summary(state):
+    """Update recency, last error code and per-version failure counts."""
+    doc = state if isinstance(state, dict) else {}
+    failures = doc.get('update_failures')
+    seen = ({str(k): v for k, v in failures.items()
+             if isinstance(v, int) and v > 0}
+            if isinstance(failures, dict) else {})
+
+    def _text(key):
+        value = doc.get(key)
+        return value if isinstance(value, str) else None
+
+    error = _text('last_error')
+    return {'last_check_at': _text('last_check_at'),
+            'last_applied_version': _text('last_applied_version'),
+            # Only a code from the closed set is ever printed or bundled; a
+            # hand-edited state file must not put free text on stdout.
+            'last_error': error if error in _updater.ERROR_CODES else None,
+            'failures': seen}
+
+
+def _update_line(summary):
+    parked = sorted(v for v, count in summary['failures'].items()
+                    if count >= _MAX_FAILURES)
+    parts = ['checked ' + summary['last_check_at'] if summary['last_check_at']
+             else 'no scheduled pass recorded']
+    if summary['last_applied_version']:
+        parts.append('applied ' + summary['last_applied_version'])
+    if summary['last_error']:
+        parts.append('last error ' + summary['last_error'])
+    if parked:
+        parts.append('parked ' + ', '.join(
+            '%s x%d' % (v, summary['failures'][v]) for v in parked))
+    return '; '.join(parts)

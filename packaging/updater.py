@@ -37,6 +37,59 @@ NOTIFY_NAMES = 3
 REPLY_LIMIT = 1 << 20
 _NONCE_SHAPE = re.compile(r'[A-Za-z0-9_\-]{16,}')
 
+# Closed set of codes the state document may carry as `last_error` (Plan
+# 147). The doctor and the support bundle read only these names; the
+# updater's free text never travels with them.
+ERROR_CODES = (
+    'feed_unreachable', 'feed_invalid', 'feed_serial', 'feed_untrusted',
+    'bundle_checksum', 'bundle_invalid', 'installer_timeout',
+    'installer_failed', 'update_failed',
+)
+_KEEP = object()
+
+
+class UpdateError(SystemExit):
+    """A failed pass carrying the code the state document records."""
+
+    def __init__(self, code, message):
+        super().__init__(message)
+        # `SystemExit.code` already carries the message; keep the closed-set
+        # code beside it so the exit text stays intact for the timer log.
+        self.error_code = code
+
+
+def _utc_now():
+    return time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+
+
+def _record_pass(home, error=_KEEP, applied=None):
+    """Record one update pass in the shared state document.
+
+    `error` is a code from ERROR_CODES, or '' to clear the previous one;
+    omitted it leaves the stored value alone. The read-modify-write goes
+    through the single state writer (Plan 131), so the updater's own
+    failure counter and pass record never drop each other. An unreadable
+    state file stays untouched.
+    """
+    try:
+        state = _svc._state.read(_svc._state.path(home))
+    except (AttributeError, OSError, ValueError):
+        return
+    if not isinstance(state, dict):
+        return
+    state['last_check_at'] = _utc_now()
+    if error is not _KEEP:
+        if error:
+            state['last_error'] = error
+        else:
+            state.pop('last_error', None)
+    if applied:
+        state['last_applied_version'] = applied
+    try:
+        _svc._write_state(home, state)
+    except OSError:
+        return
+
 
 def _default_newer(a, b):
     return tuple(int(x) for x in a.split('.')) > tuple(int(x) for x in b.split('.'))
@@ -188,63 +241,80 @@ def _park(home, etag, etag_path, version):
           f'run the installer by hand to retry')
 
 
-def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None, _announce=None):
-    """Run one scheduled-update pass; behavior matches the pre-split code."""
+def _read_feed_pass(feed, etag, read_feed, sleep):
+    """One conditional feed read with the existing bounded retry."""
+    for attempt in range(4):
+        try:
+            return read_feed(feed, etag)
+        except OSError as exc:
+            if isinstance(exc, urllib.error.HTTPError) or attempt == 3:
+                raise
+            sleep(30 * 2 ** attempt)
+            print(f'retrying feed fetch ({exc})')
+
+
+def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
+    """One applying pass; behavior matches the pre-split code."""
     sync_seams()
-    import random
-    home = Path(args.home).expanduser()
     feed = args.feed or _svc.channel_feed(home)
     # Feeds and bundles come from the public feed origin; an injected fake
     # keeps its one-argument shape all the way down.
     injected = _fetch
     _fetch = injected or _svc.fetch
     read_feed = _read_feed or (lambda url, etag: _svc.fetch_feed(url, etag, injected))
-    sleep = _sleep or time.sleep
-    sleep(random.uniform(0, 120))
     etag_path = home / 'update-etag'
     etag = etag_path.read_text().strip() if etag_path.exists() else None
-    # Transient fetch failures (offline, locked-keychain TLS, DNS blip) retry
-    # in-run with bounded backoff. HTTPError is an OSError subclass, so HTTP
-    # errors re-raise without retry; deterministic errors (SystemExit from
-    # serial/version checks, HTTP status) still fail fast below.
-    for attempt in range(4):
-        try:
-            status, body, etag = read_feed(feed, etag)
-            break
-        except OSError as exc:
-            if isinstance(exc, urllib.error.HTTPError) or attempt == 3:
-                raise
-            sleep(30 * 2 ** attempt)
-            print(f'retrying feed fetch ({exc})')
+    status, body, etag = _read_feed_pass(feed, etag, read_feed, sleep)
     if status == 304:
+        _record_pass(home, error='')
         print(f"up to date {_svc.current_version(home)}")
         return 0
-    latest = json.loads(body.decode())
-    _svc.check_serial(home, latest, pinned=bool(args.feed))
+    try:
+        latest = json.loads(body.decode())
+    except ValueError:
+        raise UpdateError('feed_invalid', 'feed document is not JSON')
+    try:
+        _svc.check_serial(home, latest, pinned=bool(args.feed))
+    except SystemExit as exc:
+        raise UpdateError('feed_serial', str(exc) or 'feed document refused')
     bundle_url = _svc.sibling_bundle(feed, latest.get('url', ''))
     if not _svc.trusted_origin(bundle_url):
-        raise SystemExit('feed points off the trusted update origin; refusing')
+        raise UpdateError('feed_untrusted',
+                          'feed points off the trusted update origin; refusing')
     if not newer(latest['version'], _svc.current_version(home)):
         if etag:
             etag_path.write_text(etag + '\n')
+        _record_pass(home, error='')
         print(f"up to date {_svc.current_version(home)}")
         return 0
     failed = _svc.update_failures(home).get(latest['version'], 0)
     if failed >= MAX_VERSION_FAILURES:
         if etag:
             etag_path.write_text(etag + '\n')
+        # The reason stays in state: a skipped pass is not a recovered one.
+        _record_pass(home)
         print(f"skipping {latest['version']}: {failed} failed attempts; "
               f"run the installer by hand to retry")
         return 0
-    state = json.loads((home / 'mixed-router-state.json').read_text())
+    try:
+        state = json.loads((home / 'mixed-router-state.json').read_text())
+    except (OSError, ValueError):
+        raise UpdateError('update_failed', 'router state is missing or unreadable')
     tarball = _fetch(bundle_url)
     if latest.get('sha256'):
-        verify_sha256(tarball, latest['sha256'])
+        try:
+            verify_sha256(tarball, latest['sha256'])
+        except SystemExit as exc:
+            raise UpdateError('bundle_checksum', str(exc) or 'bundle checksum mismatch')
     with tempfile.TemporaryDirectory() as tmp:
-        _svc.safe_extract(tarball, tmp)
+        try:
+            _svc.safe_extract(tarball, tmp)
+        except (OSError, SystemExit) as exc:
+            raise UpdateError('bundle_invalid',
+                              str(exc) or 'bundle could not be extracted')
         installer = Path(tmp) / 'packaging' / 'install.py'
         if not installer.exists():
-            raise SystemExit('downloaded bundle has no installer')
+            raise UpdateError('bundle_invalid', 'downloaded bundle has no installer')
         # Only forward an explicitly pinned feed; a channel-resolved feed must
         # not pin home/'feed', or beta would freeze on one release asset URL.
         # Scheduled and manual update checks never pop the first-run key
@@ -261,8 +331,9 @@ def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None, _announce=N
             # so count it here or a hanging release retries every poll
             # forever. TimeoutExpired is a SubprocessError, not an OSError.
             _park(home, etag, etag_path, latest['version'])
-            print(f'installer did not complete: {type(exc).__name__}')
-            raise SystemExit(1)
+            code = ('installer_timeout' if isinstance(exc, subprocess.TimeoutExpired)
+                    else 'installer_failed')
+            raise UpdateError(code, f'installer did not complete: {type(exc).__name__}')
         print(result.stdout[-2000:] if result.stdout else '')
         if result.returncode != 0:
             print(result.stderr[-2000:] if result.stderr else '')
@@ -274,6 +345,7 @@ def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None, _announce=N
                       and _svc.wait_version(state, latest['version']))
             if not landed:
                 _park(home, etag, etag_path, latest['version'])
+                _record_pass(home, error='installer_failed')
                 raise SystemExit(result.returncode)
             _svc.notice.show_pending(home)
             failure = result.returncode
@@ -281,6 +353,7 @@ def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None, _announce=N
             failure = 0
     if _svc.current_version(home) != latest['version']:
         print('deferred: installer did not activate the requested version')
+        _record_pass(home)
         return failure
     _svc.clear_update_failures(home, latest['version'])
     (home / 'logs').mkdir(exist_ok=True)
@@ -293,6 +366,77 @@ def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None, _announce=N
     (_announce or _announce_new_models)(state)
     if failure:
         print(f'installed {latest["version"]}; the installer exited {failure} after the swap')
+        _record_pass(home, error='installer_failed', applied=latest['version'])
         return failure
+    _record_pass(home, error='', applied=latest['version'])
     print(f"installed {latest['version']}")
+    return 0
+
+
+def do_update(args, _fetch=None, _read_feed=None, _sleep=None, _announce=None):
+    """Scheduled pass: check the feed and apply a newer release.
+
+    Records recency and a closed-set error code in the shared state
+    document, then re-raises so the timer sees the failure unchanged.
+    """
+    import random
+    home = Path(args.home).expanduser()
+    sleep = _sleep or time.sleep
+    sleep(random.uniform(0, 120))
+    try:
+        return _apply_update(args, home, sleep, _fetch, _read_feed, _announce)
+    except UpdateError as exc:
+        _record_pass(home, error=exc.error_code)
+        raise
+    except OSError:
+        _record_pass(home, error='feed_unreachable')
+        raise
+    except ValueError:
+        _record_pass(home, error='feed_invalid')
+        raise
+    except Exception:
+        _record_pass(home, error='update_failed')
+        raise
+
+
+def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None):
+    """Read-only pass: report the installed and available versions.
+
+    It never installs, never writes the ETag and never touches the state
+    document; the applying verb is `do_update`.
+    """
+    home = Path(args.home).expanduser()
+    feed = args.feed or _svc.channel_feed(home)
+    injected = _fetch
+    read_feed = _read_feed or (lambda url, etag: _svc.fetch_feed(url, etag, injected))
+    etag_path = home / 'update-etag'
+    etag = etag_path.read_text().strip() if etag_path.exists() else None
+    try:
+        status, body, _ = _read_feed_pass(feed, etag, read_feed, _sleep or time.sleep)
+    except OSError as exc:
+        raise SystemExit(f'update check failed: {type(exc).__name__}')
+    latest = None
+    if status != 304:
+        try:
+            latest = json.loads(body.decode())
+        except ValueError:
+            raise SystemExit('update check failed: feed document is not JSON')
+        if not isinstance(latest, dict) or not isinstance(latest.get('version'), str):
+            raise SystemExit('update check failed: feed document has no version')
+        try:
+            _svc.check_serial(home, latest, pinned=bool(args.feed))
+        except SystemExit as exc:
+            raise SystemExit(str(exc) or 'update check failed: feed document refused')
+    current = _svc.current_version(home)
+    available = (latest['version']
+                 if latest is not None and newer(latest['version'], current) else None)
+    channel = ((home / 'channel').read_text().strip()
+               if (home / 'channel').exists() else 'stable')
+    if args.json:
+        print(json.dumps({'installed': current, 'available': available,
+                          'channel': channel}, sort_keys=True))
+    elif available:
+        print(f'current {current}; available {available}')
+    else:
+        print(f'up to date {current}')
     return 0

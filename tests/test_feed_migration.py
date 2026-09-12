@@ -125,7 +125,7 @@ class FeedTests(unittest.TestCase):
         args = install_mod.build_parser().parse_args(['--home', str(home)])
         with mock.patch.object(svc.urllib.request, 'urlopen', side_effect=fake_urlopen):
             with contextlib.redirect_stdout(io.StringIO()):
-                rc = install_mod.do_check_update(args, _sleep=lambda s: None)
+                rc = install_mod.do_update(args, _sleep=lambda s: None)
         self.assertEqual(rc, 0)
         self.assertEqual([url for url, _ in seen],
                          [ORIGIN + '/stable/latest.json', ORIGIN + '/bundles/2.0.0.tar.gz'])

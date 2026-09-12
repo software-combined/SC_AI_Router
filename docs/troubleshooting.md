@@ -7,7 +7,12 @@ elsewhere; the default is `~/.codex/mixed-model-router`.
 ```sh
 python3.14 packaging/install.py --preflight --home ~/.codex/mixed-model-router
 python3.14 packaging/install.py --status --home ~/.codex/mixed-model-router
+python3.14 packaging/install.py --doctor --home ~/.codex/mixed-model-router
 ```
+
+Start with `--doctor`: it reports one row per component (runtime, install,
+service, each provider's key, the picker catalogue, the scheduled command and
+update recency) and prints a `Fix:` line for every WARN or FAIL.
 
 ## The installer stops before it downloads anything
 
@@ -30,7 +35,8 @@ affect the running router, which keeps serving the version it already has.
   and to the update service's journal on Linux:
   `journalctl --user -u codex-mixed-model-router-update.service`.
 - Retry by hand: run `packaging/install.py --home <home>`.
-- Move back: `packaging/install.py --home <home> --version <installed version>`.
+- Move back: `packaging/install.py --home <home> --rollback --to <installed
+  version>` (`--version <version>` stays as its older spelling).
 
 ## The router is not serving
 
@@ -88,10 +94,10 @@ service has no key; the agent must never handle the key. If no window
 appears, re-run the installer with `--setup`: it restarts the current release
 with a fresh setup link and opens the window, without re-extracting the
 release. A key exported in the invoking shell is not passed to the installed
-service, so the installer collects a key file instead. Scheduled and manual
-`--check-update` runs never pop the window; the next request opens it
-instead. `ROUTER_NO_KEY_WINDOW=1` suppresses only the dialog for unattended
-installs.
+service, so the installer collects a key file instead. Scheduled `--update`
+runs and manual `--check-update` runs never pop the window; the next request
+opens it instead. `ROUTER_NO_KEY_WINDOW=1` suppresses only the dialog for
+unattended installs.
 
 On Codex, a missing or rejected key opens the native key window on the next
 request; on a host with no dialog tool the loopback setup page opens instead.
@@ -103,5 +109,7 @@ the default provider and is one of `usable`, `present` or `missing`;
 
 ## What to send IT
 
-`--status --json` output only. It carries no tokens, keys, URLs or config
-bodies. Do not send `mixed-router-state.json` or anything from `logs/`.
+`--doctor --json` and `--status --json` output. They carry no tokens, keys,
+URLs or config bodies. For anything deeper run `--support` and send the
+bundle it names: booleans, counts, versions and timestamps only. Never send
+`mixed-router-state.json`, `activation.json` or the raw `logs/` files.
