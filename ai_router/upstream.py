@@ -1,7 +1,6 @@
 """Upstream failure policy (Plan 127 split; behaviour unchanged).
 
-Failure classification, retry handling and response-encoding gates for
-requests the router relays upstream. Adapters build requests; this module
+Failure classification, retries and response encoding. Adapters build requests; this module
 decides how an upstream refusal is described to the client.
 
 Pure policy: no dispatch, no model data, no credentials. It may read a
@@ -17,37 +16,7 @@ import time
 
 from . import provider_defs
 from .runtime import log_event
-
-
-def _explicit_context_code(data):
-    """True only on explicit context-limit fields, never message prose."""
-    if not isinstance(data, dict):
-        return False
-    if data.get('error_type') == 'context_length_exceeded':
-        return True
-    error = data.get('error')
-    if not isinstance(error, dict):
-        return False
-    if error.get('code') == 'context_length_exceeded':
-        return True
-    if error.get('error_type') == 'context_length_exceeded':
-        return True
-    metadata = error.get('metadata')
-    raw = metadata.get('raw') if isinstance(metadata, dict) else None
-    if isinstance(raw, str):
-        try:
-            return _explicit_context_code(json.loads(raw))
-        except ValueError:
-            return False
-    return False
-
-
-def is_context_error(body):
-    """Recognize explicit upstream codes, never infer from user-bearing prose."""
-    try:
-        return _explicit_context_code(json.loads(body))
-    except (ValueError, TypeError):
-        return False
+from .stream_errors import is_context_error
 
 
 def upstream_retry_after(response, prepared, metrics):

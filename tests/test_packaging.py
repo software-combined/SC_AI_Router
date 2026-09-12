@@ -19,7 +19,7 @@ FILES = [
          'ai_router/atomic_write.py',
          'ai_router/state.py',
          'ai_router/agent_handoffs.py',
-         'ai_router/sse.py',
+         'ai_router/sse.py', 'ai_router/stream_errors.py',
          'ai_router/capabilities.py',
          'ai_router/compaction.py',
          'ai_router/context_recovery.py',
