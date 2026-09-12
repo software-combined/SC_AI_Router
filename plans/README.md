@@ -179,6 +179,17 @@ external-router wave 145-148 on `origin/develop`.
 |---|---|---|---|
 | [149](149-first-run-key-window-reachability.md) | First-run key window reachability | DONE: key window opens on fresh install 2026-09-12 | after 139/141; independent |
 
+## Subagent model visibility (151)
+
+Added 2026-09-12 after the task 01a09477 incident: the Codex client caps the
+`spawn_agent` model-override list at five rows taken in catalogue order, so the
+roster-first catalogue hides every OpenRouter model from the agent even though
+the picker lists them all.
+
+| Plan | Title | Status | Sequencing |
+|---|---|---|---|
+| [151](151-subagent-model-visibility.md) | Subagent model visibility: every catalogue model is delegable | PARTIAL: repo side lands in 0.6.36 (instructions roster + starter rule + tests); owner-machine step, stage 3 and 4-5 open | after 133/145; serialize with 135 on `ai_router/catalogue.py` and this file |
+
 ## Recommended overall order
 
 Work top to bottom; stop at owner gates and report. Phases 0-2 are local; 3-5 are largely
@@ -187,7 +198,7 @@ owner-gated.
 - **Phase 0 (prep):** 122, 123.
 - **Phase 1 (core backlog):** 090, 091, 092, 093, 094, 095, 096, 097, 098, 100, 101, 102, 103, 104.
 - **Phase 2 (refactor and feature wave):** 124, 125, 126, 127, 129, 128, 130, 131, 134 (rest),
-  133, 145, 135 (stage 2), 132, 137, 146, 147, 148.
+  133, 145, 135 (stage 2), 132, 137, 146, 147, 148, 151 (stages 1-2).
 - **Phase 3 (infrastructure, mostly owner-gated):** 105, 106, 107, 099, 108, 109, 110.
 - **Phase 4 (clients and OS acceptance, owner-gated):** 111, 112, 113, 114, 115, 116, 117.
 - **Phase 5 (paid probes and desktop, owner-gated):** 118, 119, 120, 121, 150.

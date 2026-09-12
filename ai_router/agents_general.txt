@@ -40,6 +40,11 @@ what you did in plain language.
   and stop condition; prevent concurrent writes to the same files. The
   parent remains responsible for verifying the result. Do not authorize
   recursive delegation unless the user permits it.
+- The runtime may truncate the model list it shows in the subagent tool to a
+  few rows. A model missing from that list is not necessarily unavailable:
+  when the user or the workspace instructions name an exact model id, pass
+  that id with its effort (for example `model="vendor/model"`) instead of
+  substituting a listed model, and report which model you used.
 
 ## Safety
 

@@ -97,6 +97,12 @@ class SetupStarterTests(unittest.TestCase):
         saved = json.loads((home / 'mixed-router-state.json').read_text())
         self.assertEqual(saved.get('agents_profile'), 'dev')
 
+    def test_starters_explain_a_truncated_subagent_model_list(self):
+        for profile in agents.PROFILES:
+            text = agents.template(profile)
+            self.assertIn('truncate the model list', text)
+            self.assertIn('vendor/model', text)
+
 
 if __name__ == '__main__':
     unittest.main()
