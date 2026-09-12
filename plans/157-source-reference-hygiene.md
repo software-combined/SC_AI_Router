@@ -19,8 +19,8 @@
   plan numbers with no file".
 - First proof: a new test walks every `Plan NNN` reference in `ai_router/`,
   `packaging/`, `tools/` and `tests/` and fails when one does not resolve to a
-  plan file, a parked plan or a recorded removal; and the 84 currently dangling
-  lines all resolve.
+  plan file, a parked plan, the renumbering map or a recorded removal; and the
+  84 currently dangling lines all resolve.
 
 ## Why this matters
 
@@ -69,15 +69,14 @@ renaming or deleting any plan file (plan 159), the `codex_router/` shim removal
    "(Plan 112)". Do not restate the plan's content; the point is that the
    pointer resolves.
 
-4. **Rewrite the unresolved references.** For the numbers that resolve
-   nowhere, not even in the removal log (12 when this plan was written:
-   completed plans removed before the log was kept), the plan text is gone
-   and only git history holds it. Drop
-   the number and keep the reason in plain words, so
-   `ai_router/providers.py:14-15` "Transport leaves live in transport.py (Plan
-   062)" becomes "Transport leaves live in transport.py". Where the number is
-   the only thing the comment says, delete the comment. Where the sentence
-   carries a real invariant, keep the sentence and drop the number.
+4. **Rewrite the unresolved references.** Take the set that step 1's resolver
+   reports as unresolved on the merged tree; it may be empty, because the
+   removal log already covers the completed plans removed on 2026-09-10 and
+   2026-09-12. For each remaining number, the plan text is gone and only git
+   history holds it: drop the number and keep the reason in plain words.
+   Where the number is the only thing the comment says, delete the comment.
+   Where the sentence carries a real invariant, keep the sentence and drop
+   the number. A number the removal log records is never stripped here.
 
 5. **Keep resolving references as they are.** A reference to a plan that
    still has a file after the 2026-09-12 prune, to one of the two parked

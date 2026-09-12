@@ -73,16 +73,23 @@ already-pinned CI inputs.
    `fail-fast: false` so one platform's failure still reports the others.
    A matrix renames the check runs to `Test (ubuntu-latest)` and so on, and
    the `Protect main` ruleset (plan 144, id 23034914) requires a check named
-   exactly `Test`: keep a non-matrix gate job named `Test` that `needs` the
-   matrix legs so the required name keeps reporting, or hand the owner the
-   ruleset update to land in the same change. Never leave `main` waiting on a
-   check that no longer reports.
+   exactly `Test`: keep a non-matrix gate job named `Test` that runs
+   `if: always()`, `needs` every other job in the workflow (the matrix legs,
+   the single-host job and `installer-py39`) and fails unless every
+   `needs.<job>.result` is `success` (a skipped gate is not a failure, so a
+   plain `needs` would let a red job through, and a gate that waits only on
+   the matrix would stop the policy scans gating `main`), or hand the owner
+   the ruleset
+   update to land in the same change. Never leave `main` waiting on a check
+   that no longer reports, and never let it pass on a check that no longer
+   means the suite passed.
 
 3. **Run the installer half on a real Python 3.9.** Add a third job,
    `installer-py39`, on `ubuntu-latest`, using `actions/setup-python` pinned to
    the same SHA the composite uses but with `python-version: "3.9"`. Because
    the composite pins 3.14, this job needs its own step; add a comment saying
-   why it is the one deliberate exception to plan 134's rule.
+   why it is the one deliberate exception to plan 134's rule, without spelling
+   the action's name, because the policy scan is a substring test.
    `tools/check_policy_scans.py` fails any workflow that carries its own
    `actions/setup-python` pin, so either reach 3.9 through the composite with a
    version input (preferred, no second pin), or add an explicit allowlist in
@@ -160,6 +167,9 @@ already-pinned CI inputs.
 
 ## Acceptance checklist
 
+- [ ] The `Test` gate job runs `if: always()`, depends on every other job and
+      fails when any of them is not `success`; a deliberately failed leg and
+      a deliberately failed single-host step were each shown to fail it.
 - [ ] The unit suite runs on push and pull request, on Ubuntu, macOS and
       Windows, with `fail-fast: false`.
 - [ ] Single-host checks still run exactly once, on Ubuntu, through the setup

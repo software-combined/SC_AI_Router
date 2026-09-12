@@ -56,13 +56,22 @@ pre-flip cleanup owned by plans 142 and 143.
   them.
 - Add a `release` environment with required reviewers (owner: `SC-Cyril`)
   and a tag-only deployment rule; attach it to `release.yml`'s publish job.
+  Attaching it changes the job's OIDC subject to
+  `repo:<owner>/<repo>:environment:release`, so in the same change move the
+  `StringLike` condition in `infra/feed.yaml` to that subject (classic and
+  immutable forms) and remove the two `ref:refs/tags/v*` entries, then
+  redeploy the stack before the first gated release. Keeping the tag
+  entries would let any push-capable account assume the publisher role from
+  a workflow of its own on a four-part tag, bypassing the gate.
 - Enable immutable releases only after the `v0.6.25.42` token-bearing asset
   has been removed or superseded (retired as hygiene; there is no token to
   rotate).
 
 **Verify**: `gh api repos/software-combined/SC_OpenRouter_adapter/branches/main/protection`,
 the tag ruleset, the environment, and the immutable-releases setting each
-read back as configured.
+read back as configured; `aws iam get-role --role-name
+scg-router-feed-publisher` shows only the environment subjects; and the
+first beta release after the change assumes the role from the gated job.
 
 ### Step 2: secret scanning and supply chain
 
@@ -106,6 +115,8 @@ public feed and updates itself automatically.
 ## Done criteria
 
 - [ ] Branch, tag, environment and immutable-release protections read back.
+- [ ] `infra/feed.yaml` trusts only the `environment:release` subjects (both
+      forms), the stack is redeployed, and one gated release assumed the role.
 - [ ] Secret scanning + push protection enabled; Gitleaks in required checks.
 - [ ] Workflow inputs hash-pinned; CODEOWNERS review required for `.github/`.
 - [ ] Public text audit recorded.
@@ -119,10 +130,12 @@ public feed and updates itself automatically.
 - A control cannot be enabled without paying for a GitHub plan the owner has
   not approved: STOP and record the gap (this is an owner decision, not a
   code workaround).
-- The publish job has no `release` environment gate and the workflow still
-  creates its own tags: do not flip and do not widen push access. Any
-  push-capable account can otherwise publish to the public feed (see the
-  applied section below).
+- Any tag a non-admin can create still triggers `release.yml`'s publish job:
+  do not flip and do not widen push access. Today that is true because the
+  `refs/tags/v*.*.*.*` exclusion stands in ruleset 23035086 and no `release`
+  environment gates the job; it stays true until either the environment gate
+  is in place or the workflow creates no tags of its own and the exclusion is
+  removed (see the applied section below).
 
 ## Maintenance notes
 
@@ -167,8 +180,15 @@ STOP before the flip, and before any widening of push access: attach a
 `release` environment with required reviewers (the two admins) to
 `release.yml`'s publish job, or change the workflow to publish only from a
 tag an admin created (no build-numbered tag creation by the workflow, so the
-tag rule can cover every tag). Either closes the gap above; neither is in
-place. Also not yet applied: immutable releases, Gitleaks in CI, the
+tag rule can cover every tag, with the exclusion removed from ruleset
+23035086 in the same change). Either closes the gap above; neither is in
+place. Attaching an environment changes the job's OIDC subject to
+`repo:<owner>/<repo>:environment:release`, so `infra/feed.yaml`'s trust
+condition must move to that subject (classic and immutable forms), with the
+two `ref:refs/tags/v*` entries removed in the same deploy, before the first
+gated release: without the move the role assumption fails, and with the tag
+entries kept a non-admin four-part tag can still assume the publisher role
+from a workflow of its own and bypass the gate. Also not yet applied: immutable releases, Gitleaks in CI, the
 `cfn-lint` hash pin, `CODEOWNERS` review for `.github/` (the file now lives
 at `.github/CODEOWNERS`), the Step 3 text audit (plan 160 owns the
 identifiers in source), and the flip itself.
