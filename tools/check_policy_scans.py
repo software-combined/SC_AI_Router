@@ -33,7 +33,7 @@ SETUP_PIN_RE = re.compile(rb'actions/setup-python@[0-9a-f]{40}')
 SETUP_STEP_RE = re.compile(
     rb'(?m)^\s*(?:-[ \t]+)?uses: \./\.github/actions/setup'
     rb'(?:[ \t]*#.*)?[ \t]*$')
-WORKFLOWS = ('check.yml', 'release.yml', 'refresh.yml')
+WORKFLOWS = ('check.yml', 'release.yml')
 
 SELF = Path(__file__).resolve()
 

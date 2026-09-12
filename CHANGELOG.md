@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.39
+
+- Releases serialize publication to the shared update feed and verify the
+  maintainer-created tag before publishing. Release reruns are limited to
+  Cyril and Brent. Contributor guidance now covers public pull requests
+  against `main`, and model capability refreshes use the normal reviewed PR
+  process instead of a scheduled workflow blocked by organisation policy.
+
 ## 0.6.38
 
 - An encrypted handoff to an externally billed child can no longer end the

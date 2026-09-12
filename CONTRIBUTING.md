@@ -28,8 +28,14 @@ real router home.
 
 ## Branches and pull requests
 
-- Branch from `develop` and open the pull request against `develop`. `main`
-  only receives release merges from `develop`.
+- Fork the repository, branch from `develop`, and target `develop` for normal
+  contributions. Pull requests opened against `main` are welcome and run the
+  same checks; a maintainer retargets them to `develop` before merging.
+  `main` receives release merges from `develop`.
+- Cyril (`SC-Cyril`) and Brent (`BrentJMaxwell`) are the release maintainers.
+  Only they merge pull requests, create tags, and run or rerun releases.
+  Other contributors can open issues and pull requests; repository triage
+  access also allows issue and pull-request management.
 - Commit subjects use `<type>: <short summary>` with type `feat`, `fix`,
   `refactor`, `test`, `chore` or `docs`.
 - Every user-visible change updates `CHANGELOG.md` and `packaging/VERSION`
@@ -40,6 +46,14 @@ real router home.
 - A change to `ai_router/models.json` needs the
   `python3.14 -m ai_router.models check` output and a probe result in the
   pull request, or a deliberate `tier: preview`.
+
+## Refreshing model capabilities
+
+On a branch based on `develop`, run `python3.14 -m ai_router.live_refresh
+--fetch`, inspect the `ai_router/models.json` diff, and submit it through the
+normal pull-request checks and model-probe requirements above. This command
+uses the public upstream catalogue and needs network access. There is no
+scheduled bot PR: the organisation disables Actions-created pull requests.
 
 ## Design rules pull requests are checked against
 
