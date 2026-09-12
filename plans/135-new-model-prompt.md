@@ -74,7 +74,9 @@ The signal should be about the *model set*, not the version:
 **Out of scope**: automatic restarts, CLI/headless restart, Windows toast infrastructure, changing
 update cadence or feed handling, the Claude-side prompt (same mechanism can add `client='claude'`
 later; it must compose `claude_alias` with `allowed`), per-user policy itself (identity family),
-`packaging/install.py` (700 cap — no change).
+`packaging/install.py` beyond forwarding the `_announce` test seam through its existing
+`do_check_update` wrapper (700 cap; the pass-through moved the file from 628 to 629 lines and the
+source-limit baseline with it).
 
 ## Commands
 
@@ -165,8 +167,8 @@ planned call sites; full suite green.
 - [ ] Later/Restart acknowledge; restart runs only on the nonce-authenticated POST click.
 - [ ] Updater/refresh triggers are best-effort (`except Exception`), never import runtime code from
       3.9 packaging, and never alter their primary result or log.
-- [ ] Full suite, compile and limit gates pass; `install.py` untouched (700 cap); router edits land
-      only after 128.
+- [ ] Full suite, compile and limit gates pass; `install.py` gains only the `_announce` pass-through
+      (700 cap); router edits land only after 128.
 - [ ] `plans/README.md` status row updated.
 
 ## STOP conditions
@@ -215,11 +217,54 @@ planned call sites; full suite green.
 - The page carries the displayed slugs in hidden `m` fields and passes them to
   `acknowledge`, so a row that appears between render and click is not marked
   seen unseen.
-- Restart is macOS only (`osascript` quit by app name, then `open -a Codex`)
-  behind an injected runner; other platforms report that a manual restart is
-  needed. Nothing runs without the nonce-authenticated POST click. A quit
-  that errors reports failure rather than letting `open` activate the still-
-  running app.
+- Restart is macOS only: `osascript` quits the app by bundle id
+  (`com.openai.codex`, the identity `packaging/notice.py` already uses for
+  its update dialog) and `open -b` relaunches it, behind an injected runner;
+  other platforms report that a manual restart is needed. Nothing runs
+  without the nonce-authenticated POST click. A quit that errors reports
+  failure rather than letting `open` activate the still-running app.
 - Deviation from step 3's wording: an unknown or expired nonce renders a
   404 "Link expired" page rather than the 200 nothing-to-do page; it carries
   no actions and never restarts, matching the setup route's 404 contract.
+- Steps 4-5 land with the updater trigger. The bare `/<token>/model-prompt`
+  path is the loopback check the 3.9 updater calls: it mints or reuses the
+  notice and answers JSON `{'pending': [{'slug', 'name'}], 'url'}`. The URL
+  carries the token and nonce, so the updater opens it and never prints it.
+  A browser Origin is refused on that path (only the nonce page is
+  origin-exempt).
+- `packaging/updater.py` calls `_announce_new_models(state)` after the
+  update log and ETag write, behind one `except Exception`, so no desktop
+  or loopback failure can change the update result or exit code. macOS
+  notifies through `osascript` and opens the page through `open`; Linux uses
+  `notify-send`/`xdg-open` only when present; Windows logs the offer. Names
+  cap at three plus "+N more". `do_check_update(..., _announce=...)` is the
+  test seam.
+- `packaging/notice.py` keeps owning the version-level "restart the client"
+  dialog, including its Windows and Linux paths; this prompt is the
+  model-set-level offer, so it adds a banner plus the browser page instead of
+  a second dialog. Windows therefore logs the offer (no banner backend) and
+  the page is macOS/Linux only.
+- Step 4's refresh half is deferred with plan 099: `model_refresh.start()`
+  still has no caller, so the guarded `apply()` hook lands with that wiring,
+  and the 099 row now names it.
+- Review-round guards: the announce returns early unless the state says
+  Codex is attached (`clients`/`client`, so a Claude-only or service-only
+  install is never told to restart Codex) and unless `ROUTER_NO_NOTICE` is
+  unset; the loopback fetch bypasses proxy handling so the path token never
+  travels to `http_proxy`, caps the reply before parsing, and only opens a
+  page URL whose suffix is nonce-shaped, so a traversal or foreign host is
+  ignored. The first landing after this feature ships only seeds the
+  snapshot; that delay is recorded in the CHANGELOG and the operations page.
+- Noted for 099: call the prompt check only when the refresh actually
+  changed the catalogue (a repeat call re-offers the same unacknowledged
+  models), and remember the mint is a read-modify-write that needs the same
+  single-caller discipline as the updater.
+- Installer follow-up (adversarial round 2): `state['clients']` is written
+  only when `--clients` is passed, so it can go stale against `client`
+  (`--clients both` then `--client none` leaves `clients: 'both'`; a
+  `--clients claude` install re-run with no flags keeps `clients: 'claude'`
+  after re-attaching Codex). The gate reads the recorded value, so the first
+  sequence can still offer a restart on a service-only install and the
+  second suppresses a real Codex install; `packaging/notice.py`'s dialog
+  reads the same record. Fixing the recording belongs with the installer,
+  not this plan.

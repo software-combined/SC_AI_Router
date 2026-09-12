@@ -33,7 +33,7 @@ class PageRenderTests(unittest.TestCase):
 
 
 class RestartTests(unittest.TestCase):
-    def test_darwin_quits_and_reopens_the_app_by_name(self):
+    def test_darwin_quits_and_reopens_the_app_by_bundle_id(self):
         calls = []
 
         def fake_run(cmd, **kwargs):
@@ -41,8 +41,9 @@ class RestartTests(unittest.TestCase):
             return SimpleNamespace(returncode=0)
 
         self.assertTrue(model_prompt_page.restart_codex(fake_run, platform='darwin'))
-        self.assertEqual(calls, [['osascript', '-e', 'quit app "Codex"'],
-                                 ['open', '-a', 'Codex']])
+        self.assertEqual(calls, [['osascript', '-e',
+                                  'tell application id "com.openai.codex" to quit'],
+                                 ['open', '-b', 'com.openai.codex']])
 
     def test_unsupported_platform_stays_false(self):
         self.assertFalse(model_prompt_page.restart_codex(
@@ -56,8 +57,9 @@ class RestartTests(unittest.TestCase):
             return SimpleNamespace(returncode=0 if cmd[0] == 'osascript' else 1)
 
         self.assertFalse(model_prompt_page.restart_codex(fake_run, platform='darwin'))
-        self.assertEqual(calls, [['osascript', '-e', 'quit app "Codex"'],
-                                 ['open', '-a', 'Codex']])
+        self.assertEqual(calls, [['osascript', '-e',
+                                  'tell application id "com.openai.codex" to quit'],
+                                 ['open', '-b', 'com.openai.codex']])
 
     def test_a_refused_quit_reports_failure_without_reopening(self):
         calls = []
@@ -67,7 +69,8 @@ class RestartTests(unittest.TestCase):
             return SimpleNamespace(returncode=1 if cmd[0] == 'osascript' else 0)
 
         self.assertFalse(model_prompt_page.restart_codex(fake_run, platform='darwin'))
-        self.assertEqual(calls, [['osascript', '-e', 'quit app "Codex"']])
+        self.assertEqual(calls, [['osascript', '-e',
+                                  'tell application id "com.openai.codex" to quit']])
 
 
 class PromptRouteTests(unittest.TestCase):
@@ -84,10 +87,11 @@ class PromptRouteTests(unittest.TestCase):
             nonce, _ = model_prompt.notice(home)
         return nonce
 
-    def _get(self, port, path):
+    def _get(self, port, path, origin=None):
         conn = http.client.HTTPConnection('127.0.0.1', port, timeout=10)
         self.addCleanup(conn.close)
-        conn.request('GET', path)
+        headers = {} if origin is None else {'Origin': origin}
+        conn.request('GET', path, headers=headers)
         return conn.getresponse()
 
     def _post(self, port, path, body, origin=None):
@@ -173,6 +177,35 @@ class PromptRouteTests(unittest.TestCase):
             body = response.read()
         self.assertEqual(response.status, 200)
         self.assertIn(b'Restart Codex yourself', body)
+
+    def test_check_endpoint_reports_pending_and_the_single_use_link(self):
+        home = tmp_home(self)
+        server = self._server(home)
+        model_prompt.pending(home)  # seed today's rows, then add one
+        with mock.patch.object(catalogue, 'MODELS', _with_extra()):
+            response = self._get(server.server_port, '/test-token/model-prompt')
+            payload = json.loads(response.read())
+        self.assertEqual(response.status, 200)
+        self.assertEqual([row['slug'] for row in payload['pending']], [EXTRA])
+        prefix = 'http://127.0.0.1:%d/test-token/model-prompt/' % server.server_port
+        self.assertTrue(payload['url'].startswith(prefix))
+        with mock.patch.object(catalogue, 'MODELS', _with_extra()):
+            self.assertIsNotNone(model_prompt.check_notice(
+                home, 'codex', payload['url'][len(prefix):]))
+
+    def test_check_endpoint_is_empty_without_new_models(self):
+        home = tmp_home(self)
+        server = self._server(home)
+        response = self._get(server.server_port, '/test-token/model-prompt')
+        self.assertEqual(response.status, 200)
+        self.assertEqual(json.loads(response.read()), {'pending': [], 'url': None})
+
+    def test_check_endpoint_refuses_a_browser_origin(self):
+        home = tmp_home(self)
+        server = self._server(home)
+        response = self._get(server.server_port, '/test-token/model-prompt',
+                             origin='http://evil.example')
+        self.assertEqual(response.status, 403)
 
 
 if __name__ == '__main__':

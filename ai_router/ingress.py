@@ -90,6 +90,8 @@ def do_get(handler):
     path = path.split('?', 1)[0]
     if path.startswith('/setup/'):
         return setup.serve(handler, path[len('/setup/'):], False)
+    if path == '/model-prompt':
+        return model_prompt_page.handle_check(handler)
     if path.startswith('/model-prompt/'):
         return model_prompt_page.handle_page(
             handler, path[len('/model-prompt/'):], False)

@@ -11,11 +11,14 @@ provide the same behavior for direct/extracted use.
 import hashlib
 import json
 import os
+import re
+import shutil
 import subprocess
 import sys
 import tempfile
 import time
 import urllib.error
+import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -29,6 +32,10 @@ _svc = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_svc)
 
 MAX_VERSION_FAILURES = 3
+ANNOUNCE_TIMEOUT_S = 5
+NOTIFY_NAMES = 3
+REPLY_LIMIT = 1 << 20
+_NONCE_SHAPE = re.compile(r'[A-Za-z0-9_\-]{16,}')
 
 
 def _default_newer(a, b):
@@ -43,6 +50,112 @@ def _default_verify(data, want):
 
 def _noop_sync():
     return None
+
+
+def _pending_reply(state, _urlopen=None):
+    """{'pending': [...], 'url': ...} from the running router, or {}.
+
+    The URL carries the per-install path token and the single-use nonce, so
+    it is returned to the caller only and never printed.
+    """
+    port, token = state.get('port'), state.get('token')
+    if not isinstance(port, int) or not 0 < port < 65536:
+        return {}
+    if not isinstance(token, str) or not token:
+        return {}
+    # No proxy handling: the path token stays on the loopback, never on the
+    # wire to whatever http_proxy names. The reply is capped before parsing.
+    opener = _urlopen or urllib.request.build_opener(
+        urllib.request.ProxyHandler({})).open
+    url = 'http://127.0.0.1:%d/%s/model-prompt' % (port, token)
+    with opener(url, timeout=ANNOUNCE_TIMEOUT_S) as response:
+        return json.loads(response.read(REPLY_LIMIT).decode())
+
+
+def _notify_command(names, platform):
+    """One platform notification command, or None where none exists."""
+    text = 'New models: %s. Restart Codex to use them.' % ', '.join(names)
+    if platform == 'darwin':
+        escaped = text.replace('\\', '\\\\').replace('"', '\\"')
+        return ['osascript', '-e',
+                'display notification "%s" with title "Router update"' % escaped]
+    if platform == 'linux':
+        return ['notify-send', 'Router update', text]
+    return None
+
+
+def _open_command(url, platform):
+    """One platform opener for the approval page, or None."""
+    if not url:
+        return None
+    if platform == 'darwin':
+        return ['open', url]
+    if platform == 'linux':
+        return ['xdg-open', url]
+    return None
+
+
+def _page_url(reply, state):
+    """The reply's page URL, accepted only when it is this install's own.
+
+    The router builds it from the token and the requested port; a reply
+    pointing anywhere else is ignored rather than opened.
+    """
+    url = reply.get('url')
+    port, token = state.get('port'), state.get('token')
+    if not isinstance(url, str) or not isinstance(port, int) or not token:
+        return None
+    prefix = 'http://127.0.0.1:%d/%s/model-prompt/' % (port, token)
+    suffix = url[len(prefix):] if url.startswith(prefix) else ''
+    return url if _NONCE_SHAPE.fullmatch(suffix) else None
+
+
+def _codex_attached(state):
+    """True when this install serves Codex, so the offer is not a dead end.
+
+    `--clients` records the attachments; legacy state carries only `client`,
+    whose absence means Codex. A Claude-only or service-only install is never
+    told to restart an app it does not run.
+    """
+    clients = state.get('clients')
+    if clients is not None:
+        return clients in ('codex', 'both')
+    return state.get('client', 'codex') != 'none'
+
+
+def _announce_new_models(state, _run=None, _urlopen=None, _which=None,
+                         platform=None):
+    """Offer a Codex restart when the router reports new models.
+
+    Best-effort by contract: this runs after the update log is written, and
+    no notification, opener or loopback failure may change the update result
+    or the exit code. The page URL is opened but never printed.
+    """
+    try:
+        if os.environ.get('ROUTER_NO_NOTICE') == '1':
+            return
+        if not _codex_attached(state):
+            return
+        reply = _pending_reply(state, _urlopen)
+        rows = reply.get('pending') or []
+        if not rows:
+            return
+        names = [row.get('name') or row.get('slug') for row in rows[:NOTIFY_NAMES]]
+        if len(rows) > NOTIFY_NAMES:
+            names.append('+%d more' % (len(rows) - NOTIFY_NAMES))
+        platform = platform or sys.platform
+        which = _which or shutil.which
+        runner = _run or _svc.run
+        command = _notify_command(names, platform)
+        if command is None:
+            print('new models pending: %s; restart Codex to use them' % ', '.join(names))
+        elif command[0] != 'notify-send' or which('notify-send'):
+            runner(command, capture_output=True, text=True, timeout=10)
+        opener = _open_command(_page_url(reply, state), platform)
+        if opener is not None and (opener[0] != 'xdg-open' or which('xdg-open')):
+            runner(opener, capture_output=True, text=True, timeout=10)
+    except Exception:
+        pass  # a desktop or loopback failure must not disturb the update
 
 
 # Installer-owned seams; rebound via bind() after file-based load.
@@ -75,7 +188,7 @@ def _park(home, etag, etag_path, version):
           f'run the installer by hand to retry')
 
 
-def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None):
+def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None, _announce=None):
     """Run one scheduled-update pass; behavior matches the pre-split code."""
     sync_seams()
     import random
@@ -177,6 +290,7 @@ def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None):
                                  'source': _svc.feed_source(feed)}) + '\n')
     if etag:
         etag_path.write_text(etag + '\n')
+    (_announce or _announce_new_models)(state)
     if failure:
         print(f'installed {latest["version"]}; the installer exited {failure} after the swap')
         return failure

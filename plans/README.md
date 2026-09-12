@@ -37,7 +37,7 @@ Executor rules for every plan:
 | [096](096-router-streaming-robustness.md) | SSE frame cap and mid-stream error containment | DONE: streaming robustness 2026-09-11 | — |
 | [097](097-router-discovered-lock-scope.md) | Narrow the discovered-recall lock scope | DONE: discovered lock scope 2026-09-11 | — |
 | [098](098-router-model-refresh-bindings.md) | Refresh-safe registry consumers | DONE: refresh-safe registry consumers 2026-09-11 | before 099 |
-| [099](099-codex-router-model-onboarding-at-scale.md) | Model onboarding: one-command add, data-driven dispatch, refresh wiring | PARTIAL | 098 landed; refresh wiring awaits 106's qualified feed, then publish `models_url`; wiring must also fix `model_refresh.apply()` swap publication order (see plan 098) |
+| [099](099-codex-router-model-onboarding-at-scale.md) | Model onboarding: one-command add, data-driven dispatch, refresh wiring | PARTIAL | 098 landed; refresh wiring awaits 106's qualified feed, then publish `models_url`; wiring must also fix `model_refresh.apply()` swap publication order (see plan 098) and call the plan-135 prompt check inside the same guarded wrapper after `apply()` |
 | [100](100-router-retired-slug-single-source.md) | Shared retired-subscription slug set | DONE: retired-slug single source 2026-09-11 | depends 094 |
 | [101](101-router-dead-code-and-lint-gate.md) | Delete dead code; add F401/F811 gate | DONE: dead code + F401/F811 lint gate 2026-09-11 | before 102/103 |
 | [102](102-router-install-option-collapse.md) | Collapse installer option handling below the cap | DONE: installer option collapse 2026-09-11 | serialize with 103 |
@@ -82,7 +82,7 @@ below interleaves them.
 | [132](132-windows-backend-cleanup.md) | Windows backend cleanup | TODO | before/with 116; after 123 |
 | [133](133-probe-harness-consolidation.md) | One app-server probe harness | DONE: shared AppServer harness 2026-09-12 | before 118/119 |
 | [134](134-repo-hygiene-feed-ci-docs.md) | feed_verify move, CI single owner, docs index, shim owner | DONE: repo hygiene 2026-09-12 (verifier in packaging/, one setup composite + policy-scan script, kiro pointer, shim owner, tools/ rule); CI-side run of the composite pends the first push | after 101; before 106 (feed work) |
-| [135](135-new-model-prompt.md) | New-model prompt: notify + one-click Codex restart only when new models appear | PARTIAL: steps 1-3 and the restart action landed (`0844c5d`, `f4bfef4`); triggers, notification and docs remain | after 128/131; hooks into 099; coordinate 106 |
+| [135](135-new-model-prompt.md) | New-model prompt: notify + one-click Codex restart only when new models appear | PARTIAL: steps 1-6 landed (`0844c5d`, `f4bfef4`, `27abff5`, trigger commit 2026-09-12), trigger only in the updater; the hourly refresh call lands with 099 | after 128/131; hooks into 099; coordinate 106 |
 
 ## Security wave (136-138)
 
