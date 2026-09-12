@@ -14,6 +14,7 @@ COMPACT_PROMPT = ('You are performing a CONTEXT CHECKPOINT COMPACTION. Create a 
 import base64
 import secrets
 from .agent_handoffs import plaintext_agent_message
+from .compaction_result import IncompleteSummary as IncompleteSummary, extract_summary as extract_summary
 PREFIX = 'ocx1:'
 TRIGGER_TYPE = 'compaction_trigger'
 SUMMARY_PREFIX = ('Another language model started to solve this problem and '
@@ -367,29 +368,3 @@ def transcript_for_summary(items):
         # One oversized newest message: keep its tail, never an empty brief.
         return TRUNCATED_NOTE + fallback[-(TRANSCRIPT_BUDGET - len(TRUNCATED_NOTE)):]
     return ''
-
-def extract_summary(status, data):
-    """Pull summarizer text from a Responses payload; fail closed on bad shape."""
-    if status != 200:
-        raise OSError('Summarizer upstream failed')
-    output = data.get('output') if isinstance(data, dict) else None
-    if not isinstance(output, list):
-        raise ValueError('Summarizer response has no output list')
-    texts = []
-    for item in output:
-        if not isinstance(item, dict):
-            raise ValueError('Summarizer output item is not an object')
-        if item.get('type') == 'message':
-            for block in item.get('content', []):
-                if isinstance(block, dict) and block.get('type') in ('output_text', 'text') and block.get('text'):
-                    texts.append(block['text'])
-        elif item.get('type') == 'output_text' and item.get('text'):
-            texts.append(item['text'])
-    summary = '\n'.join(texts).strip()
-    if not summary:
-        raise ValueError('Compaction summary empty; retry compaction.')
-    incomplete = data.get('incomplete_details') if isinstance(data, dict) else None
-    reason = incomplete.get('reason') if isinstance(incomplete, dict) else None
-    if reason:
-        raise ValueError(f'Compaction summary incomplete ({reason}); retry compaction.')
-    return summary

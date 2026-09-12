@@ -1,6 +1,7 @@
 """Provider adapters. Each owns model membership, request preparation, upstream target and response adaptation."""
 import http.client
 import json
+import time
 from . import capabilities, compaction as comp, local_services, agent_handoffs, provider_defs
 from .standalone_outputs import materialize_outputs
 from . import subscription_history, context_recovery
@@ -16,6 +17,19 @@ from .tool_adapter import prepare_tools, snoop_response_identity, stream_events,
 # existing importers working until the protocol split completes.
 from .transport import HOP_HEADERS, Prepared, passthrough
 NATIVE_SERVICE_PATHS = {'/alpha/search', '/alpha/notes/v2/thread_hint', '/guardian', '/guardian-classifier'}
+SUMMARY_OUTPUT_TOKENS = 4000
+SUMMARY_RETRY_OUTPUT_TOKENS = 8000
+SUMMARY_DEADLINE_S = 120
+
+
+def _summary_budgets(model):
+    entry = by_slug(model) if isinstance(model, str) else None
+    ceiling = getattr(entry, 'max_output_tokens', SUMMARY_OUTPUT_TOKENS)
+    if (isinstance(ceiling, int) and not isinstance(ceiling, bool)
+            and ceiling > SUMMARY_OUTPUT_TOKENS):
+        return (SUMMARY_OUTPUT_TOKENS,
+                min(SUMMARY_RETRY_OUTPUT_TOKENS, ceiling))
+    return (SUMMARY_OUTPUT_TOKENS,)
 
 
 def _passthrough(response):
@@ -218,26 +232,62 @@ class ExternalResponsesProvider:
     def summarize(self, model, key, payload_items):
         transcript = comp.transcript_for_summary(payload_items)
         prompt = comp.COMPACT_PROMPT + '\n\nConversation:\n' + transcript
-        body = {'model': model, 'input': [comp.user_message_item(prompt)],
-                'max_output_tokens': 4000}
         levels = capabilities.REASONING_LEVELS.get(model)
-        if levels:
-            # Never let default high effort burn the whole budget on reasoning.
-            body['reasoning'] = {'effort': min(levels, key=CANONICAL_ORDER.index)}
-        req = json.dumps(body).encode()
-        conn = http.client.HTTPSConnection(self.defn.host, timeout=120)
-        try:
-            conn.request('POST', self.defn.path_for(provider_defs.RESPONSES, '/responses'),
-                         body=req,
-                headers={'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json'})
-            resp = conn.getresponse()
+        effort = min(levels, key=CANONICAL_ORDER.index) if levels else None
+        deadline = time.monotonic() + SUMMARY_DEADLINE_S
+        budgets = _summary_budgets(model)
+        for attempt, budget in enumerate(budgets, 1):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                log_event('compact_summary_attempt', model=model, attempt=attempt,
+                          max_output_tokens=budget, outcome='deadline')
+                raise TimeoutError('Compaction summarizer deadline exceeded')
+            body = {'model': model, 'input': [comp.user_message_item(prompt)],
+                    'max_output_tokens': budget}
+            if effort:
+                # Never let default high effort burn the whole budget on reasoning.
+                body['reasoning'] = {'effort': effort}
+            conn = None
             try:
-                data = json.load(resp)
-            except ValueError:
-                raise OSError('Summarizer returned invalid JSON')
-            return comp.extract_summary(resp.status, data)
-        finally:
-            conn.close()
+                req = json.dumps(body).encode()
+                conn = http.client.HTTPSConnection(self.defn.host,
+                                                    timeout=remaining)
+                conn.request('POST', self.defn.path_for(
+                    provider_defs.RESPONSES, '/responses'), body=req,
+                    headers={'Authorization': 'Bearer ' + key,
+                             'Content-Type': 'application/json'})
+                resp = conn.getresponse()
+                try:
+                    data = json.load(resp)
+                except ValueError:
+                    raise OSError('Summarizer returned invalid JSON')
+                summary = comp.extract_summary(resp.status, data)
+            except comp.IncompleteSummary:
+                if attempt == len(budgets):
+                    log_event('compact_summary_attempt', model=model,
+                              attempt=attempt, max_output_tokens=budget,
+                              outcome='rejected')
+                    raise
+                if time.monotonic() >= deadline:
+                    log_event('compact_summary_attempt', model=model,
+                              attempt=attempt, max_output_tokens=budget,
+                              outcome='deadline')
+                    raise TimeoutError('Compaction summarizer deadline exceeded')
+                log_event('compact_summary_attempt', model=model,
+                          attempt=attempt, max_output_tokens=budget,
+                          outcome='retry')
+                continue
+            except Exception:
+                log_event('compact_summary_attempt', model=model, attempt=attempt,
+                          max_output_tokens=budget, outcome='failed')
+                raise
+            else:
+                log_event('compact_summary_attempt', model=model, attempt=attempt,
+                          max_output_tokens=budget, outcome='completed')
+                return summary
+            finally:
+                if conn is not None:
+                    conn.close()
 
 
 class LocalServicesProvider:

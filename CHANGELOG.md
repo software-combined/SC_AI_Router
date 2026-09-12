@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.43
+
+- Codex remote compaction V2 now returns the completed compaction item and
+  response completion through the streamed Responses contract, while V1 and
+  non-streamed V2 keep their existing JSON shape.
+- Summaries truncated with the structured `max_output_tokens` condition
+  receive one bounded retry at 8,000 output tokens, clamped to the registry
+  ceiling, with a shared 120-second deadline.
+- The offline context-budget probe now covers both V1 and V2 threshold and
+  context-error recovery, plus truncated-summary recovery, against the
+  installed Codex app-server with a fake upstream.
+
 ## 0.6.42
 
 - External Responses streams now translate context-limit refusals into Codex's
