@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Model verification gate (plan 145): `models add` now writes new rows as
+  unlisted preview (`listed: false`), hidden from the Codex picker and
+  `GET /v1/models` while staying routable for their own probe. Only a
+  passed `--probe` promotes to `listed: true` with `tier: verified`; a
+  failed or refused probe changes nothing and prints why. New read-only
+  `models discover` reports addable, registered, unavailable and retired
+  ids without writing or billing, and the compatibility record names the
+  legs that ran (`tool,stream,image,compact`).
+
 ## 0.6.35
 
 - Carried-history portability, second slice: a portable turn (the Muse

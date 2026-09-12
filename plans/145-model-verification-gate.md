@@ -101,15 +101,41 @@ run in CI or tests.
 
 ## Done criteria
 
-- [ ] An unlisted row is absent from both client projections (Codex catalogue and
+- [x] An unlisted row is absent from both client projections (Codex catalogue and
       `GET /v1/models`) and still routable.
-- [ ] A row without the `listed` key loads as listed; `listed: true` with a
+- [x] A row without the `listed` key loads as listed; `listed: true` with a
       non-verified tier is refused.
-- [ ] Promotion happens only on a passed probe; a failed probe changes nothing.
-- [ ] `models discover` performs no write and no billed call.
-- [ ] The compatibility record names the legs that ran, with the date.
-- [ ] Full suite, compile and limit gates pass; `docs/adding-a-model.md` updated.
-- [ ] `plans/README.md` status row updated.
+- [x] Promotion happens only on a passed probe; a failed probe changes nothing.
+- [x] `models discover` performs no write and no billed call.
+- [x] The compatibility record names the legs that ran, with the date.
+- [x] Full suite, compile and limit gates pass; `docs/adding-a-model.md` updated.
+- [x] `plans/README.md` status row updated.
+
+## Landed notes, 2026-09-12
+
+- Loader accepts the old shape (`set(row) - {'listed'} == set(FIELDS)`);
+  the `listed: true` + non-verified invariant reads the raw row with
+  `row.get('listed', False)`, so a grandfathered preview row without the
+  key loads as listed and never refuses (all 19 shipped rows load listed).
+- `visible_for` returns False for unlisted rows (Codex catalogue derives
+  from it); `claude.models_listing()` drops unlisted rows itself.
+  `providers.select` and `claude.select` untouched; the listing test
+  patches `moonshotai/kimi-k3` through `BY_SLUG` + `MODELS` and fails
+  without the fix.
+- `models add` writes `listed: false`; `--probe` promotes to listed +
+  verified only on pass, derives the legs from the row it just wrote
+  (`legs_for(slug, row)` - the import-time registry predates the new slug),
+  records those legs in compatibility, and
+  prints why on failure or refusal; `--tier verified` without a probe
+  stays unlisted. `verify()` keeps its bool contract; legs derive after.
+- `models discover` reuses `require_live_shape`/`fetch_live`, honours
+  `--provider`/`--json`, never writes or probes. `candidate` gains
+  `legs_for` (tool+stream always, image on modalities, compact on context
+  window), `run_probe` passes `--image`/`--compact`, and the `candidate`
+  CLI bills only with `--probe --confirm`.
+- Gates: focused 121 OK; full suite 1173 OK; `models check --offline` 0
+  problems; compile, source limits (baseline updated for the four grown
+  files), policy scans, ruff F401/F811 all pass. No billed run in tests.
 
 ## STOP conditions
 

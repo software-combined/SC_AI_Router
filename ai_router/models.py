@@ -3,6 +3,7 @@
 Usage: python3.14 -m ai_router.models add <slug> [--probe] [--dry-run]
            [--tier preview|verified] [--provider ID]
        python3.14 -m ai_router.models remove <slug> | check [--offline] | list
+       python3.14 -m ai_router.models discover [--provider ID] [--json]
 
 The live metadata projection belongs to the provider's definition
 (`provider_defs.ProviderDef.catalogue_shape`); only the `openrouter` shape
@@ -98,7 +99,8 @@ def derive_row(slug, live, provider_id=provider_defs.DEFAULT_EXTERNAL):
             'apply_patch': 'none',
             'experimental_tools': [],
             'web_search': 'web_search' in pricing,
-            'tier': 'preview'}
+            'tier': 'preview',
+            'listed': False}
 
 
 def read_rows(path):
@@ -123,12 +125,18 @@ def cmd_add(path, slug, live_by_id, tier=None, dry_run=False, probe=False,
         if tier not in ('preview', 'verified'):
             raise SystemExit('--tier must be preview or verified')
         row['tier'] = tier
+        if tier == 'verified' and not probe:
+            print(f'{slug} stays unlisted: --tier verified needs --probe to pass first')
+        elif tier is not None and probe:
+            print(f'{slug} stays unlisted: --tier {tier} skips the probe; '
+                  'drop --tier to run it')
     promote = probe and tier is None
     if promote:
         # Preview-activate-verify-promote: the registry is file-baked, so the
         # candidate must be written before anything can route it. Verification
         # runs isolated (own router, home and catalogue); only a pass promotes.
         row['tier'] = 'preview'
+        row['listed'] = False
     rows = renumbered(rows + [row])
     row = next(entry for entry in rows if entry['slug'] == slug)
     if dry_run:
@@ -136,25 +144,42 @@ def cmd_add(path, slug, live_by_id, tier=None, dry_run=False, probe=False,
         print(json.dumps(row, indent=2))
         return row
     if promote:
-        from .candidate import verify
+        from .candidate import legs_for, verify
         write_guarded(path, before, json.dumps(rows, indent=2) + '\n')
-        if (_probe or verify)(slug):
+        # Legs come from the row we just wrote, not the import-time registry
+        # (which predates this slug and would under-probe it).
+        legs = legs_for(slug, row)
+        try:
+            passed = (_probe or (lambda s: verify(s, row=row)))(slug)
+        except SystemExit as exc:
+            print(f'probe refused for {slug}: {exc}')
+            print(json.dumps({'added': slug, 'tier': row['tier'],
+                              'listed': row['listed']}))
+            return row
+        if passed:
             activated = Path(path).read_text()
             promoted = renumbered(
-                [{**entry, 'tier': 'verified'} if entry.get('slug') == slug
+                [{**entry, 'tier': 'verified', 'listed': True}
+                 if entry.get('slug') == slug
                  else entry for entry in json.loads(activated)])
             write_guarded(path, activated, json.dumps(promoted, indent=2) + '\n')
             row = next(entry for entry in promoted if entry['slug'] == slug)
-        _record_compat(slug, row['tier'])
+        else:
+            print(f'probe failed for {slug}: row stays unlisted preview '
+                  f'(legs attempted: {",".join(legs)}; the row records '
+                  'preview until a probe passes)')
+        _record_compat(slug, row['tier'], legs)
     else:
         write_guarded(path, before, json.dumps(rows, indent=2) + '\n')
-    print(json.dumps({'added': slug, 'tier': row['tier']}))
+    print(json.dumps({'added': slug, 'tier': row['tier'],
+                      'listed': row['listed']}))
     return row
 
 
-def _record_compat(slug, tier):
+def _record_compat(slug, tier, legs=()):
+    probed = ','.join(legs) if legs else 'base round trip'
     line = (f'| {slug} | {tier} | '
-            f'{datetime.now(timezone.utc).date()} | base round trip |\n')
+            f'{datetime.now(timezone.utc).date()} | {probed} |\n')
     if not COMPAT_PATH.exists():
         COMPAT_PATH.write_text('# Compatibility matrix\n\n'
                                '| model | tier | date | probes |\n'
@@ -207,6 +232,42 @@ def cmd_check(path, live_by_id, provider_id=provider_defs.DEFAULT_EXTERNAL):
     return 1 if problems else 0
 
 
+def cmd_discover(path, live_by_id, provider_id=provider_defs.DEFAULT_EXTERNAL,
+                 as_json=False):
+    """Read-only diff of the live catalogue against models.json.
+
+    Never writes, never probes, needs no key for OpenRouter: `addable`
+    ids are served upstream but missing locally, `registered` are in
+    both, `unavailable` are registered but absent upstream, and `retired`
+    are registered ids the catalogue module already drops from pickers.
+    """
+    from .catalogue import RETIRED_SLUGS
+    defn = require_live_shape(provider_id)
+    if live_by_id is None:
+        live_by_id = fetch_live(provider_id)
+    rows = read_rows(path)
+    owned = [row for row in rows
+             if (row.get('provider') or provider_defs.DEFAULT_EXTERNAL) == provider_id]
+    registered = {row['slug'] for row in owned}
+    live_ids = set(live_by_id)
+    doc = {'provider': provider_id,
+           'addable': sorted(live_ids - registered),
+           'registered': sorted(registered & live_ids),
+           'unavailable': sorted(registered - live_ids),
+           'retired': sorted(slug for slug in registered if slug in RETIRED_SLUGS)}
+    if as_json:
+        print(json.dumps(doc, indent=2))
+    else:
+        print(f'{defn.label}: {len(doc["addable"])} addable, '
+              f'{len(doc["registered"])} registered, '
+              f'{len(doc["unavailable"])} unavailable, '
+              f'{len(doc["retired"])} retired')
+        for key in ('addable', 'registered', 'unavailable', 'retired'):
+            for slug in doc[key]:
+                print(f'  {key}: {slug}')
+    return doc
+
+
 def cmd_list(path):
     for row in read_rows(path):
         print(f"{row['slug']}  tier={row.get('tier')}  "
@@ -227,6 +288,9 @@ def main(argv=None):
     check = sub.add_parser('check')
     check.add_argument('--offline', action='store_true')
     sub.add_parser('list')
+    discover = sub.add_parser('discover')
+    discover.add_argument('--provider', default=provider_defs.DEFAULT_EXTERNAL)
+    discover.add_argument('--json', action='store_true')
     args = parser.parse_args(argv)
     path = MODELS_PATH
     if args.command == 'add':
@@ -249,6 +313,8 @@ def main(argv=None):
         return max(codes) if codes else cmd_check(path, None)
     elif args.command == 'list':
         cmd_list(path)
+    elif args.command == 'discover':
+        cmd_discover(path, None, args.provider, args.json)
 
 
 if __name__ == '__main__':

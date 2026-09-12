@@ -153,7 +153,7 @@ rejections, the no-copy rule and the client-catalogue spike).
 
 | Plan | Title | Status | Sequencing |
 |---|---|---|---|
-| [145](145-model-verification-gate.md) | Model verification gate: hidden until probed | TODO | after 133; before 135 stage 2 |
+| [145](145-model-verification-gate.md) | Model verification gate: hidden until probed | DONE: verification gate landed 2026-09-12 (source, uncommitted) | after 133; before 135 stage 2 |
 | [146](146-ingress-hardening-wave-2.md) | Ingress hardening, second wave | TODO | after 137; serialize with 135 on `ai_router/router.py` |
 | [147](147-operator-surface-doctor-status-rollback-support.md) | Operator surface: doctor, status, rollback, support bundle | TODO | after 131; serialize with 134's CI step |
 | [148](148-claude-drift-and-contract.md) | Claude Code drift check and attachment contract | TODO | after 146's guard; coordinate 113/120/121 |

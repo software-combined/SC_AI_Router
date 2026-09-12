@@ -1,4 +1,6 @@
 """Isolated candidate verification for models add --probe (brief defect 9)."""
+import io
+import json
 import os
 import unittest
 from pathlib import Path
@@ -23,26 +25,53 @@ class VerifySequenceTests(unittest.TestCase):
                 return False
 
         self.assertTrue(candidate.verify('m/x', _scope=FakeScope,
-                                         _run_probe=lambda slug, scope: True))
+                                         _run_probe=lambda slug, scope, row=None: True))
         self.assertTrue(candidate.verify('m/x', _scope=FakeScope,
-                                         _run_probe=lambda slug, scope: slug == 'm/x'))
+                                         _run_probe=lambda slug, scope, row=None: slug == 'm/x'))
         self.assertFalse(candidate.verify('m/x', _scope=FakeScope,
-                                          _run_probe=lambda slug, scope: False))
+                                          _run_probe=lambda slug, scope, row=None: False))
         self.assertTrue(all(s.closed for s in scopes))
+
+    def test_verify_forwards_the_row_to_the_probe(self):
+        # The add path probes a row that is not in the import-time registry;
+        # verify must pass it through so image/compact legs are derived.
+        class Scope:
+            def __init__(self, slug):
+                self.slug = slug
+            def __enter__(self):
+                return SimpleNamespace(home=Path('/tmp/scope'), catalog=Path('/tmp/cat'))
+            def __exit__(self, *exc):
+                return False
+
+        seen = []
+        candidate.verify('m/x', _scope=Scope,
+                         _run_probe=lambda slug, scope, row=None: seen.append(row) or True,
+                         row={'modalities': ['text', 'image'], 'context_window': 1})
+        self.assertEqual(seen, [{'modalities': ['text', 'image'], 'context_window': 1}])
+
+    def test_legs_for_reads_a_fresh_row_dict(self):
+        row = {'modalities': ['text', 'image'], 'context_window': 262144}
+        self.assertEqual(candidate.legs_for('m/new', row),
+                         ['tool', 'stream', 'image', 'compact'])
 
     def test_run_probe_matches_round_trip_marker(self):
         scope = SimpleNamespace(home=Path('/tmp/s'), catalog=Path('/tmp/c'))
         run = lambda cmd, **kwargs: SimpleNamespace(
-            stdout='{"desktop_runtime_tool_round_trip": "passed"}')
+            stdout='{"desktop_runtime_tool_round_trip": "passed"}', returncode=0)
         self.assertTrue(candidate.run_probe('m/x', scope, _run=run))
-        run = lambda cmd, **kwargs: SimpleNamespace(stdout='turn failed')
+        run = lambda cmd, **kwargs: SimpleNamespace(stdout='turn failed', returncode=1)
+        self.assertFalse(candidate.run_probe('m/x', scope, _run=run))
+        # A later leg (image/compact) can fail after the marker is printed;
+        # the exit status must still fail the probe.
+        run = lambda cmd, **kwargs: SimpleNamespace(
+            stdout='{"desktop_runtime_tool_round_trip": "passed"}', returncode=1)
         self.assertFalse(candidate.run_probe('m/x', scope, _run=run))
         scope = SimpleNamespace(home=Path('/tmp/scope-x'), catalog=Path('/tmp/c'))
         seen = []
 
         def fake_run(cmd, **kwargs):
             seen.append(cmd)
-            return SimpleNamespace(stdout='ok')
+            return SimpleNamespace(stdout='ok', returncode=0)
         candidate.run_probe('m/x', scope, _run=fake_run)
         flat = ' '.join(str(part) for part in seen[0])
         self.assertIn('--router-state', flat)
@@ -147,6 +176,51 @@ class VerifySequenceTests(unittest.TestCase):
             finally:
                 scope.close()
             self.assertIsNone(scope.process)
+
+
+class LegsTests(unittest.TestCase):
+    def test_legs_follow_the_row(self):
+        self.assertEqual(candidate.legs_for('z-ai/glm-5.3-flash'),
+                         ['tool', 'stream', 'image', 'compact'])
+        self.assertEqual(candidate.legs_for('nope/nothing'),
+                         ['tool', 'stream'])
+
+    def test_run_probe_passes_implied_flags(self):
+        scope = SimpleNamespace(home=Path('/tmp/s'), catalog=Path('/tmp/c'))
+        seen = []
+
+        def fake_run(cmd, **kwargs):
+            seen.append(cmd)
+            return SimpleNamespace(
+                stdout='{"desktop_runtime_tool_round_trip": "passed"}', returncode=0)
+
+        with mock.patch.object(candidate, 'legs_for',
+                               return_value=['tool', 'stream', 'image', 'compact']):
+            self.assertTrue(candidate.run_probe('m/x', scope, _run=fake_run))
+        flat = ' '.join(str(part) for part in seen[0])
+        self.assertIn('--image', flat)
+        self.assertIn('--compact', flat)
+
+    def test_main_without_confirm_bills_nothing(self):
+        buf = io.StringIO()
+        with mock.patch.object(candidate, 'verify',
+                               side_effect=AssertionError('must not bill')):
+            with mock.patch.object(candidate.sys, 'stdout', buf):
+                rc = candidate.main(['z-ai/glm-5.3-flash'])
+        self.assertEqual(rc, 0)
+        doc = json.loads(buf.getvalue())
+        self.assertEqual(doc['legs'], ['tool', 'stream', 'image', 'compact'])
+        self.assertFalse(doc['billed'])
+
+    def test_main_with_probe_and_confirm_bills(self):
+        buf = io.StringIO()
+        with mock.patch.object(candidate, 'verify', return_value=True) as probed:
+            with mock.patch.object(candidate.sys, 'stdout', buf):
+                rc = candidate.main(['m/x', '--probe', '--confirm'])
+        self.assertEqual(rc, 0)
+        probed.assert_called_once_with('m/x')
+        doc = json.loads(buf.getvalue())
+        self.assertEqual(doc['result'], 'passed')
 
 
 if __name__ == '__main__':

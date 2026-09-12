@@ -69,6 +69,50 @@ class RegistryTests(unittest.TestCase):
                 with self.assertRaises(SystemExit):
                     load(json.dumps([bad]))
 
+    def test_listed_defaults_true_and_validates(self):
+        model = Model(slug='x/y', provider='openrouter', display_name='X',
+                      vendor='V', reasoning=('low',), default_reasoning='low')
+        self.assertTrue(model.listed)
+        good = dict(zip(FIELDS, ['x/y', 'openrouter', 'X', 'V',
+            ['low'], 'low', ['text'], [], 'native', 'native', None, False, 1,
+            100, 32768, 'none', 'none', [], True, 'verified']))
+        self.assertTrue(load(json.dumps([{**good, 'listed': False}]))[0].listed is False)
+        with self.assertRaises(SystemExit):
+            load(json.dumps([{**good, 'listed': 'yes'}]))
+
+    def test_preview_row_without_listed_key_loads_as_listed(self):
+        # Grandfathered shape: every row shipped before the flag keeps
+        # working and stays visible without a file rewrite.
+        good = dict(zip(FIELDS, ['x/y', 'openrouter', 'X', 'V',
+            ['low'], 'low', ['text'], [], 'native', 'native', None, False, 1,
+            100, 32768, 'none', 'none', [], True, 'verified']))
+        old = dict(good)
+        old['tier'] = 'preview'
+        self.assertNotIn('listed', old)
+        self.assertTrue(load(json.dumps([old]))[0].listed)
+
+    def test_listed_preview_row_is_refused(self):
+        good = dict(zip(FIELDS, ['x/y', 'openrouter', 'X', 'V',
+            ['low'], 'low', ['text'], [], 'native', 'native', None, False, 1,
+            100, 32768, 'none', 'none', [], True, 'verified']))
+        bad = dict(good, tier='preview', listed=True)
+        with self.assertRaises(SystemExit):
+            load(json.dumps([bad]))
+        ok = dict(good, tier='preview', listed=False)
+        self.assertFalse(load(json.dumps([ok]))[0].listed)
+
+    def test_unlisted_row_is_hidden_from_both_pickers(self):
+        hidden = Model(slug='x/y', provider='openrouter', display_name='X',
+                       vendor='V', reasoning=('low',), default_reasoning='low',
+                       listed=False)
+        self.assertFalse(visible_for(hidden, 'codex'))
+        self.assertFalse(visible_for(hidden, 'claude'))
+        self.assertNotIn(hidden, models_for((hidden,), 'codex'))
+        self.assertEqual(models_for((hidden,), 'codex'), ())
+        listed = Model(slug='x/y', provider='openrouter', display_name='X',
+                       vendor='V', reasoning=('low',), default_reasoning='low')
+        self.assertIn(listed, models_for((listed,), 'codex'))
+
     def test_history_mode_defaults_native_and_validates(self):
         model = Model(slug='x/y', provider='openrouter', display_name='X',
                       vendor='V', reasoning=('low',), default_reasoning='low')

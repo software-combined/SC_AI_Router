@@ -44,6 +44,7 @@ class Model:
     experimental_tools: tuple = ()   # probe-gated tool names
     web_search: bool = True          # False downgrades search to text-only
     tier: str = 'verified'           # 'verified' | 'preview'
+    listed: bool = True              # picker visibility; new rows land False
 
 
 def load(text):
@@ -57,7 +58,8 @@ def load(text):
     models = []
     seen = set()
     for i, row in enumerate(rows):
-        if not isinstance(row, dict) or set(row) != set(FIELDS):
+        if (not isinstance(row, dict)
+                or set(row) - {'listed'} != set(FIELDS)):
             raise SystemExit(f'models.json row {i} must have exactly: {", ".join(FIELDS)}')
         if row['slug'] in seen:
             raise SystemExit(f'models.json duplicate slug: {row["slug"]}')
@@ -88,6 +90,10 @@ def load(text):
             raise SystemExit(f'models.json {row["slug"]}: bad experimental_tools')
         if row['tier'] not in ('verified', 'preview'):
             raise SystemExit(f'models.json {row["slug"]}: bad tier')
+        if 'listed' in row and not isinstance(row['listed'], bool):
+            raise SystemExit(f'models.json {row["slug"]}: bad listed')
+        if row.get('listed', False) and row['tier'] != 'verified':
+            raise SystemExit(f'models.json {row["slug"]}: preview row must not be listed')
         models.append(Model(
             slug=row['slug'], provider=row['provider'], display_name=row['display_name'],
             vendor=row['vendor'], reasoning=tuple(row['reasoning']),
@@ -98,7 +104,8 @@ def load(text):
             priority=row['priority'], max_output_tokens=row['max_output_tokens'],
             reasoning_summary=row['reasoning_summary'], apply_patch=row['apply_patch'],
             experimental_tools=tuple(row['experimental_tools']),
-            web_search=row['web_search'], tier=row['tier']))
+            web_search=row['web_search'], tier=row['tier'],
+            listed=row.get('listed', True)))
     return tuple(models)
 
 
