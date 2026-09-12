@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.6.38
+
+- An encrypted handoff to an externally billed child can no longer end the
+  turn silently. When the upstream model picked the native encrypted spawn,
+  follow-up or send for a child this thread created on an external model,
+  the router answered with a synthesized tool result; Codex recorded that as
+  unexpected and stopped. The rejection now keeps the native function, item
+  and call identity and replaces only the unreadable arguments with a
+  bounded diagnostic, so Codex raises a real argument-validation error,
+  asks for the next inference and the parent corrects the call within the
+  same turn. The diagnostic contains no assignment text, ciphertext or
+  target name; native encrypted handoffs and valid plaintext calls are
+  unchanged.
+- The handoff probe gains an installed-Codex recovery run: it rejects each of
+  the three native handoffs, requires the matching validation error, then
+  proves the corrected plaintext call and the parent's final answer land in
+  the same turn, in both classic and Responses Lite wire modes.
+- Release publishing uses the pushed tag for the bundle URLs and for
+  `gh release create --verify-tag`, so publishing no longer depends on a
+  workflow-created secondary tag.
+
 ## 0.6.37
 
 - Mixed-provider subagent assignments now work with native Responses Lite

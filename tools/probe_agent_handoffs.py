@@ -23,7 +23,7 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from ai_router.agent_handoffs import add_plaintext_tools, restore_event
+from ai_router.agent_handoffs import add_plaintext_tools, restore_event, steer_event
 from ai_router.catalogue import external_entry, subscription_stub
 from ai_router.registry import by_slug
 from tools.appserver_probe import AppServer, AGENT_HANDOFFS, scrub_env
@@ -57,6 +57,10 @@ def sse(items, ident):
 
 
 class Probe:
+    required_final = None
+    live_prompts = None
+    expected_recovered = ()
+
     def __init__(self, live, call_limit, live_children=False):
         self.live, self.call_limit = live, call_limit
         self.live_children = live_children
@@ -198,7 +202,7 @@ class Probe:
                         'name': item.get('name'),
                         'encrypted_fields': 'absent' if fields == 'absent' else ('empty' if fields == [] else 'nonempty'),
                         'model': arguments.get('model'), 'fork_turns': arguments.get('fork_turns')})
-            restored = restore_event(event, aliases)
+            restored = steer_event(restore_event(event, aliases), aliases)
             if restored is not event:
                 self.facts['alias_emitted'] = True
                 if isinstance(restored.get('item'), dict):
@@ -224,12 +228,14 @@ class Probe:
             return response.read()
 
 
-def run(args):
+def run(args, probe_type=Probe):
     if args.live and not 1 <= args.max_live_calls <= 24:
         raise ValueError('--live requires --max-live-calls between 1 and 24')
     if args.live_children and not args.live:
         raise ValueError('--live-children requires --live')
-    probe = Probe(args.live, args.max_live_calls, args.live_children)
+    if getattr(args, 'installed', False) and (not args.live_children or args.lifecycle):
+        raise ValueError('--installed requires --live-children without --lifecycle')
+    probe = probe_type(args.live, args.max_live_calls, args.live_children)
     class Handler(BaseHTTPRequestHandler):
         protocol_version = 'HTTP/1.1'
 
@@ -277,7 +283,7 @@ def run(args):
     with tempfile.TemporaryDirectory(prefix='agent-handoff-probe-') as temp:
         root = Path(temp)
         candidate = None
-        if args.live_children:
+        if args.live_children and not getattr(args, 'installed', False):
             from ai_router.credentials import Credentials
             from ai_router.router import Router
             from ai_router.runtime import LOG
@@ -396,6 +402,8 @@ def run(args):
                 'Without tools, reply SYNTH_REPLAY_TWO.'] if args.live else ['Synthetic test.']
             if args.native_only:
                 prompts = prompts[-2:]
+            if args.live and probe.live_prompts:
+                prompts = probe.live_prompts
             def turn(prompt_text):
                 answer = []
                 rpc('turn/start', {'threadId': thread, 'input': [{'type': 'text', 'text': prompt_text,
@@ -412,7 +420,9 @@ def run(args):
                         break
                 return '\n'.join(answer)
             for prompt_text in prompts:
-                turn(prompt_text)
+                answer = turn(prompt_text)
+                if probe.required_final and probe.required_final not in answer:
+                    raise ValueError('parent did not finish after handoff recovery')
             expected_replies = {'SYNTH_NATIVE_CONTROL'} if args.native_only else set(ALL_MARKERS)
             settle = min(deadline, time.monotonic() + (120 if args.live_children else 2))
             while time.monotonic() < settle:
@@ -453,6 +463,8 @@ def run(args):
                 probe.facts['compaction_and_two_turns'] = True
             print(json.dumps({'live_parent': args.live, 'scripted_children': not args.live_children,
                 'live_calls': probe.live_calls, **probe.facts, 'errors': probe.errors}), flush=True)
+            if set(probe.expected_recovered) - set(probe.facts.get('recovered_tools', [])):
+                return 1
             if args.native_only:
                 return 0 if (probe.facts['encrypted_child'] and not probe.errors
                     and (not args.live_children or expected_replies <= set(probe.facts['replies']))) else 1
@@ -483,6 +495,7 @@ if __name__ == '__main__':
                         help='Offline variant; live always uses installed catalogue metadata.')
     parser.add_argument('--live', action='store_true')
     parser.add_argument('--live-children', action='store_true')
+    parser.add_argument('--installed', action='store_true', help='Verify the installed router, not a candidate.')
     parser.add_argument('--native-only', action='store_true')
     parser.add_argument('--lifecycle', action='store_true')
     parser.add_argument('--max-live-calls', type=int, default=0)

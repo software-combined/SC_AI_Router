@@ -205,15 +205,17 @@ def restore_response(response, names):
 
 
 def steer_plaintext(item, names):
-    """Replace a provably undeliverable encrypted handoff with a steer output.
+    """Reject an unreadable handoff through Codex's native validation path.
 
     Fires only when the emitted native call cannot reach its child readably:
     an encrypted spawn_agent naming an external-provider model, or an encrypted
     followup_task/send_message targeting a child this thread spawned onto an
     external model. Everything else returns untouched, so native encrypted
     handoffs and unknown targets keep current behavior and the downstream
-    guards remain the backstop. The steer names the exact alias call to make
-    instead; no payload, ciphertext, or history is quoted. Pure.
+    guards remain the backstop. A JSON string cannot deserialize as any of the
+    three native argument objects: Codex returns a real tool error and requests
+    another inference. A response-only tool output silently ends its turn.
+    The diagnostic contains no assignment, ciphertext or target. Pure.
     """
     if item.get('type') != 'function_call':
         return item
@@ -229,22 +231,17 @@ def steer_plaintext(item, names):
         if entry is None or not provider_defs.is_external(entry.provider):
             return item
         detail = ('spawn via collaboration_plaintext.spawn_agent '
-                  'for externally billed models')
+                  'with fork_turns="none" for externally billed models')
     else:
         target = args.get('target')
         model = _spawn_model(spawns, target)
         entry = by_slug(model) if isinstance(model, str) else None
         if entry is None or not provider_defs.is_external(entry.provider):
             return item
-        detail = ('call collaboration_plaintext.' + item['name']
-                  + " with target '" + target + "'")
-    call_id = item.get('call_id')
-    output = {'type': 'function_call_output', 'output':
-              'That handoff cannot be delivered readably; ' + detail
-              + ' and resend the message as plain text.'}
-    if isinstance(call_id, str):
-        output['call_id'] = call_id
-    return output
+        detail = 'call collaboration_plaintext.' + item['name'] + ' with the same target'
+    diagnostic = ('That handoff cannot be delivered readably; ' + detail
+                  + ' and resend the message as plain text.')
+    return {**item, 'arguments': json.dumps(diagnostic), 'encrypted_function_args': []}
 
 
 def steer_response(response, names):
