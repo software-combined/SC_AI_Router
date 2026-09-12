@@ -99,7 +99,7 @@ rejections, the no-copy rule and the client-catalogue spike). Plan 145
 |---|---|---|---|
 | [146](146-ingress-hardening-wave-2.md) | Ingress hardening, second wave | DONE: token strength, 32-request cap, redaction, 415 guard, opencode confinement, ACL verdict TTL 2026-09-12 | after 137; serialize with 135 on `ai_router/router.py` |
 | [147](147-operator-surface-doctor-status-rollback-support.md) | Operator surface: doctor, status, rollback, support bundle | DONE: `--doctor` row registry, state-backed `--status`, read-only `--check-update` with `--update` applying, rollback listing, redacted `--support` 2026-09-13 | after 131; serialize with 134's CI step (landed) |
-| [148](148-claude-drift-and-contract.md) | Claude Code drift check and attachment contract | TODO | after 146's guard; coordinate 113/120/121 |
+| [148](148-claude-drift-and-contract.md) | Claude Code drift check and attachment contract | DONE: attach records the served listing snapshot in the activation receipt, `--doctor` reports match/drift/unknown against the live `GET /v1/models`, contract note in `docs/claude-code.md` 2026-09-13 | after 146's guard; coordinate 113/120/121 |
 
 ## Carried-history portability (150)
 

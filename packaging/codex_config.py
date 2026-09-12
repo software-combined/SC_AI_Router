@@ -105,7 +105,7 @@ def read_receipt(home):
     `codex` attachment without losing restore information; nothing is
     rewritten on read.
     """
-    receipt_path = Path(home) / 'activation.json'
+    receipt_path = receipt_path_for(home)
     if not receipt_path.exists():
         return {}
     doc = json.loads(receipt_path.read_text())
@@ -129,6 +129,14 @@ def parse_snapshot(text):
     return previous if isinstance(previous, dict) else {}
 
 
+RECEIPT_NAME = 'activation.json'
+
+
+def receipt_path_for(home):
+    """The one activation receipt under a router home (single-name owner)."""
+    return Path(home) / RECEIPT_NAME
+
+
 def write_client_receipt(home, client, entry):
     """Record one client attachment; other attachments are preserved."""
     # The single activation.json writer (Plan 095): entry builders stay in
@@ -137,7 +145,7 @@ def write_client_receipt(home, client, entry):
     doc = read_receipt(home) or {'version': RECEIPT_VERSION, 'clients': {}}
     doc['version'] = RECEIPT_VERSION
     doc.setdefault('clients', {})[client] = entry
-    receipt_path = Path(home) / 'activation.json'
+    receipt_path = receipt_path_for(home)
     _replace_text(receipt_path, json.dumps(doc, indent=2) + '\n')
     try:
         os.chmod(receipt_path, 0o600)
@@ -173,7 +181,7 @@ def drop_client(home, client):
     if client not in clients:
         return False
     del clients[client]
-    receipt_path = Path(home, 'activation.json')
+    receipt_path = receipt_path_for(home)
     if clients:
         _replace_text(receipt_path, json.dumps(doc, indent=2) + '\n')
     else:
