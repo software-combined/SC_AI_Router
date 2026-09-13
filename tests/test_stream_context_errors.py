@@ -78,6 +78,64 @@ class StreamContextTests(unittest.TestCase):
         self.assertTrue(any(c.args[0] == 'request_completed' for c in logs))
         self.assertFalse(any(c.args[0] == 'request_failed' for c in logs))
 
+    def test_incomplete_stream_records_its_reason_under_its_own_code(self):
+        wire = sse.frame(json.dumps({'type': 'response.incomplete', 'response': {
+            'incomplete_details': {'reason': 'max_output_tokens'}}}).encode())
+        body, logs = self.request(wire)
+        self.assertEqual(body, wire)  # the client still sees the provider's frame
+        failures = [c for c in logs if c.args[0] == 'request_failed']
+        self.assertEqual(len(failures), 1)
+        self.assertEqual(failures[0].kwargs['code'], 'UPSTREAM_INCOMPLETE')
+        self.assertEqual(failures[0].kwargs['terminal_event'], 'response.incomplete')
+        self.assertEqual(failures[0].kwargs['upstream_reason'], 'max_output_tokens')
+        self.assertNotIn('served_model', failures[0].kwargs)
+
+    def test_failed_stream_records_the_bounded_provider_code_only(self):
+        wire = sse.frame(json.dumps({'type': 'response.failed', 'response': {
+            'error': {'code': 'provider_unavailable', 'message': 'private-input'}}}).encode())
+        body, logs = self.request(wire)
+        self.assertEqual(body, wire)
+        failures = [c for c in logs if c.args[0] == 'request_failed']
+        self.assertEqual(failures[0].kwargs['code'], 'UPSTREAM_STREAM_FAILED')
+        self.assertEqual(failures[0].kwargs['terminal_event'], 'response.failed')
+        self.assertEqual(failures[0].kwargs['upstream_code'], 'provider_unavailable')
+        self.assertNotIn('private-input', str(logs))
+
+    def test_non_scalar_provider_detail_is_never_recorded(self):
+        wire = sse.frame(json.dumps({'type': 'response.failed', 'response': {
+            'error': {'code': {'nested': 'private-input'},
+                      'message': 'quoted prompt text must not be logged'}}}).encode())
+        _, logs = self.request(wire)
+        failures = [c for c in logs if c.args[0] == 'request_failed']
+        self.assertNotIn('upstream_code', failures[0].kwargs)
+        self.assertNotIn('private-input', str(logs))
+        self.assertNotIn('quoted prompt text', str(logs))
+
+    def test_oversized_provider_code_is_truncated_to_the_bound(self):
+        wire = sse.frame(json.dumps({'type': 'error', 'code': 'x' * 200,
+                                     'message': 'private-input'}).encode())
+        _, logs = self.request(wire)
+        failures = [c for c in logs if c.args[0] == 'request_failed']
+        self.assertEqual(failures[0].kwargs['upstream_code'], 'x' * 64)
+        self.assertNotIn('private-input', str(logs))
+
+    def test_prose_in_provider_metadata_is_never_recorded(self):
+        prose = 'the user asked about ACME payroll; token sk-or-v1-AAAABBBBCCCC'
+        for event in (
+            {'type': 'response.failed', 'response': {'error': {'code': prose}}},
+            {'type': 'response.failed', 'response': {'error': {'error_type': prose}}},
+            {'type': 'response.incomplete', 'response': {
+                'incomplete_details': {'reason': prose}}},
+            {'type': 'error', 'code': prose},
+        ):
+            with self.subTest(event=event):
+                _, logs = self.request(sse.frame(json.dumps(event).encode()))
+                failures = [c for c in logs if c.args[0] == 'request_failed']
+                self.assertEqual(len(failures), 1)
+                self.assertNotIn('upstream_code', failures[0].kwargs)
+                self.assertNotIn('upstream_reason', failures[0].kwargs)
+                self.assertNotIn('ACME payroll', str(logs))
+
     def test_subscription_stream_keeps_existing_wire_behavior(self):
         self.server.state['openai_models'] = ['gpt-6-astra']
         wire = sse.frame(json.dumps({'type': 'response.failed', 'response': {

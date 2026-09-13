@@ -22,15 +22,19 @@ from .runtime import VERSION
 
 def send_json(handler, status, obj, headers=None):
     body = json.dumps(obj).encode()
-    handler.send_response(status)
-    handler.send_header('Content-Type', 'application/json')
-    handler.send_header('Content-Length', str(len(body)))
-    for k, v in (headers or {}).items():
-        handler.send_header(k, v)
-    handler.send_header('Connection', 'close')
-    handler.end_headers()
-    handler.wfile.write(body)
-    handler.close_connection = True
+    try:
+        handler.send_response(status)
+        handler.send_header('Content-Type', 'application/json')
+        handler.send_header('Content-Length', str(len(body)))
+        for k, v in (headers or {}).items():
+            handler.send_header(k, v)
+        handler.send_header('Connection', 'close')
+        handler.end_headers()
+        handler.wfile.write(body)
+    except OSError:
+        pass  # Client already disconnected; nothing more can be delivered.
+    finally:
+        handler.close_connection = True
 
 
 def send_compaction_stream(handler, output):
@@ -118,13 +122,17 @@ def context_error(handler, streaming, *, log_event):
     log_event('request_rejected', status=200, code=err.code)
     body = ('event: response.failed\ndata: ' + json.dumps(
         {'type': 'response.failed', 'response': err.body()}) + '\n\n').encode()
-    handler.send_response(200)
-    handler.send_header('Content-Type', 'text/event-stream')
-    handler.send_header('Content-Length', str(len(body)))
-    handler.send_header('Connection', 'close')
-    handler.end_headers()
-    handler.wfile.write(body)
-    handler.close_connection = True
+    try:
+        handler.send_response(200)
+        handler.send_header('Content-Type', 'text/event-stream')
+        handler.send_header('Content-Length', str(len(body)))
+        handler.send_header('Connection', 'close')
+        handler.end_headers()
+        handler.wfile.write(body)
+    except OSError:
+        pass  # Client already disconnected after the stream was requested.
+    finally:
+        handler.close_connection = True
 
 
 def do_get(handler):
