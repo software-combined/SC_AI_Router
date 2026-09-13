@@ -29,6 +29,7 @@ _XML_ENTITIES = {'"': '&quot;', "'": '&apos;'}
 
 ROUTER_TASK = 'CodexMixedModelRouter'
 UPDATE_TASK = ROUTER_TASK + 'Update'
+EXPRESS_TASK = UPDATE_TASK + 'Express'
 TASK_LAUNCHER = 'task_launch.py'  # written beside router_launch.py on install
 ROUTER_LOG = 'launchd.log'   # same supervisor log names as the other platforms
 UPDATE_LOG = 'update.log'
@@ -97,6 +98,7 @@ _ROUTER_XML = (_TASK_HEAD + _LOGON_TRIGGER + _repeat_trigger('PT1M') + _TASK_MID
 _UPDATE_XML = (_TASK_HEAD + _repeat_trigger('PT4H') + _TASK_MID
                + '<ExecutionTimeLimit>PT30M</ExecutionTimeLimit>'
                + _TASK_TAIL)
+_EXPRESS_XML = _UPDATE_XML.replace('PT4H', 'PT1M')
 
 def _quote(arg):
     # schtasks /xml carries no shell, but the Task Scheduler command line
@@ -132,6 +134,10 @@ def render_router_xml(python, home, user):
 
 def render_update_xml(python, home):
     return _render(_UPDATE_XML, python, home, 'update_launch.py', UPDATE_LOG)
+
+
+def render_express_xml(python, home):
+    return _render(_EXPRESS_XML, python, home, 'express_launch.py', UPDATE_LOG)
 
 
 def _tail(text):
@@ -287,6 +293,8 @@ class Backend:
         self._register(ROUTER_TASK,
                        render_router_xml(python, home, _grantee(self._call)), home)
         self._register(UPDATE_TASK, render_update_xml(python, home), home)
+        if (Path(home) / 'express_launch.py').is_file():
+            self._register(EXPRESS_TASK, render_express_xml(python, home), home)
         self._handover(home)
 
     def _wait_stopped(self, name, timeout, home):
@@ -368,7 +376,10 @@ class Backend:
         # 2026-09-10), so drain and end the router before either
         # definition goes; otherwise the old router serves until sign-out.
         self._drain(home, UNINSTALL_DRAIN_S)
-        for task in (ROUTER_TASK, UPDATE_TASK):
+        tasks = [ROUTER_TASK, UPDATE_TASK]
+        if self._task_state(EXPRESS_TASK) is not None:
+            tasks.append(EXPRESS_TASK)
+        for task in tasks:
             self._call(['schtasks', '/end', '/tn', task], capture_output=True)
             result = self._call(['schtasks', '/delete', '/tn', task, '/f'],
                                 capture_output=True)

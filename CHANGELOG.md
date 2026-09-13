@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.6.46
+
+- Express release tags publish urgent updates on either stable
+  (`v<VERSION>-express`) or beta (`v<VERSION>-beta-express`).
+- macOS, Windows and Linux gain a separate minute Express check using the
+  existing verified installer. Ordinary releases keep the four-hour schedule.
+  Existing machines gain this capability through their next ordinary update.
+- Express checks preserve channel selection, install locks, health rollback
+  and failure limits. After one failed attempt, retries use the normal cadence.
+  Older restored releases skip the Express check without losing regular updates.
+
+## 0.6.45
+
+- Importing the router remover no longer changes Codex settings or stops the
+  service. The installer Python compatibility check compiles executable scripts
+  without running them and imports library files in a scratch environment.
+- Existing installations affected by the September 13 compatibility-check
+  incident recover their Codex routing settings when the installer runs again.
+  See `docs/codex-routing-incident-20260913.md` for the cause and recovery plan.
+
 ## 0.6.43
 
 - Codex remote compaction V2 now returns the completed compaction item and

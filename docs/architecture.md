@@ -95,6 +95,13 @@ release publication: it turns a built `dist/` into the feed's
 router imports neither: hosts read the feed through `packaging/feed.py`, which
 stays the client-side owner of origin and channel resolution.
 
+`packaging/release.py` parses normal and Express tags; Express is feed
+urgency on stable or beta, never a third channel or a package-version suffix.
+The platform backends own a separate minute Express job alongside the regular
+four-hour job. Both use `update_launch.py` (also installed as
+`express_launch.py`) and `updater.py`; an update-parent lock serializes
+them while the child installer retains its own installation lock.
+
 ## Transitional owners (do not entrench)
 
 - `packaging/service.py` keeps the feed/state/cross-platform helpers

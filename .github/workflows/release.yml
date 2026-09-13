@@ -89,18 +89,9 @@ jobs:
         run: python tools/verify_runtime_pins.py
       - name: Build bundle
         run: |
-          case "$GITHUB_REF_NAME" in
-            v*-beta) CHANNEL=beta ;;
-            v*) CHANNEL=stable ;;
-            *) echo "release must run from a v* tag, got $GITHUB_REF_NAME"; exit 1 ;;
-          esac
-          TAG_VERSION="${GITHUB_REF_NAME#v}"; TAG_VERSION="${TAG_VERSION%-beta}"
-          BASE_VERSION="$(cat packaging/VERSION)"
-          if [ "$TAG_VERSION" != "$BASE_VERSION" ]; then
-            echo "tag $GITHUB_REF_NAME != packaging/VERSION $BASE_VERSION"; exit 1
-          fi
-          python packaging/release.py --out dist --build "$GITHUB_RUN_NUMBER" --sha "$GITHUB_SHA" --channel "$CHANNEL" \
+          python packaging/release.py --out dist --build "$GITHUB_RUN_NUMBER" --sha "$GITHUB_SHA" --tag "$GITHUB_REF_NAME" \
             --url-base "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
+          CHANNEL=$(python -c "import json;print(json.load(open('dist/latest.json'))['channel'])")
           echo "CHANNEL=$CHANNEL" >> "$GITHUB_ENV"
       - name: Configure feed publishing credentials
         uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c

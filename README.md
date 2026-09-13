@@ -203,6 +203,32 @@ shows are described in
 - A `--feed <latest.json>` install uses that document for the run only; later
   checks follow the channel.
 
+### Express updates
+
+Maintainers can publish an urgent stable release with `v<VERSION>-express`,
+or an urgent beta with `v<VERSION>-beta-express`. The version must match
+`packaging/VERSION`; use a new tag for each release. These tags use the
+same tests, publisher permissions and integrity checks as ordinary releases.
+
+After installing an Express-capable version, macOS, Windows and Linux run
+a separate lightweight Express check about every minute. Online machines
+can begin an urgent update within a few minutes of feed publication;
+downloads, request draining and health checks take additional time.
+Each machine follows its existing stable or beta channel. Normal releases
+continue on the four-hour schedule. A failed Express attempt waits for the
+regular retry schedule, retaining the existing three-failure limit.
+
+The jobs are `com.local.codex-mixed-model-router.update.express` on macOS,
+`CodexMixedModelRouterUpdateExpress` on Windows, and
+`codex-mixed-model-router-express.timer` on Linux. The installer registers
+and removes these with the regular jobs. They use the same home launcher
+under the name `express_launch.py`, which skips older restored releases
+that do not support Express.
+
+Existing machines first need this version through their current update
+schedule or a manual update. Sleeping/offline machines check when available.
+A missing interpreter or broken updater still needs local recovery.
+
 ## Uninstall
 
 `python3.14 packaging/install.py --uninstall` stops and removes the service,
