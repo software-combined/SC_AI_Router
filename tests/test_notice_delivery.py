@@ -230,7 +230,10 @@ class ShowPendingTests(unittest.TestCase):
             # The extraction directory is gone, as it is after a scheduled
             # update; the dialog must still reference a usable icon.
             shutil.rmtree(bundle)
-            cmd = notice_mod.dialog_command('1.0.1', icon=str(durable))
+            # Compile against an app every Mac has: osacompile resolves
+            # `tell application id`, and hosted runners do not install Codex.
+            with mock.patch.object(notice_mod, 'CODEX_BUNDLE_ID', 'com.apple.finder'):
+                cmd = notice_mod.dialog_command('1.0.1', icon=str(durable))
             self.assertIn(str(durable), cmd[cmd.index('-e') + 1])
             self.assertNotIn(str(bundle), cmd[cmd.index('-e') + 1])
             with tempfile.TemporaryDirectory() as scratch:
