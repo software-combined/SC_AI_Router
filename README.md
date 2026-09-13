@@ -338,6 +338,22 @@ stay Python 3.9-compatible. Branches start from `develop`, pull requests
 target `develop`, and user-visible changes update `CHANGELOG.md` and
 `packaging/VERSION`. Releases are cut by tagging the version as `v<VERSION>`.
 
+## Agent plugins
+
+This repo also hosts the private `scg-agent-plugins` marketplace:
+`scg-review` (pre-commit review), `scg-subagents` (subagent coordination),
+`scg-prototypes` (prototype publishing) and `scg-finance` (finance analysis).
+Every plugin works in Codex and Claude Code and ships automatic updates.
+
+```sh
+codex plugin marketplace add software-combined/SC_OpenRouter_adapter --ref main
+codex plugin add scg-review@scg-agent-plugins
+```
+
+Plugin releases ride `plugin.json` versions plus `plugins/CHANGELOG.md`,
+separate from the router tag train (`packaging/VERSION` never moves for a
+plugin-only change). See `AGENTS.md` section 9 for the plugin rules.
+
 ## Documentation
 
 - [Architecture](docs/architecture.md)

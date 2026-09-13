@@ -1,0 +1,9 @@
+{
+  "name": "scg-finance",
+  "version": "0.1.0",
+  "description": "Finance-director grade analysis grounded in the organisation's accounting data, whatever system it lives in.",
+  "author": {
+    "name": "Software Combined"
+  },
+  "license": "Apache-2.0"
+}
