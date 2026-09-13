@@ -1,8 +1,8 @@
 {
   "ai_router/agent_handoffs.py": 314,
   "ai_router/catalogue.py": 393,
-  "ai_router/compaction.py": 370,
-  "ai_router/errors.py": 260,
+  "ai_router/compaction.py": 396,
+  "ai_router/errors.py": 267,
   "ai_router/key_dialog.py": 260,
   "ai_router/models.py": 321,
   "ai_router/providers.py": 354,
