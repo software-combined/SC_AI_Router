@@ -67,6 +67,12 @@ class Backend:
             # update itself again.
             print('warning: the scheduled updater is not loaded; run the '
                   'installer again to restore automatic updates')
+        if (home / 'express_launch.py').is_file():
+            _launchd.write_plist(agents / (_launchd.EXPRESS_LABEL + '.plist'),
+                                _launchd.render_update_plist(python, home, express=True))
+            if not _launchd.ensure_updater(self._run, uid, python, home, agents,
+                                          express=True, **self._seams()):
+                raise SystemExit('Express update job could not be loaded')
 
     def restart(self, home):
         self._run(['launchctl', 'kill', 'TERM', f'gui/{self._uid()}/{self._svc.LABEL}'],
@@ -99,7 +105,8 @@ class Backend:
         uid, agents = self._uid(), self._agents()
         self._run(['launchctl', 'bootout', f'gui/{uid}/{svc.LABEL}'], capture_output=True)
         self._run(['launchctl', 'bootout', f'gui/{uid}/{svc.UPDATE_LABEL}'], capture_output=True)
-        for name in (svc.LABEL, svc.UPDATE_LABEL):
+        self._run(['launchctl', 'bootout', f'gui/{uid}/{_launchd.EXPRESS_LABEL}'], capture_output=True)
+        for name in (svc.LABEL, svc.UPDATE_LABEL, _launchd.EXPRESS_LABEL):
             try:
                 (agents / (name + '.plist')).unlink()
             except FileNotFoundError:
