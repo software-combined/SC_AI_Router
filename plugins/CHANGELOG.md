@@ -1,5 +1,10 @@
 # Changelog
 
+## scg-subagents 0.5.1 — 2026-09-13
+
+- Make reading `references/tool-guide.md` mandatory before the first spawn in
+  a session: the entrypoint alone no longer authorizes a delegation.
+
 ## scg-finance 0.1.0 — 2026-09-13
 
 - Add the `finance-analyst` skill as a new `scg-finance` plugin: controller
