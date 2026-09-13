@@ -2,6 +2,8 @@ name: Check
 
 on:
   pull_request:
+    branches: [main, develop]
+    types: [opened, synchronize, reopened, edited]
   push:
     branches: [main, develop]
 
@@ -13,21 +15,133 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
-    name: Test
-    # Single Ubuntu runner, static checks only: the billed test-suite
-    # minutes are unaffordable per-PR on this plan, and installs are
-    # proven on local hardware instead. The full suite
-    # (python -m unittest discover -s tests -t .) is a required local
-    # gate before every commit; CI keeps compile, source limits,
-    # CloudFormation lint, registry/catalogue shape, and the two grep scans.
+  changes:
+    name: Change scope
+    # Only pull requests need the scope. Push runs keep the static checks and
+    # skip the native installer jobs entirely (Plan 156).
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      installer: ${{ steps.scope.outputs.installer }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          # The diff needs the base branch, so fetch full history.
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Installer scope
+        id: scope
+        # One owner for the path list and the native test list
+        # (tools/ci_scope.py), so the workflows and the tool cannot drift.
+        # pipefail keeps a failed diff from reading as "no installer files
+        # changed" and silently skipping the native checks.
+        run: |
+          set -o pipefail
+          git diff --name-only "origin/${{ github.base_ref }}...HEAD" | python3 tools/ci_scope.py --installer >> "$GITHUB_OUTPUT"
+
+  installer-macos:
+    name: Installer (macOS)
+    needs: changes
+    if: needs.changes.outputs.installer == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Native installer tests
+        shell: bash
+        run: python -m unittest $(python tools/ci_scope.py --installer-tests)
+
+  installer-windows:
+    name: Installer (Windows)
+    needs: changes
+    if: needs.changes.outputs.installer == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Native installer tests
+        shell: bash
+        run: python -m unittest $(python tools/ci_scope.py --installer-tests)
+
+  installer-python39:
+    name: Installer (Python 3.9)
+    needs: changes
+    if: needs.changes.outputs.installer == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
-          python-version: "3.14"
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          python-version: "3.9"
+      - name: Installer surface imports on 3.9
+        run: python tools/check_installer_python39.py
+
+  test:
+    name: Test
+    # The one required check. It waits for every scoped installer job and
+    # fails when one failed or was cancelled; only a deliberately unselected
+    # platform job (scope said no installer paths) may be skipped (Plan 156).
+    # !cancelled(): a failed dependency still runs the guard below, while a
+    # cancelled run stops this job instead of reporting a result.
+    needs: [changes, installer-macos, installer-windows, installer-python39]
+    if: ${{ !cancelled() }}
+    # Single Ubuntu runner. Plan 134 revisited the cost decision after the
+    # 2026-09-12 external review found a green check that never executed the
+    # tests: the offline unit suite now runs on every pull request. Installs
+    # and native lifecycle stay proven on local hardware, recorded per client
+    # and OS version in docs/compatibility.md.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Required installer jobs
+        # Scoped installer jobs that failed or were cancelled must fail this
+        # required check, not disappear behind a green gate.
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: |
+          echo "an installer job did not succeed: ${{ join(needs.*.result, ', ') }}"
+          exit 1
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Unit suite (offline)
+        # Pull requests only: the suite is the required local gate for every
+        # commit, and the release workflow runs it again at tag time. Push
+        # runs keep the static checks so a merge to develop stays cheap.
+        if: github.event_name == 'pull_request'
+        run: python -m unittest discover -s tests -t .
+      - name: Shell syntax
+        shell: bash
+        # The bootstrap and installer shells ship to every host; a syntax
+        # error should fail here, not on a recipient's machine.
+        run: |
+          for f in packaging/*.sh; do
+            sh -n "$f" || { echo "$f failed sh -n"; exit 1; }
+          done
+      - name: PowerShell parse
+        shell: pwsh
+        # Real parser validation, not a lint pass: a .ps1 syntax error is
+        # otherwise only discovered on a Windows host.
+        run: |
+          foreach ($f in Get-ChildItem packaging/*.ps1) {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              $f.FullName, [ref]$null, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Host "::error file=$($f.Name)::$($_.Message)" }
+              exit 1
+            }
+          }
       - run: python -m compileall -q ai_router tools tests packaging
       - name: Lint (F401/F811)
         # python -m ruff: the script location differs by platform, the module
@@ -56,11 +170,37 @@ jobs:
         run: |
           python -m ai_router.catalogue --merge ./ci-catalogue.json
           python -m ai_router.catalogue --check ./ci-catalogue.json
-      - name: No request cap
-        shell: bash
+      - name: Policy scans
+        # Single owner (Plan 134): tools/check_policy_scans.py implements the
+        # request-cap and secrets greps, so the same scan runs locally and in
+        # CI. Behaviour and failure messages match the inline steps it
+        # replaces.
+        run: python tools/check_policy_scans.py
+
+  plugin-schedulers:
+    name: Plugin schedulers
+    # Native scheduler coverage for the agent-plugin updater: real systemd
+    # user timers on Linux and Task Scheduler on Windows, using a fake local
+    # Codex CLI. Pull requests only; push runs stay cheap.
+    if: github.event_name == 'pull_request'
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Start the disposable Linux user manager
+        if: runner.os == 'Linux'
         run: |
-          if grep -rEn "request_cap|DEFAULT_REQUEST_CAP" ai_router tools tests packaging ; then echo "request cap removed by decision (docs/operations.md); do not reintroduce"; exit 1; fi
-      - name: Secrets scan
-        shell: bash
-        run: |
-          if grep -rEn "sk-or-v1-[A-Za-z0-9]{20,}|Bearer [A-Za-z0-9._-]{30,}" --include='*.py' --include='*.md' --include='*.json' --include='*.toml' . ; then echo "possible secret committed"; exit 1; fi
+          scheduler_uid="$(id -u)"
+          sudo systemctl start "user@${scheduler_uid}.service"
+          echo "XDG_RUNTIME_DIR=/run/user/${scheduler_uid}" >> "$GITHUB_ENV"
+          echo "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/${scheduler_uid}/bus" >> "$GITHUB_ENV"
+      - name: Native scheduler migration
+        run: python -m unittest tests.test_scheduling_native -v
+        env:
+          SCG_TEST_NATIVE_SCHEDULER: '1'

@@ -1,5 +1,217 @@
 # Compatibility
 
+## OpenRouter refusals that arrive after the stream opens, 2026-09-13
+
+Installed Codex CLI `0.154.0-alpha.6.2` against router 0.6.47. A thread on
+`deepseek/deepseek-v4.1-flash` produced two different refusals, both as a
+terminal `response.failed` after HTTP 200 and part of the stream.
+
+1. `incomplete parallel tool-call group: tool call 'call_00_FQ1Z...' has no
+   tool response` at `08:42:57Z` and `08:44:29Z`. The cause was local and is
+   fixed. The thread switched models at `08:08:34Z`, and the client's
+   `<model_switch>` developer message stays in the thread's history, so the
+   portable history pass kept running on every later turn. It replaced the
+   matched tool-search pair with a user note at the search call's position,
+   which sat between a parallel group's calls and their outputs, so the
+   converted chat history carried calls with no results. The note now waits
+   for the tool run to close, and reasoning notes wait with it.
+2. `204 request validation errors: Extra inputs are not permitted` naming
+   `messages[12].tool_calls[0].tool_kind`, `responses_item_id` and
+   `responses_item_status` at `08:11:50Z`. Those three field names appear
+   nowhere in the Codex app bundle, the `codex` binary, `ai_router/`, or any
+   release, so OpenRouter's own Responses-to-chat conversion annotates the tool
+   calls it synthesizes and a strict serving backend refuses the extra keys.
+   The repair belongs upstream with OpenRouter; the router now answers that
+   terminal event with `UPSTREAM_INVALID_PROMPT` and one actionable sentence,
+   and keeps OpenRouter's code in the service log.
+
+No paid probe reproduced either refusal; the DeepSeek serving provider was
+not identified.
+
+The same thread then switched to `meta/muse-spark-1.3-contributor` at
+`08:46:17Z` and Meta refused the same converted body synchronously: six
+identical turns at `08:46:23Z`--`08:46:53Z` returned upstream HTTP 502 with no
+code-shaped field, which the router answered as 409 `PROVIDER_REJECTED` with
+the switch-back recovery sentence (269 prepared items: 59 messages, 68
+`custom_tool_call`, 105 `function_call_output`, 37 `function_call`, 55 tool
+definitions, ~456KB). Contributor itself was healthy: an identical-shape turn
+completed 200 at `08:40:05Z` and standard Muse 1.3 served 200s throughout, so
+the refusal names the carried history, not the model. The tool-run fix above
+removes the poison: replaying the thread's exact history through the fixed
+pass keeps the parallel group contiguous (calls at 184--185, outputs at
+186--187) and defers the search note to position 190, after the run closes.
+
+## Streamed context refusals, 2026-09-13
+
+Candidate 0.6.42, macOS Codex CLI `0.154.0-alpha.6.2`:
+`python3.14 tools/probe_context_budget.py` passed all four offline scenarios.
+Synthetic upstream replies exercise threshold compaction, HTTP context errors,
+HTTP 200 SSE numeric context refusals, and SSE metadata context codes. The two
+new stream scenarios produce `contextWindowExceeded`, then explicit compaction
+and continuation preserve the marker with one compaction and three inference
+requests per scenario. No paid inference or installed-router mutation occurred.
+
+The incident's Linux CLI `0.153.4` was source-inspected at `rust-v0.153.4`
+(`3d2ee51ca2d5db578f328aa75e20aa22c0197c9a`):
+`codex-rs/codex-api/src/sse/responses.rs` recognizes the canonical error code;
+`codex-rs/core/src/session/turn.rs` marks context full and returns an error.
+This is not a Linux runtime replay or proof of automatic same-turn recovery.
+The original provider accounting discrepancy remains unverified.
+
+## Sonnet parent switches and retained subagents, 2026-09-12
+
+Candidate 0.6.37, installed Codex CLI 0.153.4, same pinned source and desktop
+version as the Lite entry below. Sonnet means OpenRouter
+`anthropic/claude-sonnet-5` in Codex; this does not verify Claude Code.
+
+The owner requested parent-model changes midway through the same task with
+subagent tools on both sides. Disposable client homes and an isolated candidate
+router were used; existing user tasks and the installed router were untouched.
+Each sequence kept one DeepSeek V4.1 Flash child alive through all three parent
+turns. The first parent spawned it, the second followed up with that same child,
+and the final Sonnet parent sent a queued message then woke the child again.
+The child and parent both returned all expected synthetic markers.
+
+| Parent sequence | Calls (cap 24 per sequence) | Result |
+|---|---:|---|
+| Sonnet 5 -> DeepSeek V4.1 Flash -> Sonnet 5 | 13 | PASS |
+| Sonnet 5 -> GPT-6 Astra -> Sonnet 5 | 16 | PASS |
+
+All 29 candidate requests returned HTTP 200 and observed serving identities
+matched requested models. The three handoff actions executed as native client
+tools with explicit plaintext metadata. Astra used its actual Lite catalogue
+row. There was no compaction, recreated child or final-step reminder in either
+passing sequence; marker checks were scoped to parent/child and turn IDs.
+
+Earlier expanded runs exposed Sonnet's rejection of a terminal assistant
+prefill and the external handoff metadata gap. Readable peer messages now use
+the existing matched-tool-result projection. An interim response-only steering
+attempt completed Codex turns without executing a tool, confirmed in the pinned
+client source; it was replaced before approval by executable plaintext calls.
+Explicit opaque metadata remains rejected and subscription encryption is intact.
+
+Final offline suite: 1,255 tests passed. Compile, lint, source limits, policy,
+classic/Lite handoff probes and history-switch/400/transient-retry probes passed.
+The isolated router and disposable clients were stopped after acceptance.
+
+## Responses Lite agent handoffs, 2026-09-12
+
+Candidate 0.6.37 on `cyril/cross-provider-history-fix`, base `ed55ced`
+(after the unrelated loopback Host-header fix).
+Clients: ChatGPT.app 26.903.71938 (8576), bundled Codex CLI 0.153.4.
+Pinned source: `rust-v0.153.4`, `3d2ee51ca2d5db578f328aa75e20aa22c0197c9a`.
+
+- The running 0.6.36.53 router contains the earlier alias/steering fixes,
+  but they inspect only top-level `tools`. The actual Astra row enables
+  `use_responses_lite`, which inserts developer `additional_tools` items
+  in `input` instead (`core/src/client.rs:929-977`). With no discovered
+  aliases, the subscription response adapter also skips steering.
+- Both failed DeepSeek review spawns carried an opaque message and omitted
+  `encrypted_function_args`; the native executor requires an explicit
+  empty list to select plaintext delivery (`core/src/tools/router.rs:44-62`).
+  The external guard rejected the unreadable assignment before dispatch.
+- A synthetic loopback capture with the installed binary and actual Astra
+  row found zero top-level tools, one `additional_tools` item containing
+  all six native collaboration functions, and zero aliases before the fix.
+- The candidate discovers the existing namespace in either location,
+  adds aliases in that same container, and derives a stable new `at_` ID
+  for the changed Lite prefix. Original tool schemas, native encryption,
+  client history and downstream opaque-input containment remain intact.
+- Corrected offline installed-client probes passed for both `--wire-mode
+  lite` and `--wire-mode classic`: all three assignment markers delivered,
+  canonical native-name replay true, aliases emitted, encrypted native
+  control preserved, and no probe errors. Neither run called a model.
+- Earlier Plan 066 Astra live evidence used a parent copied from the external
+  template with Lite disabled; it proves classic Responses only. The live
+  probe now requires the installed native row and reports its wire mode.
+- Bounded live candidate lifecycle passed with the actual Astra Lite row
+  and DeepSeek/max child: 20 model calls under a cap of 24, all three
+  plaintext markers received and returned, native encrypted Sol control
+  returned, canonical replay true, router restart/resume true, compaction
+  and two recall turns true, no probe errors. The recorded initial
+  WebSocket 404 fallback was expected; subsequent HTTP delivery completed.
+
+See `plans/2026-09-12-responses-lite-agent-handoffs.md` for the failure chain
+and implementation scope. This source change does not deploy the router.
+
+## Subscription history replay and validation retries, 2026-09-12
+
+Candidate source: 0.6.37, initially based on `develop` at `4b9cdf4`,
+refreshed to `c177f17`, then `ed55ced` before review. Clients:
+ChatGPT.app 26.903.71938 (8576), bundled Codex CLI 0.153.4;
+Claude Code 2.1.223 (version readback only, no Claude acceptance in this
+Codex-only change). Upstream Codex source: `rust-v0.153.4`, commit
+`3d2ee51ca2d5db578f328aa75e20aa22c0197c9a`.
+
+- A task switched from DeepSeek to Astra with 19 plaintext reasoning
+  records and no compaction. OpenAI rejected `input[0].content` with
+  `array_above_max_length`: maximum 0, received 1. A synthetic control
+  without the reasoning item returned 200. Removing only its content
+  caused an unknown-item 404, so the complete foreign item must be omitted.
+  The working Beacon task had compacted immediately before its switch,
+  leaving no foreign reasoning records to replay.
+- The outgoing subscription projection omits plaintext-only reasoning,
+  preserves native encrypted reasoning without plaintext content, and
+  leaves client history, messages, and tool pairs intact. It applies to
+  Responses turns and compaction; existing external portability policy
+  is unchanged.
+- The pinned client's `api_bridge.rs` maps HTTP 400 to non-retryable
+  `InvalidRequest`; `protocol/src/error.rs` maps that to protocol `other`.
+  HTTP 409 instead becomes retryable `UnexpectedStatus`. Validation
+  refusals now retain 400, including cached refusals. Existing context
+  error handling is preserved.
+- `python3.14 tools/probe_history_switch.py` passed with the installed
+  client and fake upstream: DeepSeek -> Astra -> DeepSeek, no compaction,
+  preserved marker; permanent rejection exactly one attempt; transient
+  rejection then success exactly two attempts. The fake upstream sees no
+  foreign reasoning on the Astra leg, while the adapter's incoming history
+  still contains it.
+- `python3.14 tools/probe_context_budget.py` passed both threshold
+  compaction and explicit context-error recovery, preserving the marker.
+  Its fake connection gained the no-op `connect()` required by the current
+  transport contract.
+- Owner-authorized live candidate acceptance passed using
+  `tools/probe_codex_runtime.py` with DeepSeek at max, `--switch --switch-to
+  gpt-6-astra --switch-back`: a real reasoning item and dynamic-tool round
+  trip preceded the switches, and both retained the tool result. A separate
+  Astra dynamic-tool round trip passed. All candidate requests reported
+  HTTP 200; DeepSeek served identity matched. The candidate used a separate
+  loopback port and disposable client home and was stopped afterward.
+
+No deployed router or existing task was changed. The source-size baseline
+keeps the existing adapter/failure-policy owners (296/281 lines), both below
+the 400-line hard cap; history normalization lives in its own small leaf.
+
+## Subagent model list is capped by the client, 2026-09-12
+
+Clients: bundled app-server codex-cli `0.153.4` (upstream tag
+`rust-v0.153.4`); the same cap is present at `rust-v0.155.0-alpha.3.10`.
+Router source base `48d5bae` (0.6.35), plan 151 on
+`codex/subagent-model-visibility-20260912`, target `develop`; the
+instruction fix ships in the `0.6.36` beta.
+
+- `spawn_agent`'s "Available model overrides" text is built from the first
+  five picker-visible models that support the active multi-agent backend,
+  in catalogue order (`MAX_SPAWN_AGENT_MODEL_OVERRIDES = 5`,
+  `codex-rs/core/src/tools/handlers/multi_agents_common.rs:33` and
+  `multi_agents_spec.rs:763-772` in `rust-v0.153.4`).
+- The router catalogue lists the subscription roster first, so those five
+  rows are all OpenAI models and every router model is invisible in that
+  list. The picker is unaffected: the same client's `model/list` returns
+  all 26 visible rows of the 27-row catalogue.
+- Validation is not capped: `find_spawn_agent_model_name` searches the full
+  model list, so an explicitly passed router id reaches routing; a portco
+  policy can still reject it and the 0.6.36 instructions require reporting
+  that rejection. The 0.6.36 instructions tell routed sessions the roster
+  and that rule; the starter profiles carry it for subscription-model
+  sessions. The upstream cap is unchanged, so a future client can still
+  hide the list; plan 151 stage 5 tracks the upstream report.
+- Observed failure 2026-09-12 (task 01a09477): asked for Muse Contributor
+  subagents, the agent spawned `gpt-6-astra` twice, `gpt-5.6-sol`,
+  `gpt-5.6-terra` and `gpt-5.6-luna`; five of that day's 156
+  `upstream_rate_limited` events (all `provider: openai`) are those
+  children.
+
 ## Standalone delegation delivery, 2026-09-11
 
 Clients: ChatGPT.app `26.903.71938`, Codex Framework `152.0.7977.83`,
@@ -72,9 +284,8 @@ acceptance.
 
 Researched before wiring the update notice's "Quit and reopen" action, so
 the restart targets the installed client rather than a guessed process
-name. Sources are the official documentation and the open-source clients
-listed in `AGENTS.md` section 9; re-check them before relying on the
-identities below.
+name. Sources are the evidence named in the table below; re-check them
+before relying on the identities.
 
 | platform | client identity | evidence |
 |---|---|---|
@@ -271,6 +482,55 @@ the user or system location. Router `GET /v1/models` = 20 rows.
   readback through `install.py --desktop`. Both wait on release plus
   deploy of this source to the live router and an app relaunch, then
   this entry gets the observed picker count.
+
+## Context recovery and desktop upgrade, 2026-09-13
+
+Desktop `26.908.40834` (build 8881), bundled Codex
+`0.154.0-alpha.6.2`; matched source tag `rust-v0.154.0-alpha.6.2`,
+annotated tag object `a1bc283c327568149d7a29d5fbd304cc471a981a`, commit
+`b5bffd3ec4db487e7e3dec59663875b0ef7b72ca`. Claude Code `2.1.223`.
+
+- `tools/probe_context_recovery.py` passed scripted native and external legs
+  against the new installed binary. The real `new_context` tool removed the
+  synthetic assignment; the next request carried the recovery note, and the
+  exact previous-window history was retrieved before completing the same turn.
+- Live recovery passed for `gpt-5.6-luna` on the subscription route and
+  `deepseek/deepseek-v4.1-flash` on OpenRouter: one history retrieval and two
+  live calls each, capped at four. Those legs used the candidate router and
+  a local synthetic history tool, not another user's task history.
+- `tools/probe_context_budget.py` passed both threshold compaction and
+  explicit recovery after a context error, with the marker preserved.
+- `tools/probe_codex_runtime.py` passed a real dynamic-tool round trip on
+  both models through the installed `0.6.38.55` router after the client upgrade.
+- Real Claude Code sessions through the installed router returned the exact
+  synthetic marker on the subscription and OpenRouter paths. Requested
+  native alias `haiku` was reported by the CLI as `claude-opus-4-6`;
+  external usage reported `deepseek/deepseek-v4.1-flash`. No exact Haiku
+  identity claim is made. Tools, hooks and persistence were disabled for
+  these bounded routing checks; neither checks Claude desktop or MCP tools.
+
+See [the root cause, plan and acceptance limits](context-recovery.md).
+Recovery remains model-executed; the router does not change Codex's persisted
+history or claim it can reconstruct history that is no longer accessible.
+
+## Compaction stream recovery, 2026-09-13
+
+Candidate source `0.6.43` passed the offline `tools/probe_context_budget.py`
+against bundled Codex `0.154.0-alpha.6.2` and a fake loopback upstream: V1 and
+V2 threshold and explicit context-error recovery, plus V2 truncated-summary
+recovery. Each leg observed one compaction on the expected route with the
+expected stream/trigger flags and preserved the marker; truncation used two
+bounded summary attempts. This is source and offline evidence, not an
+installed candidate compaction result.
+
+The unchanged compatibility baseline remained on installed beta `0.6.40.56`:
+Codex DeepSeek Flash and `gpt-5.6-luna`, plus Claude Code GLM 5.3 Flash and
+Haiku legs, all passed their bounded routing round trips. Those legs do not
+exercise candidate compaction.
+
+After reconciling PR #107 (`c068368e...`), all nine combined probe legs passed:
+both V1/V2 also recognize streamed numeric and metadata context refusals,
+compact explicitly and resume. V2 truncation still uses two summary attempts.
 
 ## Pinned Claude rows, 2026-09-11
 

@@ -34,8 +34,17 @@ def _load_backend():
     return mod
 
 
+def _load_service():
+    spec = importlib.util.spec_from_file_location(
+        'router_service_for_windows_acl', ROOT / 'packaging' / 'service.py')
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
 winacl = _load_winacl()
 backend = _load_backend()
+service = _load_service()
 
 
 def _ok(cmd_responses):
@@ -61,6 +70,39 @@ WIDENED = ('C:\\keys\\openrouter.key\n'
 
 
 class WinAclCheckTests(unittest.TestCase):
+    def setUp(self):
+        winacl.reset()  # verdicts are cached per file across calls
+
+    def _counting(self, responses):
+        calls = []
+        inner = _ok(responses)
+
+        def run(cmd, **kwargs):
+            calls.append(list(cmd))
+            return inner(cmd, **kwargs)
+        return run, calls
+
+    def test_the_verdict_is_cached_for_a_short_interval(self):
+        run, calls = self._counting(
+            [(['icacls'], SimpleNamespace(returncode=0, stdout=OWNER_ONLY, stderr='')),
+             (['whoami'], _ok_acl())])
+        winacl.check('C:\\keys\\openrouter.key', run=run, _now=100.0)
+        winacl.check('C:\\keys\\openrouter.key', run=run, _now=100.0 + 5)
+        self.assertEqual(len(calls), 2, 'one icacls plus one whoami, then cached')
+        winacl.check('C:\\keys\\openrouter.key', run=run,
+                     _now=100.0 + winacl.VERDICT_TTL_S + 1)
+        self.assertEqual(len(calls), 4, 'the cache expires and re-checks')
+
+    def test_a_cached_refusal_is_raised_without_respawning(self):
+        run, calls = self._counting(
+            [(['icacls'], SimpleNamespace(returncode=0, stdout=WIDENED, stderr='')),
+             (['whoami'], _ok_acl())])
+        with self.assertRaisesRegex(SystemExit, 'readable by'):
+            winacl.check('C:\\keys\\openrouter.key', run=run, _now=200.0)
+        with self.assertRaisesRegex(SystemExit, 'readable by'):
+            winacl.check('C:\\keys\\openrouter.key', run=run, _now=200.0 + 1)
+        self.assertEqual(len(calls), 2, 'the refusal is cached too')
+
     def test_owner_only_acl_passes(self):
         run = _ok([(['icacls'], SimpleNamespace(returncode=0, stdout=OWNER_ONLY, stderr='')),
                    (['whoami'], _ok_acl())])
@@ -201,7 +243,7 @@ class WinBackendShapeTests(unittest.TestCase):
             return SimpleNamespace(returncode=0, stdout='', stderr='')
 
         with self.assertRaisesRegex(SystemExit, 'CodexMixedModelRouterUpdate'):
-            backend.Backend(None, fake_run).uninstall('/home/x')
+            backend.Backend(service, fake_run).uninstall('/home/x')
 
     def test_failed_state_protection_keeps_a_pre_existing_token(self):
         # Gap 0 (PR 55 review): a failed state-file ACL check unlinks only
@@ -229,7 +271,7 @@ class WinBackendShapeTests(unittest.TestCase):
             live.write_text('{"port": 1, "token": "live"}')
             args = install_mod.build_parser().parse_args(
                 ['--feed', 'file:///latest.json', '--home', str(home)])
-            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'k'}
+            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'k', 'ROUTER_NO_KEY_WINDOW': '1'}
             with mock.patch.dict(os.environ, env), mock.patch.object(
                     install_mod, 'platform_backend', return_value=FailingBackend()):
                 with self.assertRaisesRegex(SystemExit, 'cannot protect state'):
@@ -312,7 +354,7 @@ class WinBackendShapeTests(unittest.TestCase):
                 ['--home', str(home), '--client', 'none'])
             with mock.patch.object(install_mod, 'platform_backend', return_value=StubBackend()), \
                     mock.patch.object(install_mod, 'find_python', return_value=sys.executable), \
-                    mock.patch.dict(os.environ, {'OPENROUTER_API_KEY': 'env-key-for-test'}):
+                    mock.patch.dict(os.environ, {'OPENROUTER_API_KEY': 'env-key-for-test', 'ROUTER_NO_KEY_WINDOW': '1'}):
                 self.assertEqual(install_mod.do_install(args, _fetch=fetch), 0)
         self.assertEqual(events, [('protect', 'home', False),
                                   ('protect', 'mixed-router-state.json', None),

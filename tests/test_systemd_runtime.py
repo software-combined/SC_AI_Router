@@ -27,6 +27,7 @@ class SystemdRuntimeTests(unittest.TestCase):
                    # The restart notice is a GUI side effect; this suite must
                    # never pop dialogs (the child installer inherits this).
                    'ROUTER_NO_NOTICE': '1',
+                   'ROUTER_NO_KEY_WINDOW': '1',
                    # Deliberate live run: HOME is faked hermetic and only
                    # systemctl is stubbed, so main() may use this home.
                    'ROUTER_LIVE_RUN': '1'}
@@ -61,7 +62,7 @@ class SystemdRuntimeTests(unittest.TestCase):
                     build(3)
                     args = installer.build_parser().parse_args(argv)
                     with mock.patch.dict(os.environ, {'ROUTER_UPDATE_SERVICE': '1'}):
-                        installer.do_check_update(args, _sleep=lambda s: None)
+                        installer.do_update(args, _sleep=lambda s: None)
                     third = installer.current_version(self.home)
                     self.assertNotEqual(second, third)
                     self.assertEqual(installer.health(state)['version'], third)

@@ -127,6 +127,7 @@ def reload_job(run, uid, label, agents=None, unload_timeout=180,
 
 LABEL = 'com.local.codex-mixed-model-router'
 UPDATE_LABEL = LABEL + '.update'
+EXPRESS_LABEL = UPDATE_LABEL + '.express'
 
 
 def _agent_dir(agents=None):
@@ -162,18 +163,18 @@ def render_plist(python, home, state):
             'StandardErrorPath': str(home / 'logs' / 'launchd.log')}
 
 
-def render_update_plist(python, home):
+def render_update_plist(python, home, express=False):
     python = _require_absolute(python)
     # The stable home launcher, never a per-release install.py path. launchd
     # keeps running its in-memory copy of a loaded plist, so a versioned path
     # outlives the release it names: after a prune the updater keeps firing a
     # deleted or obsolete installer every 4 hours. update_launch.py
     # resolves `current` at exec time instead, exactly like router_launch.py.
-    args = [python, str(home / 'update_launch.py')]
-    return {'Label': UPDATE_LABEL,
+    args = [python, str(home / ('express_launch.py' if express else 'update_launch.py'))]
+    return {'Label': EXPRESS_LABEL if express else UPDATE_LABEL,
             'ProgramArguments': args,
             'RunAtLoad': True,
-            'StartInterval': 14400,
+            'StartInterval': 60 if express else 14400,
             'StandardOutPath': str(home / 'logs' / 'update.log'),
             'StandardErrorPath': str(home / 'logs' / 'update.log')}
 
@@ -265,7 +266,7 @@ def main_plist_needs_reload(run, uid, python, home, state, agents=None):
 
 
 def ensure_updater(run, uid, python, home, agents=None, *, sleep,
-                   unload_timeout, load_timeout):
+                   unload_timeout, load_timeout, express=False):
     """Keep the scheduled updater loaded and running the current command.
 
     Writing the file is not enough: launchd adopts a rewritten plist only on
@@ -280,19 +281,20 @@ def ensure_updater(run, uid, python, home, agents=None, *, sleep,
     release-independent launcher, so one adoption is final.
     """
     agents = _agent_dir(agents)
-    rendered = render_update_plist(python, home)['ProgramArguments']
-    loaded = loaded_command(run, uid, UPDATE_LABEL)
+    label = EXPRESS_LABEL if express else UPDATE_LABEL
+    rendered = render_update_plist(python, home, express)['ProgramArguments']
+    loaded = loaded_command(run, uid, label)
     if loaded is None:
-        return load(run, uid, UPDATE_LABEL, agents=agents,
+        return load(run, uid, label, agents=agents,
                              timeout=load_timeout, sleep=sleep)
     if command_matches(loaded, rendered):
         return True
-    if running_under(UPDATE_LABEL):
+    if running_under(label):
         print('scheduled updater command changed; adopting it needs a reload '
               'from outside its own job, so the next manual install or login '
               'will pick it up')
         return True
-    return reload_job(run, uid, UPDATE_LABEL, agents=agents,
+    return reload_job(run, uid, label, agents=agents,
                                unload_timeout=unload_timeout,
                                load_timeout=load_timeout, sleep=sleep)
 

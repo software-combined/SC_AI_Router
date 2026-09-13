@@ -7,8 +7,8 @@ import unittest
 from pathlib import Path
 
 from ai_router import models as models_mod
-from ai_router.models import (cmd_add, cmd_check, cmd_list, cmd_remove, derive_row,
-                                 qualify_name)
+from ai_router.models import (cmd_add, cmd_check, cmd_discover, cmd_list, cmd_remove,
+                                 derive_row, qualify_name)
 
 LIVE = {
     'qwen/qwen4-coder': {
@@ -39,10 +39,10 @@ def _seeded(tmp, rows):
 def _row(slug='a/b', priority=100):
     return {'slug': slug, 'provider': 'openrouter', 'display_name': 'A',
             'vendor': 'V', 'reasoning': ['low'], 'default_reasoning': 'low',
-            'modalities': ['text'], 'excluded_efforts': [], 'schema_mode': 'native',
+            'modalities': ['text'], 'excluded_efforts': [], 'schema_mode': 'native', 'history_mode': 'native',
             'max_tools': None, 'drop_images': False, 'context_window': 1, 'priority': priority,
             'max_output_tokens': 7, 'reasoning_summary': 'none', 'apply_patch': 'none',
-            'experimental_tools': [], 'web_search': True, 'tier': 'verified'}
+            'experimental_tools': [], 'web_search': True, 'tier': 'verified', 'listed': True}
 
 
 class DeriveTests(unittest.TestCase):
@@ -177,6 +177,75 @@ class AddTests(unittest.TestCase):
             self.assertEqual(path.read_text(), before)
             self.assertEqual(row['tier'], 'preview')
 
+    def test_add_writes_unlisted_preview(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = _seeded(tmp, [_row()])
+            row = cmd_add(path, 'qwen/qwen4-coder', LIVE)
+            self.assertEqual(row['tier'], 'preview')
+            self.assertFalse(row['listed'])
+            stored = next(r for r in json.loads(path.read_text())
+                          if r['slug'] == 'qwen/qwen4-coder')
+            self.assertFalse(stored['listed'])
+
+    def test_passed_probe_promotes_to_listed_verified(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            models_mod.COMPAT_PATH, saved = Path(tmp) / 'compatibility.md', models_mod.COMPAT_PATH
+            self.addCleanup(setattr, models_mod, 'COMPAT_PATH', saved)
+            path = _seeded(tmp, [_row()])
+            row = cmd_add(path, 'qwen/qwen4-coder', LIVE,
+                          probe=True, _probe=lambda slug: True)
+            self.assertEqual(row['tier'], 'verified')
+            self.assertTrue(row['listed'])
+            stored = next(r for r in json.loads(path.read_text())
+                          if r['slug'] == 'qwen/qwen4-coder')
+            self.assertEqual(stored['tier'], 'verified')
+            self.assertTrue(stored['listed'])
+            compat = models_mod.COMPAT_PATH.read_text()
+            self.assertIn('qwen/qwen4-coder', compat)
+            self.assertIn('tool', compat)
+
+    def test_failed_probe_changes_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            models_mod.COMPAT_PATH, saved = Path(tmp) / 'compatibility.md', models_mod.COMPAT_PATH
+            self.addCleanup(setattr, models_mod, 'COMPAT_PATH', saved)
+            path = _seeded(tmp, [_row()])
+            before = path.read_text()
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                row = cmd_add(path, 'qwen/qwen4-coder', LIVE,
+                              probe=True, _probe=lambda slug: False)
+            self.assertEqual((row['tier'], row['listed']), ('preview', False))
+            stored = next(r for r in json.loads(path.read_text())
+                          if r['slug'] == 'qwen/qwen4-coder')
+            self.assertEqual((stored['tier'], stored['listed']), ('preview', False))
+            self.assertIn('stays unlisted', buf.getvalue())
+
+    def test_refused_probe_changes_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            models_mod.COMPAT_PATH, saved = Path(tmp) / 'compatibility.md', models_mod.COMPAT_PATH
+            self.addCleanup(setattr, models_mod, 'COMPAT_PATH', saved)
+            path = _seeded(tmp, [_row()])
+
+            def refused(slug):
+                raise SystemExit('no credential')
+
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                row = cmd_add(path, 'qwen/qwen4-coder', LIVE,
+                              probe=True, _probe=refused)
+            self.assertEqual((row['tier'], row['listed']), ('preview', False))
+            self.assertIn('refused', buf.getvalue())
+
+    def test_verified_tier_without_probe_stays_unlisted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = _seeded(tmp, [_row()])
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                row = cmd_add(path, 'qwen/qwen4-coder', LIVE, tier='verified')
+            self.assertEqual(row['tier'], 'verified')
+            self.assertFalse(row['listed'])
+            self.assertIn('stays unlisted', buf.getvalue())
+
     def test_probe_sets_tier(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = _seeded(tmp, [_row()])
@@ -192,6 +261,40 @@ class AddTests(unittest.TestCase):
                 self.assertIn('qwen/qwen4-coder', models_mod.COMPAT_PATH.read_text())
             finally:
                 models_mod.COMPAT_PATH = saved
+
+
+class DiscoverTests(unittest.TestCase):
+    def test_discover_is_read_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = _seeded(tmp, [_row('a/b', 100)])
+            before = path.read_text()
+            live = {'a/b': {}, 'n/e-w': {}}
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                doc = cmd_discover(path, live)
+            self.assertEqual(path.read_text(), before)
+            self.assertEqual(doc['addable'], ['n/e-w'])
+            self.assertEqual(doc['registered'], ['a/b'])
+            self.assertEqual(doc['unavailable'], [])
+            self.assertEqual(doc['retired'], [])
+            self.assertIn('addable', buf.getvalue())
+
+    def test_discover_reports_unavailable_and_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = _seeded(tmp, [_row('a/b', 100)])
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                doc = cmd_discover(path, {}, as_json=True)
+            self.assertEqual(doc['unavailable'], ['a/b'])
+            self.assertEqual(doc['registered'], [])
+            parsed = json.loads(buf.getvalue())
+            self.assertEqual(parsed, doc)
+
+    def test_discover_refuses_manual_provider(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = _seeded(tmp, [_row('a/b', 100)])
+            with self.assertRaises(SystemExit):
+                cmd_discover(path, {}, provider_id='openai')
 
 
 class RemoveTests(unittest.TestCase):

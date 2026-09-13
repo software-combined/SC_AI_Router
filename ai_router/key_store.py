@@ -6,12 +6,17 @@ shared writer, and prove a stored key is dead before replacing it. The
 nonce, window and state machine stay in `setup.py`.
 """
 import json
-import os
+import threading
 import urllib.error
 import urllib.request
 from pathlib import Path
 
 from . import provider_defs
+from .atomic_write import replace_text
+
+# Two setup windows can submit at once (ThreadingHTTPServer); the lock keeps
+# the check-then-replace claim from silently losing an update to its twin.
+_LOCK = threading.Lock()
 
 
 class KeyRejected(ValueError):
@@ -58,32 +63,25 @@ class KeyExists(OSError):
     """The key file holds a live key; rotation needs explicit deletion."""
 
 
-def _claim_truncated(key_path):
-    """Open an existing key file for overwrite, keeping owner-only mode."""
-    fd = os.open(key_path, os.O_WRONLY | os.O_TRUNC, 0o600)
-    try:
-        os.fchmod(fd, 0o600)
-    except OSError:
-        pass
-    return fd
-
-
 def store_key(home, key, provider_id=provider_defs.DEFAULT_EXTERNAL, _check_live=None):
-    """Write one provider's key through the one shared writer."""
+    """Write one provider's key through the one shared writer.
+
+    Replaces a missing or empty file and a key proven dead by `_check_live`;
+    a live stored key raises KeyExists. The write is atomic, so a crash
+    never leaves a half-written secret behind.
+    """
     key_path = Path(home) / provider_defs.get(provider_id).key.file
-    try:
-        return os.open(key_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    except FileExistsError:
-        pass
-    try:
-        stored = key_path.read_bytes().strip()
-    except OSError:
-        raise OSError('could not store the key')
-    if not stored:
-        return _claim_truncated(key_path)
-    if _check_live is not None and _check_live(stored.decode('utf-8', 'replace')) is False:
-        return _claim_truncated(key_path)
-    raise KeyExists('a key file already exists; delete it to rotate keys')
+    with _LOCK:
+        if key_path.exists():
+            try:
+                stored = key_path.read_bytes().strip()
+            except OSError:
+                raise OSError('could not store the key')
+            if stored and not (_check_live is not None
+                               and _check_live(stored.decode('utf-8', 'replace')) is False):
+                raise KeyExists('a key file already exists; delete it to rotate keys')
+        replace_text(key_path, key + '\n')
+    return key_path
 
 
 def _stored_key_live(provider_id, stored, _fetch):
@@ -100,5 +98,3 @@ def _stored_key_live(provider_id, stored, _fetch):
     except (ValueError, OSError):
         return True
     return True
-
-

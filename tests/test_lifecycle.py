@@ -16,7 +16,7 @@ from unittest import mock
 
 from ai_router import activation
 import ai_router.__main__ as router_main
-from ai_router.router import Router
+from ai_router.router import Router, _harden_listener
 from tests.harness import get as _get, post as _post, start_auth_server as _start_auth_server
 
 
@@ -80,7 +80,7 @@ class LauncherBootTests(unittest.TestCase):
             probe.bind(('127.0.0.1', 0))
             port = probe.getsockname()[1]
             probe.close()
-            token = 'launch-proof-token'
+            token = 'launch-proof-token'.ljust(32, 'x')
             (home / 'mixed-router-state.json').write_text(json.dumps({
                 'port': port, 'token': token, 'openai_models': [],
                 'setup': {'nonce': 'n' * 16,
@@ -319,9 +319,35 @@ class SingleListenerTests(unittest.TestCase):
     def test_second_bind_to_same_port_raises(self):
         # Plan 090 Step 3: no SO_REUSEPORT, so a second router on the same
         # loopback port fails instead of silently sharing connections.
+        # Windows gets the same guarantee from SO_EXCLUSIVEADDRUSE, set in
+        # Router.server_bind (its default SO_REUSEADDR would allow sharing).
         server = _server(self)
         with self.assertRaises(OSError):
             Router({'port': server.server_port, 'token': 't', 'openai_models': []})
+
+    def test_a_reuse_address_binder_cannot_take_the_port(self):
+        # The hijack shape the Windows fix exists for: a second local
+        # process sets SO_REUSEADDR and tries to co-bind. Without
+        # SO_EXCLUSIVEADDRUSE it succeeds on Windows, so this fails there
+        # unless the exclusive flag really reached the listening socket.
+        server = _server(self)
+        probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.addCleanup(probe.close)
+        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        with self.assertRaises(OSError):
+            probe.bind(('127.0.0.1', server.server_port))
+
+    def test_windows_listener_sets_exclusive_bind(self):
+        # The Windows branch cannot run on this host; pin its shape: the
+        # exclusive flag before bind, and SO_REUSEADDR off (both required).
+        fake = mock.Mock()
+        with mock.patch.object(socket, 'SO_EXCLUSIVEADDRUSE', 0x4, create=True):
+            _harden_listener(fake, platform='nt')
+        fake.setsockopt.assert_called_once_with(socket.SOL_SOCKET, 0x4, 1)
+        self.assertEqual(Router.allow_reuse_address, os.name != 'nt')
+        if os.name == 'nt':
+            # The helper no-ops without the flag; Windows must expose it.
+            self.assertIsNotNone(getattr(socket, 'SO_EXCLUSIVEADDRUSE', None))
 
 
 class SocketActivationTests(unittest.TestCase):

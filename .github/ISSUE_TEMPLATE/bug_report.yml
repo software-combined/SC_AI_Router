@@ -1,0 +1,29 @@
+name: Bug report
+description: Something the router, installer or updater did wrong.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Never paste keys, the health URL, `mixed-router-state.json` or log lines that carry a token.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: status
+    attributes:
+      label: Router status
+      description: Output of `python3.14 packaging/install.py --status` (it prints no secrets), plus your OS and client versions.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log lines
+      description: From `logs/` in the router home, with any token removed.
+      render: text

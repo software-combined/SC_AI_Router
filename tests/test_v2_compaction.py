@@ -2,7 +2,9 @@
 
 Proven against lidge-jun/opencodex f7f890f (MIT): a trigger turn is a normal
 /responses call ending in {"type":"compaction_trigger"} and the client fatals
-unless exactly one {"type":"compaction","encrypted_content":...} item returns.
+unless exactly one {"type":"compaction","encrypted_content":...} item and
+terminal response.completed event return. V1 /responses/compact and nonstream
+V2 remain JSON.
 Routed models cannot mint OpenAI blobs, so the router briefs locally and the
 summary rides the envelope replay already decodes. No network in these tests:
 the summarizer and the upstream are both stubbed.
@@ -10,7 +12,9 @@ the summarizer and the upstream are both stubbed.
 import json
 import unittest
 from unittest import mock
+from types import SimpleNamespace
 from ai_router.compaction import decode_summary, encode_summary
+from ai_router import ingress
 from ai_router import provider_defs
 from ai_router.providers import (
     ExternalResponsesProvider, PreparationError, SubscriptionProvider,
@@ -111,6 +115,53 @@ class CompactTriggerHandlerTests(unittest.TestCase):
         self.assertEqual(item['type'], 'compaction')
         self.assertEqual(decode_summary(item['encrypted_content']), 'handoff done')
         self.assertEqual(recorded, [])
+
+    def test_streamed_trigger_returns_completed_sse_events(self):
+        recorded = install_fake(self, lambda: FakeUpstream(200, b'{"output": []}', []))
+        server = self._server()
+        with mock.patch.object(ExternalResponsesProvider, 'summarize',
+                               return_value='handoff done'):
+            response = _post(server.server_port, '/test-token/responses', {
+                'model': 'z-ai/glm-5.3-flash',
+                'stream': True,
+                'input': [{'type': 'message', 'role': 'user', 'content': 'do it'},
+                          {'type': 'compaction_trigger'}]})
+        self.assertEqual(response.status, 200)
+        self.assertEqual(response.getheader('Content-Type'), 'text/event-stream')
+        self.assertEqual(response.getheader('Connection'), 'close')
+        frames = [part for part in response.read().split(b'\n\n') if part]
+        events = [json.loads(frame.split(b'data: ', 1)[1]) for frame in frames]
+        self.assertEqual([event['type'] for event in events], [
+            'response.output_item.done', 'response.completed'])
+        item = events[0]['item']
+        self.assertEqual(item['type'], 'compaction')
+        self.assertEqual(decode_summary(item['encrypted_content']), 'handoff done')
+        completed = events[1]['response']
+        self.assertTrue(completed['id'])
+        self.assertEqual(completed['output'], [item])
+        self.assertEqual(recorded, [])
+
+    def test_stream_write_failure_is_contained_after_one_reply(self):
+        writes = []
+
+        class BrokenWriter:
+            def write(self, body):
+                writes.append(body)
+                raise OSError('client disconnected')
+
+        handler = SimpleNamespace(
+            wfile=BrokenWriter(), close_connection=False,
+            send_response=mock.Mock(), send_header=mock.Mock(),
+            end_headers=mock.Mock())
+        item = {'type': 'compaction', 'id': 'cmp_test',
+                'encrypted_content': encode_summary('handoff done')}
+
+        ingress.send_compaction_stream(handler, [item])
+
+        self.assertEqual(len(writes), 1)
+        handler.send_response.assert_called_once_with(200)
+        handler.end_headers.assert_called_once_with()
+        self.assertTrue(handler.close_connection)
 
     def test_subscription_trigger_forwards_untouched(self):
         recorded = install_fake(

@@ -13,7 +13,7 @@ from pathlib import Path
 import importlib.util as _ilu
 _spec = _ilu.spec_from_file_location(
     'router_feed_verify',
-    Path(__file__).resolve().parents[1] / 'ai_router' / 'feed_verify.py')
+    Path(__file__).resolve().parent / 'feed_verify.py')
 _feed_verify = _ilu.module_from_spec(_spec)
 _spec.loader.exec_module(_feed_verify)
 

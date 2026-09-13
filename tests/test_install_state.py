@@ -36,7 +36,7 @@ class InstallStateTests(unittest.TestCase):
     def test_existing_state_missing_roster_is_backfilled(self):
         home = self._home()
         (home / 'mixed-router-state.json').write_text(
-            json.dumps({'port': 1, 'token': 't'}) + '\n')
+            json.dumps({'port': 1, 'token': 't' * 32}) + '\n')
         state = install_mod.ensure_state(home)
         self.assertEqual(state['openai_models'], install_mod.DEFAULT_OPENAI_MODELS)
         self.assertEqual(self._load(home / 'mixed-router-state.json')['openai_models'],
@@ -44,7 +44,7 @@ class InstallStateTests(unittest.TestCase):
 
     def test_existing_valid_state_is_untouched(self):
         home = self._home()
-        before = json.dumps({'port': 1, 'token': 't', 'openai_models': ['x']}) + '\n'
+        before = json.dumps({'port': 1, 'token': 't' * 32, 'openai_models': ['x']}) + '\n'
         (home / 'mixed-router-state.json').write_text(before)
         state = install_mod.ensure_state(home)
         self.assertEqual(state['openai_models'], ['x'])
@@ -72,10 +72,10 @@ class InstallStateTests(unittest.TestCase):
             (tmp / 'packaging').mkdir()
             (tmp / 'ai_router').mkdir()
             for name in ('service.py', 'launchd.py', 'feed.py',
-                         'atomic_write.py', 'notice.py'):
+                         'feed_verify.py', 'atomic_write.py', 'notice.py'):
                 shutil.copy(root / 'packaging' / name, tmp / 'packaging' / name)
             for name in ('subscription_roster.py', 'retired_slugs.py',
-                         'feed_verify.py'):
+                         'atomic_write.py', 'state.py'):
                 shutil.copy(root / 'ai_router' / name, tmp / 'ai_router' / name)
             spec = importlib.util.spec_from_file_location(
                 'relocated_service', tmp / 'packaging' / 'service.py')
@@ -96,7 +96,7 @@ class InstallStateTests(unittest.TestCase):
         # Plan 100 review fix: the prune must not hash non-string elements.
         home = self._home()
         (home / 'mixed-router-state.json').write_text(
-            json.dumps({'port': 1, 'token': 't',
+            json.dumps({'port': 1, 'token': 't' * 32,
                         'openai_models': ['gpt-reserve', {'x': 1}, 'gpt-6-astra']}) + '\n')
         state = install_mod.ensure_state(home)
         self.assertEqual(state['openai_models'], [{'x': 1}, 'gpt-6-astra'])
@@ -106,7 +106,7 @@ class InstallStateTests(unittest.TestCase):
         # literal in ensure_state cannot pass this.
         home = self._home()
         (home / 'mixed-router-state.json').write_text(
-            json.dumps({'port': 1, 'token': 't',
+            json.dumps({'port': 1, 'token': 't' * 32,
                         'openai_models': ['gpt-synthetic-retired', 'gpt-6-astra']}) + '\n')
         with mock.patch.object(install_mod._svc, 'RETIRED_SUBSCRIPTION_SLUGS',
                                frozenset({'gpt-synthetic-retired'})):
@@ -116,7 +116,7 @@ class InstallStateTests(unittest.TestCase):
     def test_existing_state_with_retired_slug_is_pruned(self):
         home = self._home()
         (home / 'mixed-router-state.json').write_text(
-            json.dumps({'port': 1, 'token': 't',
+            json.dumps({'port': 1, 'token': 't' * 32,
                         'openai_models': ['gpt-6-astra', 'gpt-reserve',
                                           'gpt-5.6-luna']}) + '\n')
         state = install_mod.ensure_state(home)

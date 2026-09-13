@@ -22,6 +22,29 @@ def default_home():
     return Path(os.environ.get('ROUTER_HOME', Path.home() / '.codex' / 'mixed-model-router'))
 
 
+def opencode_auth_path(env=None):
+    """The one credential file the OpenCode client writes.
+
+    Resolved from HOME exactly as the service sees it: the launchd/systemd
+    environment carries no XDG_DATA_HOME, so both the router and the
+    installer must agree on the client's default data directory. The router
+    reads that path only, so a hand-edited state file cannot aim it at
+    another file and read that as a credential.
+    """
+    env = os.environ if env is None else env
+    return (Path(env.get('HOME') or Path.home())
+            / '.local' / 'share' / 'opencode' / 'auth.json')
+
+
+def _expand(path_text, env):
+    """Expand a leading `~` against the given environment, not the process."""
+    if path_text == '~':
+        return Path(env.get('HOME') or Path.home())
+    if path_text.startswith('~/'):
+        return Path(env.get('HOME') or Path.home()) / path_text[2:]
+    return Path(path_text)
+
+
 class Credentials:
     def __init__(self, state, home=None, env=None):
         self.state = state
@@ -58,8 +81,11 @@ class Credentials:
             raise LookupError(f'{key_file} is empty')
         opencode = self.state.get('opencode_auth') if spec.state_key else None
         if opencode:
+            expected = opencode_auth_path(self.env)
+            if _expand(opencode, self.env) != expected:
+                raise LookupError(f'opencode_auth must name {expected}')
             try:
-                auth = json.loads(Path(opencode).read_text())[spec.state_key]
+                auth = json.loads(expected.read_text())[spec.state_key]
                 if auth.get('type') != 'api':
                     raise ValueError('OpenCode credential is not an API key')
                 return auth['key']

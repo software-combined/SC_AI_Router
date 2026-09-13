@@ -20,7 +20,7 @@ ACME_FILE = 'acme.key'
 ACME_ROW = {
     'slug': 'acme/one', 'provider': 'acme', 'display_name': 'Acme: One \u00b7 Acme',
     'vendor': 'Acme', 'reasoning': ['low'], 'default_reasoning': 'low',
-    'modalities': ['text'], 'excluded_efforts': [], 'schema_mode': 'native',
+    'modalities': ['text'], 'excluded_efforts': [], 'schema_mode': 'native', 'history_mode': 'native',
     'max_tools': None, 'drop_images': False, 'context_window': 8000,
     'priority': 200, 'max_output_tokens': 1000, 'reasoning_summary': 'none',
     'apply_patch': 'none', 'experimental_tools': [], 'web_search': True,

@@ -10,25 +10,59 @@ stays the router: new ingress validation goes here.
 the injected object, never a fresh import.
 """
 import hmac
+import http.client
 import io
 import json
+import secrets
 from compression import zstd
-from . import claude, errors, setup
+from . import claude, errors, model_prompt_page, setup, sse
 from .errors import InvalidSize
 from .runtime import VERSION
 
 
 def send_json(handler, status, obj, headers=None):
     body = json.dumps(obj).encode()
-    handler.send_response(status)
-    handler.send_header('Content-Type', 'application/json')
-    handler.send_header('Content-Length', str(len(body)))
-    for k, v in (headers or {}).items():
-        handler.send_header(k, v)
-    handler.send_header('Connection', 'close')
-    handler.end_headers()
-    handler.wfile.write(body)
-    handler.close_connection = True
+    try:
+        handler.send_response(status)
+        handler.send_header('Content-Type', 'application/json')
+        handler.send_header('Content-Length', str(len(body)))
+        for k, v in (headers or {}).items():
+            handler.send_header(k, v)
+        handler.send_header('Connection', 'close')
+        handler.end_headers()
+        handler.wfile.write(body)
+    except OSError:
+        pass  # Client already disconnected; nothing more can be delivered.
+    finally:
+        handler.close_connection = True
+
+
+def send_compaction_stream(handler, output):
+    """Send one local V2 compaction item in the Responses event stream."""
+    if not isinstance(output, list) or len(output) != 1 \
+            or not isinstance(output[0], dict):
+        raise ValueError('Compaction output must contain one item')
+    item = output[0]
+    response = {'id': 'resp_' + secrets.token_hex(8),
+                'object': 'response', 'status': 'completed',
+                'output': [item]}
+    events = ({'type': 'response.output_item.done', 'output_index': 0,
+               'item': item},
+              {'type': 'response.completed', 'response': response})
+    # Serialize every frame before sending headers: post-start failures cannot
+    # be remapped to a second JSON response.
+    body = b''.join(sse.frame(json.dumps(event).encode()) for event in events)
+    try:
+        handler.send_response(200)
+        handler.send_header('Content-Type', 'text/event-stream')
+        handler.send_header('Content-Length', str(len(body)))
+        handler.send_header('Connection', 'close')
+        handler.end_headers()
+        handler.wfile.write(body)
+    except (OSError, http.client.HTTPException):
+        pass  # Client already disconnected after the single response began.
+    finally:
+        handler.close_connection = True
 
 
 def error(handler, err, *, log_event):
@@ -44,11 +78,15 @@ def error(handler, err, *, log_event):
 
 
 def authorized_path(handler):
-    # Setup URLs carry their own token plus nonce and enforce same-origin
-    # themselves, so the generic rebinding rejection exempts their path.
-    if (handler.headers.get('Origin')
-            and '/setup/' not in handler.path.split('?', 1)[0]):
+    if not _loopback_host(handler):
         return None, False
+    # Setup and prompt URLs carry their own token plus nonce and enforce
+    # same-origin themselves, so the generic rebinding rejection exempts
+    # their paths.
+    if handler.headers.get('Origin'):
+        target = handler.path.split('?', 1)[0]
+        if '/setup/' not in target and '/model-prompt/' not in target:
+            return None, False
     prefix = '/' + handler.server.state['token']
     token = handler.server.state['token'].encode()
     candidate, sep, _ = handler.path[1:].partition('/')
@@ -63,6 +101,18 @@ def authorized_path(handler):
     return None, False
 
 
+def _loopback_host(handler):
+    """False when Host names anything but the loopback interface.
+
+    Rebinding reaches the loopback through a name the attacker controls, and
+    a browser always sends Host even on the GETs that carry no Origin. This
+    is defence in depth: the path token stays the primary control, and a
+    Host-less HTTP/1.0 client is still answered.
+    """
+    name = (handler.headers.get('Host') or '').split(':', 1)[0].strip().lower()
+    return not name or name in ('127.0.0.1', 'localhost')
+
+
 def context_error(handler, streaming, *, log_event):
     err = errors.context_window()
     if not streaming:
@@ -72,13 +122,17 @@ def context_error(handler, streaming, *, log_event):
     log_event('request_rejected', status=200, code=err.code)
     body = ('event: response.failed\ndata: ' + json.dumps(
         {'type': 'response.failed', 'response': err.body()}) + '\n\n').encode()
-    handler.send_response(200)
-    handler.send_header('Content-Type', 'text/event-stream')
-    handler.send_header('Content-Length', str(len(body)))
-    handler.send_header('Connection', 'close')
-    handler.end_headers()
-    handler.wfile.write(body)
-    handler.close_connection = True
+    try:
+        handler.send_response(200)
+        handler.send_header('Content-Type', 'text/event-stream')
+        handler.send_header('Content-Length', str(len(body)))
+        handler.send_header('Connection', 'close')
+        handler.end_headers()
+        handler.wfile.write(body)
+    except OSError:
+        pass  # Client already disconnected after the stream was requested.
+    finally:
+        handler.close_connection = True
 
 
 def do_get(handler):
@@ -88,9 +142,15 @@ def do_get(handler):
     path = path.split('?', 1)[0]
     if path.startswith('/setup/'):
         return setup.serve(handler, path[len('/setup/'):], False)
+    if path == '/model-prompt':
+        return model_prompt_page.handle_check(handler)
+    if path.startswith('/model-prompt/'):
+        return model_prompt_page.handle_page(
+            handler, path[len('/model-prompt/'):], False)
     if path == '/health':
         return handler.send_json(200, {'status': 'ok', 'version': VERSION,
                                        'inflight': handler.server.inflight,
+                                       'max_inflight': handler.server.max_inflight,
                                        'draining': handler.server.draining,
                                        'served_models': dict(handler.server.served_models)})
     if path == '/v1/models':

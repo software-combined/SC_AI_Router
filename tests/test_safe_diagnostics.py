@@ -7,6 +7,7 @@ log argument or record. No paid request, no real credentials, no user data.
 import json
 import logging
 import unittest
+from types import SimpleNamespace
 from unittest import mock
 
 from ai_router import errors, upstream
@@ -46,7 +47,7 @@ class SafeDiagnosticsTests(unittest.TestCase):
             {'model': 'z-ai/glm-5.3', 'provider': 'openrouter',
              'elapsed_ms': 1.0, 'timeout_s': 120, 'has_image': False})
         self.assertIsNotNone(described)
-        status, message = described
+        status, message, _ = described
         self.assertEqual(status, 409)
         LOG.info(json.dumps({'event': 'upstream_rejected_test', 'code': 'PROVIDER_REJECTED'}))
         self.assertNotIn(MARKER, message)
@@ -63,10 +64,73 @@ class SafeDiagnosticsTests(unittest.TestCase):
             {'model': 'z-ai/glm-5.3', 'provider': 'openrouter',
              'elapsed_ms': 1.0, 'timeout_s': 120, 'has_image': False})
         self.assertIsNotNone(described)
-        status, message = described
+        status, message, _ = described
         self.assertEqual(status, 409)
         self.assertNotIn(MARKER, message)
         self.assertNotIn(MARKER, _logged_text(handler))
+
+    def test_fingerprint_carries_counts_only(self):
+        body = json.dumps({
+            'model': 'm',
+            'input': [
+                {'type': 'message', 'role': 'user',
+                 'content': [{'type': 'input_text', 'text': f'secret {MARKER}'}]},
+                {'type': 'function_call', 'name': 'exec', 'call_id': 'c1',
+                 'arguments': json.dumps({'input': f'run {MARKER}'})}],
+            'tools': [{'type': 'function', 'name': 'exec',
+                       'description': f'does {MARKER}',
+                       'parameters': {'type': 'object'}}]}).encode()
+        fingerprint = upstream.rejection_fingerprint(body)
+        self.assertEqual(fingerprint,
+                         {'items': 2,
+                          'item_kinds': {'message': 1, 'function_call': 1},
+                          'tools': 1})
+        blob = json.dumps(fingerprint)
+        self.assertNotIn(MARKER, blob)
+        for banned in ('text', 'arguments', 'description', 'name'):
+            self.assertNotIn(f"'{banned}'", blob.replace('"', "'"))
+        self.assertEqual(upstream.rejection_fingerprint(b'not json'), {})
+        self.assertEqual(upstream.rejection_fingerprint(
+            json.dumps({'input': 'a string, not a list'}).encode()), {})
+        # The Messages wire has no `input`; its counts would be misleading.
+        self.assertEqual(upstream.rejection_fingerprint(
+            json.dumps({'messages': [{'role': 'user', 'content': 'hi'}],
+                        'tools': [{'name': 'exec'}]}).encode()), {})
+
+    def test_cached_rejection_log_carries_counts_only(self):
+        from ai_router import relay
+        from ai_router.transport import Prepared
+        handler = _captured(self)
+        LOG.setLevel(logging.DEBUG)
+        self.addCleanup(LOG.setLevel, logging.WARNING)
+        body = json.dumps({
+            'model': 'm',
+            'input': [{'type': 'message', 'role': 'user',
+                       'content': [{'type': 'input_text',
+                                    'text': f'secret {MARKER}'}]}],
+            'tools': []}).encode()
+        upstream.remember_refusal('openrouter', 'z-ai/glm-5.3', body,
+                                  'cached 409 message', now=100.0)
+        self.addCleanup(upstream.clear_refusals)
+        prepared = Prepared('openrouter.ai', '/responses', {}, body, {}, 'openrouter')
+        metrics = {'provider': 'openrouter', 'protocol': 'responses',
+                   'model': 'z-ai/glm-5.3', 'path': '/responses'}
+        inst = SimpleNamespace(
+            server=SimpleNamespace(credentials=SimpleNamespace(
+                key_rejected=lambda provider: False)),
+            error=lambda err: None)
+        from ai_router import provider_defs
+        emit = lambda event, **fields: LOG.info(json.dumps({'event': event, **fields}))
+        with mock.patch('ai_router.relay.time.monotonic', return_value=110.0):
+            relay.relay(inst, SimpleNamespace(defn=provider_defs.OPENROUTER),
+                        prepared, metrics, 0.0, log_event=emit)
+        text = _logged_text(handler)
+        self.assertIn('upstream_rejected_cached', text)
+        self.assertNotIn(MARKER, text)
+        for line in text.splitlines():
+            if 'upstream_rejected_cached' in line:
+                for banned in ('text', 'arguments', 'description'):
+                    self.assertNotIn(f"'{banned}'", line.replace('"', "'"))
 
     def test_rejection_log_carries_code_not_message_content(self):
         # Drive the real Handler.error path with a marker-bearing failure:

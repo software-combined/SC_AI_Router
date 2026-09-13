@@ -13,6 +13,7 @@ import threading
 from copy import deepcopy
 from pathlib import Path
 from .compaction import SUMMARY_PREFIX, decode_summary
+from .atomic_write import replace_text
 from .tool_merge import merge_tool_defs
 
 _MEMORY, _LOCK, _MAX = {}, threading.Lock(), 16
@@ -35,9 +36,7 @@ def _write_disk(key, defs):
         directory = _store_dir()
         directory.mkdir(parents=True, exist_ok=True)
         path = directory / (key + '.json')
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, 'w') as stream:
-            stream.write(json.dumps(defs))
+        replace_text(path, json.dumps(defs))
         _stamp_and_prune(directory, path, _MAX)
     except OSError:
         pass  # The memory entry still serves this process.

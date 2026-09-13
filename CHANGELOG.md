@@ -1,6 +1,308 @@
 # Changelog
 
-## Unreleased
+## 0.6.48
+
+- Installer-changing pull requests now run native installer checks on macOS
+  and Windows plus a real Python 3.9 surface check, scoped by
+  `tools/ci_scope.py`; the single required `Test` gate fails when any
+  scoped job fails. Releases run the installer jobs unconditionally.
+- The Windows loopback listener binds exclusively (`SO_EXCLUSIVEADDRUSE`,
+  `SO_REUSEADDR` off), so a second local process can no longer bind the
+  same port and receive router traffic. The dialog liveness probe test
+  tolerates transient cold-probe stalls on Windows CI.
+- The source-limits baseline check rejects nonexistent files, incorrect
+  counts and entries below their soft cap instead of drifting silently.
+- Seeded ingress input-shape coverage and router-level SSE framing cases
+  pin the rejection and framing contracts without adding guards.
+- Carried history no longer splits a parallel tool group. On a thread that
+  switched models the `<model_switch>` marker keeps the portable pass running,
+  and its tool-search note was written between a group's calls and their
+  outputs, so the converted chat history held calls with no results and a
+  strict upstream refused the turn ("incomplete parallel tool-call group",
+  and Meta's synchronous HTTP 502 on the same carried body when the thread
+  switched to `meta/muse-spark-1.3-contributor`). The note now waits until the
+  tool run closes, and reasoning notes wait with it.
+- A provider refusal that OpenRouter raises after the stream has opened
+  (`invalid_prompt`) is now answered as `UPSTREAM_INVALID_PROMPT` with one
+  actionable sentence, instead of relaying the provider's whole schema dump to
+  the client. OpenRouter's bounded code still reaches the service log, and no
+  retry or request translation was added.
+
+## 0.6.47
+
+- A failed stream now records why the upstream ended it: the terminal event,
+  the provider's error code, or an incomplete response's reason. An incomplete
+  response is logged as `UPSTREAM_INCOMPLETE` instead of the generic upstream
+  failure, and provider message text is never recorded.
+- A client that disconnects before a JSON reply is flushed (health and model
+  listing polls) no longer raises out of the handler, so it no longer writes a
+  BrokenPipeError traceback to the service log.
+
+## 0.6.46
+
+- Express release tags publish urgent updates on either stable
+  (`v<VERSION>-express`) or beta (`v<VERSION>-beta-express`).
+- macOS, Windows and Linux gain a separate minute Express check using the
+  existing verified installer. Ordinary releases keep the four-hour schedule.
+  Existing machines gain this capability through their next ordinary update.
+- Express checks preserve channel selection, install locks, health rollback
+  and failure limits. After one failed attempt, retries use the normal cadence.
+  Older restored releases skip the Express check without losing regular updates.
+
+## 0.6.45
+
+- Importing the router remover no longer changes Codex settings or stops the
+  service. The installer Python compatibility check compiles executable scripts
+  without running them and imports library files in a scratch environment.
+- Existing installations affected by the September 13 compatibility-check
+  incident recover their Codex routing settings when the installer runs again.
+  See `docs/codex-routing-incident-20260913.md` for the cause and recovery plan.
+
+## 0.6.43
+
+- Codex remote compaction V2 now returns the completed compaction item and
+  response completion through the streamed Responses contract, while V1 and
+  non-streamed V2 keep their existing JSON shape.
+- Summaries truncated with the structured `max_output_tokens` condition
+  receive one bounded retry at 8,000 output tokens, clamped to the registry
+  ceiling, with a shared 120-second deadline.
+- The offline context-budget probe now covers both V1 and V2 threshold and
+  context-error recovery, plus truncated-summary recovery, against the
+  installed Codex app-server with a fake upstream.
+
+## 0.6.42
+
+- External Responses streams now translate context-limit refusals into Codex's
+  recognized error code, including nested metadata codes and the exact numeric
+  "The prompt is too long" refusal. Terminal stream failures are logged as
+  failed requests even when the upstream HTTP status is 200. Successful output
+  and usage are preserved; this does not guarantee automatic in-turn compaction.
+
+## 0.6.41
+
+- Claude Code drift check (plan 148): attaching Claude Code records the
+  served listing snapshot (ids, display names, tiers and the served-at time)
+  inside the existing activation receipt, and `--doctor` now reports whether
+  the live `GET /v1/models` listing still matches it - `match`, `drift` with
+  the added and removed ids, `unknown` when the router is not answering, or a
+  warning when the attachment predates snapshots. The contract note in
+  `docs/claude-code.md` records why `ANTHROPIC_AUTH_TOKEN` and
+  `ANTHROPIC_API_KEY` must stay unset and why a launcher alias was rejected.
+
+## 0.6.40
+
+- Codex windows that declare a previous context window now receive explicit
+  assignment-recovery guidance on both subscription and external Responses
+  routes. The shipped instructions distinguish summarized compaction from
+  `new_context`, which can omit the brief. Agents must retrieve their prior
+  assignment and progress before treating a reset as an unassigned task.
+- Upgrades replace the exact legacy context paragraph in retained subscription
+  templates while preserving custom instructions and model settings.
+- A real-client probe exercises initial delivery, unsummarized reset,
+  read-only history retrieval and completion of the recovered assignment.
+  Its default is scripted; optional live acceptance has a strict call cap.
+
+## 0.6.39
+
+- Releases serialize publication to the shared update feed and verify the
+  maintainer-created tag before publishing. Release reruns are limited to
+  Cyril and Brent. Contributor guidance now covers public pull requests
+  against `main`, and model capability refreshes use the normal reviewed PR
+  process instead of a scheduled workflow blocked by organisation policy.
+
+## 0.6.38
+
+- An encrypted handoff to an externally billed child can no longer end the
+  turn silently. When the upstream model picked the native encrypted spawn,
+  follow-up or send for a child this thread created on an external model,
+  the router answered with a synthesized tool result; Codex recorded that as
+  unexpected and stopped. The rejection now keeps the native function, item
+  and call identity and replaces only the unreadable arguments with a
+  bounded diagnostic, so Codex raises a real argument-validation error,
+  asks for the next inference and the parent corrects the call within the
+  same turn. The diagnostic contains no assignment text, ciphertext or
+  target name; native encrypted handoffs and valid plaintext calls are
+  unchanged.
+- The handoff probe gains an installed-Codex recovery run: it rejects each of
+  the three native handoffs, requires the matching validation error, then
+  proves the corrected plaintext call and the parent's final answer land in
+  the same turn, in both classic and Responses Lite wire modes.
+- Release publishing uses the pushed tag for the bundle URLs and for
+  `gh release create --verify-tag`, so publishing no longer depends on a
+  workflow-created secondary tag.
+
+## 0.6.37
+
+- Operator surface (plan 147): `--doctor` prints one read-only row per
+  component (runtime, install, service, each provider's key, picker
+  catalogue, scheduled command, update recency) with a `Fix:` line on every
+  WARN or FAIL, `--json` for machines and exit 1 when a row fails.
+  `--status` now reports the last update check, the last applied version,
+  the last error code and any parked versions from state. `--support`
+  writes a 0600 bundle containing booleans, enums, versions, counts and
+  timestamps only, and prints just the path. `--check-update` is now
+  read-only: it names the installed and available versions and never
+  installs or writes the ETag; the applying command is `--update`, which
+  the home launcher, the systemd unit and the Windows task now run.
+  The home launcher picks the applying verb the release `current` points
+  at advertises, so a scheduled pass keeps working after a rollback to an
+  older release (the channel then offers the newer release again, as
+  before).
+  `--rollback` with no argument lists the installed releases, and
+  `--rollback --to VERSION` performs the switch `--version VERSION` still
+  performs as an alias.
+- Mixed-provider subagent assignments now work with native Responses Lite
+  tool declarations. Plaintext aliases and encrypted-handoff steering apply
+  to both wire formats; native OpenAI handoffs keep their encryption.
+  The handoff probe now uses the actual installed subscription metadata.
+- Child messages use matched tool results on external routes, avoiding
+  Sonnet assistant-prefill rejections. External parents also produce
+  executable plaintext calls when they select the native handoff tools.
+- Switching from an external model to a ChatGPT subscription model now
+  normalizes reasoning records in the outgoing request, including compaction
+  requests. Foreign plaintext reasoning items are omitted; native encrypted
+  reasoning, messages, tool results, and saved task history are preserved.
+- Codex Responses validation failures retain HTTP 400 instead of becoming
+  retryable 409 errors. Diagnostics include only validated structural field
+  paths, and cached refusals retain the original client status.
+
+## 0.6.36
+
+- Ingress hardening, second wave (plan 146): the router refuses a state
+  token that is not at least 32 characters of `[A-Za-z0-9_-]` (the installer
+  already mints one), answers 429 with `Retry-After` beyond 32 concurrent
+  turns and reports `inflight`/`max_inflight` on `/health`, answers 415 for a
+  non-JSON body before parsing, and strips filesystem paths and the caller's
+  model id from credential and unknown-model errors. `opencode_auth` must
+  name the OpenCode client's own `~/.local/share/opencode/auth.json`; a
+  state key pointing elsewhere is refused, and the installer resolves the
+  same path so it never counts a key the service cannot read. A Windows ACL
+  verdict is cached for 30 seconds per file instead of spawning icacls and
+  whoami on every key read.
+- New-model prompt (plan 135): when an update adds models for the machine's
+  policy scope, the scheduled updater asks the running router over loopback
+  and offers a Codex restart. A desktop notification names up to three of
+  the new models and the single-use approval page (48 h link, Restart Codex
+  or Later) opens in the browser; only the Restart click quits and reopens
+  Codex, on macOS. Notifications and the page are macOS and Linux (with the
+  platform tools present); Windows records the offer in the update log. The
+  first run, removals and version-only updates stay
+  silent, an unverified or out-of-policy row is never announced, and the
+  offer is best-effort: a failed notification or browser can never change
+  the update result. A Claude-only or service-only install is never told to
+  restart Codex, and `ROUTER_NO_NOTICE=1` silences this offer too. The
+  landing that first runs the trigger only seeds the snapshot, so
+  announcements begin with the next landing that adds models. The hourly
+  model refresh gains the same call when plan 099 wires it.
+- Public repository readiness: the README is rewritten around the
+  product with screenshots of the Codex picker row, the first-run key
+  window and the update notice, a logo that switches to a white
+  wordmark in dark mode, and a maintainer contact. `SECURITY.md` names
+  the reporting address and scope, `CONTRIBUTING.md` carries the branch
+  rules and gates, issue templates steer vulnerability reports away
+  from public issues, `CODEOWNERS` moves under `.github/`, the model
+  allocation review moves to `plans/model-allocation/`, and
+  `pyproject.toml` gains the project URLs. Documentation only; the
+  installed router is unchanged.
+- Subagent model visibility (plan 151): Codex builds the `spawn_agent`
+  "Available model overrides" text from the first five picker-visible
+  multi-agent models in catalogue order, and the catalogue lists the
+  subscription roster first, so every router model was hidden from that
+  list even though the picker showed them all. The served model
+  instructions now carry the visible router roster plus the rule that an
+  id missing from that list can still be passed, with any router
+  rejection reported, and the starter global instructions carry the same
+  rule for subscription-model sessions. A fresh merge renders the roster
+  from the picker's own projection, so it never names an allowlisted-out
+  or client-hidden model; `catalogue --check` compares the rendered form.
+  The client cap itself is unchanged upstream, so plan 151 stages 3-5
+  stay open.
+- Model verification gate (plan 145): `models add` now writes new rows as
+  unlisted preview (`listed: false`), hidden from the Codex picker and
+  `GET /v1/models` while staying routable for their own probe. Only a
+  passed `--probe` promotes to `listed: true` with `tier: verified`; a
+  failed or refused probe changes nothing and prints why. New read-only
+  `models discover` reports addable, registered, unavailable and retired
+  ids without writing or billing, and the compatibility record names the
+  legs that ran (`tool,stream,image,compact`).
+
+## 0.6.35
+
+- Carried-history portability, second slice: a portable turn (the Muse
+  Contributor row, or any turn carrying the client's `<model_switch>`
+  marker) now drops carried reasoning items instead of replaying them.
+  Measured on 2026-09-12: Meta answers a carried deepseek reasoning item
+  with a bare HTTP 400 while the identical turn without it is accepted.
+  Native, marker-free turns keep their reasoning items.
+
+## 0.6.34
+
+- A fresh install opens the first-run key window by itself whenever the
+  installed service has no key: the installer mints the setup nonce and
+  spawns the native popup without needing `--setup`, which stays as the
+  explicit force and now also works on an up-to-date home by restarting the
+  current release with a fresh setup link, never re-extracting it. A
+  shell-exported `OPENROUTER_API_KEY` no longer counts as configured (the
+  service does not receive the invoking shell's environment), so it prints
+  one non-secret notice and still opens the window. A non-blank key file
+  with widened permissions refuses before install with the file and the
+  required permission. Scheduled and manual `--check-update` runs never pop
+  the window (`ROUTER_NO_KEY_WINDOW=1` on the installer child, also the
+  unattended opt-out); the next request opens it through the request path.
+  Cancelling the native key dialog now counts as a cancel instead of a
+  dialog failure, so it no longer opens the browser setup page (macOS
+  reports the cancel as "cancelled" with AppleScript error -128).
+  `--setup` also repairs when the feed lags the installed release, without
+  downgrading it.
+
+- Carried-history portability (plan 150, slice 2a): turns on the
+  `meta/muse-spark-1.3-contributor` row, or turns carrying the
+  client's `<model_switch>` developer marker, replay a carried tool-search
+  call as its declared tools with the search call itself omitted.
+  Refusals on a routed turn now name the provider code when the field
+  is already code-shaped and say to switch the thread back or start a
+  new thread; an identical deterministic refusal answers 409 once more
+  without dispatching again (8 entries, 60 s, never a 5xx). Rejection
+  logs carry counts only.
+
+## 0.6.33
+
+- Namespaced client tools are exposed to routed models under readable aliases
+  (`namespace__tool`) instead of `ns_<hash>_<tool>`; collisions and over-length
+  names fall back to the same readable stem plus a short digest, sanitised to
+  provider-legal characters, so a routed model can still read the tool it is
+  calling. The digest widens until the name is unique; a tool set that exhausts
+  that ladder fails the request instead of sharing a wire name.
+
+- A tool call is repaired before dispatch only when it is the plain native tool
+  name of exactly one exposed namespaced tool, the dotted `namespace.tool` form
+  shown in its description, or a fallback alias whose digest characters were
+  re-typed. A call that already carries a namespace, a readable-name typo, an
+  ambiguous name, a native name the per-model tool ceiling withheld, and an
+  unrelated name are never rewritten; they reach the client unchanged and the
+  guidance line then names the exact exposed tool. Repairs and unresolved names
+  are counted in content-free `tool_call_repaired` / `tool_call_unresolved` log
+  events.
+
+- When the client still answers `unsupported call: <name>`, the router adds one
+  line naming the exact exposed tool to the model-facing history, and the routed
+  base instructions now state that tool names must be copied verbatim.
+
+- Documentation now ships with every release: the bundle carries `README.md`
+  and `docs/*.md`, `docs/troubleshooting.md` covers the staff-real failures
+  (a parked update, a client that needs a restart, key recovery, Claude Code
+  routing, request error codes) and `docs/README.md` indexes the set. CI runs
+  the offline unit suite on every pull request, parses the shipped shell and
+  PowerShell scripts, and the secrets scan covers `*.yml`, `*.sh` and `*.ps1`.
+
+- README: the router home path and the installed-release installer are
+  documented, installs and updates need no GitHub account, and switching
+  channels by hand requires clearing `feed-serial`.
+
+- Repository README rewritten for public consumption: an install quick start,
+  client and model guidance, updates, security, architecture and development
+  sections, with the installed-file inventory moved to
+  `docs/runtime-files.md`.
 
 - Repository relicensed to Apache-2.0 only: `LICENSE` carries the Apache
   License 2.0 text, `COMMERCIAL_LICENSE.md` is removed, a `NOTICE` file is
@@ -515,7 +817,7 @@
   over SSE for streaming requests and HTTP 400 JSON otherwise. Other
   preparation errors remain 409. Native compaction thresholds are unchanged.
 
-## 0.6.9 (unreleased)
+## 0.6.9
 
 - Make `--feed` one-shot for the anti-replay serial as well as the URL. A
   local bundle carries its own build number as its serial, so a pinned
@@ -703,7 +1005,7 @@
   non-absolute interpreters, and upgrades detect a legacy bare-python
   plist and reload the main agent (updater untouched) to heal it.
 
-## 0.6.5 (unreleased)
+## 0.6.5
 
 - Remove feed signature enforcement: the installer accepts unsigned
   feeds again, trusting version, URL, checksum and serial plus the

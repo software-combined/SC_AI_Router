@@ -1,7 +1,12 @@
 """Deprecated alias: `codex_router` re-exports `ai_router`.
 
-Kept so old releases, probes, and user scripts keep importing during the
-transition window. New code imports `ai_router`. Removal needs its own plan.
+Kept so installed releases from before the `ai_router` rename, probes, and
+user scripts keep importing during the transition window. New code imports
+`ai_router`. Owner: Plan 134 until a dedicated removal plan names its own
+owner. Removal condition: a removal plan may delete this shim only after an
+external-consumer search finds no live importer outside this repository
+(installed old releases keep working through `packaging/router_launch.py`'s
+`ai_router`-first fallback either way) and records the result.
 """
 import importlib as _importlib
 import sys as _sys

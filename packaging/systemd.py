@@ -6,6 +6,8 @@ from pathlib import Path
 SERVICE = 'codex-mixed-model-router.service'
 UPDATE = 'codex-mixed-model-router-update.service'
 TIMER = 'codex-mixed-model-router-update.timer'
+EXPRESS_UPDATE = 'codex-mixed-model-router-express.service'
+EXPRESS_TIMER = 'codex-mixed-model-router-express.timer'
 
 
 def quote(value, command=False):
@@ -40,12 +42,23 @@ class Manager:
         # Stop the old timer and a legacy updater before replacing its definition.
         # A scheduled update must not stop its own service (and installer child).
         self.ctl('stop', TIMER, check=False)
+        self.ctl('stop', EXPRESS_TIMER, check=False)
         if os.environ.get('ROUTER_UPDATE_SERVICE') != '1':
             self.ctl('stop', UPDATE, check=False)
         env = quote('ROUTER_HOME=' + str(self.home))
         command = quote(python, True) + ' ' + quote(self.home / 'router_launch.py', True)
-        updater = (quote(python, True) + ' ' + quote(release / 'packaging' / 'install.py', True)
-                   + ' --check-update --home ' + quote(self.home, True))
+        installer = release / 'packaging' / 'install.py'
+        # The unit may be rendered around a release older than this installer
+        # (the --setup repair path): ask that release which applying verb it
+        # advertises, exactly as the home launcher does, so a pre-147 release
+        # keeps updating instead of exiting 2 on every timer pass.
+        try:
+            installer_text = installer.read_text(encoding='utf-8')
+        except OSError:
+            installer_text = ''
+        verb = '--update' if "'--update'" in installer_text else '--check-update'
+        updater = (quote(python, True) + ' ' + quote(installer, True)
+                   + ' ' + verb + ' --home ' + quote(self.home, True))
         units = {
             SERVICE: ('[Unit]\nDescription=SC mixed model router\nAfter=network.target\n'
                       '[Service]\nExecStart=' + command + '\nEnvironment=' + env + '\n'
@@ -62,20 +75,33 @@ class Manager:
                     '[Timer]\nOnActiveSec=5min\nOnUnitInactiveSec=4h\n'
                     '[Install]\nWantedBy=timers.target\n'),
         }
+        express = (self.home / 'express_launch.py').is_file()
+        if express:
+            command = quote(python, True) + ' ' + quote(self.home / 'express_launch.py', True)
+            units[EXPRESS_UPDATE] = units[UPDATE].replace('ExecStart=' + updater,
+                                                        'ExecStart=' + command)
+            units[EXPRESS_TIMER] = (
+                '[Unit]\nDescription=Check Express router updates every minute\n'
+                '[Timer]\nOnActiveSec=1min\nOnUnitInactiveSec=1min\nAccuracySec=1s\n'
+                '[Install]\nWantedBy=timers.target\n')
         self.units.mkdir(parents=True, exist_ok=True)
         for name, content in units.items():
             (self.units / name).write_text(content)
         self.ctl('daemon-reload')
         self.ctl('enable', SERVICE, TIMER)
+        if express:
+            self.ctl('enable', EXPRESS_TIMER)
         self.restart()
         # The installer calls start_updates() again once it finishes, but a
         # later failure (a refused settings merge, a client attach) used to
         # return before that call and leave the timer stopped: no scheduled
         # check ran again until the next reinstall. Start it here, where it
         # was stopped, so polling survives every later step.
-        self.ctl('start', TIMER)
+        self.start_updates()
 
     def start_updates(self):
+        if (self.units / EXPRESS_TIMER).is_file():
+            self.ctl('start', EXPRESS_TIMER)
         self.ctl('start', TIMER)
 
     def restart(self):
@@ -85,8 +111,10 @@ class Manager:
         self.ctl('stop', SERVICE)
 
     def uninstall(self):
+        self.ctl('disable', '--now', EXPRESS_TIMER, check=False)
+        self.ctl('stop', EXPRESS_UPDATE, check=False)
         self.ctl('disable', '--now', TIMER, SERVICE)
         self.ctl('stop', UPDATE, check=False)
-        for name in (SERVICE, UPDATE, TIMER):
+        for name in (SERVICE, UPDATE, TIMER, EXPRESS_UPDATE, EXPRESS_TIMER):
             (self.units / name).unlink(missing_ok=True)
         self.ctl('daemon-reload')

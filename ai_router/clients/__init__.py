@@ -21,6 +21,8 @@ def visible_for(model, client, include_twins=False):
     """
     if client not in ('codex', 'claude'):
         raise ValueError(f'unknown client: {client}')
+    if not model.listed:
+        return False
     if (not provider_defs.is_external(model.provider)
             or include_twins or client == 'codex'):
         return True

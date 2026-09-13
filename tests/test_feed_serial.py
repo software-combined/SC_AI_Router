@@ -66,7 +66,7 @@ class FeedSerialTests(unittest.TestCase):
             latest = {**latest, 'serial': 9}
             version = latest['version']
             _patch_attrs(self, health=lambda state, timeout=20: {'status': 'ok', 'version': version})
-            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}
+            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key', 'ROUTER_NO_KEY_WINDOW': '1'}
             with mock.patch.dict(os.environ, env):
                 self.assertEqual(
                     install_mod.do_install(_unpinned_args(home),
@@ -88,7 +88,7 @@ class FeedSerialTests(unittest.TestCase):
             latest = {**latest, 'serial': 99}
             version = latest['version']
             _patch_attrs(self, health=lambda state, timeout=20: {'status': 'ok', 'version': version})
-            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}
+            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key', 'ROUTER_NO_KEY_WINDOW': '1'}
             with mock.patch.dict(os.environ, env):
                 self.assertEqual(
                     install_mod.do_install(_install_args(home),
@@ -110,7 +110,7 @@ class FeedSerialTests(unittest.TestCase):
             latest = {**latest, 'serial': 0}
             version = latest['version']
             _patch_attrs(self, health=lambda state, timeout=20: {'status': 'ok', 'version': version})
-            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}
+            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key', 'ROUTER_NO_KEY_WINDOW': '1'}
             with mock.patch.dict(os.environ, env):
                 self.assertEqual(
                     install_mod.do_install(_install_args(home),
@@ -130,7 +130,7 @@ class FeedSerialTests(unittest.TestCase):
         # or its serial: the old path unpacked the feed document as a bundle.
         with tempfile.TemporaryDirectory() as tmp:
             home = _home_with_serial(tmp)
-            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}
+            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key', 'ROUTER_NO_KEY_WINDOW': '1'}
             for version, serial in (('0.4.2.0', 10), ('0.4.2.1', 11)):
                 blob, latest = _craft_bundle(version)
                 latest = {**latest, 'serial': serial}
@@ -154,21 +154,21 @@ class FeedSerialTests(unittest.TestCase):
             self.assertEqual((home / 'current').read_text(), '0.4.2.0\n')
             self.assertEqual((home / 'feed-serial').read_text(), serial_before)
 
-    def test_check_update_refuses_stale_feed_before_download(self):
+    def test_update_refuses_stale_feed_before_download(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = _home_with_serial(tmp)
             blob, latest = _craft_bundle('9.9.9')
             stale = {**latest, 'serial': 7}
             # Unpinned: the unattended channel is what the guard protects.
             args = install_mod.build_parser().parse_args(
-                ['--check-update', '--home', str(home)])
+                ['--update', '--home', str(home)])
             stale_body = json.dumps(stale).encode()
 
             def fake_fetch(url):
                 raise AssertionError('a stale feed must be refused before download')
 
             with self.assertRaises(SystemExit) as ctx:
-                install_mod.do_check_update(
+                install_mod.do_update(
                     args,
                     _fetch=fake_fetch,
                     _read_feed=lambda url, etag: (200, stale_body, None),

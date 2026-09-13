@@ -3,14 +3,14 @@
 The native Codex executor still owns tool validation and execution. This adapter
 only wraps/unwraps its text input; it never executes tools or changes permissions.
 """
-import hashlib
 import json
 import re
 from copy import deepcopy
 from .capabilities import has_recursive_refs
+from .compaction import portable_history
 from .discovered import recall
 from .registry import by_slug
-from . import agent_handoffs, sse, tool_merge
+from . import agent_handoffs, sse, tool_aliases, tool_merge
 SEARCH_NAME = 'codex_client_tool_search'
 # Bytes retained per body for the post-EOF identity parse. Overflow drops
 # the observation, never the forwarded bytes.
@@ -67,7 +67,7 @@ def _grok_needs_envelope(parameters):
     return False
 
 def prepare_tools(payload):
-    names = {}
+    names = tool_aliases.ToolNames()
     # OpenAI reads discovered definitions from tool_search_output history. Other
     # providers require those released tools in the ordinary request tool list.
     released = []
@@ -120,19 +120,18 @@ def prepare_tools(payload):
             # Object-only unions stay native.
             _wrap_string_envelope(tool, 'value')
             names[(namespace, tool['name'])] = 'json_text_root'
-    wire_names = {}
+    wire_names = tool_aliases.bind(tool_entries(payload.get('tools', [])))
+    names.reserved |= wire_names.reserved
     flattened = []
     for tool, namespace in tool_entries(payload.get('tools', [])):
         if namespace:
             original = (namespace, tool['name'])
-            digest = hashlib.sha256((namespace + '\0' + tool['name']).encode()).hexdigest()[:12]
-            wire = 'ns_' + digest + '_' + tool['name'][:48]
+            wire = wire_names[original]
             kind = names.pop(original, 'identity')
             if original in released_keys:
                 released_keys.discard(original)
                 released_keys.add((None, wire))
             names[(None, wire)] = {'kind': kind, 'namespace': namespace, 'name': tool['name']}
-            wire_names[original] = wire
             tool['description'] = namespace + '.' + tool['name'] + ': ' + tool.get('description', '')
             tool['name'] = wire
         tool.pop('defer_loading', None)
@@ -157,7 +156,9 @@ def prepare_tools(payload):
                 'the ceiling, or trim tools, then retry in the same thread.')
         for tool in flattened:
             if tool not in kept:
-                names.pop((None, tool.get('name')), None)
+                entry = names.pop((None, tool.get('name')), None)
+                if isinstance(entry, dict):
+                    names.dropped.add(entry['name'])
         payload['tools'] = kept
     for item in payload.get('input', []) if isinstance(payload.get('input'), list) else []:
         if item.get('type') == 'tool_search_call':
@@ -192,6 +193,11 @@ def prepare_tools(payload):
             kind = entry.get('kind') if isinstance(entry, dict) else entry
             if kind in ('json_text', 'json_text_root'):
                 item['arguments'] = json.dumps({'arguments_json': item['arguments']})
+        elif item.get('type') == 'function_call_output' and isinstance(item.get('output'), str):
+            item['output'] = tool_aliases.annotate(item['output'], names)
+    if isinstance(payload.get('input'), list):
+        payload['input'] = portable_history(
+            payload['input'], SEARCH_NAME, _quirk(payload, 'history_mode'))
     return names
 
 class ToolEvents:
@@ -199,7 +205,14 @@ class ToolEvents:
         self.names = names
         self.notes = notes
         self.item_ids = set()
+        self.logged = set()
         self.changed = False
+
+    def _plaintext(self, item):
+        aliases = getattr(self.names, 'handoffs', ())
+        restored = agent_handoffs.external_plaintext_call(item, aliases)
+        self.changed |= restored is not item
+        return restored
 
     def item(self, item, started=False):
         if not started and item.get('type') == 'function_call' and isinstance(item.get('arguments'), str):
@@ -207,8 +220,15 @@ class ToolEvents:
             if trimmed != item['arguments']:
                 self.changed = True
                 item['arguments'] = trimmed
-        if item.get('type') != 'function_call' or tool_key(item) not in self.names:
+        if item.get('type') != 'function_call':
             return item
+        if tool_key(item) not in self.names:
+            if item.get('namespace') is not None:
+                return self._plaintext(item)
+            if not tool_aliases.repair_item(item, self.names, self.notes, self.logged):
+                return item
+            self.changed = True
+            return self.item(item, started=started)
         if item.get('id'):
             self.item_ids.add(item['id'])
         had_arguments = 'arguments' in item
@@ -228,7 +248,7 @@ class ToolEvents:
             if not had_arguments:
                 self.changed = True
             item['arguments'] = arguments
-            return item
+            return self._plaintext(item)
         self.changed = True
         if kind == 'search':
             item.pop('name')

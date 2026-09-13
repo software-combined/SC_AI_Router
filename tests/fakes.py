@@ -14,7 +14,7 @@ def install_payloads(version):
     rules = Path(__file__).resolve().parents[1] / 'tools' / 'global_instructions.py'
     return {'packaging/VERSION': (version + '\n').encode(),
             'packaging/router_launch.py': b'# launcher\n',
-            'packaging/update_launch.py': b'# update launcher\n',
+            'packaging/update_launch.py': b"# update launcher '--express-only'\n",
             'packaging/install.py': b'# installer stub\n',
             'tools/global_instructions.py': rules.read_bytes()}
 
@@ -38,6 +38,9 @@ class LaunchdDomain:
               unloaded=(), commands=None):
         # Labels start loaded: an upgrade runs against a live service.
         self.unloaded = set(unloaded)
+        express = 'com.local.codex-mixed-model-router.update.express'
+        if not commands or express not in commands:
+            self.unloaded.add(express)  # Legacy hosts have no Express job yet.
         self.program = program or self.DEFAULT_PROGRAM
         # What launchd has *loaded*, per label. Recorded at bootstrap from the
         # plist as it read at that moment, so rewriting the file afterwards
@@ -121,7 +124,8 @@ def launchd_in_sync(home, label, update_label):
     program = LaunchdDomain.DEFAULT_PROGRAM
     return LAUNCHD.reset(program=program, commands={
         label: [program, str(Path(home) / 'router_launch.py')],
-        update_label: [program, str(Path(home) / 'update_launch.py')]})
+        update_label: [program, str(Path(home) / 'update_launch.py')],
+        update_label + '.express': [program, str(Path(home) / 'express_launch.py')]})
 
 
 class FakeUpstream:
@@ -153,6 +157,12 @@ class FakeUpstream:
 
 def install_fake(test, responder):
     """Patch HTTPSConnection; record (host, method, path, body, headers)."""
+    # A fake upstream answers from stubs, so process-local refusal verdicts
+    # cached against the real upstream no longer apply; drop them with the
+    # patch (and on cleanup) so stubbed responses are actually dispatched.
+    from ai_router import upstream as _upstream
+    _upstream.clear_refusals()
+    test.addCleanup(_upstream.clear_refusals)
     recorded = []
 
     class FakeConn:

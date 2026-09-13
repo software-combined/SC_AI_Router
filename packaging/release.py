@@ -5,14 +5,16 @@ import hashlib
 import io
 import json
 import os
-import sys
+import re
 import tarfile
 import importlib.util
 from datetime import datetime, timezone
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from ai_router import feed_verify
+_feed_verify_spec = importlib.util.spec_from_file_location(
+    'router_feed_verify', Path(__file__).resolve().parent / 'feed_verify.py')
+feed_verify = importlib.util.module_from_spec(_feed_verify_spec)
+_feed_verify_spec.loader.exec_module(feed_verify)
 
 MIN_PYTHON = '3.14'
 REPO = 'software-combined/SC_OpenRouter_adapter'
@@ -26,14 +28,17 @@ PACKAGING_FILES = (
     'packaging/VERSION', 'packaging/install.py', 'packaging/bundle.py',
     'packaging/launchd.py',
     'packaging/router_launch.py', 'packaging/service.py',
-    'packaging/feed.py', 'packaging/atomic_write.py',
+    'packaging/feed.py', 'packaging/feed_verify.py',
+    'packaging/atomic_write.py',
     'packaging/notice.py',
     'packaging/assets/router-icon.png',
     'packaging/systemd.py', 'packaging/update_launch.py',
+    'packaging/task_launch.py',
     'packaging/updater.py', 'packaging/codex_config.py',
     'packaging/claude_config.py',
     'packaging/claude_desktop_config.py',
     'packaging/diagnostics.py', 'packaging/provider_keys.py',
+    'packaging/operator_surface.py',
     'packaging/runtime.lock', 'packaging/runtime_lock.py',
     'packaging/platforms/__init__.py',
     'packaging/platforms/darwin.py', 'packaging/platforms/linux.py',
@@ -51,8 +56,21 @@ def bundle_files(root):
         + sorted(p.relative_to(root).as_posix() for p in (root / 'ai_router').glob('*.txt'))
         + sorted(p.relative_to(root).as_posix() for p in (root / 'ai_router').glob('*.json'))
         + sorted(p.relative_to(root).as_posix() for p in (root / 'tools').glob('*.py'))
+        # Plan 134: an installed host had no documentation at all. The README
+        # and the markdown docs travel with the release so an operator reads
+        # the same page the repository shows.
+        + sorted(p.relative_to(root).as_posix() for p in (root / 'docs').rglob('*.md'))
+        + ['README.md']
         + list(PACKAGING_FILES)
     )
+
+
+def release_tag(tag, base_version):
+    """Express is urgency on the existing channel, never a version suffix."""
+    match = re.fullmatch(r'v' + re.escape(base_version) + r'(-beta)?(-express)?', tag)
+    if not match:
+        raise SystemExit(f'tag {tag} does not match packaging/VERSION {base_version}')
+    return ('beta' if match[1] else 'stable'), bool(match[2])
 
 
 def main(argv=None):
@@ -60,7 +78,8 @@ def main(argv=None):
     parser.add_argument('--out', required=True)
     parser.add_argument('--build', type=int, default=0)
     parser.add_argument('--sha', default='')
-    parser.add_argument('--channel', default='stable')
+    parser.add_argument('--channel', choices=('stable', 'beta'))
+    parser.add_argument('--tag', help='Validated release tag, including optional -beta and -express.')
     parser.add_argument('--url-base')
     parser.add_argument('--gen-key', metavar='OUT',
                         help='write a fresh 32-byte hex release signing seed (owner-only file) and exit')
@@ -88,6 +107,10 @@ def main(argv=None):
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     base_version = (root / 'packaging' / 'VERSION').read_text().strip()
+    channel, express = release_tag(args.tag, base_version) if args.tag else (args.channel or 'stable', False)
+    if args.channel and args.channel != channel:
+        raise SystemExit('--channel does not match release tag')
+    args.channel = channel
     if args.build < 0:
         raise SystemExit('--build must be >= 0')
     version = f'{base_version}.{args.build}'
@@ -114,11 +137,11 @@ def main(argv=None):
     tarball = gzip.compress(tar_buffer.getvalue(), mtime=0)
     tarball_name = f'ai-router-{version}.tar.gz'
     (out_dir / tarball_name).write_bytes(tarball)
-    tag = f'v{version}' if args.channel == 'stable' else f'v{version}-beta'
+    tag = args.tag or (f'v{version}' if args.channel == 'stable' else f'v{version}-beta')
     base = args.url_base or f'https://github.com/{REPO}/releases/download/{tag}'
     latest = {'version': version, 'url': f'{base}/{tarball_name}',
               'sha256': hashlib.sha256(tarball).hexdigest(), 'min_python': MIN_PYTHON,
-              'serial': args.build,
+              'serial': args.build, 'channel': channel, 'express': express,
               'published': datetime.now(timezone.utc).isoformat(timespec='seconds')}
     (out_dir / 'latest.json').write_text(json.dumps(latest, indent=2) + '\n')
     # The bootstrap resolves its runtime from this table, never from a
