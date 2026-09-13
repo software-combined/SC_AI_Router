@@ -162,3 +162,64 @@ class HistoryPortabilityTests(unittest.TestCase):
             text = ' '.join(b.get('text', '') for note in notes
                             for b in (note.get('content') or []))
             self.assertIn('ten-call cap', text)
+
+        def test_search_note_never_splits_a_parallel_tool_group(self):
+            # 2026-09-13: a carried thread that switched models replays the
+            # <model_switch> marker, so every later turn ran the portable pass.
+            # The note it wrote for the search pair landed between a parallel
+            # group's calls and their outputs and deepseek/deepseek-v4.1-flash
+            # refused the turn ("incomplete parallel tool-call group").
+            marker = {'type': 'message', 'role': 'developer', 'content': [
+                {'type': 'input_text', 'text': '<model_switch> hop'}]}
+            payload = self._history_payload('deepseek/deepseek-v4.1-flash')
+            payload['input'] = [
+                marker,
+                {'type': 'function_call', 'name': 'exec', 'call_id': 'c0',
+                 'arguments': '{"value":"a"}'},
+                {'type': 'function_call', 'name': 'exec', 'call_id': 'c1',
+                 'arguments': '{"value":"b"}'},
+                {'type': 'tool_search_call', 'call_id': 's1', 'execution': 'client',
+                 'arguments': {'query': 'echo'}},
+                {'type': 'function_call_output', 'name': 'exec', 'call_id': 'c0', 'output': 'a'},
+                {'type': 'function_call_output', 'name': 'exec', 'call_id': 'c1', 'output': 'b'},
+                {'type': 'tool_search_output', 'call_id': 's1', 'execution': 'client',
+                 'status': 'completed', 'tools': []},
+                {'type': 'message', 'role': 'user', 'content': [
+                    {'type': 'input_text', 'text': 'next'}]}]
+            prepare_tools(payload)
+            self.assertEqual([item.get('type') for item in payload['input']],
+                             ['message', 'function_call', 'function_call',
+                              'function_call_output', 'function_call_output',
+                              'message', 'message'])
+            self.assertIn('search call itself is omitted',
+                          payload['input'][5]['content'][0]['text'])
+            self.assertEqual(payload['input'][6]['content'][0]['text'], 'next')
+
+        def test_search_note_never_splits_an_apply_patch_group(self):
+            # The run window covers every call/output type the scrub
+            # accepts, not just function/custom calls: an apply_patch pair
+            # astride the search pair keeps the note deferred too.
+            marker = {'type': 'message', 'role': 'developer', 'content': [
+                {'type': 'input_text', 'text': '<model_switch> hop'}]}
+            payload = self._history_payload('deepseek/deepseek-v4.1-flash')
+            payload['input'] = [
+                marker,
+                {'type': 'apply_patch_call', 'call_id': 'a1',
+                 'status': 'completed',
+                 'operation': {'type': 'update_file', 'path': 'n.txt',
+                               'diff': 'x'}},
+                {'type': 'tool_search_call', 'call_id': 's1', 'execution': 'client',
+                 'arguments': {'query': 'echo'}},
+                {'type': 'apply_patch_call_output', 'call_id': 'a1',
+                 'status': 'completed', 'output': 'done'},
+                {'type': 'tool_search_output', 'call_id': 's1', 'execution': 'client',
+                 'status': 'completed', 'tools': []},
+                {'type': 'message', 'role': 'user', 'content': [
+                    {'type': 'input_text', 'text': 'next'}]}]
+            prepare_tools(payload)
+            self.assertEqual([item.get('type') for item in payload['input']],
+                             ['message', 'apply_patch_call',
+                              'apply_patch_call_output', 'message', 'message'])
+            self.assertIn('search call itself is omitted',
+                          payload['input'][3]['content'][0]['text'])
+            self.assertEqual(payload['input'][4]['content'][0]['text'], 'next')

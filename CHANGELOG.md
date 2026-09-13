@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.48
+
+- Carried history no longer splits a parallel tool group. On a thread that
+  switched models the `<model_switch>` marker keeps the portable pass running,
+  and its tool-search note was written between a group's calls and their
+  outputs, so the converted chat history held calls with no results and a
+  strict upstream refused the turn ("incomplete parallel tool-call group",
+  and Meta's synchronous HTTP 502 on the same carried body when the thread
+  switched to `meta/muse-spark-1.3-contributor`). The note now waits until the
+  tool run closes, and reasoning notes wait with it.
+- A provider refusal that OpenRouter raises after the stream has opened
+  (`invalid_prompt`) is now answered as `UPSTREAM_INVALID_PROMPT` with one
+  actionable sentence, instead of relaying the provider's whole schema dump to
+  the client. OpenRouter's bounded code still reaches the service log, and no
+  retry or request translation was added.
+
 ## 0.6.47
 
 - A failed stream now records why the upstream ended it: the terminal event,
