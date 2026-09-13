@@ -1,0 +1,4 @@
+interface:
+  display_name: "Optimal subagents"
+  short_description: "Choose and coordinate subagents with the right model"
+  default_prompt: "Use $optimal-subagents to choose the right model and delegation plan for this task."

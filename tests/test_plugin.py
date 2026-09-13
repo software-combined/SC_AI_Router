@@ -39,7 +39,7 @@ class PluginTest(unittest.TestCase):
     def test_review_routing_is_one_synchronized_source_with_fixed_efforts(self):
         skills = PLUGIN / "skills"
         review = (skills / "pre-commit-review/SKILL.md").read_text()
-        policy_root = ROOT / 'plugins/scg-subagents/skills/cost-first-subagents/references'
+        policy_root = ROOT / 'plugins/scg-subagents/skills/optimal-subagents/references'
         canonical = (policy_root / 'reviews.md').read_text()
         self.assertEqual((PLUGIN / 'references/reviews.md').read_text(), canonical)
         self.assertIn('../../references/reviews.md', review)
@@ -65,7 +65,7 @@ class PluginTest(unittest.TestCase):
                 self.assertIn('updates.md', skill.read_text(), str(skill))
         subagents = ROOT / "plugins/scg-subagents"
         self.assertEqual(
-            (subagents / "skills/cost-first-subagents/references/updates.md").read_bytes(),
+            (subagents / "skills/optimal-subagents/references/updates.md").read_bytes(),
             (PLUGIN / "references/updates.md").read_bytes())
 
     def test_provision_preserves_existing_configuration_and_requires_matching_pin(self):

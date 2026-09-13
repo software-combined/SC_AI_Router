@@ -1,4 +1,0 @@
-interface:
-  display_name: "Cost-first subagents"
-  short_description: "Choose and coordinate subagents with cost discipline"
-  default_prompt: "Use $cost-first-subagents to choose the least costly capable model and delegation plan for this task."

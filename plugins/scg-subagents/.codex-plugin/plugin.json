@@ -1,19 +1,19 @@
 {
   "name": "scg-subagents",
-  "version": "0.3.1",
-  "description": "Cost-first model selection, subagent coordination and evidence refresh.",
+  "version": "0.4.0",
+  "description": "Subagent coordination, model selection and evidence refresh.",
   "author": {
     "name": "Software Combined"
   },
   "skills": "./skills/",
   "interface": {
     "displayName": "SCG Subagents",
-    "shortDescription": "Choose capable models at the lowest practical cost.",
+    "shortDescription": "Choose the right model for each subagent.",
     "longDescription": "Evidence-based model selection, parent and child tool guidance, and repeatable cost-quality evaluation.",
     "developerName": "Software Combined",
     "category": "Productivity",
     "capabilities": [],
-    "defaultPrompt": "Use the cost-first-subagents skill to choose and coordinate models for this task."
+    "defaultPrompt": "Use the optimal-subagents skill to choose and coordinate models for this task."
   },
   "repository": "https://github.com/software-combined/SC_OpenRouter_adapter"
 }

@@ -1,17 +1,17 @@
 # Cost-first pre-commit model routing
 
-Canonical authoring source: `plugins/scg-subagents/skills/cost-first-subagents/references/reviews.md`
+Canonical authoring source: `plugins/scg-subagents/skills/optimal-subagents/references/reviews.md`
 in SC_OpenRouter_adapter. The review plugin bundles an unchanged release copy at
 `references/reviews.md` so existing review-only installations remain usable.
 Edit the canonical source, synchronize the copy and release both affected plugins.
 Repository tests enforce equality. For a running review, the installed review
 plugin's bundled copy is its effective release policy; do not mix policy versions
 mid-review. General model evidence and refresh methodology live in the
-cost-first-subagents skill.
+optimal-subagents skill.
 
 ## Defaults and authorized availability fallbacks
 
-These are provisional, cost-first choices from the September 12, 2026 evidence.
+These are provisional, evidence-based choices from the September 12, 2026 evidence.
 Public benchmarks do not directly measure code-review defect recall. Validate
 with representative real regressions before claiming superiority. Use one fixed
 reasoning level per model, not a cheaper effort variant. Subscription/account
