@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 
 home = Path(__file__).resolve().parent
+express = Path(__file__).name == 'express_launch.py'
 try:
     name = (home / 'current').read_text(encoding='utf-8').strip().split('/')[-1]
 except (OSError, ValueError):
@@ -29,6 +30,8 @@ try:
     installer_text = installer.read_text(encoding='utf-8')
 except OSError:
     installer_text = ''
+if express and "'--express-only'" not in installer_text:
+    raise SystemExit(0)  # An older restored release keeps its regular updater.
 verb = '--update' if "'--update'" in installer_text else '--check-update'
 try:
     import importlib.util as _ilu
@@ -40,4 +43,6 @@ try:
 except (OSError, ImportError, AttributeError):
     pass  # Rotation is hygiene; an older release without it still boots.
 sys.argv = [str(installer), verb, '--home', str(home)]
+if express:
+    sys.argv.append('--express-only')
 runpy.run_path(str(installer), run_name='__main__')

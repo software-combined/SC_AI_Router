@@ -317,7 +317,7 @@ def require_live_home(home, action):
 
 
 @contextlib.contextmanager
-def install_lock(home):
+def install_lock(home, name='install.lock'):
     """Serialise installs on one router home. Yields False when one is running.
 
     The scheduled updater and a manual run fire independently, and both swap
@@ -334,7 +334,7 @@ def install_lock(home):
               'are not serialised')
         yield True
         return
-    handle = os.open(path / 'install.lock', os.O_RDWR | os.O_CREAT, 0o600)
+    handle = os.open(path / name, os.O_RDWR | os.O_CREAT, 0o600)
     try:
         try:
             if fcntl is not None:
@@ -430,19 +430,20 @@ def rotate_log(path, limit_bytes=1024 * 1024, backups=2):
         pass
 
 
-def _install_home_file(home, release_dir, name):
+def _install_home_file(home, release_dir, name, target=None):
     """Copy one stable entry point beside the state directory, atomically."""
+    target = target or name
     try:
         blob = (release_dir / 'packaging' / name).read_bytes()
     except OSError:
         raise SystemExit(f'bundle has no {name}')
-    tmp = home / (name + '.tmp')
+    tmp = home / (target + '.tmp')
     if tmp.is_symlink() or tmp.is_file():
         tmp.unlink()
     elif tmp.exists():
         shutil.rmtree(tmp)
     tmp.write_bytes(blob)
-    os.replace(tmp, home / name)
+    os.replace(tmp, home / target)
 
 
 def install_launcher(home, release_dir):
@@ -453,6 +454,8 @@ def install_launcher(home, release_dir):
     """
     _install_home_file(home, release_dir, 'router_launch.py')
     _install_home_file(home, release_dir, 'update_launch.py')
+    if "'--express-only'" in (release_dir / 'packaging' / 'update_launch.py').read_text():
+        _install_home_file(home, release_dir, 'update_launch.py', 'express_launch.py')
 
 
 def install_task_launcher(home, release_dir):
