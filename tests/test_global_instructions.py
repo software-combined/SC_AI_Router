@@ -1,7 +1,8 @@
 """Starters install once via the setup window and survive updates untouched."""
 import json
 import os
-import runpy
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -127,8 +128,12 @@ class GlobalInstructionsTests(unittest.TestCase):
             rules = config.parent / 'AGENTS.md'
             rules.write_text('User instructions.\n')
             disable = Path(__file__).resolve().parents[1] / 'tools' / 'disable.py'
-            with mock.patch.dict(os.environ, {'ROUTER_HOME': str(home)}), \
-                    mock.patch('subprocess.run'):
-                runpy.run_path(str(disable))
+            # Run it the way the installer does: subprocess with
+            # ROUTER_RESTORE_ONLY=1. Never in-process (2026-09-13 incident).
+            result = subprocess.run(
+                [sys.executable, str(disable)], capture_output=True, text=True,
+                env=dict(os.environ, ROUTER_HOME=str(home),
+                         ROUTER_RESTORE_ONLY='1'))
+            self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(config.read_text(), '\n\n# user setting\n')
             self.assertEqual(rules.read_text(), 'User instructions.\n')
