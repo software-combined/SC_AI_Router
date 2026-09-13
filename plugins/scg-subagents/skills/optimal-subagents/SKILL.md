@@ -1,9 +1,9 @@
 ---
-name: cost-first-subagents
-description: Choose cost-effective models and coordinate subagents for research, coding, documents, analysis and independent plan review before action. Covers delegation, model evidence, workload-specific comparisons and refreshing recommendations as models change.
+name: optimal-subagents
+description: Choose the right model and coordinate subagents for research, coding, documents, analysis and independent plan review before action. Covers delegation, model evidence, workload-specific comparisons and refreshing recommendations as models change.
 ---
 
-# Cost-first subagents
+# Optimal subagents
 
 Read this entrypoint at each session start when required by host instructions.
 Use it to decide whether delegation helps; reading it does not require spawning.
@@ -45,7 +45,7 @@ refresh live prices before material spend, long runs, or relying on a promotion.
 | UI and frontend | GLM Flash or DeepSeek Flash at `max`; `qwen/qwen3.8-max-0902` at `xhigh` as a stronger visual candidate | `moonshotai/kimi-k3` at `max`, then Astra/Fable at `max` for a difficult focused slice |
 | Images and multimodal reasoning | Verify actual input support; Gemini Flash at `high`, Muse or Luna at `max` according to task and budget | Astra at `max` for harder visual reasoning; use task-specific tests, not text scores |
 | Long-document extraction | Luna or DeepSeek Flash at `max`, with citations and spot checks | Muse at `max`; Kimi at `max` for demanding long-context reasoning |
-| Pre-commit review | Use the installed review skill and its bundled cost-first routing | Apply its authorized fallbacks; exact user requirements still take precedence |
+| Pre-commit review | Use the installed review skill and its bundled model routing | Apply its authorized fallbacks; exact user requirements still take precedence |
 
 **Cybersecurity exception:** read [security model selection](references/cybersecurity.md)
 before assigning any cybersecurity work, including defensive analysis, pentesting,

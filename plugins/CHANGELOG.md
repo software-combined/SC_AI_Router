@@ -1,5 +1,17 @@
 # Changelog
 
+## scg-review 0.4.2 and scg-subagents 0.4.0 — 2026-09-13
+
+- Refresh the `scg-review` bundled routing copy for the rename; the review
+  procedure itself is unchanged.
+
+## scg-subagents 0.4.0 — 2026-09-13
+
+- Rename the `cost-first-subagents` skill to `optimal-subagents`: it is the
+  global subagent skill (delegation, model choice, coordination), with cost
+  as one criterion rather than its identity. Update host instructions to the
+  new name.
+
 ## scg-review 0.4.1, scg-subagents 0.3.1 and scg-prototypes 0.1.1 — 2026-09-13
 
 - Move the `scg-agent-plugins` marketplace from `SC_Agent_plugins` into this

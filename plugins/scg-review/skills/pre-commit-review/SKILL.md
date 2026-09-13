@@ -16,10 +16,10 @@ This skill is the mandatory gate before every commit. One main agent prepares an
 
 ## Runtime Mapping
 
-Before each review, read the bundled [cost-first reviewer routing](../../references/reviews.md)
+Before each review, read the bundled [reviewer routing policy](../../references/reviews.md)
 and the effective host/project policy. The routing reference owns default models,
 fixed reasoning levels, authorized availability fallbacks and escalation. It is
-an unchanged release copy of the canonical cost-first-subagents policy, not a
+an unchanged release copy of the canonical optimal-subagents policy, not a
 second independently maintained model table. Exact user or project model/effort
 requirements take precedence.
 

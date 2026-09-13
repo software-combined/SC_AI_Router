@@ -1,9 +1,9 @@
 # Reviewer model policy
 
-Read the bundled [cost-first review routing](reviews.md) immediately before each
+Read the bundled [model routing policy](reviews.md) immediately before each
 review, together with applicable host/project requirements. That release copy
 contains defaults, fixed effort, bounded availability fallbacks and escalation.
-It is synchronized from the canonical cost-first-subagents skill; do not add a
+It is synchronized from the canonical optimal-subagents skill; do not add a
 second model table here or rewrite user instructions during plugin installation.
 
 Explicit exact-model requirements still take precedence. Otherwise a listed

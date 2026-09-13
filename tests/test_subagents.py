@@ -5,7 +5,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN = ROOT / 'plugins/scg-subagents'
-SKILL = PLUGIN / 'skills/cost-first-subagents'
+SKILL = PLUGIN / 'skills/optimal-subagents'
 
 
 def module(name, path):
