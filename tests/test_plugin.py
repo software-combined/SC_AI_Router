@@ -24,7 +24,7 @@ class PluginTest(unittest.TestCase):
         self.assertEqual((ROOT / entry["source"]["path"]).resolve(), PLUGIN)
         manifest = json.loads((PLUGIN / ".codex-plugin/plugin.json").read_text())
         self.assertEqual(entry["name"], manifest["name"])
-        self.assertEqual(manifest["repository"], "https://github.com/software-combined/SC_Agent_plugins")
+        self.assertEqual(manifest["repository"], "https://github.com/software-combined/SC_OpenRouter_adapter")
         self.assertRegex(manifest["version"], r"^\d+\.\d+\.\d+(?:\+[A-Za-z0-9.-]+)?$")
         for skill in ("pre-commit-review", "code-simplifier", "ponytail", "review-setup"):
             self.assertTrue((PLUGIN / "skills" / skill / "SKILL.md").is_file())

@@ -1,6 +1,6 @@
 {
   "name": "scg-subagents",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Cost-first model selection, subagent coordination and evidence refresh.",
   "author": {
     "name": "Software Combined"
@@ -15,5 +15,5 @@
     "capabilities": [],
     "defaultPrompt": "Use the cost-first-subagents skill to choose and coordinate models for this task."
   },
-  "repository": "https://github.com/software-combined/SC_Agent_plugins"
+  "repository": "https://github.com/software-combined/SC_OpenRouter_adapter"
 }

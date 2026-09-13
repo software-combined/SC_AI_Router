@@ -1,5 +1,19 @@
 # Changelog
 
+## scg-review 0.4.1, scg-subagents 0.3.1 and scg-prototypes 0.1.1 — 2026-09-13
+
+- Move the `scg-agent-plugins` marketplace from `SC_Agent_plugins` into this
+  repository: `plugins/scg-review`, `plugins/scg-subagents` and
+  `plugins/scg-prototypes` with the marketplace manifest at
+  `.agents/plugins/marketplace.json`. Marketplace and plugin names are
+  unchanged; only the Git source URL changes.
+- Rewire updater sources, repository fields, update guides and test fixtures
+  to `software-combined/SC_OpenRouter_adapter`. Accept the pre-move released
+  updater runner by hash so `install --migrate` retires it cleanly.
+- Reinstall from the new source after this lands: remove the marketplace,
+  re-add it from this repository, reinstall the wanted plugins, then run the
+  updater installer with `--migrate` once.
+
 ## scg-prototypes 0.1.0 — 2026-09-12
 
 - Add the `publish-prototype` skill: publish a built static prototype to

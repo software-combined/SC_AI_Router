@@ -1,6 +1,6 @@
 # Automatic updates: required machine setup
 
-Canonical source: `software-combined/SC_Agent_plugins`, branch `main`.
+Canonical source: `software-combined/SC_OpenRouter_adapter`, branch `main`.
 One native schedule refreshes this Git marketplace once and reinstalls every
 installed, enabled SCG plugin. New skills inside those plugins follow the same
 updates. Uninstalled or disabled plugins remain so.

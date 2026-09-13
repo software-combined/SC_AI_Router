@@ -17,9 +17,9 @@ import sys
 MARKETPLACE = 'scg-agent-plugins'
 LABEL = 'com.softwarecombined.agent-plugins.update'
 SOURCES = {
-    'https://github.com/software-combined/SC_Agent_plugins',
-    'https://github.com/software-combined/SC_Agent_plugins.git',
-    'git@github.com:software-combined/SC_Agent_plugins.git',
+    'https://github.com/software-combined/SC_OpenRouter_adapter',
+    'https://github.com/software-combined/SC_OpenRouter_adapter.git',
+    'git@github.com:software-combined/SC_OpenRouter_adapter.git',
 }
 # Known previous runners, retired only after content is hash-verified:
 # (label, home-relative path, accepted SHA-256s, path reused by shared runner).
@@ -29,7 +29,8 @@ LEGACY = (
      '.local/share/scg-agent-plugins/updater.py',
      ('704f610e262921e29040bf8848a20bc33968a59fd649b06aabd638e1f4bd4b56',
       '67819b4e806f76024a388cb2f697aeb4ba300c727f82b60eb10b7de7cea2f6ee',
-      '8c06a8a7305e9b2d3344b66830834f07653acb9641c5035b769110e8ff353232'), True),
+      '8c06a8a7305e9b2d3344b66830834f07653acb9641c5035b769110e8ff353232',
+      '4ded20ea2db5a42c4641ccdbb2845e3f21513644a2d01d5acfa787e77ed9f83a'), True),
     ('com.softwarecombined.subagents.update',
      '.local/share/scg-subagents/updater.py',
      ('3d4ebaba23349511892c2ae9c8b71c273e5910e91fe486dc89e470a6f343abfe',
@@ -55,7 +56,7 @@ def verify_source(codex):
     entry = next((m for m in entries if m['name'] == MARKETPLACE), {})
     source = entry.get('marketplaceSource', {})
     if source.get('sourceType') != 'git' or source.get('source') not in SOURCES:
-        raise ValueError('SCG marketplace must use the approved software-combined/SC_Agent_plugins Git source.')
+        raise ValueError('SCG marketplace must use the approved software-combined/SC_OpenRouter_adapter Git source.')
 
 
 def update(codex):

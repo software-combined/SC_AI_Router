@@ -1,6 +1,6 @@
 {
   "name": "scg-prototypes",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Publish frontend prototypes to the SCG prototype channel and return shareable URLs.",
   "author": {
     "name": "Software Combined"
@@ -15,5 +15,5 @@
     "capabilities": [],
     "defaultPrompt": "Use the publish-prototype skill to publish this prototype and give me the URL."
   },
-  "repository": "https://github.com/software-combined/SC_Agent_plugins"
+  "repository": "https://github.com/software-combined/SC_OpenRouter_adapter"
 }
