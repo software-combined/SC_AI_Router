@@ -1,4 +1,12 @@
-"""Enforce source size limits. Usage: python3.14 tools/check_source_limits.py"""
+"""Enforce source size limits.
+
+Usage: python3.14 tools/check_source_limits.py [--root REPO]
+
+Every baseline exemption must be exact and still needed (Plan 156): a file
+that shrank below its soft cap, a changed count or a deleted path fails the
+check instead of drifting silently past it.
+"""
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -8,23 +16,47 @@ from pathlib import Path
 SOFT = {'ai_router': 250, 'tools': 400, 'tests': 300, 'packaging': 400}
 HARD = {'ai_router': 400, 'tools': 700, 'tests': 500, 'packaging': 700}
 
-def main():
-    root = Path(__file__).resolve().parents[1]
+
+def problems(root):
+    """(checked, failures) for one repository root."""
     baseline = json.loads((root / 'config' / 'source-limits-baseline.json').read_text())
-    checked, failures = 0, 0
+    checked, failures, over_soft = 0, [], set()
     for area in SOFT:
         for path in sorted((root / area).rglob('*.py')):
             rel = path.relative_to(root).as_posix()
             count = sum(1 for _ in open(path))
             checked += 1
+            if count <= SOFT[area]:
+                continue
+            over_soft.add(rel)
+            recorded = baseline.get(rel)
             if count > HARD[area]:
-                print(f'HARD {rel}: {count} lines')
-                failures += 1
-            elif count > SOFT[area] and baseline.get(rel) != count:
-                print(f'SOFT {rel}: {count} lines (not in baseline)')
-                failures += 1
-    print(f'source-limits: checked={checked} failures={failures}')
+                failures.append(f'HARD {rel}: {count} lines')
+            elif recorded is None:
+                failures.append(f'SOFT {rel}: {count} lines (not in baseline)')
+            elif recorded != count:
+                failures.append(f'SOFT {rel}: {count} lines (baseline says {recorded})')
+    for rel in sorted(set(baseline) - over_soft):
+        if not (root / rel).is_file():
+            failures.append(f'BASELINE {rel}: no such file')
+        elif rel.split('/', 1)[0] not in SOFT:
+            failures.append(f'BASELINE {rel}: unknown area')
+        else:
+            failures.append(f'BASELINE {rel}: no longer over the soft cap')
+    return checked, failures
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--root', default=str(Path(__file__).resolve().parents[1]),
+                        help='repository root to check')
+    args = parser.parse_args(argv)
+    checked, failures = problems(Path(args.root).resolve())
+    for failure in failures:
+        print(failure)
+    print(f'source-limits: checked={checked} failures={len(failures)}')
     return 1 if failures else 0
+
 
 if __name__ == '__main__':
     sys.exit(main())

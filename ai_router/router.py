@@ -17,10 +17,35 @@ from .runtime import MAX_BODY, ROUTER_HOME, log_event
 MAX_INFLIGHT = 32
 
 
+def _harden_listener(sock, platform=None):
+    """Windows: bind exclusively so no local process can share the port.
+
+    Python's HTTPServer sets SO_REUSEADDR, which on Windows lets another
+    local process bind the same loopback port and receive router traffic;
+    SO_EXCLUSIVEADDRUSE forbids that. POSIX already refuses the second bind
+    without SO_REUSEPORT, so only Windows sets the flag.
+
+    Trade-off: after an abrupt exit, a Windows rebind can wait while
+    connections the old listener accepted finish closing; the scheduled
+    task's retry covers that window.
+    """
+    platform = os.name if platform is None else platform
+    exclusive = getattr(socket, 'SO_EXCLUSIVEADDRUSE', None)
+    if platform == 'nt' and exclusive is not None:
+        sock.setsockopt(socket.SOL_SOCKET, exclusive, 1)
+
+
 class Router(ThreadingHTTPServer):
     daemon_threads = True
     drain_deadline_s = 120
     max_inflight = MAX_INFLIGHT
+    # Windows takes SO_EXCLUSIVEADDRUSE in server_bind instead; leaving
+    # SO_REUSEADDR on would undo it.
+    allow_reuse_address = os.name != 'nt'
+
+    def server_bind(self):
+        _harden_listener(self.socket)
+        super().server_bind()
 
     def __init__(self, state, fileno=None, credentials=None):
         sock = (None if fileno is None else
