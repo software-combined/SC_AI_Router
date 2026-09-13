@@ -88,6 +88,20 @@ def is_context_error(body):
         return False
 
 
+def _prompt_refusal(failure, event):
+    """OpenRouter's own provider-400 code, raised after the stream opened.
+
+    The converted chat body was refused upstream and replaying it cannot
+    succeed, so the client gets one actionable sentence instead of the
+    provider's schema dump. The bounded code still reaches the log.
+    """
+    envelope = _error_envelope(failure, event)
+    if envelope is None:
+        return None
+    codes = (_bounded(envelope.get('code')), _bounded(envelope.get('error_type')))
+    return errors.upstream_invalid_prompt() if 'invalid_prompt' in codes else None
+
+
 def normalize(chunks, metrics):
     """Keep HTTP status separate from the terminal event's inference outcome."""
     for frame, data in sse.blocks(sse.lines(chunks)):
@@ -106,15 +120,18 @@ def normalize(chunks, metrics):
         context = (kind != 'response.incomplete'
                    and (_context_error(failure) or _context_error(event)))
         _record_detail(metrics, kind, failure, event)
-        if context:
-            metrics['code'] = 'context_length_exceeded'
-        elif kind == 'response.incomplete':
-            metrics['code'] = 'UPSTREAM_INCOMPLETE'
+        refusal = None
+        if kind != 'response.incomplete':
+            refusal = errors.context_window() if context else _prompt_refusal(failure, event)
+        if refusal is None:
+            metrics['code'] = ('UPSTREAM_INCOMPLETE' if kind == 'response.incomplete'
+                               else 'UPSTREAM_STREAM_FAILED')
         else:
-            metrics['code'] = 'UPSTREAM_STREAM_FAILED'
+            metrics['code'] = ('context_length_exceeded' if context
+                               else 'UPSTREAM_INVALID_PROMPT')
         metrics.pop('served_model', None)
-        if context:
+        if refusal is not None:
             frame = sse.frame(json.dumps({
-                'type': 'response.failed', 'response': errors.context_window().body()}).encode())
+                'type': 'response.failed', 'response': refusal.body()}).encode())
         yield frame
         return  # A terminal failure cannot be followed by a successful completion.
