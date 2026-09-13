@@ -1,0 +1,22 @@
+{
+  "name": "scg-review",
+  "version": "0.4.2",
+  "description": "Simplification, secret scanning and three-lane review of the exact staged Git tree.",
+  "author": {
+    "name": "Software Combined"
+  },
+  "repository": "https://github.com/software-combined/SC_OpenRouter_adapter",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "SCG Pre-Commit Review",
+    "shortDescription": "Review staged changes before committing.",
+    "longDescription": "Runs a simplification pass, a pinned secret scan, and correctness, quality and adversarial reviews. Includes setup checks and the shared Git hook adapter.",
+    "developerName": "Software Combined",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": [
+      "Check whether this repository is ready for SCG pre-commit review.",
+      "Review my staged changes before committing."
+    ]
+  }
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pre-Commit Review"
+  short_description: "Simplification pass plus calibrated three-lane staged review."
+  default_prompt: "Use the pre-commit-review skill bundled with scg-review to run simplification, secret scanning and the correctness, quality and adversarial reviews over the exact staged tree before committing."

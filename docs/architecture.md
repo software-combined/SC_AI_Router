@@ -83,6 +83,11 @@ successful frames and records semantic failure separately from the HTTP status.
    deliberate exception is `tools/disable.py`, the installed-host remover
    that `packaging/install.py` runs.
 
+`plugins/` and `.agents/plugins/marketplace.json` host the SCG agent-plugin
+marketplace outside the router dependency map: no `ai_router/`, `tools/` or
+`packaging/` module imports from `plugins/`, and plugin scripts never import
+router code.
+
 ## Distribution (outside the request path)
 
 `infra/` owns the update feed as code (repository-only templates, deployed from a checkout): the certificate stack, the private
