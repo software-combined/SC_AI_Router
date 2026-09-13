@@ -24,7 +24,7 @@ def _external_responses():
 def _row(slug='z-ai/glm-5.3'):
     return {'slug': slug, 'provider': 'openrouter', 'display_name': 'X',
             'vendor': 'V', 'reasoning': ['low'], 'default_reasoning': 'low',
-            'modalities': ['text'], 'excluded_efforts': [], 'schema_mode': 'native',
+            'modalities': ['text'], 'excluded_efforts': [], 'schema_mode': 'native', 'history_mode': 'native',
             'max_tools': None, 'drop_images': False, 'context_window': 1,
             'priority': 100, 'max_output_tokens': 100, 'reasoning_summary': 'none',
             'apply_patch': 'none', 'experimental_tools': [], 'web_search': True,

@@ -14,15 +14,32 @@ rows authored by hand, and `models add` refuses it rather than guessing.
 `models check` and `live_refresh` follow the same rule in reverse: a fetch
 only ever rewrites rows owned by the provider whose catalogue it read.
 
-Without `--probe` the row lands as `tier: preview`: it appears in the
-picker labelled Preview but is not trusted yet (an `openai/*` row lists
-in the Codex picker beside its subscription twin; the `--client claude`
-catalogue merge still drops OpenRouter-billed Anthropic rows). With
-`--probe` the base tool round trip runs on the installed router; a pass
-writes `tier: verified`, anything else stays `preview` and appends a row
-to `docs/compatibility.md`. Validate with
-`python3.14 -m ai_router.models check` (`0 problems` required) and
-remove with `python3.14 -m ai_router.models remove <slug>`.
+Without `--probe` the row lands as `tier: preview` and `listed: false`:
+it stays out of both pickers (the Codex catalogue and `GET /v1/models`)
+but remains routable so its own probe can reach it. With `--probe` the
+implied legs run on an isolated router (tool round trip always, `--image`
+when the row's modalities include image, compaction when it declares a
+context window); a pass writes `tier: verified` with `listed: true`,
+anything else leaves the row unlisted and prints why, and the run is
+recorded in `docs/compatibility.md` with the legs that ran. An explicit
+`--tier verified` without a passing probe keeps the row unlisted and says
+so, and a hand-edited `listed: true` on a non-verified row is refused at
+load. Rows shipped before the flag keep working without it and stay
+visible. Validate with `python3.14 -m ai_router.models check`
+(`0 problems` required) and remove with
+`python3.14 -m ai_router.models remove <slug>`.
+
+`models discover` diffs the live catalogue against `models.json` without
+writing anything or billing a probe (no key needed for OpenRouter):
+
+```sh
+python3.14 -m ai_router.models discover            # addable / registered / unavailable / retired
+python3.14 -m ai_router.models discover --json     # same document as JSON
+python3.14 -m ai_router.models discover --provider ID
+```
+
+A standalone probe preview bills nothing: `python3.14 -m ai_router.candidate
+<slug>` prints the legs it would run; add `--probe --confirm` to bill them.
 
 Preview models route exactly like verified ones; only the picker label
 and their position differ: the picker groups rows by vendor A-Z, verified

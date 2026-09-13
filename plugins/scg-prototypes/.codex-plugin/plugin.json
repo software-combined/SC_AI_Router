@@ -1,0 +1,19 @@
+{
+  "name": "scg-prototypes",
+  "version": "0.1.1",
+  "description": "Publish frontend prototypes to the SCG prototype channel and return shareable URLs.",
+  "author": {
+    "name": "Software Combined"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "SCG Prototypes",
+    "shortDescription": "Publish a prototype and get a shareable URL.",
+    "longDescription": "Publishes a built static prototype to the private-backend, CloudFront-fronted SCG prototype channel, archives it in git, and returns the URL with its 30 day expiry.",
+    "developerName": "Software Combined",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": "Use the publish-prototype skill to publish this prototype and give me the URL."
+  },
+  "repository": "https://github.com/software-combined/SC_OpenRouter_adapter"
+}

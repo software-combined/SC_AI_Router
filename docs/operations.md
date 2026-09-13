@@ -14,8 +14,10 @@ checks but publishes nothing.
 
 ## Feed infrastructure and publishing
 
-Two stacks, both in this repository, hold the update path. Deploy the
-certificate first: CloudFront reads viewer certificates from `us-east-1`,
+Two stacks, both in this repository, hold the update path. The `infra/`
+templates are repository-only: deploy them from a checkout, not from an
+installed host (the release bundle carries `README.md` and `docs/*.md` only).
+Deploy the certificate first: CloudFront reads viewer certificates from `us-east-1`,
 and the deploy stays in progress until ACM validates the DNS record it
 creates in the `softwarecombined.com` zone.
 
@@ -64,8 +66,8 @@ roll-forward: revert the change on the publishing branch, bump
 `packaging/VERSION`, and tag again. Re-uploading a different bundle for an
 already-published version aborts instead of replacing bytes, and a failed
 workflow before the feed upload leaves the previous feed document serving.
-A single host rolls back locally with `install.py --version <version>` at
-an idle moment. Moving a host from `beta` back to `stable` needs
+A single host rolls back locally with `install.py --rollback --to <version>`
+at an idle moment. Moving a host from `beta` back to `stable` needs
 `<home>/feed-serial` cleared first, or the lower stable serial is refused
 as stale.
 
@@ -149,6 +151,26 @@ the owner's edits always win. Start a fresh Codex task to load the file. It
 applies across models without duplicating text in the catalogue and grants no
 new permission.
 
+## New model notifications
+
+When a scheduled update lands a version that adds models for the machine's
+policy scope, the updater asks the running router over loopback (the 3.9
+updater never imports the runtime) and offers a Codex restart: a desktop
+notification names up to three of the new models (macOS always; Linux when
+`notify-send` is installed; Windows logs the offer only) and the approval
+page opens in the browser on macOS and Linux. The page is reachable only
+through its single-use link, which carries the per-install path token plus
+a 48 h nonce; both Restart Codex and Later acknowledge, and only the
+Restart click quits and reopens Codex, on macOS. The offer is skipped on
+installs whose state records no Codex attachment (`--clients claude`,
+`--client none`; a `clients` value recorded by an earlier run can lag the
+current attachment) and whenever `ROUTER_NO_NOTICE=1` silences the update
+notice. The first run
+seeds the snapshot without announcing the catalogue, so the first landing
+after this feature ships only seeds it and later landings announce;
+removals and version-only updates stay silent, and an unverified or
+out-of-policy row is never announced.
+
 ## How to test first
 
 Tag `v*-beta` from `develop`. The workflow publishes a pre-release to the
@@ -162,9 +184,11 @@ watch its `/health` version and `logs/update.log` before merging
 
 Revert through `develop` to `main` and tag (the next release supersedes
 the bad one), or pin one machine with
-`python3 packaging/install.py --version X`. The installer itself
+`python3 packaging/install.py --rollback --to X`. The installer itself
 restores the old pointer automatically when the new release fails its
-health check.
+health check. Scheduled updates keep running after a rollback, so the
+channel offers the newer release again at the next pass; stop the scheduled
+update job if the rollback has to persist until a fix ships.
 
 A release before 0.6.9 recorded a `--feed` install's own build number in
 `<home>/feed-serial`, so a local build could leave a number the published
@@ -172,6 +196,32 @@ feed has not reached. Every scheduled check then refuses the real feed with
 `stale feed serial N is older than M`. Delete `<home>/feed-serial` to clear
 it; the next unpinned update records the channel's own serial. Installs from
 0.6.9 on leave that file alone.
+
+## Operator surface
+
+Every command is read-only unless it says otherwise, and none prints a
+token, key or URL:
+
+```sh
+python3 packaging/install.py --doctor    # helper rows, a Fix line per WARN/FAIL
+python3 packaging/install.py --status    # version, service, keys, channel, update recency
+python3 packaging/install.py --check-update   # installed and available versions only
+python3 packaging/install.py --update    # apply what the channel offers (scheduled action)
+python3 packaging/install.py --rollback  # list installed releases; --to VERSION restores one
+python3 packaging/install.py --support   # 0600 redacted bundle for a support request
+```
+
+`--doctor` exits 1 when any row fails. Its rows cover the Python runtime, the
+installed release, the serving version, each provider key, the picker
+catalogue (one `ai_router.catalogue --check` run), the Claude Code attach
+snapshot against the live `GET /v1/models` listing, the scheduled command
+carrier and update recency; a host whose launcher or systemd unit still runs
+the read-only `--check-update` fails that row until the installer re-renders
+it. `--status` reports `last_check_at`, `last_applied_version`, `last_error`
+(a code from a closed set) and the per-version failure counts from state, so
+a parked release is visible without reading the log. `--support` writes only
+booleans, enums, versions, counts and timestamps to
+`<home>/logs/support-<UTC>.json` and prints the path.
 
 ## Safe update, restart, reinstall
 
@@ -261,6 +311,27 @@ window, and use per-request ratios, never ratios of unrelated
 percentiles. Paid direct-versus-router comparisons need separate
 explicit authority.
 
+## Failed streams (why the provider ended it)
+
+`request_failed` records a terminal event the upstream sent inside a `200`
+stream. `code` is `context_length_exceeded` for a context-limit refusal,
+`UPSTREAM_INCOMPLETE` when the provider reported an incomplete response,
+`UPSTREAM_INVALID_PROMPT` when OpenRouter refused the converted request after
+the stream opened, and `UPSTREAM_STREAM_FAILED` for any other terminal error.
+Three fields say why:
+
+| Field | Meaning |
+|---|---|
+| `terminal_event` | `response.failed`, `response.incomplete`, or `error` |
+| `upstream_reason` | the `incomplete_details.reason` enum, when reported |
+| `upstream_code` | the error envelope's `code` or `error_type`, when present |
+
+Both details must be code-shaped (letters, digits, dot, dash, underscore) and
+at most 64 characters; anything else, including message text, is dropped
+rather than recorded, because provider prose can quote prompt content. A
+missing detail means the provider did not say why, or said it in a form this
+rule refuses to record.
+
 ## Stream identity observation (last-observed, not proof)
 
 Tool-free responses carry an optional identity observer: bytes forward
@@ -287,14 +358,20 @@ provider's key under `providers`, with the legacy `key_present` /
 1. IT creates the key in the OpenRouter dashboard with a monthly allowance
    and hands it to the user over an existing trusted channel (never commit
    it, never paste it into chat or email threads beyond that handoff).
-2. The user installs with `--setup` and a native window asks for the key, the
-   subscription choice for the client(s) being set up (ChatGPT for Codex,
+2. The user installs and a native window opens by itself to ask for the key,
+   the subscription choice for the client(s) being set up (ChatGPT for Codex,
    Claude for Claude Code, both when both are attached) and the starter. It
    validates the key against OpenRouter before storing anything and shows
    remaining credit; the key lands in `openrouter.key` (mode 600), which the
    router reads per request. A host with no dialog tool (headless Linux, SSH)
-   opens the loopback page instead, and the installer prints the link on its
-   own terminal so the operator can paste it into a browser.
+   opens the loopback page instead, and an interactive terminal prints the
+   link so the operator can paste it into a browser. The installed
+   service does not receive the invoking shell's environment, so an exported
+   `OPENROUTER_API_KEY` does not count as configured and still opens the
+   window. Re-run with `--setup` only if no window appears; it restarts the
+   current release with a fresh link, without re-extracting it. Scheduled
+   `--update` runs and manual `--check-update` runs never pop the window; the
+   next request opens it instead.
 3. Rotation: delete `openrouter.key` first (the setup window refuses to
    overwrite a file holding a real key with 409), then re-run the installer
    with `--setup` and paste the replacement. File-level alternative is under
@@ -387,10 +464,10 @@ widened ACL makes the router refuse the key at read time.
 
 ## Incidents
 
-Check `/health`, then `logs/launchd.log`, then
-`launchctl print` for the router agent (`schtasks /query` on Windows). Roll
-back by re-running the installer with `--version` pointing at the previous
-release.
+Check `install.py --doctor` first, then `/health`, then `logs/launchd.log`,
+then `launchctl print` for the router agent (`schtasks /query` on Windows).
+Roll back by re-running the installer with `--rollback --to` naming the
+previous release.
 
 ## Decision log
 

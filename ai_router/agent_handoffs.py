@@ -1,6 +1,7 @@
 """Plaintext aliases for native collaboration; Codex still executes every tool."""
 from copy import deepcopy
 import json
+import uuid
 
 from . import provider_defs, sse
 from .registry import by_slug
@@ -79,11 +80,33 @@ def spawn_models(items):
     return models
 
 
+def _tool_container(payload):
+    """Find one native declaration, including the client's Lite prefix."""
+    containers = [(payload, None)]
+    items = payload.get('input', [])
+    containers.extend((item, index) for index, item in enumerate(items if isinstance(items, list) else [])
+                      if isinstance(item, dict) and item.get('type') == 'additional_tools'
+                      and item.get('role') == 'developer')
+    matches = []
+    for container, index in containers:
+        tools = container.get('tools', [])
+        if index is not None and (not isinstance(tools, list)
+                                  or any(not isinstance(t, dict) for t in tools)):
+            raise ValueError('unsupported tool declaration shape')
+        for tool in tools:
+            if tool.get('name') == PLAINTEXT_NAMESPACE:
+                raise ValueError('plaintext collaboration namespace collision')
+            if tool.get('type') == 'namespace' and tool.get('name') == NATIVE_NAMESPACE:
+                matches.append((container, index))
+    if len(matches) > 1:
+        raise ValueError('duplicate native collaboration namespace')
+    return matches[0] if matches else (payload, None)
+
+
 def add_plaintext_tools(payload):
     """Offer aliases only for native tools present in this request."""
-    tools = payload.get('tools', [])
-    if any(t.get('name') == PLAINTEXT_NAMESPACE for t in tools):
-        raise ValueError('plaintext collaboration namespace collision')
+    container, input_index = _tool_container(payload)
+    tools = container.get('tools', [])
     aliases = []
     for namespace in tools:
         if namespace.get('type') != 'namespace' or namespace.get('name') != NATIVE_NAMESPACE:
@@ -113,13 +136,23 @@ def add_plaintext_tools(payload):
     if len(names) != len(aliases):
         raise ValueError('duplicate native collaboration tool')
     if aliases:
-        payload['tools'] = [*tools, {'type': 'namespace', 'name': PLAINTEXT_NAMESPACE,
+        augmented = [*tools, {'type': 'namespace', 'name': PLAINTEXT_NAMESPACE,
             'description': ('Use this namespace for every initial assignment and follow-up '
                 'to externally billed agents. Previous calls may appear under '
                 'collaboration in '
                 'history because Codex executes the native tool; that does not change '
                 'the need to choose collaboration_plaintext for the next message.'),
             'tools': aliases}]
+        if input_index is None:
+            payload['tools'] = augmented
+        else:
+            # Codex hashes prefix payloads into IDs; changed tools need a new,
+            # stable identity too. Never modify the client's saved prefix.
+            identity = json.dumps([container.get('id'), augmented], sort_keys=True)
+            ident = 'at_' + str(uuid.uuid5(uuid.NAMESPACE_URL, 'scg-plaintext:' + identity))
+            items = list(payload['input'])
+            items[input_index] = {**container, 'tools': augmented, 'id': ident}
+            payload['input'] = items
     return AliasTools(names, payload.get('stream') is True, children)
 
 
@@ -151,6 +184,16 @@ def restore_event(event, names):
     return mapped
 
 
+def external_plaintext_call(item, names):
+    """External upstreams emit plaintext; keep advertised native calls executable."""
+    if (item.get('type') != 'function_call' or item.get('namespace') != NATIVE_NAMESPACE
+            or item.get('name') not in HANDOFF_TOOLS or item.get('name') not in names):
+        return item
+    if item.get('encrypted_function_args', []) != []:
+        raise ValueError('unsupported encrypted external handoff')
+    return {**item, 'encrypted_function_args': []}
+
+
 def restore_response(response, names):
     output = response.get('output')
     if not isinstance(output, list):
@@ -162,15 +205,17 @@ def restore_response(response, names):
 
 
 def steer_plaintext(item, names):
-    """Replace a provably undeliverable encrypted handoff with a steer output.
+    """Reject an unreadable handoff through Codex's native validation path.
 
     Fires only when the emitted native call cannot reach its child readably:
     an encrypted spawn_agent naming an external-provider model, or an encrypted
     followup_task/send_message targeting a child this thread spawned onto an
     external model. Everything else returns untouched, so native encrypted
     handoffs and unknown targets keep current behavior and the downstream
-    guards remain the backstop. The steer names the exact alias call to make
-    instead; no payload, ciphertext, or history is quoted. Pure.
+    guards remain the backstop. A JSON string cannot deserialize as any of the
+    three native argument objects: Codex returns a real tool error and requests
+    another inference. A response-only tool output silently ends its turn.
+    The diagnostic contains no assignment, ciphertext or target. Pure.
     """
     if item.get('type') != 'function_call':
         return item
@@ -186,22 +231,17 @@ def steer_plaintext(item, names):
         if entry is None or not provider_defs.is_external(entry.provider):
             return item
         detail = ('spawn via collaboration_plaintext.spawn_agent '
-                  'for externally billed models')
+                  'with fork_turns="none" for externally billed models')
     else:
         target = args.get('target')
         model = _spawn_model(spawns, target)
         entry = by_slug(model) if isinstance(model, str) else None
         if entry is None or not provider_defs.is_external(entry.provider):
             return item
-        detail = ('call collaboration_plaintext.' + item['name']
-                  + " with target '" + target + "'")
-    call_id = item.get('call_id')
-    output = {'type': 'function_call_output', 'output':
-              'That handoff cannot be delivered readably; ' + detail
-              + ' and resend the message as plain text.'}
-    if isinstance(call_id, str):
-        output['call_id'] = call_id
-    return output
+        detail = 'call collaboration_plaintext.' + item['name'] + ' with the same target'
+    diagnostic = ('That handoff cannot be delivered readably; ' + detail
+                  + ' and resend the message as plain text.')
+    return {**item, 'arguments': json.dumps(diagnostic), 'encrypted_function_args': []}
 
 
 def steer_response(response, names):

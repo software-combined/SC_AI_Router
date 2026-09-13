@@ -19,6 +19,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+from .atomic_write import replace_text
 
 from . import registry
 
@@ -85,9 +86,7 @@ def poll_once(models_url, home, etag, _urlopen=urllib.request.urlopen):
         LOG.info(json.dumps({'event': 'models_refresh_failed', 'reason': exc.__class__.__name__}))
         return None, etag
     try:
-        tmp = Path(home) / (CACHE_NAME + '.tmp')
-        tmp.write_text(body.decode())
-        tmp.replace(Path(home) / CACHE_NAME)
+        replace_text(Path(home) / CACHE_NAME, body.decode())
     except OSError as exc:
         LOG.info(json.dumps({'event': 'models_refresh_failed', 'reason': exc.__class__.__name__}))
         return None, etag
@@ -130,7 +129,7 @@ def start(models_url, home, _urlopen=urllib.request.urlopen):
                 apply(models)
             if etag:
                 try:
-                    etag_path.write_text(etag + '\n')
+                    replace_text(etag_path, etag + '\n')
                 except OSError:
                     pass
 

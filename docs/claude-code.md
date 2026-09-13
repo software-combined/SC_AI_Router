@@ -50,6 +50,29 @@ registry row. A registry slug also routes directly. Reasoning is
 governed by each call's `max_tokens` and `thinking` fields, which
 travel untouched. Start a fresh session when switching providers.
 
+## Attachment contract
+
+The installer owns exactly two `env` keys in `~/.claude/settings.json`
+(`ANTHROPIC_BASE_URL` and `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY`) and
+restores the previous values on detach. `ANTHROPIC_AUTH_TOKEN` and
+`ANTHROPIC_API_KEY` must stay unset: either one overrides the subscription
+bearer, so subscription requests would stop reaching Anthropic with the
+client's own login and the listing fetch would present the wrong credential.
+The attach records the listing ids, display names and tiers it was told
+about, and `--doctor` compares that snapshot with the live `GET /v1/models`;
+a change shows up as `drift` with the added and removed ids, and `unknown`
+when the router is not answering. The comparison is by listing id, so a
+display-name or tier edit alone does not report drift. Restart Claude Code
+after a listing change so the client refetches.
+
+A launcher that only routes when the user types a different command (or a
+wrapper script) was considered and rejected: an alias breaks a plain `claude`
+invocation, and the external-router pattern of setting
+`ANTHROPIC_AUTH_TOKEN` to a router secret is exactly what breaks subscription
+passthrough, which requires the client's own credential to reach the router
+untouched. The settings merge writes only owned keys and refuses a
+hand-edited conflict instead of overwriting it.
+
 ## Behaviour and limits
 
 - OpenRouter-bound bodies are forwarded byte-identical to OpenRouter's

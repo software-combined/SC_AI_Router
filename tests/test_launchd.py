@@ -171,6 +171,7 @@ class UpdateLauncherTests(unittest.TestCase):
         home = Path(tmp) / 'home'
         (home / 'releases' / version / 'packaging').mkdir(parents=True)
         (home / 'releases' / version / 'packaging' / 'install.py').write_text(
+            "# parser.add_argument('--update')\n"
             'import json, sys, os\n'
             'open(os.environ["ARGV_OUT"], "w").write(json.dumps(sys.argv))\n')
         (home / 'current').write_text((pointer or version) + '\n')
@@ -196,8 +197,25 @@ class UpdateLauncherTests(unittest.TestCase):
             self.assertEqual(
                 Path(argv[0]),
                 (home / 'releases' / '1.2.3' / 'packaging' / 'install.py').resolve())
-            self.assertIn('--check-update', argv)
+            self.assertIn('--update', argv)
+            self.assertNotIn('--check-update', argv)
             self.assertEqual(Path(argv[argv.index('--home') + 1]), home.resolve())
+
+    def test_uses_the_verb_the_resolved_release_advertises(self):
+        # Rollback can point `current` at a pre-147 installer that only knows
+        # --check-update; the launcher must not strand it on argparse error.
+        with tempfile.TemporaryDirectory() as tmp:
+            home, launcher = self._home(tmp)
+            (home / 'releases' / '1.2.3' / 'packaging' / 'install.py').write_text(
+                '# this release applies on --check-update\n'
+                'import json, sys, os\n'
+                'open(os.environ["ARGV_OUT"], "w").write(json.dumps(sys.argv))\n')
+            out = Path(tmp) / 'argv.json'
+            self.assertEqual(self._run(launcher, out).returncode, 0)
+            import json
+            argv = json.loads(out.read_text())
+            self.assertIn('--check-update', argv)
+            self.assertNotIn('--update', argv)
 
     def test_follows_the_pointer_after_an_update(self):
         # The whole point: no plist rewrite is needed for the updater to start

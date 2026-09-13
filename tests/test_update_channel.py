@@ -48,7 +48,8 @@ class UpdaterAdoptionTests(unittest.TestCase):
                      write_catalogue=_fake_write_catalogue,
                      wait_version=lambda *a, **k: {'status': 'ok'})
         env = dict({'HOME': str(Path(tmp) / 'fakehome'),
-                    'OPENROUTER_API_KEY': 'k'}, **(env_extra or {}))
+                    'OPENROUTER_API_KEY': 'k',
+                    'ROUTER_NO_KEY_WINDOW': '1'}, **(env_extra or {}))
         with mock.patch.dict(os.environ, env):
             args = install_mod.build_parser().parse_args(
                 ['--feed', 'file:///latest.json', '--home', str(home)])
@@ -115,6 +116,7 @@ class UpdaterAdoptionTests(unittest.TestCase):
                          write_catalogue=_fake_write_catalogue,
                          wait_version=lambda *a, **k: {'status': 'ok'})
             env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'k',
+                   'ROUTER_NO_KEY_WINDOW': '1',
                    'XPC_SERVICE_NAME': UPDATE_LABEL}
             with mock.patch.dict(os.environ, env):
                 args = install_mod.build_parser().parse_args(
@@ -159,7 +161,8 @@ class UpdaterAdoptionTests(unittest.TestCase):
                          write_catalogue=_fake_write_catalogue,
                          wait_version=lambda *a, **k: {'status': 'ok'})
             LAUNCHD.reset(unloaded={LABEL, UPDATE_LABEL})
-            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'k'}
+            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'k',
+                   'ROUTER_NO_KEY_WINDOW': '1'}
             with mock.patch.dict(os.environ, env):
                 args = install_mod.build_parser().parse_args(
                     ['--feed', 'file:///latest.json', '--home', str(home)])
@@ -203,7 +206,7 @@ class InstallLockTests(unittest.TestCase):
             self.assertEqual(rc, 0)
             self.assertIn('another router operation', buf.getvalue())
 
-    def test_check_update_never_takes_the_lock_its_own_child_needs(self):
+    def test_update_never_takes_the_lock_its_own_child_needs(self):
         # The scheduled parent must stay unlocked: the installer it spawns is
         # a fresh main() that takes the lock itself. A parent holding it would
         # make the child defer, the parent report "did not activate", and
@@ -232,11 +235,11 @@ class InstallLockTests(unittest.TestCase):
                 with mock.patch('time.sleep'), contextlib.redirect_stdout(buf), \
                         mock.patch.dict(os.environ, {'ROUTER_LIVE_RUN': '1'}):  # deliberate scratch-home run
                     rc = install_mod.main(
-                        ['--check-update', '--home', str(home),
+                        ['--update', '--home', str(home),
                          '--feed', 'file://' + str(feed_doc)])
             self.assertEqual(rc, 0)
             self.assertNotIn('another router operation', buf.getvalue(),
-                             'a scheduled check must not be blocked by the lock')
+                             'a scheduled update must not be blocked by the lock')
             self.assertTrue([c for c in child if '--home' in c],
                             'the check must still reach the child installer')
 
@@ -265,7 +268,7 @@ class UpdateBackoffTests(unittest.TestCase):
             json.dumps({'port': 1, 'token': 'x'}))
         return home
 
-    def _check(self, home, blob, latest, fetches, run=None, child_rc=1):
+    def _check(self, home, blob, latest, fetches, run=None, child_rc=1, _announce=None):
         def fake_run(cmd, **kwargs):
             if cmd[:1] == ['launchctl']:
                 return _ok_run(cmd, **kwargs)
@@ -281,10 +284,10 @@ class UpdateBackoffTests(unittest.TestCase):
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             try:
-                rc = install_mod.do_check_update(
+                rc = install_mod.do_update(
                     args, _fetch=fetch,
                     _read_feed=lambda f, e: (200, json.dumps(latest).encode(), 'etag-1'),
-                    _sleep=lambda s: None)
+                    _sleep=lambda s: None, _announce=_announce)
             except SystemExit as exc:
                 rc = exc.code
         return rc, buf.getvalue()
@@ -360,7 +363,8 @@ class UpdateBackoffTests(unittest.TestCase):
             with mock.patch.object(install_mod._svc.notice, 'show_pending',
                                    wraps=honest) as shown, \
                     mock.patch.dict(os.environ, {'ROUTER_NO_NOTICE': '1'}):
-                rc, out = self._check(home, blob, latest, [], run=run)
+                rc, out = self._check(home, blob, latest, [], run=run,
+                                      _announce=lambda _state: None)
             self.assertEqual(rc, 1, 'the failure must stay visible')
             self.assertEqual(shown.call_count, 1, 'the notice module is asked')
             self.assertEqual(install_mod._update_failures(home), {},
@@ -384,6 +388,29 @@ class UpdateBackoffTests(unittest.TestCase):
             self.assertEqual(install_mod._update_failures(home), {'9.9.9': 1})
             self.assertFalse((home / 'logs' / 'update.log').exists())
             self.assertNotIn('after the swap', out)
+
+    def test_the_announce_runs_after_the_update_log_is_written(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = self._home(tmp)
+            blob, latest = _craft_bundle('9.9.9')
+            seen = {}
+
+            def fake_run(cmd, **kwargs):
+                if cmd[:1] == ['launchctl']:
+                    return _ok_run(cmd, **kwargs)
+                (home / 'releases' / '9.9.9').mkdir(parents=True)
+                (home / 'current').write_text('9.9.9')
+                return SimpleNamespace(returncode=0, stdout='', stderr='')
+
+            def fake_announce(state):
+                seen['log'] = (home / 'logs' / 'update.log').read_text()
+                seen['state'] = state
+
+            rc, _out = self._check(home, blob, latest, [], run=fake_run,
+                                   child_rc=0, _announce=fake_announce)
+            self.assertEqual(rc, 0)
+            self.assertIn('9.9.9', seen['log'])
+            self.assertEqual(seen['state']['port'], 1)
 
 
 if __name__ == '__main__':

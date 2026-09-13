@@ -229,6 +229,7 @@ class ToolAdapterTests(unittest.TestCase):
         qualified = ToolEvents(names).item({'type': 'function_call', 'name': SEARCH_NAME, 'arguments': '{"query":"probe.echo_probe"}'})
         self.assertEqual(qualified['arguments'], {'query': 'probe echo_probe'})
 
+
     def test_union_root_schema_is_string_wrapped_for_grok_only(self):
         union = {'anyOf': [{'type': 'object', 'properties': {'value': {'type': 'string'}}},
                            {'type': 'string'}]}
@@ -361,7 +362,7 @@ class ToolAdapterTests(unittest.TestCase):
                         'call_id': 'c1', 'output': 'hi'}]}
         names = prepare_tools(payload)
         wire = payload['tools'][0]['name']
-        self.assertTrue(wire.startswith('ns_'))
+        self.assertEqual(wire, 'probe__exec')
         call, result = payload['input']
         self.assertEqual(call['type'], 'function_call')
         self.assertEqual(call['name'], wire)

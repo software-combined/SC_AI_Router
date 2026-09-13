@@ -15,7 +15,8 @@ registry / capabilities / image_items (leaves: model facts, stdlib + dataclasses
   |            |
 catalogue / models / live_refresh / apply_catalogue (client projections)
   |
-agent_handoffs / compaction / tool_adapter / discovered (request normalization)
+agent_handoffs / compaction / tool_adapter / tool_aliases / discovered
+(request normalization)
   |
 providers (Responses adapters) + claude (Messages adapters)
   |
@@ -32,6 +33,17 @@ Rules:
 
 `agent_handoffs.py` owns collaboration alias schemas and native-name restoration;
 `sse.py` owns shared event framing without provider-specific argument rewriting.
+`standalone_outputs.py` projects readable peer messages and standalone outputs
+into matched tool results for external requests; client history stays unchanged.
+`subscription_history.py` owns the pure outgoing reasoning projection for
+subscription Responses requests; it never edits persisted client history.
+`context_recovery.py` adds fixed recovery guidance for client-declared context
+resets on either Responses route. Codex owns saved history and executes its
+retrieval tools; the router stores no assignment or transcript cache.
+It also owns the exact legacy paragraph migration used by catalogue upgrades.
+`stream_errors.py` owns shared HTTP/SSE context-error classification and applies
+it to external Responses terminal events after tool adaptation. It preserves
+successful frames and records semantic failure separately from the HTTP status.
 
 1. `provider_defs.py` owns every upstream fact (host, endpoint prefixes, key
    location, model catalogue, key-info endpoint, failure dialect) and imports
@@ -62,10 +74,23 @@ Rules:
 6. `packaging/` file-based imports (`spec_from_file_location`) avoid
    depending on a third-party distribution named `packaging`. Installer
    scripts stay Python 3.9-compatible; the runtime requires 3.14.
+7. `tools/` holds checkout-run helpers (local probes, scans, key ceremonies)
+   that are invoked by the developer or by CI, not by an installed router;
+   `packaging/` holds the modules an installed host executes. A new
+   host-run script belongs in `packaging/`, even if nothing in `ai_router/`
+   imports it. `packaging/release.py` globs every `tools/*.py` into the
+   bundle, so a repo-only helper placed there ships to recipients; the one
+   deliberate exception is `tools/disable.py`, the installed-host remover
+   that `packaging/install.py` runs.
+
+`plugins/` and `.agents/plugins/marketplace.json` host the SCG agent-plugin
+marketplace outside the router dependency map: no `ai_router/`, `tools/` or
+`packaging/` module imports from `plugins/`, and plugin scripts never import
+router code.
 
 ## Distribution (outside the request path)
 
-`infra/` owns the update feed as code: the certificate stack, the private
+`infra/` owns the update feed as code (repository-only templates, deployed from a checkout): the certificate stack, the private
 bucket, the CloudFront distribution, the DNS alias, and the tag-only
 publisher role. `tools/publish_feed.py` owns
 release publication: it turns a built `dist/` into the feed's
@@ -74,6 +99,13 @@ release publication: it turns a built `dist/` into the feed's
 `runtimes.json` and `runtimes/*`, plus the `bootstrap/*` wrappers. The
 router imports neither: hosts read the feed through `packaging/feed.py`, which
 stays the client-side owner of origin and channel resolution.
+
+`packaging/release.py` parses normal and Express tags; Express is feed
+urgency on stable or beta, never a third channel or a package-version suffix.
+The platform backends own a separate minute Express job alongside the regular
+four-hour job. Both use `update_launch.py` (also installed as
+`express_launch.py`) and `updater.py`; an update-parent lock serializes
+them while the child installer retains its own installation lock.
 
 ## Transitional owners (do not entrench)
 

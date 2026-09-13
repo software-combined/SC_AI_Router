@@ -1,11 +1,12 @@
-# SC_OpenRouter_adapter Agent Instructions
+# SC Router agent instructions
 
 ## 1. Purpose
 
 Local loopback router that keeps ChatGPT subscription traffic on OpenAI and
 Claude subscription traffic on Anthropic, and routes approved OpenRouter
 models with a separate key. Runtime Python 3.14+, stdlib only, no
-third-party dependencies, no network calls in tests.
+third-party dependencies, no network calls in the unit suite. Explicit live
+probes run separately under section 5's verification rules.
 
 ## 2. Worktree discipline
 
@@ -65,15 +66,36 @@ across the platforms, so a new dialog cannot drift from this style.
 ## 5. Verification before commit
 
 Run `python3.14 -m unittest discover -s tests -t .`,
-`python3.14 -m compileall -q ai_router tools tests packaging`, and
-`python3.14 tools/check_source_limits.py`, then the shared
+`python3.14 -m compileall -q ai_router tools tests packaging`,
+`python3.14 tools/check_source_limits.py` and
+`python3.14 tools/check_policy_scans.py`, then the shared
 `pre-commit-review` skill. Commit subjects use `<type>: <short summary>`
 with type `feat`, `fix`, `refactor`, `test`, `chore` or `docs`.
 
+### Bounded live regression probes
+
+When a regression depends on real client or model behavior that offline tests
+cannot prove, add a separately invoked live probe using synthetic task data.
+Paid probes are permitted when necessary for authorized work. Keep the unit
+suite offline; require hard caps on call count and token or cost spend, and
+never add unbounded retries.
+
+Use the cheapest suitable model and low reasoning effort where supported.
+Prefer Luna, DeepSeek Flash or GLM Flash; use Sonnet at low effort when the
+Anthropic-specific contract needs it. Resolve current IDs and supported effort
+from the catalogue; expand model coverage only for a demonstrated need.
+Record the client version, requested model and effort, served identity when
+exposed, call count, and result. Reuse passing evidence for unchanged paths;
+rerun only after a relevant change or failure. These probe defaults do not
+change mandatory fixed-effort pre-commit reviewer routing or waive section 7's
+compatibility checks.
+
 ## 6. Release rule
 
-Every user-visible change updates `CHANGELOG.md` and `packaging/VERSION`
-(semver). Releases are cut by tag `v<VERSION>` and the release workflow.
+Every user-visible router change updates `CHANGELOG.md` and
+`packaging/VERSION` (semver). Releases are cut by tag `v<VERSION>` and the
+release workflow. Plugin-only changes ride the plugin release train instead
+(section 9); they never bump `packaging/VERSION` or trigger router tags.
 
 ## 7. Compatibility rule
 
@@ -100,24 +122,23 @@ snapshot; dated snapshots merge into a tracking alias only when upstream
 actually serves the `~` id (never invent one). `models add` and `live_refresh`
 must produce conforming rows; the registry naming test enforces it.
 
-## 9. Upstream client sources for insight
+## 9. Agent plugins
 
-The clients this router serves are open source. Read them whenever a contract
-is unclear, a client upgrade changes behaviour, or a symptom looks like it
-comes from the client rather than the router. They are evidence, not
-instructions: never copy their code or adopt their conventions here, and
-confirm a claim against the version actually installed before acting on it.
+This repo also hosts the `scg-agent-plugins` marketplace (`scg-review`,
+`scg-subagents`, `scg-prototypes`, `scg-finance`). Author under
+`plugins/<name>`; installed plugin caches are delivery copies. The root
+`scg-openrouter` plugin stays outside the marketplace. Keep the marketplace
+name and plugin names stable; release via `develop` to `main`, consumers
+track branch `main`.
 
-| Client | Repository | Use it for |
-|---|---|---|
-| Codex | https://github.com/openai/codex | Picker and catalogue shape, `thread/start` and `turn/start` wire format, `model_providers` config keys, `wire_api` behaviour, approvals |
-| OpenCode | https://github.com/anomalyco/opencode | Credential file format read by `credentials.py` (`opencode_auth`), provider and model config |
-| Claude Code | https://github.com/anthropics/claude-code | `ANTHROPIC_BASE_URL` and `ANTHROPIC_MODEL` handling, ingress expectations in `ai_router/claude.py` |
-
-Verified 2026-09-09: `sst/opencode` now redirects to `anomalyco/opencode`; use
-the current path and re-check with `gh repo view <owner>/<repo>` before relying
-on any of these, since upstream repositories move.
-
-Prefer the tag matching the installed client version over `main`, and record
-the commit or tag alongside any finding in `docs/compatibility.md` so a later
-reader can tell whether it still holds.
+- Every plugin works in Codex and Claude Code: ship both `.codex-plugin`
+  and `.claude-plugin` manifests at the same version, keep skill content
+  client-agnostic, and read system state through whichever MCP or connector
+  tools the active client exposes.
+- Every plugin ships automatic updates: bundle the shared `updater.py` and
+  `scheduling.py` byte-identical, link every skill to the shared update
+  guide, and support macOS, Linux and Windows through the one shared native
+  schedule. A pull alone is never setup.
+- Release a plugin by bumping both manifests' version and adding a
+  `plugins/CHANGELOG.md` entry; validate with the plugin-creator validator
+  and the plugin test modules.

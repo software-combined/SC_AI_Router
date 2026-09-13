@@ -68,9 +68,12 @@ class ProviderTests(unittest.TestCase):
             items=[before, plaintext('SYNTH_ASSIGNMENT\nDo not edit.'), after])
         items = json.loads(prepared.body)['input']
         self.assertEqual(items[0], before)
-        self.assertEqual(items[2], after)
-        self.assertEqual(items[1], agent_handoffs.plaintext_agent_message(
-            plaintext('SYNTH_ASSIGNMENT\nDo not edit.')))
+        self.assertEqual(items[3], after)
+        self.assertEqual(items[1]['type'], 'function_call')
+        self.assertEqual(items[2]['type'], 'function_call_output')
+        self.assertEqual(items[1]['call_id'], items[2]['call_id'])
+        self.assertEqual(items[2]['output'],
+            'Agent message from /root to /root/child:\nSYNTH_ASSIGNMENT\nDo not edit.')
         summary = compaction.transcript_for_summary([plaintext('SYNTH_SCOPE')])
         for value in ('/root', '/root/child', 'SYNTH_SCOPE'):
             self.assertIn(value, summary)
@@ -110,6 +113,65 @@ class ProviderTests(unittest.TestCase):
             self.assertEqual(item['encrypted_function_args'], [])
             self.assertEqual(item['call_id'], call['call_id'])
             self.assertEqual(item['id'], call['id'])
+
+    def test_peer_reply_ends_in_matched_result_without_assistant_prefill(self):
+        original = [plaintext('SYNTH_FIRST'), plaintext('SYNTH_LAST')]
+        prepared, _, before = self.prepare(_external_responses(), items=original)
+        items = json.loads(prepared.body)['input']
+        self.assertEqual([i['type'] for i in items],
+                         ['function_call', 'function_call_output'] * 2)
+        self.assertEqual(len({i['call_id'] for i in items}), 2)
+        for call, output in zip(items[::2], items[1::2]):
+            self.assertEqual(call['call_id'], output['call_id'])
+            self.assertEqual(call['arguments'], '{}')
+            self.assertNotIn('namespace', call)
+            self.assertNotIn('namespace', output)
+        self.assertTrue(items[-1]['output'].endswith('SYNTH_LAST'))
+        self.assertEqual(original, before['input'])
+
+    def test_external_native_handoffs_execute_as_plaintext_in_json_and_stream(self):
+        provider = _external_responses()
+        history = [{'type': 'function_call', 'namespace': 'collaboration',
+                    'name': 'spawn_agent', 'call_id': 'call_spawn',
+                    'arguments': json.dumps({'task_name': 'child',
+                        'model': 'deepseek/deepseek-v4.1-flash'})},
+                   {'type': 'function_call_output', 'call_id': 'call_spawn',
+                    'output': 'synthetic spawned'}]
+        for name in ('spawn_agent', 'followup_task', 'send_message'):
+            prepared, _, _ = self.prepare(provider, native_tools(name), deepcopy(history))
+            wire = next(w for (_, w), info in prepared.tool_names.items()
+                        if info['namespace'] == 'collaboration')
+            args = {'task_name': 'child', 'model': 'deepseek/deepseek-v4.1-flash',
+                    'target': '/root/child', 'message': 'SYNTH_SECRET_BRIEF'}
+            for native in (False, True):
+                call = {'type': 'function_call', 'name': name if native else wire,
+                        'call_id': 'call_next', 'arguments': json.dumps(args)}
+                if native:
+                    call['namespace'] = 'collaboration'
+                for stream in (False, True):
+                    response = {'output': [call]}
+                    raw = (b'data: ' + json.dumps({'type': 'response.output_item.done',
+                           'item': call}).encode() + b'\n\n' if stream
+                           else json.dumps(response).encode())
+                    source = Response(raw, 'text/event-stream' if stream else 'application/json')
+                    result = b''.join(provider.adapt(source, prepared.tool_names))
+                    decoded = json.loads(result[6:] if stream else result)
+                    item = decoded['item'] if stream else decoded['output'][0]
+                    self.assertEqual(item['type'], 'function_call')
+                    self.assertEqual(item['call_id'], 'call_next')
+                    self.assertEqual(item['namespace'], 'collaboration')
+                    self.assertEqual(item['name'], name)
+                    self.assertEqual(item['encrypted_function_args'], [])
+                    self.assertEqual(json.loads(item['arguments']), args)
+
+    def test_external_plaintext_signal_requires_advertisement_and_readable_fields(self):
+        call = {'type': 'function_call', 'namespace': 'collaboration',
+                'name': 'send_message', 'arguments': '{"message":"SYNTH"}'}
+        self.assertIs(agent_handoffs.external_plaintext_call(call, set()), call)
+        opaque = {**call, 'encrypted_function_args': ['message']}
+        with self.assertRaisesRegex(ValueError, 'encrypted external'):
+            agent_handoffs.external_plaintext_call(opaque, {'send_message'})
+        self.assertNotIn('encrypted_function_args', call)
 
     def test_adapted_responses_reject_unsupported_encoding(self):
         for provider in (providers.SubscriptionProvider(), _external_responses()):
@@ -192,10 +254,11 @@ class SteerWiringTests(unittest.TestCase):
         result = b''.join(providers.SubscriptionProvider().adapt(
             Response(raw, 'text/event-stream'), prepared.tool_names))
         item = json.loads(result[6:])['item']
-        self.assertEqual(item['type'], 'function_call_output')
+        self.assertEqual(item['type'], 'function_call')
         self.assertEqual(item['call_id'], 'call_wake')
-        self.assertIn('collaboration_plaintext.followup_task', item['output'])
-        self.assertNotIn('SYNTH_WAKE', item['output'])
+        self.assertIsInstance(json.loads(item['arguments']), str)
+        self.assertIn('collaboration_plaintext.followup_task', item['arguments'])
+        self.assertNotIn('SYNTH_WAKE', item['arguments'])
         credentials.key_for.assert_not_called()
 
     def test_subscription_leaves_native_followup_alone(self):

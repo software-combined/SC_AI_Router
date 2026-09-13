@@ -8,8 +8,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-feed
   cancel-in-progress: false
+  queue: max
 
 env:
   AWS_REGION: ap-southeast-2
@@ -18,34 +19,79 @@ env:
   FEED_ROLE: arn:aws:iam::651116729473:role/scg-router-feed-publisher
 
 jobs:
+  installer-macos:
+    name: Installer (macOS)
+    # A release ships the installer half to macOS and Windows hosts, so the
+    # native checks run before anything is published (Plan 156).
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Native installer tests
+        shell: bash
+        run: python -m unittest $(python tools/ci_scope.py --installer-tests)
+
+  installer-windows:
+    name: Installer (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Native installer tests
+        shell: bash
+        run: python -m unittest $(python tools/ci_scope.py --installer-tests)
+
+  installer-python39:
+    name: Installer (Python 3.9)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          python-version: "3.9"
+      - name: Installer surface imports on 3.9
+        run: python tools/check_installer_python39.py
+
   release:
     name: Build and publish
+    needs: [installer-macos, installer-windows, installer-python39]
+    # Check both identities: reruns use the original actor's privileges.
+    # !cancelled() keeps this job visible when an installer check failed, so
+    # the required step below fails it; a cancelled run stops the job instead
+    # of letting a publish finish.
+    if: ${{ !cancelled() && contains(fromJSON('["SC-Cyril", "BrentJMaxwell"]'), github.actor) && contains(fromJSON('["SC-Cyril", "BrentJMaxwell"]'), github.triggering_actor) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: write
       id-token: write
     steps:
+      - name: Required installer checks
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: |
+          echo "an installer check did not succeed: ${{ join(needs.*.result, ', ') }}"
+          exit 1
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
-          python-version: "3.14"
+          persist-credentials: false
+      - uses: ./.github/actions/setup
       - run: python -m unittest discover -s tests -t .
       - name: Verify runtime pins
         run: python tools/verify_runtime_pins.py
       - name: Build bundle
         run: |
-          case "$GITHUB_REF_NAME" in
-            v*-beta) CHANNEL=beta ;;
-            v*) CHANNEL=stable ;;
-            *) echo "release must run from a v* tag, got $GITHUB_REF_NAME"; exit 1 ;;
-          esac
-          TAG_VERSION="${GITHUB_REF_NAME#v}"; TAG_VERSION="${TAG_VERSION%-beta}"
-          BASE_VERSION="$(cat packaging/VERSION)"
-          if [ "$TAG_VERSION" != "$BASE_VERSION" ]; then
-            echo "tag $GITHUB_REF_NAME != packaging/VERSION $BASE_VERSION"; exit 1
-          fi
-          python packaging/release.py --out dist --build "$GITHUB_RUN_NUMBER" --sha "$GITHUB_SHA" --channel "$CHANNEL"
+          python packaging/release.py --out dist --build "$GITHUB_RUN_NUMBER" --sha "$GITHUB_SHA" --tag "$GITHUB_REF_NAME" \
+            --url-base "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
+          CHANNEL=$(python -c "import json;print(json.load(open('dist/latest.json'))['channel'])")
           echo "CHANNEL=$CHANNEL" >> "$GITHUB_ENV"
       - name: Configure feed publishing credentials
         uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c
@@ -63,7 +109,13 @@ jobs:
           fi
           echo "FEED_DISTRIBUTION_ID=$DIST_ID" >> "$GITHUB_ENV"
       - name: Publish to the update feed
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          TAG_SHA=$(gh api "repos/$GITHUB_REPOSITORY/commits/refs%2Ftags%2F$GITHUB_REF_NAME" --jq .sha)
+          if [ "$TAG_SHA" != "$GITHUB_SHA" ]; then
+            echo "release tag changed; start a new release run"; exit 1
+          fi
           python tools/publish_feed.py --dist dist --channel "$CHANNEL" \
             --bucket "$FEED_BUCKET" --distribution-id "$FEED_DISTRIBUTION_ID"
       - name: Create release
@@ -73,8 +125,8 @@ jobs:
           VERSION=$(python -c "import json;print(json.load(open('dist/latest.json'))['version'])")
           if [ "$CHANNEL" = stable ]; then
             cp dist/release-latest.json dist/latest.json
-            gh release create "v$VERSION" dist/*.tar.gz dist/latest.json --generate-notes --latest --target "$GITHUB_SHA"
+            gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/latest.json --verify-tag --title "v$VERSION" --generate-notes --latest
           else
             cp dist/release-latest.json dist/latest-beta.json
-            gh release create "v$VERSION-beta" dist/*.tar.gz dist/latest-beta.json --prerelease --generate-notes --target "$GITHUB_SHA"
+            gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/latest-beta.json --verify-tag --title "v$VERSION-beta" --prerelease --generate-notes
           fi

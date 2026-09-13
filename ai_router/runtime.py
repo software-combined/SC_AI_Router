@@ -3,16 +3,19 @@ import json
 import logging
 import logging.handlers
 import os
+import string
 from datetime import datetime, timezone
 from pathlib import Path
-from . import provider_defs, registry
+from . import provider_defs, registry, state as state_mod
 from .setup import setup_pending
 from .credentials import Credentials, default_home
 
 ROUTER_HOME = default_home()
-STATE = ROUTER_HOME / 'mixed-router-state.json'
+STATE = state_mod.path(ROUTER_HOME)
 REQUIRED_STATE = {'port': int, 'token': str, 'openai_models': list}
 MAX_BODY = 16 * 1024 * 1024
+TOKEN_MIN_LENGTH = 32
+TOKEN_ALPHABET = frozenset(string.ascii_letters + string.digits + '_-')
 
 LOG = logging.getLogger('codex_router')
 
@@ -37,14 +40,24 @@ VERSION = _release_version()
 def load_state(path=STATE):
     """Fail closed with a precise message; never echo the token."""
     try:
-        state = json.loads(path.read_text())
-    except FileNotFoundError:
-        raise SystemExit(f'Router state file missing: {path}')
-    except ValueError as exc:
-        raise SystemExit(f'Router state file is not valid JSON: {path} ({exc.__class__.__name__})')
-    missing = [k for k, t in REQUIRED_STATE.items() if not isinstance(state.get(k), t)]
+        state = state_mod.read_strict(path)
+    except state_mod.StateUnreadable as exc:
+        if exc.reason == 'missing':
+            raise SystemExit(f'Router state file missing: {path}')
+        if exc.reason == 'unreadable':
+            raise SystemExit(
+                f'Router state file could not be read: {path} ({exc.detail})')
+        raise SystemExit(
+            f'Router state file is not valid JSON: {path} ({exc.detail})')
+    missing = state_mod.required_keys(state, REQUIRED_STATE)
     if missing:
         raise SystemExit('Router state file is missing or mistyped keys: ' + ', '.join(missing))
+    token = state['token']
+    if len(token) < TOKEN_MIN_LENGTH or not set(token) <= TOKEN_ALPHABET:
+        raise SystemExit(
+            'Router state token is too weak: it must be at least '
+            f'{TOKEN_MIN_LENGTH} characters of [A-Za-z0-9_-]; '
+            'reinstall to mint a new token.')
     if 'opencode_auth' in state and not isinstance(state['opencode_auth'], str):
         raise SystemExit('Router state file is missing or mistyped keys: opencode_auth')
     if 'openai_mode' in state and state['openai_mode'] not in ('subscription', 'none'):

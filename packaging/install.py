@@ -36,6 +36,12 @@ _desktop_config = _svc.load(
     'router_claude_desktop_config', Path(__file__).resolve().parent / 'claude_desktop_config.py')
 _diag = _svc.load(
     'router_diagnostics', Path(__file__).resolve().parent / 'diagnostics.py')
+# Never name a packaging module after a standard-library one: scripts run with
+# packaging/ as sys.path[0] (python packaging/install.py), so packaging/operator.py
+# shadowed the stdlib operator that collections imports, breaking every entry
+# point with a circular import.
+_operator = _svc.load(
+    'router_operator_surface', Path(__file__).resolve().parent / 'operator_surface.py')
 _linux = _platforms._linux_mod().systemd
 _updater = _svc.load(
     'router_updater', Path(__file__).resolve().parent / 'updater.py')
@@ -199,6 +205,7 @@ def _sync_seams():
                   sync_seams=_sync_seams)
     _diag.bind(find_python=find_python, health=health,
                current_version=current_version, codex_config=_codex_config)
+    _operator.bind(run=run, diag=_diag)
 
 
 def _resolve_clients_and_modes(args, home, state):
@@ -261,6 +268,21 @@ def _rollback_failed_install(home, state, backend, latest, previous, catalog_pat
     raise SystemExit(1)
 
 
+def _open_key_window(python, home, setup_url, clients):
+    """Open the native key window; the setup URL prints only on a TTY."""
+    if sys.stdout.isatty():
+        print(f'open {setup_url} to connect your OpenRouter key')
+    try:
+        subprocess.Popen([python, '-m', 'ai_router.key_prompt', setup_url, '--clients', clients],
+                         cwd=str(current_release_dir(home)), start_new_session=True,
+                         creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL)
+    except OSError:
+        if not sys.stdout.isatty():
+            print('could not open the key window; the next request opens it')
+
+
 def do_install(args, _fetch=fetch, _run=None):
     if _run is not None:
         _svc.run = _run
@@ -281,8 +303,14 @@ def do_install(args, _fetch=fetch, _run=None):
     feed = args.feed or _svc.channel_feed(home)
     latest = json.loads(_svc.feed_read(_fetch, feed).decode())
     serial = check_serial(home, latest, pinned=bool(args.feed))
-    if not newer(latest['version'], current_version(home)):
-        print(f"up to date {current_version(home)}")
+    current = current_version(home)
+    # --setup on a current install is a repair run: it restarts the current
+    # release with a fresh setup nonce and never re-extracts or downgrades
+    # anything, so it also works when the feed lags the installed version.
+    # Only a newer feed version takes the full install path.
+    repair = bool(args.setup) and not newer(latest['version'], current)
+    if not newer(latest['version'], current) and not repair:
+        print(f'up to date {current}')
         return 0
     if args.dry_run:
         print(f'would fetch {feed}; interpreter {python}')
@@ -317,22 +345,60 @@ def do_install(args, _fetch=fetch, _run=None):
             (home / 'mixed-router-state.json').unlink(missing_ok=True)
         raise
     client, clients, claude_mode, mode = _resolve_clients_and_modes(args, home, state)
+    # First-run window: the router boots keyless on a single-use link and
+    # the operator pastes one key there instead of into the terminal. TTL
+    # mirrors ai_router.setup.SETUP_TTL_S; kept literal so the 3.9-compatible
+    # installer never imports the router package. --setup forces the window;
+    # otherwise a fresh install arms it whenever the installed service has
+    # no service-visible key.
+    missing = provider_keys().unhandled(home, state, _diag._key_private)
+    env_named = [defn.key.env for defn in missing
+                 if os.environ.get(defn.key.env, '').strip()]
     setup_url = None
-    if args.setup:
-        # First-run window: the router boots keyless on this single-use link
-        # and the operator pastes one key there instead of into the terminal.
-        # TTL mirrors ai_router.setup.SETUP_TTL_S; kept literal so the
-        # 3.9-compatible installer never imports the router package.
+    if args.setup or missing:
         state['setup'] = {'nonce': secrets.token_urlsafe(32),
                           'expires': int(time.time()) + 15 * 60}
         _write_state(home, state)
         setup_url = (f"http://127.0.0.1:{state['port']}/{state['token']}"
                      f"/setup/{state['setup']['nonce']}")
+    if env_named:
+        # The service environment carries only ROUTER_HOME, so a key that
+        # lives only in the shell never reaches it; the window collects it.
+        # The value itself is never printed.
+        print('%s is set in this shell; the installer passes only ROUTER_HOME '
+              'to the installed service, so the key window collects the key '
+              'instead' % ', '.join(env_named))
     try:
         ensure_credentials(home, state)
     except SystemExit as exc:
         if exc.code != 3 or setup_url is None:
             raise
+    if repair:
+        # --setup on a current install changes no code: restart the current
+        # release so the service reads the fresh setup nonce, then open the
+        # window. Never re-extract a release the running service is using.
+        try:
+            backend.install(python, home, state, current_release_dir(home), None)
+            healthy = wait_version(state, current)
+        except (OSError, subprocess.CalledProcessError, SystemExit) as exc:
+            print(f'service restart failed: {exc}')
+            healthy = False
+        if not healthy:
+            print('the service did not come back with the fresh setup link; '
+                  're-run the installer')
+            return 1
+        # A receipt that predates the listing snapshot (or one whose fetch
+        # failed) can only be refreshed from here: a plain re-run returns
+        # "up to date" before the client stage, and the scheduled child never
+        # passes --clients. The merge is idempotent for unchanged values.
+        _claude_config.refresh_snapshot(
+            home, state, _codex_config,
+            lambda: _claude_config.release_listing(
+                current_release_dir(home), python, run))
+        if setup_url is not None and os.environ.get('ROUTER_NO_KEY_WINDOW') != '1':
+            _open_key_window(python, home, setup_url, clients)
+        print(f'installed {current}; health ok; key window ready')
+        return 0
     # No idle gate. A version swap is a pointer write plus a TERM: launchd
     # owns the listening socket, so new connections queue for the incoming
     # process while the outgoing one finishes the requests it already
@@ -359,18 +425,8 @@ def do_install(args, _fetch=fetch, _run=None):
     # installs are a no-op); notice failures never surface.
     _svc.notice.record(home, previous, latest['version'], args.clients)
     previous_receipt = _codex_config.codex_attachment(home)
-    if setup_url is not None:
-        # Native key popup; the child's detached stdio means a TTY fallback link is printed here.
-        if sys.stdout.isatty():
-            print(f'open {setup_url} to connect your OpenRouter key')
-        try:
-            subprocess.Popen([python, '-m', 'ai_router.key_prompt', setup_url, '--clients', clients],
-                             cwd=str(current_release_dir(home)), start_new_session=True,
-                             creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
-                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                             stderr=subprocess.DEVNULL)
-        except OSError:
-            print(f'open {setup_url} to connect your OpenRouter key')
+    if setup_url is not None and os.environ.get('ROUTER_NO_KEY_WINDOW') != '1':
+        _open_key_window(python, home, setup_url, clients)
     if clients == 'none' and previous_receipt.get('inserted_block'):
         # Never silently detach an active Codex configuration: restore the
         # exact owned settings first, or refuse when the block was edited.
@@ -388,7 +444,7 @@ def do_install(args, _fetch=fetch, _run=None):
     if claude_mode == 'none' and clients in ('claude', 'both'):
         raise SystemExit('claude_mode is none: re-run with --claude-mode subscription '
                          'to attach Claude Code, or select --clients codex')
-    if clients in ('claude', 'both'): attach_claude(home, state)
+    if clients in ('claude', 'both'): attach_claude(home, state, python=python)
     if args.desktop: _desktop_config.attach(home, state, _codex_config)
     # A selection without Claude never silently detaches it: only an
     # explicit service-only install or uninstall drops attachments.
@@ -428,9 +484,14 @@ def do_install(args, _fetch=fetch, _run=None):
     return 0
 
 
-def attach_claude(home, state, settings_path=None, env=None):
+def attach_claude(home, state, settings_path=None, env=None, listing=None,
+                  python=None):
+    if listing is None:
+        listing = _claude_config.release_listing(
+            current_release_dir(home), python or find_python(None), run)
     return _claude_config.attach(home, state, _codex_config,
-                                 settings_path_override=settings_path, env=env)
+                                 settings_path_override=settings_path, env=env,
+                                 listing=listing)
 
 
 def detach_claude(home, settings_path=None, env=None):
@@ -445,8 +506,28 @@ prune_releases = _bundle.prune_releases
 MAX_VERSION_FAILURES = _updater.MAX_VERSION_FAILURES
 
 
+def do_update(args, _fetch=None, _read_feed=None, _sleep=None, _announce=None):
+    _sync_seams()
+    return _updater.do_update(args, _fetch=_fetch, _read_feed=_read_feed,
+                              _sleep=_sleep, _announce=_announce)
+
+
 def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None):
-    return _updater.do_check_update(args, _fetch=_fetch, _read_feed=_read_feed, _sleep=_sleep)
+    _sync_seams()
+    return _updater.do_check_update(args, _fetch=_fetch, _read_feed=_read_feed,
+                                    _sleep=_sleep)
+
+
+def do_doctor(args):
+    _sync_seams(); return _operator.do_doctor(args)
+
+
+def do_support(args):
+    _sync_seams(); return _operator.do_support(args)
+
+
+def do_rollback_list(args):
+    _sync_seams(); return _operator.do_rollback_list(args)
 
 
 def do_uninstall(args):
@@ -515,19 +596,31 @@ def build_parser():
     parser.add_argument('--python', default=None)
     parser.add_argument('--install-python', action='store_true')
     parser.add_argument('--dry-run', action='store_true')
-    parser.add_argument('--check-update', action='store_true')
+    parser.add_argument('--check-update', action='store_true',
+                        help='Read-only: print the installed and available versions.')
+    parser.add_argument('--update', action='store_true',
+                        help='Apply an available update (the scheduled action).')
+    parser.add_argument('--express-only', action='store_true', help=argparse.SUPPRESS)
+    parser.add_argument('--rollback', action='store_true',
+                        help='List installed releases; with --to, restore one.')
+    parser.add_argument('--to', default=None,
+                        help='With --rollback: the installed release version to restore.')
+    parser.add_argument('--doctor', action='store_true',
+                        help='Read-only health report with one Fix line per failing row.')
+    parser.add_argument('--support', action='store_true',
+                        help='Write a redacted support bundle and print its path.')
     parser.add_argument('--uninstall', action='store_true')
     parser.add_argument('--preflight', action='store_true',
                         help='Report missing install prerequisites and exit.')
     parser.add_argument('--status', action='store_true',
                         help='Print installed version, service, client, and key status.')
     parser.add_argument('--json', action='store_true',
-                        help='With --status, print machine-readable JSON.')
+                        help='With --status, --check-update or --doctor: machine-readable JSON.')
     parser.add_argument('--static-catalogue', action='store_true',
                         help='No-op: the static catalogue file is now always configured.')
     parser.add_argument('--setup', action='store_true',
-                        help='First-run key window: mint a setup link and open it instead of '
-                             'requiring the key up front.')
+                        help='First-run key window: mint a setup link and open it even when '
+                             'a key is already configured.')
     parser.add_argument('--openai-mode', default=None)
     parser.add_argument('--anthropic-mode', default=None,
                         choices=('subscription', 'none'),
@@ -549,21 +642,41 @@ def build_parser():
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
-    action = do_status if args.status else do_preflight if args.preflight else do_uninstall if args.uninstall else do_check_update if args.check_update else do_install
-    if not (args.status or args.preflight):
-        # Plan 057 Stage 1: refuse before any router home or bundle work.
-        # Read-only --status/--preflight run everywhere; everything else
-        # (install, update, rollback, uninstall) stays refused.
-        require_supported_platform()
+    if args.express_only and not args.update: raise SystemExit('--express-only needs --update')
+    if args.to and not args.rollback:
+        raise SystemExit('--to needs --rollback')
+    if args.rollback and args.to:
+        args.version = args.to  # --version stays the pre-147 alias
+    list_rollback = args.rollback and not args.version
+    action = (do_status if args.status else
+              do_preflight if args.preflight else
+              do_uninstall if args.uninstall else
+              do_doctor if args.doctor else
+              do_support if args.support else
+              do_rollback_list if list_rollback else
+              do_update if args.update else
+              do_check_update if args.check_update else
+              do_install)
+    # Plan 057 Stage 1: read-only verbs run everywhere and take no lock; a
+    # dry run mutates nothing and keeps its historic exemptions. --update is
+    # the scheduled applying pass: it spawns the installer as a child and
+    # that child takes the lock itself, so a parent holding it would make
+    # every automatic update defer. Everything else (install, rollback,
+    # uninstall) is refused before any router home or bundle work.
+    read_only = (args.status or args.preflight or args.doctor or args.support
+                 or list_rollback or args.check_update or args.dry_run)
     home = Path(args.home).expanduser()
-    backend = platform_backend()
-    # --check-update spawns the installer as a child, and that child takes the
-    # lock itself; holding it here would deadlock every scheduled update. A
-    # dry run mutates nothing, so it takes no lock and creates no home.
-    if args.status or args.preflight or args.check_update or args.dry_run:
-        if args.check_update or (args.uninstall and action is do_uninstall):
+    if args.update:
+        require_supported_platform()
+        require_live_home(home, '--update')
+        return action(args)
+    if not read_only:
+        require_supported_platform()
+    if read_only:
+        if args.check_update or args.uninstall:
             require_live_home(home, '--uninstall' if args.uninstall else '--check-update')
         return action(args)
+    backend = platform_backend()
     # Before the lock: a host with no service manager must be refused
     # without leaving a router home behind.
     backend.check(home)

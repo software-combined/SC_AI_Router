@@ -11,12 +11,15 @@ from pathlib import Path
 from unittest import mock
 from ai_router.credentials import Credentials
 from ai_router.runtime import LOG, load_state
+from tests._platform import requires_posix_perms
 from tests.fakes import FakeUpstream, install_fake
 from tests.harness import (
     start_auth_server as _start_auth_server,
     start_server as _start_server,
     test_state as _test_state,
 )
+
+TOKEN = 't' * 32
 
 
 def _capture_log(test):
@@ -42,11 +45,31 @@ class LoadStateTests(unittest.TestCase):
         return f.name
 
     def _auth(self, payload):
-        auth = tempfile.NamedTemporaryFile('w', suffix='.json', delete=False)
-        auth.write(payload if isinstance(payload, str) else json.dumps(payload))
-        auth.close()
-        self.addCleanup(os.unlink, auth.name)
-        return auth.name
+        """The client's own auth file under a temp HOME: (path, env)."""
+        env_home = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, str(env_home), True)
+        auth = env_home / '.local' / 'share' / 'opencode' / 'auth.json'
+        auth.parent.mkdir(parents=True)
+        if payload is not None:
+            auth.write_text(payload if isinstance(payload, str) else json.dumps(payload))
+        return auth, {'HOME': str(env_home)}
+
+    def test_load_state_refuses_a_weak_token(self):
+        for name, token in (('short', 't' * 31), ('bad-char', '!' * 32),
+                            ('empty', '')):
+            with self.subTest(name=name):
+                path = self._write({'port': 0, 'token': token, 'openai_models': []})
+                with self.assertRaises(SystemExit) as ctx:
+                    load_state(Path(path))
+                message = str(ctx.exception)
+                self.assertIn('token is too weak', message)
+                if token:
+                    self.assertNotIn(token, message)
+
+    def test_load_state_accepts_a_strong_token(self):
+        path = self._write({'port': 0, 'token': TOKEN, 'openai_models': []})
+        with mock.patch.dict(os.environ, {'OPENROUTER_API_KEY': 'sk-or'}):
+            self.assertEqual(load_state(Path(path))['token'], TOKEN)
 
     def test_load_state_reports_missing_keys(self):
         path = self._write({'port': 1})
@@ -54,6 +77,18 @@ class LoadStateTests(unittest.TestCase):
             load_state(Path(path))
         for key in ('token', 'openai_models'):
             self.assertIn(key, str(ctx.exception))
+
+    def test_load_state_reports_an_unreadable_path_as_such(self):
+        # A state path that exists but cannot be read is not a missing file;
+        # the operator must not be sent looking for a file that is right there.
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        path = Path(tmp) / 'state-dir'
+        path.mkdir()
+        with self.assertRaises(SystemExit) as ctx:
+            load_state(path)
+        self.assertIn('could not be read', str(ctx.exception))
+        self.assertIn(str(path), str(ctx.exception))
 
     def test_load_state_rejects_unusable_credential_file(self):
         for name, payload in (
@@ -64,28 +99,29 @@ class LoadStateTests(unittest.TestCase):
                 ('api-without-key', {'openrouter': {'type': 'api'}}),
                 ('null-entry', {'openrouter': None})):
             with self.subTest(name=name):
-                auth = '/nonexistent-auth.json' if payload is None else self._auth(payload)
-                path = self._write({'port': 0, 'token': 't', 'openai_models': [],
-                                    'opencode_auth': auth})
+                auth, env = self._auth(payload)
+                path = self._write({'port': 0, 'token': TOKEN, 'openai_models': [],
+                                    'opencode_auth': str(auth)})
                 # Isolate the key-file leg: on machines where the router is
                 # installed, the real ~/.codex/mixed-model-router/openrouter.key
                 # otherwise satisfies the lookup before opencode_auth is read.
                 home = Path(tempfile.mkdtemp())
                 self.addCleanup(shutil.rmtree, str(home), True)
                 with mock.patch('ai_router.runtime.ROUTER_HOME', home), \
-                        mock.patch.dict(os.environ, clear=True):
+                        mock.patch.dict(os.environ, env, clear=True):
                     with self.assertRaises(SystemExit) as ctx:
                         load_state(Path(path))
                 self.assertIn('OpenRouter credential problem', str(ctx.exception))
 
     def test_load_state_accepts_valid_file(self):
-        auth = self._auth({'openrouter': {'type': 'api', 'key': 'k'}})
-        path = self._write({'port': 0, 'token': 't', 'openai_models': [],
-                            'opencode_auth': auth})
-        self.assertEqual(load_state(Path(path))['token'], 't')
+        auth, env = self._auth({'openrouter': {'type': 'api', 'key': 'k'}})
+        path = self._write({'port': 0, 'token': TOKEN, 'openai_models': [],
+                            'opencode_auth': str(auth)})
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertEqual(load_state(Path(path))['token'], TOKEN)
 
     def test_load_state_without_opencode_auth_needs_env_or_key_file(self):
-        path = self._write({'port': 0, 'token': 't', 'openai_models': []})
+        path = self._write({'port': 0, 'token': TOKEN, 'openai_models': []})
         with mock.patch.dict(os.environ):
             os.environ.pop('OPENROUTER_API_KEY', None)
             home = Path(tempfile.mkdtemp())
@@ -119,7 +155,7 @@ class LoadStateTests(unittest.TestCase):
                            vendor='Acme', reasoning=('low',),
                            default_reasoning='low')]
         with mock.patch.object(registry, 'MODELS', rows):
-            path = self._write({'port': 0, 'token': 't', 'openai_models': []})
+            path = self._write({'port': 0, 'token': TOKEN, 'openai_models': []})
             home = Path(tempfile.mkdtemp())
             self.addCleanup(shutil.rmtree, str(home), True)
             (home / 'openrouter.key').write_text('sk-or\n')
@@ -127,7 +163,7 @@ class LoadStateTests(unittest.TestCase):
             with mock.patch.dict(os.environ, clear=True), \
                     mock.patch('ai_router.runtime.ROUTER_HOME', home):
                 # One provider resolves, so the router boots.
-                self.assertEqual(load_state(Path(path))['token'], 't')
+                self.assertEqual(load_state(Path(path))['token'], TOKEN)
                 # The keyless provider is named, and its own request fails closed.
                 credentials = Credentials({'openai_models': []}, home, {})
                 self.assertEqual(credentials.key_for('openrouter'), 'sk-or')
@@ -135,6 +171,25 @@ class LoadStateTests(unittest.TestCase):
 
 
 class CredentialRequestMappingTests(unittest.TestCase):
+
+    @requires_posix_perms
+    def test_a_widened_key_file_401_body_carries_no_path(self):
+        home = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, str(home), True)
+        key = home / 'openrouter.key'
+        key.write_text('sk-live\n')
+        os.chmod(key, 0o644)
+        with mock.patch.dict(os.environ):
+            os.environ.pop('OPENROUTER_API_KEY', None)
+            server = self._server_without_opencode(home)
+            response = self._post(server, {'model': 'z-ai/glm-5.3', 'input': []})
+            body = json.loads(response.read())
+        self.assertEqual(response.status, 401)
+        self.assertEqual(body['error']['code'], 'CREDENTIAL_PERMISSION')
+        self.assertIn('[path]', body['error']['message'])
+        self.assertIn('readable by the owner only', body['error']['message'])
+        self.assertNotIn(str(home), body['error']['message'])
+
     def _server_without_opencode(self, home):
         state = _test_state('/nonexistent-auth.json')
         del state['opencode_auth']
@@ -169,6 +224,9 @@ class CredentialRequestMappingTests(unittest.TestCase):
             server = self._server_without_opencode(home)
             response = self._post(server, {'model': 'z-ai/glm-5.3', 'input': []})
             self.assertEqual(response.status, 400)
+            message = json.loads(response.read())['error']['message']
+        self.assertIn('No OpenRouter key', message)
+        self.assertNotIn(str(home), message)
 
 
 class LoggingAndHealthTests(unittest.TestCase):

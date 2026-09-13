@@ -54,12 +54,13 @@ class CatalogueFlagTests(unittest.TestCase):
 
 
     def test_instructions_live_in_model_messages_template(self):
-        from ai_router.catalogue import BASE_INSTRUCTIONS
+        from ai_router.catalogue import SUBAGENT_MODEL_PLACEHOLDER
         entry = external_entry(by_slug('z-ai/glm-5.3-flash'))
         self.assertNotIn('base_instructions', entry)
-        self.assertEqual(entry['model_messages'],
-                         {'instructions_template': BASE_INSTRUCTIONS})
-        self.assertTrue(BASE_INSTRUCTIONS.startswith(
+        template = entry['model_messages']['instructions_template']
+        self.assertNotIn(SUBAGENT_MODEL_PLACEHOLDER, template)
+        self.assertIn('## Subagent model overrides', template)
+        self.assertTrue(template.startswith(
             'You are Codex, a coding agent running the selected OpenRouter model.'))
         merged = merge({'models': []})
         for item in merged['models']:
@@ -235,6 +236,17 @@ class CatalogueFlagTests(unittest.TestCase):
         self.assertNotIn('anthropic/claude-sonnet-5',
                          {m['slug'] for m in merge({'models': [hid]},
                                                    client='claude')['models']})
+
+    def test_merge_drops_unlisted_rows(self):
+        from unittest import mock
+        from dataclasses import replace
+        from ai_router import catalogue as catalogue_mod
+        target = replace(by_slug('moonshotai/kimi-k3'), listed=False)
+        rows = tuple(target if m.slug == target.slug else m for m in MODELS)
+        with mock.patch.object(catalogue_mod, 'MODELS', rows):
+            merged = merge({'models': []}, client='codex')
+            self.assertNotIn('moonshotai/kimi-k3',
+                             {m['slug'] for m in merged['models']})
 
     def test_check_rejects_hidden_rows_left_in_catalogue(self):
         stale = dict(external_entry(by_slug('anthropic/claude-sonnet-5')),

@@ -36,7 +36,7 @@ class HandlerCharacterisationTests(unittest.TestCase):
         return server
 
     def _state_base(self):
-        return {'port': 0, 'token': 'test-token', 'openai_models': []}
+        return {'port': 0, 'token': 'test-token'.ljust(32, 'x'), 'openai_models': []}
 
     def _state_file(self, state):
         f = tempfile.NamedTemporaryFile('w', suffix='.json', delete=False)
@@ -118,6 +118,7 @@ class HandlerCharacterisationTests(unittest.TestCase):
         server = self._server()
         conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
         conn.putrequest('POST', '/test-token/responses')
+        conn.putheader('Content-Type', 'application/json')
         conn.putheader('Content-Length', '17000000')
         conn.endheaders()
         self.assertEqual(conn.getresponse().status, 413)
@@ -143,7 +144,7 @@ class HandlerCharacterisationTests(unittest.TestCase):
         self.assertEqual(response.status, 400)
         self.assertEqual(json.loads(response.read()), {'error': 'slow down'})
 
-    def test_nested_provider_400_becomes_409_before_headers(self):
+    def test_nested_provider_400_stays_400_before_headers(self):
         inner = ('{"code": "invalid-argument", "error": "Failed to start sampling: '
                  '[invalid_client_tool_schema] ns_abc123def456_tool_update: root must be object"}')
         body = json.dumps({'error': {'message': 'Provider returned error',
@@ -153,7 +154,7 @@ class HandlerCharacterisationTests(unittest.TestCase):
         server = self._server()
         response = _post(server.server_port, '/test-token/responses',
                          {'model': 'x-ai/grok-4.6', 'input': []})
-        self.assertEqual(response.status, 409)
+        self.assertEqual(response.status, 400)
         message = json.loads(response.read())['error']['message']
         self.assertIn('xAI', message)
         self.assertIn('ns_abc123def456_tool_update', message)
@@ -251,11 +252,13 @@ class HandlerCharacterisationTests(unittest.TestCase):
 
     def test_openai_mode_validation(self):
         from ai_router.runtime import load_state
-        good = dict(self._state_base(), openai_mode='none', opencode_auth=_auth_file(self))
-        self.assertEqual(load_state(self._state_file(good))['openai_mode'], 'none')
+        good = dict(self._state_base(), openai_mode='none')
+        with mock.patch.dict(os.environ, {'OPENROUTER_API_KEY': 'sk-or'}):
+            self.assertEqual(load_state(self._state_file(good))['openai_mode'], 'none')
         bad = dict(self._state_base(), openai_mode='sometimes')
-        with self.assertRaises(SystemExit) as ctx:
-            load_state(self._state_file(bad))
+        with mock.patch.dict(os.environ, {'OPENROUTER_API_KEY': 'sk-or'}):
+            with self.assertRaises(SystemExit) as ctx:
+                load_state(self._state_file(bad))
         self.assertIn('openai_mode must be subscription or none', str(ctx.exception))
 
     def test_none_mode_rejects_openai_models_without_upstream_call(self):

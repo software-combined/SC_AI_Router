@@ -13,6 +13,7 @@ the router key never accompanies those requests and client credentials are
 never stored or logged.
 """
 import json
+import sys
 
 from . import provider_defs, transport
 from .errors import ClaudeSubscriptionRequired, PreparationError, UnknownModel
@@ -70,11 +71,22 @@ def models_listing():
                                             m.display_name.casefold()))
     rows = []
     for entry in ordered:
+        if not entry.listed:
+            continue
         alias = claude_alias(entry.slug)
         if alias is not None:
             rows.append({'id': alias, 'display_name': entry.display_name,
                          'anthropic_family_tier': family_tier(alias)})
     return {'data': rows}
+
+
+USAGE = 'usage: python3.14 -m ai_router.claude --listing'
+
+
+if __name__ == '__main__':
+    if sys.argv[1:] != ['--listing']:
+        raise SystemExit(USAGE)
+    print(json.dumps(models_listing(), sort_keys=True))
 
 
 def resolve(model):

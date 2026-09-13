@@ -15,9 +15,10 @@ from . import provider_defs
 
 FIELDS = ('slug', 'provider', 'display_name', 'vendor', 'reasoning',
           'default_reasoning', 'modalities', 'excluded_efforts',
-          'schema_mode', 'max_tools', 'drop_images', 'context_window',
-          'priority', 'max_output_tokens', 'reasoning_summary',
-          'apply_patch', 'experimental_tools', 'web_search', 'tier')
+          'schema_mode', 'history_mode', 'max_tools', 'drop_images',
+          'context_window', 'priority', 'max_output_tokens',
+          'reasoning_summary', 'apply_patch', 'experimental_tools',
+          'web_search', 'tier')
 
 
 @dataclass(frozen=True)
@@ -32,6 +33,7 @@ class Model:
     excluded_efforts: frozenset = frozenset()   # live-advertised but proven unsupported
     schema_mode: str = 'native'   # 'native' | 'json_text' (recursive schemas as JSON string)
                                   # | 'json_text_root' (non-object roots as JSON value)
+    history_mode: str = 'native'  # 'native' | 'portable' (carried tool history replay)
     max_tools: int | None = None  # provider ceiling on exposed tools
     drop_images: bool = False  # upstream stalls on image input; run text-only
     context_window: int = 0
@@ -42,6 +44,7 @@ class Model:
     experimental_tools: tuple = ()   # probe-gated tool names
     web_search: bool = True          # False downgrades search to text-only
     tier: str = 'verified'           # 'verified' | 'preview'
+    listed: bool = True              # picker visibility; new rows land False
 
 
 def load(text):
@@ -55,7 +58,8 @@ def load(text):
     models = []
     seen = set()
     for i, row in enumerate(rows):
-        if not isinstance(row, dict) or set(row) != set(FIELDS):
+        if (not isinstance(row, dict)
+                or set(row) - {'listed'} != set(FIELDS)):
             raise SystemExit(f'models.json row {i} must have exactly: {", ".join(FIELDS)}')
         if row['slug'] in seen:
             raise SystemExit(f'models.json duplicate slug: {row["slug"]}')
@@ -65,6 +69,8 @@ def load(text):
             raise SystemExit(f'models.json {row["slug"]}: bad provider')
         if row['schema_mode'] not in ('native', 'json_text', 'json_text_root'):
             raise SystemExit(f'models.json {row["slug"]}: bad schema_mode')
+        if row['history_mode'] not in ('native', 'portable'):
+            raise SystemExit(f'models.json {row["slug"]}: bad history_mode')
         if row['default_reasoning'] not in row['reasoning']:
             raise SystemExit(f'models.json {row["slug"]}: default not in reasoning')
         if row['reasoning_summary'] not in ('none', 'auto'):
@@ -84,17 +90,22 @@ def load(text):
             raise SystemExit(f'models.json {row["slug"]}: bad experimental_tools')
         if row['tier'] not in ('verified', 'preview'):
             raise SystemExit(f'models.json {row["slug"]}: bad tier')
+        if 'listed' in row and not isinstance(row['listed'], bool):
+            raise SystemExit(f'models.json {row["slug"]}: bad listed')
+        if row.get('listed', False) and row['tier'] != 'verified':
+            raise SystemExit(f'models.json {row["slug"]}: preview row must not be listed')
         models.append(Model(
             slug=row['slug'], provider=row['provider'], display_name=row['display_name'],
             vendor=row['vendor'], reasoning=tuple(row['reasoning']),
             default_reasoning=row['default_reasoning'], modalities=tuple(row['modalities']),
             excluded_efforts=frozenset(row['excluded_efforts']), schema_mode=row['schema_mode'],
-            max_tools=row['max_tools'], drop_images=row['drop_images'],
+            history_mode=row['history_mode'], max_tools=row['max_tools'], drop_images=row['drop_images'],
             context_window=row['context_window'],
             priority=row['priority'], max_output_tokens=row['max_output_tokens'],
             reasoning_summary=row['reasoning_summary'], apply_patch=row['apply_patch'],
             experimental_tools=tuple(row['experimental_tools']),
-            web_search=row['web_search'], tier=row['tier']))
+            web_search=row['web_search'], tier=row['tier'],
+            listed=row.get('listed', True)))
     return tuple(models)
 
 

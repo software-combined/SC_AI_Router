@@ -56,6 +56,8 @@ _retired = load('router_retired_slugs',
                 Path(__file__).resolve().parents[1] / 'ai_router' / 'retired_slugs.py')
 _atomic_write = load('router_atomic_write',
                      Path(__file__).resolve().parent / 'atomic_write.py')
+_state = load('router_state',
+              Path(__file__).resolve().parents[1] / 'ai_router' / 'state.py')
 _notice = load('router_notice',
                 Path(__file__).resolve().parent / 'notice.py')
 
@@ -315,7 +317,7 @@ def require_live_home(home, action):
 
 
 @contextlib.contextmanager
-def install_lock(home):
+def install_lock(home, name='install.lock'):
     """Serialise installs on one router home. Yields False when one is running.
 
     The scheduled updater and a manual run fire independently, and both swap
@@ -332,7 +334,7 @@ def install_lock(home):
               'are not serialised')
         yield True
         return
-    handle = os.open(path / 'install.lock', os.O_RDWR | os.O_CREAT, 0o600)
+    handle = os.open(path / name, os.O_RDWR | os.O_CREAT, 0o600)
     try:
         try:
             if fcntl is not None:
@@ -354,9 +356,8 @@ def _read_failures(home):
     run: the child installer writes the same file, and merging onto a stale
     copy would drop its changes.
     """
-    try:
-        state = json.loads((home / 'mixed-router-state.json').read_text())
-    except (OSError, ValueError):
+    state = _state.read(_state.path(home))
+    if state is None:
         return None, {}
     failures = state.get('update_failures')
     return state, dict(failures) if isinstance(failures, dict) else {}
@@ -429,19 +430,20 @@ def rotate_log(path, limit_bytes=1024 * 1024, backups=2):
         pass
 
 
-def _install_home_file(home, release_dir, name):
+def _install_home_file(home, release_dir, name, target=None):
     """Copy one stable entry point beside the state directory, atomically."""
+    target = target or name
     try:
         blob = (release_dir / 'packaging' / name).read_bytes()
     except OSError:
         raise SystemExit(f'bundle has no {name}')
-    tmp = home / (name + '.tmp')
+    tmp = home / (target + '.tmp')
     if tmp.is_symlink() or tmp.is_file():
         tmp.unlink()
     elif tmp.exists():
         shutil.rmtree(tmp)
     tmp.write_bytes(blob)
-    os.replace(tmp, home / name)
+    os.replace(tmp, home / target)
 
 
 def install_launcher(home, release_dir):
@@ -452,26 +454,47 @@ def install_launcher(home, release_dir):
     """
     _install_home_file(home, release_dir, 'router_launch.py')
     _install_home_file(home, release_dir, 'update_launch.py')
+    if "'--express-only'" in (release_dir / 'packaging' / 'update_launch.py').read_text():
+        _install_home_file(home, release_dir, 'update_launch.py', 'express_launch.py')
+
+
+def install_task_launcher(home, release_dir):
+    """Install the Windows Task Scheduler entry point beside the state dir.
+
+    The task XML names `<home>/task_launch.py`; copying the packaged file
+    keeps the installed launcher byte-identical to the one CI parses. A
+    repair run can name a release that predates the packaged launcher (or no
+    release at all): the home copy the previous install wrote is then already
+    correct, so it is kept instead of failing the repair.
+    """
+    if release_dir is not None:
+        try:
+            _install_home_file(home, release_dir, 'task_launch.py')
+            return
+        except SystemExit:
+            pass
+    if not (Path(home) / 'task_launch.py').is_file():
+        raise SystemExit('bundle has no task_launch.py')
 
 
 def _write_state(home, state):
-    _atomic_write.replace_text(home / 'mixed-router-state.json', json.dumps(state, indent=2) + '\n')
+    _atomic_write.replace_json(_state.path(home), state)
 
 
 def ensure_state(home):
-    path = home / 'mixed-router-state.json'
+    path = _state.path(home)
     if path.exists():
-        state = json.loads(path.read_text())
+        state = _state.read_strict(path)
         if not isinstance(state.get('openai_models'), list):
             state['openai_models'] = list(DEFAULT_OPENAI_MODELS)
-            _atomic_write.replace_text(path, json.dumps(state, indent=2) + '\n')
+            _atomic_write.replace_json(path, state)
         elif any(slug in state['openai_models'] for slug in RETIRED_SUBSCRIPTION_SLUGS):
             # Retired slugs: prune so routing stops authorizing them on update.
             # Type-check first: a corrupt non-string element must not be hashed.
             state['openai_models'] = [
                 s for s in state['openai_models']
                 if not (isinstance(s, str) and s in RETIRED_SUBSCRIPTION_SLUGS)]
-            _atomic_write.replace_text(path, json.dumps(state, indent=2) + '\n')
+            _atomic_write.replace_json(path, state)
         return state
     port = 18749
     probe = socket.socket()

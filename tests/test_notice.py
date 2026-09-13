@@ -199,10 +199,15 @@ class DialogCommandTests(unittest.TestCase):
     @unittest.skipUnless(sys.platform == 'darwin',
                          'compiles AppleScript; macOS only')
     def test_darwin_script_compiles(self):
-        cmd = notice_mod.dialog_command(
-            '1.0.1', platform_name='darwin',
-            which=lambda name: '/usr/bin/' + name,
-            icon='/bundle/router-icon.png')
+        # Compile against an app every Mac has: osacompile resolves
+        # `tell application id`, and hosted runners do not install Codex, so
+        # the production id cannot compile there. The script's real id stays
+        # pinned by test_darwin_restart_quits_and_relaunches_codex.
+        with mock.patch.object(notice_mod, 'CODEX_BUNDLE_ID', 'com.apple.finder'):
+            cmd = notice_mod.dialog_command(
+                '1.0.1', platform_name='darwin',
+                which=lambda name: '/usr/bin/' + name,
+                icon='/bundle/router-icon.png')
         with tempfile.TemporaryDirectory() as tmp:
             out = subprocess.run(
                 ['osacompile', '-e', cmd[cmd.index('-e') + 1],
@@ -215,10 +220,11 @@ class DialogCommandTests(unittest.TestCase):
     def test_darwin_script_compiles_with_a_non_ascii_path(self):
         # AppleScript has no unicode escape, so an accented home path must
         # reach the script as raw UTF-8 rather than json-escaped text.
-        cmd = notice_mod.dialog_command(
-            '1.0.1', platform_name='darwin',
-            which=lambda name: '/usr/bin/' + name,
-            icon='/Users/jos\u00e9/router-icon.png')
+        with mock.patch.object(notice_mod, 'CODEX_BUNDLE_ID', 'com.apple.finder'):
+            cmd = notice_mod.dialog_command(
+                '1.0.1', platform_name='darwin',
+                which=lambda name: '/usr/bin/' + name,
+                icon='/Users/jos\u00e9/router-icon.png')
         script = cmd[cmd.index('-e') + 1]
         self.assertIn('/Users/jos\u00e9/router-icon.png', script)
         self.assertNotIn('u00e9', script)

@@ -1,4 +1,5 @@
 import importlib.util
+import re
 import shutil
 import tarfile
 import json
@@ -13,16 +14,19 @@ FILES = [
          'ai_router/claude.py',
          'ai_router/registry.py',
          'ai_router/credentials.py',
-         'ai_router/tool_adapter.py',
+         'ai_router/tool_adapter.py', 'ai_router/tool_aliases.py',
          'ai_router/tool_merge.py',
+         'ai_router/atomic_write.py',
+         'ai_router/state.py',
          'ai_router/agent_handoffs.py',
-         'ai_router/sse.py',
+         'ai_router/sse.py', 'ai_router/stream_errors.py',
          'ai_router/capabilities.py',
          'ai_router/compaction.py',
+         'ai_router/compaction_result.py',
+         'ai_router/context_recovery.py',
          'ai_router/standalone_outputs.py',
 'ai_router/discovered.py',
 'ai_router/errors.py',
-'ai_router/feed_verify.py',
 'ai_router/candidate.py',
 'ai_router/setup.py',
 'ai_router/setup_page.py',
@@ -42,13 +46,16 @@ FILES = [
          'ai_router/model_refresh.py',
          'ai_router/winacl.py',
          'ai_router/image_items.py',
-          'ai_router/model_policy.py',
+         'ai_router/model_prompt.py',
+         'ai_router/model_prompt_page.py',
+         'ai_router/model_policy.py',
          'ai_router/subscription_roster.py',
          'ai_router/retired_slugs.py',
           'ai_router/clients/__init__.py',
          'ai_router/clients/codex.py',
          'ai_router/transport.py',
          'ai_router/subscription_fallback.py',
+         'ai_router/subscription_history.py',
          'ai_router/provider_defs.py',
          'ai_router/upstream.py',
          'ai_router/protocols/__init__.py',
@@ -60,6 +67,7 @@ FILES = [
          'ai_router/agents_general.txt',
          'ai_router/agents_dev.txt',
          'tools/probe_codex_runtime.py',
+         'tools/probe_context_budget.py',
          'tools/global_instructions.py',
          'tools/disable.py',
          ]
@@ -69,8 +77,10 @@ FILES = [
 # of release.py's inventory so a dropped member fails the bundle gate.
 REQUIRED_PACKAGING = (
     'packaging/router_launch.py', 'packaging/update_launch.py',
+    'packaging/task_launch.py',
     'packaging/launchd.py', 'packaging/service.py',
-    'packaging/feed.py', 'packaging/atomic_write.py',
+    'packaging/feed.py', 'packaging/feed_verify.py',
+    'packaging/atomic_write.py',
     'packaging/notice.py', 'packaging/assets/router-icon.png',
     'packaging/install.py', 'packaging/bundle.py', 'packaging/updater.py',
     'packaging/codex_config.py', 'packaging/claude_config.py',
@@ -138,11 +148,30 @@ class PackagingTests(unittest.TestCase):
                 continue
             self.assertIn(rel, bundled, 'packaging module missing from the release inventory')
 
-    def test_readme_runtime_list_matches_files(self):
-        import re
-        readme = (Path(__file__).resolve().parents[1] / 'README.md').read_text()
-        listed = set(re.findall(r'`((?:ai_router|tools)/[^`]+)`', readme))
+    def test_runtime_file_list_matches_files(self):
+        doc = (Path(__file__).resolve().parents[1] / 'docs' / 'runtime-files.md').read_text()
+        listed = set(re.findall(r'`((?:ai_router|tools)/[^`]+)`', doc))
         self.assertEqual(listed, set(FILES))
+
+    def test_readme_quick_start_installs_its_own_build(self):
+        # --url-base keeps the built feed pointing at the local tarball.
+        root = Path(__file__).resolve().parents[1]
+        blocks = re.findall(r'```(?:sh|powershell)\n(.*?)```',
+                            (root / 'README.md').read_text(), re.S)
+        release_blocks = [block for block in blocks if 'packaging/release.py' in block]
+        self.assertEqual(len(release_blocks), 2)
+        for block in release_blocks:
+            self.assertIn('--url-base "file://$PWD/dist"', block)
+        out = root / 'dist-test-readme-quick-start'
+        self.addCleanup(shutil.rmtree, str(out), True)
+        spec = importlib.util.spec_from_file_location(
+            'release_quick_start', root / 'packaging' / 'release.py')
+        release_mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(release_mod)
+        release_mod.main(['--out', str(out), '--url-base', 'file://' + str(out)])
+        latest = json.loads((out / 'latest.json').read_text())
+        self.assertTrue(latest['url'].startswith('file://'))
+        self.assertTrue(Path(latest['url'][len('file://'):]).is_file())
 
     def test_release_bundle_contains_deploy_list(self):
         root = Path(__file__).resolve().parents[1]
@@ -193,28 +222,22 @@ class PackagingTests(unittest.TestCase):
 
     def test_installer_surface_parses_as_python39(self):
         # Plan 061: the installer runs on Python 3.9+ while the router
-        # needs 3.14. No 3.9 interpreter exists in CI, so pin the grammar
-        # instead: every installer-surface file must parse as 3.9 syntax.
+        # needs 3.14. Plan 156 adds a real 3.9 import check
+        # (tools/check_installer_python39.py); this test keeps the grammar
+        # pin for every surface file, including the parse-only entry points.
         # feature_version misses PEP 604 unions (`X | Y` parses as BinOp
         # but raises at runtime on 3.9), so annotations get their own walk.
         import ast
         root = Path(__file__).resolve().parents[1]
-        surface = [
-            'packaging/install.py', 'packaging/bundle.py', 'packaging/service.py',
-            'packaging/feed.py', 'packaging/atomic_write.py',
-            'packaging/notice.py',
-            'packaging/launchd.py', 'packaging/router_launch.py',
-            'packaging/systemd.py', 'packaging/update_launch.py',
-            'packaging/updater.py', 'packaging/codex_config.py',
-            'packaging/claude_config.py', 'packaging/diagnostics.py',
-            'packaging/runtime_lock.py', 'packaging/platforms/__init__.py',
-            'packaging/platforms/darwin.py', 'packaging/platforms/linux.py',
-            'packaging/platforms/windows.py', 'ai_router/feed_verify.py',
-            'ai_router/subscription_roster.py',
-            'ai_router/retired_slugs.py',
-            'ai_router/provider_defs.py', 'packaging/provider_keys.py',
-            'tools/disable.py', 'tools/global_instructions.py',
-        ]
+        surface = []
+        for line in (root / 'config' / 'installer-python-surface.txt').read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            mode, name = line.split()
+            self.assertIn(mode, ('load', 'parse'))
+            surface.append(name)
+        self.assertTrue(surface)
         for name in surface:
             with self.subTest(name=name):
                 src = (root / name).read_text()

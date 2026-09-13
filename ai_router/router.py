@@ -6,18 +6,46 @@ import threading
 import time
 from compression import zstd
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from . import (capabilities, errors, ingress, local_services, provider_defs,
-               relay, setup, subscription_fallback, transport)
+from . import (capabilities, errors, ingress, local_services, model_prompt_page,
+               provider_defs, relay, setup, subscription_fallback, transport)
 from .credentials import Credentials
 from .protocols import owned_paths, select as select_protocol
 from .errors import InvalidSize, PreparationError
 from .providers import NATIVE_SERVICE_PATHS
 from .runtime import MAX_BODY, ROUTER_HOME, log_event
 
+MAX_INFLIGHT = 32
+
+
+def _harden_listener(sock, platform=None):
+    """Windows: bind exclusively so no local process can share the port.
+
+    Python's HTTPServer sets SO_REUSEADDR, which on Windows lets another
+    local process bind the same loopback port and receive router traffic;
+    SO_EXCLUSIVEADDRUSE forbids that. POSIX already refuses the second bind
+    without SO_REUSEPORT, so only Windows sets the flag.
+
+    Trade-off: after an abrupt exit, a Windows rebind can wait while
+    connections the old listener accepted finish closing; the scheduled
+    task's retry covers that window.
+    """
+    platform = os.name if platform is None else platform
+    exclusive = getattr(socket, 'SO_EXCLUSIVEADDRUSE', None)
+    if platform == 'nt' and exclusive is not None:
+        sock.setsockopt(socket.SOL_SOCKET, exclusive, 1)
+
 
 class Router(ThreadingHTTPServer):
     daemon_threads = True
     drain_deadline_s = 120
+    max_inflight = MAX_INFLIGHT
+    # Windows takes SO_EXCLUSIVEADDRUSE in server_bind instead; leaving
+    # SO_REUSEADDR on would undo it.
+    allow_reuse_address = os.name != 'nt'
+
+    def server_bind(self):
+        _harden_listener(self.socket)
+        super().server_bind()
 
     def __init__(self, state, fileno=None, credentials=None):
         sock = (None if fileno is None else
@@ -73,6 +101,9 @@ class Handler(BaseHTTPRequestHandler):
     def send_json(self, status, obj, headers=None):
         return ingress.send_json(self, status, obj, headers)
 
+    def send_compaction_stream(self, output):
+        return ingress.send_compaction_stream(self, output)
+
     def error(self, err):
         return ingress.error(self, err, log_event=log_event)
 
@@ -108,10 +139,22 @@ class Handler(BaseHTTPRequestHandler):
         if path not in owned_paths():
             if path.startswith('/setup/'):
                 return setup.serve(self, path[len('/setup/'):], True)
+            if path.startswith('/model-prompt/'):
+                return model_prompt_page.handle_page(
+                    self, path[len('/model-prompt/'):], True)
             return self.error(errors.unsupported_route())
+        if (self.headers.get('Content-Type') or '').split(';', 1)[0].strip().lower() \
+                != 'application/json':
+            return self.error(errors.unsupported_media_type())
         # One slot spans read_body, prepare and relay; rejects above return first.
         with self.server.lock:
-            self.server.inflight += 1
+            if self.server.inflight >= self.server.max_inflight:
+                over = True
+            else:
+                self.server.inflight += 1
+                over = False
+        if over:
+            return self.retryable_reject(errors.too_many_inflight(), retry_after='1')
         try:
             return self._owned_post(path, via_path, started)
         finally:
@@ -143,7 +186,10 @@ class Handler(BaseHTTPRequestHandler):
                 # errors keep 401/400, not 502.
                 key = self.server.credentials.key_for(provider.defn.id)
                 try:
-                    return self.send_json(200, {'output': compact_call(key)})
+                    output = compact_call(key)
+                    if path == '/responses' and payload.get('stream') is True:
+                        return self.send_compaction_stream(output)
+                    return self.send_json(200, {'output': output})
                 except PreparationError as exc:
                     return self.error(errors.preparation(str(exc)))
                 except (OSError, http.client.HTTPException):

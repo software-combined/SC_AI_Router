@@ -54,7 +54,8 @@ def _run_install_ordered(test, tmp, home, version, platform):
                  wait_version=lambda *args, **kwargs: {'status': 'ok'})
     args = install_mod.build_parser().parse_args(
         ['--feed', 'file:///latest.json', '--home', str(home)])
-    env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'k'}
+    env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'k',
+           'ROUTER_NO_KEY_WINDOW': '1'}
     with mock.patch.dict(os.environ, env):
         with contextlib.redirect_stdout(io.StringIO()):
             rc = install_mod.do_install(args, _fetch=_static_fetch(latest, blob),
@@ -129,7 +130,7 @@ class DispatchOrderTests(unittest.TestCase):
                 ['--feed', 'file:///latest.json', '--home', str(home)])
             env = {'HOME': str(Path(tmp) / 'fakehome'),
                    'XDG_CONFIG_HOME': str(env_home),
-                   'OPENROUTER_API_KEY': 'k'}
+                   'OPENROUTER_API_KEY': 'k', 'ROUTER_NO_KEY_WINDOW': '1'}
             with mock.patch.dict(os.environ, env):
                 with contextlib.redirect_stdout(io.StringIO()):
                     rc = install_mod.do_install(args, _fetch=_static_fetch(latest, blob),

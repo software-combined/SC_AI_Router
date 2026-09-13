@@ -1,12 +1,10 @@
 import base64
 import json
 import os
-import queue
 import re
 import subprocess
 import sys
 import tempfile
-import threading
 import time
 from pathlib import Path
 
@@ -14,6 +12,11 @@ try:
     from tools.probe_media import red_png, silent_wav
 except ImportError:  # run as a script: the sibling module is on sys.path
     from probe_media import red_png, silent_wav
+
+try:
+    from tools.appserver_probe import AppServer
+except ImportError:  # run as a script: the sibling module is on sys.path
+    from appserver_probe import AppServer
 
 ROOT = Path(__file__).resolve().parent
 CODEX_BIN = os.environ.get('CODEX_BIN', '/Applications/ChatGPT.app/Contents/Resources/codex')
@@ -95,54 +98,38 @@ def flatten(d, prefix=''):
 
 flatten(cfg)
 args.extend(['-c', 'mcp_servers={}'])
-p = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                     stderr=subprocess.PIPE, text=True, cwd=ROOT)
-events = queue.Queue()
-def drain_stderr():
-    for _ in p.stderr:
-        pass  # Drain diagnostics without logging potentially secret-bearing URLs.
-
-threading.Thread(target=drain_stderr, daemon=True).start()
-
-def read():
-    for line in p.stdout:
-        try:
-            events.put(json.loads(line))
-        except ValueError:
-            pass
-    events.put({'eof': True})
-
-threading.Thread(target=read, daemon=True).start()
 deadline = time.monotonic() + (180 if '--capture-tools' in sys.argv else 90)
-seq = 0
 calls = 0
 marker = 'CODEX_OPENROUTER_OK_719'
 trace = []
 
-def send(value):
-    p.stdin.write(json.dumps(value) + '\n')
-    p.stdin.flush()
 
-def next_event():
-    event = events.get(timeout=max(0.01, deadline - time.monotonic()))
+def on_event(event):
+    # --capture-tools prints runtime events; the shared class stays silent.
     if '--capture-tools' in sys.argv and event.get('method'):
         print(json.dumps({'runtime_event': event['method'], 'request': 'id' in event}), flush=True)
         if event['method'] == 'error':
             print(re.sub(r'https?://[^\s"<>]+', '[URL]', json.dumps(event.get('params')))[:1800], flush=True)
-    if 'eof' in event:
-        raise RuntimeError('App server exited')
-    return event
+
+
+# Ambient env, piped stderr drained silently, plain terminate: the shared
+# AppServer default. Per-call timeout keeps the global-deadline wait shape.
+server = AppServer(args, cwd=ROOT, env=dict(os.environ), stderr=subprocess.PIPE,
+                    on_event=on_event)
+
+
+def send(value):
+    server.send(value)
+
+
+def next_event():
+    return server.next_event(deadline=deadline)
+
 
 def rpc(method, params):
-    global seq
-    seq += 1
-    send({'id': seq, 'method': method, 'params': params})
-    while True:
-        event = next_event()
-        if event.get('id') == seq and 'method' not in event:
-            if 'error' in event:
-                raise RuntimeError(str(event['error']))
-            return event['result']
+    return server.rpc(method, params,
+                      timeout=max(0.01, deadline - time.monotonic()))
+
 
 def _flag_value(name):
     return sys.argv[sys.argv.index(name) + 1] if name in sys.argv else None
@@ -375,6 +362,8 @@ try:
     compact_then_switch = '--compact-then-switch' in sys.argv
     if '--switch' in sys.argv and not compact_then_switch:
         run_switch_leg(thread, switch_target())
+        if '--switch-back' in sys.argv:
+            run_switch_leg(thread, model)
     if '--compact' in sys.argv or compact_then_switch:
         run_compact(thread)
         if '--compact-twice' in sys.argv:
@@ -382,8 +371,4 @@ try:
     if compact_then_switch:
         run_switch_leg(thread, switch_target())
 finally:
-    p.terminate()
-    try:
-        p.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        p.kill()
+    server.close()

@@ -1,6 +1,7 @@
 """Plan 041 installer tests. install.py imports cleanly as a module."""
 import contextlib
 import hashlib
+import importlib.util as _ilu
 import io
 import json
 import os
@@ -13,7 +14,6 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ai_router import feed_verify
 from tests.install_fixtures import (
     _craft_bundle,
     _ok_run,
@@ -24,6 +24,12 @@ from tests.install_fixtures import (
     _tarball,
     install_mod,
 )
+
+_feed_verify_spec = _ilu.spec_from_file_location(
+    'router_feed_verify',
+    Path(__file__).resolve().parents[1] / 'packaging' / 'feed_verify.py')
+feed_verify = _ilu.module_from_spec(_feed_verify_spec)
+_feed_verify_spec.loader.exec_module(feed_verify)
 
 
 class PlatformRefusalTests(unittest.TestCase):
@@ -193,7 +199,7 @@ class InstallTests(unittest.TestCase):
 
             args = install_mod.build_parser().parse_args(
                 ['--feed', 'file:///latest.json', '--home', str(home)])
-            env = {'HOME': tmp, 'OPENROUTER_API_KEY': 'test-key'}
+            env = {'HOME': tmp, 'OPENROUTER_API_KEY': 'test-key', 'ROUTER_NO_KEY_WINDOW': '1'}
             with mock.patch.dict(os.environ, env):
                 with self.assertRaises(SystemExit) as ctx:
                     install_mod.do_install(args, _fetch=fake_fetch, _run=fake_run)
@@ -279,14 +285,14 @@ class InstallTests(unittest.TestCase):
             with mock.patch.dict(os.environ, env):
                 buf = io.StringIO()
                 with contextlib.redirect_stdout(buf):
-                    rc = install_mod.do_check_update(
+                    rc = install_mod.do_update(
                         args, _fetch=fake_fetch, _sleep=lambda s: None)
             self.assertEqual(rc, 0)
             self.assertIn('up to date', buf.getvalue())
             self.assertEqual(sum(1 for cmd in calls if 'bootstrap' in cmd), n_bootstraps)
 
 
-    def test_check_update_uses_etag_and_treats_304_as_current(self):
+    def test_update_uses_etag_and_treats_304_as_current(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             home.mkdir()
@@ -304,7 +310,7 @@ class InstallTests(unittest.TestCase):
                 ['--feed', 'file:///latest.json', '--home', str(home)])
             buf = io.StringIO()
             with contextlib.redirect_stdout(buf):
-                rc = install_mod.do_check_update(
+                rc = install_mod.do_update(
                     args, _fetch=boom, _read_feed=fake_read, _sleep=lambda s: None)
             self.assertEqual(rc, 0)
             self.assertIn('up to date', buf.getvalue())
@@ -335,7 +341,7 @@ class InstallTests(unittest.TestCase):
                 ['--feed', 'file:///latest.json', '--home', str(home)])
             buf = io.StringIO()
             with contextlib.redirect_stdout(buf):
-                install_mod.do_check_update(
+                install_mod.do_update(
                     args,
                     _read_feed=lambda feed, etag: (304, b'', None),
                     _sleep=sleeps.append)
@@ -349,7 +355,7 @@ class InstallTests(unittest.TestCase):
         self.assertTrue(content['RunAtLoad'])
         self.assertNotIn('StartCalendarInterval', content)
 
-    def test_deferred_check_keeps_old_etag(self):
+    def test_deferred_update_keeps_old_etag(self):
         # Retaining the old ETag is what makes the next poll re-read the feed.
         # There is no busy gate any more, so the deferral under test is the
         # one that remains: the child installer ran and did not activate the
@@ -371,14 +377,14 @@ class InstallTests(unittest.TestCase):
                 ['--feed', 'file:///latest.json', '--home', str(home)])
             buf = io.StringIO()
             with contextlib.redirect_stdout(buf):
-                rc = install_mod.do_check_update(
+                rc = install_mod.do_update(
                     args, _fetch=lambda url: blob, _read_feed=fake_read,
                     _sleep=lambda s: None)
             self.assertEqual(rc, 0)
             self.assertIn('deferred', buf.getvalue())
             self.assertEqual((home / 'update-etag').read_text(), 'etag-A\n')
 
-    def test_up_to_date_check_stores_new_etag(self):
+    def test_up_to_date_update_stores_new_etag(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             rel = home / 'releases' / '9.9.9'
@@ -400,7 +406,7 @@ class InstallTests(unittest.TestCase):
                 ['--feed', 'file:///latest.json', '--home', str(home)])
             buf = io.StringIO()
             with contextlib.redirect_stdout(buf):
-                rc = install_mod.do_check_update(
+                rc = install_mod.do_update(
                     args, _fetch=boom, _read_feed=fake_read, _sleep=lambda s: None)
             self.assertEqual(rc, 0)
             self.assertIn('up to date', buf.getvalue())

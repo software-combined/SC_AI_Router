@@ -23,12 +23,13 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from ai_router.agent_handoffs import add_plaintext_tools, restore_event
-from ai_router.catalogue import external_entry
+from ai_router.agent_handoffs import add_plaintext_tools, restore_event, steer_event
+from ai_router.catalogue import external_entry, subscription_stub
 from ai_router.registry import by_slug
+from tools.appserver_probe import AppServer, AGENT_HANDOFFS, scrub_env
 
 PARENT = 'gpt-6-astra'
-CHILD = 'meta/muse-spark-1.3-contributor'
+CHILD = 'deepseek/deepseek-v4.1-flash'
 MARKERS = ('SYNTH_066_INITIAL', 'SYNTH_066_FOLLOWUP', 'SYNTH_066_MESSAGE')
 ALL_MARKERS = (*MARKERS, 'SYNTH_NATIVE_CONTROL')
 
@@ -56,6 +57,10 @@ def sse(items, ident):
 
 
 class Probe:
+    required_final = None
+    live_prompts = None
+    expected_recovered = ()
+
     def __init__(self, live, call_limit, live_children=False):
         self.live, self.call_limit = live, call_limit
         self.live_children = live_children
@@ -94,7 +99,7 @@ class Probe:
         step = self.parent_calls
         self.parent_calls += 1
         calls = [
-            ('spawn_agent', {'task_name': 'plain', 'model': CHILD, 'fork_turns': 'none', 'message': MARKERS[0]}),
+            ('spawn_agent', {'task_name': 'plain', 'model': CHILD, 'fork_turns': 'none', 'reasoning_effort': 'max', 'message': MARKERS[0]}),
             ('followup_task', {'target': 'plain', 'message': MARKERS[1]}),
             ('send_message', {'target': 'plain', 'message': MARKERS[2]}),
             ('followup_task', {'target': 'plain', 'message': 'SYNTH_WAKE_READ_QUEUED_MESSAGE'}),
@@ -130,7 +135,14 @@ class Probe:
             'input_kinds': sorted({i.get('type') for i in body.get('input', [])
                                    if isinstance(i, dict)}),
         })
-        body['tools'] = [t for t in offered if t.get('name') == 'collaboration']
+        containers = [body, *(i for i in body.get('input', [])
+            if i.get('type') == 'additional_tools' and i.get('role') == 'developer')]
+        self.facts['turns'][-1]['tool_location'] = (
+            'additional_tools' if len(containers) > 1 else 'tools')
+        for container in containers:
+            if isinstance(container.get('tools'), list):
+                container['tools'] = [t for t in container['tools']
+                                      if t.get('name') == 'collaboration']
         if self.live_children:
             if body.get('model') != PARENT:
                 self.scripted(body, ordinal)  # Observe input shape only; discard scripted reply.
@@ -168,6 +180,8 @@ class Probe:
                             self.facts['replies'].append(marker)
             return raw
         aliases = add_plaintext_tools(body)
+        if body.get('model') == PARENT and not aliases:
+            raise ValueError('parent collaboration aliases were not advertised')
         if self.live and body.get('model') == PARENT:
             raw = self.forward(body, headers)
         else:
@@ -188,7 +202,7 @@ class Probe:
                         'name': item.get('name'),
                         'encrypted_fields': 'absent' if fields == 'absent' else ('empty' if fields == [] else 'nonempty'),
                         'model': arguments.get('model'), 'fork_turns': arguments.get('fork_turns')})
-            restored = restore_event(event, aliases)
+            restored = steer_event(restore_event(event, aliases), aliases)
             if restored is not event:
                 self.facts['alias_emitted'] = True
                 if isinstance(restored.get('item'), dict):
@@ -214,12 +228,14 @@ class Probe:
             return response.read()
 
 
-def run(args):
+def run(args, probe_type=Probe):
     if args.live and not 1 <= args.max_live_calls <= 24:
         raise ValueError('--live requires --max-live-calls between 1 and 24')
     if args.live_children and not args.live:
         raise ValueError('--live-children requires --live')
-    probe = Probe(args.live, args.max_live_calls, args.live_children)
+    if getattr(args, 'installed', False) and (not args.live_children or args.lifecycle):
+        raise ValueError('--installed requires --live-children without --lifecycle')
+    probe = probe_type(args.live, args.max_live_calls, args.live_children)
     class Handler(BaseHTTPRequestHandler):
         protocol_version = 'HTTP/1.1'
 
@@ -267,7 +283,7 @@ def run(args):
     with tempfile.TemporaryDirectory(prefix='agent-handoff-probe-') as temp:
         root = Path(temp)
         candidate = None
-        if args.live_children:
+        if args.live_children and not getattr(args, 'installed', False):
             from ai_router.credentials import Credentials
             from ai_router.router import Router
             from ai_router.runtime import LOG
@@ -291,25 +307,20 @@ def run(args):
         threading.Thread(target=server.serve_forever, daemon=True).start()
         child = external_entry(by_slug(CHILD))
         child['prefer_websockets'] = False
-        if PARENT.startswith('gpt-'):
-            # Subscription parents keep their live multi-agent contract.
-            # The installed catalogue serves Astra v2 but Luna v1 (Codex
-            # 0.153.4, 2026-09-10); forcing v2 would mask that difference.
-            # Plan 066 covers the v2 parent route; v1 parents stay fail-closed
-            # on opaque follow-ups and need their own plan if pursued.
-            # Isolated default must run without the installed catalogue.
-            try:
-                installed = (Path.home() / '.codex/mixed-model-router'
-                             / 'mixed-models.json').read_text()
-            except OSError:
-                installed = '{"models": []}'
-            live = {m.get('slug'): m.get('multi_agent_version')
-                    for m in json.loads(installed).get('models', [])}
-            parent = dict(child, slug=PARENT, display_name='Synthetic parent',
-                          multi_agent_version=live.get(PARENT, 'v2'))
+        if args.live:
+            installed = json.loads((Path.home() / '.codex/mixed-model-router'
+                                    / 'mixed-models.json').read_text())
+            rows = {m['slug']: m for m in installed['models']}
+            parent = dict(rows[PARENT])
+            native = dict(rows['gpt-5.6-sol'])
         else:
-            parent = external_entry(by_slug(PARENT))
-        native = dict(parent, slug='gpt-5.6-sol')
+            parent = (subscription_stub(PARENT) if PARENT.startswith('gpt-')
+                      else external_entry(by_slug(PARENT)))
+            parent['use_responses_lite'] = args.wire_mode == 'lite'
+            parent['multi_agent_version'] = 'v2'
+            native = dict(parent, slug='gpt-5.6-sol')
+        probe.facts['parent_wire_mode'] = 'lite' if parent['use_responses_lite'] else 'classic'
+        probe.facts['child_effort'] = 'max'
         catalog = root / 'catalog.json'
         catalog.write_text(json.dumps({'models': [parent, child, native]}))
         if args.live:
@@ -333,30 +344,13 @@ def run(args):
         command = [args.codex, 'app-server', '--stdio']
         for key, value in config.items():
             command.extend(['-c', key + '=' + json.dumps(value)])
-        env = {k: v for k, v in os.environ.items() if not any(
-            word in k.upper() for word in ('API_KEY', 'TOKEN', 'SECRET', 'AUTH'))}
-        env['CODEX_HOME'] = temp
-        process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE, text=True, cwd=temp, env=env)
-        events = queue.Queue()
-        def read_events():
-            for line in process.stdout:
-                try:
-                    events.put(json.loads(line))
-                except ValueError:
-                    pass
-        def drain_errors():
-            for _ in process.stderr:
-                pass
-        threading.Thread(target=read_events, daemon=True).start()
-        threading.Thread(target=drain_errors, daemon=True).start()
+        env = scrub_env(os.environ, AGENT_HANDOFFS, inject={'CODEX_HOME': temp})
         deadline = time.monotonic() + (600 if args.live else 40)
         sequence = 0
-        def send(value):
-            process.stdin.write(json.dumps(value) + '\n')
-            process.stdin.flush()
-        def next_event():
-            event = events.get(timeout=max(.1, deadline - time.monotonic()))
+        def record_failure(event):
+            # Probe policy: every dequeued event is scanned for failures and
+            # recorded in facts. Lives in the probe via the on_event hook so
+            # the shared class never learns this probe's fact shape.
             params = event.get('params', {})
             failure = params.get('error') if event.get('method') == 'error' else None
             if event.get('method') == 'turn/completed' and params.get('turn', {}).get('status') == 'failed':
@@ -366,7 +360,16 @@ def run(args):
                         'code': failure.get('codexErrorInfo') if isinstance(failure, dict) else None}
                 if safe not in probe.facts['tool_failures']:
                     probe.facts['tool_failures'].append(safe)
-            return event
+        # Piped stderr drained silently, plain terminate, ambient-adjacent
+        # scrub above: the shared AppServer default. The global deadline is
+        # threaded through next_event: this probe keeps its own reply loop and
+        # never calls the shared rpc, so the shared cap is left at its default.
+        server_process = AppServer(command, cwd=temp, env=env, stderr=subprocess.PIPE,
+                                   on_event=record_failure)
+        def send(value):
+            server_process.send(value)
+        def next_event():
+            return server_process.next_event(deadline=deadline)
         def rpc(method, params):
             nonlocal sequence
             sequence += 1
@@ -387,7 +390,7 @@ def run(args):
                 'developerInstructions': 'Use only the collaboration tools requested by the user.'})['thread']['id']
             prompts = [
                 f'Use collaboration_plaintext.spawn_agent once to create plain on {CHILD}, '
-                f'fork_turns none, message "Reply exactly {MARKERS[0]}". Then finish this turn.',
+                f'fork_turns none, reasoning_effort max, message "Reply exactly {MARKERS[0]}". Then finish this turn.',
                 'The plain child uses OpenRouter. Call collaboration_plaintext.followup_task '
                 f'once with target plain, message "Reply exactly {MARKERS[1]}". Then finish this turn.',
                 'The plain child uses OpenRouter. Call collaboration_plaintext.send_message '
@@ -399,6 +402,8 @@ def run(args):
                 'Without tools, reply SYNTH_REPLAY_TWO.'] if args.live else ['Synthetic test.']
             if args.native_only:
                 prompts = prompts[-2:]
+            if args.live and probe.live_prompts:
+                prompts = probe.live_prompts
             def turn(prompt_text):
                 answer = []
                 rpc('turn/start', {'threadId': thread, 'input': [{'type': 'text', 'text': prompt_text,
@@ -415,14 +420,18 @@ def run(args):
                         break
                 return '\n'.join(answer)
             for prompt_text in prompts:
-                turn(prompt_text)
+                answer = turn(prompt_text)
+                if probe.required_final and probe.required_final not in answer:
+                    raise ValueError('parent did not finish after handoff recovery')
             expected_replies = {'SYNTH_NATIVE_CONTROL'} if args.native_only else set(ALL_MARKERS)
             settle = min(deadline, time.monotonic() + (120 if args.live_children else 2))
             while time.monotonic() < settle:
                 if args.live_children and expected_replies <= set(probe.facts['replies']):
                     break
                 try:
-                    events.get(timeout=.1)
+                    # Raw dequeue-and-discard, exactly as before: the
+                    # failure-recording hook must not see settle events.
+                    server_process.events.get(timeout=.1)
                 except queue.Empty:
                     pass
             if args.lifecycle:
@@ -454,6 +463,8 @@ def run(args):
                 probe.facts['compaction_and_two_turns'] = True
             print(json.dumps({'live_parent': args.live, 'scripted_children': not args.live_children,
                 'live_calls': probe.live_calls, **probe.facts, 'errors': probe.errors}), flush=True)
+            if set(probe.expected_recovered) - set(probe.facts.get('recovered_tools', [])):
+                return 1
             if args.native_only:
                 return 0 if (probe.facts['encrypted_child'] and not probe.errors
                     and (not args.live_children or expected_replies <= set(probe.facts['replies']))) else 1
@@ -469,12 +480,7 @@ def run(args):
                               'facts': probe.facts, 'errors': probe.errors}), flush=True)
             return 1
         finally:
-            process.terminate()
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait()
+            server_process.close()
             server.shutdown()
             server.server_close()
             if candidate is not None:
@@ -485,8 +491,11 @@ def run(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--codex', default='/Applications/ChatGPT.app/Contents/Resources/codex')
+    parser.add_argument('--wire-mode', choices=('classic', 'lite'), default='lite',
+                        help='Offline variant; live always uses installed catalogue metadata.')
     parser.add_argument('--live', action='store_true')
     parser.add_argument('--live-children', action='store_true')
+    parser.add_argument('--installed', action='store_true', help='Verify the installed router, not a candidate.')
     parser.add_argument('--native-only', action='store_true')
     parser.add_argument('--lifecycle', action='store_true')
     parser.add_argument('--max-live-calls', type=int, default=0)

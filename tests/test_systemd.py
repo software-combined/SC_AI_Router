@@ -25,7 +25,8 @@ class SystemdTests(unittest.TestCase):
         for patcher in (
                 mock.patch.object(install_mod, 'PLATFORM', 'linux'),
                 mock.patch.dict(os.environ, {'HOME': str(self.root / 'user'),
-                    'XDG_CONFIG_HOME': str(self.root / 'config'), 'OPENROUTER_API_KEY': 'test-key'})):
+                    'XDG_CONFIG_HOME': str(self.root / 'config'), 'OPENROUTER_API_KEY': 'test-key',
+                    'ROUTER_NO_KEY_WINDOW': '1'})):
             patcher.start()
             self.addCleanup(patcher.stop)
         _patch_attrs(self, run=self.run_command, self_test=lambda *a: None,
@@ -52,11 +53,16 @@ class SystemdTests(unittest.TestCase):
         current = self.home / 'current'
         current.unlink()
         current.symlink_to(self.home / 'releases' / '0.6.2.0')
-        before_state = (self.home / 'mixed-router-state.json').read_bytes()
+        before = json.loads((self.home / 'mixed-router-state.json').read_text())
         self.install('0.6.6.0')
         self.assertFalse(current.is_symlink())
         self.assertEqual(current.read_text().strip(), '0.6.6.0')
-        self.assertEqual((self.home / 'mixed-router-state.json').read_bytes(), before_state)
+        after = json.loads((self.home / 'mixed-router-state.json').read_text())
+        self.assertEqual({k: v for k, v in after.items() if k != 'setup'},
+                         {k: v for k, v in before.items() if k != 'setup'})
+        # Env-only key: the upgrade mints a fresh setup nonce for the window.
+        self.assertIn('setup', after)
+        self.assertNotEqual(after['setup'], before.get('setup'))
         units = self.root / 'config' / 'systemd' / 'user'
         service = (units / install_mod._linux.SERVICE).read_text()
         self.assertIn(str(self.home / 'router_launch.py'), service)
@@ -118,6 +124,30 @@ class SystemdTests(unittest.TestCase):
             self.install('0.6.6.0')
         self.assertNotIn(['systemctl', '--user', 'stop', install_mod._linux.UPDATE], self.calls)
 
+    def test_update_unit_asks_the_release_it_names_for_its_verb(self):
+        # A --setup repair re-renders the unit around the release already
+        # current, which can predate --update; the unit must not strand it.
+        units = self.root / 'config' / 'systemd' / 'user'
+        legacy = self.home / 'releases' / '0.6.36' / 'packaging'
+        legacy.mkdir(parents=True)
+        (legacy / 'VERSION').write_text('0.6.36\n')
+        (legacy / 'install.py').write_text(
+            "parser.add_argument('--check-update', action='store_true')\n")
+        manager = install_mod._linux.Manager(self.home, self.run_command)
+        manager.install(sys.executable, self.home / 'releases' / '0.6.36')
+        update = (units / install_mod._linux.UPDATE).read_text()
+        self.assertIn('--check-update --home', update)
+        self.assertNotIn('--update --home', update)
+        current = self.home / 'releases' / '0.6.37' / 'packaging'
+        current.mkdir(parents=True)
+        (current / 'VERSION').write_text('0.6.37\n')
+        (current / 'install.py').write_text(
+            "parser.add_argument('--update', action='store_true')\n")
+        manager.install(sys.executable, self.home / 'releases' / '0.6.37')
+        update = (units / install_mod._linux.UPDATE).read_text()
+        self.assertIn('--update --home', update)
+        self.assertNotIn('--check-update --home', update)
+
     def test_deferred_child_keeps_etag_and_does_not_report_success(self):
         self.install('0.6.2.0')
         blob, latest = _craft_bundle('0.6.6.0')
@@ -128,7 +158,7 @@ class SystemdTests(unittest.TestCase):
         args = install_mod.build_parser().parse_args(['--home', str(self.home)])
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
-            install_mod.do_check_update(args, _fetch=_static_fetch(latest, blob),
+            install_mod.do_update(args, _fetch=_static_fetch(latest, blob),
                 _read_feed=lambda *a: (200, json.dumps(latest).encode(), 'new'), _sleep=lambda s: None)
         self.assertIn('deferred:', output.getvalue())
         self.assertEqual((self.home / 'update-etag').read_text(), 'old')

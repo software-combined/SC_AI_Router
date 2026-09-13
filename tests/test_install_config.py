@@ -55,7 +55,8 @@ def _install(test, tmp, home, version, *extra_args, feed='file:///latest.json',
     if feed is not None:
         argv = ['--feed', feed, *argv]
     args = install_mod.build_parser().parse_args(argv)
-    env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}
+    env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key',
+           'ROUTER_NO_KEY_WINDOW': '1'}
     with mock.patch.dict(os.environ, env):
         test.assertEqual(
             install_mod.do_install(args, _fetch=fake_fetch, _run=fake_run), 0)
@@ -211,7 +212,7 @@ class InstallConfigTests(unittest.TestCase):
             LAUNCHD.reset(unloaded={install_mod.LABEL, install_mod.UPDATE_LABEL})
             args = install_mod.build_parser().parse_args(
                 ['--feed', 'file:///latest.json', '--home', str(home)])
-            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key'}
+            env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key', 'ROUTER_NO_KEY_WINDOW': '1'}
             with mock.patch.dict(os.environ, env):
                 self.assertEqual(
                     install_mod.do_install(args, _fetch=fake_fetch, _run=fake_run), 0)
@@ -359,22 +360,6 @@ class InstallConfigTests(unittest.TestCase):
             self.assertEqual(len(spawned), 1)
             self.assertEqual(spawned[0][-2:], ['--clients', 'claude'])
 
-    def test_no_setup_without_key_still_refuses(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            home = Path(tmp) / 'home'
-            blob, latest = _craft_bundle('1.0.0')
-            _patch_attrs(self, run=lambda cmd, **kwargs: _ok_run(cmd, **kwargs),
-                         self_test=lambda *args: None,
-                         write_catalogue=_fake_write_catalogue,
-                         wait_version=lambda *args, **kwargs: True)
-            args = install_mod.build_parser().parse_args(
-                ['--feed', 'file:///latest.json', '--home', str(home)])
-            env = {'HOME': str(Path(tmp) / 'fakehome'), 'PATH': '/usr/bin:/bin'}
-            with mock.patch.dict(os.environ, env, clear=True):
-                with self.assertRaises(SystemExit) as ctx:
-                    install_mod.do_install(args, _fetch=_static_fetch(latest, blob))
-            self.assertEqual(ctx.exception.code, 3)
-
     def test_channel_feed_prefers_pinned_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
@@ -383,7 +368,7 @@ class InstallConfigTests(unittest.TestCase):
             self.assertEqual(install_mod.channel_feed(home),
                              'file:///pinned.json')
 
-    def test_check_update_reinvoke_does_not_pin_channel_feed(self):
+    def test_update_reinvoke_does_not_pin_channel_feed(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             home.mkdir()
@@ -413,9 +398,9 @@ class InstallConfigTests(unittest.TestCase):
             _patch_attrs(self, run=fake_run)
             args = install_mod.build_parser().parse_args(['--home', str(home)])
             buf = io.StringIO()
-            with mock.patch.dict(os.environ, {'OPENROUTER_API_KEY': 'k'}):
+            with mock.patch.dict(os.environ, {'OPENROUTER_API_KEY': 'k', 'ROUTER_NO_KEY_WINDOW': '1'}):
                 with contextlib.redirect_stdout(buf):
-                    rc = install_mod.do_check_update(
+                    rc = install_mod.do_update(
                         args, _fetch=_static_fetch(latest, blob),
                         _read_feed=lambda feed, etag: (
                             200, json.dumps(latest).encode(), None),

@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+exec python3 "$HOME/.config/scg-agent-git-hooks/lib/scg_agent_git_hooks.py" pre-commit "$@"

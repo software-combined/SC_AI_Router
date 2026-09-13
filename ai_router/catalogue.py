@@ -11,7 +11,8 @@ own label with no code change here.
 import json
 import sys
 from pathlib import Path
-from . import provider_defs
+from . import context_recovery, provider_defs, state as state_mod
+from .atomic_write import replace_json
 from .capabilities import (COMP_HASH, MULTI_AGENT_VERSION, NODE_REPL_DISABLED,
                            catalogue_patch, describe)
 from .clients.codex import capability_fields as codex_projection
@@ -119,7 +120,7 @@ if (set(SUBSCRIPTION_REASONING) != set(SUBSCRIPTION_SLUGS)
     raise ValueError('subscription roster and catalogue tables disagree')
 
 
-def subscription_stub(slug):
+def subscription_stub(slug, instructions=None):
     """Full-schema placeholder row for a subscription-side picker slug.
 
     Routing ignores these fields (the subscription provider owns the slug),
@@ -127,6 +128,8 @@ def subscription_stub(slug):
     """
     name = SUBSCRIPTION_DISPLAY_NAMES.get(slug, slug)
     default, efforts = SUBSCRIPTION_REASONING.get(slug, ('medium', ('medium',)))
+    if instructions is None:
+        instructions = instructions_for(_visible_rows('codex', None)[0])
     return {**ROW_TEMPLATE,
             'slug': slug,
             'display_name': name,
@@ -139,10 +142,23 @@ def subscription_stub(slug):
             'max_context_window': 272000,
             'input_modalities': ['text', 'image'],
             'priority': 1,
-            'model_messages': {'instructions_template': BASE_INSTRUCTIONS}}
+            'model_messages': {'instructions_template': instructions}}
 
 
 BASE_INSTRUCTIONS = (Path(__file__).with_name('openrouter_base_instructions.txt')).read_text()
+SUBAGENT_MODEL_PLACEHOLDER = '{{SUBAGENT_MODEL_IDS}}'
+
+
+def instructions_for(visible):
+    """Served instructions with one roster line of visible model ids.
+
+    The Codex client shows at most five spawn_agent model overrides, in
+    catalogue order, so this line is how a routed session learns the ids it
+    may still pass explicitly (Plan 151). Rendered from the picker's own
+    projection, so a portco allowlist can never be widened by the text.
+    """
+    roster = ', '.join(f'`{model.slug}`' for model in visible)
+    return BASE_INSTRUCTIONS.replace(SUBAGENT_MODEL_PLACEHOLDER, roster)
 
 
 def catalog_name(model):
@@ -157,9 +173,11 @@ def label_of(row):
     return provider_defs.label_for(provider_id or provider_defs.DEFAULT_EXTERNAL)
 
 
-def external_entry(model):
+def external_entry(model, instructions=None):
     projected = codex_projection(model)
     label = label_of(model)
+    if instructions is None:
+        instructions = instructions_for(_visible_rows('codex', None)[0])
     return {**ROW_TEMPLATE,
             'slug': model.slug,
             'display_name': (model.display_name + ' · Preview'
@@ -173,7 +191,7 @@ def external_entry(model):
             'priority': model.priority,
             'context_window': model.context_window,
             'max_context_window': model.context_window,
-            'model_messages': {'instructions_template': BASE_INSTRUCTIONS},
+            'model_messages': {'instructions_template': instructions},
             **catalogue_patch(model.slug),
             'input_modalities': projected['input_modalities'],
             'default_reasoning_summary': model.reasoning_summary,
@@ -232,14 +250,19 @@ def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False)
     carried, so the picker lists registry rows only, twins included.
     """
     visible, hidden_rows = _visible_rows(client, allowed, include_twins)
+    instructions = instructions_for(visible)
     shown = {m.slug for m in visible}
     hidden = {m.slug for m in hidden_rows}
     active = {m.slug for m in MODELS}
     models = [m for m in catalog.get('models', [])
               if (m['slug'] not in RETIRED_SLUGS or m['slug'] in active)
               and m['slug'] not in hidden]
-    entries = {m['slug']: {**subscription_stub(m['slug']), **m} for m in models}
+    entries = {m['slug']: {**subscription_stub(m['slug'], instructions), **m}
+               for m in models}
     for slug, row in entries.items():
+        if slug in SUBSCRIPTION_SLUGS:
+            row['model_messages'] = context_recovery.refresh_model_messages(
+                row.get('model_messages'), instructions)
         # Frozen 0.6.10.23 single-medium signature, exact match only.
         if (slug in SUBSCRIPTION_REASONING
                 and row.get('default_reasoning_level') == 'medium'
@@ -249,14 +272,14 @@ def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False)
             row['default_reasoning_level'] = fresh['default_reasoning_level']
             row['supported_reasoning_levels'] = fresh['supported_reasoning_levels']
     for model in visible:
-        entries[model.slug] = external_entry(model)
+        entries[model.slug] = external_entry(model, instructions)
     # Retired subscription rows never come back: a roster or catalogue that
     # still names one loses it here, so the dead picker row cannot linger.
     for slug in RETIRED_SUBSCRIPTION_SLUGS:
         entries.pop(slug, None)
     for slug in roster:
         if slug not in entries and slug not in RETIRED_SUBSCRIPTION_SLUGS:
-            entries[slug] = subscription_stub(slug)
+            entries[slug] = subscription_stub(slug, instructions)
     if include_twins:
         subs = []
     else:
@@ -272,11 +295,7 @@ def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False)
 
 def _state_doc(catalog_path):
     """State dict beside the catalogue; {} when missing or unreadable."""
-    try:
-        state = json.loads((Path(catalog_path).parent / 'mixed-router-state.json').read_text())
-    except (OSError, ValueError):
-        return {}
-    return state if isinstance(state, dict) else {}
+    return state_mod.read(state_mod.path(Path(catalog_path).parent)) or {}
 
 
 def read_roster(catalog_path):
@@ -298,9 +317,7 @@ def merge_file(path, client='codex', allowed=None, openai_mode=None):
     base = json.loads(path.read_text()) if path.exists() else {'models': []}
     merged = merge(base, read_roster(path), client, allowed,
                    include_twins=(mode == 'none'))
-    tmp = path.with_name(path.name + '.tmp')
-    tmp.write_text(json.dumps(merged, indent=2) + '\n')
-    tmp.replace(path)
+    replace_json(path, merged)
     return merged
 
 
@@ -319,19 +336,24 @@ def check(path, client='codex', allowed=None, include_twins=False):
         if missing:
             print(f'{slug}: missing schema fields: {", ".join(sorted(missing))}')
             return False
+        template = (row.get('model_messages') or {}).get('instructions_template') or ''
+        if SUBAGENT_MODEL_PLACEHOLDER in template:
+            print(f'{slug}: unrendered model roster placeholder')
+            return False
     visible, hidden = _visible_rows(client, allowed, include_twins)
     identical, total = 0, 0
     for model in hidden:
         if model.slug in existing:
             print(f'{model.slug}: hidden from the {client} picker but present')
             return False
+    instructions = instructions_for(visible)
     for model in visible:
         total += 1
         old = existing.get(model.slug)
         if old is None:
             print(f'{model.slug}: missing from catalogue')
             continue
-        new = external_entry(model)
+        new = external_entry(model, instructions)
         diff = [k for k in set(old) | set(new) if not _same(old, new, k)]
         if diff:
             print(f'{model.slug}: differs in {", ".join(sorted(diff))}')
