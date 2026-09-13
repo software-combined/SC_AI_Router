@@ -26,7 +26,7 @@ class RouterResponseTests(unittest.TestCase):
         self.assertEqual(response.status, 500)
         self.assertEqual(recorded, [])
 
-    def test_image_turn_to_text_only_model_is_409_with_code(self):
+    def test_image_turn_to_text_only_model_is_400_with_code(self):
         # Stable code is the catalog contract; statuses/messages are pinned elsewhere.
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
         server = self._server()
@@ -36,7 +36,7 @@ class RouterResponseTests(unittest.TestCase):
                                  {'type': 'input_text', 'text': 'look'},
                                  {'type': 'input_image',
                                   'image_url': 'data:image/png;base64,AAA'}]}]})
-        self.assertEqual(response.status, 409)
+        self.assertEqual(response.status, 400)
         body = json.loads(response.read())
         self.assertEqual(body['error']['code'], 'PROVIDER_REJECTED')
         self.assertIn('does not accept image input', body['error']['message'])

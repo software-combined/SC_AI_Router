@@ -332,6 +332,23 @@ rather than recorded, because provider prose can quote prompt content. A
 missing detail means the provider did not say why, or said it in a form this
 rule refuses to record.
 
+## Router answer codes (Responses protocol)
+
+The router answers deterministic refusals with HTTP 400 (the client treats
+400 as final and shows the message at once) and transient upstream failures
+with HTTP 503 plus `Retry-After: 2` (the client retries on its own backoff;
+Codex paces itself and does not read the header). The only retryable 409
+left on Responses is the compaction summariser's, where a repeat can cure
+the failure; an oversized turn answers 400 with guidance instead of 413. The
+Anthropic Messages path keeps its existing answers except at that shared
+size boundary, where it answers 400 like Responses.
+
+| Event | Meaning |
+|---|---|
+| `upstream_unavailable` | an upstream 5xx or 408 on a Responses turn, answered 503 |
+| `client_disconnected` | the client hung up mid-stream; previously counted as `transport_error` |
+| `upstream_rate_limited` | an upstream 429, with `category` `quota`, `auth` or `transient`; on Responses a quota 429 answers 400 `PROVIDER_REJECTED` and an auth 429 opens the key window |
+
 ## Stream identity observation (last-observed, not proof)
 
 Tool-free responses carry an optional identity observer: bytes forward

@@ -163,6 +163,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _owned_post(self, path, via_path, started):
         provider = None
+        policy = None
         self.connection.settimeout(120)
         try:
             raw, payload, size = self.read_body()
@@ -191,7 +192,7 @@ class Handler(BaseHTTPRequestHandler):
                         return self.send_compaction_stream(output)
                     return self.send_json(200, {'output': output})
                 except PreparationError as exc:
-                    return self.error(errors.preparation(str(exc)))
+                    return self.error(errors.retryable_preparation(str(exc)))
                 except (OSError, http.client.HTTPException):
                     return self.error(errors.compaction_unavailable())
             try:
@@ -206,6 +207,10 @@ class Handler(BaseHTTPRequestHandler):
         except InvalidSize as exc:
             return self.error(errors.invalid_size(str(exc)))
         except PreparationError as exc:
+            # Responses 400 ends the turn at once; the Messages path keeps
+            # today's 409 (Claude Code's retry semantics are out of scope).
+            if policy is not None and policy.name == provider_defs.MESSAGES:
+                return self.error(errors.retryable_preparation(str(exc)))
             return self.error(errors.preparation(str(exc)))
         except LookupError as exc:
             if isinstance(exc, KeyError):
