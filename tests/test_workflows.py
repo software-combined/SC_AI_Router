@@ -15,8 +15,8 @@ WORKFLOWS = ROOT / '.github/workflows'
 RELEASE = (WORKFLOWS / 'release.yml').read_text()
 
 
-def run_block(name):
-    step = RELEASE.split(f'      - name: {name}\n', 1)[1]
+def run_block(name, text=None):
+    step = (text if text is not None else RELEASE).split(f'      - name: {name}\n', 1)[1]
     block = re.search(r'        run: \|\n((?:          [^\n]*\n|\n)+)', step)
     return textwrap.dedent(block[1])
 
@@ -88,6 +88,75 @@ class ReleaseShellTests(unittest.TestCase):
                 self.assertEqual((Path(tmp) / 'published').exists(), publishes)
                 self.assertIn('commits/refs%2Ftags%2Fv1.2.3-beta',
                               (Path(tmp) / 'api-args').read_text())
+
+
+class InstallerCiGateTests(unittest.TestCase):
+    """Plan 156: scoped native installer checks behind the one Test gate."""
+    CHECK = (WORKFLOWS / 'check.yml').read_text()
+    SETUP = (ROOT / '.github/actions/setup/action.yml').read_text()
+
+    def test_the_test_gate_waits_for_every_installer_job(self):
+        self.assertIn(
+            'needs: [changes, installer-macos, installer-windows, installer-python39]',
+            self.CHECK)
+        self.assertIn('if: ${{ !cancelled() }}', self.CHECK)
+        self.assertIn(
+            "contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')",
+            self.CHECK)
+
+    def test_the_scope_step_fails_closed_and_writes_the_output(self):
+        # The exact workflow step: a failed diff must fail it (pipefail), not
+        # read as "no installer files changed" and silently skip the native
+        # checks while the required gate stays green.
+        block = run_block('Installer scope', self.CHECK).replace(
+            '${{ github.base_ref }}', 'develop')
+        with tempfile.TemporaryDirectory() as tmp:
+            bin_dir = Path(tmp) / 'bin'
+            bin_dir.mkdir()
+            stub = bin_dir / 'git'
+            stub.write_text('#!/bin/sh\nprintf "%s\\n" "$GIT_STUB_OUTPUT"\n'
+                            'exit "$GIT_STUB_STATUS"\n')
+            stub.chmod(0o700)
+            out = Path(tmp) / 'out'
+            env = {**os.environ, 'PATH': f'{bin_dir}{os.pathsep}{os.environ["PATH"]}',
+                   'GIT_STUB_OUTPUT': 'packaging/install.py',
+                   'GIT_STUB_STATUS': '0', 'GITHUB_OUTPUT': str(out)}
+            subprocess.run(['bash', '-e', '-c', block], cwd=ROOT, env=env,
+                           check=True, capture_output=True)
+            self.assertIn('installer=true', out.read_text())
+            env['GIT_STUB_STATUS'] = '128'
+            failed = subprocess.run(['bash', '-e', '-c', block], cwd=ROOT, env=env,
+                                    capture_output=True)
+            self.assertNotEqual(failed.returncode, 0)
+
+    def test_installer_jobs_are_scope_selected_for_pull_requests(self):
+        for job in ('installer-macos', 'installer-windows', 'installer-python39'):
+            self.assertIn(f'{job}:', self.CHECK)
+        # The producer wiring too: without the step id and the job output no
+        # installer job is ever selected, however correct the consumer is.
+        self.assertIn('id: scope', self.CHECK)
+        self.assertIn('installer: ${{ steps.scope.outputs.installer }}', self.CHECK)
+        self.assertIn("if: needs.changes.outputs.installer == 'true'", self.CHECK)
+        self.assertIn('tools/ci_scope.py --installer', self.CHECK)
+        self.assertIn('tools/ci_scope.py --installer-tests', self.CHECK)
+        self.assertIn('runs-on: macos-latest', self.CHECK)
+        self.assertIn('runs-on: windows-latest', self.CHECK)
+
+    def test_the_39_check_selects_its_interpreter_through_the_composite(self):
+        # The composite owns the pin and must pass the version input through;
+        # the 3.9 job must not carry a second pin of its own (policy scan
+        # enforces that side).
+        self.assertIn('python-version: ${{ inputs.python-version }}', self.SETUP)
+        self.assertIn('python-version: "3.9"', self.CHECK)
+        self.assertIn('tools/check_installer_python39.py', self.CHECK)
+
+    def test_releases_run_the_installer_checks_before_publishing(self):
+        self.assertIn(
+            'needs: [installer-macos, installer-windows, installer-python39]', RELEASE)
+        self.assertIn('!cancelled() &&', RELEASE)
+        self.assertIn("contains(needs.*.result, 'failure')", RELEASE)
+        self.assertIn('tools/ci_scope.py --installer-tests', RELEASE)
+        self.assertIn('tools/check_installer_python39.py', RELEASE)
 
 
 class WorkflowBoundaryTests(unittest.TestCase):
