@@ -174,9 +174,13 @@ small (well under the 5 GB single-put limit), so multipart is not needed.
 Leave `publish_document` on `aws s3 cp` (documents are meant to be
 replaced).
 
-Update `tests/test_publish_feed.py` where it asserts the bundle `aws s3 cp`
-argv: it must now assert `s3api put-object` with `--if-none-match '*'`, and
-add one case that the recorded precondition-failure stderr produces the
+Update `tests/test_publish_feed.py` at all three places that filter for
+`['s3', 'cp']`: `:148` (the bundle upload itself — assert `s3api put-object`
+with `--if-none-match '*'` and the `--key` form, since `put-object` carries
+the key as a flag rather than a positional `s3://` URI), `:173` (the channel
+document, which stays on `s3 cp`) and `:191` (the re-upload guard, which
+otherwise becomes true by construction and stops protecting anything). Add
+one case that the recorded precondition-failure stderr produces the
 immutability refusal.
 
 **Verify**: `python3.14 -B -m unittest tests.test_publish_feed` → pass.
@@ -243,8 +247,11 @@ Record the deploy date and the change-set summary in this plan's status row.
 - The runner's AWS CLI does not support `--if-none-match` on `put-object`
   (check `aws --version`; support arrived in CLI v2 during 2024): keep
   `aws s3 cp` plus the pre-check and report the version.
-- `tools/publish_first_install.py` writes a key outside the six prefixes:
-  add that prefix to Step 1, do not widen back to `/*`.
+- `tools/publish_feed.py` writes a key outside the prefixes in Step 1: add
+  that prefix, do not widen back to `/*`. (`tools/publish_first_install.py`
+  writes `runtimes.json`, `runtimes/*` and `bootstrap/*`, which the role
+  deliberately no longer covers because that tool uses the operator's own
+  credentials.)
 
 ## Maintenance notes
 

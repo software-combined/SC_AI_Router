@@ -200,8 +200,11 @@ the same step: `tests/test_setup.py:358-366` and
 function-local. Once the name is bound at import time those patches intercept
 nothing, so point them at the consumer module — `ai_router.setup.log_event`
 and `ai_router.tool_aliases.log_event` — keeping the call-count and no-token
-assertions. Patching `ai_router.events.log_event` would not intercept a
-`from .events import log_event` binding either.
+assertions. Retarget the third patch of the same binding at
+`tests/test_tool_alias_repair.py:183` as well: its assertion is
+`call_count == 0` on a path that never logs, so it stays green while
+observing nothing. Patching `ai_router.events.log_event` would not intercept
+a `from .events import log_event` binding either.
 
 **Verify**: `ROUTER_HOME=$(mktemp -d) python3.14 -c "import ai_router.router"` → exit 0; focused tests pass.
 
