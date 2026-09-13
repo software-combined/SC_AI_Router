@@ -1,0 +1,19 @@
+{
+  "name": "scg-subagents",
+  "version": "0.3.0",
+  "description": "Cost-first model selection, subagent coordination and evidence refresh.",
+  "author": {
+    "name": "Software Combined"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "SCG Subagents",
+    "shortDescription": "Choose capable models at the lowest practical cost.",
+    "longDescription": "Evidence-based model selection, parent and child tool guidance, and repeatable cost-quality evaluation.",
+    "developerName": "Software Combined",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": "Use the cost-first-subagents skill to choose and coordinate models for this task."
+  },
+  "repository": "https://github.com/software-combined/SC_Agent_plugins"
+}
