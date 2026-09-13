@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.51
+
+- Carried history now stops at the model-switch boundary. The client's
+  `<model_switch>` message persists in history, so the portable pass used to
+  rewrite every later turn and drop the current model's own reasoning; now
+  only items before the last marker are treated as foreign, and a marker
+  inside a tool run moves the boundary back so the run replays whole. The
+  Muse Contributor row keeps whole-history rewriting until it is probed.
+  `ai_router/history_portability.py` carries the pass as a leaf.
+
 ## 0.6.50
 
 - Stream failures now classify on OpenRouter's canonical top-level
