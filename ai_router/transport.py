@@ -132,6 +132,10 @@ def emit_terminal_failure(wfile, metrics):
     except (OSError, ValueError):
         # Closed-file ValueError plus dead-socket OSError: never raise here.
         pass
+    else:
+        # Only claim the frame once it is written: the log line must not report
+        # a terminal frame the client never received.
+        metrics['terminal_source'] = 'router'
 
 
 def relay_headers(response, send_header, model):

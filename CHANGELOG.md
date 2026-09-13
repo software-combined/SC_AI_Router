@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.6.49
+
+- A failed stream now records who wrote the terminal frame the client received
+  (`terminal_source`), how many bytes reached it (`forwarded_delta_bytes`) and
+  how many of those were the model's answer rather than setup
+  (`content_delta_bytes`). A 2026-09-13 incident on one OpenRouter model row
+  took an hour of log forensics because the log could not tell the provider's
+  own `response.failed` frame from the router's frame on a dead socket.
+- One provider failure is now absorbed before the client sees it: when an
+  OpenRouter Responses stream ends with the provider's own failure frame while
+  every byte so far is still held, the router re-opens the upstream once and
+  continues the same response. Setup frames are held until the answer starts
+  (bounded at 64 KiB) so the retry replaces them instead of appending a second
+  copy; any byte already sent, a failure after an answer frame, the
+  provider's own prompt refusal, and a context refusal all pass through
+  unchanged. A retry that answers with a non-200 status or a different body
+  ends the stream with the provider's original held verdict plus the router's
+  own terminal frame, and a retry that dies mid-stream the same way; the
+  verdict the client keeps decides `terminal_source` (`upstream` when the
+  provider's frame survived, `router` when only the router's did). Each retry
+  logs `stream_retry` with the provider code that caused it.
+- `forwarded_delta_bytes` counts bytes the upstream produced, including held
+  setup frames once flushed; the router's own terminal frame is not counted.
+
 ## 0.6.48
 
 - Installer-changing pull requests now run native installer checks on macOS

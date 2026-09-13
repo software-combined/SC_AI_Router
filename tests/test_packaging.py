@@ -6,95 +6,25 @@ import json
 import unittest
 from pathlib import Path
 
-FILES = [
-         'ai_router/router.py',
-         'ai_router/ingress.py',
-         'ai_router/relay.py',
-         'ai_router/providers.py',
-         'ai_router/claude.py',
-         'ai_router/registry.py',
-         'ai_router/credentials.py',
-         'ai_router/tool_adapter.py', 'ai_router/tool_aliases.py',
-         'ai_router/tool_merge.py',
-         'ai_router/atomic_write.py',
-         'ai_router/state.py',
-         'ai_router/agent_handoffs.py',
-         'ai_router/sse.py', 'ai_router/stream_errors.py',
-         'ai_router/capabilities.py',
-         'ai_router/compaction.py',
-         'ai_router/compaction_result.py',
-         'ai_router/context_recovery.py',
-         'ai_router/standalone_outputs.py',
-'ai_router/discovered.py',
-'ai_router/errors.py',
-'ai_router/candidate.py',
-'ai_router/setup.py',
-'ai_router/setup_page.py',
-         'ai_router/key_store.py',
-'ai_router/key_dialog.py',
-'ai_router/key_prompt.py',
-         'ai_router/runtime.py',
-         'ai_router/catalogue.py',
-         'ai_router/local_services.py',
-         'ai_router/live_refresh.py',
-         'ai_router/models.py',
-         'ai_router/apply_catalogue.py',
-         'ai_router/activation.py',
-         'ai_router/__init__.py',
-         'ai_router/__main__.py',
-         'ai_router/model_metadata.py',
-         'ai_router/model_refresh.py',
-         'ai_router/winacl.py',
-         'ai_router/image_items.py',
-         'ai_router/model_prompt.py',
-         'ai_router/model_prompt_page.py',
-         'ai_router/model_policy.py',
-         'ai_router/subscription_roster.py',
-         'ai_router/retired_slugs.py',
-          'ai_router/clients/__init__.py',
-         'ai_router/clients/codex.py',
-         'ai_router/transport.py',
-         'ai_router/subscription_fallback.py',
-         'ai_router/subscription_history.py',
-         'ai_router/provider_defs.py',
-         'ai_router/upstream.py',
-         'ai_router/protocols/__init__.py',
-         'ai_router/protocols/responses.py',
-         'ai_router/protocols/messages.py',
-         'ai_router/models.json',
-         'ai_router/openrouter_base_instructions.txt',
-         'ai_router/agents.py',
-         'ai_router/agents_general.txt',
-         'ai_router/agents_dev.txt',
-         'tools/probe_codex_runtime.py',
-         'tools/probe_context_budget.py',
-         'tools/global_instructions.py',
-         'tools/disable.py',
-         ]
-
-# Explicit required-files assertion (Plan 123 STOP condition): every member
-# an installed release needs to boot and to update itself. Kept independent
-# of release.py's inventory so a dropped member fails the bundle gate.
-REQUIRED_PACKAGING = (
-    'packaging/router_launch.py', 'packaging/update_launch.py',
-    'packaging/task_launch.py',
-    'packaging/launchd.py', 'packaging/service.py',
-    'packaging/feed.py', 'packaging/feed_verify.py',
-    'packaging/atomic_write.py',
-    'packaging/notice.py', 'packaging/assets/router-icon.png',
-    'packaging/install.py', 'packaging/bundle.py', 'packaging/updater.py',
-    'packaging/codex_config.py', 'packaging/claude_config.py',
-    'packaging/claude_desktop_config.py', 'packaging/systemd.py',
-    'packaging/diagnostics.py', 'packaging/provider_keys.py',
-    'packaging/runtime.lock', 'packaging/runtime_lock.py',
-    'packaging/platforms/__init__.py',
-    'packaging/platforms/darwin.py',
-    'packaging/platforms/linux.py',
-    'packaging/platforms/windows.py',
+# Only the members `packaging/release.py` cannot discover by globbing need an
+# explicit contract: modules under ai_router/, tools/ and docs/ travel
+# automatically, so a new module cannot be forgotten here.
+EXPLICIT_FILES = (
+    'LICENSE', 'NOTICE', 'THIRD_PARTY_NOTICES.md', 'README.md',
+    'packaging/VERSION', 'packaging/install.py', 'packaging/bundle.py',
+    'packaging/updater.py', 'packaging/router_launch.py',
+    'packaging/service.py', 'packaging/feed.py', 'packaging/runtime.lock',
+    'packaging/assets/router-icon.png',
     'packaging/install.sh', 'packaging/install.ps1',
-    'LICENSE', 'NOTICE', 'THIRD_PARTY_NOTICES.md',
 )
 
+
+def _release_module():
+    spec = importlib.util.spec_from_file_location(
+        'router_release', Path(__file__).resolve().parents[1] / 'packaging' / 'release.py')
+    release_mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(release_mod)
+    return release_mod
 
 class PackagingTests(unittest.TestCase):
     def test_apache_only_licence_gate(self):
@@ -116,30 +46,30 @@ class PackagingTests(unittest.TestCase):
         self.assertIn('install.py', ps1)
 
     def test_file_list_covers_the_runtime_import_closure(self):
-        # A fresh copy-install following FILES must start: every package
-        # module plus the data files read at import must be listed.
+        # A fresh copy-install following the bundle inventory must start: every
+        # module and data file ships, and the explicit contract below still
+        # names the members globbing cannot discover.
         root = Path(__file__).resolve().parents[1]
+        bundled = set(_release_module().bundle_files(root))
         for path in sorted((root / 'ai_router').rglob('*.py')):
             if '__pycache__' in path.parts:
                 continue
-            self.assertIn(path.relative_to(root).as_posix(), FILES,
-                          'runtime module missing from deploy list')
+            self.assertIn(path.relative_to(root).as_posix(), bundled,
+                          'runtime module missing from the bundle')
         for dep in ('ai_router/models.json',
                     'ai_router/openrouter_base_instructions.txt'):
-            self.assertIn(dep, FILES, dep)
+            self.assertIn(dep, bundled, dep)
         for tool in ('tools/probe_codex_runtime.py', 'tools/disable.py'):
-            self.assertIn(tool, FILES, tool)
+            self.assertIn(tool, bundled, tool)
+        for name in EXPLICIT_FILES:
+            self.assertIn(name, bundled, name)
 
     def test_packaging_modules_are_all_bundled(self):
         # Every packaging module an installed release can load must be in the
         # release inventory; release.py is the publish-time tool and is the
         # one deliberate exclusion.
         root = Path(__file__).resolve().parents[1]
-        spec = importlib.util.spec_from_file_location(
-            'release_scan', root / 'packaging' / 'release.py')
-        release_scan = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(release_scan)
-        bundled = set(release_scan.bundle_files(root))
+        bundled = set(_release_module().bundle_files(root))
         for path in sorted((root / 'packaging').rglob('*.py')):
             if '__pycache__' in path.parts:
                 continue
@@ -149,9 +79,22 @@ class PackagingTests(unittest.TestCase):
             self.assertIn(rel, bundled, 'packaging module missing from the release inventory')
 
     def test_runtime_file_list_matches_files(self):
-        doc = (Path(__file__).resolve().parents[1] / 'docs' / 'runtime-files.md').read_text()
+        root = Path(__file__).resolve().parents[1]
+        doc = (root / 'docs' / 'runtime-files.md').read_text()
         listed = set(re.findall(r'`((?:ai_router|tools)/[^`]+)`', doc))
-        self.assertEqual(listed, set(FILES))
+        bundled = set(_release_module().bundle_files(root))
+        # The page names the modules a reader looks for, not every member of the
+        # inventory (release.py globs tools/ and docs/ wholesale), so each name
+        # it does carry must resolve, and no runtime module may go unnamed.
+        self.assertTrue(listed <= bundled,
+                        'runtime-files.md names a file the bundle omits: '
+                        + ', '.join(sorted(listed - bundled)))
+        for module in sorted((root / 'ai_router').rglob('*.py')):
+            if '__pycache__' in module.parts:
+                continue
+            rel = module.relative_to(root).as_posix()
+            with self.subTest(module=rel):
+                self.assertIn(rel, listed, 'runtime module missing from the page')
 
     def test_readme_quick_start_installs_its_own_build(self):
         # --url-base keeps the built feed pointing at the local tarball.
@@ -187,12 +130,10 @@ class PackagingTests(unittest.TestCase):
             names = set(tar.getnames())
         # Single inventory (Plan 123): the tarball must match release.py's
         # bundle_files() exactly, neither missing a member nor shipping an
-        # extra. REQUIRED_PACKAGING below stays an explicit list so a member
+        # extra. EXPLICIT_FILES below stays an explicit list so a member
         # dropped from the inventory still fails this gate.
         self.assertEqual(names, set(release_mod.bundle_files(root)) | {'MANIFEST.json'})
-        for name in FILES:
-            self.assertIn(name, names, name)
-        for name in REQUIRED_PACKAGING:
+        for name in EXPLICIT_FILES:
             self.assertIn(name, names, name)
 
     def test_activation_receipt_has_a_single_writer(self):
@@ -257,13 +198,9 @@ class PackagingTests(unittest.TestCase):
                                   'unavailable on Python 3.9' % (name, ann.lineno))
 
     def test_build_composes_full_version_and_manifest(self):
-        import importlib.util
         root = Path(__file__).resolve().parents[1]
         base = (root / 'packaging' / 'VERSION').read_text().strip()
-        spec = importlib.util.spec_from_file_location(
-            'router_release', root / 'packaging' / 'release.py')
-        release_mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(release_mod)
+        release_mod = _release_module()
         out = root / 'dist-test-build'
         self.addCleanup(shutil.rmtree, str(out), True)
         release_mod.main(['--out', str(out), '--build', '57',
@@ -284,13 +221,9 @@ class PackagingTests(unittest.TestCase):
             latest['url'])
 
     def test_default_channel_builds_stable_url(self):
-        import importlib.util
         root = Path(__file__).resolve().parents[1]
         base = (root / 'packaging' / 'VERSION').read_text().strip()
-        spec = importlib.util.spec_from_file_location(
-            'router_release', root / 'packaging' / 'release.py')
-        release_mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(release_mod)
+        release_mod = _release_module()
         out = root / 'dist-test-stable'
         self.addCleanup(shutil.rmtree, str(out), True)
         release_mod.main(['--out', str(out)])

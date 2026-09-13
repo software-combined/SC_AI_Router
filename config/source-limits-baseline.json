@@ -29,7 +29,6 @@
   "tests/test_notice.py": 372,
   "tests/test_notice_delivery.py": 414,
   "tests/test_operator_surface.py": 448,
-  "tests/test_packaging.py": 303,
   "tests/test_probe_harness.py": 362,
   "tests/test_providers.py": 368,
   "tests/test_runtime.py": 321,
