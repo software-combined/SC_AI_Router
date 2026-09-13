@@ -113,7 +113,18 @@ class HandlerCharacterisationTests(unittest.TestCase):
         self.assertEqual(response.status, 404)
         self.assertEqual(recorded, [])
 
-    def test_oversized_content_length_is_413(self):
+    def test_preparation_errors_are_final_400(self):
+        recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
+        server = self._server()
+        response = _post(server.server_port, '/test-token/responses',
+                         {'model': 'z-ai/glm-5.3', 'input': [],
+                          'reasoning': {'effort': 'not-a-level'}})
+        self.assertEqual(response.status, 400)
+        body = json.loads(response.read())
+        self.assertEqual(body['error']['code'], 'PROVIDER_REJECTED')
+        self.assertEqual(recorded, [])
+
+    def test_oversized_content_length_is_400(self):
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
         server = self._server()
         conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
@@ -121,7 +132,7 @@ class HandlerCharacterisationTests(unittest.TestCase):
         conn.putheader('Content-Type', 'application/json')
         conn.putheader('Content-Length', '17000000')
         conn.endheaders()
-        self.assertEqual(conn.getresponse().status, 413)
+        self.assertEqual(conn.getresponse().status, 400)
         self.assertEqual(recorded, [])
 
     def test_zstd_body_is_decoded(self):

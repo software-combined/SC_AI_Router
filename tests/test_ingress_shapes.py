@@ -100,7 +100,7 @@ class IngressShapeTests(unittest.TestCase):
         response.read()
         self.assertEqual(len(recorded), 1)
 
-    def test_missing_negative_or_oversized_lengths_are_413(self):
+    def test_missing_negative_or_oversized_lengths_are_400(self):
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
         big = json.dumps({'model': 'm' * 80}).encode()
         cases = (
@@ -113,7 +113,7 @@ class IngressShapeTests(unittest.TestCase):
             for name, headers, body in cases:
                 with self.subTest(name=name):
                     response = self.raw_request('/%s/responses' % TOKEN, headers, body)
-                    self.rejected(response, 413, 'INVALID_REQUEST_SIZE', recorded)
+                    self.rejected(response, 400, 'INVALID_REQUEST_SIZE', recorded)
 
     def test_a_malformed_length_is_a_payload_rejection(self):
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))

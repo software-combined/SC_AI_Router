@@ -38,7 +38,7 @@ class IngressGuardTests(unittest.TestCase):
         self.assertEqual(json.loads(response.read())['error']['code'], 'WEBSOCKET_REJECTED')
         self.assertEqual(recorded, [])
 
-    def test_transfer_encoding_is_413_and_never_reaches_upstream(self):
+    def test_transfer_encoding_is_400_and_never_reaches_upstream(self):
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
         server = self._server()
         conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
@@ -50,7 +50,7 @@ class IngressGuardTests(unittest.TestCase):
         conn.endheaders()
         conn.send(payload)
         response = conn.getresponse()
-        self.assertEqual(response.status, 413)
+        self.assertEqual(response.status, 400)
         self.assertEqual(json.loads(response.read())['error']['code'], 'INVALID_REQUEST_SIZE')
         self.assertEqual(recorded, [])
 
@@ -191,7 +191,7 @@ class IngressGuardTests(unittest.TestCase):
             thread.join(5)
         self.assertEqual(first.get('status'), 200)
 
-    def test_zstd_decoded_too_large_is_413_and_never_reaches_upstream(self):
+    def test_zstd_decoded_too_large_is_400_and_never_reaches_upstream(self):
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
         server = self._server()
         payload = {'model': 'z-ai/glm-5.3',
@@ -203,8 +203,26 @@ class IngressGuardTests(unittest.TestCase):
                          headers={'Content-Type': 'application/json',
                                   'Content-Encoding': 'zstd'})
             response = conn.getresponse()
-            self.assertEqual(response.status, 413)
+            self.assertEqual(response.status, 400)
             self.assertEqual(json.loads(response.read())['error']['code'], 'BODY_TOO_LARGE')
+        self.assertEqual(recorded, [])
+
+    def test_oversized_body_is_a_final_400_with_guidance(self):
+        recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
+        server = self._server()
+        payload = {'model': 'z-ai/glm-5.3',
+                   'input': [{'type': 'message', 'role': 'user', 'content': 'x' * 4096}]}
+        body = zstd.compress(json.dumps(payload).encode())
+        with mock.patch.object(router_mod, 'MAX_BODY', 4096):
+            conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
+            conn.request('POST', '/test-token/responses', body=body,
+                         headers={'Content-Type': 'application/json',
+                                  'Content-Encoding': 'zstd'})
+            response = conn.getresponse()
+            self.assertEqual(response.status, 400)
+            message = json.loads(response.read())['error']['message']
+            self.assertIn('16 MiB', message)
+            self.assertIn('new thread', message)
         self.assertEqual(recorded, [])
 
     def _raw_request(self, port, request_bytes):

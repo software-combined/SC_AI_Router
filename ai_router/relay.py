@@ -26,7 +26,7 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
             log_event('upstream_rejected_cached', provider=prepared.provider,
                       model=metrics.get('model'), status=status, category='PROVIDER_REJECTED')
             return handler.error(errors.upstream_invalid_request(message) if status == 400
-                                 else errors.preparation(message))
+                                 else errors.retryable_preparation(message))
     conn = http.client.HTTPSConnection(prepared.host, timeout=120)
     sent = False
     response = None
@@ -47,6 +47,21 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
                 return handler.error(exc)
         retry_after = upstream.upstream_retry_after(response, prepared, metrics)
         if retry_after is not None:
+            category, retry_after = retry_after
+            if (category in ('quota', 'auth')
+                    and metrics.get('protocol') == provider_defs.RESPONSES
+                    and prepared.provider == provider_defs.OPENROUTER.id):
+                if category == 'auth':
+                    if handler.server.credentials.key_rejected(prepared.provider):
+                        setup.open_key_window(handler.server,
+                                              handler.server.credentials.home,
+                                              prepared.provider)
+                    return handler.error(errors.credential_problem(
+                        f'The stored {provider_defs.label_for(prepared.provider)} key was '
+                        'rejected. Open the key setup page to connect a new one.'))
+                return handler.error(errors.upstream_invalid_request(
+                    f'The {provider_defs.label_for(prepared.provider)} account has no '
+                    'remaining credit; check the provider billing settings'))
             return subscription_fallback.refused(handler, prepared, retry_after, metrics, started)
         if response.status >= 400:
             raw = response.read()
@@ -77,11 +92,21 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
                  'has_image': has_image, 'routed': routed})
             if described is not None:
                 status, message, code = described
-                # A transient upstream failure is retryable; only a
-                # deterministic client-side rejection is worth remembering.
-                if status in (400, 409) and routed and response.status < 500:
+                if status == 503:
+                    # Transient: retried, never remembered. `Retry-After` is
+                    # inert for Codex (it paces itself) but other clients
+                    # may honour it.
+                    log_event('upstream_unavailable', status=response.status,
+                              client_status=status, code=code,
+                              parameter=upstream.rejection_parameter(raw),
+                              category='UPSTREAM_UNAVAILABLE',
+                              **metrics, **upstream.rejection_fingerprint(prepared.body))
+                    return handler.retryable_reject(errors.upstream_unavailable(message),
+                                                    retry_after='2')
+                # A cached answer must be one the client treats as final.
+                if status == 400 and routed and response.status < 500:
                     upstream.remember_refusal(prepared.provider, metrics.get('model'),
-                                              prepared.body, message, status=status)
+                                              prepared.body, message)
                 log_event('upstream_rejected', status=response.status,
                           client_status=status, code=code,
                           parameter=upstream.rejection_parameter(raw),
@@ -89,8 +114,9 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
                           **metrics, **upstream.rejection_fingerprint(prepared.body))
                 if status == 400:
                     return handler.error(errors.upstream_invalid_request(message))
-                return handler.error(errors.upstream_described(message) if status == 502
-                                     else errors.preparation(message))
+                if status == 409:
+                    return handler.error(errors.retryable_preparation(message))
+                return handler.error(errors.upstream_described(message))
             handler.send_response(response.status)
             transport.relay_headers(response, handler.send_header, metrics.get('model'))
             handler.send_header('Connection', 'close')
@@ -161,6 +187,11 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
     except (OSError, http.client.HTTPException, ValueError, KeyError,
             TypeError, AttributeError) as exc:
         total_ms = round((time.monotonic() - started) * 1000, 1)
+        location = transport.describe_location(exc)
+        # A client that hung up mid-stream is not an upstream fault: its own
+        # event, and no terminal frame (the socket is gone).
+        client_abort = (sent and isinstance(exc, (BrokenPipeError, ConnectionResetError))
+                        and 'socketserver.py' in location)
         if record is not None:
             # Whatever setup frames were held still belong to the client, and
             # the terminal frame this tier is about to add must follow them.
@@ -173,7 +204,7 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
         # log line is what lets the line report the frame the client received.
         # Only the provider's held terminal may stand in for the generic frame,
         # and only if it actually reached the client.
-        if sent and record.client_terminal is None:
+        if sent and record.client_terminal is None and not client_abort:
             # A client that holds no terminal frame needs one; a retry that
             # replaced the failed attempt's verdict still owes exactly one.
             transport.emit_terminal_failure(handler.wfile, metrics)
@@ -189,11 +220,11 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
                 metrics['terminal_source'] = record.client_terminal
             else:
                 metrics.pop('terminal_source', None)
-        log_event('transport_error',
+        log_event('client_disconnected' if client_abort else 'transport_error',
                   status=response.status if response is not None else None,
                   **metrics, error_type=type(exc).__name__,
                   error_category=exc.msg if isinstance(exc, json.JSONDecodeError) else type(exc).__name__,
-                  location=transport.describe_location(exc),
+                  location=location,
                   total_ms=total_ms)
         if not sent:
             described = upstream.describe_failure(

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.6.50
+
+- Router answers on the Responses protocol now match what the Codex client
+  does with them: deterministic refusals (unsupported preparation, oversized
+  turn, spent provider credit) answer HTTP 400, which ends the turn at once
+  instead of costing five silent retries; transient upstream failures (5xx,
+  408) answer 503 with `Retry-After`, which the client retries on its own
+  backoff. Only the compaction summariser keeps a retryable 409. An upstream
+  429 is classified from structured codes only: quota answers 400 with
+  billing guidance, auth opens the key window, transient keeps the 503. The
+  Anthropic Messages path keeps its existing answers except at the shared
+  HTTP size boundary, where an oversized turn answers 400 like Responses
+  (no Messages client issues such turns today). Client hang-ups log
+  `client_disconnected` instead of sharing `transport_error` with upstream
+  faults, and 5xx/408 turns log `upstream_unavailable`; the refusal cache
+  stores only 400 answers.
+
 ## 0.6.49
 
 - A failed stream now records who wrote the terminal frame the client received

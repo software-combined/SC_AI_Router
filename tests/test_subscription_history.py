@@ -141,4 +141,8 @@ class RejectionParameterTests(unittest.TestCase):
                 status, _, _ = upstream.describe_failure(None,
                     {'status': http_status, 'body': b'{"error":{"message":"rejected"}}'},
                     {'model': 'm', 'protocol': protocol})
-                self.assertEqual(status, 400 if protocol == 'responses' and http_status == 400 else 409)
+                if protocol == 'responses':
+                    expected = 503 if http_status in (500, 503) else 400
+                else:
+                    expected = 409
+                self.assertEqual(status, expected)
