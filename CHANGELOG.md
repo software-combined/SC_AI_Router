@@ -2,6 +2,14 @@
 
 ## 0.6.50
 
+- Stream failures now classify on OpenRouter's canonical top-level
+  `error_type` instead of the lossy `error.code` collapse, and the log
+  records `upstream_error_type`, `upstream_provider_code` and
+  `failure_class` (`context`, `final` or `transient`). A refused stream
+  keeps the `invalid_prompt` code Codex treats as fatal instead of the
+  router's own code, which Codex retried five times; the log keeps
+  `UPSTREAM_INVALID_PROMPT`. The one pre-answer stream retry now requires
+  a `transient` class, so deterministic refusals are never re-sent.
 - Router answers on the Responses protocol now match what the Codex client
   does with them: deterministic refusals (unsupported preparation, oversized
   turn, spent provider credit) answer HTTP 400, which ends the turn at once

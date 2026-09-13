@@ -7,7 +7,7 @@ from ai_router import stream_relay
 class RetryDecisionTests(unittest.TestCase):
     def _metrics(self, **over):
         metrics = {'terminal_source': 'upstream', 'code': 'UPSTREAM_STREAM_FAILED',
-                   'upstream_code': 'server_error'}
+                   'upstream_code': 'server_error', 'failure_class': 'transient'}
         metrics.update(over)
         return metrics
 
@@ -43,6 +43,19 @@ class RetryDecisionTests(unittest.TestCase):
             with self.subTest(metrics=metrics):
                 self.assertFalse(stream_relay.retryable_stream_failure(metrics, record))
 
+    def test_final_or_context_class_is_not_retried(self):
+        record = stream_relay.StreamRecord()
+        for failure_class in ('final', 'context'):
+            with self.subTest(failure_class=failure_class):
+                self.assertFalse(stream_relay.retryable_stream_failure(
+                    self._metrics(failure_class=failure_class), record))
+
+    def test_missing_class_is_not_retried(self):
+        record = stream_relay.StreamRecord()
+        metrics = self._metrics()
+        del metrics['failure_class']
+        self.assertFalse(stream_relay.retryable_stream_failure(metrics, record))
+
 
 class HeldFrameTests(unittest.TestCase):
     class _Client:
@@ -75,6 +88,8 @@ class HeldFrameTests(unittest.TestCase):
 
     def test_clear_terminal_fields_drops_only_the_verdict(self):
         metrics = {'code': 'UPSTREAM_STREAM_FAILED', 'upstream_code': 'server_error',
+                   'upstream_error_type': 'server_error',
+                   'upstream_provider_code': 'p1', 'failure_class': 'transient',
                    'terminal_event': 'response.failed', 'upstream_reason': 'x',
                    'model': 'z-ai/glm-5.3-flash'}
         stream_relay.clear_terminal_fields(metrics)

@@ -318,15 +318,18 @@ stream. `code` is `context_length_exceeded` for a context-limit refusal,
 `UPSTREAM_INCOMPLETE` when the provider reported an incomplete response,
 `UPSTREAM_INVALID_PROMPT` when OpenRouter refused the converted request after
 the stream opened, and `UPSTREAM_STREAM_FAILED` for any other terminal error.
-Three fields say why:
+Six fields say why:
 
 | Field | Meaning |
 |---|---|
 | `terminal_event` | `response.failed`, `response.incomplete`, or `error` |
 | `upstream_reason` | the `incomplete_details.reason` enum, when reported |
 | `upstream_code` | the error envelope's `code` or `error_type`, when present |
+| `upstream_error_type` | the canonical top-level `error_type`, when reported |
+| `upstream_provider_code` | the `error.metadata.provider_code`, when reported |
+| `failure_class` | `context`, `final` or `transient`; the stream retry runs only on `transient` |
 
-Both details must be code-shaped (letters, digits, dot, dash, underscore) and
+Every detail must be code-shaped (letters, digits, dot, dash, underscore) and
 at most 64 characters; anything else, including message text, is dropped
 rather than recorded, because provider prose can quote prompt content. A
 missing detail means the provider did not say why, or said it in a form this
