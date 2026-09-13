@@ -1,5 +1,46 @@
 # Compatibility
 
+## OpenRouter refusals that arrive after the stream opens, 2026-09-13
+
+Installed Codex CLI `0.154.0-alpha.6.2` against router 0.6.47. A thread on
+`deepseek/deepseek-v4.1-flash` produced two different refusals, both as a
+terminal `response.failed` after HTTP 200 and part of the stream.
+
+1. `incomplete parallel tool-call group: tool call 'call_00_FQ1Z...' has no
+   tool response` at `08:42:57Z` and `08:44:29Z`. The cause was local and is
+   fixed. The thread switched models at `08:08:34Z`, and the client's
+   `<model_switch>` developer message stays in the thread's history, so the
+   portable history pass kept running on every later turn. It replaced the
+   matched tool-search pair with a user note at the search call's position,
+   which sat between a parallel group's calls and their outputs, so the
+   converted chat history carried calls with no results. The note now waits
+   for the tool run to close, and reasoning notes wait with it.
+2. `204 request validation errors: Extra inputs are not permitted` naming
+   `messages[12].tool_calls[0].tool_kind`, `responses_item_id` and
+   `responses_item_status` at `08:11:50Z`. Those three field names appear
+   nowhere in the Codex app bundle, the `codex` binary, `ai_router/`, or any
+   release, so OpenRouter's own Responses-to-chat conversion annotates the tool
+   calls it synthesizes and a strict serving backend refuses the extra keys.
+   The repair belongs upstream with OpenRouter; the router now answers that
+   terminal event with `UPSTREAM_INVALID_PROMPT` and one actionable sentence,
+   and keeps OpenRouter's code in the service log.
+
+No paid probe reproduced either refusal; the DeepSeek serving provider was
+not identified.
+
+The same thread then switched to `meta/muse-spark-1.3-contributor` at
+`08:46:17Z` and Meta refused the same converted body synchronously: six
+identical turns at `08:46:23Z`--`08:46:53Z` returned upstream HTTP 502 with no
+code-shaped field, which the router answered as 409 `PROVIDER_REJECTED` with
+the switch-back recovery sentence (269 prepared items: 59 messages, 68
+`custom_tool_call`, 105 `function_call_output`, 37 `function_call`, 55 tool
+definitions, ~456KB). Contributor itself was healthy: an identical-shape turn
+completed 200 at `08:40:05Z` and standard Muse 1.3 served 200s throughout, so
+the refusal names the carried history, not the model. The tool-run fix above
+removes the poison: replaying the thread's exact history through the fixed
+pass keeps the parallel group contiguous (calls at 184--185, outputs at
+186--187) and defers the search note to position 190, after the run closes.
+
 ## Streamed context refusals, 2026-09-13
 
 Candidate 0.6.42, macOS Codex CLI `0.154.0-alpha.6.2`:
