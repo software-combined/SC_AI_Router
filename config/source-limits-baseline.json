@@ -1,7 +1,7 @@
 {
   "ai_router/agent_handoffs.py": 314,
   "ai_router/catalogue.py": 393,
-  "ai_router/compaction.py": 396,
+  "ai_router/compaction.py": 271,
   "ai_router/errors.py": 279,
   "ai_router/key_dialog.py": 260,
   "ai_router/models.py": 321,
@@ -43,5 +43,6 @@
   "ai_router/router.py": 255,
   "ai_router/upstream.py": 296,
   "tests/test_ingress_guards.py": 304,
-  "tests/test_stream_context_errors.py": 336
+  "tests/test_stream_context_errors.py": 336,
+  "tests/test_history_portability.py": 355
 }

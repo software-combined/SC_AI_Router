@@ -1,5 +1,16 @@
 # Compatibility
 
+## Model-switch history boundary, 2026-09-13
+
+The client's `<model_switch>` developer message (`core/src/session/mod.rs:4289`
+at Codex `rust-v0.154.0-alpha.6.2`, recorded into history and replayed every
+later turn; local rollouts show it mid-thread at 20 of 53 and 19 of 58 items)
+is now a boundary, not a flag: items before the last marker get the portable
+treatment, items after it replay natively, so the current model's own
+reasoning survives. The `meta/muse-spark-1.3-contributor` row keeps
+whole-history rewriting until plan 175 probes it with its own reasoning
+replayed.
+
 ## OpenRouter refusals that arrive after the stream opens, 2026-09-13
 
 Installed Codex CLI `0.154.0-alpha.6.2` against router 0.6.47. A thread on
