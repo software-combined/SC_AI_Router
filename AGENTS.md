@@ -92,8 +92,10 @@ compatibility checks.
 
 ## 6. Release rule
 
-Every user-visible change updates `CHANGELOG.md` and `packaging/VERSION`
-(semver). Releases are cut by tag `v<VERSION>` and the release workflow.
+Every user-visible router change updates `CHANGELOG.md` and
+`packaging/VERSION` (semver). Releases are cut by tag `v<VERSION>` and the
+release workflow. Plugin-only changes ride the plugin release train instead
+(section 9); they never bump `packaging/VERSION` or trigger router tags.
 
 ## 7. Compatibility rule
 
@@ -119,3 +121,24 @@ roster deliberately tracks upstream, and it tracks with `Latest`, never a pinned
 snapshot; dated snapshots merge into a tracking alias only when upstream
 actually serves the `~` id (never invent one). `models add` and `live_refresh`
 must produce conforming rows; the registry naming test enforces it.
+
+## 9. Agent plugins
+
+This repo also hosts the `scg-agent-plugins` marketplace (`scg-review`,
+`scg-subagents`, `scg-prototypes`, `scg-finance`). Author under
+`plugins/<name>`; installed plugin caches are delivery copies. The root
+`scg-openrouter` plugin stays outside the marketplace. Keep the marketplace
+name and plugin names stable; release via `develop` to `main`, consumers
+track branch `main`.
+
+- Every plugin works in Codex and Claude Code: ship both `.codex-plugin`
+  and `.claude-plugin` manifests at the same version, keep skill content
+  client-agnostic, and read system state through whichever MCP or connector
+  tools the active client exposes.
+- Every plugin ships automatic updates: bundle the shared `updater.py` and
+  `scheduling.py` byte-identical, link every skill to the shared update
+  guide, and support macOS, Linux and Windows through the one shared native
+  schedule. A pull alone is never setup.
+- Release a plugin by bumping both manifests' version and adding a
+  `plugins/CHANGELOG.md` entry; validate with the plugin-creator validator
+  and the plugin test modules.
