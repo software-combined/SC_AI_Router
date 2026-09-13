@@ -1,0 +1,19 @@
+{
+  "name": "scg-finance",
+  "version": "0.1.0",
+  "description": "Finance-director grade analysis grounded in the organisation's accounting data, whatever system it lives in.",
+  "author": {
+    "name": "Software Combined"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "SCG Finance Analyst",
+    "shortDescription": "Analyse finance, accounting and money questions.",
+    "longDescription": "Controller-grade analysis across NetSuite, Xero, Airwallex, exports and pasted figures: statements, variances, close, controls and board-ready output. Read-only by default.",
+    "developerName": "Software Combined",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": "Use the finance-analyst skill for this finance question."
+  },
+  "repository": "https://github.com/software-combined/SC_OpenRouter_adapter"
+}

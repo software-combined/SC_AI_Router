@@ -1,5 +1,15 @@
 # Changelog
 
+## scg-finance 0.1.0 — 2026-09-13
+
+- Add the `finance-analyst` skill as a new `scg-finance` plugin: controller
+  and finance-director grade analysis across NetSuite, Xero, Airwallex,
+  exported reports and pasted figures. Works in Codex and Claude Code through
+  the client's own MCP or connector tools; read-only by default, with an
+  explicit per-mutation write guard.
+- Ship both `.codex-plugin` and `.claude-plugin` manifests at the same
+  version, the shared marketplace updater, and the shared update guide.
+
 ## scg-subagents 0.5.0 — 2026-09-13
 
 - Add the department delegation briefs: `sales-subagent`, `csm-subagent`,
