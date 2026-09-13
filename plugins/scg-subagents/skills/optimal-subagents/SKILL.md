@@ -85,9 +85,11 @@ cycling for a shared transport failure or an exact-model review gate.
 
 ## Run a bounded delegation
 
-Read [tool operation and communication](references/tool-guide.md) before the
-first spawn or when acting as a child. It includes exact examples for the current
-collaboration tools, fork restrictions, replies, waiting and failure handling.
+MANDATORY: read [tool operation and communication](references/tool-guide.md) in
+full before the first spawn in this session, and re-read it when acting as a
+child. No delegation without it: the entrypoint alone does not authorize a
+spawn. It includes exact examples for the current collaboration tools, fork
+restrictions, replies, waiting and failure handling.
 
 Give each child: one deliverable, relevant context/paths, write authority,
 acceptance checks, cost/retry limits where useful, and a stop condition. One
