@@ -194,6 +194,13 @@ def context_window(message='The model context window is full; compact or shorten
     return _error(400, 'context_length_exceeded', message)
 
 
+def upstream_invalid_prompt(message=('OpenRouter refused this request before answering. '
+                                     'Retrying it unchanged will fail again; switch models '
+                                     'or start a new thread.')):
+    """A provider 400 raised after the stream opened, replayable only as a new turn."""
+    return _error(400, 'UPSTREAM_INVALID_PROMPT', message)
+
+
 # Local services (no-subscription mode answers).
 def guardian_needs_subscription():
     return LocalAnswer(404, 'GUARDIAN_NEEDS_SUBSCRIPTION',
