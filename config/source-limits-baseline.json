@@ -42,5 +42,6 @@
   "tools/probe_agent_handoffs.py": 505,
   "ai_router/router.py": 255,
   "ai_router/upstream.py": 296,
-  "tests/test_ingress_guards.py": 304
+  "tests/test_ingress_guards.py": 304,
+  "tests/test_stream_context_errors.py": 336
 }

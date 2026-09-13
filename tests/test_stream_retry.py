@@ -131,8 +131,12 @@ class UpstreamTerminalRetryTests(_ServerFixture):
             self._responder(self._failed_attempt('invalid_prompt')))
         self.assertEqual(len(recorded), 1)
         # The merged rewrite replaces the frame with one actionable line.
+        # The emitted code stays `invalid_prompt` so Codex ends the turn.
         self.assertEqual(self._events(body)[-1]['response']['error']['code'],
-                         'UPSTREAM_INVALID_PROMPT')
+                         'invalid_prompt')
+        failures = [c for c in logs if c.args[0] == 'request_failed']
+        self.assertEqual(failures[0].kwargs['code'], 'UPSTREAM_INVALID_PROMPT')
+        self.assertEqual(failures[0].kwargs['failure_class'], 'final')
         self.assertFalse(any(c.args[0] == 'stream_retry' for c in logs))
 
     def test_retry_refused_by_the_upstream_ends_the_stream_cleanly(self):
