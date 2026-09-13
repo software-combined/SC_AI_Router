@@ -1,11 +1,11 @@
 {
   "name": "scg-review",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Simplification, secret scanning and three-lane review of the exact staged Git tree.",
   "author": {
     "name": "Software Combined"
   },
-  "repository": "https://github.com/software-combined/SC_Agent_plugins",
+  "repository": "https://github.com/software-combined/SC_OpenRouter_adapter",
   "skills": "./skills/",
   "interface": {
     "displayName": "SCG Pre-Commit Review",

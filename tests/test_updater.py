@@ -26,7 +26,7 @@ def entry(plugin_id, version="0.1.0", enabled=True):
 def approved_source():
     return {"marketplaces": [{"name": updater.MARKETPLACE,
             "marketplaceSource": {"sourceType": "git",
-            "source": "https://github.com/software-combined/SC_Agent_plugins.git"}}]}
+            "source": "https://github.com/software-combined/SC_OpenRouter_adapter.git"}}]}
 
 
 class UpdaterTest(unittest.TestCase):
@@ -213,6 +213,13 @@ class UpdaterTest(unittest.TestCase):
             self.assertEqual(script.read_bytes(), b'released runner')
             self.assertEqual(exported.read_bytes(), definition)
             self.assertFalse(list(script.parent.glob('*.migrated')))
+
+    def test_pre_move_runner_is_accepted_for_migration(self):
+        # Digest of the released pre-move updater (SC_Agent_plugins main
+        # 5e56a3e), verified against the deployed shared runner before the
+        # move. Pinned as a literal so this test runs on shallow checkouts.
+        pre_move = "4ded20ea2db5a42c4641ccdbb2845e3f21513644a2d01d5acfa787e77ed9f83a"
+        self.assertIn(pre_move, updater.LEGACY[0][2])
 
     def test_migration_requires_the_explicit_flag_and_verified_content(self):
         digest = hashlib.sha256(b"released review updater").hexdigest()
