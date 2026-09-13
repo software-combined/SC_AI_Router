@@ -315,8 +315,10 @@ explicit authority.
 
 `request_failed` records a terminal event the upstream sent inside a `200`
 stream. `code` is `context_length_exceeded` for a context-limit refusal,
-`UPSTREAM_INCOMPLETE` when the provider reported an incomplete response, and
-`UPSTREAM_STREAM_FAILED` for any other terminal error. Three fields say why:
+`UPSTREAM_INCOMPLETE` when the provider reported an incomplete response,
+`UPSTREAM_INVALID_PROMPT` when OpenRouter refused the converted request after
+the stream opened, and `UPSTREAM_STREAM_FAILED` for any other terminal error.
+Three fields say why:
 
 | Field | Meaning |
 |---|---|
