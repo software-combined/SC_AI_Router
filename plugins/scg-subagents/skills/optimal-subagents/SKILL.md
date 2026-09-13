@@ -29,6 +29,10 @@ plugin; the installed review plugin's release copy governs a running review.
 5. Start with one child; add parallel children only for independent work that
    saves useful time. Avoid duplicate recon, ceremonial reviewers, and asking
    every child to reread the entire conversation. Required review lanes still run.
+6. For department work, brief the child with its department skill: [sales](../sales-subagent/SKILL.md),
+   [CSM](../csm-subagent/SKILL.md), [support](../support-subagent/SKILL.md),
+   [finance](../finance-subagent/SKILL.md), [operations](../operations-subagent/SKILL.md).
+   The brief sets role, inputs, authority and acceptance; this skill still owns model choice.
 
 ## Current starting choices
 
