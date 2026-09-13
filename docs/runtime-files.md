@@ -33,14 +33,21 @@ are never copied between machines.
 `ai_router/subscription_history.py`, `ai_router/context_recovery.py`,
 `ai_router/provider_defs.py`, `ai_router/upstream.py`, `ai_router/ingress.py`,
 `ai_router/relay.py`, `ai_router/tool_merge.py`, `ai_router/atomic_write.py`,
+`ai_router/stream_relay.py`,
 `ai_router/state.py`,
 `ai_router/protocols/__init__.py`, `ai_router/protocols/responses.py`,
 `ai_router/protocols/messages.py`, `ai_router/models.json`,
 `ai_router/openrouter_base_instructions.txt`, `ai_router/agents.py`,
 `ai_router/agents_general.txt`, `ai_router/agents_dev.txt`,
 `tools/probe_codex_runtime.py`, `tools/probe_context_budget.py`,
-`tools/global_instructions.py`,
-`tools/disable.py`.
+`tools/probe_context_recovery.py`, `tools/probe_handoff_recovery.py`,
+`tools/probe_history_switch.py`, `tools/probe_media.py`,
+`tools/probe_standalone_outputs.py`, `tools/probe_agent_handoffs.py`,
+`tools/appserver_probe.py`, `tools/provision_key.py`,
+`tools/verify_runtime_pins.py`, `tools/check_installer_python39.py`,
+`tools/check_policy_scans.py`, `tools/check_source_limits.py`,
+`tools/publish_feed.py`, `tools/publish_first_install.py`,
+`tools/global_instructions.py`, `tools/disable.py`.
 
 The feed-signature module lives with its consumers as
 `packaging/feed_verify.py`: `packaging/feed.py` and `packaging/release.py`
