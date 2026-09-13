@@ -4,7 +4,7 @@ The router backlog. Every numbered file is a self-contained brief an agent can
 execute in one session, and the tables below hold only open work. Completed
 plans leave the tree when they land: git history keeps their text and the
 removal log at the bottom of this file records each one with its landing date.
-The live numbering runs 099-161; the pre-renumbering 034-089 series is archived
+The live numbering runs 099-167; the pre-renumbering 034-089 series is archived
 and mapped at the bottom. Dated audit, review and brief files in this directory
 are historical snapshots and keep their original numbering.
 
@@ -144,15 +144,63 @@ that executes this wave; it carries the execution order and the owner gates.
 | [159](159-backlog-consolidation-and-acceptance-split.md) | Backlog consolidation and the acceptance split | TODO | after the public-readiness backlog pass merges; before 157 |
 | [160](160-publication-identifiers-out-of-source.md) | Move publication identifiers out of tracked source | TODO | independent; feeds 144 Step 3 |
 
+## Router four-lane audit wave (161-167)
+
+Added 2026-09-13 from `2026-09-13-router-four-lane-audit.md`, the read-only
+audit of scalability, abstraction, cleanliness and security run at `main`
+`c1ec415` and re-verified at `develop` `c068368`. The request path held;
+the new work is the self-update chain's fail-open shapes, unbounded upstream
+reads, five small listener gaps, per-request memory, the `runtime`/`setup`
+import cycle and the exact-count source-limit baseline. The report also
+records amendments to existing plans (below) and one owner decision (F14:
+wire or delete the dead feed-signature path). `2026-09-13-continuation-prompt.md`
+is the hand-over brief that slots this wave into the 2026-09-12 execution order.
+
+| Plan | Title | Status | Sequencing |
+|---|---|---|---|
+| [161](161-update-chain-fetch-hardening.md) | Update chain: mandatory bundle checksum and origin-pinned fetches | TODO | independent; before 167's deploy |
+| [162](162-bounded-upstream-reads.md) | Bound every upstream read the way request bodies are bounded | TODO | independent; before 164 on `ai_router/relay.py` |
+| [163](163-listener-and-token-hygiene.md) | Listener robustness and token hygiene | TODO | independent; before 164 on `ai_router/router.py` |
+| [164](164-request-memory-footprint.md) | Release request buffers before the relay; name the upstream timeout | TODO | after 162 and 163 |
+| [165](165-runtime-leaves-and-architecture-map.md) | Split logging and home leaves out of `runtime.py`; correct the architecture map | TODO | coordinate 131 (`runtime.py`); 152/155 cite `docs/architecture.md` |
+| [166](166-source-limit-gate-monotone-baseline.md) | Source-limit baseline becomes a ceiling; prune stale entries | TODO | first; reconciles 156 item 4 |
+| [167](167-feed-bucket-write-scope.md) | Scope the feed publisher role; create-only bundle publication | TODO: source local, deploy owner-gated | after 161; complements 144/160 |
+
+Amendments the audit asks of existing plans (recorded here so the owners see
+them; no new numbers):
+
+- **152**: also replace the `dialect == 'openrouter'` gate at
+  `ai_router/relay.py:109-113` (added 2026-09-13 for stream-error
+  normalisation, after 152 was written); strip `provider_defs.OPENAI.responses_path`
+  in `ai_router/ingress.py:62,66` instead of the literal; make the popup copy
+  in `ai_router/key_dialog.py:26` and the `label='OpenRouter'` defaults in
+  `ai_router/key_prompt.py:74,86` read the provider label; delete
+  `credentials.ENV_VAR` (tests only); in step 5 also delete the two dead
+  substring branches at `ai_router/errors.py:255-256` and type the
+  `'api key'` `ValueError` raised at `ai_router/credentials.py:90` (F8, F9).
+- **155**: pin `protocols/*._Policy.name` to the `provider_defs` protocol
+  constants with a contract test, and route the `/v1/models` GET through the
+  dispatch table (F10).
+- **131**: route `packaging/notice.py:89-92`, `packaging/operator_surface.py:383`
+  and `ai_router/apply_catalogue.py:27-37` through the shared atomic writer
+  (F11).
+- **116**: acceptance must include a non-English Windows locale, or
+  `ai_router/winacl.py:61-73` must stop depending on the English `icacls`
+  summary line (F12).
+- **108**: a second router instance on one machine exits with `EADDRINUSE`
+  and is relaunched forever; add a clear, non-looping refusal (F13).
+
 ## Recommended overall order
 
 Work top to bottom; stop at owner gates and report.
 
-- **Local, now:** 156, 152, 153, 154, 155, 160, 137, 146, 131, 147, 148,
-  135 (remaining stages), 151 (stages 1-2); then 159, 157 and 158 once the
-  public-readiness backlog and documentation passes have merged.
+- **Local, now:** 166, 163, 161, 162, 164, 165, 156, 152, 153, 154, 155,
+  160, 131, 135 (remaining stages), 151 (stages 1-2); then 159, 157 and 158
+  once the public-readiness backlog and documentation passes have merged.
+  163 and 164 both edit `ai_router/router.py` and 162 and 164 both edit
+  `ai_router/relay.py`: one writer at a time, in that order.
 - **Owner-gated infrastructure:** 105, 106, 107, 099, 108, 109, 110, 139
-  (remaining stages), 142, 144.
+  (remaining stages), 142, 144, 167 (deploy step).
 - **Owner-gated client and OS acceptance:** 111, 112, 113, 114, 115, 116, 117.
 - **Owner-gated paid probes and desktop:** 118, 119, 120, 121, 150.
 
