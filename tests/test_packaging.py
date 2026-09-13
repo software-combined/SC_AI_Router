@@ -222,30 +222,22 @@ class PackagingTests(unittest.TestCase):
 
     def test_installer_surface_parses_as_python39(self):
         # Plan 061: the installer runs on Python 3.9+ while the router
-        # needs 3.14. No 3.9 interpreter exists in CI, so pin the grammar
-        # instead: every installer-surface file must parse as 3.9 syntax.
+        # needs 3.14. Plan 156 adds a real 3.9 import check
+        # (tools/check_installer_python39.py); this test keeps the grammar
+        # pin for every surface file, including the parse-only entry points.
         # feature_version misses PEP 604 unions (`X | Y` parses as BinOp
         # but raises at runtime on 3.9), so annotations get their own walk.
         import ast
         root = Path(__file__).resolve().parents[1]
-        surface = [
-            'packaging/install.py', 'packaging/bundle.py', 'packaging/service.py',
-            'packaging/feed.py', 'packaging/atomic_write.py',
-            'packaging/notice.py',
-            'packaging/launchd.py', 'packaging/router_launch.py',
-            'packaging/systemd.py', 'packaging/update_launch.py',
-            'packaging/task_launch.py',
-            'packaging/updater.py', 'packaging/codex_config.py',
-            'packaging/claude_config.py', 'packaging/diagnostics.py',
-            'packaging/runtime_lock.py', 'packaging/platforms/__init__.py',
-            'packaging/platforms/darwin.py', 'packaging/platforms/linux.py',
-            'packaging/platforms/windows.py', 'packaging/feed_verify.py',
-            'ai_router/atomic_write.py', 'ai_router/state.py',
-            'ai_router/subscription_roster.py',
-            'ai_router/retired_slugs.py',
-            'ai_router/provider_defs.py', 'packaging/provider_keys.py',
-            'tools/disable.py', 'tools/global_instructions.py',
-        ]
+        surface = []
+        for line in (root / 'config' / 'installer-python-surface.txt').read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            mode, name = line.split()
+            self.assertIn(mode, ('load', 'parse'))
+            surface.append(name)
+        self.assertTrue(surface)
         for name in surface:
             with self.subTest(name=name):
                 src = (root / name).read_text()

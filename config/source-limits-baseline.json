@@ -33,7 +33,7 @@
   "tests/test_notice.py": 366,
   "tests/test_notice_delivery.py": 399,
   "tests/test_operator_surface.py": 448,
-  "tests/test_packaging.py": 311,
+  "tests/test_packaging.py": 303,
   "tests/test_probe_harness.py": 362,
   "tests/test_runtime.py": 321,
   "tests/test_setup.py": 398,
