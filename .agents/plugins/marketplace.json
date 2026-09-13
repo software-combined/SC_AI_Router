@@ -1,0 +1,44 @@
+{
+  "name": "scg-agent-plugins",
+  "interface": {
+    "displayName": "Scg Agent Plugins"
+  },
+  "plugins": [
+    {
+      "name": "scg-review",
+      "source": {
+        "source": "local",
+        "path": "./plugins/scg-review"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "scg-subagents",
+      "source": {
+        "source": "local",
+        "path": "./plugins/scg-subagents"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "scg-prototypes",
+      "source": {
+        "source": "local",
+        "path": "./plugins/scg-prototypes"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

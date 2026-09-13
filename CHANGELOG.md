@@ -1,0 +1,100 @@
+# Changelog
+
+## scg-prototypes 0.1.0 — 2026-09-12
+
+- Add the `publish-prototype` skill: publish a built static prototype to
+  `https://prototypes.softwarecombined.com/<slug>/`, archive it in
+  `software-combined/SC_Prototypes`, sync it to the private channel bucket,
+  invalidate the CloudFront path and verify the live URL before printing it.
+- Fail closed before writing when the slug, the asset base path or the
+  SHA-256-verified gitleaks scan reports a problem; refuse slug collisions
+  unless `--update`, refuse a scanner configured through `GITLEAKS_CONFIG`,
+  and re-check the copied artifact and any `--source` snapshot before they are
+  committed or uploaded.
+- Ship `list` and `unpublish` alongside `publish`, keep the archived source when
+  a prototype is unpublished, and require the same shared updater setup as the
+  other SCG plugins.
+- The channel foundation lives in `SC_Infrastructure`
+  (`web-edge/static-site-cloudfront-s3`). Until its owner-gated deploy lands,
+  `channel.json` has no distribution id and every publish stops with a clear
+  "not deployed yet" message.
+
+## scg-review 0.4.0 and scg-subagents 0.3.0 — 2026-09-13
+
+- Add an independent planning advisor role with researched model choices,
+  a reusable read-only plan review brief and qualification criteria.
+- Label every subagent assignment with its requested model, effort, role/pass
+  and task context, including the shared pre-commit reviewer routing.
+- Reconcile the marketplace-wide updater with native macOS, Linux and Windows
+  scheduling. Either plugin configures one shared updater for all enabled SCG
+  plugins, including future skills delivered in those plugins.
+- Preserve the reviewed migration safeguards and Windows windowless execution.
+- Require agents installing or pulling skills for use to configure and verify
+  automatic updates; require all new skills to support all three platforms.
+
+## scg-review 0.3.0 and scg-subagents 0.2.0 — 2026-09-12
+
+- Extend both updater installers to Linux systemd user timers and Windows
+  Task Scheduler, using the same daily approach as macOS.
+- Preserve known existing Mac runners and user-owned schedules; verify native
+  registration and keep disabled/uninstalled plugins disabled.
+- Add native Linux and Windows CI execution using a local test CLI, alongside
+  macOS/Linux regression checks. Keep the existing Git marketplace source.
+
+## scg-subagents 0.1.1 — 2026-09-12
+
+- Add security-first model selection for defensive analysis and authorised
+  pentesting, with full catalogue coverage and task-specific evidence limits.
+- Distinguish production safeguards and approved access from benchmark capability;
+  add cyber qualification criteria and preserve the separate pre-commit policy.
+
+## scg-review 0.2.0 — 2026-09-12
+
+- Use the shared cost-first reviewer policy: GLM Flash for simplification/quality,
+  DeepSeek Flash for correctness/adversarial, fixed max effort and bounded
+  availability fallbacks. Keep explicit model requirements and all review gates.
+- Bundle a synchronized policy copy so review-only installations remain usable.
+- Correct marketplace refresh scope: other configured plugin caches may update.
+
+## scg-subagents 0.1.0 — 2026-09-12
+
+- Add cost-first model selection with full catalogue evidence and reproducible
+  workload-specific Pareto comparisons.
+- Document parent/child tools, messaging, exact model identity, cost accounting
+  and a repeatable methodology for researching and qualifying new models.
+- Add an independent daily macOS updater and document marketplace-wide cache refresh.
+- Assign one effort per model, add workload fallbacks, and own shared reviewer routing.
+
+## 0.1.4 — 2026-09-11
+
+- Route every Codex and OpenCode review pass to DeepSeek V4.1 Flash at max
+  effort, replacing the GLM and Muse rows.
+- Collapse the runtime mapping to one reviewer row per runtime after each
+  runtime's four passes agreed.
+
+## 0.1.3 — 2026-09-11
+
+- Route the Codex review passes across GLM 5.3 Flash (simplification,
+  adversarial), Muse Spark 1.3 (correctness) and DeepSeek V4.1 Flash (quality),
+  all at max effort. The OpenCode placeholder row mirrors the same mapping.
+
+## 0.1.2 — 2026-09-08
+
+- Show the existing Muse Contributor/xhigh defaults directly in the review
+  skill and remove the obsolete Kimi/Luna fallback table.
+- Preserve the latest review procedure, Ponytail, simplification and exact-tree gates.
+
+## 0.1.1 — 2026-09-08
+
+- Add an explicit daily macOS updater for separate Codex accounts.
+- Refresh only the approved SCG Git marketplace and enabled review plugin.
+- Preserve disabled/uninstalled state and keep machine hooks and pins unchanged.
+
+## 0.1.0 — 2026-09-08
+
+- First Codex marketplace release of SCG Pre-Commit Review.
+- Bundle the current review skill, Code Simplifier and Ponytail with portable
+  references and an explicit reviewer model policy.
+- Include the unchanged SCG hook adapter and regression tests, with explicit
+  provisioning that preserves existing configuration and validates scanner pins.
+- Document workspace sync, direct Git refresh and future Claude Code packaging.
