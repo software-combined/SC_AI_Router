@@ -35,7 +35,9 @@ class SseFrameBoundTests(unittest.TestCase):
         self.assertEqual(sse.MAX_FRAME_BYTES, router_mod.MAX_BODY)
 
 
-class RelayContainmentTests(unittest.TestCase):
+class _ServerFixture(unittest.TestCase):
+    """Shared ephemeral-router fixture for the relay suites below."""
+
     def _server(self, **state_overrides):
         state = _test_state(_auth_file(self))
         state.update(state_overrides)
@@ -51,6 +53,8 @@ class RelayContainmentTests(unittest.TestCase):
                     events.append(json.loads(line[5:].strip()))
         return events
 
+
+class RelayContainmentTests(_ServerFixture):
     def test_non_dict_sse_payload_ends_stream_with_response_failed(self):
         wire = b'data: [1,2,3]\n\n'
         install_fake(self, lambda: FakeUpstream(
@@ -95,6 +99,7 @@ class RelayContainmentTests(unittest.TestCase):
                          {'model': 'z-ai/glm-5.3', 'input': []})
         self.assertEqual(response.status, 200)
         self.assertNotIn(b'response.failed', response.read())
+
 
 
 class EmitTerminalFailureTests(unittest.TestCase):

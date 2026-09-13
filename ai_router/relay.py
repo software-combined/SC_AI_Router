@@ -12,7 +12,7 @@ the injected object, never a fresh import.
 import http.client
 import json
 import time
-from . import errors, local_services, provider_defs, setup, stream_errors, subscription_fallback, transport, upstream
+from . import errors, local_services, provider_defs, setup, stream_errors, stream_relay, subscription_fallback, transport, upstream
 from .providers import NATIVE_SERVICE_PATHS
 
 
@@ -30,6 +30,8 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
     conn = http.client.HTTPSConnection(prepared.host, timeout=120)
     sent = False
     response = None
+    record = None
+    attempts = [conn]
     try:
         # Phases land inside post_with_phases even on failure.
         response, headers_done = transport.post_with_phases(
@@ -105,19 +107,51 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
         handler.send_header('Connection', 'close')
         handler.end_headers()
         sent = True
-        chunks = provider.adapt(response, prepared.tool_names, metrics)
-        if (provider.defn.dialect == 'openrouter'
-                and metrics.get('protocol') == provider_defs.RESPONSES
-                and metrics['response_kind'] == 'sse'
-                and metrics['response_encoding'] == 'identity'):
-            chunks = stream_errors.normalize(chunks, metrics)
-        for chunk in chunks:
-            if 'first_chunk_ms' not in metrics:
-                metrics['first_chunk_ms'] = round((time.monotonic() - started) * 1000, 1)
-            transport.note_first_data(metrics, headers_done)
-            handler.wfile.write(chunk)
-            handler.wfile.flush()
+        # One extra upstream attempt is allowed, and only while the client has
+        # no answer frames (see stream_relay.retryable_stream_failure);
+        # `attempts` owns every connection a retry opens so none outlive the
+        # request.
+        record = stream_relay.StreamRecord()
+        while True:
+            stream_relay.relay_stream(handler, provider, response, prepared,
+                                      metrics, started, headers_done, record)
+            retry_code = stream_relay.code_of(metrics)
+            # At most one retry: this guard is evaluated before the second pass,
+            # so a provider that fails both attempts cannot loop.
+            if record.stream_retry or not stream_relay.retryable_stream_failure(
+                    metrics, record):
+                break
+            record.stream_retry = 1
+            metrics['stream_retry'] = 1
+            metrics['retry_code'] = retry_code
+            # The retry inherits nothing from the failed attempt: its frames
+            # are dropped rather than forwarded, and its verdict must not
+            # survive into the second attempt's log line.
+            stream_relay.clear_terminal_fields(metrics)
+            log_event('stream_retry', code=retry_code, provider=prepared.provider,
+                      model=metrics.get('model'), path=metrics.get('path'),
+                      forwarded_delta_bytes=record.forwarded_bytes)
+            response, headers_done = stream_relay.reopen_stream(
+                prepared, metrics, attempts, started)
+            # No second send_response: the status line and headers of the first
+            # attempt are already on the wire, and every response header is
+            # written before the first body byte, so a retry only continues the
+            # open body. Re-sending them would append a second header block to
+            # the client's stream.
+            upstream.validate_response(response, prepared)
+            # A retry that opened keeps the discard: its verdict replaces the
+            # failed attempt's held one, so the hold stays dropped after this
+            # point and only this attempt's frames can reach the client.
+            record.pending.clear()
+            record.held_terminal = False
+        # The settled path flushes the hold exactly like the error path: the
+        # frames the client never saw still belong to it, and a flush that
+        # moved bytes is the stream's first downstream write.
+        if record.flush(handler):
             transport.note_first_write(metrics, headers_done)
+        metrics.update(stream_relay.streamed_metrics(record))
+        if not record.stream_retry:
+            metrics['stream_retry'] = 0
         log_event('request_failed' if metrics.get('code') else 'request_completed',
                   **metrics, status=response.status,
                   total_ms=round((time.monotonic() - started) * 1000, 1))
@@ -127,15 +161,41 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
     except (OSError, http.client.HTTPException, ValueError, KeyError,
             TypeError, AttributeError) as exc:
         total_ms = round((time.monotonic() - started) * 1000, 1)
+        if record is not None:
+            # Whatever setup frames were held still belong to the client, and
+            # the terminal frame this tier is about to add must follow them.
+            if record.flush(handler):
+                transport.note_first_write(metrics, headers_done)
+            metrics.update(stream_relay.streamed_metrics(record))
+        # One terminal frame per stream: a held terminal from the failed
+        # attempt was just flushed with the provider's own verdict, so a
+        # generic frame after it would mask that verdict. Writing it before the
+        # log line is what lets the line report the frame the client received.
+        # Only the provider's held terminal may stand in for the generic frame,
+        # and only if it actually reached the client.
+        if sent and record.client_terminal is None:
+            # A client that holds no terminal frame needs one; a retry that
+            # replaced the failed attempt's verdict still owes exactly one.
+            transport.emit_terminal_failure(handler.wfile, metrics)
+            # The router's own frame is the terminal the client now holds; a
+            # dead socket simply leaves the record without one, and the log
+            # line below reports that absence instead of claiming it.
+            if metrics.get('terminal_source') == stream_errors.TERMINAL_FROM_ROUTER:
+                record.client_terminal = stream_errors.TERMINAL_FROM_ROUTER
+        if record is not None:
+            # Report the writer of the terminal the client actually holds; a
+            # client that received none gets no claim at all.
+            if record.client_terminal:
+                metrics['terminal_source'] = record.client_terminal
+            else:
+                metrics.pop('terminal_source', None)
         log_event('transport_error',
                   status=response.status if response is not None else None,
                   **metrics, error_type=type(exc).__name__,
                   error_category=exc.msg if isinstance(exc, json.JSONDecodeError) else type(exc).__name__,
                   location=transport.describe_location(exc),
                   total_ms=total_ms)
-        if sent:  # best-effort terminal frame on Responses SSE
-            transport.emit_terminal_failure(handler.wfile, metrics)
-        else:
+        if not sent:
             described = upstream.describe_failure(
                 exc, None,
                 {'model': metrics.get('model'), 'provider': prepared.provider,
@@ -150,4 +210,6 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
                 handler.error(errors.upstream_failed())
     finally:
         conn.close()
+        for extra in attempts[1:]:
+            extra.close()
         handler.close_connection = True

@@ -44,6 +44,11 @@ It also owns the exact legacy paragraph migration used by catalogue upgrades.
 `stream_errors.py` owns shared HTTP/SSE context-error classification and applies
 it to external Responses terminal events after tool adaptation. It preserves
 successful frames and records semantic failure separately from the HTTP status.
+`stream_relay.py` owns one upstream stream for `relay.py`: which frames are the
+client's answer rather than plumbing, the bounded hold that lets a retry replace
+plumbing instead of appending a second copy, the retry verdict, and opening
+the retry itself. It is a
+leaf beside `stream_errors.py`, never a dispatcher or a credential owner.
 
 1. `provider_defs.py` owns every upstream fact (host, endpoint prefixes, key
    location, model catalogue, key-info endpoint, failure dialect) and imports
