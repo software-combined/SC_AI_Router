@@ -121,10 +121,11 @@ is stale.
 Run the tool; remove every entry it reports as stale (at the planning commit
 that includes `ai_router/router.py`), and lower no other entry. Do not raise
 any entry: the recorded counts become ceilings. Re-run until `failures=0`.
-An entry may stay above its file's current length and still be correct:
-`ai_router/upstream.py` is 250 lines but stays recorded at 281, which is fine
-under the monotone rule (the file may shrink freely and its ceiling still
-forbids growth past 281), but it is not a statement of the file's size.
+An entry may sit above its file's current length only while the file is still
+above its soft cap; the recorded count is then a growth ceiling, not a claim
+about the current size. `ai_router/upstream.py` (250 lines at the 250 soft
+cap, recorded 281) is the opposite case: Step 2 reports it stale and the
+prune removes it.
 
 **Verify**: `python3.14 tools/check_source_limits.py` → `failures=0`; `python3.14 -c "import json; d=json.load(open('config/source-limits-baseline.json')); print(len(d))"` → fewer entries than 44.
 

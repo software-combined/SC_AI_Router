@@ -5,7 +5,7 @@
 > anything in "STOP conditions" occurs, stop and report; do not improvise.
 > When done, update this plan's status row in `plans/README.md`.
 >
-> **Drift check (run first)**: `git diff --stat c068368..HEAD -- ai_router/router.py ai_router/setup.py ai_router/key_prompt.py packaging/install.py tests/test_ingress_guards.py tests/test_setup.py tests/test_key_prompt.py tests/test_lifecycle.py tests/test_install_key_window.py tests/test_install_config.py config/source-limits-baseline.json`
+> **Drift check (run first)**: `git diff --stat c068368..HEAD -- ai_router/router.py ai_router/setup.py ai_router/key_prompt.py packaging/install.py tests/test_ingress_guards.py tests/test_setup.py tests/test_setup_handler.py tests/test_key_prompt.py tests/test_lifecycle.py tests/test_install_key_window.py tests/test_install_config.py config/source-limits-baseline.json`
 > If any in-scope file changed, compare the "Current state" excerpts against
 > the live code before proceeding; on a mismatch, STOP.
 
@@ -94,6 +94,7 @@ request thread, drop a request it accepted, or expose the path token.
 **In scope**: `ai_router/router.py`, `ai_router/setup.py` (one line),
 `ai_router/key_prompt.py`, `packaging/install.py` (`_open_key_window` only),
 `tests/test_ingress_guards.py`, `tests/test_setup.py`,
+`tests/test_setup_handler.py`,
 `tests/test_key_prompt.py`, `tests/test_install_key_window.py`,
 `tests/test_install_config.py`, `CHANGELOG.md`,
 `packaging/VERSION`, `pyproject.toml` (version),
@@ -161,12 +162,15 @@ raw-socket helper `tests/test_ingress_guards.py::_raw_request` (used by
 `test_a_hostless_http10_request_still_answers`), and confirm it drops the
 connection before the fix and answers 404 after.
 
-**Verify**: `python3.14 -B -m unittest tests.test_setup tests.test_setup_handler` → pass.
+**Verify**: `python3.14 -B -m unittest tests.test_setup tests.test_setup_handler tests.test_ingress_guards` → pass. Put the handler case where the server has a home: `tests/test_setup_handler.py` already builds a real `Credentials(state, home, env={})` and a live window, and the raw socket is opened the way `tests/test_ingress_guards.py::_raw_request` does. A server built by the shared harness's default `StubCredentials` cannot serve `/setup/` — it has no `home` and `ai_router/setup.py:297` reads it before the nonce — so the case must use real credentials, not that default.
 
 ### Step 3: Decide drain and admission under one lock
 
-In `ai_router/router.py` `do_POST`, remove the early `if self.server.draining`
-check at `:103-104` and fold it into the lock section at `:122-129`:
+In `ai_router/router.py` `do_POST`, keep the early `if self.server.draining`
+check at `:103-104`: it still guards the branches that sit above the lock
+(`/shutdown`, `/setup/`, `/model-prompt/`), and it is also a cheap first pass
+for owned requests. Add the same decision to the lock section at `:122-129`
+so admission and the drain flag are read together:
 
 ```python
         with self.server.lock:
@@ -183,12 +187,10 @@ check at `:103-104` and fold it into the lock section at `:122-129`:
             return self.retryable_reject(errors.too_many_inflight(), retry_after='1')
 ```
 
-Keep the `/shutdown` and `/setup/` branches above the lock as they are (they
-take no slot), but keep an early `if self.server.draining: return
-self.drain_reject()` guard inside those two branches: without it a second
-`/shutdown` starts a second drain thread, and the setup page would change
-its drain-time behaviour for no reason. In `drain_and_exit`, set the flag
-under the same lock:
+Leave the `/shutdown`, `/setup/` and `/model-prompt/` branches above the lock
+as they are (they take no slot). The early check stays for good: the lock
+section never sees those branches, and without it a second `/shutdown` starts
+a second drain thread. In `drain_and_exit`, set the flag under the same lock:
 
 ```python
         with self.lock:
@@ -197,7 +199,7 @@ under the same lock:
 
 The lock is never held across I/O, so contention is unchanged.
 
-**Verify**: `python3.14 -B -m unittest tests.test_lifecycle tests.test_ingress_guards` → pass. Add one case that pins the check and the increment to one critical section: hold `server.lock` from the test thread, start a POST on another thread, set `draining` under the same lock, release, and assert 503 with `Retry-After: 2` and `inflight == 0`. The existing cap case sets `max_inflight = 0` and the drain cases set `draining` before the request, so they pass even if the check stays outside the lock and cannot pin this.
+**Verify**: `python3.14 -B -m unittest tests.test_lifecycle tests.test_ingress_guards` → pass. Add one case that pins the check and the increment to one critical section: hold `server.lock` from the test thread, start a POST on another thread, wait until the handler is actually blocked on the lock before flipping the flag (connect first, then a short bounded poll plus `time.sleep(0.05)` is enough — without that handshake the POST has not reached the handler, the case passes against the pre-fix code and pins nothing), set `draining` under the same lock, release, and assert 503 with `Retry-After: 2` and `inflight == 0`. The existing cap case sets `max_inflight = 0` and the drain cases set `draining` before the request, so neither discriminates.
 
 ### Step 4: Raise the listen backlog
 
@@ -255,8 +257,8 @@ bursts rather than refusing them.
   `tests/test_install_key_window.py:459`, which return `None` today and must
   return a stub object instead. Define one module-level stub per file and
   reuse it: `tests/test_install_key_window.py` is 470 lines against the 500
-  `tests` hard cap, and a per-case stub for each of its five classes lands
-  the file exactly on the cap.
+  `tests` hard cap, so a per-case stub for each of its six classes plus the
+  lambda would leave almost no headroom.
 
 **Verify**: `python3.14 -B -m unittest tests.test_key_prompt tests.test_install_key_window tests.test_install_config` → pass.
 
