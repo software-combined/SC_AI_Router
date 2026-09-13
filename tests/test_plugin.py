@@ -68,6 +68,17 @@ class PluginTest(unittest.TestCase):
             (subagents / "skills/optimal-subagents/references/updates.md").read_bytes(),
             (PLUGIN / "references/updates.md").read_bytes())
 
+    def test_every_marketplace_plugin_ships_matching_dual_manifests(self):
+        marketplace = json.loads((ROOT / '.agents/plugins/marketplace.json').read_text())
+        for entry in marketplace['plugins']:
+            plugin = ROOT / entry['source']['path']
+            with self.subTest(plugin=entry['name']):
+                codex = json.loads((plugin / '.codex-plugin/plugin.json').read_text())
+                claude = json.loads((plugin / '.claude-plugin/plugin.json').read_text())
+                self.assertEqual(codex['name'], entry['name'])
+                self.assertEqual(claude['name'], codex['name'])
+                self.assertEqual(claude['version'], codex['version'])
+
     def test_provision_preserves_existing_configuration_and_requires_matching_pin(self):
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)

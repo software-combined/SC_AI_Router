@@ -91,3 +91,31 @@ jobs:
         # CI. Behaviour and failure messages match the inline steps it
         # replaces.
         run: python tools/check_policy_scans.py
+
+  plugin-schedulers:
+    name: Plugin schedulers
+    # Native scheduler coverage for the agent-plugin updater: real systemd
+    # user timers on Linux and Task Scheduler on Windows, using a fake local
+    # Codex CLI. Pull requests only; push runs stay cheap.
+    if: github.event_name == 'pull_request'
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Start the disposable Linux user manager
+        if: runner.os == 'Linux'
+        run: |
+          scheduler_uid="$(id -u)"
+          sudo systemctl start "user@${scheduler_uid}.service"
+          echo "XDG_RUNTIME_DIR=/run/user/${scheduler_uid}" >> "$GITHUB_ENV"
+          echo "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/${scheduler_uid}/bus" >> "$GITHUB_ENV"
+      - name: Native scheduler migration
+        run: python -m unittest tests.test_scheduling_native -v
+        env:
+          SCG_TEST_NATIVE_SCHEDULER: '1'
