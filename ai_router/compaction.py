@@ -89,6 +89,18 @@ def user_message_item(text):
 PORTABLE_SEARCH_NOTE = ('[tool search result replayed as declared tools; '
                         'the search call itself is omitted on this model]')
 PORTABLE_REASONING_NOTE = '[reasoning summary from the previous model] '
+CALL_TYPES = frozenset({'function_call', 'custom_tool_call', 'apply_patch_call',
+                        'web_search_call', 'file_search_call', 'image_generation_call',
+                        'code_interpreter_call', 'computer_call'})
+OUTPUT_TYPES = frozenset({'function_call_output', 'custom_tool_call_output',
+                          'apply_patch_call_output'})
+# A tool run is the call/output block of one assistant step. Nothing may be
+# inserted inside it: a note between a parallel call and its output makes a
+# strict upstream refuse the whole turn ("incomplete parallel tool-call
+# group", measured on deepseek/deepseek-v4.1-flash 2026-09-13). The discovery
+# pair keeps its names here because the portable pass may run on either side
+# of the adapter rewrite that turns it into a plain function call.
+TOOL_RUN_TYPES = CALL_TYPES | OUTPUT_TYPES | {'tool_search_call', 'tool_search_output'}
 
 
 def _summary_text(item):
@@ -144,26 +156,47 @@ def portable_history(items, search_name, history_mode):
                        and item.get('type') == 'function_call_output'
                        and (item.get('name') == search_name
                             or not item.get('name'))}
-    out, noted = [], False
+    out, noted, pending, in_run = [], False, [], False
+
+    def emit(note):
+        """Replace in place, unless a tool run is open: then it waits."""
+        if in_run:
+            pending.append(note)
+        else:
+            out.append(note)
+
+    def close_run():
+        nonlocal in_run
+        in_run = False
+        out.extend(pending)
+        pending.clear()
+
     for item in items:
         if not isinstance(item, dict):
+            close_run()
             out.append(item)
             continue
         kind, name, call_id = item.get('type'), item.get('name'), item.get('call_id')
         if kind == 'reasoning':
             note = _summary_text(item)
             if note:
-                out.append(user_message_item(PORTABLE_REASONING_NOTE + note[:2000]))
+                emit(user_message_item(PORTABLE_REASONING_NOTE + note[:2000]))
             continue
         discovery = ((kind == 'function_call' and name == search_name)
                      or (kind == 'function_call_output'
                          and (name == search_name or (not name and call_id in calls))))
-        if not discovery:
+        if discovery:
+            if call_id in matched and not noted:
+                emit(user_message_item(PORTABLE_SEARCH_NOTE))
+                noted = True
+            # Unmatched halves and repeat matches fall away here.
+        elif kind in TOOL_RUN_TYPES:
+            in_run = True
             out.append(item)
-        elif call_id in matched and not noted:
-            out.append(user_message_item(PORTABLE_SEARCH_NOTE))
-            noted = True
-        # Unmatched halves and repeat matches fall away here.
+        else:
+            close_run()
+            out.append(item)
+    close_run()
     return out
 
 def build_compact_v1_output(user_messages, summary):
@@ -202,13 +235,6 @@ def rewrite_input(items):
 # executed, so the next turn regenerates it if still needed. A standalone
 # output (no call_id) is the app-injected instruction shape, not an orphan,
 # and is never dropped here; providers materialize it before the scrub.
-CALL_TYPES = frozenset({'function_call', 'custom_tool_call', 'apply_patch_call',
-                        'web_search_call', 'file_search_call', 'image_generation_call',
-                        'code_interpreter_call', 'computer_call'})
-OUTPUT_TYPES = frozenset({'function_call_output', 'custom_tool_call_output',
-                          'apply_patch_call_output'})
-
-
 def _call_complete(item):
     kind = item.get('type')
     if not isinstance(item.get('call_id'), str):
