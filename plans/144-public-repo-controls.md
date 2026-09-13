@@ -76,8 +76,10 @@ assumption, feed publication and GitHub asset download end to end.
 - Add the Gitleaks scan used locally to CI's required checks (the existing
   regex scan is a weak net).
 - SHA-pin `cfn-lint` or install it from a hash-checked lock that CI itself
-  owns; add `CODEOWNERS` for `.github/` and require its review for workflow
-  changes.
+  owns; add `CODEOWNERS` for `.github/` and `tools/ci_scope.py` (the
+  PR-controlled installer-scope decider plan 156 landed) and require its
+  review for workflow and scope changes. Scope untrusted PRs from the base
+  branch so a fork cannot shrink its own checks.
 - Workflows triggered by fork PRs keep read-only tokens and never receive
   secrets or the OIDC role; confirm after the visibility flip.
 
@@ -116,7 +118,7 @@ public feed and updates itself automatically.
       tag-scoped role assumption, feed publication and GitHub asset download.
 - [ ] Immutable releases enabled after the legacy asset is retired.
 - [ ] Secret scanning + push protection enabled; Gitleaks in required checks.
-- [ ] Workflow inputs hash-pinned; CODEOWNERS review required for `.github/`.
+- [ ] Workflow inputs hash-pinned; CODEOWNERS review required for `.github/` and `tools/ci_scope.py`; untrusted PRs scoped from the base branch.
 - [ ] Public text audit recorded.
 - [ ] Flip performed only after plan 142; post-flip checks recorded.
 

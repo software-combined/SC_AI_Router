@@ -5,16 +5,24 @@
 > anything in "STOP conditions" occurs, stop and report; do not improvise.
 > When done, update this plan's status row in `plans/README.md`.
 >
-> **Drift check (run first)**: `git diff --stat c068368..HEAD -- tools/check_source_limits.py config/source-limits-baseline.json AGENTS.md tests/test_source_limits.py plans/156-ci-and-test-hardening-for-a-public-repo.md`
-> If any in-scope file changed, compare the "Current state" excerpts against
-> the live code before proceeding; on a mismatch, STOP.
+> **Drift check (run first)**: `git diff --stat c068368..HEAD -- tools/check_source_limits.py config/source-limits-baseline.json AGENTS.md tests/test_source_limits.py`
+>
+> Plan 156 has landed and left the tree (see the `plans/README.md`
+> removal log, 2026-09-13); reconcile against the landed tool and the
+> removal entry, not the deleted plan file. The "Current state" excerpts
+> below are pre-156: `tests/test_source_limits.py` now exists with seven
+> tests pinning the exact-count rule, and the baseline is re-synced. Read
+> Step 1 against the live `problems()` branch, Step 3 as re-run-and-confirm,
+> and Step 4 as extend-and-invert (keep the existing tests as the fixture).
+> If any in-scope file changed beyond the landed 156 state, compare the
+> excerpts against the live code before proceeding; on a mismatch, STOP.
 
 ## Status
 
 - **Priority**: P1 (it removes friction from every other plan)
 - **Effort**: S
 - **Risk**: LOW
-- **Depends on**: none; reconcile with plan 156 step 4 (see Step 4)
+- **Depends on**: none; reconcile with the 156 removal-log entry in `plans/README.md` (see Step 4)
 - **Category**: dx
 - **Planned at**: commit `c068368` (`origin/develop`), 2026-09-13
 - **Source**: `plans/2026-09-13-router-four-lane-audit.md`, finding F6
@@ -55,8 +63,8 @@ right; the mechanism should reward shrinking and forbid growth.
   entries for `tests/` and `packaging/` files as well.
 - `AGENTS.md` section 3: "Modules 250 lines soft / 400 hard, entrypoints and
   tools 400/700, tests 300/500. Checked by `python3.14 tools/check_source_limits.py`."
-- `plans/156-ci-and-test-hardening-for-a-public-repo.md`, remaining work
-  item 4: "Make the source-limits baseline reject nonexistent files,
+- Plan 156 item 4 (landed; plan file removed, see the `plans/README.md`
+  removal log): "Make the source-limits baseline reject nonexistent files,
   incorrect counts, and entries now below their soft cap. Reconcile against
   current source and add one failing-baseline regression check."
 - There is no `tests/test_source_limits.py`; the tool has no test.
@@ -76,8 +84,8 @@ right; the mechanism should reward shrinking and forbid growth.
 
 **In scope**: `tools/check_source_limits.py`, `config/source-limits-baseline.json`,
 `tests/test_source_limits.py` (create), `AGENTS.md` section 3 (two
-sentences), `plans/156-ci-and-test-hardening-for-a-public-repo.md` (one
-sentence in item 4), `plans/README.md` (status rows).
+sentences), `plans/README.md` (status rows; the planned one-sentence note to
+the 156 file is superseded by 156's removal-log entry).
 
 **Out of scope**: the cap values themselves; splitting any module; the CI
 workflow (it already runs the tool, `.github/workflows/check.yml:72`).
@@ -160,9 +168,9 @@ file's actual line count, not the recorded number (the regression check plan
   add: "A file above the soft cap needs a baseline entry, which is a ceiling:
   the file may shrink freely and may not grow past the recorded count.
   Remove the entry once the file is back under the cap."
-- `plans/156-ci-and-test-hardening-for-a-public-repo.md` item 4: append
-  "(landed by plan 166; the 'incorrect counts' check is 'counts above the
-  recorded ceiling')".
+- `plans/README.md` removal log (plan 156 entry): append the ceiling
+  semantics ("the 'incorrect counts' check is 'counts above the recorded
+  ceiling'") so the item 4 reconciliation survives the plan's removal.
 
 **Verify**: policy scans and lint pass; full suite passes.
 
@@ -177,15 +185,16 @@ file's actual line count, not the recorded number (the regression check plan
 - [ ] `python3.14 tools/check_source_limits.py` → `failures=0` with the pruned baseline.
 - [ ] `tests/test_source_limits.py` passes, including the live-baseline assertion.
 - [ ] Full suite, compile, lint and policy scans pass; only in-scope files changed.
-- [ ] `plans/README.md` status rows for 166 (DONE) and 156 (item 4 note) updated.
+- [ ] `plans/README.md` status row for 166 (DONE) and the 156 removal-log entry (ceiling note) updated.
 
 ## STOP conditions
 
 - The pruned baseline leaves a file above its hard cap: that is a real
   violation the old exact-match rule was hiding; report it, do not raise the
   hard cap.
-- Plan 156's executor has already changed the tool: reconcile against their
-  version rather than this excerpt.
+- The landed tool differs from this excerpt (plan 156 has landed since):
+  reconcile against the live `tools/check_source_limits.py` and the 156
+  removal-log entry rather than this excerpt.
 
 ## Maintenance notes
 

@@ -138,7 +138,6 @@ that executes this wave; it carries the execution order and the owner gates.
 | [153](153-model-identity-and-upstream-ids.md) | Model identity: separate the client slug from the upstream id | TODO | after 152; serialize with 154 on `ai_router/catalogue.py` |
 | [154](154-catalogue-size-budget.md) | Catalogue size budget: a roster that can grow | TODO | after 153; serialize with 135 and 151 on `ai_router/catalogue.py` |
 | [155](155-client-contract.md) | The client contract: one owner for who sees what | TODO | after 153/154; coordinate 113/120/121/148 |
-| [156](156-ci-and-test-hardening-for-a-public-repo.md) | CI and test hardening for a public repository | TODO: targeted platform checks; blanket three-OS push matrix superseded by owner-requested minimal CI | independent; serialize with 146 on `tests/test_ingress_guards.py` |
 | [157](157-source-reference-hygiene.md) | Source reference hygiene: every plan pointer resolves | TODO | after 159; quiet tree, one session |
 | [158](158-changelog-and-docs-restructure.md) | Changelog and docs restructure for a first-time reader | TODO | after the public-readiness documentation pass merges |
 | [159](159-backlog-consolidation-and-acceptance-split.md) | Backlog consolidation and the acceptance split | TODO | after the public-readiness backlog pass merges; before 157 |
@@ -194,7 +193,7 @@ them; no new numbers):
 
 Work top to bottom; stop at owner gates and report.
 
-- **Local, now:** 166, 163, 161, 162, 164, 165, 156, 152, 153, 154, 155,
+- **Local, now:** 166, 163, 161, 162, 164, 165, 152, 153, 154, 155,
   160, 131, 135 (remaining stages), 151 (stages 1-2); then 159, 157 and 158
   once the public-readiness backlog and documentation passes have merged.
   163 and 164 both edit `ai_router/router.py` and 162 and 164 both edit
@@ -280,6 +279,36 @@ record the results; git history holds the plan text.
 Note: 056's Stage 4 cross-OS CI runners were never built; that residual is
 subsumed by Plan 116 Stage 7 and by plan 156, and the single-Ubuntu CI scope
 was a recorded cost decision (see `.github/workflows/check.yml`).
+
+Removed 2026-09-13 with PR #111 (lands on `develop` at merge): 156
+(targeted CI and test hardening). Delivered: scoped native installer jobs on macOS and
+Windows plus the single required `Test` gate (`tools/ci_scope.py`,
+`.github/workflows/check.yml`, `.github/workflows/release.yml`,
+`.github/actions/setup`); the real Python 3.9 installer-surface check
+(`tools/check_installer_python39.py`); exact source-limits baseline
+validation (`tools/check_source_limits.py`); seeded ingress input-shape
+coverage (`tests/test_ingress_shapes.py`) and router-level SSE framing
+coverage (`tests/test_sse_framing.py`). Two live-run findings were fixed,
+not skipped: the Windows listener now binds exclusively
+(`SO_EXCLUSIVEADDRUSE`, `SO_REUSEADDR` off, hijack-shape probe test) and
+the macOS dialog compile tests compile against an always-present app id
+with the production bundle id still string-pinned. Gate proof: run
+34735263716 failed `Test` (job 103665966276) with `an installer job did
+not succeed: success, failure, failure, success`. Green run 34752952140 on
+`a20254b` (CPython 3.14.7 everywhere): Change scope 5 s (ubuntu-24.04),
+Installer 3.9 17 s (`loaded=26 parsed=6 failures=0` on 3.9.25),
+Windows 38 s (windows-2025, 352 tests), macOS 4m16s (macos-26-arm64,
+352 tests), Test 4m20s (ubuntu-24.04, 1410 tests). Residuals: a real
+Windows restart/rebind acceptance run is still required before any stable
+release (exclusive rebind can wait out lingering connections after an
+abrupt exit); dialog compile coverage no longer resolves the production
+bundle id in CI; the scope job runs PR-controlled `tools/ci_scope.py`
+(release runs the installer jobs unconditionally; plan 144 Step 2
+owns enforcement via CODEOWNERS on `.github/` plus `tools/ci_scope.py` and
+base-branch scoping). Plan 166's Step 5 note to the 156 file is superseded:
+156 item 4's exact-baseline validation landed with this PR, tracked in
+`tools/check_source_limits.py` and `tests/test_source_limits.py`. Git history
+holds the removed plan text.
 
 ## Renumbering map (old to new, 2026-09-10)
 

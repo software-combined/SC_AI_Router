@@ -2,6 +2,18 @@
 
 ## 0.6.48
 
+- Installer-changing pull requests now run native installer checks on macOS
+  and Windows plus a real Python 3.9 surface check, scoped by
+  `tools/ci_scope.py`; the single required `Test` gate fails when any
+  scoped job fails. Releases run the installer jobs unconditionally.
+- The Windows loopback listener binds exclusively (`SO_EXCLUSIVEADDRUSE`,
+  `SO_REUSEADDR` off), so a second local process can no longer bind the
+  same port and receive router traffic. The dialog liveness probe test
+  tolerates transient cold-probe stalls on Windows CI.
+- The source-limits baseline check rejects nonexistent files, incorrect
+  counts and entries below their soft cap instead of drifting silently.
+- Seeded ingress input-shape coverage and router-level SSE framing cases
+  pin the rejection and framing contracts without adding guards.
 - Carried history no longer splits a parallel tool group. On a thread that
   switched models the `<model_switch>` marker keeps the portable pass running,
   and its tool-search note was written between a group's calls and their

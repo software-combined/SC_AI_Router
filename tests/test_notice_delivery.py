@@ -169,20 +169,32 @@ class ShowPendingTests(unittest.TestCase):
     def test_recycled_pid_is_not_mistaken_for_a_dialog(self):
         # A live process that is not one of our dialogs must not swallow a
         # notice: the liveness probe checks the recorded command line.
+        # Sleepers outlive the poll's worst case (6 x 5 s probe
+        # timeouts): a stalled probe must observe live processes.
         foreign = subprocess.Popen(
-            [sys.executable, '-c', 'import time; time.sleep(20)'])
+            [sys.executable, '-c', 'import time; time.sleep(45)'])
         ours = subprocess.Popen(
-            [sys.executable, '-c', 'import time; time.sleep(20)',
+            [sys.executable, '-c', 'import time; time.sleep(45)',
              'display dialog "SCG Router"'])
         try:
             self.assertFalse(notice_mod._pid_alive(foreign.pid))
-            self.assertTrue(notice_mod._pid_alive(ours.pid))
+            self.assertTrue(self._poll_alive(ours.pid))
             self.assertFalse(notice_mod._pid_alive(4 * 10 ** 9))
         finally:
             foreign.kill()
             ours.kill()
             foreign.wait()
             ours.wait()
+
+    def _poll_alive(self, pid):
+        # One Windows probe is a cold powershell plus a CIM query, and
+        # under CI load a single attempt can time out for a live dialog.
+        # Production treats that as "unsure, show again", so poll the
+        # steady-state answer; a broken probe still fails every attempt.
+        for _ in range(6):
+            if notice_mod._pid_alive(pid):
+                return True
+        return False
 
     def test_a_wedged_liveness_probe_is_bounded(self):
         # The scheduled updater waits on this process, so a hanging
@@ -230,7 +242,10 @@ class ShowPendingTests(unittest.TestCase):
             # The extraction directory is gone, as it is after a scheduled
             # update; the dialog must still reference a usable icon.
             shutil.rmtree(bundle)
-            cmd = notice_mod.dialog_command('1.0.1', icon=str(durable))
+            # Compile against an app every Mac has: osacompile resolves
+            # `tell application id`, and hosted runners do not install Codex.
+            with mock.patch.object(notice_mod, 'CODEX_BUNDLE_ID', 'com.apple.finder'):
+                cmd = notice_mod.dialog_command('1.0.1', icon=str(durable))
             self.assertIn(str(durable), cmd[cmd.index('-e') + 1])
             self.assertNotIn(str(bundle), cmd[cmd.index('-e') + 1])
             with tempfile.TemporaryDirectory() as scratch:
