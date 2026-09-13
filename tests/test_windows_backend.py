@@ -376,7 +376,7 @@ class ControlTests(unittest.TestCase):
         _backend({}, calls).uninstall('/home/x')
         ended = [c[3] for c in calls if c[:3] == ['schtasks', '/end', '/tn']]
         deleted = [c[3] for c in calls if c[:3] == ['schtasks', '/delete', '/tn']]
-        self.assertEqual(deleted, ['CodexMixedModelRouter', 'CodexMixedModelRouterUpdate'])
+        self.assertEqual(deleted, [backend.ROUTER_TASK, backend.UPDATE_TASK, backend.EXPRESS_TASK])
         self.assertEqual(ended, deleted)
         for task in deleted:
             self.assertLess(calls.index(['schtasks', '/end', '/tn', task]),

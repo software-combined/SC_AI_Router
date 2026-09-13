@@ -256,6 +256,7 @@ def _read_feed_pass(feed, etag, read_feed, sleep):
 def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
     """One applying pass; behavior matches the pre-split code."""
     sync_seams()
+    express_only = getattr(args, 'express_only', False)
     feed = args.feed or _svc.channel_feed(home)
     # Feeds and bundles come from the public feed origin; an injected fake
     # keeps its one-argument shape all the way down.
@@ -266,6 +267,8 @@ def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
     etag = etag_path.read_text().strip() if etag_path.exists() else None
     status, body, etag = _read_feed_pass(feed, etag, read_feed, sleep)
     if status == 304:
+        if express_only:
+            return 0
         _record_pass(home, error='')
         print(f"up to date {_svc.current_version(home)}")
         return 0
@@ -273,6 +276,10 @@ def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
         latest = json.loads(body.decode())
     except ValueError:
         raise UpdateError('feed_invalid', 'feed document is not JSON')
+    if not isinstance(latest, dict):
+        raise UpdateError('feed_invalid', 'feed document is not an object')
+    if express_only and latest.get('express') is not True:
+        return 0  # Leave ETag/serial untouched so the regular job still sees it.
     try:
         _svc.check_serial(home, latest, pinned=bool(args.feed))
     except SystemExit as exc:
@@ -282,12 +289,16 @@ def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
         raise UpdateError('feed_untrusted',
                           'feed points off the trusted update origin; refusing')
     if not newer(latest['version'], _svc.current_version(home)):
+        if express_only:
+            return 0  # The pointer may be mid-install; do not mask a later rollback.
         if etag:
             etag_path.write_text(etag + '\n')
         _record_pass(home, error='')
         print(f"up to date {_svc.current_version(home)}")
         return 0
     failed = _svc.update_failures(home).get(latest['version'], 0)
+    if express_only and failed:
+        return 0  # Retry failures on the regular cadence, not every minute.
     if failed >= MAX_VERSION_FAILURES:
         if etag:
             etag_path.write_text(etag + '\n')
@@ -382,9 +393,13 @@ def do_update(args, _fetch=None, _read_feed=None, _sleep=None, _announce=None):
     import random
     home = Path(args.home).expanduser()
     sleep = _sleep or time.sleep
-    sleep(random.uniform(0, 120))
+    sleep(random.uniform(0, 10 if getattr(args, 'express_only', False) else 120))
     try:
-        return _apply_update(args, home, sleep, _fetch, _read_feed, _announce)
+        # Serialize normal/Express parents without holding the child's install lock.
+        with _svc.install_lock(home, 'update.lock') as held:
+            if not held:
+                return 0
+            return _apply_update(args, home, sleep, _fetch, _read_feed, _announce)
     except UpdateError as exc:
         _record_pass(home, error=exc.error_code)
         raise

@@ -600,6 +600,7 @@ def build_parser():
                         help='Read-only: print the installed and available versions.')
     parser.add_argument('--update', action='store_true',
                         help='Apply an available update (the scheduled action).')
+    parser.add_argument('--express-only', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--rollback', action='store_true',
                         help='List installed releases; with --to, restore one.')
     parser.add_argument('--to', default=None,
@@ -641,6 +642,7 @@ def build_parser():
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
+    if args.express_only and not args.update: raise SystemExit('--express-only needs --update')
     if args.to and not args.rollback:
         raise SystemExit('--to needs --rollback')
     if args.rollback and args.to:

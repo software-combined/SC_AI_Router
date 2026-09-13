@@ -26,7 +26,8 @@ def run_block(name):
 class ReleaseShellTests(unittest.TestCase):
     def test_release_uses_existing_tag_and_matching_download_url(self):
         base = (ROOT / 'packaging/VERSION').read_text().strip()
-        for channel, suffix in [('stable', ''), ('beta', '-beta')]:
+        for channel, suffix in [('stable', ''), ('beta', '-beta'),
+                                ('stable', '-express'), ('beta', '-beta-express')]:
             with self.subTest(channel=channel), tempfile.TemporaryDirectory() as tmp:
                 work = Path(tmp)
                 # Build the real bundle; gh is the sole external boundary.
@@ -48,6 +49,9 @@ class ReleaseShellTests(unittest.TestCase):
                                cwd=work, env=env, check=True, capture_output=True)
                 latest = json.loads((work / 'dist/latest.json').read_text())
                 self.assertEqual(latest['version'], f'{base}.42')
+                self.assertEqual(latest['channel'], channel)
+                self.assertIs(latest['express'], suffix.endswith('-express'))
+                self.assertEqual((work / 'env').read_text(), f'CHANNEL={channel}\n')
                 self.assertEqual(latest['url'],
                                  f'https://github.com/example/router/releases/download/{tag}/'
                                  f'ai-router-{base}.42.tar.gz')
