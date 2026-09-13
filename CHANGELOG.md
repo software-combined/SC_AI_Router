@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.47
+
+- A failed stream now records why the upstream ended it: the terminal event,
+  the provider's error code, or an incomplete response's reason. An incomplete
+  response is logged as `UPSTREAM_INCOMPLETE` instead of the generic upstream
+  failure, and provider message text is never recorded.
+- A client that disconnects before a JSON reply is flushed (health and model
+  listing polls) no longer raises out of the handler, so it no longer writes a
+  BrokenPipeError traceback to the service log.
+
 ## 0.6.46
 
 - Express release tags publish urgent updates on either stable

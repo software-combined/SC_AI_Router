@@ -5,6 +5,50 @@ from . import errors, sse
 
 _CONTEXT_MESSAGE = re.compile(
     r'The prompt is too long: ([0-9]{1,16}), model maximum context length: ([0-9]{1,16})')
+MAX_DETAIL_CHARS = 64
+# Same rule the HTTP path applies to a provider code (upstream._CODE_SHAPE):
+# an upstream must not get a sentence into the log, so a value that is not
+# already code-shaped is dropped rather than recorded.
+_CODE_SHAPE = re.compile(r'[A-Za-z0-9_.\-]{1,%d}' % MAX_DETAIL_CHARS)
+
+
+def _bounded(value):
+    """A short code-shaped scalar from provider metadata; never prose."""
+    if isinstance(value, bool) or not isinstance(value, (str, int)):
+        return None
+    text = str(value).strip()[:MAX_DETAIL_CHARS]
+    return text if _CODE_SHAPE.fullmatch(text) else None
+
+
+def _error_envelope(failure, event):
+    """The provider's error object from either terminal envelope shape."""
+    for source in (failure, event):
+        candidate = source.get('error') if isinstance(source, dict) else None
+        if isinstance(candidate, dict):
+            return candidate
+    return None
+
+
+def _record_detail(metrics, kind, failure, event):
+    """Record why the provider ended the stream, bounded to fixed metadata.
+
+    A reason or code explains an Anthropic-style mid-stream refusal without
+    ever logging the message text, which can quote prompt content.
+    """
+    metrics['terminal_event'] = kind
+    if kind == 'response.incomplete':
+        details = failure.get('incomplete_details') if isinstance(failure, dict) else None
+        reason = details.get('reason') if isinstance(details, dict) else None
+        value = _bounded(reason)
+        if value:
+            metrics['upstream_reason'] = value
+        return
+    envelope = _error_envelope(failure, event)
+    if envelope is None:
+        return
+    value = _bounded(envelope.get('code')) or _bounded(envelope.get('error_type'))
+    if value:
+        metrics['upstream_code'] = value
 
 
 def _context_error(data, depth=0):
@@ -61,7 +105,13 @@ def normalize(chunks, metrics):
             failure = {'error': event}
         context = (kind != 'response.incomplete'
                    and (_context_error(failure) or _context_error(event)))
-        metrics['code'] = 'context_length_exceeded' if context else 'UPSTREAM_STREAM_FAILED'
+        _record_detail(metrics, kind, failure, event)
+        if context:
+            metrics['code'] = 'context_length_exceeded'
+        elif kind == 'response.incomplete':
+            metrics['code'] = 'UPSTREAM_INCOMPLETE'
+        else:
+            metrics['code'] = 'UPSTREAM_STREAM_FAILED'
         metrics.pop('served_model', None)
         if context:
             frame = sse.frame(json.dumps({

@@ -311,6 +311,25 @@ window, and use per-request ratios, never ratios of unrelated
 percentiles. Paid direct-versus-router comparisons need separate
 explicit authority.
 
+## Failed streams (why the provider ended it)
+
+`request_failed` records a terminal event the upstream sent inside a `200`
+stream. `code` is `context_length_exceeded` for a context-limit refusal,
+`UPSTREAM_INCOMPLETE` when the provider reported an incomplete response, and
+`UPSTREAM_STREAM_FAILED` for any other terminal error. Three fields say why:
+
+| Field | Meaning |
+|---|---|
+| `terminal_event` | `response.failed`, `response.incomplete`, or `error` |
+| `upstream_reason` | the `incomplete_details.reason` enum, when reported |
+| `upstream_code` | the error envelope's `code` or `error_type`, when present |
+
+Both details must be code-shaped (letters, digits, dot, dash, underscore) and
+at most 64 characters; anything else, including message text, is dropped
+rather than recorded, because provider prose can quote prompt content. A
+missing detail means the provider did not say why, or said it in a form this
+rule refuses to record.
+
 ## Stream identity observation (last-observed, not proof)
 
 Tool-free responses carry an optional identity observer: bytes forward
