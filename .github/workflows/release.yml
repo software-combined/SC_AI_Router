@@ -19,18 +19,67 @@ env:
   FEED_ROLE: arn:aws:iam::651116729473:role/scg-router-feed-publisher
 
 jobs:
+  installer-macos:
+    name: Installer (macOS)
+    # A release ships the installer half to macOS and Windows hosts, so the
+    # native checks run before anything is published (Plan 156).
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Native installer tests
+        shell: bash
+        run: python -m unittest $(python tools/ci_scope.py --installer-tests)
+
+  installer-windows:
+    name: Installer (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Native installer tests
+        shell: bash
+        run: python -m unittest $(python tools/ci_scope.py --installer-tests)
+
+  installer-python39:
+    name: Installer (Python 3.9)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          python-version: "3.9"
+      - name: Installer surface imports on 3.9
+        run: python tools/check_installer_python39.py
+
   release:
     name: Build and publish
+    needs: [installer-macos, installer-windows, installer-python39]
     # Check both identities: reruns use the original actor's privileges.
-    if: >-
-      contains(fromJSON('["SC-Cyril", "BrentJMaxwell"]'), github.actor) &&
-      contains(fromJSON('["SC-Cyril", "BrentJMaxwell"]'), github.triggering_actor)
+    # !cancelled() keeps this job visible when an installer check failed, so
+    # the required step below fails it; a cancelled run stops the job instead
+    # of letting a publish finish.
+    if: ${{ !cancelled() && contains(fromJSON('["SC-Cyril", "BrentJMaxwell"]'), github.actor) && contains(fromJSON('["SC-Cyril", "BrentJMaxwell"]'), github.triggering_actor) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: write
       id-token: write
     steps:
+      - name: Required installer checks
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: |
+          echo "an installer check did not succeed: ${{ join(needs.*.result, ', ') }}"
+          exit 1
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
