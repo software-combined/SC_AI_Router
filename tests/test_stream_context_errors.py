@@ -101,6 +101,28 @@ class StreamContextTests(unittest.TestCase):
         self.assertEqual(failures[0].kwargs['upstream_code'], 'provider_unavailable')
         self.assertNotIn('private-input', str(logs))
 
+    def test_openrouter_prompt_refusal_keeps_one_actionable_line(self):
+        # 2026-09-13: OpenRouter refused a converted body after the stream had
+        # opened and the client rendered the whole provider schema dump.
+        wall = ("204 request validation errors: Extra inputs are not permitted, "
+                "field: 'messages[12].tool_calls[0].tool_kind', value: 'custom'")
+        wire = sse.frame(json.dumps({'type': 'response.failed', 'response': {
+            'status': 'failed',
+            'error': {'code': 'invalid_prompt', 'message': wall}}}).encode())
+        body, logs = self.request(wire)
+        event = json.loads(next(sse.blocks(io.BytesIO(body)))[1])
+        self.assertEqual(event['type'], 'response.failed')
+        self.assertEqual(event['response']['error']['code'], 'UPSTREAM_INVALID_PROMPT')
+        self.assertNotIn(b'Extra inputs are not permitted', body)
+        failures = [c for c in logs if c.args[0] == 'request_failed']
+        self.assertEqual(len(failures), 1)
+        self.assertEqual(failures[0].kwargs['code'], 'UPSTREAM_INVALID_PROMPT')
+        self.assertEqual(failures[0].kwargs['terminal_event'], 'response.failed')
+        self.assertEqual(failures[0].kwargs['upstream_code'], 'invalid_prompt')
+        self.assertNotIn('Extra inputs are not permitted', str(logs))
+        self.assertNotIn('served_model', failures[0].kwargs)
+        self.assertFalse(any(c.args[0] == 'request_completed' for c in logs))
+
     def test_non_scalar_provider_detail_is_never_recorded(self):
         wire = sse.frame(json.dumps({'type': 'response.failed', 'response': {
             'error': {'code': {'nested': 'private-input'},
