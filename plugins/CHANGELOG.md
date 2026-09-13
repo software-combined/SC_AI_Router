@@ -1,5 +1,13 @@
 # Changelog
 
+## scg-subagents 0.5.0 — 2026-09-13
+
+- Add the department delegation briefs: `sales-subagent`, `csm-subagent`,
+  `support-subagent`, `finance-subagent` and `operations-subagent`. Each brief
+  sets role, inputs, authority and acceptance for one department; model choice
+  stays with `optimal-subagents`. Starting models follow the researched
+  evidence (2026-09-12 snapshot, live-checked 2026-09-13).
+
 ## scg-review 0.4.2 and scg-subagents 0.4.0 — 2026-09-13
 
 - Refresh the `scg-review` bundled routing copy for the rename; the review
