@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.46
+
+- Express release tags publish urgent updates on either stable
+  (`v<VERSION>-express`) or beta (`v<VERSION>-beta-express`).
+- macOS, Windows and Linux gain a separate minute Express check using the
+  existing verified installer. Ordinary releases keep the four-hour schedule.
+  Existing machines gain this capability through their next ordinary update.
+- Express checks preserve channel selection, install locks, health rollback
+  and failure limits. After one failed attempt, retries use the normal cadence.
+  Older restored releases skip the Express check without losing regular updates.
+
 ## 0.6.45
 
 - Importing the router remover no longer changes Codex settings or stops the

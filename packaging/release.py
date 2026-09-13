@@ -5,6 +5,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import tarfile
 import importlib.util
 from datetime import datetime, timezone
@@ -64,12 +65,21 @@ def bundle_files(root):
     )
 
 
+def release_tag(tag, base_version):
+    """Express is urgency on the existing channel, never a version suffix."""
+    match = re.fullmatch(r'v' + re.escape(base_version) + r'(-beta)?(-express)?', tag)
+    if not match:
+        raise SystemExit(f'tag {tag} does not match packaging/VERSION {base_version}')
+    return ('beta' if match[1] else 'stable'), bool(match[2])
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument('--out', required=True)
     parser.add_argument('--build', type=int, default=0)
     parser.add_argument('--sha', default='')
-    parser.add_argument('--channel', default='stable')
+    parser.add_argument('--channel', choices=('stable', 'beta'))
+    parser.add_argument('--tag', help='Validated release tag, including optional -beta and -express.')
     parser.add_argument('--url-base')
     parser.add_argument('--gen-key', metavar='OUT',
                         help='write a fresh 32-byte hex release signing seed (owner-only file) and exit')
@@ -97,6 +107,10 @@ def main(argv=None):
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     base_version = (root / 'packaging' / 'VERSION').read_text().strip()
+    channel, express = release_tag(args.tag, base_version) if args.tag else (args.channel or 'stable', False)
+    if args.channel and args.channel != channel:
+        raise SystemExit('--channel does not match release tag')
+    args.channel = channel
     if args.build < 0:
         raise SystemExit('--build must be >= 0')
     version = f'{base_version}.{args.build}'
@@ -123,11 +137,11 @@ def main(argv=None):
     tarball = gzip.compress(tar_buffer.getvalue(), mtime=0)
     tarball_name = f'ai-router-{version}.tar.gz'
     (out_dir / tarball_name).write_bytes(tarball)
-    tag = f'v{version}' if args.channel == 'stable' else f'v{version}-beta'
+    tag = args.tag or (f'v{version}' if args.channel == 'stable' else f'v{version}-beta')
     base = args.url_base or f'https://github.com/{REPO}/releases/download/{tag}'
     latest = {'version': version, 'url': f'{base}/{tarball_name}',
               'sha256': hashlib.sha256(tarball).hexdigest(), 'min_python': MIN_PYTHON,
-              'serial': args.build,
+              'serial': args.build, 'channel': channel, 'express': express,
               'published': datetime.now(timezone.utc).isoformat(timespec='seconds')}
     (out_dir / 'latest.json').write_text(json.dumps(latest, indent=2) + '\n')
     # The bootstrap resolves its runtime from this table, never from a
