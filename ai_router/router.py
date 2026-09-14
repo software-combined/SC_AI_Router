@@ -166,7 +166,7 @@ class Handler(BaseHTTPRequestHandler):
         policy = None
         self.connection.settimeout(120)
         try:
-            raw, payload, size = self.read_body()
+            raw, payload, size, decoded_len = self.read_body()
             read_done = time.monotonic()
             # Snapshot before provider.prepare mutates or strips the payload.
             has_image = _payload_has_image(payload)
@@ -182,6 +182,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.error(errors.bearer_for_no_subscription_only())
             compact_call = policy.compaction_call(provider, model, path, payload)
             if compact_call is not None:
+                if decoded_len > MAX_BODY:
+                    raise InvalidSize('Decoded request is too large')
                 # Compact before prepare(): a rejected effort must not block it.
                 # Key lookup stays outside the send try so credential
                 # errors keep 401/400, not 502.
@@ -198,6 +200,10 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 prepared = subscription_fallback.prepare(provider, model, path, payload,
                                                          raw, dict(self.headers), self.server)
+                # Passthrough keeps the client's compressed bytes; use the
+                # decoded length there so a 16-64 MiB zstd turn cannot leak.
+                if (decoded_len if prepared.body is raw else len(prepared.body)) > MAX_BODY:
+                    raise InvalidSize('Decoded request is too large')
             except local_services.LocalAnswer as exc:
                 return self.error(exc)
             if os.environ.get('ROUTER_DEBUG'):

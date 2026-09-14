@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.63
+
+- A long Codex turn that is only oversized because it repeats full
+  `tool_search` schemas is decoded far enough for prepare to slim those
+  items, then refused only if the prepared upstream body is still over
+  16 MiB. Uncompressed requests stay capped at 16 MiB; zstd may expand
+  at most four times that far.
+
 ## 0.6.62
 
 - Feed signature enforcement is live: the compiled `FEED_PUBLIC_KEY` is

@@ -134,6 +134,104 @@ class IngressShapeTests(unittest.TestCase):
         response.read()
         self.assertEqual(len(recorded), 1)
 
+    def test_zstd_tool_search_history_is_slimmed_before_the_size_cap(self):
+        schema = 'x' * 80
+        tool = {'type': 'function', 'name': 'echo', 'description': 'Echo',
+                'parameters': {'type': 'object', 'properties': {'q': {'type': 'string',
+                               'description': schema}}}}
+        items = []
+        for i in range(8):
+            items.append({'type': 'tool_search_call', 'call_id': 's%d' % i,
+                          'arguments': {'query': 'echo'}})
+            items.append({'type': 'tool_search_output', 'call_id': 's%d' % i,
+                          'tools': [tool]})
+        payload = {'model': 'z-ai/glm-5.3', 'input': items,
+                   'tools': [{'type': 'tool_search',
+                              'parameters': {'type': 'object'}}]}
+        wire = json.dumps(payload).encode()
+        packed = zstd.compress(wire)
+        recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
+        cap = 2700
+        with mock.patch.object(router_mod, 'MAX_BODY', cap):
+            self.assertGreater(len(wire), cap)
+            self.assertLess(len(packed), cap)
+            self.assertLess(len(wire), cap * 4)
+            response = self.raw_request(
+                '/%s/responses' % TOKEN,
+                ['Content-Type: application/json', 'Content-Encoding: zstd',
+                 'Content-Length: %d' % len(packed)], packed)
+            self.assertEqual(response.status, 200)
+            response.read()
+        self.assertEqual(len(recorded), 1)
+        sent = json.loads(recorded[0][3])
+        self.assertLess(len(recorded[0][3]), 2700)
+        self.assertTrue(any(item.get('type') == 'function_call_output'
+                            for item in sent['input']))
+        self.assertFalse(any(item.get('type') == 'tool_search_output'
+                             for item in sent['input']))
+
+    def test_zstd_body_still_too_large_after_prepare_is_400(self):
+        payload = {'model': 'z-ai/glm-5.3',
+                   'input': [{'type': 'message', 'role': 'user',
+                              'content': 'x' * 1200}]}
+        packed = zstd.compress(json.dumps(payload).encode())
+        recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
+        with mock.patch.object(router_mod, 'MAX_BODY', 900):
+            response = self.raw_request(
+                '/%s/responses' % TOKEN,
+                ['Content-Type: application/json', 'Content-Encoding: zstd',
+                 'Content-Length: %d' % len(packed)], packed)
+            self.rejected(response, 400, 'BODY_TOO_LARGE', recorded)
+
+    def test_zstd_passthrough_still_uses_decoded_size(self):
+        payload = {'model': 'gpt-6-astra',
+                   'input': [{'type': 'message', 'role': 'user',
+                              'content': 'x' * 1200}]}
+        packed = zstd.compress(json.dumps(payload).encode())
+        recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
+        state = _test_state(_auth_file(self))
+        state['openai_models'] = ['gpt-6-astra']
+        server = _start_server(state)
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        with mock.patch.object(router_mod, 'MAX_BODY', 900):
+            conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
+            self.addCleanup(conn.close)
+            conn.putrequest('POST', '/%s/responses' % TOKEN)
+            conn.putheader('Content-Type', 'application/json')
+            conn.putheader('Content-Encoding', 'zstd')
+            conn.putheader('Content-Length', str(len(packed)))
+            conn.endheaders()
+            conn.send(packed)
+            self.rejected(conn.getresponse(), 400, 'BODY_TOO_LARGE', recorded)
+
+    def test_zstd_decoded_beyond_four_times_the_cap_is_400(self):
+        payload = {'model': 'z-ai/glm-5.3',
+                   'input': [{'type': 'message', 'role': 'user',
+                              'content': 'x' * 5000}]}
+        packed = zstd.compress(json.dumps(payload).encode())
+        recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
+        with mock.patch.object(router_mod, 'MAX_BODY', 200):
+            response = self.raw_request(
+                '/%s/responses' % TOKEN,
+                ['Content-Type: application/json', 'Content-Encoding: zstd',
+                 'Content-Length: %d' % len(packed)], packed)
+            self.rejected(response, 400, 'BODY_TOO_LARGE', recorded)
+
+    def test_zstd_compaction_over_the_cap_is_400(self):
+        payload = {'model': 'z-ai/glm-5.3',
+                   'input': [{'type': 'message', 'role': 'user',
+                              'content': 'x' * 1200},
+                             {'type': 'compaction_trigger'}]}
+        packed = zstd.compress(json.dumps(payload).encode())
+        recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
+        with mock.patch.object(router_mod, 'MAX_BODY', 900):
+            response = self.raw_request(
+                '/%s/responses' % TOKEN,
+                ['Content-Type: application/json', 'Content-Encoding: zstd',
+                 'Content-Length: %d' % len(packed)], packed)
+            self.rejected(response, 400, 'BODY_TOO_LARGE', recorded)
+
     def test_garbage_zstd_and_unknown_encodings_are_rejected(self):
         cases = (
             ('garbage zstd', 'zstd', b'not-a-zstd-frame'),

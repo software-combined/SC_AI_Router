@@ -14,6 +14,9 @@ ROUTER_HOME = default_home()
 STATE = state_mod.path(ROUTER_HOME)
 REQUIRED_STATE = {'port': int, 'token': str, 'openai_models': list}
 MAX_BODY = 16 * 1024 * 1024
+# zstd may expand this far so prepare can slim tool_search schemas;
+# the prepared upstream body is still refused above MAX_BODY.
+MAX_DECODE_FACTOR = 4
 TOKEN_MIN_LENGTH = 32
 TOKEN_ALPHABET = frozenset(string.ascii_letters + string.digits + '_-')
 
