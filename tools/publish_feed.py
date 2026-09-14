@@ -149,6 +149,7 @@ def _describe(args, latest, bundle):
     print(f'dry run: bundle {bundle} sha256 {latest["sha256"][:12]}')
     print(f'dry run: would publish s3://{args.bucket}/{BUNDLE_PREFIX}{bundle} when absent')
     print(f'dry run: would publish s3://{args.bucket}/{args.channel}/latest.json')
+    print(f'dry run: would publish s3://{args.bucket}/{args.channel}/models.json')
     print(f'dry run: would write {FEED_DOCUMENT} and {RELEASE_DOCUMENT} under {args.dist}')
     if args.distribution_id:
         print('dry run: would invalidate the channel feed document')
@@ -175,6 +176,11 @@ def main(argv=None):
     outcome = publish_bundle(args.bucket, BUNDLE_PREFIX + bundle, path, latest['sha256'])
     publish_document(args.bucket, f'{args.channel}/latest.json',
                      dist / FEED_DOCUMENT, FEED_CACHE_CONTROL)
+    models_src = Path('ai_router/models.json')
+    if models_src.is_file():
+        publish_document(args.bucket, f'{args.channel}/models.json',
+                         models_src, FEED_CACHE_CONTROL)
+        print(f'published {args.channel} models.json')
     print(f'published {args.channel} {latest["version"]}: bundle {outcome}')
     if args.distribution_id:
         target = f'/{args.channel}/latest.json'
