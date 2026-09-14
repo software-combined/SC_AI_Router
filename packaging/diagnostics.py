@@ -53,22 +53,8 @@ _MAX_FAILURES = _updater.MAX_VERSION_FAILURES
 
 
 def _key_private(key_file):
-    """Owner-only gate mirroring credentials.key_for() precedence.
-
-    POSIX checks mode bits; Windows defers to the icacls owner-only check
-    (st_mode carries no ACL meaning on NTFS). A failed Windows check means
-    not usable, never an exception: this is read-only diagnostics.
-    """
-    if os.name == 'nt':
-        try:
-            _winacl.check(key_file)
-            return True
-        except SystemExit:
-            return False
-    try:
-        return not (key_file.stat().st_mode & 0o077)
-    except OSError:
-        return False
+    """Owner-only gate; single owner is winacl.owner_only (Plan 131)."""
+    return _winacl.owner_only(key_file)
 
 
 def _provider_defs():

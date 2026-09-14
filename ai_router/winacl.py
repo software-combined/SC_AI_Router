@@ -84,3 +84,23 @@ def _verify(path, run):
             # real machine.
             continue
         raise SystemExit('%s is readable by %s; fix with icacls' % (path, account))
+
+
+def owner_only(path):
+    """True when one key file is readable by its owner only.
+
+    POSIX checks mode bits; Windows defers to the icacls owner-only check
+    (st_mode carries no ACL meaning on NTFS). Never raises: a failed check
+    means not usable. Single owner for the key-privacy gate (Plan 131).
+    """
+    import os as _os
+    if _os.name == 'nt':
+        try:
+            check(path)
+            return True
+        except SystemExit:
+            return False
+    try:
+        return not (path.stat().st_mode & 0o077)
+    except OSError:
+        return False
