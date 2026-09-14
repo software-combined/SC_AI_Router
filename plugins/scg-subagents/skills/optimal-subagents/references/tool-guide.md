@@ -1,14 +1,25 @@
 # Subagent tools: parent and child
 
 Use the active runtime's schema as authority. The following examples match the
-`collaboration` tools exposed in Codex on 2026-09-12. Other runtimes must discover
+collaboration tools exposed in Codex on 2026-09-12. Other runtimes must discover
 their equivalent; do not paste these shapes into a different API.
+
+For externally billed recipients, use `collaboration_plaintext.spawn_agent`,
+`collaboration_plaintext.send_message` and `collaboration_plaintext.followup_task`
+when the router exposes them. Use `fork_turns="none"` for external children:
+encrypted inherited history cannot be translated. Keep using the plaintext
+namespace on later turns even if saved calls appear under `collaboration`;
+Codex executes those aliases under their native names. Native OpenAI recipients
+keep the original encrypted `collaboration` tools. If the required plaintext
+surface is unavailable, apply the transport-failure policy; an encrypted
+message containing a file path is not a readable fallback.
 
 ## Parent: launch and brief
 
 `spawn_agent` takes `task_name`, `message`, optional `fork_turns`, `model`, and
 `reasoning_effort`. Task names use lowercase letters, digits and underscores.
 Store the returned agent id and canonical task name, not just your chosen label.
+Send this external-model example through `collaboration_plaintext.spawn_agent`:
 
 The assignment message itself must begin with the selected model, fixed effort,
 role/pass and task context, including follow-up assignments and replacement
@@ -33,8 +44,9 @@ from descriptive text alone is not proof of rejection. A schema enum or actual
 runtime prohibition still applies. Do not edit the router to force availability.
 
 Full-history forks (`fork_turns` omitted or `"all"`) inherit parent model/effort
-and do not accept overrides in this runtime. For an explicit model use `"none"`
-or a supported positive number string such as `"3"`. Give a no-history child
+and do not accept overrides in this runtime. For an explicit native model use
+`"none"` or a supported positive number string such as `"3"`; external children
+require `"none"`. Give a no-history child
 all necessary task context. Do not send secrets or unnecessary conversation.
 
 A successful spawn proves request acceptance only. Record requested model/effort
@@ -47,11 +59,12 @@ and returned/served identity if provided; otherwise record served identity as
 {"target":"inspect_parser","message":"The failing input is an empty array, not an empty string. Include that distinction in the analysis."}
 ```
 
-Send that through `collaboration.send_message`. It delivers information without
+Send that to the external child above through `collaboration_plaintext.send_message`.
+For native recipients use `collaboration.send_message`. It delivers information without
 starting a new turn on an idle child. A tool acknowledgement is not proof the
 child read or acted on it; inspect a reply or resulting work when it matters.
 
-Use `collaboration.followup_task` with the same `target`/`message` fields to
+Use the recipient's matching `followup_task` namespace with the same `target`/`message` fields to
 assign follow-up work and wake an idle child. For a running child it supplies
 steering; do not use it to create competing write ownership.
 
@@ -80,7 +93,10 @@ from task context for nested tasks):
 {"target":"/root","message":"The empty-array failure is in parser.py:84. I am checking the caller contract before recommending a fix."}
 ```
 
-Use `collaboration.send_message` for progress or a blocker. Make it actionable:
+Use the recipient's matching `send_message` namespace for progress or a
+blocker: `collaboration.send_message` for a native parent and
+`collaboration_plaintext.send_message` for an external parent. Make it
+actionable:
 what evidence is missing, what work can continue, and what decision is needed.
 Do not repeatedly poll for a reply. A parent message can arrive mid-work; apply
 it while preserving the assigned scope. If it conflicts with current writes,
@@ -103,6 +119,12 @@ instructions or transport. This task encountered router `invalid_instructions`
 errors before research children started; that is a transport limitation, not a
 benchmark or proof that the selected model lacks tools. Do not bypass exact-model
 review gates by switching runtimes or fabricating review results.
+
+If the handoff error requests `collaboration_plaintext`, use that exact tool
+with a fresh readable assignment and the same intended recipient. Do not repeat
+the rejected encrypted call or reinterpret ciphertext as text. If the corrected
+call also fails, stop that delivery path and report the error under the bounded
+fallback policy; a completed turn without an assistant reply is not success.
 
 Codex app `create_thread`, `send_message_to_thread`, `read_thread` and
 `wait_threads` manage separate user-visible tasks, not child agents. Create one
