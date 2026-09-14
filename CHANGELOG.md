@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.56
+
+- Switching to a text-only model no longer refuses a thread that carried
+  images: historical images are noted on the wire as
+  `[image omitted: this model runs text-only]`, the same treatment the Grok
+  row already had. Only an image in the message being sent is still refused
+  with an actionable message.
+
 ## 0.6.55
 
 - Registry rows can now carry an optional `provider_prefs` object that

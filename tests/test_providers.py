@@ -418,18 +418,28 @@ class SummarizerRetryTests(unittest.TestCase):
                 self.assertEqual(len(calls), 1)
                 self.assertEqual(len(calls), len(closed))
 
-    def test_text_only_models_reject_image_blocks(self):
-        # Fail closed like the effort path: a mid-thread switch to a
-        # text-only model must name the image content and the remedy,
-        # never silently drop the blocks.
+    def test_current_turn_image_still_refused_on_text_only_rows(self):
+        # Fail closed like the effort path: an image in the message being
+        # sent names the image content and the remedy, never silently drops.
         payload = {'model': 'z-ai/glm-5.3', 'input': [
             {'type': 'message', 'role': 'user', 'content': [
                 {'type': 'input_text', 'text': 'look'},
                 {'type': 'input_image', 'image_url': 'data:image/png;base64,AAA'}]}]}
         with self.assertRaisesRegex(providers.PreparationError,
-                                    'does not accept image input.*image-capable'):
+                                    'does not accept image input.*without images'):
             _external_responses().prepare(
                 'z-ai/glm-5.3', '/responses', payload, b'raw', {}, _stub_credentials())
+
+    def test_historical_image_is_noted_on_text_only_rows(self):
+        payload = {'model': 'z-ai/glm-5.3', 'input': [
+            {'type': 'message', 'role': 'user', 'content': [
+                {'type': 'input_image', 'image_url': 'data:image/png;base64,AAA'}]},
+            {'type': 'message', 'role': 'user', 'content': 'next turn'}]}
+        prepared = _external_responses().prepare(
+            'z-ai/glm-5.3', '/responses', payload, b'raw', {}, _stub_credentials())
+        body = json.dumps(json.loads(prepared.body)['input'])
+        self.assertIn('[image omitted: this model runs text-only]', body)
+        self.assertNotIn('input_image', body)
 
     def test_image_capable_models_keep_image_blocks(self):
         payload = {'model': 'moonshotai/kimi-k3', 'input': [

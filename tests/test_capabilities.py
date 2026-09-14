@@ -55,16 +55,42 @@ class InvariantTests(unittest.TestCase):
 
 
 class ImageDetectionTests(unittest.TestCase):
-    def test_tool_output_image_rejected_for_text_only_model(self):
+    def test_historical_image_passes_on_a_text_only_row(self):
         slug = next(slug for slug in EXTERNAL_MODELS
                     if 'image' not in input_modalities(slug))
-        items = [{'type': 'function_call_output', 'call_id': 'c1',
-                  'output': [{'type': 'input_image',
-                              'image_url': 'data:image/png;base64,AAA'}]}]
+        items = [{'type': 'message', 'role': 'user',
+                  'content': [{'type': 'input_image',
+                               'image_url': 'data:image/png;base64,AAA'}]},
+                 {'type': 'message', 'role': 'user', 'content': 'next turn'}]
+        check_images(slug, items)
+
+    def test_trailing_developer_item_does_not_hide_the_current_message(self):
+        slug = next(slug for slug in EXTERNAL_MODELS
+                    if 'image' not in input_modalities(slug))
+        items = [{'type': 'message', 'role': 'user',
+                  'content': [{'type': 'input_image',
+                               'image_url': 'data:image/png;base64,AAA'}]},
+                 {'type': 'message', 'role': 'developer',
+                  'content': 'context note'}]
         with self.assertRaisesRegex(ValueError, 'does not accept image input'):
             check_images(slug, items)
-        check_images(slug, [{'type': 'message', 'role': 'user',
-                             'content': 'plain text'}])
+
+    def test_current_message_image_still_refused(self):
+        slug = next(slug for slug in EXTERNAL_MODELS
+                    if 'image' not in input_modalities(slug))
+        with self.assertRaisesRegex(ValueError, 'does not accept image input'):
+            check_images(slug, [{'type': 'message', 'role': 'user',
+                                 'content': [{'type': 'input_image',
+                                              'image_url': 'data:image/png;base64,AAA'}]}])
+
+    def test_tool_output_after_last_user_message_does_not_raise(self):
+        slug = next(slug for slug in EXTERNAL_MODELS
+                    if 'image' not in input_modalities(slug))
+        items = [{'type': 'message', 'role': 'user', 'content': 'plain text'},
+                 {'type': 'function_call_output', 'call_id': 'c1',
+                  'output': [{'type': 'input_image',
+                              'image_url': 'data:image/png;base64,AAA'}]}]
+        check_images(slug, items)
 
 if __name__ == '__main__':
     unittest.main()

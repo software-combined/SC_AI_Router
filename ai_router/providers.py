@@ -6,7 +6,7 @@ from . import capabilities, compaction as comp, local_services, agent_handoffs, 
 from .standalone_outputs import materialize_outputs
 from . import subscription_history, context_recovery
 from .capabilities import CANONICAL_ORDER, check_effort, check_images, input_modalities
-from .image_items import note_images, strip_images
+from .image_items import note_images
 from .errors import PreparationError, SubscriptionRequired, UnknownModel
 from .registry import by_slug, near_miss
 from .runtime import log_event
@@ -147,7 +147,11 @@ class ExternalResponsesProvider:
             raise PreparationError(str(exc))
         keep_images = 'image' in input_modalities(model) if isinstance(model, str) else True
         entry = by_slug(model) if isinstance(model, str) else model
-        payload['input'] = note_images(rewritten) if getattr(entry, 'drop_images', False) else strip_images(rewritten, keep_images)
+        # One expression owns the wire rule: images pass only for an
+        # image-capable row without drop_images; every other row gets the
+        # visible note, including text-only rows with historical images.
+        payload['input'] = (rewritten if keep_images and not getattr(entry, 'drop_images', False)
+                            else note_images(rewritten))
         reasoning = payload.get('reasoning')
         try:
             check_effort(model,
