@@ -49,11 +49,12 @@ class ProviderDef:
 
     __slots__ = ('id', 'label', 'kind', 'host', 'responses_path',
                  'messages_path', 'key', 'catalogue_url', 'catalogue_shape',
-                 'key_info_url', 'dialect')
+                 'key_info_url', 'dialect', 'native_prefixes')
 
     def __init__(self, id, label, kind, host, responses_path=None,
                  messages_path=None, key=None, catalogue_url=None,
-                 catalogue_shape='manual', key_info_url=None, dialect=None):
+                 catalogue_shape='manual', key_info_url=None, dialect=None,
+                 native_prefixes=()):
         if kind not in (EXTERNAL, SUBSCRIPTION):
             raise ValueError(f'{id}: bad kind {kind!r}')
         if kind == EXTERNAL and key is None:
@@ -62,11 +63,16 @@ class ProviderDef:
             raise ValueError(f'{id}: a subscription provider holds no key')
         if responses_path is None and messages_path is None:
             raise ValueError(f'{id}: serves neither responses nor messages')
+        native_prefixes = tuple(native_prefixes)
+        for prefix in native_prefixes:
+            if not isinstance(prefix, str) or not prefix.startswith('/'):
+                raise ValueError(f'{id}: bad native prefix {prefix!r}')
         self.id, self.label, self.kind, self.host = id, label, kind, host
         self.responses_path, self.messages_path = responses_path, messages_path
         self.key, self.catalogue_url = key, catalogue_url
         self.catalogue_shape, self.key_info_url = catalogue_shape, key_info_url
         self.dialect = dialect or id
+        self.native_prefixes = native_prefixes
 
     def serves(self, protocol):
         """True when this provider serves that protocol natively."""
@@ -93,7 +99,8 @@ OPENROUTER = ProviderDef(
 
 OPENAI = ProviderDef(
     id='openai', label='OpenAI', kind=SUBSCRIPTION, host='chatgpt.com',
-    responses_path='/backend-api/codex', dialect='openai')
+    responses_path='/backend-api/codex', dialect='openai',
+    native_prefixes=('/alpha/', '/guardian'))
 
 ANTHROPIC = ProviderDef(
     id='anthropic', label='Anthropic', kind=SUBSCRIPTION, host='api.anthropic.com',
@@ -127,6 +134,22 @@ def external_defs():
 
 def subscription_ids():
     return tuple(p.id for p in PROVIDERS if p.kind == SUBSCRIPTION)
+
+
+def native_service_path(path):
+    """True when a subscription definition claims this path as a native service.
+
+    The path is forwarded verbatim with the client's own login, so a dot
+    segment, a percent-encoded dot or a backslash is refused before the
+    prefix test: `/alpha/../v1/x` must never reach the upstream.
+    """
+    if not isinstance(path, str) or '\\' in path or '%2e' in path.lower():
+        return False
+    if any(segment in ('.', '..') for segment in path.split('/')):
+        return False
+    return any(path.startswith(prefix)
+               for provider in PROVIDERS if provider.kind == SUBSCRIPTION
+               for prefix in provider.native_prefixes)
 
 
 def external_serving(protocol):

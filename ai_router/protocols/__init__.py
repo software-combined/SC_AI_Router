@@ -9,7 +9,7 @@ The path rows are built from their owners (Plan 125): `providers` owns the
 native service paths and `claude` owns the Messages paths, so a path added
 there is routable here without a second edit.
 """
-from .. import claude, providers
+from .. import claude, provider_defs, providers
 from . import messages, responses
 
 POST = 'POST'
@@ -19,6 +19,7 @@ TABLE = (
     {'methods': (POST,), 'paths': frozenset({'/responses', '/responses/compact'}),
      'policy': responses.POLICY},
     {'methods': (POST,), 'paths': frozenset(providers.NATIVE_SERVICE_PATHS),
+     'native': provider_defs.native_service_path,
      'policy': responses.POLICY},
     # Messages family: Claude Code ingress.
     {'methods': (POST,), 'paths': claude.CLAUDE_POST_PATHS,
@@ -38,5 +39,9 @@ def select(method, path):
     """Protocol policy for this request, or None when no protocol owns it."""
     for row in TABLE:
         if method in row['methods'] and path in row['paths']:
+            return row['policy']
+    for row in TABLE:
+        native = row.get('native')
+        if method in row['methods'] and native is not None and native(path):
             return row['policy']
     return None
