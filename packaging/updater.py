@@ -292,6 +292,23 @@ def _read_feed_pass(feed, etag, read_feed, sleep):
             print(f'retrying feed fetch ({exc})')
 
 
+
+def _persist_models_url(home, latest):
+    """Remember the feed's models_url for the router's refresh thread.
+
+    Plan 099 Step 3: the router boots from this file with a channel
+    default; a missing or malformed URL leaves the previous file alone.
+    Never raises: a stale URL is safer than a broken update.
+    """
+    url = latest.get('models_url')
+    if not isinstance(url, str) or not url.startswith('https://'):
+        return
+    try:
+        (Path(home) / 'models-url').write_text(url.strip() + '\n')
+    except OSError:
+        pass
+
+
 def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
     """One applying pass; behavior matches the pre-split code."""
     sync_seams()
@@ -317,6 +334,7 @@ def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
         raise UpdateError('feed_invalid', 'feed document is not JSON')
     if not isinstance(latest, dict):
         raise UpdateError('feed_invalid', 'feed document is not an object')
+    _persist_models_url(home, latest)
     if express_only and latest.get('express') is not True:
         return 0  # Leave ETag/serial untouched so the regular job still sees it.
     try:
