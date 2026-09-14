@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.54
+
+- Delivered cross-thread messages are now named `delivered_message` and
+  `delivered_app_message` instead of tool-sounding names, so a model that
+  copies a name it saw gets a hint pointing at the answer box instead of an
+  `unsupported call` dead end; a readable alias with a dropped character
+  (within two edits) now repairs onto its tool, while an ambiguous near
+  miss is still left to the client.
+
 ## 0.6.53
 
 - Every OpenRouter Responses request now sends `X-OpenRouter-Metadata:

@@ -8,11 +8,11 @@
 <h1 align="center">SC Unlimited AI</h1>
 
 <p align="center">
-One local endpoint for Codex and Claude Code. Your ChatGPT or Claude subscription models and OpenRouter models, side by side in the picker, with the billing kept apart.
+One local endpoint for Codex and Claude Code. All models from your ChatGPT, Claude and OpenRouter are side by side in the picker, subscription billing is kept separate.
 </p>
 
 <p align="center">
-  <a href="https://github.com/software-combined/SC_OpenRouter_adapter/actions/workflows/check.yml"><img alt="Checks on GitHub Actions" src="https://img.shields.io/badge/checks-GitHub_Actions-blue"></a>
+  <a href="https://github.com/software-combined/SC_Unlimited_ai/actions/workflows/check.yml"><img alt="Checks on GitHub Actions" src="https://img.shields.io/badge/checks-GitHub_Actions-blue"></a>
   <a href="https://github.com/software-combined/SC_Unlimited_ai/releases/latest"><img alt="Releases on GitHub" src="https://img.shields.io/badge/releases-GitHub-blue"></a>
   <a href="LICENSE"><img alt="Licence: Apache-2.0" src="https://img.shields.io/badge/licence-Apache--2.0-blue"></a>
   <img alt="Python 3.14, standard library only" src="https://img.shields.io/badge/python-3.14%20stdlib%20only-3776AB">
@@ -346,7 +346,7 @@ This repo also hosts the private `scg-agent-plugins` marketplace:
 Every plugin works in Codex and Claude Code and ships automatic updates.
 
 ```sh
-codex plugin marketplace add software-combined/SC_OpenRouter_adapter --ref main
+codex plugin marketplace add software-combined/SC_Unlimited_ai --ref main
 codex plugin add scg-review@scg-agent-plugins
 ```
 

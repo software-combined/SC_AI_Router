@@ -20,6 +20,12 @@ from .errors import PreparationError
 
 TEXT_KEYS = ('output', 'result', 'content', 'text', 'data')
 
+DELIVERED_MESSAGE = 'delivered_message'
+DELIVERED_APP_MESSAGE = 'delivered_app_message'
+# Every synthesized name the router injects into a model's history comes
+# from this set, never an ad hoc string (Plan 172).
+DELIVERED_NAMES = frozenset((DELIVERED_MESSAGE, DELIVERED_APP_MESSAGE))
+
 
 def _readable_text(item):
     """First non-empty text field, verbatim; content blocks join on space."""
@@ -54,7 +60,7 @@ def _call_id(item, index):
 def _materialize(item, index):
     if item.get('type') == 'agent_message':
         message = plaintext_agent_message(item)
-        item = {'id': item.get('id'), 'name': 'codex_agent_message',
+        item = {'id': item.get('id'), 'name': DELIVERED_MESSAGE,
                 'output': ''.join(block['text'] for block in message['content'])}
     text = _readable_text(item)
     if not text:
@@ -62,7 +68,7 @@ def _materialize(item, index):
             'unsupported standalone tool output; resend as plain text')
     name = item.get('name')
     if not isinstance(name, str) or not name:
-        name = 'codex_app'
+        name = DELIVERED_APP_MESSAGE
     cid = _call_id(item, index)
     return [{'type': 'function_call', 'call_id': cid,
              'name': name, 'arguments': '{}'},

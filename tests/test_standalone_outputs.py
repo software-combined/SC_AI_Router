@@ -1,7 +1,10 @@
 """Standalone app-injected tool outputs become matched tool pairs."""
 import unittest
+from ai_router import tool_aliases
 from ai_router.errors import PreparationError
-from ai_router.standalone_outputs import materialize_outputs
+from ai_router.standalone_outputs import (
+    DELIVERED_APP_MESSAGE, DELIVERED_MESSAGE, DELIVERED_NAMES,
+    materialize_outputs)
 
 ENVELOPE = ('<codex_delegation>\n'
             '  <source_thread_id>01a08e3a-0e63-7382-9cf7-bc034d96c726</source_thread_id>\n'
@@ -20,6 +23,21 @@ def pair_text(out):
     return out[1]['output']
 
 
+def _prepare_names(namespace, *names):
+    from ai_router.tool_adapter import prepare_tools
+    tools = [{'type': 'function', 'name': name, 'description': name,
+              'parameters': {'type': 'object'}} for name in names]
+    payload = {'model': 'z-ai/glm-5.3',
+               'tools': [{'type': 'namespace', 'name': namespace, 'tools': tools}],
+               'input': []}
+    return prepare_tools(payload), payload
+
+
+def _inert_candidates(name):
+    names, _ = _prepare_names('probe', 'echo')
+    return tool_aliases.candidates(names, name)
+
+
 class MaterializeTests(unittest.TestCase):
     def test_delegation_converts_to_call_plus_output_pair(self):
         item = delegation()
@@ -35,12 +53,20 @@ class MaterializeTests(unittest.TestCase):
         self.assertNotIn('namespace', call)
         self.assertNotIn('namespace', result)
 
-    def test_missing_name_defaults_to_codex_app(self):
+    def test_missing_name_defaults_to_delivered_app_message(self):
         item = delegation()
         del item['name']
         out = materialize_outputs([item])
-        self.assertEqual(out[0]['name'], 'codex_app')
+        self.assertEqual(out[0]['name'], 'delivered_app_message')
         self.assertEqual(pair_text(out), ENVELOPE)
+
+    def test_delivered_names_are_declared_inert(self):
+        self.assertEqual(DELIVERED_MESSAGE, 'delivered_message')
+        self.assertEqual(DELIVERED_APP_MESSAGE, 'delivered_app_message')
+        self.assertEqual(DELIVERED_NAMES,
+                         frozenset(('delivered_message', 'delivered_app_message')))
+        self.assertEqual(_inert_candidates(DELIVERED_MESSAGE), [])
+        self.assertEqual(_inert_candidates(DELIVERED_APP_MESSAGE), [])
 
     def test_order_preserved_with_neighbours(self):
         before = {'type': 'message', 'role': 'user', 'content': 'hi'}
