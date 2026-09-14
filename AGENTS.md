@@ -71,6 +71,8 @@ Run `python3.14 -m unittest discover -s tests -t .`,
 `python3.14 tools/check_policy_scans.py`, then the shared
 `pre-commit-review` skill. Commit subjects use `<type>: <short summary>`
 with type `feat`, `fix`, `refactor`, `test`, `chore` or `docs`.
+Discover runs the fast core suite; installer tests are opt-in via
+`SCG_RUN_INSTALLER_TESTS=1` (native CI runners cover them on scope).
 
 ### Bounded live regression probes
 
