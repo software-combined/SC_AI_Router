@@ -1,2 +1,2 @@
-Canonical source: software-combined/SC_OpenRouter_adapter
+Canonical source: software-combined/SC_Unlimited_ai
 Deployed state: ~/.codex/mixed-model-router (ROUTER_HOME)

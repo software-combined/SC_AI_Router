@@ -17,7 +17,7 @@ feed_verify = importlib.util.module_from_spec(_feed_verify_spec)
 _feed_verify_spec.loader.exec_module(feed_verify)
 
 MIN_PYTHON = '3.14'
-REPO = 'software-combined/SC_OpenRouter_adapter'
+REPO = 'software-combined/SC_Unlimited_ai'
 
 
 # Single release inventory (Plan 123): every non-globbed bundle member lives
