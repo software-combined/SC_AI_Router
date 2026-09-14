@@ -40,7 +40,7 @@
   "tests/test_windows_acl.py": 366,
   "tests/test_windows_backend.py": 413,
   "tools/probe_agent_handoffs.py": 515,
-  "ai_router/router.py": 255,
+  "ai_router/router.py": 261,
   "ai_router/upstream.py": 345,
   "tests/test_ingress_guards.py": 304,
   "tests/test_stream_context_errors.py": 358,
