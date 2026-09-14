@@ -133,6 +133,10 @@ class RegistryTests(unittest.TestCase):
         self.assertEqual(by_slug('meta/muse-spark-1.3').history_mode, 'native')
         portable = [m.slug for m in MODELS if m.history_mode == 'portable']
         self.assertEqual(portable, ['meta/muse-spark-1.3-contributor'])
+        self.assertEqual([by_slug(s).schema_mode for s in
+                          ('meta/muse-spark-1.3',
+                           'meta/muse-spark-1.3-contributor')],
+                         ['json_text', 'json_text'])
 
     def test_capability_flags_default_conservative(self):
         model = Model(slug='x/y', provider='openrouter', display_name='X',

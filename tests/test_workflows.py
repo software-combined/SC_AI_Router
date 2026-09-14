@@ -142,6 +142,21 @@ class InstallerCiGateTests(unittest.TestCase):
         self.assertIn('runs-on: macos-latest', self.CHECK)
         self.assertIn('runs-on: windows-latest', self.CHECK)
 
+    def test_runtime_containment_modules_are_never_installer_scoped(self):
+        # Plan 156 guard: runtime coverage (port-hijack hardening, shutdown
+        # auth, drain, containment, policy scans) must always run in the
+        # default suite, never hide behind the installer opt-in.
+        import importlib.util
+        tool = ROOT / 'tools' / 'ci_scope.py'
+        spec = importlib.util.spec_from_file_location('router_ci_scope', tool)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        listed = set(module.INSTALLER_TESTS)
+        for name in ('tests.test_lifecycle', 'tests.test_agent_containment',
+                     'tests.test_stream_containment', 'tests.test_policy_scans'):
+            with self.subTest(module=name):
+                self.assertNotIn(name, listed)
+
     def test_the_39_check_selects_its_interpreter_through_the_composite(self):
         # The composite owns the pin and must pass the version input through;
         # the 3.9 job must not carry a second pin of its own (policy scan
