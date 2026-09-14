@@ -112,6 +112,7 @@ class DefinitionHeaderTests(unittest.TestCase):
                 pass
             def request(self, method, path, body=None, headers=None):
                 seen.update(headers)
+                seen['body'] = json.loads(body)
             def getresponse(self):
                 payload = {'output': [{'type': 'message', 'content': [
                     {'type': 'output_text', 'text': 's'}]}]}
@@ -122,6 +123,49 @@ class DefinitionHeaderTests(unittest.TestCase):
         with mock.patch.object(providers.http.client, 'HTTPSConnection', FakeConn):
             _external_responses().summarize('z-ai/glm-5.3', 'key', [])
         self.assertEqual(seen.get('X-OpenRouter-Metadata'), 'enabled')
+        self.assertNotIn('provider', seen['body'])
+
+
+class ProviderPrefsTests(unittest.TestCase):
+    def _entry(self, prefs):
+        return SimpleNamespace(slug='x/m', provider='openrouter',
+                               max_output_tokens=1000, context_window=0,
+                               provider_prefs=prefs, drop_images=False)
+
+    def test_wire_body_has_no_provider_without_prefs(self):
+        prepared = _external_responses().prepare(
+            self._entry(None), '/responses', {'model': 'x/m', 'input': []},
+            b'raw', {}, _stub_credentials())
+        self.assertNotIn('provider', json.loads(prepared.body))
+
+    def test_wire_body_carries_provider_exactly_when_set(self):
+        prefs = {'ignore': ['DeepSeek'], 'allow_fallbacks': True}
+        prepared = _external_responses().prepare(
+            self._entry(prefs), '/responses', {'model': 'x/m', 'input': []},
+            b'raw', {}, _stub_credentials())
+        self.assertEqual(json.loads(prepared.body)['provider'], prefs)
+
+    def test_summarizer_body_carries_provider_exactly_when_set(self):
+        seen = {}
+
+        class FakeConn:
+            def __init__(self, *a, **k):
+                pass
+            def request(self, method, path, body=None, headers=None):
+                seen.update(json.loads(body))
+            def getresponse(self):
+                payload = {'output': [{'type': 'message', 'content': [
+                    {'type': 'output_text', 'text': 's'}]}]}
+                return SimpleNamespace(status=200,
+                                        read=lambda: json.dumps(payload).encode())
+            def close(self):
+                pass
+        prefs = {'require_parameters': True}
+        with mock.patch.object(providers.http.client, 'HTTPSConnection', FakeConn), \
+                mock.patch.object(providers, 'by_slug',
+                                   return_value=self._entry(prefs)):
+            _external_responses().summarize('x/m', 'key', [])
+        self.assertEqual(seen.get('provider'), prefs)
 
 
 class OutputCapTests(unittest.TestCase):

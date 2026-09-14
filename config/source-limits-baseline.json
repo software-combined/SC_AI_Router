@@ -5,7 +5,7 @@
   "ai_router/errors.py": 279,
   "ai_router/key_dialog.py": 260,
   "ai_router/models.py": 321,
-  "ai_router/providers.py": 364,
+  "ai_router/providers.py": 369,
   "ai_router/setup.py": 328,
   "ai_router/tool_adapter.py": 393,
   "packaging/install.py": 700,
@@ -30,7 +30,7 @@
   "tests/test_notice_delivery.py": 414,
   "tests/test_operator_surface.py": 448,
   "tests/test_probe_harness.py": 362,
-  "tests/test_providers.py": 418,
+  "tests/test_providers.py": 462,
   "tests/test_runtime.py": 321,
   "tests/test_setup.py": 398,
   "tests/test_tool_adapter.py": 440,
@@ -46,5 +46,6 @@
   "tests/test_stream_context_errors.py": 358,
   "tests/test_history_portability.py": 355,
   "ai_router/stream_errors.py": 295,
-  "ai_router/tool_aliases.py": 279
+  "ai_router/tool_aliases.py": 279,
+  "tests/test_registry.py": 320
 }
