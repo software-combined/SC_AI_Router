@@ -102,6 +102,64 @@ def _record_detail(metrics, kind, failure, event):
     error_type = _top_error_type(failure, event)
     if error_type:
         metrics['upstream_error_type'] = error_type
+    endpoint = _terminal_endpoint(failure, event)
+    if endpoint:
+        metrics['serving_endpoint'] = endpoint
+
+
+_ENDPOINT_SHAPE = re.compile(r'[A-Za-z0-9_.\-/]{1,%d}' % MAX_DETAIL_CHARS)
+
+
+def _bounded_endpoint(value):
+    """A code-shaped endpoint slug; never prose."""
+    if isinstance(value, bool) or not isinstance(value, (str, int)):
+        return None
+    text = str(value).strip()[:MAX_DETAIL_CHARS]
+    return text if _ENDPOINT_SHAPE.fullmatch(text) else None
+
+
+def metadata_endpoint(source, bounded):
+    """First bounded provider from selected available[], then attempts[].
+
+    Shared with `upstream.serving_endpoint`; the bounding rule stays with
+    the caller so each log path keeps its own width.
+    """
+    metadata = source.get('openrouter_metadata') if isinstance(source, dict) else None
+    if not isinstance(metadata, dict):
+        return None
+    endpoints = metadata.get('endpoints')
+    available = (endpoints.get('available')
+                 if isinstance(endpoints, dict) else None)
+    if isinstance(available, list):
+        for entry in available:
+            if isinstance(entry, dict) and entry.get('selected') is True:
+                value = bounded(entry.get('provider'))
+                if value:
+                    return value
+    attempts = metadata.get('attempts')
+    if isinstance(attempts, list):
+        # The last attempt produced the terminal state; earlier entries name
+        # providers that already failed over.
+        for attempt in reversed(attempts):
+            if isinstance(attempt, dict):
+                value = bounded(attempt.get('provider'))
+                if value:
+                    return value
+    return None
+
+
+def _terminal_endpoint(failure, event):
+    """Bounded serving endpoint from a terminal event's metadata, else None.
+
+    Reads the same `openrouter_metadata` shapes `upstream.serving_endpoint`
+    reads (selected `endpoints.available[]` entry, then `attempts[]`);
+    local because `upstream` already imports this module.
+    """
+    for source in (failure, event):
+        value = metadata_endpoint(source, _bounded_endpoint)
+        if value:
+            return value
+    return None
 
 
 _FINAL_ERROR_TYPES = frozenset((

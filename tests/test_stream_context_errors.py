@@ -166,6 +166,28 @@ class StreamContextTests(unittest.TestCase):
         self.assertEqual(failures[0].kwargs['upstream_provider_code'], 'p-overload-9')
         self.assertNotIn('private-input', str(logs))
 
+    def test_serving_endpoint_reaches_the_log_bounded(self):
+        wire = sse.frame(json.dumps({'type': 'response.failed', 'response': {
+            'status': 'failed', 'error_type': 'provider_overloaded',
+            'error': {'code': 'server_error', 'message': 'private-input'},
+            'openrouter_metadata': {'endpoints': {'available': [
+                {'provider': 'InfinityGPT', 'selected': True}]}}}}).encode())
+        body, logs = self.request(wire)
+        self.assertEqual(body, wire)
+        failures = [c for c in logs if c.args[0] == 'request_failed']
+        self.assertEqual(len(failures), 1)
+        self.assertEqual(failures[0].kwargs['serving_endpoint'], 'InfinityGPT')
+        self.assertNotIn('private-input', str(logs))
+
+    def test_retry_clears_the_failed_attempts_serving_endpoint(self):
+        from ai_router import stream_relay
+        metrics = {'code': 'UPSTREAM_STREAM_FAILED', 'serving_endpoint': 'A',
+                   'connect_ms': 1.0, 'model': 'm'}
+        stream_relay.clear_terminal_fields(metrics)
+        self.assertNotIn('serving_endpoint', metrics)
+        self.assertNotIn('code', metrics)
+        self.assertEqual(metrics['connect_ms'], 1.0)
+
     def test_context_shapes_stay_context_classed(self):
         wire = sse.frame(json.dumps({'type': 'response.failed', 'response': {
             'status': 'failed', 'error_type': 'context_length_exceeded',
