@@ -224,6 +224,45 @@ def bind(**overrides):
         globals()[name if name != 'svc' else '_svc'] = value
 
 
+def _read_failures(home):
+    """State document plus its failure map; (None, {}) when unreadable.
+
+    Update-failure owner (Plan 131): moved out of service.py; service keeps
+    thin re-exports. Always read fresh: the child installer writes the same
+    file, and merging onto a stale copy would drop its changes.
+    """
+    state = _svc._state.read(_svc._state.path(home))
+    if state is None:
+        return None, {}
+    failures = state.get('update_failures')
+    return state, dict(failures) if isinstance(failures, dict) else {}
+
+
+def update_failures(home):
+    """Failed attempts per version; {} when none are recorded."""
+    return _read_failures(home)[1]
+
+
+def record_update_failure(home, version):
+    """Count a failed attempt at one version; returns the new count."""
+    state, failures = _read_failures(home)
+    if state is None:
+        return 0
+    failures[version] = failures.get(version, 0) + 1
+    state['update_failures'] = failures
+    _svc._write_state(home, state)
+    return failures[version]
+
+
+def clear_update_failures(home, version):
+    state, failures = _read_failures(home)
+    if state is None or version not in failures:
+        return
+    del failures[version]
+    state['update_failures'] = failures
+    _svc._write_state(home, state)
+
+
 def _park(home, etag, etag_path, version):
     """Count a failed attempt and stop retrying once it is hopeless.
 
@@ -232,7 +271,7 @@ def _park(home, etag, etag_path, version):
     feed re-read when the edge answers 304, and the count in the state file
     is the hard stop.
     """
-    count = _svc.record_update_failure(home, version)
+    count = record_update_failure(home, version)
     if count < MAX_VERSION_FAILURES:
         return
     if etag:
@@ -296,7 +335,7 @@ def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
         _record_pass(home, error='')
         print(f"up to date {_svc.current_version(home)}")
         return 0
-    failed = _svc.update_failures(home).get(latest['version'], 0)
+    failed = update_failures(home).get(latest['version'], 0)
     if express_only and failed:
         return 0  # Retry failures on the regular cadence, not every minute.
     if failed >= MAX_VERSION_FAILURES:
@@ -366,7 +405,7 @@ def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
         print('deferred: installer did not activate the requested version')
         _record_pass(home)
         return failure
-    _svc.clear_update_failures(home, latest['version'])
+    clear_update_failures(home, latest['version'])
     (home / 'logs').mkdir(exist_ok=True)
     with open(home / 'logs' / 'update.log', 'a') as stream:
         stream.write(json.dumps({'at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
