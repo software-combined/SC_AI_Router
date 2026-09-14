@@ -77,6 +77,50 @@ class AliasSchemeTests(unittest.TestCase):
                 self.assertEqual((back.get('namespace'), back.get('name')),
                                  ('probe', 'echo'))
 
+    def test_near_miss_readable_alias_is_repaired(self):
+        names, _ = _prepare('alpha', 'send_message')
+        with mock.patch('ai_router.runtime.log_event') as logged:
+            back = ToolEvents(names, {'model': 'm'}).item(_call('alpha__send_messag'))
+        self.assertEqual((back.get('namespace'), back.get('name')),
+                         ('alpha', 'send_message'))
+        causes = [call.kwargs['cause'] for call in logged.call_args_list
+                  if call.args[0] == 'tool_call_repaired']
+        self.assertEqual(causes, ['near'])
+
+    def test_near_miss_is_never_guessed_between_two_aliases(self):
+        names, _ = _prepare('probe', 'echo', 'echa')
+        self.assertEqual(len(tool_aliases.candidates(names, 'probe__ech')), 2)
+        self.assertIsNone(tool_aliases.repair(names, 'probe__ech'))
+        back = ToolEvents(names).item(_call('probe__ech'))
+        self.assertEqual(back['name'], 'probe__ech')
+        self.assertNotIn('namespace', back)
+
+    def test_near_miss_never_targets_a_digest_alias(self):
+        names, payload = _prepare('probe', 'a.b', 'a_b')
+        for tool in payload['tools']:
+            self.assertRegex(tool['name'], r'^probe__a_b_[0-9a-f]{12}$')
+        back = ToolEvents(names).item(_call('probe__echo'))
+        self.assertEqual(back['name'], 'probe__echo')
+        self.assertNotIn('namespace', back)
+
+    def test_delivered_hint_does_not_stack_on_repreparation(self):
+        names, _ = _prepare('probe', 'echo')
+        once = tool_aliases.annotate('unsupported call: delivered_message', names)
+        self.assertEqual(tool_aliases.annotate(once, names), once)
+        self.assertEqual(once.count('That name marks a message'), 1)
+
+    def test_delivered_name_gets_the_delivered_hint(self):
+        from ai_router.tool_aliases import HINT_DELIVERED
+        names, _ = _prepare('probe', 'echo')
+        output = tool_aliases.annotate('unsupported call: delivered_message', names)
+        self.assertIn(HINT_DELIVERED, output)
+        self.assertNotIn('probe__echo', output)
+        with mock.patch('ai_router.runtime.log_event') as logged:
+            ToolEvents(names, {'model': 'm'}).item(_call('delivered_message'))
+        causes = [call.kwargs['cause'] for call in logged.call_args_list
+                  if call.args[0] == 'tool_call_unresolved']
+        self.assertEqual(causes, ['delivered'])
+
     def test_damaged_fallback_name_is_repaired(self):
         # The incident shape: a tool exposed under the fallback, re-typed
         # with one character dropped from the digest.
@@ -90,7 +134,7 @@ class AliasSchemeTests(unittest.TestCase):
 
     def test_typos_and_unrelated_names_are_left_to_the_client(self):
         names, _ = _prepare('probe', 'echo')
-        for called in ('probe__ech', 'probe__ecna', 'foo_echo', 'my_echo',
+        for called in ('foo_echo', 'my_echo',
                        'ns_deadbeefcafe_echo', 'probe__ecnaa'):
             with self.subTest(called=called):
                 back = ToolEvents(names).item(_call(called))

@@ -34,7 +34,7 @@
   "tests/test_runtime.py": 321,
   "tests/test_setup.py": 398,
   "tests/test_tool_adapter.py": 440,
-  "tests/test_tool_alias_repair.py": 310,
+  "tests/test_tool_alias_repair.py": 354,
   "tests/test_update_channel.py": 417,
   "tests/test_upstream_failures.py": 470,
   "tests/test_windows_acl.py": 366,
@@ -45,5 +45,6 @@
   "tests/test_ingress_guards.py": 304,
   "tests/test_stream_context_errors.py": 358,
   "tests/test_history_portability.py": 355,
-  "ai_router/stream_errors.py": 295
+  "ai_router/stream_errors.py": 295,
+  "ai_router/tool_aliases.py": 279
 }

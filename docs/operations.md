@@ -337,6 +337,15 @@ rather than recorded, because provider prose can quote prompt content. A
 missing detail means the provider did not say why, or said it in a form this
 rule refuses to record.
 
+## Tool alias repair (why a called name changed)
+
+`tool_call_repaired` and `tool_call_unresolved` carry a `cause`: `native`
+(the plain tool name), `dotted` (`namespace.tool`), `digest` (a damaged
+fallback digest), `near` (a readable alias within two edits; an ambiguous
+near miss is never guessed), or `delivered` (a delivered-message name such
+as `delivered_message`, which is not a tool). `unknown` means the name
+matched nothing repairable.
+
 ## Router answer codes (Responses protocol)
 
 The router answers deterministic refusals with HTTP 400 (the client treats
