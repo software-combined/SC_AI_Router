@@ -24,7 +24,7 @@ second independently maintained model table. Exact user or project model/effort
 requirements take precedence.
 
 If a preferred model is unavailable, use a listed eligible fallback and record
-the substitution. A required pass is `BLOCK` when no permitted model can complete
+the substitution. A required pass is `❌ Block` when no permitted model can complete
 it, or when an exact model/effort requirement cannot be met. Never change runtimes,
 accounts, data constraints or review gates to bypass the requirement. Confirm
 access through actual review calls; accepted dispatch is not completed review.
@@ -59,7 +59,7 @@ Use a distinct brief file for each pass or changed reviewed tree. If a resumed c
 ## Hard Rules
 
 - Run this process once for the intended staged commit scope. Stage only that scope; isolate unrelated staged work first.
-- Apply applicable host/project staged-size rules. Otherwise limit a commit to 800 meaningful changed lines (additions plus deletions), excluding generated, vendored and mechanical files; an unavoidable oversized coherent change needs a short justification before review. Unjustified oversize is `BLOCK`.
+- Apply applicable host/project staged-size rules. Otherwise limit a commit to 800 meaningful changed lines (additions plus deletions), excluding generated, vendored and mechanical files; an unavoidable oversized coherent change needs a short justification before review. Unjustified oversize is `❌ Block`.
 - The simplification pass runs before the review lanes and its edits are staged before the secret scan. A simplification pass that runs after the lanes is a material delta under the Re-Review Rule.
 - Reviewers are read-only. They inspect the staged diff and full staged file content from the git index (`git diff --cached`, `git show :path`), not snippets or working-tree content, and must not edit, format, stage, commit, push, delegate, or mutate any system.
 - Every pass reads ponytail first. The simplification pass and each of the three reviewer lanes must read the bundled [ponytail](../ponytail/SKILL.md) in full before inspecting the staged scope, and apply it within their own lane ownership. Pass its resolved absolute path to the reviewer. Ponytail informs judgment about the smallest correct change; it never overrides the reportability, severity, or scope rules below, and never justifies reporting style-only, LOW, speculative, or out-of-lane findings, or editing for rejected items.
@@ -70,7 +70,7 @@ Use a distinct brief file for each pass or changed reviewed tree. If a resumed c
 ## Preflight
 
 1. Identify the repo root and current branch. Read the root and nested `AGENTS.md` files that govern the staged files.
-   Run `python3 <plugin-root>/scripts/setup.py check --repo <absolute-repo-path>` using the installed plugin root (two directories above this skill directory). Failure means `BLOCK`; use [review-setup](../review-setup/SKILL.md) to diagnose missing dependencies. Installation never constitutes a completed review or approval.
+   Run `python3 <plugin-root>/scripts/setup.py check --repo <absolute-repo-path>` using the installed plugin root (two directories above this skill directory). Failure means `❌ Block`; use [review-setup](../review-setup/SKILL.md) to diagnose missing dependencies. Installation never constitutes a completed review or approval.
 2. Inspect `git status --short` and confirm the staged scope is intentional and within the size rule above.
 3. **Run the simplification pass (Pass 1)** and stage its edits; a no-op is valid and is recorded as such. The staged scope must still be the intended commit set afterwards.
    - Invoke `code-simplifier` using the active runtime's entry in the Runtime Mapping and its installed skill. Pause main-agent edits while the simplifier has write ownership. It may edit staged files only; undo only its own out-of-scope edits, preserving pre-existing work. It reads ponytail first, follows project instructions, verifies behavior preservation, and reports changes or a no-op. The main agent verifies and stages the result; the hook receipt keeps exactly the three review lanes.
@@ -81,7 +81,7 @@ Use a distinct brief file for each pass or changed reviewed tree. If a resumed c
    ~/.config/scg-agent-git-hooks/bin/scg-review-state scan
    ```
 
-   The command verifies the approved native Gitleaks binary against the pin in `~/.config/scg-agent-git-hooks/config.json` (absolute path, version, and binary SHA-256, with the Homebrew bottle recorded as provenance), refuses to run if `GITLEAKS_CONFIG` or `GITLEAKS_CONFIG_TOML` is set or the repository supplies `.gitleaks.toml` or `.gitleaksignore`, and scans the exact staged tree with redacted output. Any non-zero exit (missing, drifted, timed-out, or failed scanner, or any leak) means zero reviewer calls and `BLOCK`. Never print or paste secrets; report the credential type and `file:line` only, and recommend rotation. Changing the pin or allowing a repository config is an owner change to the hook adapter, never a session workaround. A different target must supply and prove its own adapter before this skill is usable.
+   The command verifies the approved native Gitleaks binary against the pin in `~/.config/scg-agent-git-hooks/config.json` (absolute path, version, and binary SHA-256, with the Homebrew bottle recorded as provenance), refuses to run if `GITLEAKS_CONFIG` or `GITLEAKS_CONFIG_TOML` is set or the repository supplies `.gitleaks.toml` or `.gitleaksignore`, and scans the exact staged tree with redacted output. Any non-zero exit (missing, drifted, timed-out, or failed scanner, or any leak) means zero reviewer calls and `❌ Block`. Never print or paste secrets; report the credential type and `file:line` only, and recommend rotation. Changing the pin or allowing a repository config is an owner change to the hook adapter, never a session workaround. A different target must supply and prove its own adapter before this skill is usable.
 6. Identify the context files reviewers need beyond the staged files and pass their paths in each reviewer prompt: direct callers/importers of changed exported functions or modules; adjacent tests and fixtures; schemas, contracts, builders, snapshots, workflow definitions, or config files that define the changed behavior; relevant docs/runbooks when behavior or deployment changes. Reviewers read these themselves. If a required context cannot be inspected, that lane's review is incomplete.
 7. Classify verification commands. Required: documented pre-commit checks, targeted tests for changed behavior, new or changed tests, typecheck/lint/build checks that normally gate the repo, and contract/snapshot regeneration checks relevant to the staged files; expected result is exit code 0 unless the repo documents stricter output. Optional: broad, slow, destructive, production-impacting, or unrelated commands; never run destructive or production-impacting commands without explicit approval. If no required command exists, record a verification gap.
 8. Immediately before spawning reviewers, confirm `git write-tree` still equals the captured tree. If it changed, inspect and isolate the delta, recapture the intended scope, and repeat the secret scan before any reviewer calls.
@@ -111,9 +111,15 @@ Focus: What hidden regression would pass a casual review? What missing test woul
 
 ## Reviewer Output And Severity
 
-Each reviewer returns a Markdown lane summary: verdict (`ALL_CLEAR` | `PROCEED_WITH_NOTES` | `BLOCK`), confirmation of ponytail and full staged-index inspection, inspected files, evidence-backed findings, missing tests, and residual risks. Each finding includes staged `file:line`, failure path, impact, confidence, and the smallest remedy. Omit empty findings, missing-test, and risk sections; `ALL_CLEAR` requires all three to be empty. Any `CRITICAL` or `HIGH` finding or missing test requires `BLOCK`.
+Each reviewer returns a Markdown lane summary written for a person, not a parser. Lead with one of these verdicts, emoji included, never snake_case:
 
-A finding is reportable only when all of these hold: the staged change introduced or materially worsened it; the reviewer names an executable or deterministic failure path with exact staged evidence; the concern is realistic rather than speculative (theoretical edge cases without a reachable path, defense-in-depth-only observations, and completeness for its own sake are omitted even when technically arguable); the impact is at least `MEDIUM`; and confidence is at least `0.80`. Each finding recommends the smallest in-scope remedy, including narrowing or reverting the staged change. A real blocker with no safe in-scope remedy is reported as `BLOCK` with a request for scope or owner direction, never suppressed.
+- `✅ All Clear`
+- `📝 Proceed With Notes`
+- `❌ Block`
+
+Name the model that actually ran the lane on the next line as `Model: <returned-model> at <effort>` (use `unverified` when serving identity is missing). Then confirm ponytail and full staged-index inspection, inspected files, evidence-backed findings, missing tests, and residual risks. Each finding includes staged `file:line`, failure path, impact, confidence, and the smallest remedy. Omit empty findings, missing-test, and risk sections; `✅ All Clear` requires all three to be empty. Any `CRITICAL` or `HIGH` finding or missing test requires `❌ Block`. Keep snake_case only for the Git-hook `--decision` values below.
+
+A finding is reportable only when all of these hold: the staged change introduced or materially worsened it; the reviewer names an executable or deterministic failure path with exact staged evidence; the concern is realistic rather than speculative (theoretical edge cases without a reachable path, defense-in-depth-only observations, and completeness for its own sake are omitted even when technically arguable); the impact is at least `MEDIUM`; and confidence is at least `0.80`. Each finding recommends the smallest in-scope remedy, including narrowing or reverting the staged change. A real blocker with no safe in-scope remedy is reported as `❌ Block` with a request for scope or owner direction, never suppressed.
 
 Missing tests are reportable only at `HIGH` or `CRITICAL`: the change alters high-consequence behavior, the missing test would prevent a named failure, and no equivalent deterministic verification already covers it. Residual risks are for concrete, unavoidable runtime or verification uncertainty only, not a parking lot for rejected findings or cleanup ideas.
 
@@ -126,17 +132,18 @@ Missing tests are reportable only at `HIGH` or `CRITICAL`: the change alters hig
 
 1. Confirm all three reviewers inspected the staged diff and full staged index files and attest they read the installed `ponytail` skill in full before inspecting. A lane missing either confirmation is incomplete and blocks the commit.
 2. De-duplicate findings by root cause and assign cross-lane duplicates to the owning lane.
-3. Adjudicate every item as `ACCEPT`, `DOWNGRADE`, or `REJECT` against the staged evidence: the change caused or worsened it, the failure path is executable or deterministic, the consequence is material, confidence is justified, and the smallest fix is in scope. Record a short rationale for every non-obvious decision. A rejected reviewer `BLOCK` triggers no edits and no further review cycle.
-4. Fix accepted `CRITICAL` and `HIGH` findings and missing tests. Stop if an accepted blocker requires user or product input. Do not automatically fix `MEDIUM` findings: accept the concrete residual risk with rationale as `PROCEED WITH NOTES`, or ask the owner to expand scope.
-5. Run all required verification commands. A failed required command blocks the commit. If one cannot run because of an environment or dependency blocker, record the exact blocker, residual risk, and next verification step before allowing `PROCEED WITH NOTES`.
+3. Adjudicate every item as Accept, Downgrade, or Reject against the staged evidence: the change caused or worsened it, the failure path is executable or deterministic, the consequence is material, confidence is justified, and the smallest fix is in scope. Record a short rationale for every non-obvious decision. A rejected reviewer `❌ Block` triggers no edits and no further review cycle.
+4. Fix accepted `CRITICAL` and `HIGH` findings and missing tests. Stop if an accepted blocker requires user or product input. Do not automatically fix `MEDIUM` findings: accept the concrete residual risk with rationale as `📝 Proceed With Notes`, or ask the owner to expand scope.
+5. Run all required verification commands. A failed required command blocks the commit. If one cannot run because of an environment or dependency blocker, record the exact blocker, residual risk, and next verification step before allowing `📝 Proceed With Notes`.
 6. Record in the task notes when available: staged scope; simplification outcome (ran or no-op, files changed, verification); reviewed tree id; requested and returned model plus effort per lane; reviewer verdicts; fixed findings; final staged delta after review; accepted residual risks; verification commands and results.
-7. Apply the Re-Review Rule, then record the approval and commit as described below.
+7. After adjudication, write a short person-facing recap in the main-agent reply: the combined verdict, then one bullet per lane with that lane's verdict and the model that ran it (`Model: <returned-model> at <effort>`, or `unverified`). For `📝 Proceed With Notes` or `❌ Block`, add a second flat bullet list of the accepted notes: lane, one-line point, and why it was accepted or why it blocks. Do not dump snake_case tokens in that recap.
+8. Apply the Re-Review Rule, then record the approval and commit as described below.
 
-Combined decision:
+Combined decision (same human labels as the lane verdicts):
 
-- `ALL CLEAR`: all reviewers pass, no unresolved meaningful risk, every required verification command ran and passed.
-- `PROCEED WITH NOTES`: only accepted medium or unavoidable verification/runtime residual risks remain, with rationale recorded. Notes create no automatic remediation or follow-up scope.
-- `BLOCK`: any unresolved `CRITICAL` or `HIGH` finding, incomplete reviewer inspection, inability to complete a required pass using its exact mandated model/effort or an eligible policy fallback, missing staged scope isolation, failed required verification, or unresolved high-severity missing test. Speculative, unproven, or theoretical concerns never block on their own; they are rejected at adjudication so the gate converges.
+- `✅ All Clear`: all reviewers pass, no unresolved meaningful risk, every required verification command ran and passed.
+- `📝 Proceed With Notes`: only accepted medium or unavoidable verification/runtime residual risks remain, with rationale recorded. Notes create no automatic remediation or follow-up scope.
+- `❌ Block`: any unresolved `CRITICAL` or `HIGH` finding, incomplete reviewer inspection, inability to complete a required pass using its exact mandated model/effort or an eligible policy fallback, missing staged scope isolation, failed required verification, or unresolved high-severity missing test. Speculative, unproven, or theoretical concerns never block on their own; they are rejected at adjudication so the gate converges.
 
 ## Re-Review Rule
 
@@ -157,4 +164,4 @@ Verify the effective `core.hooksPath` uses `~/.config/scg-agent-git-hooks/`. The
 ~/.config/scg-agent-git-hooks/bin/scg-review-state approve --decision ALL_CLEAR --pass correctness=<requested-model>@<requested-variant>::<returned-model>@<returned-variant> --pass quality=<requested-model>@<requested-variant>::<returned-model>@<returned-variant> --pass adversarial=<requested-model>@<requested-variant>::<returned-model>@<returned-variant>
 ```
 
-Use `--decision PROCEED_WITH_NOTES` when that is the decision. The hook treats each `--pass` value as an opaque identity, so encode both sides exactly as `<requested-model>@<requested-variant-or-unavailable>::<returned-model-or-unverified>@<returned-variant-or-unverified-or-unavailable>`; a returned side of `unverified` is expected when the runtime does not echo serving identity and never blocks approval. Never invent a value, record approval for `BLOCK`, or record approval without a genuine three-lane review having run; self-attesting the review is a bypass of the gate, not a review. Then commit.
+Map the human combined decision onto the hook token: `✅ All Clear` -> `--decision ALL_CLEAR`, `📝 Proceed With Notes` -> `--decision PROCEED_WITH_NOTES`. Never record approval for `❌ Block`. The hook treats each `--pass` value as an opaque identity, so encode both sides exactly as `<requested-model>@<requested-variant-or-unavailable>::<returned-model-or-unverified>@<returned-variant-or-unverified-or-unavailable>`; a returned side of `unverified` is expected when the runtime does not echo serving identity and never blocks approval. Never invent a value, or record approval without a genuine three-lane review having run; self-attesting the review is a bypass of the gate, not a review. Then commit.
