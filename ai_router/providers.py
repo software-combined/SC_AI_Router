@@ -103,10 +103,11 @@ class SubscriptionProvider:
 class ExternalResponsesProvider:
     """One external provider serving the Codex Responses family (Plan 141)."""
 
-    def __init__(self, defn):
+    def __init__(self, defn, region='global'):
         self.defn = defn
         self.name = defn.id
-        self.host = defn.host
+        self.region = region if provider_defs.valid_region(region) else 'global'
+        self.host = provider_defs.region_host(defn.id, self.region) or defn.host
         self.kind = defn.kind
 
     def owns(self, model, path, openai_models, openai_mode='subscription',
@@ -115,10 +116,12 @@ class ExternalResponsesProvider:
         if (entry is None or entry.provider != self.defn.id
                 or is_native_service(path)):
             return False
-        # Plan 068: a portco allowlist gates routing, never just the picker.
-        # None means no policy provisioned (today's behavior); subscription
-        # rows are unaffected by any list.
-        return allowed is None or model in allowed
+        # Plan 068 allowlist plus the key-filtered snapshot gate
+        # routing like the picker; no snapshot yet means policy decides.
+        if allowed is not None and model not in allowed:
+            return False
+        from . import availability as _availability
+        return _availability.permitted(model)
 
     def prepare(self, model, path, payload, raw_body, headers, credentials):
         if path not in ('/responses', '/responses/compact'):
@@ -267,7 +270,7 @@ class ExternalResponsesProvider:
             conn = None
             try:
                 req = json.dumps(body).encode()
-                conn = http.client.HTTPSConnection(self.defn.host,
+                conn = http.client.HTTPSConnection(self.host,
                                                     timeout=remaining)
                 headers = dict(self.defn.request_headers)
                 headers.update({'Authorization': 'Bearer ' + key,
@@ -328,13 +331,13 @@ class LocalServicesProvider:
         raise AssertionError('unreachable')
 
 
-def adapters():
+def adapters(region='global'):
     """One adapter per external def serving Responses, plus the rest.
 
-    Built per call from the definition table, so a provider added to that
-    table is routable without a second registration step (Plan 141).
+    `region` selects the endpoint profile host (Plan 145); unknown
+    names fall back to the global host inside the adapter.
     """
-    return (tuple(ExternalResponsesProvider(defn)
+    return (tuple(ExternalResponsesProvider(defn, region)
                   for defn in provider_defs.external_serving(provider_defs.RESPONSES))
             + (SubscriptionProvider(), LocalServicesProvider()))
 
@@ -352,9 +355,10 @@ def compaction_call(provider, model, path, payload):
 
 
 def select(model, path, openai_models=(), openai_mode='subscription',
+           region='global',
            allowed=None):
     allowset = None if allowed is None else frozenset(allowed)
-    for provider in adapters():
+    for provider in adapters(region):
         if provider.owns(model, path, openai_models, openai_mode,
                          allowed=allowset):
             return provider
