@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.53
+
+- Every OpenRouter Responses request now sends `X-OpenRouter-Metadata:
+  enabled` from the provider definition table (the Messages ingress stays
+  byte-identical), and the router logs the serving endpoint
+  as bounded `serving_endpoint` on `upstream_rejected`,
+  `upstream_unavailable`, `request_completed` and `request_failed`, so a
+  refused or flaky turn names the backend that answered it.
+
 ## 0.6.52
 
 - ChatGPT native service paths are now a prefix rule instead of a four-entry
