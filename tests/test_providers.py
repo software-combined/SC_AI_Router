@@ -54,7 +54,8 @@ class SelectTests(unittest.TestCase):
              'ChatGPT-Account-ID': 'acct'}, _stub_credentials())
         self.assertEqual(prepared.headers,
                          {'Authorization': 'Bearer router-secret',
-                          'Content-Type': 'application/json', 'Accept-Encoding': 'identity'})
+                          'Content-Type': 'application/json', 'Accept-Encoding': 'identity',
+                          'X-OpenRouter-Metadata': 'enabled'})
 
     def test_subscription_prepare_forwards_bearer_and_strips_hop_headers(self):
         provider = providers.select('gpt-6-astra', '/responses', ['gpt-6-astra'])
@@ -73,6 +74,55 @@ class SelectTests(unittest.TestCase):
             {'ChatGPT-Account-ID': 'acct', 'Host': 'h'}, None)
         self.assertEqual(prepared.host, 'chatgpt.com')
         self.assertNotIn('Authorization', prepared.headers)
+
+class DefinitionHeaderTests(unittest.TestCase):
+    def test_openrouter_turn_carries_the_metadata_header(self):
+        provider = providers.select('z-ai/glm-5.3', '/responses', [])
+        prepared = provider.prepare('z-ai/glm-5.3', '/responses',
+            {'model': 'z-ai/glm-5.3', 'input': []}, b'raw', {}, _stub_credentials())
+        self.assertEqual(prepared.headers.get('X-OpenRouter-Metadata'), 'enabled')
+
+    def test_definition_headers_cannot_override_credentials(self):
+        defn = provider_defs.ProviderDef(
+            id='x', label='X', kind='external', host='example.invalid',
+            responses_path='/r',
+            key=provider_defs.KeySpec('X_KEY', 'x.key'),
+            request_headers=(('Authorization', 'Bearer spoof'),
+                             ('Content-Type', 'text/plain'),
+                             ('X-Custom', 'yes')))
+        provider = providers.ExternalResponsesProvider(defn)
+        with mock.patch.object(providers, 'by_slug',
+                               return_value=SimpleNamespace(
+                                   max_output_tokens=1000, context_window=0,
+                                   provider_prefs=None, drop_images=False)):
+            prepared = provider.prepare(
+                SimpleNamespace(slug='x/m', provider='x', max_output_tokens=1000,
+                                context_window=0, provider_prefs=None, drop_images=False),
+                '/responses', {'model': 'x/m', 'input': []}, b'raw', {},
+                _stub_credentials())
+        self.assertEqual(prepared.headers['Authorization'], 'Bearer router-secret')
+        self.assertEqual(prepared.headers['Content-Type'], 'application/json')
+        self.assertEqual(prepared.headers['X-Custom'], 'yes')
+
+    def test_summarizer_carries_the_metadata_header(self):
+        seen = {}
+
+        class FakeConn:
+            def __init__(self, *a, **k):
+                pass
+            def request(self, method, path, body=None, headers=None):
+                seen.update(headers)
+            def getresponse(self):
+                payload = {'output': [{'type': 'message', 'content': [
+                    {'type': 'output_text', 'text': 's'}]}]}
+                return SimpleNamespace(status=200,
+                                        read=lambda: json.dumps(payload).encode())
+            def close(self):
+                pass
+        with mock.patch.object(providers.http.client, 'HTTPSConnection', FakeConn):
+            _external_responses().summarize('z-ai/glm-5.3', 'key', [])
+        self.assertEqual(seen.get('X-OpenRouter-Metadata'), 'enabled')
+
 
 class OutputCapTests(unittest.TestCase):
     def test_output_cap_follows_registry(self):

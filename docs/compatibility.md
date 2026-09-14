@@ -560,3 +560,18 @@ Grok 4.6 keep the `verified` tier their retired alias rows earned, since
 each alias resolved to the pinned id at the rename (Grok's 2026-09-08 base
 round trip is recorded above); no separate pinned-id probe is recorded for
 the other three.
+
+## Serving-endpoint attribution, 2026-09-14
+
+OpenRouter reorders providers on every tool-calling request by default
+(Auto Exacto) and may deprioritise a previously chosen provider mid-session.
+Sending `X-OpenRouter-Metadata: enabled` (router 0.6.53) makes the response
+and every error envelope carry an `openrouter_metadata` object naming the
+selected endpoint (`endpoints.available[]` with a `selected` flag) and the
+attempts (`attempts[]` with `provider`/`model`/`status`); the router logs the
+serving endpoint as bounded `serving_endpoint` on `upstream_rejected`,
+`upstream_unavailable`, `request_completed` and `request_failed`. Key names
+pinned from the router-metadata guide and the OpenAPI `OpenRouterMetadata`,
+`EndpointInfo` and `RouterAttempt` schemas, read 2026-09-14; the guide's
+`selected.endpoint` path does not exist in the observed shapes, so the
+extractor reads only the `available[]`/`attempts[]`/`provider_name` order.

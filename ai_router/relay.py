@@ -100,6 +100,7 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
                     log_event('upstream_unavailable', status=response.status,
                               client_status=status, code=code,
                               parameter=upstream.rejection_parameter(raw),
+                              serving_endpoint=upstream.serving_endpoint(raw),
                               category='UPSTREAM_UNAVAILABLE',
                               **metrics, **upstream.rejection_fingerprint(prepared.body))
                     return handler.retryable_reject(errors.upstream_unavailable(message),
@@ -111,6 +112,7 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
                 log_event('upstream_rejected', status=response.status,
                           client_status=status, code=code,
                           parameter=upstream.rejection_parameter(raw),
+                          serving_endpoint=upstream.serving_endpoint(raw),
                           category='PROVIDER_REJECTED',
                           **metrics, **upstream.rejection_fingerprint(prepared.body))
                 if status == 400:
