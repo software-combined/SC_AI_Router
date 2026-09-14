@@ -17,7 +17,7 @@ import secrets
 from compression import zstd
 from . import claude, errors, model_prompt_page, setup, sse
 from .errors import InvalidSize
-from .runtime import VERSION
+from .runtime import MAX_DECODE_FACTOR, VERSION
 
 
 def send_json(handler, status, obj, headers=None):
@@ -184,11 +184,13 @@ def read_body(handler, max_body):
         raise InvalidSize('Invalid request size')
     body = handler.rfile.read(size)
     encoding = handler.headers.get('Content-Encoding', '')
+    # zstd may expand past max_body so prepare can slim tool_search schemas.
+    limit = max_body * MAX_DECODE_FACTOR if encoding == 'zstd' else max_body
     if encoding == 'zstd':
         with zstd.ZstdFile(io.BytesIO(body)) as stream:
-            decoded = stream.read(max_body + 1)
+            decoded = stream.read(limit + 1)
     else:
         decoded = body
-    if len(decoded) > max_body:
+    if len(decoded) > limit:
         raise InvalidSize('Decoded request is too large')
-    return body, json.loads(decoded), size
+    return body, json.loads(decoded), size, len(decoded)
