@@ -23,6 +23,11 @@ class SubagentInstructionTests(unittest.TestCase):
         path.write_text(json.dumps(catalog))
         self.assertTrue(check(str(path), 'codex', allowed))
 
+    def test_rendered_instructions_mark_delivered_names_as_not_tools(self):
+        template = external_entry(by_slug('z-ai/glm-5.3-flash'))[
+            'model_messages']['instructions_template']
+        self.assertIn('`delivered_message` or `delivered_app_message` are', template)
+
     def test_no_row_serves_the_raw_placeholder(self):
         catalog = merge({'models': []}, ('gpt-6-astra', 'gpt-5.6-luna'))
         for row in catalog['models']:
