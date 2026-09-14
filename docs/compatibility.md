@@ -406,8 +406,13 @@ Per-model quirks, generated from the registry:
 | openai/gpt-6-astra | text,image | native | None | - | verified |
 | qwen/qwen3.8-max-0902 | text,image | native | None | - | verified |
 | x-ai/grok-4.6 | text,image | json_text_root | 350 | - | verified |
-| z-ai/glm-5.3-flash | text,image | native | None | - | verified |
-| z-ai/glm-5.3 | text | native | None | - | verified |
+| z-ai/glm-5.3-flash | text,image | native | 128 | - | verified |
+| z-ai/glm-5.3 | text | native | 128 | - | verified |
+
+Both GLM rows (`z-ai/glm-5.3`, `z-ai/glm-5.3-flash`) carry
+`max_tools: 128`, the Z.ai documented ceiling (router 0.6.57); sessions with
+more declared tools degrade the way the Grok row does instead of failing
+upstream.
 
 Text-only rows (`deepseek/deepseek-v4-pro-0813`, `z-ai/glm-5.3`) and the
 `drop_images` row (`x-ai/grok-4.6`) note historical images on the wire as
