@@ -19,16 +19,53 @@ from .runtime import log_event
 from .stream_errors import is_context_error
 
 
+_429_QUOTA_CODES = frozenset((
+    'insufficient_quota', 'billing_hard_limit_reached', 'billing_not_active',
+    'credit_balance_too_low'))
+_429_AUTH_CODES = frozenset((
+    'invalid_api_key', 'insufficient_permissions', 'account_deactivated',
+    'authentication_error'))
+
+
+def _429_codes(body):
+    """Structured 429 codes from the error envelope; never message prose."""
+    try:
+        payload = json.loads(body.decode() if isinstance(body, bytes) else body)
+    except (ValueError, UnicodeDecodeError, AttributeError):
+        return ()
+    if not isinstance(payload, dict) or not isinstance(payload.get('error'), dict):
+        return ()
+    error = payload['error']
+    codes = [error.get('code'), error.get('type'), error.get('error_type')]
+    metadata = error.get('metadata')
+    if isinstance(metadata, dict):
+        codes.append(metadata.get('provider_code'))
+    return tuple(c.lower() for c in codes if isinstance(c, str))
+
+
+def classify_429(body):
+    """'quota' | 'auth' | 'transient' from structured 429 codes only."""
+    for code in _429_codes(body):
+        if code in _429_QUOTA_CODES or 'quota' in code or 'billing' in code or 'credit' in code:
+            return 'quota'
+        if code in _429_AUTH_CODES or 'permission' in code or 'api_key' in code \
+                or 'authentication' in code:
+            return 'auth'
+    return 'transient'
+
+
 def upstream_retry_after(response, prepared, metrics):
-    """Consume an upstream 429 and return its Retry-After; None otherwise.
+    """Consume an upstream 429; return (category, Retry-After), else None.
 
     Codex treats a bare 429 as turn-fatal, so the caller must answer 503.
     """
     if response.status != 429:
         return None
-    response.read()
-    log_event('upstream_rate_limited', provider=prepared.provider, path=metrics['path'])
-    return response.getheader('Retry-After', '2')
+    body = response.read()
+    category = classify_429(body)
+    log_event('upstream_rate_limited', provider=prepared.provider, path=metrics['path'],
+              category=category)
+    return category, response.getheader('Retry-After', '2')
 
 
 _CODE_SHAPE = re.compile(r'^[A-Za-z0-9_.-]{1,40}$')
@@ -63,7 +100,10 @@ def _error_code(error, inner_error):
     match the code shape on its own yields None, so the client message and
     the log can never carry an upstream sentence.
     """
+    metadata = error.get('metadata')
     candidates = [error.get('code'), error.get('error_type')]
+    if isinstance(metadata, dict):
+        candidates.append(metadata.get('provider_code'))
     if isinstance(inner_error, dict):
         candidates += [inner_error.get('code'), inner_error.get('error_type')]
     for candidate in candidates:
@@ -167,7 +207,7 @@ def recall_refusal(provider, model, body, now=None):
     return hit[0]
 
 
-def remember_refusal(provider, model, body, message, now=None, *, status=409):
+def remember_refusal(provider, model, body, message, now=None, *, status=400):
     """Cache a described refusal; evict oldest writes past 8 entries."""
     clock = now if now is not None else time.monotonic()
     key = _refusal_key(provider, model, body)
@@ -212,6 +252,12 @@ def describe_failure(exc, response, info):
     if response is not None:
         if response.get('status') == 429:
             return None  # existing Retry-After path owns 429s
+        if (info.get('protocol') == provider_defs.RESPONSES
+                and (response.get('status', 0) >= 500 or response.get('status') == 408)):
+            parsed = _provider_reason(response.get('body', b'')) or (None,)
+            who = f'upstream {parsed[0]}' if parsed[0] else 'upstream'
+            return 503, (f'{model} is unavailable at {who} '
+                         f'(HTTP {response.get("status")}); retry shortly'), None
         parsed = _provider_reason(response.get('body', b''))
         if parsed is None:
             return None
@@ -229,10 +275,10 @@ def describe_failure(exc, response, info):
         param = rejection_parameter(response.get('body', b''))
         if param:
             message += f'; field: {param}'
-        status = (400 if response.get('status') == 400
-                  and info.get('protocol') == provider_defs.RESPONSES
-                  and not is_context_error(response.get('body', b'')) else 409)
-        return status, message, code
+        if (info.get('protocol') == provider_defs.RESPONSES
+                and not is_context_error(response.get('body', b''))):
+            return 400, message, code
+        return 409, message, code
     if isinstance(exc, TimeoutError):
         elapsed = round((info.get('elapsed_ms') or 0) / 1000)
         message = (f'{model} did not answer within {timeout}s '

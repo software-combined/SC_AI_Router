@@ -42,7 +42,7 @@ class FailureDescriptionTests(unittest.TestCase):
         self.assertEqual(status, 502)
         self.assertIn('openrouter.ai', message)
 
-    def test_nested_provider_400_becomes_actionable_409(self):
+    def test_nested_provider_400_becomes_actionable_400(self):
         raw = ('{"code": "invalid-argument", "error": "Failed to start sampling: '
                '[invalid_client_tool_schema] ns_abc123def456_tool_update: tool parameter '
                'root must be an object type"}')
@@ -50,9 +50,9 @@ class FailureDescriptionTests(unittest.TestCase):
                                      'metadata': {'raw': raw, 'provider_name': 'xAI'}}})
         status, message, _ = upstream.describe_failure(
             None, {'status': 400, 'body': body.encode()},
-            {'model': 'x-ai/grok-4.6', 'provider': 'openrouter',
+            {'model': 'x-ai/grok-4.6', 'provider': 'openrouter', 'protocol': 'responses',
              'elapsed_ms': 1831.8, 'timeout_s': 120, 'has_image': False})
-        self.assertEqual(status, 409)
+        self.assertEqual(status, 400)
         self.assertIn('xAI', message)
         self.assertIn('ns_abc123def456_tool_update', message)
         self.assertIn('tool schema was rejected', message)
@@ -65,8 +65,9 @@ class FailureDescriptionTests(unittest.TestCase):
         status, message, code = upstream.describe_failure(
             None, {'status': 400, 'body': body.encode()},
             {'model': 'meta/muse-spark-1.3-contributor', 'provider': 'openrouter',
+             'protocol': 'responses',
              'elapsed_ms': 1500.0, 'timeout_s': 120, 'has_image': False, 'routed': True})
-        self.assertEqual(status, 409)
+        self.assertEqual(status, 400)
         self.assertIsNone(code)
         self.assertIn('the request was rejected', message)
         self.assertIn('Switch this thread back to the previous model, '
@@ -91,6 +92,7 @@ class FailureDescriptionTests(unittest.TestCase):
                 _, message, code = upstream.describe_failure(
                     None, {'status': 400, 'body': body.encode()},
                     {'model': 'meta/muse-spark-1.3-contributor', 'provider': 'openrouter',
+                     'protocol': 'responses',
                      'elapsed_ms': 1500.0, 'timeout_s': 120, 'has_image': False,
                      'routed': True})
                 self.assertEqual(code, expected)
@@ -106,6 +108,7 @@ class FailureDescriptionTests(unittest.TestCase):
         _, routed_message, _ = upstream.describe_failure(
             None, {'status': 400, 'body': body.encode()},
             {'model': 'meta/muse-spark-1.3-contributor', 'provider': 'openrouter',
+             'protocol': 'responses',
              'elapsed_ms': 1500.0, 'timeout_s': 120, 'has_image': False, 'routed': True})
         plain_message = upstream.describe_failure(
             None, {'status': 400, 'body': body.encode()},
@@ -191,14 +194,14 @@ class RefusalCacheTests(unittest.TestCase):
     def test_changed_body_dispatches_again(self):
         body = json.dumps({'input': []}).encode()
         upstream.remember_refusal('openrouter', 'm', body, 'MSG', now=10.0)
-        self.assertEqual(upstream.recall_refusal('openrouter', 'm', body, now=20.0), (409, 'MSG'))
+        self.assertEqual(upstream.recall_refusal('openrouter', 'm', body, now=20.0), (400, 'MSG'))
         self.assertIsNone(upstream.recall_refusal(
             'openrouter', 'm', json.dumps({'input': [1]}).encode(), now=20.0))
 
     def test_entries_expire_after_60_seconds(self):
         body = b'same'
         upstream.remember_refusal('openrouter', 'm', body, 'MSG', now=100.0)
-        self.assertEqual(upstream.recall_refusal('openrouter', 'm', body, now=160.0), (409, 'MSG'))
+        self.assertEqual(upstream.recall_refusal('openrouter', 'm', body, now=160.0), (400, 'MSG'))
         self.assertIsNone(upstream.recall_refusal('openrouter', 'm', body, now=160.1))
 
     def test_cache_caps_at_8_entries(self):
@@ -208,7 +211,67 @@ class RefusalCacheTests(unittest.TestCase):
         self.assertEqual(len(upstream._REFUSALS), 8)
         self.assertIsNone(upstream.recall_refusal('openrouter', 'm', b'body-0', now=110.0))
         self.assertEqual(upstream.recall_refusal('openrouter', 'm', b'body-8', now=110.0),
-                         (409, 'MSG-8'))
+                         (400, 'MSG-8'))
+
+    def test_responses_upstream_5xx_is_a_retryable_503(self):
+        body = json.dumps({'error': {'message': 'No available provider',
+                                     'code': 503}}).encode()
+        status, message, _ = upstream.describe_failure(
+            None, {'status': 503, 'body': body},
+            {'model': 'm', 'provider': 'openrouter', 'protocol': 'responses',
+             'elapsed_ms': 10.0, 'timeout_s': 120, 'has_image': False, 'routed': True})
+        self.assertEqual(status, 503)
+        self.assertIn('unavailable', message)
+        self.assertIn('retry shortly', message)
+        self.assertNotIn('Do not retry', message)
+
+    def test_responses_upstream_408_is_a_retryable_503(self):
+        body = json.dumps({'error': {'message': 'timed out'}}).encode()
+        status, _, _ = upstream.describe_failure(
+            None, {'status': 408, 'body': body},
+            {'model': 'm', 'provider': 'openrouter', 'protocol': 'responses',
+             'elapsed_ms': 10.0, 'timeout_s': 120, 'has_image': False, 'routed': True})
+        self.assertEqual(status, 503)
+
+    def test_messages_upstream_5xx_keeps_todays_409(self):
+        body = json.dumps({'error': {'message': 'Provider returned error'}}).encode()
+        status, message, _ = upstream.describe_failure(
+            None, {'status': 502, 'body': body},
+            {'model': 'm', 'provider': 'openrouter', 'protocol': 'messages',
+             'elapsed_ms': 10.0, 'timeout_s': 120, 'has_image': False})
+        self.assertEqual(status, 409)
+        self.assertIn('Do not retry the unchanged request', message)
+
+    def test_classify_429_quota_auth_and_transient(self):
+        quota = json.dumps({'error': {'message': 'slow down', 'code': 'insufficient_quota'}})
+        auth = json.dumps({'error': {'message': 'slow down', 'code': 'invalid_api_key'}})
+        fuzzy_quota = json.dumps({'error': {'message': 'slow down',
+                                            'metadata': {'provider_code': 'billing_hard_limit'}}})
+        transient = json.dumps({'error': {'message': 'Rate limited: quota words in prose only'}})
+        self.assertEqual(upstream.classify_429(quota), 'quota')
+        self.assertEqual(upstream.classify_429(auth), 'auth')
+        self.assertEqual(upstream.classify_429(fuzzy_quota), 'quota')
+        # Prose never classifies: only structured code fields count.
+        self.assertEqual(upstream.classify_429(transient), 'transient')
+        self.assertEqual(upstream.classify_429(b'not json'), 'transient')
+
+    def test_upstream_retry_after_returns_category_and_header(self):
+        from types import SimpleNamespace
+        logged = []
+        with mock.patch.object(upstream, 'log_event',
+                               lambda event, **f: logged.append((event, f))):
+            response = SimpleNamespace(status=429, read=lambda *a: b'{"error": {"code": "x"}}',
+                                       getheader=lambda *a, **k: '7')
+            prepared = SimpleNamespace(provider='openrouter')
+            self.assertEqual(upstream.upstream_retry_after(
+                response, prepared, {'path': '/responses'}), ('transient', '7'))
+            self.assertEqual(logged[-1], ('upstream_rate_limited',
+                                          {'provider': 'openrouter', 'path': '/responses',
+                                           'category': 'transient'}))
+            other = SimpleNamespace(status=200, read=lambda *a: b'',
+                                    getheader=lambda *a, **k: '2')
+            self.assertIsNone(upstream.upstream_retry_after(
+                other, prepared, {'path': '/responses'}))
 
     def test_transient_upstream_failure_dispatches_again(self):
         from ai_router import relay

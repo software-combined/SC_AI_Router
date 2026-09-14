@@ -3,7 +3,8 @@
 Recorded upstream shapes do not exist for any native path (the spike saw
 no native traffic for custom providers), so every path answers 404 rather
 than guessing a response shape Codex might misread. Guardian paths name the
-setting that unblocks approvals instead.
+setting that unblocks approvals instead. Native paths are a prefix rule on
+the OpenAI definition (`provider_defs.native_service_path`), not a list.
 """
 from . import errors
 from .runtime import log_event

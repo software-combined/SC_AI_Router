@@ -44,11 +44,11 @@ class SafeDiagnosticsTests(unittest.TestCase):
             'metadata': {'provider_name': 'TestProv'}}}).encode()
         described = upstream.describe_failure(
             None, {'status': 400, 'body': body},
-            {'model': 'z-ai/glm-5.3', 'provider': 'openrouter',
+            {'model': 'z-ai/glm-5.3', 'provider': 'openrouter', 'protocol': 'responses',
              'elapsed_ms': 1.0, 'timeout_s': 120, 'has_image': False})
         self.assertIsNotNone(described)
         status, message, _ = described
-        self.assertEqual(status, 409)
+        self.assertEqual(status, 400)
         LOG.info(json.dumps({'event': 'upstream_rejected_test', 'code': 'PROVIDER_REJECTED'}))
         self.assertNotIn(MARKER, message)
         self.assertNotIn(MARKER, _logged_text(handler))
@@ -61,11 +61,11 @@ class SafeDiagnosticsTests(unittest.TestCase):
                                                   'provider_name': 'TestProv'}}}).encode()
         described = upstream.describe_failure(
             None, {'status': 400, 'body': body},
-            {'model': 'z-ai/glm-5.3', 'provider': 'openrouter',
+            {'model': 'z-ai/glm-5.3', 'provider': 'openrouter', 'protocol': 'responses',
              'elapsed_ms': 1.0, 'timeout_s': 120, 'has_image': False})
         self.assertIsNotNone(described)
         status, message, _ = described
-        self.assertEqual(status, 409)
+        self.assertEqual(status, 400)
         self.assertNotIn(MARKER, message)
         self.assertNotIn(MARKER, _logged_text(handler))
 
@@ -110,7 +110,7 @@ class SafeDiagnosticsTests(unittest.TestCase):
                                     'text': f'secret {MARKER}'}]}],
             'tools': []}).encode()
         upstream.remember_refusal('openrouter', 'z-ai/glm-5.3', body,
-                                  'cached 409 message', now=100.0)
+                                  'cached 400 message', now=100.0)
         self.addCleanup(upstream.clear_refusals)
         prepared = Prepared('openrouter.ai', '/responses', {}, body, {}, 'openrouter')
         metrics = {'provider': 'openrouter', 'protocol': 'responses',
@@ -134,7 +134,7 @@ class SafeDiagnosticsTests(unittest.TestCase):
 
     def test_rejection_log_carries_code_not_message_content(self):
         # Drive the real Handler.error path with a marker-bearing failure:
-        # the client still gets its 409 body, but the marker must not reach
+        # the client still gets its 400 body, but the marker must not reach
         # the structured log. Catches a reintroduction of reason=err.message.
         from types import SimpleNamespace
         from ai_router.router import Handler

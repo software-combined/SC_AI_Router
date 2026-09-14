@@ -318,19 +318,39 @@ stream. `code` is `context_length_exceeded` for a context-limit refusal,
 `UPSTREAM_INCOMPLETE` when the provider reported an incomplete response,
 `UPSTREAM_INVALID_PROMPT` when OpenRouter refused the converted request after
 the stream opened, and `UPSTREAM_STREAM_FAILED` for any other terminal error.
-Three fields say why:
+Six fields say why:
 
 | Field | Meaning |
 |---|---|
 | `terminal_event` | `response.failed`, `response.incomplete`, or `error` |
 | `upstream_reason` | the `incomplete_details.reason` enum, when reported |
 | `upstream_code` | the error envelope's `code` or `error_type`, when present |
+| `upstream_error_type` | the canonical top-level `error_type`, when reported |
+| `upstream_provider_code` | the `error.metadata.provider_code`, when reported |
+| `failure_class` | `context`, `final` or `transient`; the stream retry runs only on `transient` |
 
-Both details must be code-shaped (letters, digits, dot, dash, underscore) and
+Every detail must be code-shaped (letters, digits, dot, dash, underscore) and
 at most 64 characters; anything else, including message text, is dropped
 rather than recorded, because provider prose can quote prompt content. A
 missing detail means the provider did not say why, or said it in a form this
 rule refuses to record.
+
+## Router answer codes (Responses protocol)
+
+The router answers deterministic refusals with HTTP 400 (the client treats
+400 as final and shows the message at once) and transient upstream failures
+with HTTP 503 plus `Retry-After: 2` (the client retries on its own backoff;
+Codex paces itself and does not read the header). The only retryable 409
+left on Responses is the compaction summariser's, where a repeat can cure
+the failure; an oversized turn answers 400 with guidance instead of 413. The
+Anthropic Messages path keeps its existing answers except at that shared
+size boundary, where it answers 400 like Responses.
+
+| Event | Meaning |
+|---|---|
+| `upstream_unavailable` | an upstream 5xx or 408 on a Responses turn, answered 503 |
+| `client_disconnected` | the client hung up mid-stream; previously counted as `transport_error` |
+| `upstream_rate_limited` | an upstream 429, with `category` `quota`, `auth` or `transient`; on Responses a quota 429 answers 400 `PROVIDER_REJECTED` and an auth 429 opens the key window |
 
 ## Stream identity observation (last-observed, not proof)
 
@@ -393,6 +413,12 @@ lifecycle without touching any client file; uninstall needs no receipt.
 Switching an active Codex install to `none` restores the exact owned block
 first, or refuses when the block was edited. The choice persists in router
 state and survives scheduled updates.
+
+Native service calls (`/alpha/*`, `/guardian*`) pass through to the
+ChatGPT backend with the client's own login in subscription mode and answer
+404 in `none` mode; the list is a prefix rule on the OpenAI definition, so a
+new backend path needs no router change. A dot segment, percent-encoded dot
+or backslash in the path is refused before the prefix test.
 
 Subscription routing is independent per client: `openai_mode` governs
 Responses, `anthropic_mode` governs Messages when explicitly set, otherwise

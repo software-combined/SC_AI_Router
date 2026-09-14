@@ -37,12 +37,33 @@ class ProtocolContractTests(unittest.TestCase):
             | claude_mod.CLAUDE_POST_PATHS
             | {'/responses', '/responses/compact'})
 
+    def test_native_prefix_paths_select_the_responses_policy(self):
+        # Plan 171: the prefix rule routes new backend paths with no second
+        # edit; the exact union above stays pinned.
+        from ai_router import protocols
+        from ai_router.protocols import responses as responses_mod
+        for path in ('/alpha/history/v2/list_items', '/alpha/notes/v2/write_file',
+                     '/alpha/search', '/guardian-classifier'):
+            self.assertIs(protocols.select('POST', path), responses_mod.POLICY)
+        for path in ('/alphabet', '/alpha/../v1/me', '/alpha/%2e%2e/x'):
+            self.assertIsNone(protocols.select('POST', path))
+
     def _server(self, **overrides):
         state = _test_state(_auth_file(self))
         state.update(overrides)
         server = _start_server(state)
         self.addCleanup(server.shutdown)
         return server
+
+    def test_messages_quota_429_keeps_retryable_503_shape(self):
+        # The 429 quota/auth split is Responses-only: a Messages 429 with a
+        # quota-coded body keeps today's 503, byte-identical.
+        install_fake(self, lambda: FakeUpstream(429, b'{"error": {"code": "insufficient_quota"}}',
+                                                [('Content-Type', 'application/json')]))
+        server = self._server()
+        response = _post(server.server_port, '/test-token/v1/messages',
+                         _messages(), {'Authorization': 'Bearer subscription-secret'})
+        self.assertEqual(response.status, 503)
 
     def test_messages_429_keeps_retryable_503_shape(self):
         # Responses pins this in test_handler; Messages must keep the same
