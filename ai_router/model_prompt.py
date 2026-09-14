@@ -44,9 +44,19 @@ def _scope(home):
     return f'{portco}/{department or "-"}', allowed
 
 
-def _visible(client, allowed):
-    visible, _hidden = catalogue._visible_rows(client, allowed)
+def _visible(client, allowed, available=None):
+    visible, _hidden = catalogue._visible_rows(client, allowed,
+                                               available=available)
     return [(model.slug, model.display_name) for model in visible]
+
+
+def _available(home):
+    # Key-filtered id set, or None before the first `/models/user`
+    # success. Routing and the prompt share this read so the announced
+    # set never widens the routable set.
+    from . import availability as _availability
+    return _availability.effective_ids(
+        home, _availability.current_key(home), _availability.current_region(home))
 
 
 def visible_models(home, client='codex'):
@@ -59,7 +69,7 @@ def visible_models(home, client='codex'):
     is routable. Rows that are not listed (Plan 145) are never returned.
     """
     _scope_key, allowed = _scope(home)
-    return _visible(_client(client), allowed)
+    return _visible(_client(client), allowed, _available(home))
 
 
 def _read_doc(home, scope, client):
@@ -134,7 +144,7 @@ def pending(home, client='codex'):
     scope, allowed = _scope(home)
     if _rejected(scope, allowed):
         return []
-    visible = _visible(client, allowed)
+    visible = _visible(client, allowed, _available(home))
     seen = _read_seen(home, scope, client)
     if seen is None:
         _remember(home, scope, client, [slug for slug, _ in visible])
@@ -200,7 +210,7 @@ def acknowledge(home, client='codex', displayed=None):
     scope, allowed = _scope(home)
     if _rejected(scope, allowed):
         return []
-    visible = _visible(client, allowed)
+    visible = _visible(client, allowed, _available(home))
     if displayed is None:
         shown = pending(home, client)  # seeds an unseen scope and returns []
     else:

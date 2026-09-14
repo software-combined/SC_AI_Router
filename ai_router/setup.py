@@ -265,8 +265,19 @@ def _finish_setup(state, home, mode=None, profile=None, claude_mode=None):
         if claude_mode in ('subscription', 'none'):
             doc['claude_mode'] = claude_mode
             doc['anthropic_mode'] = claude_mode
+        from . import availability as _availability
+        from . import provider_defs as _defs
+        region = _availability.current_region(home)
+        host = _defs.region_host(_defs.DEFAULT_EXTERNAL, region)
+        # A fresh key changes what `/models/user` allows: refresh now so
+        # the seeded catalogue matches the key at once.
+        _avail, _key = None, _availability.current_key(home)
+        if _key and host:
+            snap = _availability.refresh(host, _key, home, region)
+            _avail = None if snap is None else snap.get('models')
         catalogue.merge_file(Path(home) / 'mixed-models.json',
-                             openai_mode=mode or doc.get('openai_mode', 'subscription'))
+                             openai_mode=mode or doc.get('openai_mode', 'subscription'),
+                             available=_avail)
         _atomic_replace(path, doc)
     except (OSError, ValueError):
         return False

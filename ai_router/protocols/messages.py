@@ -13,6 +13,7 @@ class _Policy:
     def select_provider(self, model, path, state, mode):
         return claude.select(model, path, mode,
                              anthropic_mode=state.get('anthropic_mode'),
+                             region=state.get('openrouter_region', 'global'),
                              allowed=state.get('allowed_models'))
 
     def compaction_call(self, provider, model, path, payload):
