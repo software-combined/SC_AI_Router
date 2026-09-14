@@ -409,6 +409,11 @@ Per-model quirks, generated from the registry:
 | z-ai/glm-5.3-flash | text,image | native | None | - | verified |
 | z-ai/glm-5.3 | text | native | None | - | verified |
 
+Text-only rows (`deepseek/deepseek-v4-pro-0813`, `z-ai/glm-5.3`) and the
+`drop_images` row (`x-ai/grok-4.6`) note historical images on the wire as
+`[image omitted: this model runs text-only]` instead of refusing the thread
+(router 0.6.56); only an image in the message being sent is still refused.
+
 ## Probe runs 2026-09-08
 
 Base tool round trip (`probe_codex_runtime.py <slug> --router-state <state> --effort low`)
