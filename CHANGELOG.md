@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.57
+
+- Both GLM rows now carry the documented `max_tools: 128` ceiling (Z.ai
+  allows at most 128 functions per request), so oversized tool lists degrade
+  gracefully instead of failing upstream.
+
 ## 0.6.56
 
 - Switching to a text-only model no longer refuses a thread that carried
