@@ -78,6 +78,7 @@ class ReleaseShellTests(unittest.TestCase):
                       printf '%s\\n' "$TAG_RESPONSE"
                       return "$TAG_STATUS"
                     }
+                    aws() { printf 'seed-bytes\\n'; }
                     python() { touch published; }
                 '''
                 result = subprocess.run(

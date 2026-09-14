@@ -31,6 +31,13 @@ Parameters:
     Description: >-
       Repository IDs GitHub emits in an immutable OIDC subject (owner@id/repo@id),
       kept beside the classic form so either claim can assume the role.
+  SigningSeedArn:
+    Type: String
+    Default: 'arn:aws:secretsmanager:ap-southeast-2:${AWS_ACCOUNT_ID}:secret:scg/router/feed-signing-seed-UNSET'
+    Description: ARN of the Secrets Manager secret holding the feed signing
+      seed (Plan 145). The owner replaces the placeholder with the real
+      secret ARN at deploy time.
+    AllowedPattern: '^arn:aws[A-Za-z-]*:secretsmanager:[a-z0-9-]+:\d{12}:secret:.+$'
 Resources:
   FeedBucket:
     Type: AWS::S3::Bucket
@@ -158,6 +165,9 @@ Resources:
               - Effect: Allow
                 Action: cloudformation:DescribeStacks
                 Resource: !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AWS::StackName}/*
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Ref SigningSeedArn
 Outputs:
   DistributionId:
     Description: Invalidation target; the release workflow reads this output.

@@ -77,8 +77,23 @@ class PublishFeedTests(unittest.TestCase):
         (dist / 'latest.json').write_text(json.dumps(latest))
         return dist
 
+    def _seed(self, dist):
+        import importlib.util as _ilu
+        spec = _ilu.spec_from_file_location(
+            'router_feed_verify_seed',
+            Path(__file__).resolve().parents[1] / 'packaging' / 'feed_verify.py')
+        fv = _ilu.module_from_spec(spec)
+        spec.loader.exec_module(fv)
+        seed, _pub = fv.generate_keypair()
+        key = dist / 'seed'
+        key.parent.mkdir(parents=True, exist_ok=True)
+        key.write_text(seed + '\n')
+        return key
+
     def _run(self, dist, runner, channel='beta', extra=()):
         argv = ['--dist', str(dist), '--channel', channel, '--bucket', 'feed-bucket']
+        if not any(a == '--sign' or str(a).startswith('--sign=') for a in extra):
+            argv += ['--sign', str(self._seed(dist))]
         out = io.StringIO()
         with mock.patch.object(publish, 'run', runner), \
                 redirect_stdout(out), redirect_stderr(io.StringIO()):
@@ -121,7 +136,8 @@ class PublishFeedTests(unittest.TestCase):
         dist = self._dist()
         with self.assertRaises(SystemExit) as caught:
             with mock.patch.object(publish, 'run', _Aws(existing='b' * 64)):
-                publish.main(['--dist', str(dist), '--channel', 'beta'])
+                publish.main(['--dist', str(dist), '--channel', 'beta',
+                              '--sign', str(self._seed(dist))])
         self.assertIn('immutable', str(caught.exception))
 
     def test_unreadable_bundle_state_is_refused(self):
@@ -156,7 +172,7 @@ class PublishFeedTests(unittest.TestCase):
                            's3://feed-bucket/beta/latest.json')])
         invalidations = [call for call in runner.calls if 'create-invalidation' in call]
         self.assertEqual([[call[call.index('--paths') + 1]] for call in invalidations],
-                         [['/beta/latest.json']])
+                         [['/beta/latest.json'], ['/beta/latest.json.sig']])
         feed_doc = json.loads((dist / 'feed-latest.json').read_text())
         self.assertNotIn('feed_token', feed_doc)
         release_doc = json.loads((dist / 'release-latest.json').read_text())
@@ -175,7 +191,7 @@ class PublishFeedTests(unittest.TestCase):
                       [call[4] for call in uploaded])
         invalidations = [call for call in runner.calls if 'create-invalidation' in call]
         self.assertEqual([[call[call.index('--paths') + 1]] for call in invalidations],
-                         [['/stable/latest.json']])
+                         [['/stable/latest.json'], ['/stable/latest.json.sig']])
         feed_doc = json.loads((dist / 'feed-latest.json').read_text())
         original = json.loads((dist / 'latest.json').read_text())
         for field in ('version', 'sha256', 'serial', 'min_python'):
@@ -204,6 +220,37 @@ class PublishFeedTests(unittest.TestCase):
         self.assertIn('dry run', out)
         self.assertFalse((dist / 'feed-latest.json').exists())
         self.assertFalse((dist / 'release-latest.json').exists())
+
+    def test_publish_without_sign_is_refused(self):
+        dist = self._dist()
+        runner = _Aws()
+        with self.assertRaisesRegex(SystemExit, 'unsigned'):
+            with mock.patch.object(publish, 'run', runner), \
+                    redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                publish.main(['--dist', str(dist), '--channel', 'beta',
+                              '--bucket', 'feed-bucket'])
+
+    def test_sidecar_signs_served_bytes(self):
+        import importlib.util as _ilu
+        dist = self._dist()
+        runner = _Aws()
+        self._run(dist, runner)
+        spec = _ilu.spec_from_file_location(
+            'router_feed_verify_sidecar',
+            Path(__file__).resolve().parents[1] / 'packaging' / 'feed_verify.py')
+        fv = _ilu.module_from_spec(spec)
+        spec.loader.exec_module(fv)
+        seed = (dist / 'seed').read_text().strip()
+        pub = fv.public_key_hex(seed)
+        body = (dist / publish.FEED_DOCUMENT).read_bytes()
+        sig = (dist / publish.FEED_SIG_DOCUMENT).read_text()
+        with mock.patch.object(fv, 'FEED_PUBLIC_KEY', pub):
+            self.assertEqual(fv.checked_feed(body, sig.encode())['serial'], 7)
+        served = dict(json.loads(body.decode()))
+        served['url'] = 'https://other.example/x.tar.gz'
+        with mock.patch.object(fv, 'FEED_PUBLIC_KEY', pub):
+            with self.assertRaises(SystemExit):
+                fv.checked_feed((json.dumps(served, indent=2) + '\n').encode(), sig.encode())
 
     def test_unknown_channel_is_refused(self):
         dist = self._dist()

@@ -107,13 +107,24 @@ class FeedTests(unittest.TestCase):
         latest = {'version': '2.0.0', 'url': ORIGIN + '/bundles/2.0.0.tar.gz',
                   'sha256': None, 'serial': 1}
         seen = []
+        import importlib.util as _ilu
+        _spec = _ilu.spec_from_file_location(
+            'router_feed_verify_mig',
+            Path(__file__).resolve().parents[1] / 'packaging' / 'feed_verify.py')
+        _fv = _ilu.module_from_spec(_spec)
+        _spec.loader.exec_module(_fv)
+        _seed, _pub = _fv.generate_keypair()
+        _doc = json.dumps(latest).encode()
+        _sig = _fv.sign_hex(_seed, _doc).encode()
 
         def fake_urlopen(req, timeout=None):
             url = getattr(req, 'full_url', req)
             headers = getattr(req, 'headers', {})
             seen.append((url, {name.lower() for name in headers}))
+            if url.endswith('/stable/latest.json.sig'):
+                return _Response(_sig)
             if url.endswith('/stable/latest.json'):
-                return _Response(json.dumps(latest).encode())
+                return _Response(_doc)
             return _Response(b'blob')
 
         def fake_extract(blob, dest):
@@ -122,13 +133,21 @@ class FeedTests(unittest.TestCase):
 
         _patch_attrs(self, safe_extract=fake_extract,
                      run=lambda cmd, **kw: _ok_run(cmd, **kw))
+        updater_mod = install_mod._updater
+        old_key = updater_mod._FEED_VERIFY_KEY
+        updater_mod._FEED_VERIFY_KEY = _pub
         args = install_mod.build_parser().parse_args(['--home', str(home)])
-        with mock.patch.object(svc.urllib.request, 'urlopen', side_effect=fake_urlopen):
-            with contextlib.redirect_stdout(io.StringIO()):
-                rc = install_mod.do_update(args, _sleep=lambda s: None)
+        try:
+            with mock.patch.object(svc.urllib.request, 'urlopen', side_effect=fake_urlopen):
+                with mock.patch.object(install_mod._svc.urllib.request, 'urlopen', side_effect=fake_urlopen):
+                    with contextlib.redirect_stdout(io.StringIO()):
+                        rc = install_mod.do_update(args, _sleep=lambda s: None)
+        finally:
+            updater_mod._FEED_VERIFY_KEY = old_key
         self.assertEqual(rc, 0)
         self.assertEqual([url for url, _ in seen],
-                         [ORIGIN + '/stable/latest.json', ORIGIN + '/bundles/2.0.0.tar.gz'])
+                         [ORIGIN + '/stable/latest.json', ORIGIN + '/stable/latest.json.sig',
+                          ORIGIN + '/bundles/2.0.0.tar.gz'])
         for _url, header_names in seen:
             self.assertNotIn('x-scg-feed-token', header_names)
 

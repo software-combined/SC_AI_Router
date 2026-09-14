@@ -87,6 +87,23 @@ def live_feed(url, etag, fetch):
         raise
 
 
+def live_signature(url, fetch):
+    """Detached `.sig` bytes beside a feed document; None when absent.
+
+    Same trusted-origin rule as the document read. The sidecar travels
+    through the caller's fetch seam (injected fakes included); only a
+    `file://` absence or fetch failure yields None. Never raises otherwise:
+    absence is decided by the caller.
+    """
+    sig_url = url + '.sig'
+    if not url.startswith('file://') and not trusted_origin(url):
+        raise SystemExit('refusing untrusted feed URL: %s' % _safe_url(url))
+    try:
+        return fetch(sig_url)
+    except OSError:
+        return None
+
+
 def feed_source(feed_url):
     """Short feed name for update.log: cloudfront, local, or https."""
     feed_url = str(feed_url)
@@ -106,10 +123,7 @@ def fetch_feed(url, etag, _fetch=None, _live_feed=None):
     bypass the conditional-GET path. The default path calls back into
     service.fetch through _live_feed so the installer's seam still applies.
     """
-    import urllib.error as _httperr
-    import urllib.request as _urlreq
     live = _live_feed if _live_feed is not None else live_feed
-    default_fetch = getattr(live, '__self__', None)
     if _fetch is None:
         import sys as _sys
         _svc_mod = _sys.modules.get('packaging.service')
@@ -117,16 +131,9 @@ def fetch_feed(url, etag, _fetch=None, _live_feed=None):
         if _fetch is None:
             raise SystemExit('service.fetch seam unavailable')
         return live(url, etag, _fetch)
-    if url.startswith('file://'):
-        return 200, _fetch(url), etag
-    req = _urlreq.Request(url, headers={'If-None-Match': etag} if etag else {})
-    try:
-        with _urlreq.urlopen(req, timeout=30) as response:
-            return response.status, response.read(), response.headers.get('ETag', etag)
-    except _httperr.HTTPError as exc:
-        if exc.code == 304:
-            return 304, b'', etag
-        raise
+    # An injected one-argument fake serves the document instead of the
+    # network on every scheme; only the default path does conditional GET.
+    return 200, _fetch(url), etag
 
 
 def feed_serial(home):
