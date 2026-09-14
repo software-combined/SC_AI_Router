@@ -92,9 +92,15 @@ def do_preflight(args):
             missing.append('no Python 3.14 found: the managed install provisions '
                            'the pinned private runtime; otherwise install '
                            'Python 3.14 first')
-    if (args.client or 'codex') == 'codex' and shutil.which('codex') is None:
+    clients = getattr(args, 'clients', None)
+    if clients is None:
+        clients = 'none' if (args.client or 'codex') == 'none' else 'codex'
+    if clients in ('codex', 'both') and shutil.which('codex') is None:
         missing.append('Codex CLI not found: install Codex first, or pass '
                        '--client none for a service-only install')
+    if clients in ('claude', 'both') and shutil.which('claude') is None:
+        missing.append('Claude Code CLI not found: install Claude Code first, '
+                       'or pass --clients codex for a Codex-only install')
     if missing:
         for line in missing:
             print('preflight: ' + line)
