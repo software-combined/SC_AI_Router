@@ -14,8 +14,16 @@ plugin; the installed review plugin's release copy governs a running review.
 
 ## Decide before spending
 
-1. For a trivial or tightly coupled task, work locally. Delegate a concrete,
-   bounded part only when it can run independently alongside useful parent work.
+1. Work locally by default; a trivial, quick or tightly coupled task stays local.
+   Delegate a concrete, bounded part when it improves the expected result:
+   a better-fit model or an independent check raises quality, the parent cannot
+   meet the capability floor, or the part runs independently of the parent's
+   live context and overlaps useful parent work, keeps bulky output out of the
+   parent context, or needs a separate tool or write boundary. The brief, the
+   fresh-context child, the result read and parent verification must return more
+   in quality, time or context than they consume; cost is one factor, not the
+   test. If the parent is the wrong fit for most of the task, say so and ask the
+   user to change the session model rather than relaying the whole task.
 2. Identify the capability floor: tools, modality, context, reliability and
    consequence of error. Check the active runtime's callable tools and catalogue.
    A picker entry, an accepted spawn and a verified served model are different.
@@ -40,7 +48,7 @@ Evidence checked **2026-09-12**. These are task-specific priors, not local proof
 Read [the catalogue evidence](references/catalogue.md) when selecting a model;
 refresh live prices before material spend, long runs, or relying on a promotion.
 
-| Work | Cost-first starting point | Escalate when the acceptance check needs it |
+| Work | Starting point | Escalate when the acceptance check needs it |
 | --- | --- | --- |
 | Bounded text extraction, simple edits, recon | `z-ai/glm-5.3-flash` at `max` | `deepseek/deepseek-v4.1-flash` at `max`; Luna at `max` when its task evidence fits better |
 | Repository investigation, scripts, bounded implementation, tool workflows | `deepseek/deepseek-v4.1-flash` at `max`, or GLM Flash at `max` | `z-ai/glm-5.3` at `max`; Sol or Astra at `max` for difficult debugging |
