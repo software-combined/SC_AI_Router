@@ -142,6 +142,7 @@ def main(argv=None):
     latest = {'version': version, 'url': f'{base}/{tarball_name}',
               'sha256': hashlib.sha256(tarball).hexdigest(), 'min_python': MIN_PYTHON,
               'serial': args.build, 'channel': channel, 'express': express,
+              'models_url': f'https://dist.softwarecombined.com/{channel}/models.json',
               'published': datetime.now(timezone.utc).isoformat(timespec='seconds')}
     (out_dir / 'latest.json').write_text(json.dumps(latest, indent=2) + '\n')
     # The bootstrap resolves its runtime from this table, never from a

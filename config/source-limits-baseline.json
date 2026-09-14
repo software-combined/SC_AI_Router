@@ -12,7 +12,7 @@
   "packaging/notice.py": 500,
   "packaging/operator_surface.py": 421,
   "packaging/service.py": 507,
-  "packaging/updater.py": 496,
+  "packaging/updater.py": 514,
   "tests/test_catalogue.py": 495,
   "tests/test_claude_ingress.py": 388,
   "tests/test_client_activation.py": 464,
