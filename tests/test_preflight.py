@@ -48,6 +48,39 @@ class PreflightTests(unittest.TestCase):
                     self._args('--client', 'none', '--feed', 'file:///bundle.tar.gz'))
         self.assertEqual(rc, 0)
 
+    def test_preflight_claude_only_skips_codex_requires_claude(self):
+        _patch_attrs(self, find_python=lambda explicit=None: '/usr/bin/python3.14')
+        with mock.patch.object(install_mod.shutil, 'which',
+                               side_effect=lambda name: None if name == 'claude' else '/usr/bin/x'):
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                with self.assertRaisesRegex(SystemExit, '2'):
+                    install_mod.do_preflight(
+                        self._args('--clients', 'claude', '--feed', 'file:///bundle.tar.gz'))
+        self.assertIn('Claude Code CLI not found', buf.getvalue())
+        self.assertNotIn('Codex CLI not found', buf.getvalue())
+
+    def test_preflight_claude_only_passes_without_codex(self):
+        _patch_attrs(self, find_python=lambda explicit=None: '/usr/bin/python3.14')
+        with mock.patch.object(install_mod.shutil, 'which',
+                               side_effect=lambda name: None if name == 'codex' else '/usr/bin/x'):
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                rc = install_mod.do_preflight(
+                    self._args('--clients', 'claude', '--feed', 'file:///bundle.tar.gz'))
+        self.assertEqual(rc, 0)
+
+    def test_preflight_both_requires_both_clis(self):
+        _patch_attrs(self, find_python=lambda explicit=None: '/usr/bin/python3.14')
+        with mock.patch.object(install_mod.shutil, 'which',
+                               side_effect=lambda name: None if name == 'claude' else '/usr/bin/x'):
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                with self.assertRaisesRegex(SystemExit, '2'):
+                    install_mod.do_preflight(
+                        self._args('--clients', 'both', '--feed', 'file:///bundle.tar.gz'))
+        self.assertIn('Claude Code CLI not found', buf.getvalue())
+
     def test_preflight_through_main_creates_no_home(self):
         _patch_attrs(self, find_python=lambda explicit=None: '/usr/bin/python3.14')
         with mock.patch.object(install_mod.shutil, 'which', return_value='/usr/bin/x'):
