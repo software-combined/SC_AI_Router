@@ -1,5 +1,9 @@
 # Changelog
 
+## scg-review 0.4.5 — 2026-09-15
+
+- Pin the reviewer inspect commands in the brief: `git write-tree`, `git diff --cached --stat`, `git diff --cached`, and `git show :path` for listed staged files. Do not reconstruct trees, extract the repository, or rerun the same model with the same brief.
+
 ## scg-review 0.4.4 — 2026-09-15
 
 - Remove the one-cycle cap on material remediations and targeted re-reviews. Keep cycling until the commit is All Clear or Proceed With Notes, or an accepted blocker needs owner or product input.
