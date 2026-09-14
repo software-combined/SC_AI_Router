@@ -17,6 +17,11 @@ from .tool_adapter import prepare_tools, snoop_response_identity, stream_events,
 # existing importers working until the protocol split completes.
 from .transport import HOP_HEADERS, Prepared, passthrough
 NATIVE_SERVICE_PATHS = {'/alpha/search', '/alpha/notes/v2/thread_hint', '/guardian', '/guardian-classifier'}
+
+
+def is_native_service(path):
+    # Any native path the subscription definitions claim (prefix rule).
+    return provider_defs.native_service_path(path)
 SUMMARY_OUTPUT_TOKENS = 4000
 SUMMARY_RETRY_OUTPUT_TOKENS = 8000
 SUMMARY_DEADLINE_S = 120
@@ -58,7 +63,7 @@ class SubscriptionProvider:
         del allowed  # Subscription rows are never allowlisted.
         if openai_mode == 'none':
             return False
-        if path in NATIVE_SERVICE_PATHS:
+        if is_native_service(path):
             return True
         entry = by_slug(model) if isinstance(model, str) else None
         if entry is not None:
@@ -108,7 +113,7 @@ class ExternalResponsesProvider:
              allowed=None):
         entry = by_slug(model) if isinstance(model, str) else None
         if (entry is None or entry.provider != self.defn.id
-                or path in NATIVE_SERVICE_PATHS):
+                or is_native_service(path)):
             return False
         # Plan 068: a portco allowlist gates routing, never just the picker.
         # None means no policy provisioned (today's behavior); subscription
@@ -299,7 +304,7 @@ class LocalServicesProvider:
     def owns(self, model, path, openai_models, openai_mode='subscription',
              allowed=None):
         del allowed  # Native service paths are never allowlisted.
-        return openai_mode == 'none' and path in NATIVE_SERVICE_PATHS
+        return openai_mode == 'none' and is_native_service(path)
 
     def prepare(self, model, path, payload, raw_body, headers, credentials):
         local_services.answer(path)

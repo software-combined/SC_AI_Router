@@ -299,9 +299,9 @@ class UpstreamHintTests(unittest.TestCase):
                                      'metadata': {'raw': raw, 'provider_name': 'xAI'}}})
         status, message, _ = upstream.describe_failure(
             None, {'status': 400, 'body': body.encode()},
-            {'model': 'x-ai/grok-4.6', 'provider': 'openrouter',
+            {'model': 'x-ai/grok-4.6', 'provider': 'openrouter', 'protocol': 'responses',
              'elapsed_ms': 1831.8, 'timeout_s': 120, 'has_image': False})
-        self.assertEqual(status, 409)
+        self.assertEqual(status, 400)
         self.assertIn('probe__echo', message)
         self.assertIn('tool schema was rejected', message)
 

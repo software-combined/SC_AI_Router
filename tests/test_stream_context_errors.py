@@ -112,7 +112,8 @@ class StreamContextTests(unittest.TestCase):
         body, logs = self.request(wire)
         event = json.loads(next(sse.blocks(io.BytesIO(body)))[1])
         self.assertEqual(event['type'], 'response.failed')
-        self.assertEqual(event['response']['error']['code'], 'UPSTREAM_INVALID_PROMPT')
+        # Codex ends the turn on invalid_prompt; an unknown code would retry.
+        self.assertEqual(event['response']['error']['code'], 'invalid_prompt')
         self.assertNotIn(b'Extra inputs are not permitted', body)
         failures = [c for c in logs if c.args[0] == 'request_failed']
         self.assertEqual(len(failures), 1)
@@ -122,6 +123,102 @@ class StreamContextTests(unittest.TestCase):
         self.assertNotIn('Extra inputs are not permitted', str(logs))
         self.assertNotIn('served_model', failures[0].kwargs)
         self.assertFalse(any(c.args[0] == 'request_completed' for c in logs))
+
+    def test_invalid_request_error_type_is_final_and_keeps_fatal_code(self):
+        wire = sse.frame(json.dumps({'type': 'response.failed', 'response': {
+            'status': 'failed',
+            'error': {'code': 'invalid_prompt', 'error_type': 'invalid_request',
+                      'message': 'private-input'}}}).encode())
+        body, logs = self.request(wire)
+        event = json.loads(next(sse.blocks(io.BytesIO(body)))[1])
+        self.assertEqual(event['response']['error']['code'], 'invalid_prompt')
+        failures = [c for c in logs if c.args[0] == 'request_failed']
+        self.assertEqual(len(failures), 1)
+        self.assertEqual(failures[0].kwargs['failure_class'], 'final')
+        self.assertEqual(failures[0].kwargs['upstream_error_type'], 'invalid_request')
+        self.assertEqual(failures[0].kwargs['code'], 'UPSTREAM_INVALID_PROMPT')
+        self.assertNotIn('private-input', str(logs))
+
+    def test_server_error_is_transient_and_retried_before_any_answer(self):
+        wire = sse.frame(json.dumps({'type': 'response.failed', 'response': {
+            'status': 'failed',
+            'error': {'code': 'server_error', 'message': 'private-input'}}}).encode())
+        body, logs = self.request(wire)
+        self.assertEqual(body, wire)
+        failures = [c for c in logs if c.args[0] == 'request_failed']
+        self.assertEqual(len(failures), 1)
+        self.assertEqual(failures[0].kwargs['failure_class'], 'transient')
+        self.assertEqual(failures[0].kwargs['code'], 'UPSTREAM_STREAM_FAILED')
+        self.assertNotIn('private-input', str(logs))
+
+    def test_provider_code_and_error_type_reach_the_log_bounded(self):
+        wire = sse.frame(json.dumps({'type': 'response.failed', 'response': {
+            'status': 'failed', 'error_type': 'provider_overloaded',
+            'error': {'code': 'server_error',
+                      'metadata': {'provider_code': 'p-overload-9'},
+                      'message': 'private-input'}}}).encode())
+        body, logs = self.request(wire)
+        self.assertEqual(body, wire)
+        failures = [c for c in logs if c.args[0] == 'request_failed']
+        self.assertEqual(len(failures), 1)
+        self.assertEqual(failures[0].kwargs['failure_class'], 'transient')
+        self.assertEqual(failures[0].kwargs['upstream_error_type'], 'provider_overloaded')
+        self.assertEqual(failures[0].kwargs['upstream_provider_code'], 'p-overload-9')
+        self.assertNotIn('private-input', str(logs))
+
+    def test_context_shapes_stay_context_classed(self):
+        wire = sse.frame(json.dumps({'type': 'response.failed', 'response': {
+            'status': 'failed', 'error_type': 'context_length_exceeded',
+            'error': {'code': 'invalid_prompt', 'message': 'private-input'}}}).encode())
+        body, logs = self.request(wire)
+        event = json.loads(next(sse.blocks(io.BytesIO(body)))[1])
+        self.assertEqual(event['response']['error']['code'], 'context_length_exceeded')
+        failures = [c for c in logs if c.args[0] == 'request_failed']
+        self.assertEqual(failures[0].kwargs['failure_class'], 'context')
+        self.assertNotIn('private-input', str(logs))
+
+    def test_provider_terminal_frame_is_attributed_to_the_upstream(self):
+        # The 2026-09-13 incident review could not tell a provider terminal
+        # frame from the router's own frame on a dead socket. The log must say.
+        created = sse.frame(json.dumps({'type': 'response.created', 'response': {
+            'id': 'r1', 'model': MODEL}}).encode())
+        failed = sse.frame(json.dumps({'type': 'response.failed', 'response': {
+            'error': {'code': 'server_error'}}}).encode())
+        body, logs = self.request(created + failed)
+        self.assertIn(failed, body)
+        failures = [c for c in logs if c.args[0] == 'request_failed']
+        self.assertEqual(len(failures), 1)
+        self.assertEqual(failures[0].kwargs['terminal_source'], 'upstream')
+        self.assertEqual(failures[0].kwargs['upstream_code'], 'server_error')
+        self.assertEqual(failures[0].kwargs['forwarded_delta_bytes'], len(body))
+        # The failure replaced the held setup frame, so no answer was written.
+        self.assertEqual(failures[0].kwargs['content_delta_bytes'], 0)
+
+    def test_dead_stream_is_attributed_to_the_router(self):
+        created = sse.frame(json.dumps({'type': 'response.created', 'response': {
+            'id': 'r1', 'model': MODEL}}).encode())
+
+        class DyingUpstream(FakeUpstream):
+            def read1(self, count):
+                if self._pos:
+                    raise OSError('upstream closed')
+                return super().read1(count)
+
+        install_fake(self, lambda: DyingUpstream(
+            200, created, [('Content-Type', 'text/event-stream')]))
+        with mock.patch.object(router, 'log_event') as logged:
+            response = post(self.server.server_port, '/test-token/responses',
+                            {'model': MODEL, 'input': [], 'stream': True})
+            self.assertEqual(response.status, 200)
+            body = response.read()
+        failures = [c for c in logged.call_args_list
+                    if c.args[0] == 'transport_error']
+        self.assertEqual(failures[0].kwargs['terminal_source'], 'router')
+        # The frame is appended after the relay recorded what it forwarded, so
+        # the count stops at the last frame the upstream actually produced.
+        self.assertEqual(failures[0].kwargs['forwarded_delta_bytes'], len(created))
+        self.assertTrue(body.startswith(created))
+        self.assertIn(b'response.failed', body)
 
     def test_non_scalar_provider_detail_is_never_recorded(self):
         wire = sse.frame(json.dumps({'type': 'response.failed', 'response': {

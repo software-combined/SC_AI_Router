@@ -1,5 +1,75 @@
 # Changelog
 
+## 0.6.52
+
+- ChatGPT native service paths are now a prefix rule instead of a four-entry
+  list: any path under `/alpha/` or starting with `/guardian` forwards to
+  the ChatGPT backend with the client's own login in subscription mode
+  (Codex's checkpoint notes and read-only history tools work through the
+  router) and answers 404 in `none` mode. Dot segments, percent-encoded
+  dots and backslashes are refused before the prefix test. The context
+  recovery guidance now tells models to search the tool list for the
+  history tools instead of calling remembered names.
+
+## 0.6.51
+
+- Carried history now stops at the model-switch boundary. The client's
+  `<model_switch>` message persists in history, so the portable pass used to
+  rewrite every later turn and drop the current model's own reasoning; now
+  only items before the last marker are treated as foreign, and a marker
+  inside a tool run moves the boundary back so the run replays whole. The
+  Muse Contributor row keeps whole-history rewriting until it is probed.
+  `ai_router/history_portability.py` carries the pass as a leaf.
+
+## 0.6.50
+
+- Stream failures now classify on OpenRouter's canonical top-level
+  `error_type` instead of the lossy `error.code` collapse, and the log
+  records `upstream_error_type`, `upstream_provider_code` and
+  `failure_class` (`context`, `final` or `transient`). A refused stream
+  keeps the `invalid_prompt` code Codex treats as fatal instead of the
+  router's own code, which Codex retried five times; the log keeps
+  `UPSTREAM_INVALID_PROMPT`. The one pre-answer stream retry now requires
+  a `transient` class, so deterministic refusals are never re-sent.
+- Router answers on the Responses protocol now match what the Codex client
+  does with them: deterministic refusals (unsupported preparation, oversized
+  turn, spent provider credit) answer HTTP 400, which ends the turn at once
+  instead of costing five silent retries; transient upstream failures (5xx,
+  408) answer 503 with `Retry-After`, which the client retries on its own
+  backoff. Only the compaction summariser keeps a retryable 409. An upstream
+  429 is classified from structured codes only: quota answers 400 with
+  billing guidance, auth opens the key window, transient keeps the 503. The
+  Anthropic Messages path keeps its existing answers except at the shared
+  HTTP size boundary, where an oversized turn answers 400 like Responses
+  (no Messages client issues such turns today). Client hang-ups log
+  `client_disconnected` instead of sharing `transport_error` with upstream
+  faults, and 5xx/408 turns log `upstream_unavailable`; the refusal cache
+  stores only 400 answers.
+
+## 0.6.49
+
+- A failed stream now records who wrote the terminal frame the client received
+  (`terminal_source`), how many bytes reached it (`forwarded_delta_bytes`) and
+  how many of those were the model's answer rather than setup
+  (`content_delta_bytes`). A 2026-09-13 incident on one OpenRouter model row
+  took an hour of log forensics because the log could not tell the provider's
+  own `response.failed` frame from the router's frame on a dead socket.
+- One provider failure is now absorbed before the client sees it: when an
+  OpenRouter Responses stream ends with the provider's own failure frame while
+  every byte so far is still held, the router re-opens the upstream once and
+  continues the same response. Setup frames are held until the answer starts
+  (bounded at 64 KiB) so the retry replaces them instead of appending a second
+  copy; any byte already sent, a failure after an answer frame, the
+  provider's own prompt refusal, and a context refusal all pass through
+  unchanged. A retry that answers with a non-200 status or a different body
+  ends the stream with the provider's original held verdict plus the router's
+  own terminal frame, and a retry that dies mid-stream the same way; the
+  verdict the client keeps decides `terminal_source` (`upstream` when the
+  provider's frame survived, `router` when only the router's did). Each retry
+  logs `stream_retry` with the provider code that caused it.
+- `forwarded_delta_bytes` counts bytes the upstream produced, including held
+  setup frames once flushed; the router's own terminal frame is not counted.
+
 ## 0.6.48
 
 - Installer-changing pull requests now run native installer checks on macOS

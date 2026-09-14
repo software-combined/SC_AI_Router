@@ -86,6 +86,14 @@ class ContextRecoveryTests(unittest.TestCase):
             prepared, raw = self.prepare('gpt-5.6-luna', [window()], path, True)
             self.assertIs(prepared.body, raw)
 
+    def test_guidance_names_the_tool_loading_step(self):
+        # The history tools are deferred: models must search for them, not
+        # call remembered names (which answer `unsupported call`).
+        text = context_recovery.RECOVERY_GUIDANCE
+        self.assertIn('search the tool list', text)
+        self.assertIn('do not call `read_item`', text)
+        self.assertNotIn('read_item retrieves a known item', text)
+
     def test_recovery_is_idempotent_and_never_copies_content_into_the_note(self):
         item = window()
         item['content'][0]['text'] = item['content'][0]['text'].replace(
