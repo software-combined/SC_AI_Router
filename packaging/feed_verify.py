@@ -129,11 +129,16 @@ def verify_hex(pub_hex, message, sig_hex):
 FEED_PUBLIC_KEY = ''
 
 
-def trusted_key():
-    key = FEED_PUBLIC_KEY.strip()
-    if not key:
+def trusted_keys():
+    """Compiled public keys; rotation adds a key, never a flag day."""
+    keys = [k for k in FEED_PUBLIC_KEY.replace(',', ' ').split() if k]
+    if not keys:
         raise SystemExit('no feed signing key configured; refusing unsigned feed')
-    return key
+    return keys
+
+
+def trusted_key():
+    return trusted_keys()[0]
 
 
 def checked_feed(body, sig):
@@ -142,7 +147,7 @@ def checked_feed(body, sig):
         sig_text = sig.decode('ascii').strip()
     except (UnicodeDecodeError, AttributeError):
         raise SystemExit('feed signature is not hex')
-    if not verify_hex(trusted_key(), body, sig_text):
+    if not any(verify_hex(key, body, sig_text) for key in trusted_keys()):
         raise SystemExit('feed signature rejected')
     return json.loads(body.decode())
 

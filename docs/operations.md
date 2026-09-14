@@ -81,14 +81,19 @@ document: `beta` follows the pre-release document, anything else (or a
 missing file) follows `stable`. Checks run every 4 hours (macOS
 `StartInterval` 14400, systemd `OnUnitInactiveSec=4h`, Windows `PT4H`);
 Linux also runs a first check 5 minutes after the timer activates, and
-macOS runs one when the job loads. Security rests on HTTPS from the
-trusted feed origin only (plus `file://` for manual installs), SHA-256
-verification of every bundle, version and identity checks, and the feed
-serial replay guard. Feeds and bundles off the trusted origins are
+macOS runs one when the job loads. Every channel document carries a
+detached Ed25519 signature (`latest.json.sig`); the updater verifies the
+exact served bytes before parsing and refuses unsigned or bad-signature
+feeds with the `feed_signature` code (Plan 145). `file://` manual installs
+stay operator-trusted when no sidecar is present. SHA-256 verification of
+every bundle, version and identity checks, and the feed serial replay guard
+still apply on top. Feeds and bundles off the trusted origins are
 refused. A manual install passes `--feed` with a downloaded release
 document; `--status` reports the feed source (`cloudfront`) and the
 channel. A leftover `feed-token` file on an older host is inert and can
-be ignored or deleted. `update.log` records each install with its source
+be ignored or deleted. The signing seed lives in Secrets Manager
+(`FEED_SIGNING_SEED_ARN` in the release workflow) by name only; the seed
+value never appears in logs or docs. `update.log` records each install with its source
 (`cloudfront` or `local`).
 
 A host still on a pre-cutover build reaches the public-feed version with

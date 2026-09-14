@@ -300,6 +300,8 @@ class UpdateBackoffTests(unittest.TestCase):
             for attempt in range(install_mod.MAX_VERSION_FAILURES):
                 rc, out = self._check(home, blob, latest, fetches, child_rc=1)
                 self.assertEqual(rc, 1, f'attempt {attempt} must report the failure')
+            # file:// with no key configured stays operator-trusted: one
+            # doc read per attempt, no sidecar.
             self.assertEqual(len(fetches), install_mod.MAX_VERSION_FAILURES)
             self.assertIn('parking 9.9.9', out)
             rc, out = self._check(home, blob, latest, fetches, child_rc=1)
