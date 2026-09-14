@@ -91,7 +91,7 @@ def public_key_hex(seed_hex):
 
 def generate_keypair():
     """One release signing key. The seed file is secret; the hex public key
-    is compiled into FEED_PUBLIC_KEY by the owner key ceremony."""
+    is compiled into FEED_PUBLIC_KEY."""
     seed = os.urandom(32).hex()
     return seed, public_key_hex(seed)
 
@@ -124,9 +124,9 @@ def verify_hex(pub_hex, message, sig_hex):
     return _encode(left) == _encode(right)
 
 
-# Release public key, compiled in. Empty refuses every feed until the owner
-# key ceremony stores the real key here; never accept an unsigned feed.
-FEED_PUBLIC_KEY = ''
+# Release public key, compiled in. Empty refuses every feed; never accept
+# an unsigned feed.
+FEED_PUBLIC_KEY = '8e5a2ef7fc48913e65fc02329d9ffae43261abacc4d14c9aeef266f4ca4665a7'
 
 
 def trusted_keys():
