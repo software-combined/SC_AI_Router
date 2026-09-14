@@ -156,10 +156,18 @@ class SystemdTests(unittest.TestCase):
         blob = _tarball(files=[('packaging/install.py', '# installer')])
         (self.home / 'update-etag').write_text('old')
         args = install_mod.build_parser().parse_args(['--home', str(self.home)])
+        from tests.fakes import signed_static_fetch
+        fetch, _seed, _pub = signed_static_fetch(latest, blob)
+        updater_mod = install_mod._updater
+        old_key = updater_mod._FEED_VERIFY_KEY
+        updater_mod._FEED_VERIFY_KEY = _pub
         output = io.StringIO()
-        with contextlib.redirect_stdout(output):
-            install_mod.do_update(args, _fetch=_static_fetch(latest, blob),
-                _read_feed=lambda *a: (200, json.dumps(latest).encode(), 'new'), _sleep=lambda s: None)
+        try:
+            with contextlib.redirect_stdout(output):
+                install_mod.do_update(args, _fetch=fetch,
+                    _read_feed=lambda *a: (200, json.dumps(latest).encode(), 'new'), _sleep=lambda s: None)
+        finally:
+            updater_mod._FEED_VERIFY_KEY = old_key
         self.assertIn('deferred:', output.getvalue())
         self.assertEqual((self.home / 'update-etag').read_text(), 'old')
         self.assertFalse((self.home / 'logs' / 'update.log').exists())

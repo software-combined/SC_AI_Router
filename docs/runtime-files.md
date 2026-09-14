@@ -52,8 +52,10 @@ are never copied between machines.
 
 The feed-signature module lives with its consumers as
 `packaging/feed_verify.py`: `packaging/feed.py` and `packaging/release.py`
-load it as a sibling, never from the runtime tree. Signature enforcement
-engages only once `FEED_PUBLIC_KEY` is configured (Plan 106's decision).
+load it as a sibling, never from the runtime tree. Signature enforcement is active: the updater verifies the detached
+sidecar before parsing (Plan 145). Key rotation adds the new public key
+beside the old one, ships, waits one fleet cycle, starts signing with the
+new seed, ships again, then removes the old key.
 
 The installer also places `packaging/router_launch.py` and
 `packaging/update_launch.py` beside the state directory as `router_launch.py`

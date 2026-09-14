@@ -62,20 +62,25 @@ class FeedGateTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             feed_verify.beta_feed_url('not-a-url')
 
-    def test_release_signs_verifiable_sidecar(self):
+    def test_release_sign_flag_is_retired(self):
         release_mod = _release_mod()
-        seed, pub = feed_verify.generate_keypair()
         with tempfile.TemporaryDirectory() as tmp:
             key_file = Path(tmp) / 'seed'
-            release_mod.main(['--out', tmp, '--build', '7'])
+            key_file.write_text('00' * 32 + '\n')
+            with self.assertRaisesRegex(SystemExit, 'retired'):
+                release_mod.main(['--out', tmp, '--build', '7', '--sign', str(key_file)])
+
+    def test_checked_feed_rejects_non_json_and_unknown_key(self):
+        seed, pub = feed_verify.generate_keypair()
+        other = feed_verify.generate_keypair()[1]
+        sig = feed_verify.sign_hex(seed, b'not-json{{{')
+        with mock.patch.object(feed_verify, 'FEED_PUBLIC_KEY', pub):
+            with self.assertRaises((ValueError, SystemExit)):
+                feed_verify.checked_feed(b'not-json{{{', sig.encode())
+        good = feed_verify.sign_hex(seed, b'{"serial": 7}')
+        with mock.patch.object(feed_verify, 'FEED_PUBLIC_KEY', other):
             with self.assertRaises(SystemExit):
-                release_mod.main(['--out', tmp, '--sign', str(key_file)])
-            key_file.write_text(seed + '\n')
-            release_mod.main(['--out', tmp, '--build', '7', '--sign', str(key_file)])
-            body = (Path(tmp) / 'latest.json').read_bytes()
-            sig = (Path(tmp) / 'latest.json.sig').read_text()
-            with mock.patch.object(feed_verify, 'FEED_PUBLIC_KEY', pub):
-                self.assertEqual(feed_verify.checked_feed(body, sig.encode())['serial'], 7)
+                feed_verify.checked_feed(b'{"serial": 7}', good.encode())
 
     @requires_posix_perms
     def test_gen_key_writes_owner_only_seed(self):

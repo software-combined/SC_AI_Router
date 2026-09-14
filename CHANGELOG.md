@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.61
+
+- Feed documents are signature-enforced end to end (Plan 145): the
+  publisher signs the exact served bytes, the updater verifies the
+  detached sidecar before parsing and refuses unsigned or tampered feeds
+  with the `feed_signature` code, and the publisher role may read exactly
+  one secret, the signing seed. `file://` manual installs stay
+  operator-trusted. Enforcement engages once the owner key ceremony
+  compiles the real key into `FEED_PUBLIC_KEY`.
+
 ## 0.6.60
 
 - The router installation carries the key-filtered picker re-merge (PR

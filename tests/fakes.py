@@ -198,3 +198,31 @@ def static_fetch(latest, blob):
         return body if url.endswith('.json') else blob
 
     return fake_fetch
+
+
+def signed_static_fetch(latest, blob, seed=None, pub=None):
+    """Fake fetcher serving a signed feed doc, its sidecar, and a bundle.
+
+    Signs the exact served bytes with an ephemeral key by default, or the
+    given seed. Returns (fetch, seed, public_key); tests assign the key to
+    the updater's `_FEED_VERIFY_KEY` seam.
+    """
+    import importlib.util as _ilu
+    spec = _ilu.spec_from_file_location(
+        'router_feed_verify_fake',
+        Path(__file__).resolve().parents[1] / 'packaging' / 'feed_verify.py')
+    fv = _ilu.module_from_spec(spec)
+    spec.loader.exec_module(fv)
+    if seed is None:
+        seed, pub = fv.generate_keypair()
+    elif pub is None:
+        pub = fv.public_key_hex(seed)
+    body = json.dumps(latest).encode()
+    sig = fv.sign_hex(seed, body).encode()
+
+    def fake_fetch(url):
+        if url.endswith('.json.sig'):
+            return sig
+        return body if url.endswith('.json') else blob
+
+    return fake_fetch, seed, pub
