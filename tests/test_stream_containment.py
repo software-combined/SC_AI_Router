@@ -76,6 +76,87 @@ class RelayContainmentTests(_ServerFixture):
         self.assertEqual(entry.kwargs['error_type'], 'AttributeError')
         self.assertIn('location', entry.kwargs)
 
+    def test_client_close_mid_stream_logs_client_disconnected(self):
+        # A client that hangs up after headers are sent is a client abort,
+        # not an upstream fault: its own event, no terminal frame attempt.
+        from types import SimpleNamespace
+        from ai_router import provider_defs, providers, relay
+        from ai_router.transport import Prepared
+
+        wire = (b'data: {"type": "response.created", "response": {"id": "r"}}\n\n'
+                b'data: {"type": "response.output_text.delta", "delta": "hi"}\n\n'
+                b'data: {"type": "response.completed", "response": {"id": "r"}}\n\n')
+
+        class DyingWriter:
+            def __init__(self):
+                self.writes = 0
+
+            def write(self, chunk):
+                self.writes += 1
+                if self.writes > 1:
+                    raise BrokenPipeError(32, 'Broken pipe')
+
+            def flush(self):
+                pass
+
+        class FakeResp:
+            status = 200
+
+            def __init__(self):
+                self._buf = wire
+
+            def getheaders(self):
+                return [('Content-Type', 'text/event-stream')]
+
+            def getheader(self, name, default=None):
+                return 'text/event-stream' if name.lower() == 'content-type' else default
+
+            def read(self, *a):
+                return b''
+
+            def read1(self, count):
+                piece, self._buf = self._buf[:count], self._buf[count:]
+                return piece
+
+        class FakeConn:
+            def __init__(self, *a, **k):
+                pass
+
+            def connect(self):
+                pass
+
+            def request(self, *a, **k):
+                pass
+
+            def getresponse(self):
+                return FakeResp()
+
+            def close(self):
+                pass
+
+        handler = SimpleNamespace(
+            server=SimpleNamespace(credentials=SimpleNamespace(
+                key_rejected=lambda provider: False), lock=__import__('threading').Lock(),
+                served_models={}),
+            wfile=DyingWriter(),
+            send_response=lambda *a: None, send_header=lambda *a: None,
+            end_headers=lambda: None, close_connection=False,
+            error=lambda err: None)
+        provider = providers.ExternalResponsesProvider(provider_defs.OPENROUTER)
+        body = json.dumps({'model': 'm', 'input': [], 'tools': []}).encode()
+        prepared = Prepared('openrouter.ai', '/responses', {}, body, set(), 'openrouter')
+        metrics = {'provider': 'openrouter', 'protocol': 'responses',
+                   'model': 'z-ai/glm-5.3', 'path': '/responses', 'stream': True}
+        events = []
+        with mock.patch.object(relay.http.client, 'HTTPSConnection', FakeConn):
+            with mock.patch.object(relay.transport, 'describe_location',
+                                   return_value='socketserver.py:1:write'):
+                relay.relay(handler, provider, prepared, metrics, 0.0,
+                            log_event=lambda event, **f: events.append((event, f)))
+        kinds = [event for event, _ in events]
+        self.assertIn('client_disconnected', kinds)
+        self.assertNotIn('transport_error', kinds)
+
     def test_pre_headers_failure_keeps_502_mapping(self):
         def stall():
             raise TimeoutError('timed out')

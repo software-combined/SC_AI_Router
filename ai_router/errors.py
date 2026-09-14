@@ -48,7 +48,7 @@ class RouterError(Exception):
 
 
 class PreparationError(ValueError):
-    """A well-formed request the provider cannot serve; maps to 409."""
+    """A well-formed request the provider cannot serve; maps to 400."""
 
 
 class LocalAnswer(RouterError):
@@ -56,7 +56,7 @@ class LocalAnswer(RouterError):
 
 
 class InvalidSize(ValueError):
-    """Request body rejected on size grounds; maps to 413."""
+    """Request body rejected on size grounds; maps to 400."""
 
 
 class UnknownModel(ValueError):
@@ -109,8 +109,10 @@ def missing_model():
 
 def invalid_size(message):
     if message == 'Decoded request is too large':
-        return _error(413, 'BODY_TOO_LARGE', message)
-    return _error(413, 'INVALID_REQUEST_SIZE', 'Invalid request size')
+        return _error(400, 'BODY_TOO_LARGE', "This turn is larger than the router's "
+                      '16 MiB request limit; start a new thread, or trim large tool '
+                      'outputs and images before continuing.')
+    return _error(400, 'INVALID_REQUEST_SIZE', 'Invalid request size')
 
 
 # Auth and catalog membership.
@@ -180,13 +182,19 @@ def internal_error():
     return _error(500, 'INTERNAL_ERROR', 'Internal router error')
 
 
-# Provider preparation (409): keep the provider's actionable message.
+# Provider preparation: only 400 ends a Responses turn at once (Codex
+# retries every other 4xx as `UnexpectedStatus`); the Messages path keeps
+# its retryable answer through retryable_preparation.
 def preparation(message):
+    return _error(400, 'PROVIDER_REJECTED', message)
+
+
+def retryable_preparation(message):
+    """Only for a failure a repeat can cure: the compaction summariser."""
     return _error(409, 'PROVIDER_REJECTED', message)
 
 
 def upstream_invalid_request(message):
-    """Codex treats HTTP 400 as final; HTTP 409 triggers stream retries."""
     return _error(400, 'PROVIDER_REJECTED', message)
 
 
@@ -196,9 +204,9 @@ def context_window(message='The model context window is full; compact or shorten
 
 def upstream_invalid_prompt(message=('OpenRouter refused this request before answering. '
                                      'Retrying it unchanged will fail again; switch models '
-                                     'or start a new thread.')):
+                                     'or start a new thread.'), code='UPSTREAM_INVALID_PROMPT'):
     """A provider 400 raised after the stream opened, replayable only as a new turn."""
-    return _error(400, 'UPSTREAM_INVALID_PROMPT', message)
+    return _error(400, code, message)
 
 
 # Local services (no-subscription mode answers).
@@ -214,6 +222,10 @@ def native_unavailable():
 
 
 # Retryable states.
+def upstream_unavailable(message):
+    return _error(503, 'UPSTREAM_UNAVAILABLE', message)
+
+
 def draining():
     return _error(503, 'SERVER_DRAINING', 'Server draining')
 

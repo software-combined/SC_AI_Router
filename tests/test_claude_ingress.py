@@ -8,6 +8,7 @@ through to api.anthropic.com with the client's credentials untouched.
 import http.client
 import json
 import unittest
+from unittest import mock
 from compression import zstd
 from tests.fakes import FakeUpstream, install_fake
 from tests.harness import (
@@ -244,6 +245,31 @@ class ClaudeIngressTests(unittest.TestCase):
                 host, _, path, body, _ = recorded[0]
                 self.assertEqual((host, path), ('openrouter.ai', '/api/v1/messages'))
                 self.assertEqual(json.loads(body)['model'], slug)
+
+    def test_messages_preparation_error_keeps_todays_409(self):
+        # A Messages request that raises PreparationError in prepare (here:
+        # an owned path the provider does not serve) keeps today's 409
+        # while the Responses path moves to 400.
+        install_fake(self, lambda: FakeUpstream(200, b'{}', []))
+        server = self._server()
+        with mock.patch.object(claude_mod, 'CLAUDE_POST_PATHS', frozenset()):
+            response = _post(server.server_port, '/test-token/v1/messages',
+                             _messages('z-ai/glm-5.3-flash'),
+                             {'Authorization': 'Bearer subscription-secret'})
+        self.assertEqual(response.status, 409)
+        self.assertEqual(json.loads(response.read())['error']['code'], 'PROVIDER_REJECTED')
+
+    def test_messages_upstream_502_keeps_todays_409(self):
+        body = json.dumps({'error': {'message': 'Provider returned error',
+                                     'metadata': {'provider_name': 'Meta'}}}).encode()
+        install_fake(self, lambda: FakeUpstream(502, body, []))
+        server = self._server()
+        response = _post(server.server_port, '/test-token/v1/messages',
+                         _messages('z-ai/glm-5.3-flash'),
+                         {'Authorization': 'Bearer subscription-secret'})
+        self.assertEqual(response.status, 409)
+        self.assertEqual(json.loads(response.read())['error']['code'], 'PROVIDER_REJECTED')
+        self.assertIsNone(response.getheader('Retry-After'))
 
     def test_openrouter_context_error_answers_a_json_error_not_a_responses_frame(self):
         # Plan 141 regression: the context-error gate is Responses-only. An

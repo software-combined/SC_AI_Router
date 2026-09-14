@@ -44,6 +44,16 @@ class ProtocolContractTests(unittest.TestCase):
         self.addCleanup(server.shutdown)
         return server
 
+    def test_messages_quota_429_keeps_retryable_503_shape(self):
+        # The 429 quota/auth split is Responses-only: a Messages 429 with a
+        # quota-coded body keeps today's 503, byte-identical.
+        install_fake(self, lambda: FakeUpstream(429, b'{"error": {"code": "insufficient_quota"}}',
+                                                [('Content-Type', 'application/json')]))
+        server = self._server()
+        response = _post(server.server_port, '/test-token/v1/messages',
+                         _messages(), {'Authorization': 'Bearer subscription-secret'})
+        self.assertEqual(response.status, 503)
+
     def test_messages_429_keeps_retryable_503_shape(self):
         # Responses pins this in test_handler; Messages must keep the same
         # transport-level retry contract through the shared relay path.
