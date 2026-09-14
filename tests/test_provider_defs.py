@@ -74,6 +74,24 @@ class DefinitionTests(unittest.TestCase):
             provider_defs.ProviderDef(
                 id='x', label='X', kind='subscription', host='example.invalid',
                 responses_path='/r', key=provider_defs.KeySpec('E', 'f'))
+        with self.assertRaises(ValueError):  # native prefix without a slash
+            provider_defs.ProviderDef(
+                id='x', label='X', kind='subscription', host='example.invalid',
+                responses_path='/r', native_prefixes=('alpha/',))
+
+    def test_native_service_path_is_a_guarded_prefix_rule(self):
+        native = provider_defs.native_service_path
+        for path in ('/alpha/search', '/alpha/notes/v2/thread_hint',
+                     '/alpha/history/v2/list_items', '/alpha/notes/v2/write_file',
+                     '/guardian', '/guardian-classifier'):
+            self.assertTrue(native(path), path)
+        for path in ('/alphabet', '/responses', '/v1/messages',
+                     '/alpha/../v1/me', '/alpha/%2e%2e/x', '/alpha/./x',
+                     '/alpha/..\\x', None, 42, ''):
+            self.assertFalse(native(path), path)
+        self.assertEqual(provider_defs.OPENAI.native_prefixes, ('/alpha/', '/guardian'))
+        self.assertEqual(provider_defs.OPENROUTER.native_prefixes, ())
+        self.assertEqual(provider_defs.ANTHROPIC.native_prefixes, ())
 
 
 class RegistryCompatibilityTests(unittest.TestCase):

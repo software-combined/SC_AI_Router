@@ -9,9 +9,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from . import (capabilities, errors, ingress, local_services, model_prompt_page,
                provider_defs, relay, setup, subscription_fallback, transport)
 from .credentials import Credentials
-from .protocols import owned_paths, select as select_protocol
+from .protocols import select as select_protocol
 from .errors import InvalidSize, PreparationError
-from .providers import NATIVE_SERVICE_PATHS
+from .providers import is_native_service
 from .runtime import MAX_BODY, ROUTER_HOME, log_event
 
 MAX_INFLIGHT = 32
@@ -136,7 +136,7 @@ class Handler(BaseHTTPRequestHandler):
             # Non-daemon like the SIGTERM path, or teardown kills the drain.
             threading.Thread(target=self.server.drain_and_exit, daemon=False).start()
             return self.send_json(200, {'status': 'draining'})
-        if path not in owned_paths():
+        if select_protocol(self.command, path) is None:
             if path.startswith('/setup/'):
                 return setup.serve(self, path[len('/setup/'):], True)
             if path.startswith('/model-prompt/'):
@@ -171,7 +171,7 @@ class Handler(BaseHTTPRequestHandler):
             # Snapshot before provider.prepare mutates or strips the payload.
             has_image = _payload_has_image(payload)
             model = payload.get('model')
-            if not isinstance(model, str) and path not in NATIVE_SERVICE_PATHS:
+            if not isinstance(model, str) and not is_native_service(path):
                 return self.error(errors.missing_model())
             mode = self.server.state.get('openai_mode', 'subscription')
             policy = select_protocol(self.command, path)

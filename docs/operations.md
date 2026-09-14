@@ -414,6 +414,12 @@ Switching an active Codex install to `none` restores the exact owned block
 first, or refuses when the block was edited. The choice persists in router
 state and survives scheduled updates.
 
+Native service calls (`/alpha/*`, `/guardian*`) pass through to the
+ChatGPT backend with the client's own login in subscription mode and answer
+404 in `none` mode; the list is a prefix rule on the OpenAI definition, so a
+new backend path needs no router change. A dot segment, percent-encoded dot
+or backslash in the path is refused before the prefix test.
+
 Subscription routing is independent per client: `openai_mode` governs
 Responses, `anthropic_mode` governs Messages when explicitly set, otherwise
 Messages follows the legacy `openai_mode` fallback. Neither mode widens
