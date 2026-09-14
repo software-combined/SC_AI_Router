@@ -154,7 +154,7 @@ Before committing, compare the final staged tree with the reviewed tree id. If u
 
 An unaffected lane's result may be inherited only after inspecting the exact reviewed-to-final delta and recording why its conclusion still holds. Record the original tree, final tree, re-run lanes, inherited lanes, and rationale before approving the final tree.
 
-Allow at most one material remediation and targeted re-review cycle. If an accepted blocker remains after it, stop and reassess design, scope, or evidence with the owner; do not attempt a second material remediation inside the gate. A rephrased version of the same root cause is not a new finding.
+Material remediations and targeted re-review cycles are not capped. After each accepted CRITICAL or HIGH fix, apply this rule to the new staged tree and continue until the combined decision is ALL CLEAR or PROCEED WITH NOTES. Stop only when an accepted blocker needs owner or product input. A rephrased version of the same root cause is not a new finding.
 
 ## Record Approval And Commit
 
