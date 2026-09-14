@@ -54,6 +54,19 @@ class PluginTest(unittest.TestCase):
         for markdown in skills.glob("*/SKILL.md"):
             self.assertNotRegex(markdown.read_text().lower(), r"kimi|luna")
 
+    def test_review_brief_pins_inspect_commands(self):
+        review = (PLUGIN / "skills/pre-commit-review/SKILL.md").read_text()
+        for command in (
+            "git write-tree",
+            "git diff --cached --stat",
+            "git diff --cached",
+            "git show :path",
+        ):
+            self.assertIn(command, review)
+        self.assertIn("Do not reconstruct trees", review)
+        self.assertIn("same model with the same brief", review)
+        self.assertNotRegex(review, r"muse-spark|glm-5\.3")
+
     def test_shared_updater_and_update_guide_are_synchronized_copies(self):
         marketplace = json.loads((ROOT / '.agents/plugins/marketplace.json').read_text())
         for entry in marketplace['plugins']:

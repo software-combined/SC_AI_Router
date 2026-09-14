@@ -50,6 +50,17 @@ inspection profile; it does not automatically require a more expensive model.
 
 Use the active runtime's subagent tools and their actual schemas; discover deferred tools when discovery is available. Pass the assigned lane, absolute worktree path, staged tree/scope, required context, ponytail-first instruction, read/write authority and expected report. The parent owns orchestration: an individual reviewer must not try to run the entire gate or spawn its own reviewers. Use the effective reviewer model policy, not model names remembered from an earlier turn.
 
+Every reviewer brief includes these inspect commands, not a tree-equality goal:
+
+```bash
+git write-tree
+git diff --cached --stat
+git diff --cached
+git show :path
+```
+
+`git write-tree` must print the captured reviewed-tree id; on mismatch, report and stop. `git show :path` covers only the listed staged files. Context is a named path list. Do not reconstruct trees, extract the repository to `/tmp`, inspect unlisted files, or continue after the Markdown report. The inspect contract is shared; do not write per-model prompts. A failed report is not unavailability: do not rerun the same model with the same brief. One focused correction, then the next listed fallback.
+
 Normally send this brief in the tool's message field. If an accepted child demonstrably misses the brief or starts unrelated work, stop it rather than repeating full reviews. A supported fallback is to write the same brief to a non-secret temporary Markdown file on the shared filesystem and invoke the subagent tool with an instruction to read that absolute path first. If only task labels are arriving, make the brief file identifiable in the task label too. This changes brief transport only; the effective model/fallback policy, tool-based delegation, pass order and approval rules remain intact. Do not substitute a top-level task or a self-written review receipt.
 
 Check the returned review against the assigned scope. A brief acknowledgement, task name or accepted spawn is not review evidence. Reports must cover the full staged diff and every complete staged-index file, including an index/README file beyond its changed hunk. When a report conflicts with observed actions, verify the missing inspection before accepting it. Do not add delivery probes or extra approval questions to ordinary successful reviews. If file handoff also fails, report the exact tool error or missing coverage, apply the bounded availability fallback policy where eligible, and preserve the work if no permitted pass can run; do not repeat unbounded review calls.
