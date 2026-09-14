@@ -89,7 +89,10 @@ MANDATORY: read [tool operation and communication](references/tool-guide.md) in
 full before the first spawn in this session, and re-read it when acting as a
 child. No delegation without it: the entrypoint alone does not authorize a
 spawn. It includes exact examples for the current collaboration tools, fork
-restrictions, replies, waiting and failure handling.
+restrictions, replies, waiting and failure handling. On the mixed-provider
+Codex route, external recipients require the exposed `collaboration_plaintext`
+handoff tools and fresh `fork_turns="none"` children. Saved native tool names
+do not change that requirement for later messages.
 
 Give each child: one deliverable, relevant context/paths, write authority,
 acceptance checks, cost/retry limits where useful, and a stop condition. One

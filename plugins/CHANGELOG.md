@@ -1,5 +1,14 @@
 # Changelog
 
+## scg-subagents 0.5.2 — 2026-09-14
+
+- Port the plaintext handoff guide from the retired `SC_Agent_plugins` branch
+  work: use `collaboration_plaintext` handoff tools for external recipients
+  on the mixed-provider Codex route, including later messages and follow-ups.
+  Keep native OpenAI encryption and require fresh external children without
+  encrypted history. Recover from rejected handoffs without repeating the
+  failing call or treating an empty completed turn as success.
+
 ## scg-subagents 0.5.1 — 2026-09-13
 
 - Make reading `references/tool-guide.md` mandatory before the first spawn in
