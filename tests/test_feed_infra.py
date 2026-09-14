@@ -43,7 +43,10 @@ class PublishWorkflowTests(unittest.TestCase):
         # feed origin and belongs only to the feed.
         self.assertIn('cp dist/release-latest.json dist/latest.json', text)
         self.assertIn('cp dist/release-latest.json dist/latest-beta.json', text)
-        self.assertNotIn('feed-latest.json', text)
+        # The release ships the release document plus the detached feed
+        # signature (Plan 145); the feed copy itself never becomes an asset.
+        self.assertNotIn('dist/feed-latest.json ', text)
+        self.assertNotIn('dist/feed-latest.json"', text)
 
     def test_no_token_switch_remains_in_the_workflow(self):
         text = RELEASE_WORKFLOW.read_text()
@@ -70,6 +73,15 @@ class PublishWorkflowTests(unittest.TestCase):
         # classic form alone could never assume the role.
         self.assertIn('software-combined@200868195/SC_Unlimited_ai@1360169840', _template())
         self.assertIn('${ImmutableSubjectPrefix}:ref:refs/tags/v*', _template())
+        # Plan 145: the publisher may read exactly one secret, the signing
+        # seed, and nothing else.
+        self.assertIn('secretsmanager:GetSecretValue', _template())
+        self.assertIn('SigningSeedArn', _template())
+        self.assertNotIn('secretsmanager:*', _template())
+        self.assertNotIn('Resource: \'*\'', _template())
+        text = RELEASE_WORKFLOW.read_text()
+        self.assertIn('--sign', text)
+        self.assertIn('latest.json.sig', text)
 
 
 class TemplateGuardTests(unittest.TestCase):

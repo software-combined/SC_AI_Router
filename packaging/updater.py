@@ -42,6 +42,7 @@ _NONCE_SHAPE = re.compile(r'[A-Za-z0-9_\-]{16,}')
 # updater's free text never travels with them.
 ERROR_CODES = (
     'feed_unreachable', 'feed_invalid', 'feed_serial', 'feed_untrusted',
+    'feed_signature',
     'bundle_checksum', 'bundle_invalid', 'installer_timeout',
     'installer_failed', 'update_failed',
 )
@@ -309,6 +310,58 @@ def _persist_models_url(home, latest):
         pass
 
 
+# Test seam: tests set this to an ephemeral public key so signed
+# fixtures verify without touching the compiled production key.
+_FEED_VERIFY_KEY = None
+
+
+def _verified_feed(feed, body, _fetch):
+    """Parse one feed document after Ed25519 verification (Plan 145).
+
+    `https` feeds must carry a valid detached sidecar; rejection raises
+    `UpdateError('feed_signature', ...)`. `file://` feeds without a sidecar
+    stay operator-trusted; with one, it must verify.
+    """
+    import importlib.util as _ilu
+    spec = _ilu.spec_from_file_location(
+        'router_feed_verify_upd',
+        Path(__file__).resolve().parent / 'feed_verify.py')
+    fv = _ilu.module_from_spec(spec)
+    spec.loader.exec_module(fv)
+    if _FEED_VERIFY_KEY is not None:
+        fv.FEED_PUBLIC_KEY = _FEED_VERIFY_KEY
+    _fspec = _ilu.spec_from_file_location(
+        'router_feed_sig',
+        Path(__file__).resolve().parent / 'feed.py')
+    _fmod = _ilu.module_from_spec(_fspec)
+    _fspec.loader.exec_module(_fmod)
+    if feed.startswith('file://') and _FEED_VERIFY_KEY is None:
+        try:
+            return json.loads(body.decode())
+        except ValueError:
+            raise UpdateError('feed_invalid', 'feed document is not JSON')
+    try:
+        sig = _fmod.live_signature(feed, _fetch)
+    except (OSError, SystemExit):
+        sig = None
+    if feed.startswith('file://'):
+        if sig is None:
+            try:
+                return json.loads(body.decode())
+            except ValueError:
+                raise UpdateError('feed_invalid', 'feed document is not JSON')
+        try:
+            return fv.checked_feed(body, sig)
+        except SystemExit as exc:
+            raise UpdateError('feed_signature', str(exc) or 'feed signature rejected')
+    if sig is None:
+        raise UpdateError('feed_signature', 'feed signature missing')
+    try:
+        return fv.checked_feed(body, sig)
+    except SystemExit as exc:
+        raise UpdateError('feed_signature', str(exc) or 'feed signature rejected')
+
+
 def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
     """One applying pass; behavior matches the pre-split code."""
     sync_seams()
@@ -329,7 +382,9 @@ def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
         print(f"up to date {_svc.current_version(home)}")
         return 0
     try:
-        latest = json.loads(body.decode())
+        latest = _verified_feed(feed, body, _fetch)
+    except UpdateError:
+        raise
     except ValueError:
         raise UpdateError('feed_invalid', 'feed document is not JSON')
     if not isinstance(latest, dict):
@@ -490,7 +545,9 @@ def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None):
     latest = None
     if status != 304:
         try:
-            latest = json.loads(body.decode())
+            latest = _verified_feed(feed, body, _fetch or _svc.fetch)
+        except UpdateError as exc:
+            raise SystemExit(f'update check failed: feed signature {exc}')
         except ValueError:
             raise SystemExit('update check failed: feed document is not JSON')
         if not isinstance(latest, dict) or not isinstance(latest.get('version'), str):

@@ -396,15 +396,23 @@ class InstallConfigTests(unittest.TestCase):
                 return _ok_run(cmd, **kwargs)
 
             _patch_attrs(self, run=fake_run)
+            from tests.fakes import signed_static_fetch
+            fetch, _seed, _pub = signed_static_fetch(latest, blob)
+            updater_mod = install_mod._updater
+            old_key = updater_mod._FEED_VERIFY_KEY
+            updater_mod._FEED_VERIFY_KEY = _pub
             args = install_mod.build_parser().parse_args(['--home', str(home)])
             buf = io.StringIO()
             with mock.patch.dict(os.environ, {'OPENROUTER_API_KEY': 'k', 'ROUTER_NO_KEY_WINDOW': '1'}):
-                with contextlib.redirect_stdout(buf):
-                    rc = install_mod.do_update(
-                        args, _fetch=_static_fetch(latest, blob),
-                        _read_feed=lambda feed, etag: (
-                            200, json.dumps(latest).encode(), None),
-                        _sleep=lambda s: None)
+                try:
+                    with contextlib.redirect_stdout(buf):
+                        rc = install_mod.do_update(
+                            args, _fetch=fetch,
+                            _read_feed=lambda feed, etag: (
+                                200, json.dumps(latest).encode(), None),
+                            _sleep=lambda s: None)
+                finally:
+                    updater_mod._FEED_VERIFY_KEY = old_key
             self.assertEqual(rc, 0)
             invoked = [cmd for cmd in seen if cmd[-2:] == ['--home', str(home)]]
             self.assertTrue(invoked, 'updater must re-invoke with the custom home')
