@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.60
+
+- The router installation carries the key-filtered picker re-merge (PR
+  #133): every availability refresh re-merges `mixed-models.json`, so a
+  dashboard-blocked row such as Qwen leaves the picker within one refresh
+  cycle. Includes the 131 residual ownership split and the 099 Step 3
+  `models_url` wiring from the feed origin.
+
 ## 0.6.59
 
 - Dashboard-blocked models no longer linger in the picker file: every
