@@ -50,11 +50,16 @@ class IsolatedRouter:
         self.close()
 
     def boot(self):
-        from .credentials import Credentials
+        from .credentials import Credentials, opencode_auth_path
         entry = by_slug(self.slug) if isinstance(self.slug, str) else None
         provider_id = entry.provider if entry is not None else provider_defs.DEFAULT_EXTERNAL
         state = {'port': _free_port(), 'token': secrets.token_urlsafe(32),
                  'openai_models': []}
+        # Ambient OpenCode auth by path reference, as the installed router
+        # uses; the key value itself is never copied.
+        ambient_auth = opencode_auth_path(os.environ)
+        if ambient_auth.exists():
+            state['opencode_auth'] = str(ambient_auth)
         try:
             Credentials(state, self.home).check(provider_id)
         except (LookupError, PermissionError, ValueError, OSError) as exc:
