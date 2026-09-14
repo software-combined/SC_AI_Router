@@ -37,6 +37,17 @@ class ProtocolContractTests(unittest.TestCase):
             | claude_mod.CLAUDE_POST_PATHS
             | {'/responses', '/responses/compact'})
 
+    def test_native_prefix_paths_select_the_responses_policy(self):
+        # Plan 171: the prefix rule routes new backend paths with no second
+        # edit; the exact union above stays pinned.
+        from ai_router import protocols
+        from ai_router.protocols import responses as responses_mod
+        for path in ('/alpha/history/v2/list_items', '/alpha/notes/v2/write_file',
+                     '/alpha/search', '/guardian-classifier'):
+            self.assertIs(protocols.select('POST', path), responses_mod.POLICY)
+        for path in ('/alphabet', '/alpha/../v1/me', '/alpha/%2e%2e/x'):
+            self.assertIsNone(protocols.select('POST', path))
+
     def _server(self, **overrides):
         state = _test_state(_auth_file(self))
         state.update(overrides)
