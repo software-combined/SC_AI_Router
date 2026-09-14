@@ -45,6 +45,50 @@ class Model:
     web_search: bool = True          # False downgrades search to text-only
     tier: str = 'verified'           # 'verified' | 'preview'
     listed: bool = True              # picker visibility; new rows land False
+    provider_prefs: dict | None = None  # OpenRouter `provider` routing object
+                                        # (plan 175 evidence only; no row sets it)
+
+
+# Documented OpenRouter `provider` object keys (router-metadata guide,
+# read 2026-09-14). Anything else is a typo worth failing loudly.
+_PREF_LIST_KEYS = ('order', 'only', 'ignore')
+_PREF_BOOL_KEYS = ('allow_fallbacks', 'require_parameters', 'zdr')
+_PREF_SORTS = ('price', 'throughput', 'latency')
+_PREF_PARTITIONS = ('model', 'none')
+
+
+def _valid_sort(value):
+    """True for a documented sort: a string or a {by, partition} object."""
+    if value in _PREF_SORTS:
+        return True
+    return (isinstance(value, dict)
+            and value.get('by') in _PREF_SORTS
+            and value.get('partition', 'none') in _PREF_PARTITIONS
+            and set(value) <= {'by', 'partition'})
+
+
+def _valid_prefs(prefs):
+    """True when prefs is a well-typed OpenRouter provider object."""
+    if not isinstance(prefs, dict) or not prefs:
+        return False
+    for key, value in prefs.items():
+        if key in _PREF_LIST_KEYS:
+            if (not isinstance(value, list) or not value
+                    or any(not isinstance(entry, str) or not entry
+                           for entry in value)):
+                return False
+        elif key in _PREF_BOOL_KEYS:
+            if not isinstance(value, bool):
+                return False
+        elif key == 'sort':
+            if not _valid_sort(value):
+                return False
+        elif key == 'data_collection':
+            if value not in ('allow', 'deny'):
+                return False
+        else:
+            return False
+    return True
 
 
 def load(text):
@@ -59,7 +103,7 @@ def load(text):
     seen = set()
     for i, row in enumerate(rows):
         if (not isinstance(row, dict)
-                or set(row) - {'listed'} != set(FIELDS)):
+                or set(row) - {'listed', 'provider_prefs'} != set(FIELDS)):
             raise SystemExit(f'models.json row {i} must have exactly: {", ".join(FIELDS)}')
         if row['slug'] in seen:
             raise SystemExit(f'models.json duplicate slug: {row["slug"]}')
@@ -92,6 +136,9 @@ def load(text):
             raise SystemExit(f'models.json {row["slug"]}: bad tier')
         if 'listed' in row and not isinstance(row['listed'], bool):
             raise SystemExit(f'models.json {row["slug"]}: bad listed')
+        prefs = row.get('provider_prefs')
+        if prefs is not None and not _valid_prefs(prefs):
+            raise SystemExit(f'models.json {row["slug"]}: bad provider_prefs')
         if row.get('listed', False) and row['tier'] != 'verified':
             raise SystemExit(f'models.json {row["slug"]}: preview row must not be listed')
         models.append(Model(
@@ -105,7 +152,8 @@ def load(text):
             reasoning_summary=row['reasoning_summary'], apply_patch=row['apply_patch'],
             experimental_tools=tuple(row['experimental_tools']),
             web_search=row['web_search'], tier=row['tier'],
-            listed=row.get('listed', True)))
+            listed=row.get('listed', True),
+            provider_prefs=dict(prefs) if prefs is not None else None))
     return tuple(models)
 
 
