@@ -17,10 +17,9 @@ env:
   FEED_STACK: scg-router-feed
   FEED_BUCKET: scg-router-feed-651116729473-apse2
   FEED_ROLE: arn:aws:iam::651116729473:role/scg-router-feed-publisher
-  # ARN of the Secrets Manager secret holding the feed signing seed (Plan
-  # 145 Step 1 ceremony). Empty until the owner creates the secret; the
-  # publish step fails closed without it rather than shipping unsigned.
-  FEED_SIGNING_SEED_ARN: ''
+  # ARN of the Secrets Manager secret holding the feed signing seed.
+  # Empty fails closed rather than shipping unsigned.
+  FEED_SIGNING_SEED_ARN: 'arn:aws:secretsmanager:ap-southeast-2:651116729473:secret:scg/router/feed-signing-seed-R3XEWU'
 
 jobs:
   installer-macos:

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.62
+
+- Feed signature enforcement is live: the compiled `FEED_PUBLIC_KEY` is
+  set, the release workflow reads the signing seed from Secrets Manager,
+  and the live `scg-router-feed` stack now publishes from
+  `software-combined/SC_Unlimited_ai` with GetSecretValue limited to that
+  one seed ARN. Unsigned HTTPS feeds fail closed.
+
 ## 0.6.61
 
 - Feed documents are signature-enforced end to end (Plan 145): the
@@ -7,8 +15,7 @@
   detached sidecar before parsing and refuses unsigned or tampered feeds
   with the `feed_signature` code, and the publisher role may read exactly
   one secret, the signing seed. `file://` manual installs stay
-  operator-trusted. Enforcement engages once the owner key ceremony
-  compiles the real key into `FEED_PUBLIC_KEY`.
+  operator-trusted.
 
 ## 0.6.60
 
