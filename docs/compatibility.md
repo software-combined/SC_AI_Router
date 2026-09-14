@@ -585,3 +585,73 @@ pinned from the router-metadata guide and the OpenAPI `OpenRouterMetadata`,
 `EndpointInfo` and `RouterAttempt` schemas, read 2026-09-14; the guide's
 `selected.endpoint` path does not exist in the observed shapes, so the
 extractor reads only the `available[]`/`attempts[]`/`provider_name` order.
+
+## Probe matrix 2026-09-14 (plan 175, router 0.6.58-beta, legs A-H)
+
+Legenda: A base round trip, B parallel pair, C same-slug switch replay,
+D switch-in plus switch-back, E image, F plaintext handoff as child of a
+DeepSeek parent (classic), G compact, H `require_parameters` pin. Effort
+`low` unless noted. `serving_endpoint` is the bounded log field; `none`
+means OpenRouter answered without endpoint metadata (edge validation).
+
+| model | leg | effort | result | serving_endpoint |
+|---|---|---|---|---|
+| z-ai/glm-5.3-flash | A | low | passed | Cloudflare |
+| z-ai/glm-5.3-flash | B | low | failed: calls serialized, leg asserts | Cloudflare |
+| z-ai/glm-5.3-flash | C | low | passed, history preserved | Cloudflare |
+| z-ai/glm-5.3-flash | D | low | passed both directions, history preserved | Together (DeepSeek), Cloudflare then Venice (GLM) |
+| z-ai/glm-5.3-flash | E | low | failed: upstream `invalid_prompt`, no endpoint attributed | none |
+| z-ai/glm-5.3-flash | F | max | partial: 1 of 3 markers replied, 404/409/other tool failures | unattributed (ephemeral handoff log) |
+| z-ai/glm-5.3-flash | G | low | not run (row over call cap) | - |
+| z-ai/glm-5.3-flash | H | low | not run (row over call cap) | - |
+
+Row spend: ~40 calls against a 23-call cap (overrun on the misconfigured
+subscription-parent F run and the 12-call DeepSeek-parent F run); the row
+stops here per the plan. Notable: GLM Flash answered from Cloudflare and
+Venice across turns (Auto Exacto rotation live); the parallel pair
+serialized on Cloudflare; the image leg died upstream with `invalid_prompt`
+before any endpoint was named.
+
+| deepseek/deepseek-v4.1-flash | A | low | passed | Together |
+| deepseek/deepseek-v4.1-flash | B | low | failed: calls serialized, leg asserts | Parasail then Together |
+| deepseek/deepseek-v4.1-flash | C+D | low | passed, own reasoning replayed, history preserved | Together, Parasail, Modal |
+| deepseek/deepseek-v4.1-flash | E | low | passed, red seen | Together |
+| deepseek/deepseek-v4.1-flash | G | low | passed | Parasail then Fireworks |
+| deepseek/deepseek-v4.1-flash | H | low | failed: upstream 404 with `require_parameters: true`, no endpoint attributed | none |
+| deepseek/deepseek-v4.1-flash | F | max | not run (session cap: 2 rows fully covered plus row-1 F) | - |
+
+Row spend: ~15 calls. Notable: four serving endpoints across legs
+(Together, Parasail, Modal, Fireworks); `require_parameters: true` leg H
+returned an upstream 404 with no endpoint attributed, so the flag's effect
+on this row is unverified and must be re-run before any default change
+(open question 1 input).
+
+| google/gemini-3.8-flash | A | low | passed | Google |
+| google/gemini-3.8-flash | B | low | failed: calls serialized, leg asserts | Google |
+| google/gemini-3.8-flash | C+D | low | passed, history preserved | Google |
+| google/gemini-3.8-flash | E | low | passed, red seen, no endpoint attributed | none |
+| google/gemini-3.8-flash | F | max | not run (session cap) | - |
+| google/gemini-3.8-flash | G | low | not run (session cap) | - |
+| google/gemini-3.8-flash | H | low | not run (session cap) | - |
+
+Row spend: ~8 calls. Notable: single endpoint (Google) across all legs,
+unlike the multi-endpoint rotation on GLM/DeepSeek rows; image turns carry
+no endpoint metadata while tool turns do.
+
+Scope not run this session (all rows): leg A at each row's highest
+listed effort level (only `low`, the default, was probed), leg F in Lite
+wire mode (classic only), and the four recon open questions except the
+partial leg-H input on Q1 noted above.
+
+Row edits proposed from this session: none. The parallel serialization
+appears on three unrelated upstreams (harness/client confound, not endpoint
+evidence); the leg-H 404 argues against a `require_parameters` default
+rather than for any pin; no endpoint-specific failure was attributed to a
+pinnable endpoint. Pins and 173 steps 2-4 wait for per-endpoint evidence
+from a later session.
+
+Session cap reached (3 rows: GLM Flash, DeepSeek Flash, Gemini Flash).
+Remaining rows (Kimi K3, Qwen, Muse rows, GLM 5.3, DeepSeek Pro after its
+routing check, Gemini Pro, Grok, Anthropic rows, GPT twins), legs F/G/H
+where skipped, and open questions 1-4 (Q1 partially informed by the leg H
+result above) wait for the next approved session.

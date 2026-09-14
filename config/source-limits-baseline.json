@@ -39,7 +39,7 @@
   "tests/test_upstream_failures.py": 470,
   "tests/test_windows_acl.py": 366,
   "tests/test_windows_backend.py": 413,
-  "tools/probe_agent_handoffs.py": 505,
+  "tools/probe_agent_handoffs.py": 515,
   "ai_router/router.py": 255,
   "ai_router/upstream.py": 345,
   "tests/test_ingress_guards.py": 304,
