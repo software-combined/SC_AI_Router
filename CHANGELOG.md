@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.58
+
+- The picker, request routing, Claude discovery and the new-model prompt now
+  honor what the installed key may use: each router refreshes
+  `GET /api/v1/models/user` with its ordinary inference key at startup,
+  every five minutes and after a key or region change, and shows the
+  intersection of the approved roster, the key snapshot, local policy and
+  client rules. Temporary failures keep the last good snapshot for the same
+  key and region; authentication rejection clears it. Subscription rows are
+  unaffected. Regional endpoint profiles (`global`, `us`, `eu`) live in
+  `provider_defs.py`; the per-machine `openrouter_region` state selects the
+  inference and key-filtered discovery host, and those requests never fall
+  back outside it (credential verification still uses the global host). No workspace
+  names, provider allowlists, budgets or guardrail IDs are stored in the
+  router: those remain OpenRouter dashboard controls.
+
 ## 0.6.57
 
 - Both GLM rows now carry the documented `max_tools: 128` ceiling (Z.ai

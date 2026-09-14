@@ -148,11 +148,24 @@ def do_get(handler):
         return model_prompt_page.handle_page(
             handler, path[len('/model-prompt/'):], False)
     if path == '/health':
+        from . import availability as _availability
+        from . import provider_defs as _defs
+        snap = _availability.current()
+        region = handler.server.state.get('openrouter_region', 'global')
+        if not _defs.valid_region(region):
+            region = 'global'
         return handler.send_json(200, {'status': 'ok', 'version': VERSION,
                                        'inflight': handler.server.inflight,
                                        'max_inflight': handler.server.max_inflight,
                                        'draining': handler.server.draining,
-                                       'served_models': dict(handler.server.served_models)})
+                                       'served_models': dict(handler.server.served_models),
+                                       'openrouter_region': region,
+                                       'openrouter_host': _defs.region_host(
+                                           _defs.DEFAULT_EXTERNAL, region),
+                                       'models_availability': (
+                                           None if snap is None else {
+                                               'models': len(snap.get('models') or ()),
+                                               'fetched_at': snap.get('fetched_at')})})
     if path == '/v1/models':
         return handler.send_json(200, claude.models_listing())
     if handler.server.draining:

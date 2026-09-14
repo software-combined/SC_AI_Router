@@ -105,6 +105,34 @@ OPENROUTER = ProviderDef(
     dialect='openrouter',
     request_headers=(('X-OpenRouter-Metadata', 'enabled'),))
 
+# Regional endpoint profiles for one external provider. A profile names the
+# host that serves inference and key-filtered discovery for an enforced
+# data region; `global` is today's host. Profiles carry hosts only, never
+# credentials or policy: the workspace allowed_data_regions decides which
+# profile a machine uses, and requests never fall back outside it.
+OPENROUTER_REGIONS = {
+    'global': 'openrouter.ai',
+    'us': 'us.openrouter.ai',
+    'eu': 'eu.openrouter.ai',
+}
+OPENROUTER_REGION_PATH = 'openrouter-region'
+
+
+def region_host(provider_id, region='global'):
+    # Inference host for one provider and region profile. Unknown
+    # providers and unknown regions fail closed to None so the caller
+    # refuses rather than guessing a host outside the region.
+    if provider_id != OPENROUTER.id:
+        return None
+    if not isinstance(region, str):
+        region = 'global'
+    return OPENROUTER_REGIONS.get(region)
+
+
+def valid_region(region):
+    # True for a known OpenRouter region profile name.
+    return isinstance(region, str) and region in OPENROUTER_REGIONS
+
 OPENAI = ProviderDef(
     id='openai', label='OpenAI', kind=SUBSCRIPTION, host='chatgpt.com',
     responses_path='/backend-api/codex', dialect='openai',
