@@ -2,6 +2,7 @@
 import io
 import json
 import os
+import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -77,6 +78,9 @@ class VerifySequenceTests(unittest.TestCase):
         self.assertIn('--router-state', flat)
         self.assertIn('scope-x', flat)
         self.assertIn('--catalog', flat)
+        self.assertIn('--codex-home', flat)
+        home = flat.split('--codex-home')[1].split()[0]
+        self.assertTrue(home.startswith(tempfile.gettempdir()))
 
     def test_wait_healthy_sleeps_between_polls(self):
         scope = candidate.IsolatedRouter()

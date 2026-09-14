@@ -148,11 +148,18 @@ def legs_for(slug, row=None):
     return legs
 
 
-def run_probe(slug, scope, _run=subprocess.run, row=None):
-    """Implied legs through the isolated router; True when all pass."""
+def run_probe(slug, scope, _run=subprocess.run, row=None, _mkdtemp=None):
+    """Implied legs through the isolated router; True when all pass.
+
+    The probe refuses router legs without --codex-home (never the live
+    Codex home), so the candidate always gets a disposable client home.
+    """
+    home = (_mkdtemp(prefix='candidate-codex-home-') if _mkdtemp is not None
+            else tempfile.mkdtemp(prefix='candidate-codex-home-'))
     cmd = [sys.executable, str(PROBE_TOOL), slug,
            '--router-state', str(scope.home / 'mixed-router-state.json'),
-           '--catalog', str(scope.catalog)]
+           '--catalog', str(scope.catalog),
+           '--codex-home', home]
     legs = legs_for(slug, row)
     if 'image' in legs:
         cmd.append('--image')
