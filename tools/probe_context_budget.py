@@ -222,7 +222,7 @@ def run(binary, mode, scenario, home):
         original_read_body = Handler.read_body
 
         def observe_read_body(handler):
-            raw, payload, size = original_read_body(handler)
+            raw, payload, size, decoded_len = original_read_body(handler)
             path, _ = handler.authorized_path()
             path = path.split('?', 1)[0] if isinstance(path, str) else None
             items = payload.get('input') if isinstance(payload, dict) else None
@@ -234,7 +234,7 @@ def run(binary, mode, scenario, home):
                 compact_requests.append({'path': path,
                                          'stream': payload.get('stream') is True,
                                          'trigger': trigger})
-            return raw, payload, size
+            return raw, payload, size, decoded_len
 
         with mock.patch.object(Handler, 'read_body', observe_read_body), \
                 mock.patch.object(http.client, 'HTTPSConnection', upstream.connection):
