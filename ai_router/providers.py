@@ -160,6 +160,8 @@ class ExternalResponsesProvider:
             # not a matching registry row, so this only fires for a direct
             # prepare() call and never for a routed request.
             raise PreparationError(f'unknown model: {model}')
+        if getattr(entry, 'provider_prefs', None):
+            payload['provider'] = dict(entry.provider_prefs)
         limit = entry.max_output_tokens
         window = getattr(entry, 'context_window', 0) or 0
         if window:  # reservation counts against context; keep half for input
@@ -242,6 +244,7 @@ class ExternalResponsesProvider:
         prompt = comp.COMPACT_PROMPT + '\n\nConversation:\n' + transcript
         levels = capabilities.REASONING_LEVELS.get(model)
         effort = min(levels, key=CANONICAL_ORDER.index) if levels else None
+        entry = by_slug(model) if isinstance(model, str) else None
         deadline = time.monotonic() + SUMMARY_DEADLINE_S
         budgets = _summary_budgets(model)
         for attempt, budget in enumerate(budgets, 1):
@@ -252,6 +255,8 @@ class ExternalResponsesProvider:
                 raise TimeoutError('Compaction summarizer deadline exceeded')
             body = {'model': model, 'input': [comp.user_message_item(prompt)],
                     'max_output_tokens': budget}
+            if getattr(entry, 'provider_prefs', None):
+                body['provider'] = dict(entry.provider_prefs)
             if effort:
                 # Never let default high effort burn the whole budget on reasoning.
                 body['reasoning'] = {'effort': effort}

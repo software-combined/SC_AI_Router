@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.55
+
+- Registry rows can now carry an optional `provider_prefs` object that
+  reaches the OpenRouter wire body as `provider`, so a future data edit can
+  steer a row away from a strict or flaky endpoint. No row sets it yet;
+  pins wait for plan 175's probe evidence and owner approval.
+
 ## 0.6.54
 
 - Delivered cross-thread messages are now named `delivered_message` and
