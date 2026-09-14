@@ -235,6 +235,8 @@ def run(args, probe_type=Probe):
         raise ValueError('--live-children requires --live')
     if getattr(args, 'installed', False) and (not args.live_children or args.lifecycle):
         raise ValueError('--installed requires --live-children without --lifecycle')
+    if getattr(args, 'child', CHILD) == getattr(args, 'parent', PARENT):
+        raise ValueError('--parent and --child must name different rows')
     probe = probe_type(args.live, args.max_live_calls, args.live_children)
     class Handler(BaseHTTPRequestHandler):
         protocol_version = 'HTTP/1.1'
@@ -311,6 +313,8 @@ def run(args, probe_type=Probe):
             installed = json.loads((Path.home() / '.codex/mixed-model-router'
                                     / 'mixed-models.json').read_text())
             rows = {m['slug']: m for m in installed['models']}
+            if PARENT not in rows:
+                raise SystemExit(f'live catalogue has no parent row: {PARENT}')
             parent = dict(rows[PARENT])
             native = dict(rows['gpt-5.6-sol'])
         else:
@@ -499,7 +503,13 @@ if __name__ == '__main__':
     parser.add_argument('--native-only', action='store_true')
     parser.add_argument('--lifecycle', action='store_true')
     parser.add_argument('--max-live-calls', type=int, default=0)
-    parser.add_argument('--parent', choices=('gpt-6-astra', 'gpt-5.6-luna', 'z-ai/glm-5.3-flash'), default=PARENT)
+    parser.add_argument('--parent', choices=('gpt-6-astra', 'gpt-5.6-luna', 'z-ai/glm-5.3-flash',
+                                                 'deepseek/deepseek-v4.1-flash'), default=PARENT)
+    parser.add_argument('--child', default=CHILD,
+                        choices=('deepseek/deepseek-v4.1-flash', 'z-ai/glm-5.3-flash',
+                                 'z-ai/glm-5.3', 'google/gemini-3.8-flash'),
+                        help='Child row slug for leg F (default: %(default)s).')
     arguments = parser.parse_args()
     PARENT = arguments.parent
+    CHILD = arguments.child
     raise SystemExit(run(arguments))
