@@ -78,7 +78,8 @@ class ProviderTests(unittest.TestCase):
         for value in ('/root', '/root/child', 'SYNTH_SCOPE'):
             self.assertIn(value, summary)
         self.assertEqual(prepared.headers, {'Authorization': 'Bearer synthetic-router-key',
-            'Content-Type': 'application/json', 'Accept-Encoding': 'identity'})
+            'Content-Type': 'application/json', 'Accept-Encoding': 'identity',
+            'X-OpenRouter-Metadata': 'enabled'})
         self.assertEqual(prepared.host, 'openrouter.ai')
         credentials.key_for.assert_called_once_with('openrouter')
 

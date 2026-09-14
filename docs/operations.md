@@ -327,9 +327,11 @@ Six fields say why:
 | `upstream_code` | the error envelope's `code` or `error_type`, when present |
 | `upstream_error_type` | the canonical top-level `error_type`, when reported |
 | `upstream_provider_code` | the `error.metadata.provider_code`, when reported |
+| `serving_endpoint` | the OpenRouter endpoint that answered; absent when the router or an edge validation answered |
 | `failure_class` | `context`, `final` or `transient`; the stream retry runs only on `transient` |
 
-Every detail must be code-shaped (letters, digits, dot, dash, underscore) and
+Every detail must be code-shaped (letters, digits, dot, dash, underscore,
+slash for endpoint slugs) and
 at most 64 characters; anything else, including message text, is dropped
 rather than recorded, because provider prose can quote prompt content. A
 missing detail means the provider did not say why, or said it in a form this

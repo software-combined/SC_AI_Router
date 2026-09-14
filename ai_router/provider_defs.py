@@ -49,12 +49,13 @@ class ProviderDef:
 
     __slots__ = ('id', 'label', 'kind', 'host', 'responses_path',
                  'messages_path', 'key', 'catalogue_url', 'catalogue_shape',
-                 'key_info_url', 'dialect', 'native_prefixes')
+                 'key_info_url', 'dialect', 'native_prefixes',
+                 'request_headers')
 
     def __init__(self, id, label, kind, host, responses_path=None,
                  messages_path=None, key=None, catalogue_url=None,
                  catalogue_shape='manual', key_info_url=None, dialect=None,
-                 native_prefixes=()):
+                 native_prefixes=(), request_headers=()):
         if kind not in (EXTERNAL, SUBSCRIPTION):
             raise ValueError(f'{id}: bad kind {kind!r}')
         if kind == EXTERNAL and key is None:
@@ -73,6 +74,12 @@ class ProviderDef:
         self.catalogue_shape, self.key_info_url = catalogue_shape, key_info_url
         self.dialect = dialect or id
         self.native_prefixes = native_prefixes
+        request_headers = tuple(request_headers)
+        for pair in request_headers:
+            if (not isinstance(pair, tuple) or len(pair) != 2
+                    or not all(isinstance(part, str) and part for part in pair)):
+                raise ValueError(f'{id}: bad request header {pair!r}')
+        self.request_headers = request_headers
 
     def serves(self, protocol):
         """True when this provider serves that protocol natively."""
@@ -95,7 +102,8 @@ OPENROUTER = ProviderDef(
     catalogue_url='https://openrouter.ai/api/v1/models',
     catalogue_shape='openrouter',
     key_info_url='https://openrouter.ai/api/v1/auth/key',
-    dialect='openrouter')
+    dialect='openrouter',
+    request_headers=(('X-OpenRouter-Metadata', 'enabled'),))
 
 OPENAI = ProviderDef(
     id='openai', label='OpenAI', kind=SUBSCRIPTION, host='chatgpt.com',

@@ -139,6 +139,111 @@ class FailureDescriptionTests(unittest.TestCase):
              'elapsed_ms': 500.0, 'timeout_s': 120, 'has_image': False}))
 
 
+class ServingEndpointTests(unittest.TestCase):
+    # Key names pinned from the router-metadata guide and the OpenAPI
+    # `OpenRouterMetadata`/`EndpointInfo`/`RouterAttempt` schemas (2026-09-14):
+    # `endpoints.available[]` entries carry `provider` plus `selected`, and
+    # `attempts[]` entries carry `provider`.
+    def test_selected_available_entry_wins(self):
+        body = json.dumps({'openrouter_metadata': {
+            'endpoints': {'available': [
+                {'provider': 'OpenAI', 'selected': False},
+                {'provider': 'DeepSeek', 'selected': True}]},
+            'attempts': [{'provider': 'DeepSeek', 'status': 200}]}}).encode()
+        self.assertEqual(upstream.serving_endpoint(body), 'DeepSeek')
+
+    def test_attempts_backfill_when_nothing_selected(self):
+        body = json.dumps({'error': {'metadata': {}},
+                           'openrouter_metadata': {
+                               'endpoints': {'available': []},
+                               'attempts': [{'provider': 'xAI', 'status': 400}]}})
+        self.assertEqual(upstream.serving_endpoint(body), 'xAI')
+
+    def test_last_attempt_wins_the_failover(self):
+        body = json.dumps({'openrouter_metadata': {'attempts': [
+            {'provider': 'OpenAI', 'status': 500},
+            {'provider': 'DeepSeek', 'status': 429}]}}).encode()
+        self.assertEqual(upstream.serving_endpoint(body), 'DeepSeek')
+
+    def test_error_provider_name_is_the_last_resort(self):
+        body = json.dumps({'error': {'metadata': {'provider_name': 'Meta'}}}).encode()
+        self.assertEqual(upstream.serving_endpoint(body), 'Meta')
+
+    def test_prose_never_reaches_the_log(self):
+        body = json.dumps({'openrouter_metadata': {
+            'summary': 'available=1, selected=OpenAI',
+            'endpoints': {'available': [
+                {'provider': 'Not a slug; retry shortly!', 'selected': True}]}}}).encode()
+        self.assertIsNone(upstream.serving_endpoint(body))
+
+    def test_vendor_slash_slugs_pass(self):
+        body = json.dumps({'openrouter_metadata': {'attempts': [
+            {'provider': 'fireworks/deepseek-v4', 'status': 200}]}}).encode()
+        self.assertEqual(upstream.serving_endpoint(body), 'fireworks/deepseek-v4')
+
+    def test_garbage_returns_none(self):
+        self.assertIsNone(upstream.serving_endpoint(b'not json'))
+        self.assertIsNone(upstream.serving_endpoint({'openrouter_metadata': {}}))
+        self.assertIsNone(upstream.serving_endpoint(None))
+
+
+class RelayEndpointLogTests(unittest.TestCase):
+    def setUp(self):
+        upstream.clear_refusals()
+        self.addCleanup(upstream.clear_refusals)
+
+    def _relay(self, status, raw):
+        from ai_router import relay
+        from ai_router.transport import Prepared
+
+        class FakeResp:
+            def __init__(self): self.status = status
+            def read(self, *a): return raw
+            def getheader(self, *a, **k): return ''
+
+        class FakeConn:
+            def __init__(self, *a, **k): pass
+            def connect(self): pass
+            def request(self, *a, **k): pass
+            def getresponse(self): return FakeResp()
+            def close(self): pass
+
+        handler = SimpleNamespace(
+            server=SimpleNamespace(credentials=SimpleNamespace(
+                key_rejected=lambda provider: False)),
+            error=lambda err: None,
+            retryable_reject=lambda err, **k: None)
+        provider = SimpleNamespace(defn=provider_defs.OPENROUTER)
+        body = json.dumps({'model': 'm', 'input': []}).encode()
+        prepared = Prepared('openrouter.ai', '/responses', {}, body, {}, 'openrouter')
+        metrics = {'provider': 'openrouter', 'protocol': 'responses',
+                   'model': 'm', 'path': '/responses'}
+        events = []
+        with mock.patch.object(relay.http.client, 'HTTPSConnection', FakeConn):
+            relay.relay(handler, provider, prepared, metrics, 0.0,
+                        log_event=lambda event, **f: events.append((event, f)))
+        return events
+
+    def test_rejected_400_carries_the_serving_endpoint(self):
+        raw = json.dumps({'error': {'message': 'Provider returned error',
+                                     'metadata': {'provider_name': 'xAI'}},
+                          'openrouter_metadata': {'attempts': [
+                              {'provider': 'xAI', 'status': 400}]}}).encode()
+        events = self._relay(400, raw)
+        rejected = [f for e, f in events if e == 'upstream_rejected']
+        self.assertEqual(len(rejected), 1)
+        self.assertEqual(rejected[0]['serving_endpoint'], 'xAI')
+
+    def test_unavailable_503_carries_the_serving_endpoint(self):
+        raw = json.dumps({'error': {'message': 'No available provider', 'code': 503},
+                          'openrouter_metadata': {'attempts': [
+                              {'provider': 'DeepSeek', 'status': 503}]}}).encode()
+        events = self._relay(503, raw)
+        unavailable = [f for e, f in events if e == 'upstream_unavailable']
+        self.assertEqual(len(unavailable), 1)
+        self.assertEqual(unavailable[0]['serving_endpoint'], 'DeepSeek')
+
+
 class RefusalCacheTests(unittest.TestCase):
     def setUp(self):
         upstream.clear_refusals()

@@ -173,9 +173,12 @@ class ExternalResponsesProvider:
         payload['max_output_tokens'] = min(requested, limit) if requested else default
         # Context size stays the provider's call: a chars-per-token estimate
         # refused long turns the client still had room for.
+        headers = dict(self.defn.request_headers)
+        headers.update({'Authorization': 'Bearer ' + credentials.key_for(self.defn.id),
+                        'Content-Type': 'application/json',
+                        'Accept-Encoding': 'identity'})
         return Prepared(self.host, self.defn.path_for(provider_defs.RESPONSES, '/responses'),
-                        {'Authorization': 'Bearer ' + credentials.key_for(self.defn.id),
-                         'Content-Type': 'application/json', 'Accept-Encoding': 'identity'},
+                        headers,
                         json.dumps(payload).encode(), tool_names, self.name)
 
     def adapt(self, response, tool_names, notes=None):
@@ -257,10 +260,12 @@ class ExternalResponsesProvider:
                 req = json.dumps(body).encode()
                 conn = http.client.HTTPSConnection(self.defn.host,
                                                     timeout=remaining)
+                headers = dict(self.defn.request_headers)
+                headers.update({'Authorization': 'Bearer ' + key,
+                                'Content-Type': 'application/json'})
                 conn.request('POST', self.defn.path_for(
                     provider_defs.RESPONSES, '/responses'), body=req,
-                    headers={'Authorization': 'Bearer ' + key,
-                             'Content-Type': 'application/json'})
+                    headers=headers)
                 resp = conn.getresponse()
                 try:
                     data = json.load(resp)
