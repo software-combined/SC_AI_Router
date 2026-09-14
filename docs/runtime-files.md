@@ -10,6 +10,7 @@ receipts, catalogues, backups and logs are never part of a release bundle and
 are never copied between machines.
 
 `ai_router/router.py`, `ai_router/providers.py`, `ai_router/claude.py`,
+`ai_router/availability.py`, `ai_router/snapshot_store.py`,
 `ai_router/registry.py`, `ai_router/credentials.py`,
 `ai_router/tool_adapter.py`, `ai_router/tool_aliases.py`,
 `ai_router/agent_handoffs.py`, `ai_router/sse.py`, `ai_router/stream_errors.py`,

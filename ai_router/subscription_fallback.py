@@ -56,18 +56,21 @@ def twin_slug(model):
 class Plan:
     """External twin prepared lazily, only once upstream actually refuses."""
 
-    __slots__ = ('slug', 'path', 'payload', 'raw_body', 'headers', 'credentials')
+    __slots__ = ('slug', 'path', 'payload', 'raw_body', 'headers', 'credentials',
+                 'region')
 
-    def __init__(self, slug, path, payload, raw_body, headers, credentials):
+    def __init__(self, slug, path, payload, raw_body, headers, credentials,
+                 region='global'):
         self.slug, self.path, self.payload = slug, path, payload
         self.raw_body, self.headers = raw_body, headers
         self.credentials = credentials
+        self.region = region
 
     def prepared(self):
         """Prepared request for the twin row; raises exactly as prepare() does."""
         payload = dict(self.payload, model=self.slug)
         defn = provider_defs.get(by_slug(self.slug).provider)
-        return ExternalResponsesProvider(defn).prepare(
+        return ExternalResponsesProvider(defn, self.region).prepare(
             self.slug, self.path, payload, self.raw_body, self.headers,
             self.credentials)
 
@@ -94,7 +97,15 @@ def plan(state, prepared, path, payload, raw_body, headers, credentials):
     allowed = state.get('allowed_models')
     if allowed is not None and slug not in allowed:
         return None
-    return Plan(slug, path, payload, raw_body, headers, credentials)
+    # Key-filtered availability gates the twin like a direct request: the
+    # fallback builds its adapter outright, so the owns() gate never runs.
+    from . import availability as _availability
+    if not _availability.permitted(slug):
+        return None
+    region = state.get('openrouter_region', 'global')
+    if not provider_defs.valid_region(region):
+        region = 'global'
+    return Plan(slug, path, payload, raw_body, headers, credentials, region)
 
 
 def prepare(provider, model, path, payload, raw_body, headers, server):
@@ -125,11 +136,12 @@ def refused(handler, prepared, retry_after, metrics, started):
     # protocol rides along so a mid-stream failure still emits the terminal
     # frame (transport.emit_terminal_failure keys on it, Plan 141).
     defn = provider_defs.get(by_slug(fallback.slug).provider)
+    _region = getattr(fallback, 'region', 'global')
     twin_metrics = {k: metrics[k] for k in fields if k in metrics}
     twin_metrics.update(provider=defn.id, model=fallback.slug,
                         path=fallback.path, helper_fallback=True,
                         protocol=provider_defs.RESPONSES)
     # The owned-request slot still covers this hand-off; relay no longer
     # takes or releases a slot of its own.
-    return handler.relay(ExternalResponsesProvider(defn), twin, twin_metrics, started,
+    return handler.relay(ExternalResponsesProvider(defn, _region), twin, twin_metrics, started,
                          has_images(fallback.payload.get('input')))

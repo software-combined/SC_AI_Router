@@ -162,8 +162,7 @@ def instructions_for(visible):
 
 
 def catalog_name(model):
-    # display_name is stored qualified (<Vendor>: <Model> <Version?>), so this
-    # is a pure suffix strip; bare legacy rows fail the registry test instead.
+    # display_name is stored qualified (<Vendor>: <Model> <Version?>).
     return model.display_name.removesuffix(' · ' + label_of(model))
 
 
@@ -201,55 +200,37 @@ def external_entry(model, instructions=None):
             'web_search_tool_type': 'text_and_image' if model.web_search else 'text'}
 
 
-def _visible_rows(client, allowed, include_twins=False):
+def _visible_rows(client, allowed, include_twins=False, available=None):
     """(visible, hidden) external registry rows for one client and allowlist.
 
-    `allowed` is the optional portco allowlist of registry slugs (Plan 068):
-    None preserves today's behavior exactly; a list drops visible
-    OpenRouter rows not in the list like hidden rows. Subscription rows
-    are unaffected. `merge` and `check` share this derivation so `check`
-    can never certify a catalogue `merge` would not produce.
+    `allowed` is the optional portco allowlist (Plan 068); `available` is
+    the optional key-filtered id set from `/models/user`. Either None
+    preserves today's behavior; a set hides rows the key cannot use. The
+    registry is never pruned: hidden rows stay out of this catalogue
+    until the key may use them again.
     """
     allowset = None if allowed is None else frozenset(allowed)
+    avail = None if available is None else frozenset(available)
     visible = [m for m in models_for(MODELS, client, include_twins=include_twins)
                if provider_defs.is_external(m.provider)
-               and (allowset is None or m.slug in allowset)]
+               and (allowset is None or m.slug in allowset)
+               and (avail is None or m.slug in avail)]
     shown = {m.slug for m in visible}
     hidden = [m for m in MODELS
               if provider_defs.is_external(m.provider) and m.slug not in shown]
     return visible, hidden
 
 
-def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False):
-    """Merge registry OpenRouter entries, dropping explicitly retired picker rows.
+def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False,
+          available=None):
+    """Merge registry OpenRouter entries into one client catalogue.
 
-    Only models_for(client) OpenRouter entries are emitted, so an upgrade
-    merge drops a row hidden for this client (today only Claude's
-    OpenRouter-billed Anthropic rows); the Codex picker lists the GPT
-    twins beside their subscription rows. Roster slugs absent from the
-    catalogue are appended as stubs so a fresh file still lists the
-    approved picker. Existing rows gain missing schema defaults while
-    retaining model-specific values, repairing older bare stubs.
-    One exception: rows matching the exact 0.6.10.23 single-medium
-    placeholder signature get their two reasoning fields upgraded.
-    Order is subscription rows in roster order, then OpenRouter rows
-    grouped by vendor A-Z, verified before preview inside a vendor and
-    label A-Z inside a tier. Registry priorities ascend in the same order,
-    because Codex lists the picker by ascending priority. Retired
-    subscription slugs are dropped.
-    The future Claude listing reuses models_for('claude') to omit
-    OpenRouter-billed Anthropic rows. Plan 039's live /models remains
-    the proper replacement for this fallback. Routing never consults
-    this filter.
-    `allowed` is an optional portco allowlist of registry slugs (Plan 068):
-    None preserves today's behavior exactly; a list drops visible
-    OpenRouter rows not in the list like hidden rows. Subscription rows
-    are unaffected.
-    In none mode (include_twins true) the swap is inverted: the dead
-    subscription stubs are dropped and no existing non-registry row is
-    carried, so the picker lists registry rows only, twins included.
+    Emits models_for(client) rows only; see _visible_rows for the
+    allowlist and key filters. Roster stubs repair fresh files; retired
+    subscription slugs never return. Routing never consults this filter.
     """
-    visible, hidden_rows = _visible_rows(client, allowed, include_twins)
+    visible, hidden_rows = _visible_rows(client, allowed, include_twins,
+                                           available=available)
     instructions = instructions_for(visible)
     shown = {m.slug for m in visible}
     hidden = {m.slug for m in hidden_rows}
@@ -278,7 +259,9 @@ def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False)
     for slug in RETIRED_SUBSCRIPTION_SLUGS:
         entries.pop(slug, None)
     for slug in roster:
-        if slug not in entries and slug not in RETIRED_SUBSCRIPTION_SLUGS:
+        # A roster stub repairs a fresh file only, never a hidden row.
+        if (slug not in entries and slug not in RETIRED_SUBSCRIPTION_SLUGS
+                and slug not in hidden):
             entries[slug] = subscription_stub(slug, instructions)
     if include_twins:
         subs = []
@@ -310,13 +293,14 @@ def read_openai_mode(catalog_path):
     return mode if mode in ('none', 'subscription') else 'subscription'
 
 
-def merge_file(path, client='codex', allowed=None, openai_mode=None):
+def merge_file(path, client='codex', allowed=None, openai_mode=None,
+               available=None):
     """Merge the catalogue file for the install's openai_mode and write it atomically."""
     path = Path(path)
     mode = openai_mode if openai_mode is not None else read_openai_mode(path)
     base = json.loads(path.read_text()) if path.exists() else {'models': []}
     merged = merge(base, read_roster(path), client, allowed,
-                   include_twins=(mode == 'none'))
+                   include_twins=(mode == 'none'), available=available)
     replace_json(path, merged)
     return merged
 
@@ -328,7 +312,8 @@ def _same(old, new, key):
     return old.get(key) == new.get(key)
 
 
-def check(path, client='codex', allowed=None, include_twins=False):
+def check(path, client='codex', allowed=None, include_twins=False,
+          available=None):
     catalog = json.loads(Path(path).read_text())
     existing = {m['slug']: m for m in catalog.get('models', [])}
     for slug, row in existing.items():
@@ -340,7 +325,8 @@ def check(path, client='codex', allowed=None, include_twins=False):
         if SUBAGENT_MODEL_PLACEHOLDER in template:
             print(f'{slug}: unrendered model roster placeholder')
             return False
-    visible, hidden = _visible_rows(client, allowed, include_twins)
+    visible, hidden = _visible_rows(client, allowed, include_twins,
+                                        available=available)
     identical, total = 0, 0
     for model in hidden:
         if model.slug in existing:
@@ -363,8 +349,19 @@ def check(path, client='codex', allowed=None, include_twins=False):
     return identical == total
 
 
+def _take_set(args, flag):
+    # Optional comma flag for tool/CI pins; (ids-or-None, rest).
+    if args[:1] != [flag]:
+        return None, args
+    if len(args) < 2 or not args[1].strip():
+        raise SystemExit(USAGE)
+    return (frozenset(s.strip() for s in args[1].split(',') if s.strip()),
+            args[2:])
+
+
 USAGE = ('usage: python3.14 -m ai_router.catalogue '
-         '[--client codex|claude] [--allowed slug,...] --check|--merge <catalogue>')
+         '[--client codex|claude] [--allowed slug,...] [--available slug,...] '
+         '--check|--merge <catalogue>')
 
 
 if __name__ == '__main__':
@@ -375,19 +372,14 @@ if __name__ == '__main__':
             raise SystemExit(USAGE)
         client = args[1]
         args = args[2:]
-    allowed = None
-    if args[:1] == ['--allowed']:
-        # Tool/CI-only: pins a portco subset for merge and check. Never
-        # widens the stored file policy at runtime; the effective set
-        # comes from model-policy.json alone.
-        if len(args) < 2 or not args[1].strip():
-            raise SystemExit(USAGE)
-        allowed = tuple(s.strip() for s in args[1].split(',') if s.strip())
-        args = args[2:]
+    # Tool/CI-only pins; never widen the stored file policy at runtime.
+    allowed, args = _take_set(args, '--allowed')
+    available, args = _take_set(args, '--available')
     if args[:1] == ['--merge'] and len(args) == 2:
-        merge_file(Path(args[1]), client, allowed)
+        merge_file(Path(args[1]), client, allowed, available=available)
     elif args[:1] == ['--check'] and len(args) == 2:
         sys.exit(0 if check(args[1], client, allowed,
-                            include_twins=read_openai_mode(args[1]) == 'none') else 1)
+                            include_twins=read_openai_mode(args[1]) == 'none',
+                            available=available) else 1)
     else:
         raise SystemExit(USAGE)

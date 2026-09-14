@@ -200,6 +200,50 @@ class RefusedHelperTurnTests(unittest.TestCase):
                          'UPSTREAM_RATE_LIMITED')
         self.assertEqual([call[0] for call in recorded], ['chatgpt.com'])
 
+    def test_snapshot_excluded_twin_keeps_the_refusal(self):
+        # Key-filtered availability gates the twin like a direct request,
+        # so a twin outside the `/models/user` snapshot must never bill.
+        from ai_router import availability
+        snap = availability._SNAPSHOT
+        availability._SNAPSHOT = {'key': 'k', 'region': 'global',
+                                  'models': frozenset({'z-ai/glm-5.3'}),
+                                  'fetched_at': 0}
+        self.addCleanup(setattr, availability, '_SNAPSHOT', snap)
+        recorded = install_fake(self, self._refusal())
+        server = self._server(openai_helper_fallback=True)
+        response = self._turn(server, HEADERS)
+        self.assertEqual(response.status, 503)
+        self.assertEqual(json.loads(response.read())['error']['code'],
+                         'UPSTREAM_RATE_LIMITED')
+        self.assertEqual([call[0] for call in recorded], ['chatgpt.com'])
+
+    def test_snapshot_included_twin_answers_the_helper_turn(self):
+        from ai_router import availability
+        snap = availability._SNAPSHOT
+        availability._SNAPSHOT = {'key': 'k', 'region': 'global',
+                                  'models': frozenset({'openai/gpt-5.6-luna'}),
+                                  'fetched_at': 0}
+        self.addCleanup(setattr, availability, '_SNAPSHOT', snap)
+        recorded = install_fake(self, self._refusal())
+        server = self._server(openai_helper_fallback=True)
+        response = self._turn(server, HEADERS)
+        self.assertEqual(response.status, 200)
+        self.assertEqual([call[0] for call in recorded],
+                         ['chatgpt.com', 'openrouter.ai'])
+
+    def test_snapshot_excluded_twin_gets_no_plan(self):
+        from ai_router import availability
+        snap = availability._SNAPSHOT
+        availability._SNAPSHOT = {'key': 'k', 'region': 'global',
+                                  'models': frozenset({'z-ai/glm-5.3'}),
+                                  'fetched_at': 0}
+        self.addCleanup(setattr, availability, '_SNAPSHOT', snap)
+        base = dict(state={'openai_helper_fallback': True},
+                    prepared=SimpleNamespace(provider='openai'),
+                    path='/responses', payload={'model': HELPER},
+                    raw_body=b'{}', headers=HEADERS, credentials=object())
+        self.assertIsNone(subscription_fallback.plan(**base))
+
     def test_subscription_slug_without_a_twin_keeps_the_refusal(self):
         recorded = install_fake(self, self._refusal())
         server = self._server(openai_helper_fallback=True)
