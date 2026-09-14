@@ -58,6 +58,22 @@ def _error_envelope(failure, event):
     return None
 
 
+def _top_error_type(failure, event):
+    """The top-level error_type, the canonical cause on the Responses skin."""
+    for source in (failure, event):
+        if not isinstance(source, dict):
+            continue
+        value = _bounded(source.get('error_type'))
+        if value:
+            return value
+        envelope = source.get('error')
+        if isinstance(envelope, dict):
+            value = _bounded(envelope.get('error_type'))
+            if value:
+                return value
+    return None
+
+
 def _record_detail(metrics, kind, failure, event):
     """Record why the provider ended the stream, bounded to fixed metadata.
 
@@ -74,11 +90,47 @@ def _record_detail(metrics, kind, failure, event):
             metrics['upstream_reason'] = value
         return
     envelope = _error_envelope(failure, event)
-    if envelope is None:
-        return
-    value = _bounded(envelope.get('code')) or _bounded(envelope.get('error_type'))
-    if value:
-        metrics['upstream_code'] = value
+    if envelope is not None:
+        value = _bounded(envelope.get('code')) or _bounded(envelope.get('error_type'))
+        if value:
+            metrics['upstream_code'] = value
+        metadata = envelope.get('metadata')
+        provider_code = (_bounded(metadata.get('provider_code'))
+                         if isinstance(metadata, dict) else None)
+        if provider_code:
+            metrics['upstream_provider_code'] = provider_code
+    error_type = _top_error_type(failure, event)
+    if error_type:
+        metrics['upstream_error_type'] = error_type
+
+
+_FINAL_ERROR_TYPES = frozenset((
+    'invalid_request', 'refusal', 'moderation', 'insufficient_quota'))
+_TRANSIENT_ERROR_TYPES = frozenset((
+    'server_error', 'provider_unavailable', 'provider_overloaded',
+    'timeout', 'server'))
+
+
+def failure_class(failure, event):
+    """'context' | 'final' | 'transient' from the canonical cause.
+
+    Decided on the top-level error_type first (the Responses skin's code is
+    a lossy collapse); an `invalid_prompt` code with no error_type is a
+    deterministic refusal, and anything unrecognised is transient so an
+    unknown provider death stays retryable.
+    """
+    if _context_error(failure) or _context_error(event):
+        return 'context'
+    error_type = _top_error_type(failure, event)
+    if error_type in _FINAL_ERROR_TYPES:
+        return 'final'
+    if error_type in _TRANSIENT_ERROR_TYPES:
+        return 'transient'
+    envelope = _error_envelope(failure, event)
+    code = (_bounded(envelope.get('code')) if isinstance(envelope, dict) else None)
+    if code == 'invalid_prompt' and error_type is None:
+        return 'final'
+    return 'transient'
 
 
 def _context_error(data, depth=0):
@@ -123,13 +175,18 @@ def _prompt_refusal(failure, event):
 
     The converted chat body was refused upstream and replaying it cannot
     succeed, so the client gets one actionable sentence instead of the
-    provider's schema dump. The bounded code still reaches the log.
+    provider's schema dump. The emitted code stays `invalid_prompt`: Codex
+    classifies that as fatal, while an unknown code would be retried. The
+    bounded code still reaches the log.
     """
     envelope = _error_envelope(failure, event)
     if envelope is None:
         return None
-    codes = (_bounded(envelope.get('code')), _bounded(envelope.get('error_type')))
-    return errors.upstream_invalid_prompt() if 'invalid_prompt' in codes else None
+    codes = (_bounded(envelope.get('code')), _bounded(envelope.get('error_type')),
+             _top_error_type(failure, event))
+    if 'invalid_prompt' not in codes:
+        return None
+    return errors.upstream_invalid_prompt(code='invalid_prompt')
 
 
 def normalize(chunks, metrics):
@@ -160,6 +217,7 @@ def normalize(chunks, metrics):
         _record_detail(metrics, kind, failure, event)
         refusal = None
         if kind != 'response.incomplete':
+            metrics['failure_class'] = failure_class(failure, event)
             refusal = errors.context_window() if context else _prompt_refusal(failure, event)
         if refusal is None:
             metrics['code'] = ('UPSTREAM_INCOMPLETE' if kind == 'response.incomplete'

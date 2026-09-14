@@ -48,15 +48,17 @@ class AnswerFrameTests(unittest.TestCase):
 class RewrittenTerminalTests(unittest.TestCase):
     def test_a_router_rewritten_refusal_is_attributed_to_the_router(self):
         # The provider's own frame is replaced here, so the client reads a
-        # router-written one; the bounded upstream code stays as the reason.
+        # router-written one; the bounded upstream code stays as the reason,
+        # and the emitted code keeps the fatal `invalid_prompt` Codex ends on.
         metrics = {}
         wire = _frame({'type': 'response.failed', 'response': {
             'error': {'code': 'invalid_prompt'}}})
         out = b''.join(stream_errors.normalize([wire], metrics))
-        self.assertNotIn(b'invalid_prompt', out)
+        self.assertIn(b'"code": "invalid_prompt"', out)
         self.assertEqual(metrics['upstream_code'], 'invalid_prompt')
         self.assertEqual(metrics['code'], 'UPSTREAM_INVALID_PROMPT')
         self.assertEqual(metrics['terminal_source'], 'router')
+        self.assertEqual(metrics['failure_class'], 'final')
 
     def test_a_provider_verdict_is_attributed_to_the_upstream(self):
         metrics = {}

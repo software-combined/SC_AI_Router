@@ -189,13 +189,15 @@ def retryable_stream_failure(metrics, record):
     return (record.forwarded_bytes == 0
             and metrics.get('terminal_source') == stream_errors.TERMINAL_FROM_UPSTREAM
             and metrics.get('code') == 'UPSTREAM_STREAM_FAILED'
+            and metrics.get('failure_class') == 'transient'
             and code_of(metrics) not in (None, 'invalid_prompt',
                                          'context_length_exceeded'))
 
 
 def clear_terminal_fields(metrics):
     """Drop the failed attempt's verdict before the retry overwrites it."""
-    for key in ('code', 'upstream_code', 'terminal_event', 'upstream_reason',
+    for key in ('code', 'upstream_code', 'upstream_error_type', 'upstream_provider_code',
+                'failure_class', 'terminal_event', 'upstream_reason',
                 'terminal_source'):
         metrics.pop(key, None)
 

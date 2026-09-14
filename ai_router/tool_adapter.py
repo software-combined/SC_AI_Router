@@ -7,7 +7,7 @@ import json
 import re
 from copy import deepcopy
 from .capabilities import has_recursive_refs
-from .compaction import portable_history
+from .history_portability import portable_history
 from .discovered import recall
 from .registry import by_slug
 from . import agent_handoffs, sse, tool_aliases, tool_merge
