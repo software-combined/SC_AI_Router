@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.52
+
+- ChatGPT native service paths are now a prefix rule instead of a four-entry
+  list: any path under `/alpha/` or starting with `/guardian` forwards to
+  the ChatGPT backend with the client's own login in subscription mode
+  (Codex's checkpoint notes and read-only history tools work through the
+  router) and answers 404 in `none` mode. Dot segments, percent-encoded
+  dots and backslashes are refused before the prefix test. The context
+  recovery guidance now tells models to search the tool list for the
+  history tools instead of calling remembered names.
+
 ## 0.6.51
 
 - Carried history now stops at the model-switch boundary. The client's

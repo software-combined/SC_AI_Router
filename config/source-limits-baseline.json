@@ -5,7 +5,7 @@
   "ai_router/errors.py": 279,
   "ai_router/key_dialog.py": 260,
   "ai_router/models.py": 321,
-  "ai_router/providers.py": 354,
+  "ai_router/providers.py": 359,
   "ai_router/setup.py": 328,
   "ai_router/tool_adapter.py": 394,
   "packaging/install.py": 700,

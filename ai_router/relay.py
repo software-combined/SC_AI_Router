@@ -13,7 +13,7 @@ import http.client
 import json
 import time
 from . import errors, local_services, provider_defs, setup, stream_errors, stream_relay, subscription_fallback, transport, upstream
-from .providers import NATIVE_SERVICE_PATHS
+from .providers import is_native_service
 
 
 def relay(handler, provider, prepared, metrics, started, has_image=False, *, log_event):
@@ -36,7 +36,8 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
         # Phases land inside post_with_phases even on failure.
         response, headers_done = transport.post_with_phases(
             conn, prepared, metrics)
-        if (provider.defn.dialect == 'openai' and metrics['path'] in NATIVE_SERVICE_PATHS
+        if (provider.defn.dialect == 'openai'
+                and is_native_service(metrics['path'])
                 and response.status in (401, 403)):
             response.read()
             log_event('native_upstream_rejected', path=metrics['path'],
