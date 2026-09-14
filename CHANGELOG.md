@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.59
+
+- Dashboard-blocked models no longer linger in the picker file: every
+  key-availability refresh now re-merges it, so a row the key cannot use
+  is removed within one refresh cycle (Codex shows the change after
+  reopening). Request routing already refused such rows; now the picker
+  agrees with it.
+
 ## 0.6.58
 
 - The picker, request routing, Claude discovery and the new-model prompt now

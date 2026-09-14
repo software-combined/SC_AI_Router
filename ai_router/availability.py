@@ -24,6 +24,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 from . import snapshot_store
 
@@ -105,11 +106,13 @@ def refresh(host, key, home, region='global', _urlopen=urllib.request.urlopen):
             if _SNAPSHOT is not None and _SNAPSHOT.get('key') != fingerprint:
                 _SNAPSHOT = None
                 snapshot_store.clear(home)
+                sync_catalogue(home, frozenset())
         return current()
     if rejected:
         with _LOCK:
             _SNAPSHOT = None
         snapshot_store.clear(home)
+        sync_catalogue(home, frozenset())
         LOG.info(json.dumps({'event': 'models_availability_cleared',
                              'reason': 'auth_rejected'}))
         return None
@@ -124,7 +127,25 @@ def refresh(host, key, home, region='global', _urlopen=urllib.request.urlopen):
     with _LOCK:
         _SNAPSHOT = dict(snap)
     snapshot_store.write(home, fingerprint, region, ids)
+    sync_catalogue(home, ids)
     return dict(snap)
+
+
+def sync_catalogue(home, available):
+    """Re-merge the picker catalogue against one key-filtered id set.
+
+    The snapshot gates routing; this gates the picker. None preserves
+    today's file, a set hides what the key cannot use. Never raises:
+    a catalogue write failure must not break the refresh loop.
+    """
+    try:
+        from . import catalogue as _catalogue
+        from . import model_policy as _policy
+        _portco, _department, _allowed = _policy.load(home)
+        _catalogue.merge_file(Path(home) / 'mixed-models.json',
+                              allowed=_allowed, available=available)
+    except Exception:  # noqa: BLE001 - picker sync must never break refresh
+        LOG.info(json.dumps({'event': 'models_catalogue_sync_failed'}))
 
 
 def restore(home, key, region='global'):
