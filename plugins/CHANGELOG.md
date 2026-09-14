@@ -1,5 +1,9 @@
 # Changelog
 
+## scg-review 0.4.4 — 2026-09-15
+
+- Remove the one-cycle cap on material remediations and targeted re-reviews. Keep cycling until the commit is All Clear or Proceed With Notes, or an accepted blocker needs owner or product input.
+
 ## scg-review 0.4.3 — 2026-09-14
 
 - Write review verdicts for people: `✅ All Clear`, `📝 Proceed With Notes`, `❌ Block`. Keep `ALL_CLEAR` and `PROCEED_WITH_NOTES` only as Git-hook `--decision` tokens.
