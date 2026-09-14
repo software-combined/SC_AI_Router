@@ -1,5 +1,11 @@
 # Changelog
 
+## scg-review 0.4.3 — 2026-09-14
+
+- Write review verdicts for people: `✅ All Clear`, `📝 Proceed With Notes`, `❌ Block`. Keep `ALL_CLEAR` and `PROCEED_WITH_NOTES` only as Git-hook `--decision` tokens.
+- Each lane names the model that ran it. The main agent recaps lane verdicts, models, and accepted notes as short bullets.
+
+
 ## scg-subagents 0.5.3 — 2026-09-14
 
 - Keep the local-first delegation default in `optimal-subagents` and state the delegation test in outcome terms: delegate a bounded part when a better-fit model or an independent check raises quality, the parent cannot meet the capability floor, or the part runs independently and overlaps parent work, keeps bulky output out of the parent context, or needs a separate tool or write boundary. The brief, fresh-context child, result read and parent verification must return more in quality, time or context than they consume; cost is one factor. When the parent is the wrong fit for most of the task, ask the user to change the session model. Rename the workload table header from "Cost-first starting point" to "Starting point". No change to model choice, review lanes or the mandatory tool-guide read.
