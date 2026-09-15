@@ -2,7 +2,7 @@
 import http.client
 import json
 import time
-from . import capabilities, compaction as comp, local_services, agent_handoffs, provider_defs
+from . import capabilities, compaction as comp, local_services, agent_handoffs, provider_defs, transport
 from .standalone_outputs import materialize_outputs
 from . import subscription_history, context_recovery
 from .capabilities import CANONICAL_ORDER, check_effort, input_modalities
@@ -200,7 +200,7 @@ class ExternalResponsesProvider:
             if 'text/event-stream' in response.getheader('Content-Type', ''):
                 yield from stream_events(response, tool_names, notes)
             else:
-                result = json.load(response)
+                result = json.loads(transport.read_capped(response, transport.MAX_UPSTREAM_BODY))
                 if notes is not None and isinstance(result.get('model'), str):
                     notes['served_model'] = result['model']
                 adapter = ToolEvents(tool_names, notes)
@@ -283,7 +283,7 @@ class ExternalResponsesProvider:
                     headers=headers)
                 resp = conn.getresponse()
                 try:
-                    data = json.load(resp)
+                    data = json.loads(transport.read_capped(resp, transport.MAX_UPSTREAM_BODY))
                 except ValueError:
                     raise OSError('Summarizer returned invalid JSON')
                 summary = comp.extract_summary(resp.status, data)

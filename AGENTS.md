@@ -28,7 +28,10 @@ plan that will move them.
 ## 3. Source limits
 
 Modules 250 lines soft / 400 hard, entrypoints and tools 400/700, tests
-300/500. Checked by `python3.14 tools/check_source_limits.py`. Keep the
+300/500. Checked by `python3.14 tools/check_source_limits.py`. A file above
+the soft cap needs a baseline entry, which is a ceiling: the file may shrink
+freely and may not grow past the recorded count. Remove the entry once the
+file is back under the cap. Keep the
 router and provider modules small. An upstream is one entry in
 `ai_router/provider_defs.py` (host, endpoint prefixes, key location,
 catalogue, failure dialect) consumed by adapter classes parameterized with

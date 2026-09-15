@@ -17,6 +17,9 @@ import sys
 MARKETPLACE = 'scg-agent-plugins'
 LABEL = 'com.softwarecombined.agent-plugins.update'
 SOURCES = {
+    'https://github.com/software-combined/SC_AI_Router',
+    'https://github.com/software-combined/SC_AI_Router.git',
+    'git@github.com:software-combined/SC_AI_Router.git',
     'https://github.com/software-combined/SC_OpenRouter_adapter',
     'https://github.com/software-combined/SC_OpenRouter_adapter.git',
     'git@github.com:software-combined/SC_OpenRouter_adapter.git',
@@ -56,7 +59,7 @@ def verify_source(codex):
     entry = next((m for m in entries if m['name'] == MARKETPLACE), {})
     source = entry.get('marketplaceSource', {})
     if source.get('sourceType') != 'git' or source.get('source') not in SOURCES:
-        raise ValueError('SCG marketplace must use the approved software-combined/SC_OpenRouter_adapter Git source.')
+        raise ValueError('SCG marketplace must use the approved software-combined/SC_AI_Router Git source.')
 
 
 def update(codex):

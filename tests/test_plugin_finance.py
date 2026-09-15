@@ -17,7 +17,7 @@ class FinancePluginTest(unittest.TestCase):
         self.assertEqual((ROOT / entries["scg-finance"]["source"]["path"]).resolve(), PLUGIN)
         manifest = json.loads((PLUGIN / ".codex-plugin/plugin.json").read_text())
         self.assertEqual(manifest["name"], "scg-finance")
-        self.assertEqual(manifest["repository"], "https://github.com/software-combined/SC_OpenRouter_adapter")
+        self.assertEqual(manifest["repository"], "https://github.com/software-combined/SC_AI_Router")
         self.assertRegex(manifest["version"], r"^\d+\.\d+\.\d+(?:\+[A-Za-z0-9.-]+)?$")
 
     def test_claude_manifest_matches_codex_name_and_version(self):

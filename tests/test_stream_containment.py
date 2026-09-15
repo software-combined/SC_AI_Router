@@ -34,6 +34,11 @@ class SseFrameBoundTests(unittest.TestCase):
     def test_cap_matches_request_body_ceiling(self):
         self.assertEqual(sse.MAX_FRAME_BYTES, router_mod.MAX_BODY)
 
+    def test_lines_splitter_bounds_a_newline_free_chunk(self):
+        big = b'data: ' + b'x' * (sse.MAX_FRAME_BYTES + 1)
+        with self.assertRaisesRegex(ValueError, 'exceeds %d' % sse.MAX_FRAME_BYTES):
+            list(sse.blocks(sse.lines(iter([big]))))
+
 
 class _ServerFixture(unittest.TestCase):
     """Shared ephemeral-router fixture for the relay suites below."""
