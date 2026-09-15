@@ -415,9 +415,10 @@ more declared tools degrade the way the Grok row does instead of failing
 upstream.
 
 Text-only rows (`deepseek/deepseek-v4-pro-0813`, `z-ai/glm-5.3`) and the
-`drop_images` row (`x-ai/grok-4.6`) note historical images on the wire as
-`[image omitted: this model runs text-only]` instead of refusing the thread
-(router 0.6.56); only an image in the message being sent is still refused.
+`drop_images` row (`x-ai/grok-4.6`) replace images on the wire with
+`ERROR: Cannot read image (this model does not support image input). Inform the user.`
+instead of refusing the thread (router 0.6.67). The model is expected to
+say that in the conversation; the turn continues.
 
 ## Probe runs 2026-09-08
 
