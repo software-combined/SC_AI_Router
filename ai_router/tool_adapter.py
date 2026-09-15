@@ -10,7 +10,7 @@ from .capabilities import has_recursive_refs
 from .history_portability import portable_history
 from .discovered import recall
 from .registry import by_slug
-from . import agent_handoffs, sse, tool_aliases, tool_merge
+from . import agent_handoffs, sse, tool_aliases, tool_merge, transport
 from .upstream import serving_endpoint
 SEARCH_NAME = 'codex_client_tool_search'
 SEARCH_NEXT = 'Call the exact returned name; do not search again.'
@@ -387,7 +387,7 @@ def _observe_sse_frame(frame, notes):
 
 def stream_events(response, names, notes=None):
     adapter = ToolEvents(names, notes)
-    for frame, data in sse.blocks(response):
+    for frame, data in sse.blocks(sse.lines(transport.passthrough(response))):
         if data and data != b'[DONE]':
             event = adapter.event(json.loads(data))
             if event is None:
