@@ -40,6 +40,9 @@ class Router(ThreadingHTTPServer):
     daemon_threads = True
     drain_deadline_s = 120
     max_inflight = MAX_INFLIGHT
+    # Parallel sub-agent connects burst past the stdlib backlog of 5; the
+    # in-flight cap still applies after accept, so this admits, not refuses.
+    request_queue_size = 64
     # Windows takes SO_EXCLUSIVEADDRUSE in server_bind instead; leaving
     # SO_REUSEADDR on would undo it.
     allow_reuse_address = os.name != 'nt'
@@ -73,7 +76,8 @@ class Router(ThreadingHTTPServer):
         self.credentials = credentials if credentials is not None else Credentials(state, ROUTER_HOME)
 
     def drain_and_exit(self):
-        self.draining = True
+        with self.lock:
+            self.draining = True
         log_event('draining', inflight=self.inflight)
         self.shutdown()
         deadline = time.monotonic() + self.drain_deadline_s
@@ -148,13 +152,19 @@ class Handler(BaseHTTPRequestHandler):
                 != 'application/json':
             return self.error(errors.unsupported_media_type())
         # One slot spans read_body, prepare and relay; rejects above return first.
+        # The drain flag is re-read under the same lock so a drain that lands
+        # between admission and the increment cannot strand a request.
         with self.server.lock:
-            if self.server.inflight >= self.server.max_inflight:
-                over = True
+            if self.server.draining:
+                verdict = 'draining'
+            elif self.server.inflight >= self.server.max_inflight:
+                verdict = 'over'
             else:
                 self.server.inflight += 1
-                over = False
-        if over:
+                verdict = None
+        if verdict == 'draining':
+            return self.drain_reject()
+        if verdict == 'over':
             return self.retryable_reject(errors.too_many_inflight(), retry_after='1')
         try:
             return self._owned_post(path, via_path, started)
@@ -232,7 +242,7 @@ class Handler(BaseHTTPRequestHandler):
                 % (exc, provider_defs.label_for(
                     defn.id if defn is not None else provider_defs.DEFAULT_EXTERNAL))))
         except (ValueError, KeyError, OSError, zstd.ZstdError,
-                AttributeError, TypeError) as exc:
+                AttributeError, TypeError, RecursionError) as exc:
             err = errors.map_client_error(exc)
             if err.code == 'INTERNAL_ERROR':
                 log_event('request_failed', code=err.code,
