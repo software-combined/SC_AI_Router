@@ -32,6 +32,18 @@ class SubagentInstructionTests(unittest.TestCase):
         template = external_entry(by_slug('z-ai/glm-5.3-flash'))[
             'model_messages']['instructions_template']
         self.assertIn('On Codex, after tool search returns matches', template)
+        self.assertIn('On Codex, if spawn is refused because all subagent lanes are full',
+                      template)
+
+    def test_claude_catalogue_omits_codex_only_hints(self):
+        catalog = merge({'models': []}, (), 'claude',
+                        ('z-ai/glm-5.3-flash', 'meta/muse-spark-1.3-contributor'))
+        served = '\n'.join(
+            (row.get('model_messages') or {}).get('instructions_template') or ''
+            for row in catalog['models'])
+        self.assertNotIn('On Codex,', served)
+        self.assertNotIn('subagent lanes are full', served)
+        self.assertIn('`delivered_message` or `delivered_app_message` are', served)
 
     def test_no_row_serves_the_raw_placeholder(self):
         catalog = merge({'models': []}, ('gpt-6-astra', 'gpt-5.6-luna'))
