@@ -7,7 +7,7 @@
   "ai_router/models.py": 321,
   "ai_router/providers.py": 380,
   "ai_router/relay.py": 260,
-  "ai_router/router.py": 279,
+  "ai_router/router.py": 280,
   "ai_router/setup.py": 341,
   "ai_router/stream_errors.py": 310,
   "ai_router/stream_relay.py": 260,
@@ -51,5 +51,6 @@
   "tests/test_windows_backend.py": 413,
   "tools/probe_agent_handoffs.py": 515,
   "tools/probe_codex_runtime.py": 501,
-  "tests/test_agent_handoff_providers.py": 311
+  "tests/test_agent_handoff_providers.py": 311,
+  "tests/test_ingress_shapes.py": 308
 }

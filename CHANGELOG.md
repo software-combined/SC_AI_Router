@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.71
+
+- An oversized compact now summarizes instead of refusing: V1
+  `/responses/compact` and inline V2 triggers decode up to the existing
+  64 MiB zstd ceiling before the local summarizer runs, which still sends
+  only a bounded transcript upstream. Past that ceiling the turn keeps
+  today's 400 `BODY_TOO_LARGE`.
+
 ## 0.6.70
 
 - The router no longer holds the request body and its parsed form for the
