@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.66
+
+- Codex deferred-tool search now tells the model to call the exact
+  returned name once, and to stop searching if the tool is missing.
+
 ## 0.6.65
 
 - An OpenRouter turn refused for funds now ends at once with a key

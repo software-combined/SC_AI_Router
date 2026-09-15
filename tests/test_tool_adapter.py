@@ -241,6 +241,16 @@ class ToolAdapterTests(unittest.TestCase):
         self.assertEqual(payload['tools'][0]['type'], 'function')
         self.assertNotIn('execution', payload['tools'][0])
         self.assertEqual(payload['input'][1]['type'], 'function_call_output')
+        found = json.loads(payload['input'][1]['output'])
+        self.assertEqual(found['available_tools'][0]['name'], 'echo')
+        self.assertIn('exact returned name', found['how_to_use'].lower())
+        empty = {'tools': [{'type': 'tool_search', 'parameters': {'type': 'object'}}],
+                 'input': [{'type': 'tool_search_output', 'call_id': 's0', 'tools': []},
+                           {'type': 'tool_search_output', 'call_id': 's1', 'tools': [{'name': 'echo'}]}]}
+        prepare_tools(empty)
+        first, second = (json.loads(item['output']) for item in empty['input'])
+        self.assertNotIn('how_to_use', first)
+        self.assertIn('how_to_use', second)
         item = ToolEvents(names).item({'type': 'function_call', 'name': SEARCH_NAME, 'call_id': 's1', 'arguments': '{"query":"echo"}'})
         self.assertEqual(item, {'type': 'tool_search_call', 'call_id': 's1', 'execution': 'client', 'arguments': {'query': 'echo'}})
         qualified = ToolEvents(names).item({'type': 'function_call', 'name': SEARCH_NAME, 'arguments': '{"query":"probe.echo_probe"}'})
@@ -327,7 +337,9 @@ class ToolAdapterTests(unittest.TestCase):
         self.assertNotIn('defer_loading', tool)
         self.assertEqual(payload['input'][1]['name'], tool['name'])
         self.assertNotIn('namespace', payload['input'][1])
-        self.assertEqual(json.loads(payload['input'][0]['output'])['available_tools'][0]['name'], tool['name'])
+        found = json.loads(payload['input'][0]['output'])
+        self.assertEqual(found['available_tools'][0]['name'], tool['name'])
+        self.assertIn('exact returned name', found['how_to_use'].lower())
         item = ToolEvents(names).item({'type': 'function_call', 'name': tool['name'], 'arguments': '{"value":"probe"}'})
         self.assertEqual(item['namespace'], 'probe')
         self.assertEqual(item['name'], 'echo')
