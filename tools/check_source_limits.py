@@ -2,9 +2,10 @@
 
 Usage: python3.14 tools/check_source_limits.py [--root REPO]
 
-Every baseline exemption must be exact and still needed (Plan 156): a file
-that shrank below its soft cap, a changed count or a deleted path fails the
-check instead of drifting silently past it.
+Each baseline entry is a ceiling for one file over its soft cap (Plan 166):
+the file may shrink freely and may not grow past the recorded count. An
+entry for a missing file, an unknown area, or a file back under its soft
+cap fails the check instead of drifting silently past it (Plan 156).
 """
 import argparse
 import json
@@ -34,8 +35,10 @@ def problems(root):
                 failures.append(f'HARD {rel}: {count} lines')
             elif recorded is None:
                 failures.append(f'SOFT {rel}: {count} lines (not in baseline)')
-            elif recorded != count:
-                failures.append(f'SOFT {rel}: {count} lines (baseline says {recorded})')
+            elif isinstance(recorded, bool) or not isinstance(recorded, int):
+                failures.append(f'BASELINE {rel}: ceiling is not an integer')
+            elif count > recorded:
+                failures.append(f'SOFT {rel}: {count} lines (baseline ceiling {recorded})')
     for rel in sorted(set(baseline) - over_soft):
         if not (root / rel).is_file():
             failures.append(f'BASELINE {rel}: no such file')
