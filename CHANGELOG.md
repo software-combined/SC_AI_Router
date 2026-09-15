@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.6.70
+
+- The router no longer holds the request body and its parsed form for the
+  duration of a streamed turn: the relay now runs after the request frame
+  returns, so both buffers die before the stream starts.
+
+- Rename the product and GitHub repository to SC AI Router
+  (`software-combined/SC_AI_Router`). Active documentation, release metadata,
+  feed trust references and plugin marketplace sources now use the new name;
+  the previous GitHub URL remains accepted during the redirect transition.
+
+## 0.6.69
+
+- Upstream reads are bounded the way request bodies are: SSE adapters parse
+  bounded line pieces, whole-body reads are capped at 16 MiB (1 MiB for
+  error envelopes), and an over-cap upstream ends the turn 502 instead of
+  growing the router without bound.
+
 ## 0.6.68
 
 - Codex sessions now get a full-lane spawn hint: if spawn is refused
@@ -7,6 +25,11 @@
   of them if needed) and retry. The same sentence is appended once to
   `spawn_agent` and `close_agent`. Claude Code does not receive it,
   and neither client gets an annotated spawn-error output.
+- A deeply nested request body now ends the turn with a 400 instead of
+  dropping the loopback connection, and drain admission is decided under
+  one lock so a drain landing mid-admission still refuses cleanly.
+- The installer hands the setup URL to the key window on stdin instead of
+  the command line, so it never appears in `ps` output on a shared machine.
 
 ## 0.6.67
 

@@ -3,7 +3,7 @@ from copy import deepcopy
 import json
 import uuid
 
-from . import provider_defs, sse
+from . import provider_defs, sse, transport
 from .registry import by_slug
 
 NATIVE_NAMESPACE = 'collaboration'
@@ -348,14 +348,14 @@ def plaintext_agent_message(item):
 def adapt_response(response, names, notes=None):
     """Adapt aliases only; never run provider-specific rewrites on native calls."""
     if not getattr(names, 'stream', False) and 'text/event-stream' not in response.getheader('Content-Type', ''):
-        raw = response.read()
+        raw = transport.read_capped(response, transport.MAX_UPSTREAM_BODY)
         result = json.loads(raw)
         restored = steer_response(restore_response(result, names), names)
         if notes is not None and isinstance(result.get('model'), str):
             notes['served_model'] = result['model']
         yield json.dumps(restored).encode() if restored is not result else raw
         return
-    for frame, data in sse.blocks(response):
+    for frame, data in sse.blocks(sse.lines(transport.passthrough(response))):
         if not data or data == b'[DONE]':
             yield frame
             continue

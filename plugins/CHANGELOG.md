@@ -1,6 +1,11 @@
 # Changelog
 
-## scg-review 0.4.7 and scg-subagents 0.5.5 — 2026-09-15
+## scg-review 0.4.8 and scg-subagents 0.5.6 - 2026-09-16
+
+- Route the Pass 1 simplification review to DeepSeek V4.1 Flash at `max`,
+  keeping the bounded fallback order and the other review lanes unchanged.
+
+## scg-review 0.4.7 and scg-subagents 0.5.5 - 2026-09-15
 
 - Clarify that Pass 1 simplification can be the slowest review phase and may
   stay quiet while the executor reads and reasons. Tell parent agents to wait
