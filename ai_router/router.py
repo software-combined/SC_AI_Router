@@ -245,6 +245,7 @@ class Handler(BaseHTTPRequestHandler):
                    'model': model, 'path': path, 'request_bytes': size,
                    'stream': payload.get('stream') is True,
                    'reasoning_effort': _reasoning.get('effort') if isinstance(_reasoning, dict) else None,
+                   'max_output_tokens': getattr(prepared, 'output_cap', None),
                    'tool_definitions': len(payload.get('tools', [])),
                    'local_prepare_ms': round((time.monotonic() - started) * 1000, 1),
                    # Per-phase detail; cumulative fields keep their meaning.

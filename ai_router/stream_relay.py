@@ -31,17 +31,20 @@ class StreamRecord:
     """Per-response stream state the log line reports.
 
     `forwarded_bytes` is everything the client received, `content_delta_bytes`
-    is how much of that was answer rather than plumbing, `terminal_source` is
-    which tier wrote the terminal frame, and `stream_retry` is whether the
-    caller re-opened the upstream once.
+    is how much of that was answer rather than plumbing, `reasoning_bytes` is
+    how much of the plumbing was reasoning, `terminal_source` is which tier
+    wrote the terminal frame, and `stream_retry` is whether the caller
+    re-opened the upstream once.
     """
 
-    __slots__ = ('forwarded_bytes', 'content_delta_bytes', 'pending',
+    __slots__ = ('forwarded_bytes', 'content_delta_bytes', 'reasoning_bytes',
+                 'pending', 'pending_reasoning',
                  'stream_retry', 'client_terminal', 'held_terminal')
 
     def __init__(self):
         self.forwarded_bytes = 0
         self.content_delta_bytes = 0
+        self.reasoning_bytes = 0
         # Which tier wrote the terminal frame the client holds, or None while it
         # holds none. One durable fact: a retry can neither re-attribute it nor
         # add a second frame, and a death after one never appends a generic
@@ -50,6 +53,9 @@ class StreamRecord:
         self.stream_retry = 0
         self.held_terminal = False
         self.pending = bytearray()
+        # Held reasoning bytes, folded into `reasoning_bytes` only if flush
+        # actually gets them out; a retry drops them with the rest of the hold.
+        self.pending_reasoning = 0
 
     def note_source(self, attempt_metrics):
         """Remember the writer of a terminal frame this attempt sent."""
@@ -75,6 +81,8 @@ class StreamRecord:
                 return False
             self.forwarded_bytes += held
             self.pending.clear()
+            self.reasoning_bytes += self.pending_reasoning
+            self.pending_reasoning = 0
             # The caller must know a terminal frame left in this write: it may
             # not append its own generic one on top of the provider's verdict.
             if self.held_terminal:
@@ -87,7 +95,8 @@ class StreamRecord:
 def streamed_metrics(record):
     """The counters every log line for this response carries."""
     return {'forwarded_delta_bytes': record.forwarded_bytes,
-            'content_delta_bytes': record.content_delta_bytes}
+            'content_delta_bytes': record.content_delta_bytes,
+            'reasoning_delta_bytes': record.reasoning_bytes}
 
 
 def relay_stream(handler, provider, response, prepared, metrics, started,
@@ -126,10 +135,15 @@ def relay_stream(handler, provider, response, prepared, metrics, started,
             # counts as the answer: only the normalizing path can tell.
             answered = (not normalized or attempt_metrics.get('answer_frame')
                         in stream_errors.ANSWER_FRAME_TYPES)
+            # Only the normalizing path sets this marker, so a passthrough
+            # stream reports no reasoning rather than guessing from bytes.
+            reasoning = attempt_metrics.get('reasoning_frame') is not None
             # A terminal frame is held too: the caller either retries (and
             # drops it) or flushes it to the client unchanged.
             if not answered and len(pending) + len(chunk) <= PENDING_LIMIT:
                 pending += chunk
+                if reasoning:
+                    record.pending_reasoning += len(chunk)
                 if attempt_metrics.get('terminal_event'):
                     record.held_terminal = True
                 continue
@@ -144,14 +158,17 @@ def relay_stream(handler, provider, response, prepared, metrics, started,
             delivered = delivered or record.client_terminal is not None
             if answered:
                 record.content_delta_bytes += len(chunk)
+            if reasoning:
+                record.reasoning_bytes += len(chunk)
     finally:
         # The request model is request facts, not an attempt verdict: the
         # caller's mapping must not lose it when the attempt state is merged.
         attempt_metrics.pop('model', None)
-        # The per-frame answer marker is loop state, not a log fact: the
-        # counters already say what the client received, and a second attempt
-        # must re-derive it rather than inherit the first attempt's marker.
+        # The per-frame answer and reasoning markers are loop state, not log
+        # facts: the counters already say what the client received, and a second
+        # attempt must re-derive them rather than inherit the first attempt's.
         attempt_metrics.pop('answer_frame', None)
+        attempt_metrics.pop('reasoning_frame', None)
         # Only a stream that ended with a terminal frame has a source, and a
         # clean completion never claims one.
         if delivered:
