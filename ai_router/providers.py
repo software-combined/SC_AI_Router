@@ -81,10 +81,14 @@ class SubscriptionProvider:
         history_changed = normalized is not payload
         payload = normalized
         try:
-            names = agent_handoffs.add_plaintext_tools(payload) if path == '/responses' else set()
+            names = set()
+            hinted = False
+            if path == '/responses':
+                names = agent_handoffs.add_plaintext_tools(payload)
+                hinted = agent_handoffs.hint_full_lanes(payload)
         except ValueError as exc:
             raise PreparationError(str(exc)) from exc
-        if names or history_changed:
+        if names or history_changed or hinted:
             fwd = {k: v for k, v in fwd.items() if k.lower() not in ('content-encoding', 'accept-encoding')}
             fwd['Accept-Encoding'] = 'identity'
             raw_body = json.dumps(payload).encode()
@@ -139,6 +143,7 @@ class ExternalResponsesProvider:
         payload['input'] = comp.scrub_tool_fragments(payload.get('input', []))
         try:
             aliases = agent_handoffs.add_plaintext_tools(payload)
+            agent_handoffs.hint_full_lanes(payload)
             tool_names = prepare_tools(payload)
             tool_names.handoffs = aliases
             rewritten = comp.strip_reasoning_blobs(comp.rewrite_input(payload.get('input', [])))

@@ -1,11 +1,11 @@
 {
-  "ai_router/agent_handoffs.py": 314,
-  "ai_router/catalogue.py": 385,
+  "ai_router/agent_handoffs.py": 368,
+  "ai_router/catalogue.py": 390,
   "ai_router/compaction.py": 271,
   "ai_router/errors.py": 283,
   "ai_router/key_dialog.py": 260,
   "ai_router/models.py": 321,
-  "ai_router/providers.py": 375,
+  "ai_router/providers.py": 380,
   "ai_router/relay.py": 257,
   "ai_router/router.py": 263,
   "ai_router/setup.py": 339,
@@ -50,5 +50,6 @@
   "tests/test_windows_acl.py": 366,
   "tests/test_windows_backend.py": 413,
   "tools/probe_agent_handoffs.py": 515,
-  "tools/probe_codex_runtime.py": 501
+  "tools/probe_codex_runtime.py": 501,
+  "tests/test_agent_handoff_providers.py": 311
 }

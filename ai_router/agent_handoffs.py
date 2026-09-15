@@ -9,6 +9,9 @@ from .registry import by_slug
 NATIVE_NAMESPACE = 'collaboration'
 PLAINTEXT_NAMESPACE = 'collaboration_plaintext'
 HANDOFF_TOOLS = frozenset(('spawn_agent', 'send_message', 'followup_task'))
+LANE_HINT_NAMES = frozenset(('spawn_agent', 'close_agent'))
+LANE_HINT = ('When all subagent lanes are full, close finished agents, '
+             'or all of them if needed, then retry spawn.')
 
 
 class AliasTools(frozenset):
@@ -101,6 +104,57 @@ def _tool_container(payload):
     if len(matches) > 1:
         raise ValueError('duplicate native collaboration namespace')
     return matches[0] if matches else (payload, None)
+
+
+def _hint_tool(tool):
+    """Append LANE_HINT once to spawn_agent/close_agent; walk namespaces."""
+    if not isinstance(tool, dict):
+        return False
+    if tool.get('type') == 'namespace':
+        children = tool.get('tools')
+        if not isinstance(children, list):
+            return False
+        changed = False
+        for child in children:
+            changed |= _hint_tool(child)
+        return changed
+    if tool.get('type') != 'function' or tool.get('name') not in LANE_HINT_NAMES:
+        return False
+    text = tool.get('description') or ''
+    if LANE_HINT in text:
+        return False
+    tool['description'] = (text + '\n' if text else '') + LANE_HINT
+    return True
+
+
+def hint_full_lanes(payload):
+    """Codex-only: tell spawn/close to free lanes, without stacking."""
+    changed = False
+    tools = payload.get('tools')
+    if isinstance(tools, list):
+        for tool in tools:
+            changed |= _hint_tool(tool)
+    items = payload.get('input')
+    if not isinstance(items, list):
+        return changed
+    for index, item in enumerate(items):
+        if not isinstance(item, dict):
+            continue
+        tools = item.get('tools')
+        if not isinstance(tools, list):
+            continue
+        lite = item.get('type') == 'additional_tools' and item.get('role') == 'developer'
+        if item.get('type') != 'tool_search_output' and not lite:
+            continue
+        touched = False
+        for tool in tools:
+            touched |= _hint_tool(tool)
+        changed |= touched
+        if touched and lite:
+            identity = json.dumps([item.get('id'), tools], sort_keys=True)
+            ident = 'at_' + str(uuid.uuid5(uuid.NAMESPACE_URL, 'scg-lane-hint:' + identity))
+            items[index] = {**item, 'id': ident}
+    return changed
 
 
 def add_plaintext_tools(payload):

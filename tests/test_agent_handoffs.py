@@ -208,5 +208,58 @@ class PlaintextSteerTests(unittest.TestCase):
         self.assertIs(handoffs.steer_event(other, names), other)
 
 
+class LaneHintTests(unittest.TestCase):
+    def _tools(self, *names, namespace='collaboration'):
+        return [{'type': 'namespace', 'name': namespace, 'tools': [
+            {'type': 'function', 'name': name, 'description': name + ' tool.'}
+            for name in names]}]
+
+    def test_spawn_and_close_gain_the_suffix_once(self):
+        payload = {'tools': self._tools('spawn_agent', 'close_agent', 'wait_agent')}
+        self.assertTrue(handoffs.hint_full_lanes(payload))
+        spawn, close, wait = payload['tools'][0]['tools']
+        self.assertTrue(spawn['description'].endswith(handoffs.LANE_HINT))
+        self.assertTrue(close['description'].endswith(handoffs.LANE_HINT))
+        self.assertEqual(spawn['description'].count(handoffs.LANE_HINT), 1)
+        self.assertEqual(wait['description'], 'wait_agent tool.')
+        self.assertFalse(handoffs.hint_full_lanes(payload))
+        self.assertEqual(spawn['description'].count(handoffs.LANE_HINT), 1)
+
+    def test_plaintext_spawn_alias_and_v1_are_hinted(self):
+        payload = {'tools': native_tools('spawn_agent', 'wait_agent')}
+        handoffs.add_plaintext_tools(payload)
+        payload['tools'].append(self._tools('spawn_agent', 'close_agent',
+                                            namespace='multi_agent_v1')[0])
+        self.assertTrue(handoffs.hint_full_lanes(payload))
+        native = payload['tools'][0]['tools'][0]
+        alias = payload['tools'][1]['tools'][0]
+        v1 = payload['tools'][2]['tools']
+        self.assertIn(handoffs.LANE_HINT, native['description'])
+        self.assertIn(handoffs.LANE_HINT, alias['description'])
+        self.assertIn(handoffs.LANE_HINT, v1[0]['description'])
+        self.assertIn(handoffs.LANE_HINT, v1[1]['description'])
+        self.assertNotIn(handoffs.LANE_HINT, payload['tools'][0]['tools'][1]['description'])
+
+    def test_search_output_and_lite_prefix_are_hinted(self):
+        payload = {
+            'input': [
+                {'type': 'additional_tools', 'role': 'developer', 'id': 'at_old',
+                 'tools': self._tools('spawn_agent', 'wait_agent')},
+                {'type': 'tool_search_output', 'call_id': 's1',
+                 'tools': self._tools('close_agent', namespace='multi_agent_v1')},
+            ]}
+        self.assertTrue(handoffs.hint_full_lanes(payload))
+        prefix = payload['input'][0]
+        self.assertNotEqual(prefix['id'], 'at_old')
+        self.assertTrue(prefix['id'].startswith('at_'))
+        self.assertIn(handoffs.LANE_HINT, prefix['tools'][0]['tools'][0]['description'])
+        self.assertNotIn(handoffs.LANE_HINT, prefix['tools'][0]['tools'][1]['description'])
+        self.assertIn(handoffs.LANE_HINT,
+                      payload['input'][1]['tools'][0]['tools'][0]['description'])
+        again = prefix['id']
+        self.assertFalse(handoffs.hint_full_lanes(payload))
+        self.assertEqual(payload['input'][0]['id'], again)
+
+
 if __name__ == '__main__':
     unittest.main()
