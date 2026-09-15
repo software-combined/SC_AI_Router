@@ -59,6 +59,7 @@ class SetupUnitTests(unittest.TestCase):
         self.assertFalse(setup.valid_nonce(state, '', NOW))
         self.assertFalse(setup.valid_nonce({'setup': {'nonce': 'n' * 16}}, 'n' * 16, NOW))
         self.assertFalse(setup.valid_nonce({}, 'n' * 16, NOW))
+        self.assertFalse(setup.valid_nonce(state, '\xff', NOW))
 
     def test_get_renders_form(self):
         home = Path(tempfile.mkdtemp())

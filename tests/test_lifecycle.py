@@ -1,5 +1,6 @@
 """Drain, socket activation, and graceful-restart behavior (Plan 045)."""
 import http.client
+import inspect
 import json
 import os
 import shutil
@@ -16,7 +17,7 @@ from unittest import mock
 
 from ai_router import activation
 import ai_router.__main__ as router_main
-from ai_router.router import Router, _harden_listener
+from ai_router.router import Handler, Router, _harden_listener
 from tests.harness import get as _get, post as _post, start_auth_server as _start_auth_server
 
 
@@ -158,6 +159,15 @@ class LauncherBootTests(unittest.TestCase):
 
 
 class DrainTests(unittest.TestCase):
+    def test_relay_runs_after_the_request_frame_returns(self):
+        # Plan 164: the raw body and parsed payload are locals of
+        # _owned_post; calling relay from do_POST lets them die before the
+        # stream starts. Lives here, not in test_handler.py, which sits at
+        # its 500-line hard cap.
+        source = inspect.getsource(Handler._owned_post)
+        self.assertNotIn('self.relay(', source)
+        self.assertIn('self.relay(*ready)', inspect.getsource(Handler.do_POST))
+
     def test_sigterm_waits_for_inflight_then_exits(self):
         server = Router({'port': 0, 'token': 't', 'openai_models': []})
         self.addCleanup(server.server_close)
@@ -196,6 +206,46 @@ class DrainTests(unittest.TestCase):
         self.assertEqual(response.getheader('Retry-After'), '2')
         response = _post(server.server_port, '/nope/responses', {'model': 'x'})
         self.assertEqual(response.status, 403)
+
+    def test_a_drain_between_admission_and_slot_is_still_503(self):
+        # The drain flag and the slot increment are one critical section:
+        # hold the lock before sending, flip draining under that same lock,
+        # release, and assert the request is refused with the slot unheld.
+        server = _start_auth_server(self)
+        payload = json.dumps({'model': 'z-ai/glm-5.3', 'input': []}).encode()
+        # Hold the lock before the request is even sent, so the handler must
+        # block at admission: it cannot slip through before the flip below.
+        server.lock.acquire()
+        try:
+            sock = socket.create_connection(('127.0.0.1', server.server_port), timeout=10)
+            self.addCleanup(sock.close)
+            sock.sendall(b'\r\n'.join([
+                b'POST /test-token/responses HTTP/1.1',
+                b'Host: 127.0.0.1',
+                b'Content-Type: application/json',
+                b'Content-Length: ' + str(len(payload)).encode(),
+                b'Connection: close', b'', b'']) + payload)
+            # Settle until the handler thread exists and is waiting on the
+            # lock; only then flip draining and release, so the handler
+            # decides under the same critical section the flag was set in.
+            deadline = time.monotonic() + 10
+            while (len(threading.enumerate()) < 3
+                   and time.monotonic() < deadline):
+                time.sleep(0.01)
+            time.sleep(0.3)
+            server.draining = True
+        finally:
+            server.lock.release()
+        data = b''
+        while b'\r\n\r\n' not in data:
+            chunk = sock.recv(4096)
+            if not chunk:
+                break
+            data += chunk
+        head = data.split(b'\r\n', 1)[0]
+        self.assertIn(b'503', head)
+        self.assertIn(b'Retry-After: 2', data)
+        self.assertEqual(server.inflight, 0)
 
     def test_health_reports_draining(self):
         server = _server(self)
@@ -238,8 +288,8 @@ class InFlightBodyDrainTests(unittest.TestCase):
     def test_drain_waits_for_request_still_reading_its_body(self):
         # Plan 090 Step 2: the slot is held from the owned-path check, so a
         # request mid-read_body keeps drain_and_exit from exiting early.
-        server = _server(self)
-        payload = json.dumps({'model': 'x', 'input': []}).encode()
+        server = _start_auth_server(self)
+        payload = json.dumps({'model': 'z-ai/glm-5.3', 'input': []}).encode()
         sock = socket.create_connection(('127.0.0.1', server.server_port), timeout=10)
         self.addCleanup(sock.close)
         sock.sendall(b'\r\n'.join([

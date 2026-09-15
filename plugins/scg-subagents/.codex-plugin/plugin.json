@@ -1,6 +1,6 @@
 {
   "name": "scg-subagents",
-  "version": "0.5.5",
+  "version": "0.5.6",
   "description": "Subagent coordination, model selection and evidence refresh.",
   "author": {
     "name": "Software Combined"
@@ -15,5 +15,5 @@
     "capabilities": [],
     "defaultPrompt": "Use the optimal-subagents skill to choose and coordinate models for this task."
   },
-  "repository": "https://github.com/software-combined/SC_OpenRouter_adapter"
+  "repository": "https://github.com/software-combined/SC_AI_Router"
 }

@@ -10,7 +10,8 @@ the dialog tool's stdout pipe straight into the POST body. A host with no
 dialog tool falls back to the loopback page, which stays the only HTML
 surface.
 
-Run manually: `python -m ai_router.key_prompt <setup-url> [--clients codex]`.
+Run manually: `python -m ai_router.key_prompt <setup-url> [--clients codex]`
+or pipe the URL on stdin with `--stdin` so it never appears in `ps`.
 """
 import json
 import subprocess
@@ -157,6 +158,9 @@ def _parse(argv):
     args, which = list(argv), 'codex'
     if len(args) >= 2 and args[-2] == '--clients':
         which, args = key_dialog.clients(args[-1]), args[:-2]
+    if args == ['--stdin']:
+        # The installer pipes the URL here so the token never appears in `ps`.
+        args = [sys.stdin.readline().strip()]
     if len(args) != 1 or not args[0].startswith('http://127.0.0.1:'):
         return None, None
     return args[0], which
@@ -166,7 +170,7 @@ def main(argv=None):
     """CLI entry point: `python -m ai_router.key_prompt <setup-url> [--clients set]`."""
     url, which = _parse(sys.argv[1:] if argv is None else argv)
     if url is None:
-        print('usage: python -m ai_router.key_prompt <loopback setup URL> '
+        print('usage: python -m ai_router.key_prompt (<loopback setup URL> | --stdin) '
               '[--clients codex|claude|both|none]', file=sys.stderr)
         return 1
     return run_window(url, clients=which)

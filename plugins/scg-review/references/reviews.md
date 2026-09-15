@@ -1,7 +1,7 @@
 # Cost-first pre-commit model routing
 
 Canonical authoring source: `plugins/scg-subagents/skills/optimal-subagents/references/reviews.md`
-in SC_OpenRouter_adapter. The review plugin bundles an unchanged release copy at
+in SC_AI_Router. The review plugin bundles an unchanged release copy at
 `references/reviews.md` so existing review-only installations remain usable.
 Edit the canonical source, synchronize the copy and release both affected plugins.
 Repository tests enforce equality. For a running review, the installed review
@@ -29,7 +29,7 @@ changes inspection depth and required evidence, not automatically the model bill
 
 | Pass | Default model, fixed effort | Ordered fallback models, fixed effort |
 | --- | --- | --- |
-| Simplification | `meta/muse-spark-1.3-contributor` at `xhigh` | `deepseek/deepseek-v4.1-flash` at `max` → `openai/gpt-5.6-luna` at `max` → `openai/gpt-5.6-sol` at `max` |
+| Simplification | `deepseek/deepseek-v4.1-flash` at `max` | `openai/gpt-5.6-luna` at `max` → `openai/gpt-5.6-sol` at `max` |
 | Correctness | `meta/muse-spark-1.3-contributor` at `xhigh` | `z-ai/glm-5.3-flash` at `max` → `openai/gpt-5.6-sol` at `max` → `meta/muse-spark-1.3` at `max` |
 | Quality | `meta/muse-spark-1.3-contributor` at `xhigh` | `deepseek/deepseek-v4.1-flash` at `max` → `openai/gpt-5.6-luna` at `max` → `openai/gpt-5.6-sol` at `max` |
 | Adversarial | `meta/muse-spark-1.3-contributor` at `xhigh` | `z-ai/glm-5.3-flash` at `max` → `meta/muse-spark-1.3` at `max` → `openai/gpt-5.6-sol` at `max` |

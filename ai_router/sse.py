@@ -15,11 +15,16 @@ def lines(chunks):
         if len(pending) > MAX_FRAME_BYTES:
             raise ValueError('upstream SSE frame exceeds %d bytes' % MAX_FRAME_BYTES)
     if pending:
+        if len(pending) > MAX_FRAME_BYTES:
+            raise ValueError('upstream SSE frame exceeds %d bytes' % MAX_FRAME_BYTES)
         yield bytes(pending)
 
 
 def blocks(response):
-    """Yield each original SSE frame and its joined data fields."""
+    """Yield each original SSE frame and its joined data fields.
+
+    Callers pass `lines(chunks)` for an unbounded reader; iterating a raw
+    response reads whole lines first."""
     lines = []
     size = 0
     for line in response:

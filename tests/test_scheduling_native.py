@@ -35,7 +35,7 @@ if args[:2] == ['plugin', 'list']:
         'version': versions.get(name, '0.0.0')} for name in ['scg-review', 'scg-subagents']]}
 elif args[:3] == ['plugin', 'marketplace', 'list']:
     result = {'marketplaces': [{'name': 'scg-agent-plugins', 'marketplaceSource': {
-        'sourceType': 'git', 'source': 'https://github.com/software-combined/SC_OpenRouter_adapter.git'}}]}
+        'sourceType': 'git', 'source': 'https://github.com/software-combined/SC_AI_Router.git'}}]}
 elif args[:3] == ['plugin', 'marketplace', 'upgrade']:
     result = {}
 elif args[:2] == ['plugin', 'add']:
