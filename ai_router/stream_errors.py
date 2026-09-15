@@ -35,6 +35,14 @@ def _answer_item(event):
     item = event.get('item')
     return (isinstance(item, dict)
             and item.get('type') not in (None, 'reasoning'))
+
+
+def _reasoning_item(event):
+    """True only for the exact `reasoning` item kind: no setup, no other type."""
+    item = event.get('item')
+    return isinstance(item, dict) and item.get('type') == 'reasoning'
+
+
 # Same rule the HTTP path applies to a provider code (upstream._CODE_SHAPE):
 # an upstream must not get a sentence into the log, so a value that is not
 # already code-shaped is dropped rather than recorded.
@@ -254,16 +262,23 @@ def normalize(chunks, metrics):
             event = json.loads(data)
         except (ValueError, UnicodeDecodeError):
             metrics.pop('answer_frame', None)
+            metrics.pop('reasoning_frame', None)
             yield frame
             continue
         kind = event.get('type') if isinstance(event, dict) else None
+        item_frame = kind in ('response.output_item.added',
+                              'response.output_item.done')
         # Per frame, so a caller that stops reading cannot see a stale verdict.
-        if kind in ANSWER_FRAME_TYPES or (kind in ('response.output_item.added',
-                                                  'response.output_item.done')
-                                         and _answer_item(event)):
+        if kind in ANSWER_FRAME_TYPES or (item_frame and _answer_item(event)):
             metrics['answer_frame'] = kind
         else:
             metrics.pop('answer_frame', None)
+        # Reasoning is plumbing a retry replaces, but it can be most of the
+        # forwarded bytes, so the log names it separately.
+        if item_frame and _reasoning_item(event):
+            metrics['reasoning_frame'] = kind
+        else:
+            metrics.pop('reasoning_frame', None)
         if kind not in ('response.failed', 'response.incomplete', 'error'):
             yield frame
             continue
