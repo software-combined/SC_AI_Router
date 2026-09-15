@@ -16,7 +16,7 @@ import time
 
 from . import provider_defs
 from .runtime import log_event
-from .stream_errors import is_context_error
+from .stream_errors import metadata_endpoint, is_context_error
 
 
 _429_QUOTA_CODES = frozenset((
@@ -69,6 +69,23 @@ def upstream_retry_after(response, prepared, metrics):
 
 
 _CODE_SHAPE = re.compile(r'^[A-Za-z0-9_.-]{1,40}$')
+
+# Serving-endpoint slugs observed in `openrouter_metadata` (router-metadata
+# guide and the OpenAPI `OpenRouterMetadata`/`EndpointInfo`/`RouterAttempt`
+# schemas, read 2026-09-14):
+# `endpoints.available[]` entries carry `provider` with a `selected` flag,
+# and `attempts[]` entries carry `provider`. Slashes allow `vendor/slug`
+# shapes; the bound keeps prose out of the log.
+_ENDPOINT_SHAPE = re.compile(r'^[A-Za-z0-9_.\-/]{1,64}$')
+
+
+def _bounded_endpoint(value):
+    if isinstance(value, bool) or not isinstance(value, str):
+        return None
+    text = value.strip()
+    return text if _ENDPOINT_SHAPE.match(text) else None
+
+
 _PARAM_SHAPE = re.compile(
     r'(?:input|tools)(?:\[[0-9]{1,6}\])?'
     r'(?:\.(?:content|summary|type|parameters|items|required|enum|name|arguments)'
@@ -109,6 +126,38 @@ def _error_code(error, inner_error):
     for candidate in candidates:
         if isinstance(candidate, str) and _CODE_SHAPE.match(candidate.strip()):
             return candidate.strip().lower()
+    return None
+
+
+def serving_endpoint(body):
+    """Bounded serving-endpoint slug from a response body, else None.
+
+    Reads, in order, the selected entry of
+    `openrouter_metadata.endpoints.available[]`, the `provider` of each
+    `openrouter_metadata.attempts[]` entry, then
+    `error.metadata.provider_name`. Only code-shaped slugs leave this
+    function; anything else yields None. Accepts a body, a parsed payload,
+    or a terminal event dict.
+    """
+    if isinstance(body, dict):
+        payload = body
+    else:
+        try:
+            payload = json.loads(body.decode() if isinstance(body, bytes) else body)
+        except (ValueError, TypeError, UnicodeDecodeError, AttributeError):
+            return None
+    if not isinstance(payload, dict):
+        return None
+    value = metadata_endpoint(payload, _bounded_endpoint)
+    if value:
+        return value
+    error = payload.get('error')
+    if isinstance(error, dict):
+        inner = error.get('metadata')
+        if isinstance(inner, dict):
+            value = _bounded_endpoint(inner.get('provider_name'))
+            if value:
+                return value
     return None
 
 

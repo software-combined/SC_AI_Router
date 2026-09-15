@@ -10,6 +10,7 @@ receipts, catalogues, backups and logs are never part of a release bundle and
 are never copied between machines.
 
 `ai_router/router.py`, `ai_router/providers.py`, `ai_router/claude.py`,
+`ai_router/availability.py`, `ai_router/snapshot_store.py`,
 `ai_router/registry.py`, `ai_router/credentials.py`,
 `ai_router/tool_adapter.py`, `ai_router/tool_aliases.py`,
 `ai_router/agent_handoffs.py`, `ai_router/sse.py`, `ai_router/stream_errors.py`,
@@ -51,8 +52,10 @@ are never copied between machines.
 
 The feed-signature module lives with its consumers as
 `packaging/feed_verify.py`: `packaging/feed.py` and `packaging/release.py`
-load it as a sibling, never from the runtime tree. Signature enforcement
-engages only once `FEED_PUBLIC_KEY` is configured (Plan 106's decision).
+load it as a sibling, never from the runtime tree. Signature enforcement is active: the updater verifies the detached
+sidecar before parsing (Plan 145). Key rotation adds the new public key
+beside the old one, ships, waits one fleet cycle, starts signing with the
+new seed, ships again, then removes the old key.
 
 The installer also places `packaging/router_launch.py` and
 `packaging/update_launch.py` beside the state directory as `router_launch.py`

@@ -1,4 +1,4 @@
-"""Build a deterministic release bundle. Usage: python3 packaging/release.py --out dist [--build N] [--sha SHA] [--channel NAME] [--url-base URL] [--gen-key FILE] [--sign SEEDFILE]"""
+"""Build a deterministic release bundle. Usage: python3 packaging/release.py --out dist [--build N] [--sha SHA] [--channel NAME] [--url-base URL] [--gen-key FILE]"""
 import argparse
 import gzip
 import hashlib
@@ -17,7 +17,7 @@ feed_verify = importlib.util.module_from_spec(_feed_verify_spec)
 _feed_verify_spec.loader.exec_module(feed_verify)
 
 MIN_PYTHON = '3.14'
-REPO = 'software-combined/SC_OpenRouter_adapter'
+REPO = 'software-combined/SC_Unlimited_ai'
 
 
 # Single release inventory (Plan 123): every non-globbed bundle member lives
@@ -84,7 +84,7 @@ def main(argv=None):
     parser.add_argument('--gen-key', metavar='OUT',
                         help='write a fresh 32-byte hex release signing seed (owner-only file) and exit')
     parser.add_argument('--sign', metavar='SEEDFILE',
-                        help='write latest.json.sig (hex detached signature) for this build')
+                        help='retired: signing moved to tools/publish_feed.py --sign, which signs the served bytes')
     args = parser.parse_args(argv)
     if args.gen_key:
         out = Path(args.gen_key)
@@ -142,6 +142,7 @@ def main(argv=None):
     latest = {'version': version, 'url': f'{base}/{tarball_name}',
               'sha256': hashlib.sha256(tarball).hexdigest(), 'min_python': MIN_PYTHON,
               'serial': args.build, 'channel': channel, 'express': express,
+              'models_url': f'https://dist.softwarecombined.com/{channel}/models.json',
               'published': datetime.now(timezone.utc).isoformat(timespec='seconds')}
     (out_dir / 'latest.json').write_text(json.dumps(latest, indent=2) + '\n')
     # The bootstrap resolves its runtime from this table, never from a
@@ -154,12 +155,7 @@ def main(argv=None):
         {'cpython': _lock_doc['cpython'], 'targets': _lock_table},
         indent=2) + '\n')
     if args.sign:
-        try:
-            seed = Path(args.sign).read_text().strip()
-        except OSError:
-            raise SystemExit('cannot read release signing seed')
-        (out_dir / 'latest.json.sig').write_text(
-            feed_verify.sign_hex(seed, (out_dir / 'latest.json').read_bytes()) + '\n')
+        raise SystemExit('release --sign is retired: sign the served bytes with tools/publish_feed.py --sign')
     print(f'built {tarball_name} {latest["sha256"][:12]}')
 
 

@@ -2,11 +2,13 @@
 import io
 import json
 import os
+import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 from ai_router import candidate
+from ai_router.credentials import opencode_auth_path
 
 
 class VerifySequenceTests(unittest.TestCase):
@@ -77,6 +79,9 @@ class VerifySequenceTests(unittest.TestCase):
         self.assertIn('--router-state', flat)
         self.assertIn('scope-x', flat)
         self.assertIn('--catalog', flat)
+        self.assertIn('--codex-home', flat)
+        home = flat.split('--codex-home')[1].split()[0]
+        self.assertTrue(home.startswith(tempfile.gettempdir()))
 
     def test_wait_healthy_sleeps_between_polls(self):
         scope = candidate.IsolatedRouter()
@@ -167,15 +172,43 @@ class VerifySequenceTests(unittest.TestCase):
         self.assertEqual(len(spawned), 1)
         self.assertEqual(spawned[0]['env']['ROUTER_HOME'], str(home))
 
-    def test_boot_without_credential_fails_before_billing(self):
-        with mock.patch.dict(os.environ, {'OPENROUTER_API_KEY': ''}):
-            scope = candidate.IsolatedRouter()
-            try:
-                with self.assertRaisesRegex(SystemExit, 'credential'):
+    def test_boot_passes_ambient_opencode_auth_as_path_reference(self):
+        # The isolated router may reference the ambient opencode auth file
+        # by path (as the installed router does); the key value itself is
+        # never copied.
+        seen = {}
+
+        def spy_boot(self):
+            seen['opencode_auth'] = self.state.get('opencode_auth')
+            raise SystemExit('stop before spawn')
+
+        with mock.patch.object(candidate.IsolatedRouter, '_spawn', spy_boot):
+            with mock.patch.dict(os.environ, {'OPENROUTER_API_KEY': ''}):
+                scope = candidate.IsolatedRouter()
+                try:
                     scope.boot()
-            finally:
-                scope.close()
-            self.assertIsNone(scope.process)
+                    self.fail('boot did not stop before spawn')
+                except SystemExit:
+                    pass
+                finally:
+                    scope.close()
+        expected = opencode_auth_path(os.environ)
+        self.assertEqual(seen.get('opencode_auth'),
+                         str(expected) if expected.exists() else None)
+
+    def test_boot_without_credential_fails_before_billing(self):
+        # No ambient auth file either: the isolated probe must fail closed
+        # before spawning anything billable.
+        with mock.patch('ai_router.credentials.opencode_auth_path',
+                        return_value=Path('/nonexistent-auth.json')):
+            with mock.patch.dict(os.environ, {'OPENROUTER_API_KEY': ''}):
+                scope = candidate.IsolatedRouter()
+                try:
+                    with self.assertRaisesRegex(SystemExit, 'credential'):
+                        scope.boot()
+                finally:
+                    scope.close()
+                self.assertIsNone(scope.process)
 
 
 class LegsTests(unittest.TestCase):

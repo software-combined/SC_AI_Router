@@ -42,17 +42,33 @@ class ExpressUpdates(unittest.TestCase):
         args = install_mod.build_parser().parse_args(
             ['--home', str(self.home), '--update'] + (['--express-only'] if express else []))
 
+        import importlib.util as _ilu
+        _spec = _ilu.spec_from_file_location(
+            'router_feed_verify_express',
+            ROOT / 'packaging' / 'feed_verify.py')
+        _fv = _ilu.module_from_spec(_spec)
+        _spec.loader.exec_module(_fv)
+        _seed, _pub = _fv.generate_keypair()
+
         def read(feed, etag):
             self.feeds.append((feed, etag))
             return status, json.dumps(self.latest).encode(), 'candidate'
 
         def fetch(url):
             self.fetches.append(url)
+            if url.endswith('.json.sig'):
+                return _fv.sign_hex(_seed, json.dumps(self.latest).encode()).encode()
             return self.blob
 
-        with contextlib.redirect_stdout(io.StringIO()):
-            return install_mod.do_update(args, _read_feed=read, _fetch=fetch,
-                                         _sleep=self.sleeps.append, _announce=lambda s: None)
+        updater_mod = install_mod._updater
+        old_key = updater_mod._FEED_VERIFY_KEY
+        updater_mod._FEED_VERIFY_KEY = _pub
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                return install_mod.do_update(args, _read_feed=read, _fetch=fetch,
+                                             _sleep=self.sleeps.append, _announce=lambda s: None)
+        finally:
+            updater_mod._FEED_VERIFY_KEY = old_key
 
     def test_ordinary_metadata_does_not_consume_the_regular_update(self):
         before = (self.home / 'mixed-router-state.json').read_bytes()
@@ -60,7 +76,7 @@ class ExpressUpdates(unittest.TestCase):
             with self.subTest(value=value):
                 self.latest['express'] = value
                 self.assertEqual(self.run_update(), 0)
-                self.assertEqual(self.fetches, [])
+                self.assertEqual([u for u in self.fetches if not u.endswith('.json.sig')], [])
                 self.assertEqual((self.home / 'update-etag').read_text(), 'previous')
                 self.assertFalse((self.home / 'feed-serial').exists())
                 self.assertEqual((self.home / 'mixed-router-state.json').read_bytes(), before)
@@ -86,7 +102,7 @@ class ExpressUpdates(unittest.TestCase):
         (self.home / 'releases' / '9.9.9').mkdir(parents=True)
         (self.home / 'current').write_text('9.9.9')
         self.run_update()
-        self.assertEqual(self.fetches, [])
+        self.assertEqual([u for u in self.fetches if not u.endswith('.json.sig')], [])
         self.assertEqual((self.home / 'update-etag').read_text(), 'previous')
         self.assertEqual((self.home / 'mixed-router-state.json').read_bytes(), before)
         (self.home / 'current').write_text('1.0.0')  # failed install rolls back
@@ -111,10 +127,10 @@ class ExpressUpdates(unittest.TestCase):
         _patch_attrs(self, run=fail)
         with self.assertRaises(SystemExit):
             self.run_update()
-        fetched = len(self.fetches)
+        fetched = len([u for u in self.fetches if not u.endswith('.json.sig')])
         self.assertEqual(install_mod._update_failures(self.home), {'9.9.9': 1})
         self.run_update()
-        self.assertEqual(len(self.fetches), fetched)
+        self.assertEqual(len([u for u in self.fetches if not u.endswith('.json.sig')]), fetched)
         self.assertEqual((self.home / 'update-etag').read_text(), 'previous')
         with self.assertRaises(SystemExit):
             self.run_update(express=False)

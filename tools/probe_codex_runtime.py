@@ -14,12 +14,86 @@ except ImportError:  # run as a script: the sibling module is on sys.path
     from probe_media import red_png, silent_wav
 
 try:
-    from tools.appserver_probe import AppServer
+    from tools.appserver_probe import AppServer, scrub_env, AGENT_HANDOFFS
 except ImportError:  # run as a script: the sibling module is on sys.path
-    from appserver_probe import AppServer
+    from appserver_probe import AppServer, scrub_env, AGENT_HANDOFFS
 
 ROOT = Path(__file__).resolve().parent
 CODEX_BIN = os.environ.get('CODEX_BIN', '/Applications/ChatGPT.app/Contents/Resources/codex')
+
+def _flag_value(name):
+    return sys.argv[sys.argv.index(name) + 1] if name in sys.argv else None
+
+
+def _effective_home():
+    home = os.environ.get('CODEX_HOME')
+    if home:
+        return home
+    return os.path.join(os.path.expanduser('~'), '.codex')
+
+
+def _home_routes_to_router(home):
+    """True when the home's config points the client at a local router."""
+    try:
+        config = Path(home, 'config.toml').read_text()
+    except OSError:
+        return False
+    return 'openrouter' in config.lower() or 'scg_router' in config.lower()
+
+
+_codex_home = _flag_value('--codex-home')
+_reaches_router = ('--router-state' in sys.argv or '--provider' in sys.argv
+                   or '--capture-tools' in sys.argv)
+if '--live-home' in sys.argv and (_codex_home or _reaches_router):
+    print('refusing: --live-home is subscription-path only; it combines '
+          'with neither --codex-home nor router flags', file=sys.stderr)
+    raise SystemExit(2)
+if _codex_home:
+    live = os.path.realpath(_effective_home())
+    given = os.path.realpath(_codex_home)
+    if given == live or not os.path.relpath(given, live).startswith('..'):
+        print('refusing: --codex-home must not be the live Codex home',
+              file=sys.stderr)
+        raise SystemExit(2)
+if _reaches_router and not _codex_home:
+    print('refusing: a leg that reaches a router needs --codex-home <dir> '
+          'so the probe never touches the live Codex home', file=sys.stderr)
+    raise SystemExit(2)
+if (not _codex_home and '--live-home' not in sys.argv
+        and '--help' not in sys.argv and '-h' not in sys.argv
+        and _home_routes_to_router(_effective_home())):
+    print('refusing: this Codex home routes to a local router; pass '
+          '--codex-home <fresh dir>, or --live-home for an explicit '
+          'subscription-path leg', file=sys.stderr)
+    raise SystemExit(2)
+_child_env = (scrub_env(os.environ, AGENT_HANDOFFS, inject={'CODEX_HOME': _codex_home})
+              if _codex_home else dict(os.environ))
+
+
+def print_usage():
+    print('usage: probe_codex_runtime.py <slug> [--effort L] [--router-state F] '
+          '[--catalog F] [--provider P] [--codex-home DIR] [--parallel] '
+          '[--switch --switch-to S [--switch-back]] [--switch-in S] [--compact] '
+          '[--image] [--web-search] [--experimental-tools] [--apply-patch] '
+          '[--reasoning-summary] [--capture-tools URL]',
+          file=sys.stderr)
+    print('  --codex-home DIR: required for any leg reaching a router; the child '
+          'app-server runs with a scrubbed env and CODEX_HOME=DIR.',
+          file=sys.stderr)
+    print('  --live-home: explicit opt-in to run on the ambient Codex home '
+          '(subscription-path legs only; never with router flags).',
+          file=sys.stderr)
+    print('  --parallel: second thread asks for echo_probe and timing_probe in '
+          'one step; pass when both calls arrive and both are answered.',
+          file=sys.stderr)
+    print('  --switch --switch-to S: switch out to S and back; --switch-in S: '
+          'start on the argv slug, switch into S.',
+          file=sys.stderr)
+
+
+if '--help' in sys.argv or '-h' in sys.argv:
+    print_usage()
+    raise SystemExit(0)
 cfg = {'model_provider': 'openai', 'model_reasoning_effort': 'low'}
 if '--reasoning-summary' in sys.argv:
     # Plan 044 Step 3: ask the client for reasoning summaries on this thread.
@@ -112,9 +186,9 @@ def on_event(event):
             print(re.sub(r'https?://[^\s"<>]+', '[URL]', json.dumps(event.get('params')))[:1800], flush=True)
 
 
-# Ambient env, piped stderr drained silently, plain terminate: the shared
-# AppServer default. Per-call timeout keeps the global-deadline wait shape.
-server = AppServer(args, cwd=ROOT, env=dict(os.environ), stderr=subprocess.PIPE,
+# Piped stderr drained silently, plain terminate: the shared AppServer
+# default. Per-call timeout keeps the global-deadline wait shape.
+server = AppServer(args, cwd=ROOT, env=_child_env, stderr=subprocess.PIPE,
                     on_event=on_event)
 
 
@@ -130,12 +204,9 @@ def rpc(method, params):
     return server.rpc(method, params,
                       timeout=max(0.01, deadline - time.monotonic()))
 
-
-def _flag_value(name):
-    return sys.argv[sys.argv.index(name) + 1] if name in sys.argv else None
-
 def switch_target():
     return _flag_value('--switch-to') or 'z-ai/glm-5.3-flash'
+
 
 def model_modalities(model):
     try:
@@ -267,6 +338,55 @@ try:
                 print(json.dumps({'expected_error_matched': True}), flush=True)
                 sys.exit(0)
             raise RuntimeError(str(params.get('error', {}).get('codexErrorInfo', 'Provider error')))
+    if '--parallel' in sys.argv:
+        # Plan 175 Step 1: open a second thread with timing_probe alongside
+        # echo_probe and ask for both calls at once.
+        second = {'type': 'function', 'name': 'timing_probe',
+                  'description': 'Returns a synthetic timing marker.',
+                  'inputSchema': {'type': 'object', 'properties': {}}}
+        t2 = rpc('thread/start', {'model': model, 'modelProvider': cfg['model_provider'],
+            'cwd': str(ROOT), 'ephemeral': True, 'approvalPolicy': 'never',
+            'sandbox': 'read-only',
+            'baseInstructions': 'This is a synthetic protocol test. Call echo_probe and timing_probe now, in parallel. Do not read any files.',
+            'developerInstructions': 'Call echo_probe with the user supplied value and timing_probe, both now, in parallel, then return both results.',
+            'dynamicTools': [dynamic, second]})
+        p_thread = t2['thread']['id']
+        rpc('turn/start', {'threadId': p_thread,
+            'input': [{'type': 'text', 'text': 'Call echo_probe with value "probe" and timing_probe now, in parallel. Reply with both results.',
+                       'text_elements': []}], 'effort': _flag_value('--effort') or 'low'})
+        parallel_calls = {}
+        stepped = False
+        while True:
+            event = next_event()
+            if event.get('method') == 'item/tool/call':
+                tool = event['params']['tool']
+                assert tool in ('echo_probe', 'timing_probe'), 'Unexpected tool ' + str(tool)
+                # One step means no completed item lands between the calls;
+                # completions before the first call (userMessage, reasoning)
+                # are the normal live ordering, not separate steps.
+                assert not stepped, 'Parallel calls arrived in separate steps'
+                args = event['params']['arguments']
+                parallel_calls[tool] = args
+                if tool == 'echo_probe':
+                    assert args == {'value': 'probe'}, 'Unexpected arguments'
+                    send({'id': event['id'], 'result': {'success': True,
+                         'contentItems': [{'type': 'inputText', 'text': marker}]}})
+                else:
+                    send({'id': event['id'], 'result': {'success': True,
+                         'contentItems': [{'type': 'inputText', 'text': 'tick-482'}]}})
+            if event.get('method') == 'item/completed' and parallel_calls:
+                stepped = True
+            if event.get('method') == 'turn/completed':
+                turn = event['params']['turn']
+                assert turn['status'] == 'completed', str(turn.get('error'))
+                assert set(parallel_calls) == {'echo_probe', 'timing_probe'}, \
+                    'Parallel calls missing: saw=%s' % ','.join(sorted(parallel_calls))
+                print(json.dumps({'model': model, 'capability': 'parallel',
+                                  'result': 'passed',
+                                  'detail': 'both calls in one step'}), flush=True)
+                break
+            if event.get('method') == 'error':
+                raise RuntimeError(str(event['params']))
     if '--experimental-tools' in sys.argv:
         # Plan 044 Step 3: pass when a tool item named clock completes.
         rpc('turn/start', {'threadId': thread, 'effort': _flag_value('--effort') or 'low',
@@ -359,6 +479,13 @@ try:
                     break
                 if event.get('method') == 'error':
                     raise RuntimeError(str(event['params']))
+    if '--switch-in' in sys.argv:
+        # Plan 175 Step 1: the base turn above ran on the from-slug, so
+        # switching into the target row exercises foreign history in and
+        # native history out. Documented beside --switch/--switch-to.
+        target = _flag_value('--switch-in')
+        assert target, '--switch-in needs a target slug'
+        run_switch_leg(thread, target)
     compact_then_switch = '--compact-then-switch' in sys.argv
     if '--switch' in sys.argv and not compact_then_switch:
         run_switch_leg(thread, switch_target())

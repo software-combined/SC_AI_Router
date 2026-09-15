@@ -6,7 +6,7 @@ from . import capabilities, compaction as comp, local_services, agent_handoffs, 
 from .standalone_outputs import materialize_outputs
 from . import subscription_history, context_recovery
 from .capabilities import CANONICAL_ORDER, check_effort, check_images, input_modalities
-from .image_items import note_images, strip_images
+from .image_items import note_images
 from .errors import PreparationError, SubscriptionRequired, UnknownModel
 from .registry import by_slug, near_miss
 from .runtime import log_event
@@ -103,10 +103,11 @@ class SubscriptionProvider:
 class ExternalResponsesProvider:
     """One external provider serving the Codex Responses family (Plan 141)."""
 
-    def __init__(self, defn):
+    def __init__(self, defn, region='global'):
         self.defn = defn
         self.name = defn.id
-        self.host = defn.host
+        self.region = region if provider_defs.valid_region(region) else 'global'
+        self.host = provider_defs.region_host(defn.id, self.region) or defn.host
         self.kind = defn.kind
 
     def owns(self, model, path, openai_models, openai_mode='subscription',
@@ -115,10 +116,12 @@ class ExternalResponsesProvider:
         if (entry is None or entry.provider != self.defn.id
                 or is_native_service(path)):
             return False
-        # Plan 068: a portco allowlist gates routing, never just the picker.
-        # None means no policy provisioned (today's behavior); subscription
-        # rows are unaffected by any list.
-        return allowed is None or model in allowed
+        # Plan 068 allowlist plus the key-filtered snapshot gate
+        # routing like the picker; no snapshot yet means policy decides.
+        if allowed is not None and model not in allowed:
+            return False
+        from . import availability as _availability
+        return _availability.permitted(model)
 
     def prepare(self, model, path, payload, raw_body, headers, credentials):
         if path not in ('/responses', '/responses/compact'):
@@ -147,7 +150,11 @@ class ExternalResponsesProvider:
             raise PreparationError(str(exc))
         keep_images = 'image' in input_modalities(model) if isinstance(model, str) else True
         entry = by_slug(model) if isinstance(model, str) else model
-        payload['input'] = note_images(rewritten) if getattr(entry, 'drop_images', False) else strip_images(rewritten, keep_images)
+        # One expression owns the wire rule: images pass only for an
+        # image-capable row without drop_images; every other row gets the
+        # visible note, including text-only rows with historical images.
+        payload['input'] = (rewritten if keep_images and not getattr(entry, 'drop_images', False)
+                            else note_images(rewritten))
         reasoning = payload.get('reasoning')
         try:
             check_effort(model,
@@ -160,6 +167,8 @@ class ExternalResponsesProvider:
             # not a matching registry row, so this only fires for a direct
             # prepare() call and never for a routed request.
             raise PreparationError(f'unknown model: {model}')
+        if getattr(entry, 'provider_prefs', None):
+            payload['provider'] = dict(entry.provider_prefs)
         limit = entry.max_output_tokens
         window = getattr(entry, 'context_window', 0) or 0
         if window:  # reservation counts against context; keep half for input
@@ -173,9 +182,12 @@ class ExternalResponsesProvider:
         payload['max_output_tokens'] = min(requested, limit) if requested else default
         # Context size stays the provider's call: a chars-per-token estimate
         # refused long turns the client still had room for.
+        headers = dict(self.defn.request_headers)
+        headers.update({'Authorization': 'Bearer ' + credentials.key_for(self.defn.id),
+                        'Content-Type': 'application/json',
+                        'Accept-Encoding': 'identity'})
         return Prepared(self.host, self.defn.path_for(provider_defs.RESPONSES, '/responses'),
-                        {'Authorization': 'Bearer ' + credentials.key_for(self.defn.id),
-                         'Content-Type': 'application/json', 'Accept-Encoding': 'identity'},
+                        headers,
                         json.dumps(payload).encode(), tool_names, self.name)
 
     def adapt(self, response, tool_names, notes=None):
@@ -239,6 +251,7 @@ class ExternalResponsesProvider:
         prompt = comp.COMPACT_PROMPT + '\n\nConversation:\n' + transcript
         levels = capabilities.REASONING_LEVELS.get(model)
         effort = min(levels, key=CANONICAL_ORDER.index) if levels else None
+        entry = by_slug(model) if isinstance(model, str) else None
         deadline = time.monotonic() + SUMMARY_DEADLINE_S
         budgets = _summary_budgets(model)
         for attempt, budget in enumerate(budgets, 1):
@@ -249,18 +262,22 @@ class ExternalResponsesProvider:
                 raise TimeoutError('Compaction summarizer deadline exceeded')
             body = {'model': model, 'input': [comp.user_message_item(prompt)],
                     'max_output_tokens': budget}
+            if getattr(entry, 'provider_prefs', None):
+                body['provider'] = dict(entry.provider_prefs)
             if effort:
                 # Never let default high effort burn the whole budget on reasoning.
                 body['reasoning'] = {'effort': effort}
             conn = None
             try:
                 req = json.dumps(body).encode()
-                conn = http.client.HTTPSConnection(self.defn.host,
+                conn = http.client.HTTPSConnection(self.host,
                                                     timeout=remaining)
+                headers = dict(self.defn.request_headers)
+                headers.update({'Authorization': 'Bearer ' + key,
+                                'Content-Type': 'application/json'})
                 conn.request('POST', self.defn.path_for(
                     provider_defs.RESPONSES, '/responses'), body=req,
-                    headers={'Authorization': 'Bearer ' + key,
-                             'Content-Type': 'application/json'})
+                    headers=headers)
                 resp = conn.getresponse()
                 try:
                     data = json.load(resp)
@@ -314,13 +331,13 @@ class LocalServicesProvider:
         raise AssertionError('unreachable')
 
 
-def adapters():
+def adapters(region='global'):
     """One adapter per external def serving Responses, plus the rest.
 
-    Built per call from the definition table, so a provider added to that
-    table is routable without a second registration step (Plan 141).
+    `region` selects the endpoint profile host (Plan 145); unknown
+    names fall back to the global host inside the adapter.
     """
-    return (tuple(ExternalResponsesProvider(defn)
+    return (tuple(ExternalResponsesProvider(defn, region)
                   for defn in provider_defs.external_serving(provider_defs.RESPONSES))
             + (SubscriptionProvider(), LocalServicesProvider()))
 
@@ -338,9 +355,10 @@ def compaction_call(provider, model, path, payload):
 
 
 def select(model, path, openai_models=(), openai_mode='subscription',
+           region='global',
            allowed=None):
     allowset = None if allowed is None else frozenset(allowed)
-    for provider in adapters():
+    for provider in adapters(region):
         if provider.owns(model, path, openai_models, openai_mode,
                          allowed=allowset):
             return provider

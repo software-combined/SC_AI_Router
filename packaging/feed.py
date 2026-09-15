@@ -87,6 +87,23 @@ def live_feed(url, etag, fetch):
         raise
 
 
+def live_signature(url, fetch):
+    """Detached `.sig` bytes beside a feed document; None when absent.
+
+    Same trusted-origin rule as the document read. The sidecar travels
+    through the caller's fetch seam (injected fakes included); only a
+    `file://` absence or fetch failure yields None. Never raises otherwise:
+    absence is decided by the caller.
+    """
+    sig_url = url + '.sig'
+    if not url.startswith('file://') and not trusted_origin(url):
+        raise SystemExit('refusing untrusted feed URL: %s' % _safe_url(url))
+    try:
+        return fetch(sig_url)
+    except OSError:
+        return None
+
+
 def feed_source(feed_url):
     """Short feed name for update.log: cloudfront, local, or https."""
     feed_url = str(feed_url)
@@ -95,3 +112,54 @@ def feed_source(feed_url):
     if feed_url.startswith('file://'):
         return 'local'
     return 'https'
+
+
+def fetch_feed(url, etag, _fetch=None, _live_feed=None):
+    """Read a feed document, revalidating with a saved ETag.
+
+    Feed-channel owner (Plan 131): moved out of service.py; service keeps a
+    thin re-export so installer patches still resolve. Returns
+    (status, body, etag). Injected fakes keep their one-argument shape and
+    bypass the conditional-GET path. The default path calls back into
+    service.fetch through _live_feed so the installer's seam still applies.
+    """
+    live = _live_feed if _live_feed is not None else live_feed
+    if _fetch is None:
+        import sys as _sys
+        _svc_mod = _sys.modules.get('packaging.service')
+        _fetch = getattr(_svc_mod, 'fetch', None)
+        if _fetch is None:
+            raise SystemExit('service.fetch seam unavailable')
+        return live(url, etag, _fetch)
+    # An injected one-argument fake serves the document instead of the
+    # network on every scheme; only the default path does conditional GET.
+    return 200, _fetch(url), etag
+
+
+def feed_serial(home):
+    """Last accepted feed serial; 0 when no serialed release was installed."""
+    home = Path(home)
+    try:
+        return int((home / 'feed-serial').read_text().strip())
+    except FileNotFoundError:
+        return 0
+    except ValueError:
+        raise SystemExit('feed serial file is corrupt')
+
+
+def check_serial(home, latest, pinned=False):
+    """Refuse feeds older than the last accepted one (replay protection).
+
+    A pinned `--feed` is exempt on both sides: operator-supplied for this
+    one run, neither the unattended channel the guard protects nor recorded
+    afterwards.
+    """
+    if pinned:
+        return 0
+    serial = latest.get('serial', 0)
+    if type(serial) is not int:
+        raise SystemExit('feed has a bad serial')
+    stored = feed_serial(home)
+    if serial < stored:
+        raise SystemExit(f'stale feed serial {serial} is older than {stored}')
+    return serial

@@ -36,9 +36,9 @@ aws cloudformation deploy --stack-name scg-router-feed --region ap-southeast-2 \
 through CloudFront), the CloudFront distribution, the DNS alias, and the
 publisher role. The role is assumable only by
 `token.actions.githubusercontent.com`, and only for this repository's tag
-refs: `repo:software-combined/SC_OpenRouter_adapter:ref:refs/tags/v*` in the
+refs: `repo:software-combined/SC_Unlimited_ai:ref:refs/tags/v*` in the
 classic subject form, or
-`repo:software-combined@200868195/SC_OpenRouter_adapter@1360169840:ref:refs/tags/v*`
+`repo:software-combined@200868195/SC_Unlimited_ai@1360169840:ref:refs/tags/v*`
 in GitHub's immutable form. It can read and write objects in the feed
 bucket, list the bucket, invalidate the feed, and read the stack outputs.
 It cannot delete objects or touch any other resource. The feed and its
@@ -81,14 +81,19 @@ document: `beta` follows the pre-release document, anything else (or a
 missing file) follows `stable`. Checks run every 4 hours (macOS
 `StartInterval` 14400, systemd `OnUnitInactiveSec=4h`, Windows `PT4H`);
 Linux also runs a first check 5 minutes after the timer activates, and
-macOS runs one when the job loads. Security rests on HTTPS from the
-trusted feed origin only (plus `file://` for manual installs), SHA-256
-verification of every bundle, version and identity checks, and the feed
-serial replay guard. Feeds and bundles off the trusted origins are
+macOS runs one when the job loads. Every channel document carries a
+detached Ed25519 signature (`latest.json.sig`); the updater verifies the
+exact served bytes before parsing and refuses unsigned or bad-signature
+feeds with the `feed_signature` code (Plan 145). `file://` manual installs
+stay operator-trusted when no sidecar is present. SHA-256 verification of
+every bundle, version and identity checks, and the feed serial replay guard
+still apply on top. Feeds and bundles off the trusted origins are
 refused. A manual install passes `--feed` with a downloaded release
 document; `--status` reports the feed source (`cloudfront`) and the
 channel. A leftover `feed-token` file on an older host is inert and can
-be ignored or deleted. `update.log` records each install with its source
+be ignored or deleted. The signing seed lives in Secrets Manager
+(`FEED_SIGNING_SEED_ARN` in the release workflow) by name only; the seed
+value never appears in logs or docs. `update.log` records each install with its source
 (`cloudfront` or `local`).
 
 A host still on a pre-cutover build reaches the public-feed version with
@@ -327,13 +332,24 @@ Six fields say why:
 | `upstream_code` | the error envelope's `code` or `error_type`, when present |
 | `upstream_error_type` | the canonical top-level `error_type`, when reported |
 | `upstream_provider_code` | the `error.metadata.provider_code`, when reported |
+| `serving_endpoint` | the OpenRouter endpoint that answered; absent when the router or an edge validation answered |
 | `failure_class` | `context`, `final` or `transient`; the stream retry runs only on `transient` |
 
-Every detail must be code-shaped (letters, digits, dot, dash, underscore) and
+Every detail must be code-shaped (letters, digits, dot, dash, underscore,
+slash for endpoint slugs) and
 at most 64 characters; anything else, including message text, is dropped
 rather than recorded, because provider prose can quote prompt content. A
 missing detail means the provider did not say why, or said it in a form this
 rule refuses to record.
+
+## Tool alias repair (why a called name changed)
+
+`tool_call_repaired` and `tool_call_unresolved` carry a `cause`: `native`
+(the plain tool name), `dotted` (`namespace.tool`), `digest` (a damaged
+fallback digest), `near` (a readable alias within two edits; an ambiguous
+near miss is never guessed), or `delivered` (a delivered-message name such
+as `delivered_message`, which is not a tool). `unknown` means the name
+matched nothing repairable.
 
 ## Router answer codes (Responses protocol)
 

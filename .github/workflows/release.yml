@@ -17,6 +17,9 @@ env:
   FEED_STACK: scg-router-feed
   FEED_BUCKET: router-feed-publication
   FEED_ROLE: arn:aws:iam::${AWS_ACCOUNT_ID}:role/scg-router-feed-publisher
+  # ARN of the Secrets Manager secret holding the feed signing seed.
+  # Empty fails closed rather than shipping unsigned.
+  FEED_SIGNING_SEED_ARN: 'arn:aws:secretsmanager:ap-southeast-2:${AWS_ACCOUNT_ID}:secret:scg/router/feed-signing-seed-R3XEWU'
 
 jobs:
   installer-macos:
@@ -116,8 +119,15 @@ jobs:
           if [ "$TAG_SHA" != "$GITHUB_SHA" ]; then
             echo "release tag changed; start a new release run"; exit 1
           fi
+          SEED_FILE="$(mktemp)"
+          trap 'rm -f "$SEED_FILE"' EXIT
+          aws secretsmanager get-secret-value --secret-id "$FEED_SIGNING_SEED_ARN" \
+            --query SecretString --output text > "$SEED_FILE"
           python tools/publish_feed.py --dist dist --channel "$CHANNEL" \
-            --bucket "$FEED_BUCKET" --distribution-id "$FEED_DISTRIBUTION_ID"
+            --bucket "$FEED_BUCKET" --distribution-id "$FEED_DISTRIBUTION_ID" \
+            --sign "$SEED_FILE"
+          rm -f "$SEED_FILE"
+          trap - EXIT
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -125,8 +135,8 @@ jobs:
           VERSION=$(python -c "import json;print(json.load(open('dist/latest.json'))['version'])")
           if [ "$CHANNEL" = stable ]; then
             cp dist/release-latest.json dist/latest.json
-            gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/latest.json --verify-tag --title "v$VERSION" --generate-notes --latest
+            gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/latest.json dist/feed-latest.json.sig --verify-tag --title "v$VERSION" --generate-notes --latest
           else
             cp dist/release-latest.json dist/latest-beta.json
-            gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/latest-beta.json --verify-tag --title "v$VERSION-beta" --prerelease --generate-notes
+            gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/latest-beta.json dist/feed-latest.json.sig --verify-tag --title "v$VERSION-beta" --prerelease --generate-notes
           fi

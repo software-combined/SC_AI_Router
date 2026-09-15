@@ -198,7 +198,7 @@ def clear_terminal_fields(metrics):
     """Drop the failed attempt's verdict before the retry overwrites it."""
     for key in ('code', 'upstream_code', 'upstream_error_type', 'upstream_provider_code',
                 'failure_class', 'terminal_event', 'upstream_reason',
-                'terminal_source'):
+                'terminal_source', 'serving_endpoint'):
         metrics.pop(key, None)
 
 

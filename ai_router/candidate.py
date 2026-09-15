@@ -50,11 +50,16 @@ class IsolatedRouter:
         self.close()
 
     def boot(self):
-        from .credentials import Credentials
+        from .credentials import Credentials, opencode_auth_path
         entry = by_slug(self.slug) if isinstance(self.slug, str) else None
         provider_id = entry.provider if entry is not None else provider_defs.DEFAULT_EXTERNAL
         state = {'port': _free_port(), 'token': secrets.token_urlsafe(32),
                  'openai_models': []}
+        # Ambient OpenCode auth by path reference, as the installed router
+        # uses; the key value itself is never copied.
+        ambient_auth = opencode_auth_path(os.environ)
+        if ambient_auth.exists():
+            state['opencode_auth'] = str(ambient_auth)
         try:
             Credentials(state, self.home).check(provider_id)
         except (LookupError, PermissionError, ValueError, OSError) as exc:
@@ -148,11 +153,18 @@ def legs_for(slug, row=None):
     return legs
 
 
-def run_probe(slug, scope, _run=subprocess.run, row=None):
-    """Implied legs through the isolated router; True when all pass."""
+def run_probe(slug, scope, _run=subprocess.run, row=None, _mkdtemp=None):
+    """Implied legs through the isolated router; True when all pass.
+
+    The probe refuses router legs without --codex-home (never the live
+    Codex home), so the candidate always gets a disposable client home.
+    """
+    home = (_mkdtemp(prefix='candidate-codex-home-') if _mkdtemp is not None
+            else tempfile.mkdtemp(prefix='candidate-codex-home-'))
     cmd = [sys.executable, str(PROBE_TOOL), slug,
            '--router-state', str(scope.home / 'mixed-router-state.json'),
-           '--catalog', str(scope.catalog)]
+           '--catalog', str(scope.catalog),
+           '--codex-home', home]
     legs = legs_for(slug, row)
     if 'image' in legs:
         cmd.append('--image')

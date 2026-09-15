@@ -39,6 +39,23 @@ class ToolAdapterTests(unittest.TestCase):
             'arguments': '{"query":"echo"}'})
         self.assertEqual((item['type'], item['execution']), ('tool_search_call', 'client'))
 
+    def test_glm_ceiling_drops_flat_tools_but_keeps_search(self):
+        # Z.ai documents at most 128 functions per request; the ceiling
+        # degrades the way the Grok row does instead of failing upstream.
+        released = {'type': 'namespace', 'name': 'probe', 'tools': [
+            {'type': 'function', 'name': 'echo', 'description': 'Echo',
+             'parameters': {'type': 'object'}}]}
+        payload = {'model': 'z-ai/glm-5.3-flash',
+            'tools': [{'type': 'tool_search', 'description': 's',
+                       'parameters': {'type': 'object', 'properties': {}}}] + [
+                {'type': 'function', 'name': f'tool_{i}', 'parameters': {'type': 'object'}}
+                for i in range(130)],
+            'input': [{'type': 'tool_search_output', 'call_id': 's1', 'tools': [released]}]}
+        names = prepare_tools(payload)
+        self.assertEqual([tool.get('name') for tool in payload['tools']],
+                         [SEARCH_NAME, 'probe__echo'])
+        self.assertEqual(len(names), 2)
+
     def test_grok_ceiling_without_search_still_fails_closed(self):
         payload = {'model': 'x-ai/grok-4.6', 'tools': [
             {'type': 'function', 'name': f'tool_{i}', 'parameters': {'type': 'object'}} for i in range(351)]}

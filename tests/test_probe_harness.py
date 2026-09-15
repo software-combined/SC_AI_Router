@@ -52,6 +52,7 @@ while True:
     elif method == 'thread/start':
         rec = os.environ.get('FAKE_RECORD')
         if rec:
+            open(rec, 'a').write('codex_home=' + str(os.environ.get('CODEX_HOME')) + '\\n')
             open(rec, 'a').write('provider=' + str(params.get('modelProvider')) + '\\n')
             open(rec, 'a').write('sandbox=' + str(params.get('sandbox')) + '\\n')
             open(rec, 'a').write('cwd=' + str(params.get('cwd')) + '\\n')
@@ -112,9 +113,33 @@ while True:
             rec = os.environ.get('FAKE_RECORD')
             if rec:
                 open(rec, 'a').write(blob + '\\n')
-            send({'method': 'item/tool/call', 'id': 'ev1',
-                  'params': {'tool': 'echo_probe', 'arguments': {'value': 'probe'}}})
-            read()  # tool result
+            if 'timing_probe' in blob and os.environ.get('FAKE_PARALLEL'):
+                if os.environ.get('FAKE_PARALLEL') == 'sequential':
+                    send({'method': 'item/tool/call', 'id': 'ev1',
+                          'params': {'tool': 'echo_probe', 'arguments': {'value': 'probe'}}})
+                    read()  # echo_probe result
+                    send({'method': 'item/completed',
+                          'params': {'item': {'type': 'agentMessage', 'text': 'half'}}})
+                    send({'method': 'item/tool/call', 'id': 'ev2',
+                          'params': {'tool': 'timing_probe', 'arguments': {}}})
+                    read()  # timing_probe result
+                else:
+                    # A completed userMessage precedes the calls, as on the
+                    # live path; only a completed item *between* calls
+                    # marks separate steps.
+                    send({'method': 'item/completed',
+                          'params': {'item': {'type': 'userMessage',
+                                              'text': 'go'}}})
+                    send({'method': 'item/tool/call', 'id': 'ev1',
+                          'params': {'tool': 'echo_probe', 'arguments': {'value': 'probe'}}})
+                    send({'method': 'item/tool/call', 'id': 'ev2',
+                          'params': {'tool': 'timing_probe', 'arguments': {}}})
+                    read()  # echo_probe result
+                    read()  # timing_probe result
+            else:
+                send({'method': 'item/tool/call', 'id': 'ev1',
+                      'params': {'tool': 'echo_probe', 'arguments': {'value': 'probe'}}})
+                read()  # tool result
             if os.environ.get('FAKE_REASONING_SUMMARY') == 'summary':
                 send({'method': 'item/completed',
                       'params': {'item': {'type': 'reasoning',
@@ -160,7 +185,12 @@ class ProbeHarnessTests(unittest.TestCase):
         return str(path)
 
     def _run(self, *args, **env):
-        full = dict(os.environ, CODEX_BIN=self._fake_bin(), **env)
+        # Isolate HOME so the attached live ~/.codex never satisfies the
+        # probe's routing gate; legs that need a home pass --codex-home.
+        clean = tempfile.mkdtemp(prefix='probe-fake-home-')
+        self.addCleanup(shutil.rmtree, clean, True)
+        full = dict(os.environ, CODEX_BIN=self._fake_bin(), **{'HOME': clean, **env})
+        full.pop('CODEX_HOME', None)
         return subprocess.run([sys.executable, str(PROBE), *args],
                               capture_output=True, text=True, timeout=60,
                               cwd=str(ROOT), env=full)
@@ -197,7 +227,10 @@ class ProbeHarnessTests(unittest.TestCase):
         self.assertNotIn('anyOf', json.loads(blob)[0]['inputSchema'])
 
     def test_provider_flag_reaches_thread_start(self):
-        proc, _, recorded = self._run_recorded('fake-model', '--provider', 'scg_router')
+        home = tempfile.mkdtemp(prefix='probe-home-')
+        self.addCleanup(shutil.rmtree, home, True)
+        proc, _, recorded = self._run_recorded(
+            'fake-model', '--provider', 'scg_router', '--codex-home', home)
         self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
         self.assertIn('"desktop_runtime_tool_round_trip": "passed"', proc.stdout)
         self.assertIn('provider=scg_router', recorded)
@@ -230,6 +263,80 @@ class ProbeHarnessTests(unittest.TestCase):
     def test_lost_marker_fails_loudly(self):
         proc = self._run('fake-model', '--switch', FAKE_SWITCH_TEXT='something else')
         self.assertNotEqual(proc.returncode, 0)
+
+    def test_router_leg_refuses_without_codex_home(self):
+        proc = self._run('fake-model', '--router-state', '/tmp/no-such-router.json')
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn('--codex-home', proc.stderr)
+
+    def test_codex_home_reaches_the_child(self):
+        home = tempfile.mkdtemp(prefix='probe-home-')
+        self.addCleanup(shutil.rmtree, home, True)
+        state = {'port': 1, 'token': 't'}
+        spath = Path(home) / 'router-state.json'
+        spath.write_text(json.dumps(state))
+        proc, _, recorded = self._run_recorded(
+            'fake-model', '--router-state', str(spath), '--codex-home', home,
+            FAKE_FIRST_ERROR='stop after start')
+        homes = [l.split('=', 1)[1] for l in recorded if l.startswith('codex_home=')]
+        self.assertTrue(homes, 'fake never saw thread/start')
+        self.assertEqual(homes[0], home)
+
+    def test_parallel_leg_fails_on_sequential_calls(self):
+        proc = self._run('fake-model', '--parallel', FAKE_PARALLEL='sequential')
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn('separate steps', proc.stderr)
+
+    def test_router_shaped_home_refuses_without_flag(self):
+        home = tempfile.mkdtemp(prefix='probe-routed-home-')
+        self.addCleanup(shutil.rmtree, home, True)
+        Path(home, '.codex').mkdir()
+        Path(home, '.codex', 'config.toml').write_text(
+            'openai_base_url = "http://127.0.0.1:9/t/backend-api/codex"\n'
+            '[model_providers.scg_router]\nwire_api = "responses"\n')
+        proc = self._run('fake-model', HOME=home)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn('routes to a local router', proc.stderr)
+
+    def test_router_shaped_home_allows_live_home_opt_in(self):
+        home = tempfile.mkdtemp(prefix='probe-routed-home-')
+        self.addCleanup(shutil.rmtree, home, True)
+        Path(home, '.codex').mkdir()
+        Path(home, '.codex', 'config.toml').write_text(
+            'openai_base_url = "http://127.0.0.1:9/t/backend-api/codex"\n'
+            '[model_providers.scg_router]\nwire_api = "responses"\n')
+        proc = self._run('fake-model', '--live-home', HOME=home,
+                         FAKE_FIRST_ERROR='stop early')
+        self.assertNotIn('routes to a local router', proc.stderr + proc.stdout)
+        self.assertIn('stop early', proc.stderr + proc.stdout)
+
+    def test_capture_tools_url_needs_codex_home(self):
+        proc = self._run('fake-model', '--capture-tools', 'http://127.0.0.1:9/t/backend-api/codex')
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn('--codex-home', proc.stderr)
+
+    def test_live_home_path_as_codex_home_refused(self):
+        # A fake HOME whose .codex is passed back as --codex-home.
+        home = tempfile.mkdtemp(prefix='probe-live-home-')
+        self.addCleanup(shutil.rmtree, home, True)
+        live = os.path.join(home, '.codex')
+        proc = self._run('fake-model', '--router-state', '/tmp/x.json',
+                         '--codex-home', live, HOME=home)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn('live Codex home', proc.stderr)
+
+    def test_parallel_leg_passes_on_two_calls(self):
+        proc = self._run('fake-model', '--parallel', FAKE_PARALLEL='1')
+        self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
+        self.assertIn('"capability": "parallel"', proc.stdout)
+        self.assertIn('"result": "passed"', proc.stdout)
+
+    def test_switch_in_leg_reaches_the_target(self):
+        proc, _, recorded = self._run_recorded('fake-model', '--switch-in', 'other-model')
+        self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
+        self.assertIn('"switch_to": "other-model"', proc.stdout)
+        models = [l for l in recorded if l and not l.startswith(('argv=', 'provider=', 'sandbox=', 'cwd=', 'dynamicTools=', 'codex_home='))]
+        self.assertIn('other-model', models)
 
     def test_expected_error_exits_clean(self):
         proc = self._run('fake-model', '--expect-error', 'reasoning effort',

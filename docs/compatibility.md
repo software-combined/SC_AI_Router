@@ -406,8 +406,18 @@ Per-model quirks, generated from the registry:
 | openai/gpt-6-astra | text,image | native | None | - | verified |
 | qwen/qwen3.8-max-0902 | text,image | native | None | - | verified |
 | x-ai/grok-4.6 | text,image | json_text_root | 350 | - | verified |
-| z-ai/glm-5.3-flash | text,image | native | None | - | verified |
-| z-ai/glm-5.3 | text | native | None | - | verified |
+| z-ai/glm-5.3-flash | text,image | native | 128 | - | verified |
+| z-ai/glm-5.3 | text | native | 128 | - | verified |
+
+Both GLM rows (`z-ai/glm-5.3`, `z-ai/glm-5.3-flash`) carry
+`max_tools: 128`, the Z.ai documented ceiling (router 0.6.57); sessions with
+more declared tools degrade the way the Grok row does instead of failing
+upstream.
+
+Text-only rows (`deepseek/deepseek-v4-pro-0813`, `z-ai/glm-5.3`) and the
+`drop_images` row (`x-ai/grok-4.6`) note historical images on the wire as
+`[image omitted: this model runs text-only]` instead of refusing the thread
+(router 0.6.56); only an image in the message being sent is still refused.
 
 ## Probe runs 2026-09-08
 
@@ -560,3 +570,379 @@ Grok 4.6 keep the `verified` tier their retired alias rows earned, since
 each alias resolved to the pinned id at the rename (Grok's 2026-09-08 base
 round trip is recorded above); no separate pinned-id probe is recorded for
 the other three.
+
+## Serving-endpoint attribution, 2026-09-14
+
+OpenRouter reorders providers on every tool-calling request by default
+(Auto Exacto) and may deprioritise a previously chosen provider mid-session.
+Sending `X-OpenRouter-Metadata: enabled` (router 0.6.53) makes the response
+and every error envelope carry an `openrouter_metadata` object naming the
+selected endpoint (`endpoints.available[]` with a `selected` flag) and the
+attempts (`attempts[]` with `provider`/`model`/`status`); the router logs the
+serving endpoint as bounded `serving_endpoint` on `upstream_rejected`,
+`upstream_unavailable`, `request_completed` and `request_failed`. Key names
+pinned from the router-metadata guide and the OpenAPI `OpenRouterMetadata`,
+`EndpointInfo` and `RouterAttempt` schemas, read 2026-09-14; the guide's
+`selected.endpoint` path does not exist in the observed shapes, so the
+extractor reads only the `available[]`/`attempts[]`/`provider_name` order.
+
+## Probe matrix 2026-09-14 (plan 175, router 0.6.58-beta, legs A-H)
+
+Legenda: A base round trip, B parallel pair, C same-slug switch replay,
+D switch-in plus switch-back, E image, F plaintext handoff as child of a
+DeepSeek parent (classic), G compact, H `require_parameters` pin. Effort
+`low` unless noted. `serving_endpoint` is the bounded log field; `none`
+means OpenRouter answered without endpoint metadata (edge validation).
+
+| model | leg | effort | result | serving_endpoint |
+|---|---|---|---|---|
+| z-ai/glm-5.3-flash | A | low | passed | Cloudflare |
+| z-ai/glm-5.3-flash | B | low | failed: calls serialized, leg asserts | Cloudflare |
+| z-ai/glm-5.3-flash | C | low | passed, history preserved | Cloudflare |
+| z-ai/glm-5.3-flash | D | low | passed both directions, history preserved | Together (DeepSeek), Cloudflare then Venice (GLM) |
+| z-ai/glm-5.3-flash | E | low | failed: upstream `invalid_prompt`, no endpoint attributed | none |
+| z-ai/glm-5.3-flash | F | max | partial: 1 of 3 markers replied, 404/409/other tool failures | unattributed (ephemeral handoff log) |
+| z-ai/glm-5.3-flash | G | low | not run (row over call cap) | - |
+| z-ai/glm-5.3-flash | H | low | not run (row over call cap) | - |
+
+Row spend: ~40 calls against a 23-call cap (overrun on the misconfigured
+subscription-parent F run and the 12-call DeepSeek-parent F run); the row
+stops here per the plan. Notable: GLM Flash answered from Cloudflare and
+Venice across turns (Auto Exacto rotation live); the parallel pair
+serialized on Cloudflare; the image leg died upstream with `invalid_prompt`
+before any endpoint was named.
+
+| deepseek/deepseek-v4.1-flash | A | low | passed | Together |
+| deepseek/deepseek-v4.1-flash | B | low | failed: calls serialized, leg asserts | Parasail then Together |
+| deepseek/deepseek-v4.1-flash | C+D | low | passed, own reasoning replayed, history preserved | Together, Parasail, Modal |
+| deepseek/deepseek-v4.1-flash | E | low | passed, red seen | Together |
+| deepseek/deepseek-v4.1-flash | G | low | passed | Parasail then Fireworks |
+| deepseek/deepseek-v4.1-flash | H | low | failed: upstream 404 with `require_parameters: true`, no endpoint attributed | none |
+| deepseek/deepseek-v4.1-flash | F | max | not run (session cap: 2 rows fully covered plus row-1 F) | - |
+
+Row spend: ~15 calls. Notable: four serving endpoints across legs
+(Together, Parasail, Modal, Fireworks); `require_parameters: true` leg H
+returned an upstream 404 with no endpoint attributed, so the flag's effect
+on this row is unverified and must be re-run before any default change
+(open question 1 input).
+
+| google/gemini-3.8-flash | A | low | passed | Google |
+| google/gemini-3.8-flash | B | low | failed: calls serialized, leg asserts | Google |
+| google/gemini-3.8-flash | C+D | low | passed, history preserved | Google |
+| google/gemini-3.8-flash | E | low | passed, red seen, no endpoint attributed | none |
+| google/gemini-3.8-flash | F | max | not run (session cap) | - |
+| google/gemini-3.8-flash | G | low | not run (session cap) | - |
+| google/gemini-3.8-flash | H | low | not run (session cap) | - |
+
+Row spend: ~8 calls. Notable: single endpoint (Google) across all legs,
+unlike the multi-endpoint rotation on GLM/DeepSeek rows; image turns carry
+no endpoint metadata while tool turns do.
+
+Scope not run this session (all rows): leg A at each row's highest
+listed effort level (only `low`, the default, was probed), leg F in Lite
+wire mode (classic only), and the four recon open questions except the
+partial leg-H input on Q1 noted above.
+
+Row edits proposed from this session: none. The parallel serialization
+appears on three unrelated upstreams (harness/client confound, not endpoint
+evidence); the leg-H 404 argues against a `require_parameters` default
+rather than for any pin; no endpoint-specific failure was attributed to a
+pinnable endpoint. Pins and 173 steps 2-4 wait for per-endpoint evidence
+from a later session.
+
+Session cap reached (3 rows: GLM Flash, DeepSeek Flash, Gemini Flash).
+Remaining rows (Kimi K3, Qwen, Muse rows, GLM 5.3, DeepSeek Pro after its
+routing check, Gemini Pro, Grok, Anthropic rows, GPT twins), legs F/G/H
+where skipped, and open questions 1-4 (Q1 partially informed by the leg H
+result above) wait for the next approved session.
+
+## Probe matrix 2026-09-15 (plan 175, router 0.6.63.65 isolated, legs A-G)
+
+Session 2 of the paid matrix. Isolated candidate router plus a disposable
+`--codex-home`; the live install and live Codex home were not used.
+`qwen/qwen3.8-max-0902` was skipped: the OpenRouter key cannot use that
+id (`/models/user` has other Qwen ids, not this one), so the live picker
+already hides it. Budget remaining after this session is unused rather
+than spent on a blocked row.
+
+Legenda unchanged from the 2026-09-14 table. Isolated catalogues still
+list the registry Qwen row because they do not apply the key filter;
+that is candidate-router behaviour, not live picker visibility.
+
+| model | leg | effort | result | serving_endpoint |
+|---|---|---|---|---|
+| moonshotai/kimi-k3 | A | low | passed | none |
+| moonshotai/kimi-k3 | A | max | passed | Together |
+| moonshotai/kimi-k3 | B | low | failed: calls serialized, leg asserts | none |
+| moonshotai/kimi-k3 | C | low | passed, history preserved | Together |
+| moonshotai/kimi-k3 | D | low | passed into DeepSeek, history preserved | Parasail (Kimi), Together (DeepSeek) |
+| moonshotai/kimi-k3 | E | low | failed: answered `Black` | Parasail |
+| moonshotai/kimi-k3 | F | - | not run (session cap) | - |
+| moonshotai/kimi-k3 | G | low | passed | Together |
+| moonshotai/kimi-k3 | H | - | not run (session cap) | - |
+
+Row spend: 16 counted calls. Notable: same parallel-serialization
+harness failure as 2026-09-14; image colour still wrong on Parasail
+(`Black`, matching the 2026-09-09 live-router image note).
+
+| meta/muse-spark-1.3 | A | low | passed | Meta |
+| meta/muse-spark-1.3 | A | max | passed | Meta |
+| meta/muse-spark-1.3 | B | low | failed: calls serialized, leg asserts | Meta |
+| meta/muse-spark-1.3 | C | low | passed, history preserved | Meta |
+| meta/muse-spark-1.3 | D | low | passed into DeepSeek, history preserved | Meta, Together |
+| meta/muse-spark-1.3 | E | low | passed, red seen | Meta |
+| meta/muse-spark-1.3 | F | - | not run (session cap) | - |
+| meta/muse-spark-1.3 | G | low | passed | Meta |
+| meta/muse-spark-1.3 | H | - | not run (session cap) | - |
+
+Row spend: 16 counted calls. Notable: image colour now passes on Meta
+(the 2026-09-09 live-router image leg on this row had answered
+`unknown`). Parallel serialization still matches the other vendors.
+
+| meta/muse-spark-1.3-contributor | A | low | passed | Meta |
+| meta/muse-spark-1.3-contributor | A | xhigh | passed | Meta |
+| meta/muse-spark-1.3-contributor | B | low | failed: calls serialized, leg asserts | Meta |
+| meta/muse-spark-1.3-contributor | C | low | passed, own reasoning replayed, history preserved | Meta |
+| meta/muse-spark-1.3-contributor | D | low | passed into DeepSeek, history preserved | Meta, Together |
+| meta/muse-spark-1.3-contributor | E | low | failed: answered `unknown` | Meta |
+| meta/muse-spark-1.3-contributor | F | - | not run (session cap) | - |
+| meta/muse-spark-1.3-contributor | G | low | passed | Meta |
+| meta/muse-spark-1.3-contributor | H | - | not run (session cap) | - |
+
+Row spend: 16 counted calls. Open question 4 (does Contributor accept
+its own reasoning item back): yes on leg C at `low` (`history_preserved`).
+Image colour still fails on this row (`unknown`), unlike standard Muse
+in this session.
+
+Session cap reached (3 rows: Kimi K3, Muse Spark, Muse Contributor).
+Remaining rows: GLM 5.3, DeepSeek Pro after its routing check, Gemini
+Pro, Grok, Anthropic rows, GPT twins. Qwen stays skipped until the key
+can use `qwen/qwen3.8-max-0902`. Legs F/H and open questions 1-3 still
+wait. Row edits proposed: none (parallel serialization remains a
+harness/client confound; image colour is vendor/endpoint behaviour, not
+a roster pin).
+
+## Probe matrix 2026-09-15 session 3 (plan 175, router 0.6.63.65 isolated, legs A-G)
+
+Session 3 of the paid matrix. Isolated candidate router plus a disposable
+`--codex-home`; the live install and live Codex home were not used.
+Legenda unchanged from the 2026-09-14 table.
+
+| model | leg | effort | result | serving_endpoint |
+|---|---|---|---|---|
+| z-ai/glm-5.3 | A | low | passed | Phala |
+| z-ai/glm-5.3 | A | max | passed | Phala |
+| z-ai/glm-5.3 | B | low | failed: calls serialized, leg asserts | Phala |
+| z-ai/glm-5.3 | C | low | passed, history preserved | Phala |
+| z-ai/glm-5.3 | D | low | passed into DeepSeek, history preserved | Phala (GLM), Together (DeepSeek) |
+| z-ai/glm-5.3 | E | low | passed: turn completed, image noted on the wire, no refusal | Phala |
+| z-ai/glm-5.3 | F | - | not run (session cap) | - |
+| z-ai/glm-5.3 | G | low | passed | Phala |
+| z-ai/glm-5.3 | H | - | not run (session cap) | - |
+
+Row spend: ~25 counted calls, slightly over the 23-call cap on two
+repeated leg-D attempts (the first leg-D invocation duplicated leg C
+and was re-run correctly). The row stops here per the plan. Notable:
+single endpoint (Phala) across all legs, unlike the multi-endpoint
+rotation on GLM Flash. Leg E is the
+plan 174 acceptance live: the image rode in the sent turn and the turn
+completed with the visible note instead of refusing. A follow-up switch
+turn on the same thread also completed, so the historical-image path
+holds on this row.
+
+| deepseek/deepseek-v4-pro-0813 | A | low | passed | CoreWeave |
+| deepseek/deepseek-v4-pro-0813 | A | max | passed | CoreWeave |
+| deepseek/deepseek-v4-pro-0813 | B | low | failed: calls serialized, leg asserts | CoreWeave |
+| deepseek/deepseek-v4-pro-0813 | C | low | passed, own reasoning replayed, history preserved | CoreWeave |
+| deepseek/deepseek-v4-pro-0813 | D | low | passed into DeepSeek Flash, history preserved | CoreWeave (Pro), Together (Flash) |
+| deepseek/deepseek-v4-pro-0813 | E | low | passed: turn completed, image noted on the wire, no refusal | CoreWeave |
+| deepseek/deepseek-v4-pro-0813 | F | - | not run (session cap) | - |
+| deepseek/deepseek-v4-pro-0813 | G | low | passed | CoreWeave |
+| deepseek/deepseek-v4-pro-0813 | H | - | not run (session cap) | - |
+
+Row spend: ~17 counted calls. Notable: the plan 175 routing check
+passes, `served_model` echoes `deepseek/deepseek-v4-pro-0813`
+verbatim on CoreWeave, so this row is not a silent alias and stays
+probed. Single endpoint (CoreWeave) across all legs. Leg E matches the
+GLM 5.3 plan 174 note above.
+
+| google/gemini-3.1-pro-preview | A | low | failed: tool called, final narrated, strict echo assert fails | Google |
+| google/gemini-3.1-pro-preview | A | high | failed: same echo shape | Google |
+| google/gemini-3.1-pro-preview | B | low | not reached: base echo assert fails first | Google |
+| google/gemini-3.1-pro-preview | C | low | not reached: base echo assert fails first | Google |
+| google/gemini-3.1-pro-preview | D | low | not reached: base echo assert fails first | Google |
+| google/gemini-3.1-pro-preview | E | low | passed, red seen | Google |
+| google/gemini-3.1-pro-preview | F | - | not run (session cap) | - |
+| google/gemini-3.1-pro-preview | G | low | not reached: base echo assert fails first | Google |
+| google/gemini-3.1-pro-preview | H | - | not run (session cap) | - |
+
+Row spend: ~19 counted calls. Notable: the tool call itself succeeds on
+Google every attempt and the marker content comes back, but the final
+wraps it in prose (`The result is ...`), so the harness's exact-echo
+assert fails on every attempt except leg E, which passed once with the
+exact echo and `red seen`. This is vendor verbosity, not an upstream
+rejection, so no plan stop condition fires. The row's top effort is `high`; a `max`
+attempt is refused by the router's effort gate with `PROVIDER_REJECTED`
+(a harness mistake, not row evidence). Single endpoint (Google) across
+all legs.
+
+Session cap reached (3 rows: GLM 5.3, DeepSeek Pro, Gemini Pro).
+Remaining rows: Grok, Anthropic rows, GPT twins. Qwen stays skipped
+until the key can use `qwen/qwen3.8-max-0902`. Legs F/H and open
+questions 1-3 still wait. Row edits proposed: none (parallel
+serialization remains a harness/client confound; image noting is the
+plan 174 design; Gemini narration is vendor behaviour, not a roster
+pin).
+
+## Probe matrix 2026-09-15 sessions 4-6 (plan 175, router 0.6.63.65 isolated, legs A-G)
+
+Sessions 4 to 6 of the paid matrix, three rows each per the plan's
+per-session cap: Grok plus Haiku plus Sonnet (session 4), Opus plus Fable
+plus Luna (session 5), Sol plus Terra plus Astra (session 6). Isolated
+candidate router plus a disposable `--codex-home`; the live install and
+live Codex home were not used. Legenda unchanged from the 2026-09-14
+table. These nine rows close the A-G legs of the matrix.
+
+| model | leg | effort | result | serving_endpoint |
+|---|---|---|---|---|
+| x-ai/grok-4.6 | A | low | passed | xAI |
+| x-ai/grok-4.6 | A | xhigh | passed | xAI |
+| x-ai/grok-4.6 | B | low | failed: calls serialized, leg asserts | xAI |
+| x-ai/grok-4.6 | C | low | passed, history preserved | xAI |
+| x-ai/grok-4.6 | D | low | passed into DeepSeek, history preserved | xAI (Grok), Together (DeepSeek) |
+| x-ai/grok-4.6 | E | low | failed: answered `unknown` | xAI |
+| x-ai/grok-4.6 | F | - | not run (session cap) | - |
+| x-ai/grok-4.6 | G | low | passed | xAI |
+| x-ai/grok-4.6 | H | - | not run (session cap) | - |
+
+Row spend: ~12 counted calls. Notable: single endpoint (xAI) on Grok
+turns; the DeepSeek side of leg D answered from Together. The image turn
+answered `unknown` because this row pins `drop_images: true`: the router
+notes the image on the wire instead of sending it, so the colour question
+has no image to answer from. Contributor's same-looking answer has a
+different cause (`drop_images: false` on that row).
+
+| anthropic/claude-haiku-4.5 | A | none | passed | none |
+| anthropic/claude-haiku-4.5 | B | none | failed: calls serialized, leg asserts | none |
+| anthropic/claude-haiku-4.5 | C | - | not run: switch helper sends `low`, row allows `none` only | - |
+| anthropic/claude-haiku-4.5 | D | - | not run: same effort-gate confound as C | - |
+| anthropic/claude-haiku-4.5 | E | - | not run: image follow-up sends `low`, row allows `none` only | - |
+| anthropic/claude-haiku-4.5 | F | - | not run (session cap) | - |
+| anthropic/claude-haiku-4.5 | G | none | passed | none |
+| anthropic/claude-haiku-4.5 | H | - | not run (session cap) | - |
+
+Row spend: ~6 counted calls. Notable: the only `none`-default row in the
+roster. Legs C, D and E are harness confounds, not row evidence: the
+switch helper and the image follow-up both hard-code `low`, so the
+router's effort gate refuses with `PROVIDER_REJECTED` before any upstream
+call. Tool turns carry no endpoint metadata on this row. The three legs
+need a rerun with an effort-aware helper before any row edit is proposed.
+
+| anthropic/claude-sonnet-5 | A | low | passed | none |
+| anthropic/claude-sonnet-5 | A | max | passed | none |
+| anthropic/claude-sonnet-5 | B | low | failed: calls serialized, leg asserts | none |
+| anthropic/claude-sonnet-5 | C | low | passed, history preserved | none |
+| anthropic/claude-sonnet-5 | D | low | passed both directions, history preserved | none |
+| anthropic/claude-sonnet-5 | E | low | failed: image reported not attached | none |
+| anthropic/claude-sonnet-5 | F | - | not run (session cap) | - |
+| anthropic/claude-sonnet-5 | G | low | passed | none |
+| anthropic/claude-sonnet-5 | H | - | not run (session cap) | - |
+
+Row spend: ~13 counted calls. Notable: tool turns on the Anthropic rows
+carry no endpoint metadata in this session, unlike the named endpoints on
+other vendors. Leg E is a conversion observation, not a colour miss: the
+row says the image never arrived.
+
+| anthropic/claude-opus-5 | A | low | passed | none |
+| anthropic/claude-opus-5 | A | max | passed | none |
+| anthropic/claude-opus-5 | B | low | failed: calls serialized, leg asserts | none |
+| anthropic/claude-opus-5 | C | low | passed, history preserved | none |
+| anthropic/claude-opus-5 | D | low | passed both directions, history preserved | none |
+| anthropic/claude-opus-5 | E | low | passed, red seen | none |
+| anthropic/claude-opus-5 | F | - | not run (session cap) | - |
+| anthropic/claude-opus-5 | G | low | passed | none |
+| anthropic/claude-opus-5 | H | - | not run (session cap) | - |
+
+Row spend: ~12 counted calls. Notable: the only Anthropic row in this
+session with a passing image leg; Sonnet on the same vendor and harness
+reported no attachment.
+
+| anthropic/claude-fable-5.1 | A | low | passed | none |
+| anthropic/claude-fable-5.1 | A | max | passed | none |
+| anthropic/claude-fable-5.1 | B | low | failed: calls serialized, leg asserts | none |
+| anthropic/claude-fable-5.1 | C | low | passed, history preserved | none |
+| anthropic/claude-fable-5.1 | D | low | passed both directions, history preserved | none |
+| anthropic/claude-fable-5.1 | E | low | passed, red seen | none |
+| anthropic/claude-fable-5.1 | F | - | not run (session cap) | - |
+| anthropic/claude-fable-5.1 | G | low | passed | none |
+| anthropic/claude-fable-5.1 | H | - | not run (session cap) | - |
+
+Row spend: ~12 counted calls. Notable: matches Opus leg for leg,
+including the passing image turn.
+
+| openai/gpt-5.6-luna | A | low | passed | none |
+| openai/gpt-5.6-luna | A | max | passed | none |
+| openai/gpt-5.6-luna | B | low | failed: calls serialized, leg asserts | none |
+| openai/gpt-5.6-luna | C | low | passed, history preserved | none |
+| openai/gpt-5.6-luna | D | low | passed both directions, history preserved | none |
+| openai/gpt-5.6-luna | E | low | passed, red seen | none |
+| openai/gpt-5.6-luna | F | - | not run (session cap) | - |
+| openai/gpt-5.6-luna | G | low | passed | none |
+| openai/gpt-5.6-luna | H | - | not run (session cap) | - |
+
+Row spend: ~12 counted calls. Notable: fully green except the shared
+parallel-serialization confound; tool turns carry no endpoint metadata on
+this row.
+
+| openai/gpt-5.6-sol | A | low | passed | none |
+| openai/gpt-5.6-sol | A | max | passed | none |
+| openai/gpt-5.6-sol | B | low | failed: calls serialized, leg asserts | none |
+| openai/gpt-5.6-sol | C | low | passed, history preserved | none |
+| openai/gpt-5.6-sol | D | low | passed both directions, history preserved | none |
+| openai/gpt-5.6-sol | E | low | failed: answered `Cyan` | none |
+| openai/gpt-5.6-sol | F | - | not run (session cap) | - |
+| openai/gpt-5.6-sol | G | low | passed | none |
+| openai/gpt-5.6-sol | H | - | not run (session cap) | - |
+
+Row spend: ~12 counted calls. Notable: the image turn completed but the
+colour came back `Cyan`, vendor behaviour rather than a refusal; Luna on
+the same harness answered `red`.
+
+| openai/gpt-5.6-terra | A | low | passed | none |
+| openai/gpt-5.6-terra | A | max | passed | none |
+| openai/gpt-5.6-terra | B | low | failed: calls serialized, leg asserts | none |
+| openai/gpt-5.6-terra | C | low | passed, history preserved | none |
+| openai/gpt-5.6-terra | D | low | passed both directions, history preserved | none |
+| openai/gpt-5.6-terra | E | low | passed, red seen | none |
+| openai/gpt-5.6-terra | F | - | not run (session cap) | - |
+| openai/gpt-5.6-terra | G | low | passed | none |
+| openai/gpt-5.6-terra | H | - | not run (session cap) | - |
+
+Row spend: ~12 counted calls. Notable: fully green except the shared
+parallel-serialization confound.
+
+| openai/gpt-6-astra | A | low | passed | none |
+| openai/gpt-6-astra | A | max | passed | none |
+| openai/gpt-6-astra | B | low | failed: calls serialized, leg asserts | none |
+| openai/gpt-6-astra | C | low | passed, history preserved | none |
+| openai/gpt-6-astra | D | low | passed both directions, history preserved | none |
+| openai/gpt-6-astra | E | low | failed: answered `Pink` | none |
+| openai/gpt-6-astra | F | - | not run (session cap) | - |
+| openai/gpt-6-astra | G | low | passed | none |
+| openai/gpt-6-astra | H | - | not run (session cap) | - |
+
+Row spend: ~12 counted calls. Notable: the image turn completed but the
+colour came back `Pink`; Terra on the same harness answered `red`.
+
+Matrix close: legs A to D are recorded for every row probed in sessions
+1 to 6 except Haiku C/D, which need the effort-aware rerun; leg E is recorded
+except where the harness effort gate blocked it, and leg G wherever the row
+and session caps allowed it. Still open: Haiku legs C/D/E (effort-aware
+rerun), leg A at the top listed effort on GLM Flash, DeepSeek Flash and
+Gemini Flash, leg G on GLM Flash and Gemini Flash, Gemini Pro legs B/C/D/G
+(blocked behind its narrated base echo, not the caps), and Qwen, which stays
+skipped until the key can use `qwen/qwen3.8-max-0902`. Legs F/H and open
+questions 1-3 still wait for a later approved session. Row edits proposed:
+none (parallel serialization is now an eight-vendor harness/client
+confound; image colour variance is vendor behaviour, not a roster pin;
+the Haiku gaps are harness confounds awaiting rerun).
