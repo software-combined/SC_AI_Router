@@ -23,8 +23,7 @@ from tests.install_fixtures import (
     _static_fetch,
     install_mod,
 )
-from tests.test_install_config import _fake_write_catalogue
-
+from tests.test_install_config import _StubStdin, _fake_write_catalogue
 
 @unix_only
 class InstallKeyWindowTests(unittest.TestCase):
@@ -40,6 +39,7 @@ class InstallKeyWindowTests(unittest.TestCase):
             class FakePopen:
                 def __init__(self, cmd, **kwargs):
                     spawned.append(cmd)
+                    self.stdin = _StubStdin()
 
             _patch_attrs(self, run=lambda cmd, **kwargs: _ok_run(cmd, **kwargs),
                          self_test=lambda *args: None,
@@ -56,7 +56,7 @@ class InstallKeyWindowTests(unittest.TestCase):
             self.assertIn('setup', state)
             self.assertEqual(len(spawned), 1)
             self.assertEqual(spawned[0][1:3], ['-m', 'ai_router.key_prompt'])
-            self.assertIn(f"/setup/{state['setup']['nonce']}", spawned[0][3])
+            self.assertFalse(any(a.startswith('http://') for a in spawned[0]))
 
     def test_env_only_key_arms_the_window_and_names_the_var(self):
         # A shell-exported key never reaches the installed service, whose
@@ -71,6 +71,7 @@ class InstallKeyWindowTests(unittest.TestCase):
             class FakePopen:
                 def __init__(self, cmd, **kwargs):
                     spawned.append(cmd)
+                    self.stdin = _StubStdin()
 
             _patch_attrs(self, run=lambda cmd, **kwargs: _ok_run(cmd, **kwargs),
                          self_test=lambda *args: None,
@@ -111,6 +112,7 @@ class InstallKeyWindowTests(unittest.TestCase):
             class FakePopen:
                 def __init__(self, cmd, **kwargs):
                     spawned.append(cmd)
+                    self.stdin = _StubStdin()
 
             _patch_attrs(self, run=lambda cmd, **kwargs: _ok_run(cmd, **kwargs),
                          self_test=lambda *args: None,
@@ -174,6 +176,7 @@ class InstallKeyWindowTests(unittest.TestCase):
             class FakePopen:
                 def __init__(self, cmd, **kwargs):
                     spawned.append(cmd)
+                    self.stdin = _StubStdin()
 
             def state():
                 return json.loads((home / 'mixed-router-state.json').read_text())
@@ -335,6 +338,7 @@ class InstallKeyWindowTests(unittest.TestCase):
             class FakePopen:
                 def __init__(self, cmd, **kwargs):
                     spawned.append(cmd)
+                    self.stdin = _StubStdin()
 
             with mock.patch.dict(os.environ, env, clear=True), \
                     mock.patch.object(install_mod.subprocess, 'Popen', FakePopen):
@@ -358,6 +362,7 @@ class InstallKeyWindowTests(unittest.TestCase):
             class FakePopen:
                 def __init__(self, cmd, **kwargs):
                     spawned.append(cmd)
+                    self.stdin = _StubStdin()
 
             _patch_attrs(self, run=lambda cmd, **kwargs: _ok_run(cmd, **kwargs),
                          self_test=lambda *args: None,

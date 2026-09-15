@@ -7,6 +7,11 @@
   of them if needed) and retry. The same sentence is appended once to
   `spawn_agent` and `close_agent`. Claude Code does not receive it,
   and neither client gets an annotated spawn-error output.
+- A deeply nested request body now ends the turn with a 400 instead of
+  dropping the loopback connection, and drain admission is decided under
+  one lock so a drain landing mid-admission still refuses cleanly.
+- The installer hands the setup URL to the key window on stdin instead of
+  the command line, so it never appears in `ps` output on a shared machine.
 
 ## 0.6.67
 
