@@ -80,6 +80,38 @@ class RegistryTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             load(json.dumps([{**good, 'listed': 'yes'}]))
 
+    def test_provider_prefs_absent_by_default_and_validated(self):
+        model = Model(slug='x/y', provider='openrouter', display_name='X',
+                      vendor='V', reasoning=('low',), default_reasoning='low')
+        self.assertIsNone(model.provider_prefs)
+        good = dict(zip(FIELDS, ['x/y', 'openrouter', 'X', 'V',
+            ['low'], 'low', ['text'], [], 'native', 'native', None, False, 1,
+            100, 32768, 'none', 'none', [], True, 'verified']))
+        valid = dict(good, provider_prefs={'ignore': ['DeepSeek'],
+                                           'allow_fallbacks': True,
+                                           'require_parameters': True,
+                                           'sort': {'by': 'throughput',
+                                                      'partition': 'none'},
+                                           'data_collection': 'deny',
+                                           'zdr': True})
+        loaded = load(json.dumps([valid]))[0]
+        self.assertEqual(loaded.provider_prefs, valid['provider_prefs'])
+        for bad_prefs in ({'bogus': True},
+                          {'ignore': 'DeepSeek'},
+                          {'ignore': []},
+                          {'allow_fallbacks': 'yes'},
+                          {'sort': 'cheapest'},
+                          {'sort': {'by': 'cheapest'}},
+                          {'sort': {'by': 'price', 'partition': 'bogus'}},
+                          {'zdr': 'allow'},
+                          {'data_collection': True},
+                          {'zdr': 1},
+                          'ignore',
+                          {}):
+            with self.subTest(prefs=bad_prefs):
+                with self.assertRaises(SystemExit):
+                    load(json.dumps([dict(good, provider_prefs=bad_prefs)]))
+
     def test_preview_row_without_listed_key_loads_as_listed(self):
         # Grandfathered shape: every row shipped before the flag keeps
         # working and stays visible without a file rewrite.
@@ -133,6 +165,10 @@ class RegistryTests(unittest.TestCase):
         self.assertEqual(by_slug('meta/muse-spark-1.3').history_mode, 'native')
         portable = [m.slug for m in MODELS if m.history_mode == 'portable']
         self.assertEqual(portable, ['meta/muse-spark-1.3-contributor'])
+        self.assertEqual([by_slug(s).schema_mode for s in
+                          ('meta/muse-spark-1.3',
+                           'meta/muse-spark-1.3-contributor')],
+                         ['json_text', 'json_text'])
 
     def test_capability_flags_default_conservative(self):
         model = Model(slug='x/y', provider='openrouter', display_name='X',

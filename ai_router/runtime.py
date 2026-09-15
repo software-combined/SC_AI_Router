@@ -14,6 +14,9 @@ ROUTER_HOME = default_home()
 STATE = state_mod.path(ROUTER_HOME)
 REQUIRED_STATE = {'port': int, 'token': str, 'openai_models': list}
 MAX_BODY = 16 * 1024 * 1024
+# zstd may expand this far so prepare can slim tool_search schemas;
+# the prepared upstream body is still refused above MAX_BODY.
+MAX_DECODE_FACTOR = 4
 TOKEN_MIN_LENGTH = 32
 TOKEN_ALPHABET = frozenset(string.ascii_letters + string.digits + '_-')
 
@@ -66,6 +69,8 @@ def load_state(path=STATE):
         raise SystemExit('anthropic_mode must be subscription or none')
     if 'openai_helper_fallback' in state and not isinstance(state['openai_helper_fallback'], bool):
         raise SystemExit('openai_helper_fallback must be true or false')
+    if 'openrouter_region' in state and not provider_defs.valid_region(state['openrouter_region']):
+        raise SystemExit("openrouter_region must be one of 'global', 'us' or 'eu'")
     # Every external provider the registry routes to needs its own key, but
     # the router boots as soon as one resolves: a provider without a key
     # fails its own requests closed instead of taking the service down. A

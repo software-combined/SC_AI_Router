@@ -280,23 +280,15 @@ def wait_version(state, version, timeout=150, fetch_health=None):
 
 
 def fetch_feed(url, etag, _fetch=None):
-    """Read a feed document, revalidating with a saved ETag.
+    """Read a feed document (Plan 131: owned by feed.py, re-exported here).
 
-    Returns (status, body, etag). Injected fakes keep their one-argument
-    shape and bypass the conditional-GET path.
+    The default path calls back into this module's fetch seam so installer
+    patches still apply; injected fakes keep their one-argument shape.
     """
+    live = _feed.live_feed
     if _fetch is None:
-        return _feed.live_feed(url, etag, fetch)
-    if url.startswith('file://'):
-        return 200, _fetch(url), etag
-    req = urllib.request.Request(url, headers={'If-None-Match': etag} if etag else {})
-    try:
-        with urllib.request.urlopen(req, timeout=30) as response:
-            return response.status, response.read(), response.headers.get('ETag', etag)
-    except urllib.error.HTTPError as exc:
-        if exc.code == 304:
-            return 304, b'', etag
-        raise
+        return live(url, etag, fetch)
+    return _feed.fetch_feed(url, etag, _fetch=_fetch)
 
 
 def _agents(agents=None):
@@ -349,43 +341,35 @@ def install_lock(home, name='install.lock'):
         os.close(handle)
 
 
-def _read_failures(home):
-    """State document plus its failure map; (None, {}) when unreadable.
+_updater_mod = None
 
-    Always read fresh here rather than reusing a copy taken earlier in the
-    run: the child installer writes the same file, and merging onto a stale
-    copy would drop its changes.
-    """
-    state = _state.read(_state.path(home))
-    if state is None:
-        return None, {}
-    failures = state.get('update_failures')
-    return state, dict(failures) if isinstance(failures, dict) else {}
+
+def _updater():
+    """updater.py loaded once (it spec-loads this module, so no top import)."""
+    global _updater_mod
+    if _updater_mod is None:
+        _updater_mod = load(
+            'router_updater', Path(__file__).resolve().parent / 'updater.py')
+    return _updater_mod
+
+
+def _read_failures(home):
+    """Update-failure state (Plan 131: owned by updater.py)."""
+    return _updater()._read_failures(home)
 
 
 def update_failures(home):
-    """Failed attempts per version; {} when none are recorded."""
-    return _read_failures(home)[1]
+    """Failed attempts per version (Plan 131: owned by updater.py)."""
+    return _updater().update_failures(home)
 
 
 def record_update_failure(home, version):
-    """Count a failed attempt at one version; returns the new count."""
-    state, failures = _read_failures(home)
-    if state is None:
-        return 0
-    failures[version] = failures.get(version, 0) + 1
-    state['update_failures'] = failures
-    _write_state(home, state)
-    return failures[version]
+    """Count a failed attempt (Plan 131: owned by updater.py)."""
+    return _updater().record_update_failure(home, version)
 
 
 def clear_update_failures(home, version):
-    state, failures = _read_failures(home)
-    if state is None or version not in failures:
-        return
-    del failures[version]
-    state['update_failures'] = failures
-    _write_state(home, state)
+    _updater().clear_update_failures(home, version)
 
 
 def ensure_serving(uid, home, state, agents=None, timeout=180, version=None):
@@ -514,31 +498,10 @@ def ensure_state(home):
 
 
 def feed_serial(home):
-    """Last accepted feed serial; 0 when no serialed release was installed."""
-    try:
-        return int((home / 'feed-serial').read_text().strip())
-    except FileNotFoundError:
-        return 0
-    except ValueError:
-        raise SystemExit('feed serial file is corrupt')
+    """Last accepted feed serial (Plan 131: owned by feed.py)."""
+    return _feed.feed_serial(home)
 
 
 def check_serial(home, latest, pinned=False):
-    """Refuse feeds older than the last accepted one (replay protection).
-
-    A pinned `--feed` is exempt on both sides: it is operator-supplied for
-    this one run, so it is neither the unattended channel the guard protects
-    nor recorded afterwards. Without the exemption a locally built bundle
-    (`--build` defaults to 0) is refused as stale against whatever the real
-    feed last recorded, which is a trap that invites picking a build number
-    high enough to win -- and that number then freezes the real channel.
-    """
-    if pinned:
-        return 0
-    serial = latest.get('serial', 0)
-    if type(serial) is not int:
-        raise SystemExit('feed has a bad serial')
-    stored = feed_serial(home)
-    if serial < stored:
-        raise SystemExit(f'stale feed serial {serial} is older than {stored}')
-    return serial
+    """Replay guard (Plan 131: owned by feed.py)."""
+    return _feed.check_serial(home, latest, pinned)

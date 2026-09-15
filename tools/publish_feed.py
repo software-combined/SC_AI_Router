@@ -17,6 +17,7 @@ FEED_ORIGIN = 'https://dist.softwarecombined.com'
 DEFAULT_BUCKET = 'scg-router-feed-651116729473-apse2'
 FEED_DOCUMENT = 'feed-latest.json'
 RELEASE_DOCUMENT = 'release-latest.json'
+FEED_SIG_DOCUMENT = 'feed-latest.json.sig'
 BUNDLE_PREFIX = 'bundles/'
 FEED_CACHE_CONTROL = 'public, max-age=60'
 BUNDLE_CACHE_CONTROL = 'public, max-age=31536000, immutable'
@@ -109,6 +110,12 @@ def publish_document(bucket, key, path, cache_control):
           '--cache-control', cache_control, '--content-type', 'application/json'])
 
 
+def publish_signature(bucket, key, path):
+    """Upload the detached feed signature beside the channel document."""
+    _aws(['s3', 'cp', str(path), f's3://{bucket}/{key}',
+          '--cache-control', FEED_CACHE_CONTROL, '--content-type', 'text/plain'])
+
+
 def invalidate(distribution_id, path):
     """Drop one feed document from the edge cache; returns the request id."""
     return _aws(['cloudfront', 'create-invalidation', '--distribution-id',
@@ -149,6 +156,9 @@ def _describe(args, latest, bundle):
     print(f'dry run: bundle {bundle} sha256 {latest["sha256"][:12]}')
     print(f'dry run: would publish s3://{args.bucket}/{BUNDLE_PREFIX}{bundle} when absent')
     print(f'dry run: would publish s3://{args.bucket}/{args.channel}/latest.json')
+    print(f'dry run: would publish s3://{args.bucket}/{args.channel}/latest.json.sig')
+    print('dry run: refusing without --sign (unsigned channel documents never ship)')
+    print(f'dry run: would publish s3://{args.bucket}/{args.channel}/models.json')
     print(f'dry run: would write {FEED_DOCUMENT} and {RELEASE_DOCUMENT} under {args.dist}')
     if args.distribution_id:
         print('dry run: would invalidate the channel feed document')
@@ -162,6 +172,8 @@ def main(argv=None):
     parser.add_argument('--bucket', default=DEFAULT_BUCKET)
     parser.add_argument('--distribution-id', default='')
     parser.add_argument('--dry-run', action='store_true')
+    parser.add_argument('--sign', metavar='SEEDFILE',
+                        help='sign the served feed bytes; publishing without it is refused')
     args = parser.parse_args(argv)
     dist = Path(args.dist)
     latest = _load_latest(dist)
@@ -170,15 +182,38 @@ def main(argv=None):
     if args.dry_run:
         return _describe(args, latest, bundle)
     feed_doc, release_doc = documents(latest, bundle)
-    (dist / FEED_DOCUMENT).write_text(json.dumps(feed_doc, indent=2) + '\n')
+    feed_bytes = (json.dumps(feed_doc, indent=2) + '\n').encode()
+    (dist / FEED_DOCUMENT).write_bytes(feed_bytes)
     (dist / RELEASE_DOCUMENT).write_text(json.dumps(release_doc, indent=2) + '\n')
+    if not args.sign:
+        raise SystemExit('refusing to publish an unsigned channel document: pass --sign SEEDFILE')
+    try:
+        seed = Path(args.sign).read_text().strip()
+    except OSError:
+        raise SystemExit('cannot read release signing seed')
+    import importlib.util as _ilu
+    _spec = _ilu.spec_from_file_location(
+        'router_feed_verify_sig',
+        Path(__file__).resolve().parent.parent / 'packaging' / 'feed_verify.py')
+    _fv = _ilu.module_from_spec(_spec)
+    _spec.loader.exec_module(_fv)
+    (dist / FEED_SIG_DOCUMENT).write_text(_fv.sign_hex(seed, feed_bytes) + '\n')
     outcome = publish_bundle(args.bucket, BUNDLE_PREFIX + bundle, path, latest['sha256'])
     publish_document(args.bucket, f'{args.channel}/latest.json',
                      dist / FEED_DOCUMENT, FEED_CACHE_CONTROL)
+    publish_signature(args.bucket, f'{args.channel}/latest.json.sig',
+                      dist / FEED_SIG_DOCUMENT)
+    models_src = Path('ai_router/models.json')
+    if models_src.is_file():
+        publish_document(args.bucket, f'{args.channel}/models.json',
+                         models_src, FEED_CACHE_CONTROL)
+        print(f'published {args.channel} models.json')
     print(f'published {args.channel} {latest["version"]}: bundle {outcome}')
     if args.distribution_id:
         target = f'/{args.channel}/latest.json'
+        sig_target = f'/{args.channel}/latest.json.sig'
         print(f'invalidated {target} ({invalidate(args.distribution_id, target)})')
+        print(f'invalidated {sig_target} ({invalidate(args.distribution_id, sig_target)})')
     else:
         print('no distribution id given; skipped invalidation, the 60 s cache expires on its own')
     return 0

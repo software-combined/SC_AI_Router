@@ -155,6 +155,8 @@ class FeedSerialTests(unittest.TestCase):
             self.assertEqual((home / 'feed-serial').read_text(), serial_before)
 
     def test_update_refuses_stale_feed_before_download(self):
+        from tests.fakes import signed_static_fetch
+        updater_mod = install_mod._updater
         with tempfile.TemporaryDirectory() as tmp:
             home = _home_with_serial(tmp)
             blob, latest = _craft_bundle('9.9.9')
@@ -162,17 +164,17 @@ class FeedSerialTests(unittest.TestCase):
             # Unpinned: the unattended channel is what the guard protects.
             args = install_mod.build_parser().parse_args(
                 ['--update', '--home', str(home)])
-            stale_body = json.dumps(stale).encode()
-
-            def fake_fetch(url):
-                raise AssertionError('a stale feed must be refused before download')
-
-            with self.assertRaises(SystemExit) as ctx:
-                install_mod.do_update(
-                    args,
-                    _fetch=fake_fetch,
-                    _read_feed=lambda url, etag: (200, stale_body, None),
-                    _sleep=lambda s: None)
+            fetch, _seed, pub = signed_static_fetch(stale, blob)
+            old_key = updater_mod._FEED_VERIFY_KEY
+            updater_mod._FEED_VERIFY_KEY = pub
+            try:
+                with self.assertRaises(SystemExit) as ctx:
+                    install_mod.do_update(
+                        args,
+                        _fetch=fetch,
+                        _sleep=lambda s: None)
+            finally:
+                updater_mod._FEED_VERIFY_KEY = old_key
             self.assertIn('stale feed serial', str(ctx.exception.code))
 
 

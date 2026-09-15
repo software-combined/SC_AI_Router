@@ -42,6 +42,7 @@ _NONCE_SHAPE = re.compile(r'[A-Za-z0-9_\-]{16,}')
 # updater's free text never travels with them.
 ERROR_CODES = (
     'feed_unreachable', 'feed_invalid', 'feed_serial', 'feed_untrusted',
+    'feed_signature',
     'bundle_checksum', 'bundle_invalid', 'installer_timeout',
     'installer_failed', 'update_failed',
 )
@@ -224,6 +225,45 @@ def bind(**overrides):
         globals()[name if name != 'svc' else '_svc'] = value
 
 
+def _read_failures(home):
+    """State document plus its failure map; (None, {}) when unreadable.
+
+    Update-failure owner (Plan 131): moved out of service.py; service keeps
+    thin re-exports. Always read fresh: the child installer writes the same
+    file, and merging onto a stale copy would drop its changes.
+    """
+    state = _svc._state.read(_svc._state.path(home))
+    if state is None:
+        return None, {}
+    failures = state.get('update_failures')
+    return state, dict(failures) if isinstance(failures, dict) else {}
+
+
+def update_failures(home):
+    """Failed attempts per version; {} when none are recorded."""
+    return _read_failures(home)[1]
+
+
+def record_update_failure(home, version):
+    """Count a failed attempt at one version; returns the new count."""
+    state, failures = _read_failures(home)
+    if state is None:
+        return 0
+    failures[version] = failures.get(version, 0) + 1
+    state['update_failures'] = failures
+    _svc._write_state(home, state)
+    return failures[version]
+
+
+def clear_update_failures(home, version):
+    state, failures = _read_failures(home)
+    if state is None or version not in failures:
+        return
+    del failures[version]
+    state['update_failures'] = failures
+    _svc._write_state(home, state)
+
+
 def _park(home, etag, etag_path, version):
     """Count a failed attempt and stop retrying once it is hopeless.
 
@@ -232,7 +272,7 @@ def _park(home, etag, etag_path, version):
     feed re-read when the edge answers 304, and the count in the state file
     is the hard stop.
     """
-    count = _svc.record_update_failure(home, version)
+    count = record_update_failure(home, version)
     if count < MAX_VERSION_FAILURES:
         return
     if etag:
@@ -251,6 +291,75 @@ def _read_feed_pass(feed, etag, read_feed, sleep):
                 raise
             sleep(30 * 2 ** attempt)
             print(f'retrying feed fetch ({exc})')
+
+
+
+def _persist_models_url(home, latest):
+    """Remember the feed's models_url for the router's refresh thread.
+
+    Plan 099 Step 3: the router boots from this file with a channel
+    default; a missing or malformed URL leaves the previous file alone.
+    Never raises: a stale URL is safer than a broken update.
+    """
+    url = latest.get('models_url')
+    if not isinstance(url, str) or not url.startswith('https://'):
+        return
+    try:
+        (Path(home) / 'models-url').write_text(url.strip() + '\n')
+    except OSError:
+        pass
+
+
+# Test seam: tests set this to an ephemeral public key so signed
+# fixtures verify without touching the compiled production key.
+_FEED_VERIFY_KEY = None
+
+
+def _verified_feed(feed, body, _fetch):
+    """Parse one feed document after Ed25519 verification (Plan 145).
+
+    `https` feeds must carry a valid detached sidecar; rejection raises
+    `UpdateError('feed_signature', ...)`. `file://` feeds without a sidecar
+    stay operator-trusted; with one, it must verify.
+    """
+    import importlib.util as _ilu
+    spec = _ilu.spec_from_file_location(
+        'router_feed_verify_upd',
+        Path(__file__).resolve().parent / 'feed_verify.py')
+    fv = _ilu.module_from_spec(spec)
+    spec.loader.exec_module(fv)
+    if _FEED_VERIFY_KEY is not None:
+        fv.FEED_PUBLIC_KEY = _FEED_VERIFY_KEY
+    _fspec = _ilu.spec_from_file_location(
+        'router_feed_sig',
+        Path(__file__).resolve().parent / 'feed.py')
+    _fmod = _ilu.module_from_spec(_fspec)
+    _fspec.loader.exec_module(_fmod)
+    if feed.startswith('file://') and _FEED_VERIFY_KEY is None:
+        try:
+            return json.loads(body.decode())
+        except ValueError:
+            raise UpdateError('feed_invalid', 'feed document is not JSON')
+    try:
+        sig = _fmod.live_signature(feed, _fetch)
+    except (OSError, SystemExit):
+        sig = None
+    if feed.startswith('file://'):
+        if sig is None:
+            try:
+                return json.loads(body.decode())
+            except ValueError:
+                raise UpdateError('feed_invalid', 'feed document is not JSON')
+        try:
+            return fv.checked_feed(body, sig)
+        except SystemExit as exc:
+            raise UpdateError('feed_signature', str(exc) or 'feed signature rejected')
+    if sig is None:
+        raise UpdateError('feed_signature', 'feed signature missing')
+    try:
+        return fv.checked_feed(body, sig)
+    except SystemExit as exc:
+        raise UpdateError('feed_signature', str(exc) or 'feed signature rejected')
 
 
 def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
@@ -273,11 +382,14 @@ def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
         print(f"up to date {_svc.current_version(home)}")
         return 0
     try:
-        latest = json.loads(body.decode())
+        latest = _verified_feed(feed, body, _fetch)
+    except UpdateError:
+        raise
     except ValueError:
         raise UpdateError('feed_invalid', 'feed document is not JSON')
     if not isinstance(latest, dict):
         raise UpdateError('feed_invalid', 'feed document is not an object')
+    _persist_models_url(home, latest)
     if express_only and latest.get('express') is not True:
         return 0  # Leave ETag/serial untouched so the regular job still sees it.
     try:
@@ -296,7 +408,7 @@ def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
         _record_pass(home, error='')
         print(f"up to date {_svc.current_version(home)}")
         return 0
-    failed = _svc.update_failures(home).get(latest['version'], 0)
+    failed = update_failures(home).get(latest['version'], 0)
     if express_only and failed:
         return 0  # Retry failures on the regular cadence, not every minute.
     if failed >= MAX_VERSION_FAILURES:
@@ -366,7 +478,7 @@ def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
         print('deferred: installer did not activate the requested version')
         _record_pass(home)
         return failure
-    _svc.clear_update_failures(home, latest['version'])
+    clear_update_failures(home, latest['version'])
     (home / 'logs').mkdir(exist_ok=True)
     with open(home / 'logs' / 'update.log', 'a') as stream:
         stream.write(json.dumps({'at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
@@ -433,7 +545,9 @@ def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None):
     latest = None
     if status != 304:
         try:
-            latest = json.loads(body.decode())
+            latest = _verified_feed(feed, body, _fetch or _svc.fetch)
+        except UpdateError as exc:
+            raise SystemExit(f'update check failed: feed signature {exc}')
         except ValueError:
             raise SystemExit('update check failed: feed document is not JSON')
         if not isinstance(latest, dict) or not isinstance(latest.get('version'), str):

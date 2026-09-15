@@ -66,12 +66,22 @@ def family_tier(alias):
 def models_listing():
     """Anthropic-style {data: [{id, display_name, anthropic_family_tier}]}.
 
-    Verified rows first A-Z by display name, then preview rows A-Z."""
+    Verified rows first A-Z by display name, then preview rows A-Z.
+    External rows outside the key-filtered snapshot hide, matching the
+    picker, the prompt and request routing; subscription rows list on.
+    """
+    from . import availability as _availability
+    snap = _availability.current()
+    avail = None if snap is None else (snap.get('models') or frozenset())
     ordered = sorted(registry.MODELS, key=lambda m: (m.tier != 'verified',
                                             m.display_name.casefold()))
     rows = []
     for entry in ordered:
         if not entry.listed:
+            continue
+        if (avail is not None
+                and provider_defs.is_external(entry.provider)
+                and entry.slug not in avail):
             continue
         alias = claude_alias(entry.slug)
         if alias is not None:
@@ -112,10 +122,11 @@ def row_def(model, _resolve=resolve):
 class ExternalMessagesProvider:
     """One external provider serving Anthropic Messages (Plan 141)."""
 
-    def __init__(self, defn):
+    def __init__(self, defn, region='global'):
         self.defn = defn
         self.name = defn.id
-        self.host = defn.host
+        self.region = region if provider_defs.valid_region(region) else 'global'
+        self.host = provider_defs.region_host(defn.id, self.region) or defn.host
         self.kind = defn.kind
 
     def prepare(self, model, path, payload, raw_body, headers, credentials):
@@ -160,7 +171,7 @@ class ClaudeSubscriptionProvider:
 
 
 def select(model, path, openai_mode='subscription', anthropic_mode=None,
-           allowed=None):
+           region='global', allowed=None):
     defn = row_def(model)
     if defn is not None and defn.kind == provider_defs.EXTERNAL:
         if not defn.serves(provider_defs.MESSAGES):
@@ -173,7 +184,12 @@ def select(model, path, openai_mode='subscription', anthropic_mode=None,
         slug = resolve(model)
         if allowed is not None and slug not in frozenset(allowed):
             raise UnknownModel(slug, ())
-        return ExternalMessagesProvider(defn)
+        # Key-filtered availability gates routing like the picker: with no
+        # successful snapshot the key shows no approved external models.
+        from . import availability as _availability
+        if not _availability.permitted(slug):
+            raise UnknownModel(slug, ())
+        return ExternalMessagesProvider(defn, region)
     # Independent subscription choice; missing mode reproduces the legacy
     # behavior of following openai_mode. Never widened by migration.
     if (anthropic_mode if anthropic_mode is not None else openai_mode) == 'none':

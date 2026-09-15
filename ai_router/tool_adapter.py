@@ -11,10 +11,22 @@ from .history_portability import portable_history
 from .discovered import recall
 from .registry import by_slug
 from . import agent_handoffs, sse, tool_aliases, tool_merge
+from .upstream import serving_endpoint
 SEARCH_NAME = 'codex_client_tool_search'
 # Bytes retained per body for the post-EOF identity parse. Overflow drops
 # the observation, never the forwarded bytes.
 _OBSERVE_LIMIT = 64 * 1024
+
+
+def _note_identity(payload, notes):
+    """Record the serving model and endpoint from one parsed payload."""
+    if not isinstance(payload, dict):
+        return
+    if isinstance(payload.get('model'), str):
+        notes['served_model'] = payload['model']
+    endpoint = serving_endpoint(payload)
+    if endpoint is not None:
+        notes['serving_endpoint'] = endpoint
 
 def _quirk(payload, name):
     entry = by_slug(payload.get('model', ''))
@@ -283,8 +295,8 @@ class ToolEvents:
         if isinstance(event.get('response'), dict):
             response = event['response']
             response['output'] = [self.item(item) for item in response.get('output', [])]
-            if kind == 'response.completed' and self.notes is not None and isinstance(response.get('model'), str):
-                self.notes['served_model'] = response['model']
+            if kind == 'response.completed' and self.notes is not None:
+                _note_identity(response, self.notes)
         return event
 
 def snoop_response_identity(response, notes):
@@ -308,11 +320,10 @@ def snoop_response_identity(response, notes):
                 kept += piece
         if seen <= _OBSERVE_LIMIT:
             try:
-                model = json.loads(kept).get('model')
+                payload = json.loads(kept)
             except Exception:
-                model = None  # observation is best-effort; never fail bytes
-            if isinstance(model, str):
-                notes['served_model'] = model
+                payload = None  # observation is best-effort; never fail bytes
+            _note_identity(payload, notes)
         return
     spare = b''
     watching = True  # False once the tail exceeds the bound: keep yielding
@@ -360,23 +371,11 @@ def _observe_sse_frame(frame, notes):
         data = b''.join(part[5:].lstrip() for part in
                         frame.split(b'\n') if part.startswith(b'data:')).strip()
         if data and data != b'[DONE]':
-            completed = _completed_model(data)
-            if completed is not None:
-                notes['served_model'] = completed
+            event = json.loads(data)
+            if event.get('type') == 'response.completed':
+                _note_identity(event.get('response'), notes)
     except Exception:
         pass  # observation is best-effort; never fail forwarded bytes
-
-
-def _completed_model(data):
-    """Serving model from a response.completed SSE payload, else None."""
-    try:
-        event = json.loads(data)
-        if event['type'] != 'response.completed':
-            return None
-        model = event['response']['model']
-        return model if isinstance(model, str) else None
-    except Exception:
-        return None
 
 
 def stream_events(response, names, notes=None):

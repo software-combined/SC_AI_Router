@@ -17,7 +17,7 @@ import secrets
 from compression import zstd
 from . import claude, errors, model_prompt_page, setup, sse
 from .errors import InvalidSize
-from .runtime import VERSION
+from .runtime import MAX_DECODE_FACTOR, VERSION
 
 
 def send_json(handler, status, obj, headers=None):
@@ -148,11 +148,24 @@ def do_get(handler):
         return model_prompt_page.handle_page(
             handler, path[len('/model-prompt/'):], False)
     if path == '/health':
+        from . import availability as _availability
+        from . import provider_defs as _defs
+        snap = _availability.current()
+        region = handler.server.state.get('openrouter_region', 'global')
+        if not _defs.valid_region(region):
+            region = 'global'
         return handler.send_json(200, {'status': 'ok', 'version': VERSION,
                                        'inflight': handler.server.inflight,
                                        'max_inflight': handler.server.max_inflight,
                                        'draining': handler.server.draining,
-                                       'served_models': dict(handler.server.served_models)})
+                                       'served_models': dict(handler.server.served_models),
+                                       'openrouter_region': region,
+                                       'openrouter_host': _defs.region_host(
+                                           _defs.DEFAULT_EXTERNAL, region),
+                                       'models_availability': (
+                                           None if snap is None else {
+                                               'models': len(snap.get('models') or ()),
+                                               'fetched_at': snap.get('fetched_at')})})
     if path == '/v1/models':
         return handler.send_json(200, claude.models_listing())
     if handler.server.draining:
@@ -171,11 +184,13 @@ def read_body(handler, max_body):
         raise InvalidSize('Invalid request size')
     body = handler.rfile.read(size)
     encoding = handler.headers.get('Content-Encoding', '')
+    # zstd may expand past max_body so prepare can slim tool_search schemas.
+    limit = max_body * MAX_DECODE_FACTOR if encoding == 'zstd' else max_body
     if encoding == 'zstd':
         with zstd.ZstdFile(io.BytesIO(body)) as stream:
-            decoded = stream.read(max_body + 1)
+            decoded = stream.read(limit + 1)
     else:
         decoded = body
-    if len(decoded) > max_body:
+    if len(decoded) > limit:
         raise InvalidSize('Decoded request is too large')
-    return body, json.loads(decoded), size
+    return body, json.loads(decoded), size, len(decoded)

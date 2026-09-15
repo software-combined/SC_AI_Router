@@ -4,7 +4,7 @@ from ai_router.compaction import (PREFIX, TRANSCRIPT_BUDGET, build_compact_v1_ou
     compaction_text, decode_summary, encode_summary, extract_summary, extract_user_messages,
     has_compaction_trigger, rewrite_input, scrub_tool_fragments,
     transcript_for_summary, v2_compaction_item, OPAQUE_NOTE)
-from ai_router.image_items import IMAGE_NOTE, note_images, strip_images
+from ai_router.image_items import IMAGE_NOTE, note_images
 
 class CompactionTests(unittest.TestCase):
     def test_transparent_envelope_round_trips(self):
@@ -176,17 +176,6 @@ class ImageStripTests(unittest.TestCase):
             {'type': 'input_text', 'text': 'look here'},
             {'type': 'input_image', 'image_url': 'data:image/png;base64,AAA', 'detail': 'high'}]}
 
-    def test_image_blocks_dropped_text_kept_without_mutating(self):
-        item = self._item()
-        out = strip_images([item], False)
-        self.assertEqual(out[0]['content'], [{'type': 'input_text', 'text': 'look here'}])
-        self.assertEqual(len(item['content']), 2)
-
-    def test_keep_images_passes_through(self):
-        item = self._item()
-        self.assertIs(strip_images([item], True)[0], item)
-        self.assertEqual(strip_images('prompt', False), 'prompt')
-
     def test_noted_images_stay_text_only_without_mutating(self):
         item = self._item()
         out = note_images([item])
@@ -195,17 +184,6 @@ class ImageStripTests(unittest.TestCase):
              {'type': 'input_text', 'text': IMAGE_NOTE}])
         self.assertEqual(len(item['content']), 2)
         self.assertEqual(note_images('prompt'), 'prompt')
-
-    def test_tool_output_images_stripped_without_mutating(self):
-        item = {'type': 'function_call_output', 'call_id': 'c1', 'name': 'view_image',
-                'output': [{'type': 'input_image', 'image_url': 'data:image/png;base64,AAA',
-                            'detail': 'high'},
-                           {'type': 'text', 'text': 'caption'}]}
-        out = strip_images([item], False)
-        self.assertEqual(out[0]['output'], [{'type': 'text', 'text': 'caption'}])
-        self.assertEqual(out[0]['call_id'], 'c1')
-        self.assertEqual(out[0]['name'], 'view_image')
-        self.assertEqual(len(item['output']), 2)
 
     def test_tool_output_images_noted_without_mutating(self):
         item = {'type': 'function_call_output', 'call_id': 'c1',

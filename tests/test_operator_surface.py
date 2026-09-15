@@ -323,15 +323,18 @@ class OperatorSurfaceTests(unittest.TestCase):
                 _read_feed=lambda feed, etag: (200, b'not json', None),
                 _sleep=lambda s: None)
         state = json.loads((home / 'mixed-router-state.json').read_text())
-        self.assertEqual(state['last_error'], 'feed_invalid')
+        # Unsigned garbage on the https channel fails verification before
+        # parsing (Plan 145); the code stays in the closed set.
+        self.assertEqual(state['last_error'], 'feed_signature')
         self.assertIn(state['last_error'], install_mod._updater.ERROR_CODES)
         self.assertTrue(state['last_check_at'].endswith('Z'))
         # A corrupt local state file is not a feed problem, whatever the code.
         (home / 'mixed-router-state.json').write_text('{')
         latest = {'version': '9.9.9', 'url': 'file:///bundle.tar.gz', 'sha256': None}
+        file_args = self._args(home, '--update', '--feed', 'file:///latest.json')
         with self.assertRaises(SystemExit) as ctx:
             install_mod.do_update(
-                args, _read_feed=lambda feed, etag: (200, json.dumps(latest).encode(), None),
+                file_args, _read_feed=lambda feed, etag: (200, json.dumps(latest).encode(), None),
                 _sleep=lambda s: None)
         self.assertIn('state is missing or unreadable', str(ctx.exception))
 

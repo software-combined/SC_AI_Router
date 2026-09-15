@@ -53,22 +53,8 @@ _MAX_FAILURES = _updater.MAX_VERSION_FAILURES
 
 
 def _key_private(key_file):
-    """Owner-only gate mirroring credentials.key_for() precedence.
-
-    POSIX checks mode bits; Windows defers to the icacls owner-only check
-    (st_mode carries no ACL meaning on NTFS). A failed Windows check means
-    not usable, never an exception: this is read-only diagnostics.
-    """
-    if os.name == 'nt':
-        try:
-            _winacl.check(key_file)
-            return True
-        except SystemExit:
-            return False
-    try:
-        return not (key_file.stat().st_mode & 0o077)
-    except OSError:
-        return False
+    """Owner-only gate; single owner is winacl.owner_only (Plan 131)."""
+    return _winacl.owner_only(key_file)
 
 
 def _provider_defs():
@@ -106,9 +92,15 @@ def do_preflight(args):
             missing.append('no Python 3.14 found: the managed install provisions '
                            'the pinned private runtime; otherwise install '
                            'Python 3.14 first')
-    if (args.client or 'codex') == 'codex' and shutil.which('codex') is None:
+    clients = getattr(args, 'clients', None)
+    if clients is None:
+        clients = 'none' if (args.client or 'codex') == 'none' else 'codex'
+    if clients in ('codex', 'both') and shutil.which('codex') is None:
         missing.append('Codex CLI not found: install Codex first, or pass '
                        '--client none for a service-only install')
+    if clients in ('claude', 'both') and shutil.which('claude') is None:
+        missing.append('Claude Code CLI not found: install Claude Code first, '
+                       'or pass --clients codex for a Codex-only install')
     if missing:
         for line in missing:
             print('preflight: ' + line)

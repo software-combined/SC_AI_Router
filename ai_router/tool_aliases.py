@@ -9,11 +9,15 @@ over-length names, and a name the request already exposes is never rewritten.
 import hashlib
 import re
 
+from .standalone_outputs import DELIVERED_NAMES
+
 # Provider function-name ceiling; the disambiguated fallback also fits it.
 LIMIT = 64
 
 PREFIX = 'unsupported call: '
 HINT = 'No tool with that exact name is exposed this turn.'
+HINT_DELIVERED = ('That name marks a message delivered to you, not a tool. '
+                  'Reply in your answer or with the collaboration tools.')
 EDITS = 2  # a re-typed alias is repaired within this many edits
 
 
@@ -151,7 +155,7 @@ def _digest_damage(called, wire, namespace, native, limit=EDITS):
     if wire == readable(namespace, native):
         return False
     stem, _, digest = wire.rpartition('_')
-    if len(digest) not in (12, 16, 20, 24, 32, 48) or not _hex(digest):
+    if len(digest) not in _DIGEST_WIDTHS or not _hex(digest):
         return False
     prefix = stem + '_'
     if not called.startswith(prefix):
@@ -161,30 +165,61 @@ def _digest_damage(called, wire, namespace, native, limit=EDITS):
             and _near(tail, digest, limit))
 
 
+_DIGEST_WIDTHS = (12, 16, 20, 24, 32, 48)  # router-minted digest widths
+
+
+def _hex_tail(called):
+    """True when called ends in a digest-width hex segment.
+
+    A readable alias whose last segment looks like a disambiguating digest
+    names a real (possibly now absent) tool, not a typo: repairing it onto
+    a one-character-different survivor would misroute, so the near-miss
+    class leaves it to the client.
+    """
+    tail = called.rpartition('_')[2]
+    return len(tail) in _DIGEST_WIDTHS and _hex(tail)
+
+
+def _repair_class(called, wire, namespace, native):
+    """The repair class for one wire candidate, or None."""
+    if called == native:
+        return 'exact'
+    if called == namespace + '.' + native:
+        return 'dotted'
+    if _digest_damage(called, wire, namespace, native):
+        return 'digest'
+    if (wire == readable(namespace, native)
+            and _near(called, wire)
+            and not _hex_tail(called)):
+        return 'near'
+    return None
+
+
 def candidates(names, called):
     """Ordered exposed wire names the caller could have meant.
 
     Only router-renamed namespaced tools are eligible, never a name this
     request already exposes, and never a native name the client sent but this
     turn did not expose. Repairs stay as wide as the shapes the router mints:
-    the plain native name, the dotted description form, or a fallback alias
-    with damaged digest characters. Anything else is left to the client.
+    the plain native name, the dotted description form, a fallback alias
+    with damaged digest characters, or a readable alias within two edits
+    (an ambiguous near miss is never guessed). Anything else is left to the
+    client.
     """
     if (not isinstance(called, str) or not called or called in reserved(names)
             or called in dropped(names)):
         return []
-    exact, dotted, digest = [], [], []
+    if called in DELIVERED_NAMES:
+        return []
+    classes = {'exact': [], 'dotted': [], 'digest': [], 'near': []}
     for key, entry in names.items():
         if len(key) != 2 or key[0] is not None or not _renamed(entry):
             continue
         wire, native = key[1], entry['name']
-        if called == entry['name']:
-            exact.append(wire)
-        elif called == entry['namespace'] + '.' + native:
-            dotted.append(wire)
-        elif _digest_damage(called, wire, entry['namespace'], native):
-            digest.append(wire)
-    return exact + dotted + digest
+        shape = _repair_class(called, wire, entry['namespace'], native)
+        if shape:
+            classes[shape].append(wire)
+    return sum(classes.values(), [])
 
 
 def repair(names, called):
@@ -209,14 +244,12 @@ def repair_item(item, names, notes, logged):
         from .runtime import log_event
         model = notes.get('model') if isinstance(notes, dict) else None
         cause = 'unknown'
+        if isinstance(called, str) and called in DELIVERED_NAMES:
+            cause = 'delivered'
         if wire is not None:
             entry = names[(None, wire)]
-            if called == entry['name']:
-                cause = 'native'
-            elif called == entry['namespace'] + '.' + entry['name']:
-                cause = 'dotted'
-            else:
-                cause = 'digest'
+            shape = _repair_class(called, wire, entry['namespace'], entry['name'])
+            cause = 'native' if shape == 'exact' else shape
         log_event('tool_call_repaired' if wire is not None else 'tool_call_unresolved',
                   model=model, cause=cause)
     if wire is None:
@@ -232,11 +265,14 @@ def annotate(output, names):
     The client's own text is never edited, and an existing hint is left
     alone, so a re-prepared payload cannot stack lines.
     """
-    if not isinstance(output, str) or not output.startswith(PREFIX) or HINT in output:
+    if (not isinstance(output, str) or not output.startswith(PREFIX)
+            or HINT in output or HINT_DELIVERED in output):
         return output
     called = output[len(PREFIX):].split('\n', 1)[0].strip()
     if (None, called) in names or called in reserved(names):
         return output
+    if called in DELIVERED_NAMES:
+        return output + '\n' + HINT_DELIVERED
     options = candidates(names, called)[:3]
     if options:
         return output + '\n' + HINT + ' Use the exact exposed name: ' + ', '.join(options)

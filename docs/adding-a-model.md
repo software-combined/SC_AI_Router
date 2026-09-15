@@ -75,6 +75,12 @@ and upstream actually serves the `~`-prefixed id; never invent one, and an
 alias keeps the `Latest` label. New entries are Preview, not
 runtime-verified.
 
+A row may pin or steer its serving endpoints with `provider_prefs`,
+using OpenRouter's documented `provider` object. Set it only from a recorded
+probe or incident in `docs/compatibility.md`, and prefer
+`ignore: [<endpoint>]` over a hard `order` plus `allow_fallbacks: false`,
+which removes failover.
+
 Picker labels follow the naming convention in `AGENTS.md` section 8
 (`<Vendor>: <Model> <Version?>`); `models add` and `live_refresh` produce
 conforming rows automatically.

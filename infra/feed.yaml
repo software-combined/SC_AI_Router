@@ -23,14 +23,21 @@ Parameters:
     Description: Bucket holding feeds and immutable bundles. Retained on delete.
   Repository:
     Type: String
-    Default: software-combined/SC_OpenRouter_adapter
+    Default: software-combined/SC_Unlimited_ai
     Description: GitHub repository whose tag builds may assume the publisher role.
   ImmutableSubjectPrefix:
     Type: String
-    Default: software-combined@200868195/SC_OpenRouter_adapter@1360169840
+    Default: software-combined@200868195/SC_Unlimited_ai@1360169840
     Description: >-
       Repository IDs GitHub emits in an immutable OIDC subject (owner@id/repo@id),
       kept beside the classic form so either claim can assume the role.
+  SigningSeedArn:
+    Type: String
+    Default: 'arn:aws:secretsmanager:ap-southeast-2:651116729473:secret:scg/router/feed-signing-seed-UNSET'
+    Description: ARN of the Secrets Manager secret holding the feed signing
+      seed (Plan 145). The owner replaces the placeholder with the real
+      secret ARN at deploy time.
+    AllowedPattern: '^arn:aws[A-Za-z-]*:secretsmanager:[a-z0-9-]+:\d{12}:secret:.+$'
 Resources:
   FeedBucket:
     Type: AWS::S3::Bucket
@@ -158,6 +165,9 @@ Resources:
               - Effect: Allow
                 Action: cloudformation:DescribeStacks
                 Resource: !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AWS::StackName}/*
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Ref SigningSeedArn
 Outputs:
   DistributionId:
     Description: Invalidation target; the release workflow reads this output.

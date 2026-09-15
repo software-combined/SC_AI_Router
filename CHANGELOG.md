@@ -1,5 +1,109 @@
 # Changelog
 
+## 0.6.64
+
+- Plan 175 paid probe matrix sessions 3 to 6: per-model legs A-G recorded
+  for GLM 5.3, DeepSeek Pro, Gemini Pro, Grok, the four Anthropic rows and
+  the four GPT twins, with serving endpoints. Parallel-call serialization
+  confirmed as an eight-vendor harness/client confound; image colour misses
+  are vendor behaviour. No roster row edits proposed.
+
+## 0.6.63
+
+- A long Codex turn that is only oversized because it repeats full
+  `tool_search` schemas is decoded far enough for prepare to slim those
+  items, then refused only if the prepared upstream body is still over
+  16 MiB. Uncompressed requests stay capped at 16 MiB; zstd may expand
+  at most four times that far.
+
+## 0.6.62
+
+- Feed signature enforcement is live: the compiled `FEED_PUBLIC_KEY` is
+  set, the release workflow reads the signing seed from Secrets Manager,
+  and the live `scg-router-feed` stack now publishes from
+  `software-combined/SC_Unlimited_ai` with GetSecretValue limited to that
+  one seed ARN. Unsigned HTTPS feeds fail closed.
+
+## 0.6.61
+
+- Feed documents are signature-enforced end to end (Plan 145): the
+  publisher signs the exact served bytes, the updater verifies the
+  detached sidecar before parsing and refuses unsigned or tampered feeds
+  with the `feed_signature` code, and the publisher role may read exactly
+  one secret, the signing seed. `file://` manual installs stay
+  operator-trusted.
+
+## 0.6.60
+
+- The router installation carries the key-filtered picker re-merge (PR
+  #133): every availability refresh re-merges `mixed-models.json`, so a
+  dashboard-blocked row such as Qwen leaves the picker within one refresh
+  cycle. Includes the 131 residual ownership split and the 099 Step 3
+  `models_url` wiring from the feed origin.
+
+## 0.6.59
+
+- Dashboard-blocked models no longer linger in the picker file: every
+  key-availability refresh now re-merges it, so a row the key cannot use
+  is removed within one refresh cycle (Codex shows the change after
+  reopening). Request routing already refused such rows; now the picker
+  agrees with it.
+
+## 0.6.58
+
+- The picker, request routing, Claude discovery and the new-model prompt now
+  honor what the installed key may use: each router refreshes
+  `GET /api/v1/models/user` with its ordinary inference key at startup,
+  every five minutes and after a key or region change, and shows the
+  intersection of the approved roster, the key snapshot, local policy and
+  client rules. Temporary failures keep the last good snapshot for the same
+  key and region; authentication rejection clears it. Subscription rows are
+  unaffected. Regional endpoint profiles (`global`, `us`, `eu`) live in
+  `provider_defs.py`; the per-machine `openrouter_region` state selects the
+  inference and key-filtered discovery host, and those requests never fall
+  back outside it (credential verification still uses the global host). No workspace
+  names, provider allowlists, budgets or guardrail IDs are stored in the
+  router: those remain OpenRouter dashboard controls.
+
+## 0.6.57
+
+- Both GLM rows now carry the documented `max_tools: 128` ceiling (Z.ai
+  allows at most 128 functions per request), so oversized tool lists degrade
+  gracefully instead of failing upstream.
+
+## 0.6.56
+
+- Switching to a text-only model no longer refuses a thread that carried
+  images: historical images are noted on the wire as
+  `[image omitted: this model runs text-only]`, the same treatment the Grok
+  row already had. Only an image in the message being sent is still refused
+  with an actionable message.
+
+## 0.6.55
+
+- Registry rows can now carry an optional `provider_prefs` object that
+  reaches the OpenRouter wire body as `provider`, so a future data edit can
+  steer a row away from a strict or flaky endpoint. No row sets it yet;
+  pins wait for plan 175's probe evidence and owner approval.
+
+## 0.6.54
+
+- Delivered cross-thread messages are now named `delivered_message` and
+  `delivered_app_message` instead of tool-sounding names, so a model that
+  copies a name it saw gets a hint pointing at the answer box instead of an
+  `unsupported call` dead end; a readable alias with a dropped character
+  (within two edits) now repairs onto its tool, while an ambiguous near
+  miss is still left to the client.
+
+## 0.6.53
+
+- Every OpenRouter Responses request now sends `X-OpenRouter-Metadata:
+  enabled` from the provider definition table (the Messages ingress stays
+  byte-identical), and the router logs the serving endpoint
+  as bounded `serving_endpoint` on `upstream_rejected`,
+  `upstream_unavailable`, `request_completed` and `request_failed`, so a
+  refused or flaky turn names the backend that answered it.
+
 ## 0.6.52
 
 - ChatGPT native service paths are now a prefix rule instead of a four-entry
