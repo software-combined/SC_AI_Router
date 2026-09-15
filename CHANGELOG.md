@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.65
+
+- An OpenRouter turn refused for funds now ends at once with a key
+  credit message naming the model and pointing to IT for a topped-up
+  key, instead of a generic upstream rejection. The 429 rate-limit
+  path is unchanged.
+
 ## 0.6.64
 
 - Plan 175 paid probe matrix sessions 3 to 6: per-model legs A-G recorded

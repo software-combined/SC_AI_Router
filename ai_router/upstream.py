@@ -18,6 +18,11 @@ from . import provider_defs
 from .runtime import log_event
 from .stream_errors import metadata_endpoint, is_context_error
 
+KEY_NO_CREDIT_MESSAGE = (
+    '{model} cannot run on the OpenRouter key: '
+    'it has no remaining credit. '
+    'Contact IT for a topped-up key, then retry')
+
 
 _429_QUOTA_CODES = frozenset((
     'insufficient_quota', 'billing_hard_limit_reached', 'billing_not_active',
@@ -301,6 +306,12 @@ def describe_failure(exc, response, info):
     if response is not None:
         if response.get('status') == 429:
             return None  # existing Retry-After path owns 429s
+        if response.get('status') == 402:
+            # Status alone names the cause: the key cannot afford the turn.
+            # The code comes from fixed fields only; prose never classifies.
+            parsed = _provider_reason(response.get('body', b''))
+            code = parsed[3] if parsed is not None else None
+            return 400, KEY_NO_CREDIT_MESSAGE.format(model=model), code
         if (info.get('protocol') == provider_defs.RESPONSES
                 and (response.get('status', 0) >= 500 or response.get('status') == 408)):
             parsed = _provider_reason(response.get('body', b'')) or (None,)
