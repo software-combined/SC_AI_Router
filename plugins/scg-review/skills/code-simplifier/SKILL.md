@@ -14,6 +14,13 @@ Delegate using the [pre-commit runtime mapping](../pre-commit-review/SKILL.md#ru
 
 Supply the staged scope and relevant context with the prompt below. Require the executor to read the bundled [ponytail](../ponytail/SKILL.md) in full before inspection; supply its resolved absolute path. During its edits the main agent pauses writing; the main agent stages and verifies the result afterwards.
 
+Pass 1 can take longer than the three read-only review lanes because the
+executor must read the staged scope and its context before deciding whether a
+change is safe. Quiet output while it is working is expected. Do not cancel or
+restart an active simplifier because it has not sent a progress update; wait
+for the existing child, and only retry after a reported failure, attention
+request, or runtime/transport timeout has been diagnosed.
+
 You are a code simplification specialist. When explicitly invoked, improve the clarity, consistency, and maintainability of code changed by the current task while preserving its observable behavior.
 
 Follow these rules:
