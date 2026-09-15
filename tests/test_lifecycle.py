@@ -1,5 +1,6 @@
 """Drain, socket activation, and graceful-restart behavior (Plan 045)."""
 import http.client
+import inspect
 import json
 import os
 import shutil
@@ -16,7 +17,7 @@ from unittest import mock
 
 from ai_router import activation
 import ai_router.__main__ as router_main
-from ai_router.router import Router, _harden_listener
+from ai_router.router import Handler, Router, _harden_listener
 from tests.harness import get as _get, post as _post, start_auth_server as _start_auth_server
 
 
@@ -158,6 +159,15 @@ class LauncherBootTests(unittest.TestCase):
 
 
 class DrainTests(unittest.TestCase):
+    def test_relay_runs_after_the_request_frame_returns(self):
+        # Plan 164: the raw body and parsed payload are locals of
+        # _owned_post; calling relay from do_POST lets them die before the
+        # stream starts. Lives here, not in test_handler.py, which sits at
+        # its 500-line hard cap.
+        source = inspect.getsource(Handler._owned_post)
+        self.assertNotIn('self.relay(', source)
+        self.assertIn('self.relay(*ready)', inspect.getsource(Handler.do_POST))
+
     def test_sigterm_waits_for_inflight_then_exits(self):
         server = Router({'port': 0, 'token': 't', 'openai_models': []})
         self.addCleanup(server.server_close)
