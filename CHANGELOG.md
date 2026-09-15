@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.64
+
+- Plan 175 paid probe matrix sessions 3 to 6: per-model legs A-G recorded
+  for GLM 5.3, DeepSeek Pro, Gemini Pro, Grok, the four Anthropic rows and
+  the four GPT twins, with serving endpoints. Parallel-call serialization
+  confirmed as an eight-vendor harness/client confound; image colour misses
+  are vendor behaviour. No roster row edits proposed.
+
 ## 0.6.63
 
 - A long Codex turn that is only oversized because it repeats full
