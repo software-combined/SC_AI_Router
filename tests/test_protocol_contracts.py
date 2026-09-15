@@ -65,6 +65,20 @@ class ProtocolContractTests(unittest.TestCase):
                          _messages(), {'Authorization': 'Bearer subscription-secret'})
         self.assertEqual(response.status, 503)
 
+    def test_messages_402_names_key_credit(self):
+        # No separate wording fork: the shared policy names the key on
+        # Messages too, as the client-visible status for the turn.
+        install_fake(self, lambda: FakeUpstream(
+            402, b'{"error": {"code": "insufficient_credits", "message": "out"}}',
+            [('Content-Type', 'application/json')]))
+        server = self._server()
+        response = _post(server.server_port, '/test-token/v1/messages',
+                         _messages(), {'Authorization': 'Bearer subscription-secret'})
+        self.assertEqual(response.status, 400)
+        body = json.loads(response.read())
+        self.assertEqual(body['error']['code'], 'KEY_NO_CREDIT')
+        self.assertIn('Contact IT', body['error']['message'])
+
     def test_messages_429_keeps_retryable_503_shape(self):
         # Responses pins this in test_handler; Messages must keep the same
         # transport-level retry contract through the shared relay path.
