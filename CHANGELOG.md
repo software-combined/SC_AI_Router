@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.69
+
+- Upstream reads are bounded the way request bodies are: SSE adapters parse
+  bounded line pieces, whole-body reads are capped at 16 MiB (1 MiB for
+  error envelopes), and an over-cap upstream ends the turn 502 instead of
+  growing the router without bound.
+
 ## 0.6.68
 
 - Codex sessions now get a full-lane spawn hint: if spawn is refused
