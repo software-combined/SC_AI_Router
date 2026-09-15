@@ -229,7 +229,7 @@ def media_items():
     return items
 
 def run_switch_leg(thread, target):
-    rpc('turn/start', {'threadId': thread, 'model': target, 'effort': 'low',
+    rpc('turn/start', {'threadId': thread, 'model': target, 'effort': _flag_value('--effort') or 'low',
         'input': [{'type': 'text', 'text': 'Without calling any tools, repeat the exact result returned by echo_probe in the previous turn.', 'text_elements': []}]})
     answer = ''
     while True:
@@ -464,7 +464,7 @@ try:
                                              'audio_bytes': len(silent_wav()) if '--audio' in sys.argv else 0,
                                              'image_capable': capable}}), flush=True)
         if '--image' in sys.argv and capable:
-            rpc('turn/start', {'threadId': thread, 'effort': 'low',
+            rpc('turn/start', {'threadId': thread, 'effort': _flag_value('--effort') or 'low',
                 'input': [{'type': 'text', 'text': 'What solid color is the image attached earlier? Reply with the color only.', 'text_elements': []}]})
             answer = ''
             while True:
