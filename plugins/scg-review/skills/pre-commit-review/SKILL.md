@@ -50,6 +50,20 @@ inspection profile; it does not automatically require a more expensive model.
 
 Use the active runtime's subagent tools and their actual schemas; discover deferred tools when discovery is available. Pass the assigned lane, absolute worktree path, staged tree/scope, required context, ponytail-first instruction, read/write authority and expected report. The parent owns orchestration: an individual reviewer must not try to run the entire gate or spawn its own reviewers. Use the effective reviewer model policy, not model names remembered from an earlier turn.
 
+### Pass 1 timing and liveness
+
+Pass 1, the simplification pass, is often the slowest review phase. It may
+spend substantial time reading the full staged scope, project instructions,
+callers and relevant tests before it edits or returns a report. A quiet child
+or a long interval without a progress message is not evidence that the pass has
+stalled. Keep the active simplifier's write ownership and wait for its result;
+do not cancel, interrupt, respawn, or launch a duplicate simplifier merely
+because it is quiet. Check status through the runtime's bounded wait/status
+mechanism. Treat Pass 1 as stalled only after the runtime reports a failure, the
+child requests attention, or an established runtime/transport timeout occurs.
+If it fails, inspect the worktree and index before retrying and use one focused
+fresh brief after identifying the failure cause.
+
 Every reviewer brief includes these inspect commands, not a tree-equality goal:
 
 ```bash
@@ -83,7 +97,7 @@ Use a distinct brief file for each pass or changed reviewed tree. If a resumed c
 1. Identify the repo root and current branch. Read the root and nested `AGENTS.md` files that govern the staged files.
    Run `python3 <plugin-root>/scripts/setup.py check --repo <absolute-repo-path>` using the installed plugin root (two directories above this skill directory). Failure means `❌ Block`; use [review-setup](../review-setup/SKILL.md) to diagnose missing dependencies. Installation never constitutes a completed review or approval.
 2. Inspect `git status --short` and confirm the staged scope is intentional and within the size rule above.
-3. **Run the simplification pass (Pass 1)** and stage its edits; a no-op is valid and is recorded as such. The staged scope must still be the intended commit set afterwards.
+3. **Run the simplification pass (Pass 1)** and stage its edits; a no-op is valid and is recorded as such. Expect this pass to take time, including quiet periods while the executor reads and reasons. Do not treat silence as a stall or start a duplicate pass; the staged scope must still be the intended commit set afterwards.
    - Invoke `code-simplifier` using the active runtime's entry in the Runtime Mapping and its installed skill. Pause main-agent edits while the simplifier has write ownership. It may edit staged files only; undo only its own out-of-scope edits, preserving pre-existing work. It reads ponytail first, follows project instructions, verifies behavior preservation, and reports changes or a no-op. The main agent verifies and stages the result; the hook receipt keeps exactly the three review lanes.
 4. Capture the reviewed scope: `git diff --cached --name-only`, `git diff --cached --stat`, `git diff --cached`, and `git write-tree` as the reviewed index tree id.
 5. **Run the secret-scan gate** before spawning any reviewer:
