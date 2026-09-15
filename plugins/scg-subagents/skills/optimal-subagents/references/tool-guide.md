@@ -74,6 +74,14 @@ It returns a wakeup/status summary, not message content; messages and final
 answers arrive separately. New user input can end the wait. Prefer bounded
 waits that leave room for user progress updates; do not busy-poll.
 
+The simplification pass in a pre-commit review is commonly the slowest child.
+It may remain quiet while it reads the staged tree and relevant context, so
+silence or a long wait is not evidence of a stall. Keep one active child and
+wait through quiet periods; do not interrupt, respawn, or launch duplicate
+write ownership just to produce progress text. Interrupt only for a reported
+failure, an attention request, or an established runtime/transport timeout,
+then inspect the worktree and index before any focused retry.
+
 Use `collaboration.interrupt_agent({"target":"inspect_parser"})` to stop its
 current turn. It remains available; interruption does not undo edits. Inspect
 any partial changes before handing its write scope to someone else.
