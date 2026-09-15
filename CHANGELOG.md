@@ -4,6 +4,9 @@
 
 - Codex deferred-tool search now tells the model to call the exact
   returned name once, and to stop searching if the tool is missing.
+- Native installer CI jobs run only on pull requests into `main`;
+  develop PRs keep the cheap Ubuntu check. Develop `v*` tags still
+  publish through the release workflow.
 
 ## 0.6.65
 
