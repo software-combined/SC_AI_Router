@@ -6,11 +6,12 @@ import threading
 import time
 from compression import zstd
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from . import (capabilities, errors, ingress, local_services, model_prompt_page,
+from . import (errors, ingress, local_services, model_prompt_page,
                provider_defs, relay, setup, subscription_fallback, transport)
 from .credentials import Credentials
 from .protocols import select as select_protocol
 from .errors import InvalidSize, PreparationError
+from .image_items import has_images
 from .providers import is_native_service
 from .runtime import MAX_BODY, ROUTER_HOME, log_event
 
@@ -88,7 +89,7 @@ def _payload_has_image(payload):
     # prose mentioning images must not count.
     if not isinstance(payload, dict):
         return False
-    return capabilities.has_images(payload.get('input'))
+    return has_images(payload.get('input'))
 
 
 class Handler(BaseHTTPRequestHandler):

@@ -26,9 +26,8 @@ class RouterResponseTests(unittest.TestCase):
         self.assertEqual(response.status, 500)
         self.assertEqual(recorded, [])
 
-    def test_image_turn_to_text_only_model_is_400_with_code(self):
-        # Stable code is the catalog contract; statuses/messages are pinned elsewhere.
-        recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
+    def test_image_turn_to_text_only_model_continues_with_a_note(self):
+        recorded = install_fake(self, lambda: FakeUpstream(200, b'{"output": []}', []))
         server = self._server()
         response = _post(server.server_port, '/test-token/responses',
                          {'model': 'z-ai/glm-5.3', 'input': [
@@ -36,11 +35,13 @@ class RouterResponseTests(unittest.TestCase):
                                  {'type': 'input_text', 'text': 'look'},
                                  {'type': 'input_image',
                                   'image_url': 'data:image/png;base64,AAA'}]}]})
-        self.assertEqual(response.status, 400)
-        body = json.loads(response.read())
-        self.assertEqual(body['error']['code'], 'PROVIDER_REJECTED')
-        self.assertIn('does not accept image input', body['error']['message'])
-        self.assertEqual(recorded, [])
+        self.assertEqual(response.status, 200)
+        self.assertEqual(len(recorded), 1)
+        body = json.loads(recorded[0][3])
+        text = json.dumps(body['input'])
+        self.assertIn('Cannot read image', text)
+        self.assertIn('Inform the user', text)
+        self.assertNotIn('input_image', text)
 
     def test_unknown_model_is_400_with_code(self):
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))

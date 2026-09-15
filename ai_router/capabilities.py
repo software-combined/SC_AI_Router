@@ -10,7 +10,6 @@ advertising it; Grok has no max/minimal. Defaults stay low.
 `EXTERNAL_MODELS` is every slug routed to an external provider's own key,
 whatever that provider is; upstream facts live in provider_defs.py.
 """
-from .image_items import has_images
 from .registry import MODELS, external_slugs
 EXTERNAL_MODELS = frozenset()
 IMAGE_INPUT_MODELS = frozenset()
@@ -94,38 +93,6 @@ def check_effort(slug, effort):
             slug + ' does not support reasoning effort ' + repr(effort)
             + '; use one of ' + ', '.join(levels)
             + ' (change effort before switching models).')
-
-
-def current_user_message(items):
-    """The message the user is sending now: the last user-role message.
-
-    Codex appends the new user message after history; a trailing
-    `compaction_trigger` or developer item may follow it, so search from
-    the end. None when no user message is present.
-    """
-    if not isinstance(items, list):
-        return None
-    for item in reversed(items):
-        if (isinstance(item, dict) and item.get('type') == 'message'
-                and item.get('role') == 'user'):
-            return item
-    return None
-
-
-def check_images(slug, items):
-    """Fail closed when a text-only model is asked to read image blocks.
-
-    Only the message the user is sending now can carry a new image; images
-    earlier in history are noted on the wire instead of refusing the turn
-    (Plan 174). Unknown shapes pass through untouched; only a known-bad
-    combination raises.
-    """
-    if not isinstance(slug, str) or slug not in EXTERNAL_MODELS:
-        return
-    if 'image' not in input_modalities(slug) and has_images(current_user_message(items)):
-        raise ValueError(
-            slug + ' does not accept image input, but this message carries image blocks'
-            + ' (resend this message without images).')
 
 
 def catalogue_patch(slug):
