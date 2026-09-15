@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.65
 
 - An OpenRouter turn refused for funds now ends at once with a key
   credit message naming the model and pointing to IT for a topped-up
