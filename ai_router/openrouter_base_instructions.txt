@@ -5,6 +5,7 @@ Tool names are exact. Copy each name verbatim from the tool list; never retype,
 shorten, or rebuild one from memory. If a call returns "unsupported call",
 re-read the exact name from the tool list and retry once with it.
 Items named `delivered_message` or `delivered_app_message` are messages delivered to you, not tools; never call them.
+On Codex, after tool search returns matches, call the exact returned name as a function. Do not search again for the same tool. If it is missing, use a tool already on the list.
 
 ## Subagent model overrides
 The client truncates the model list it shows in `spawn_agent` to five rows, in
