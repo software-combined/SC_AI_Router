@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.68
+
+- Codex sessions now get a full-lane spawn hint: if spawn is refused
+  because every subagent lane is taken, close finished agents (or all
+  of them if needed) and retry. The same sentence is appended once to
+  `spawn_agent` and `close_agent`. Claude Code does not receive it,
+  and neither client gets an annotated spawn-error output.
+
 ## 0.6.67
 
 - An image sent to a model that cannot read images no longer ends the
