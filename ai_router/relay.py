@@ -179,6 +179,7 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
             # failed attempt's held one, so the hold stays dropped after this
             # point and only this attempt's frames can reach the client.
             record.pending.clear()
+            record.pending_reasoning = 0
             record.held_terminal = False
         # The settled path flushes the hold exactly like the error path: the
         # frames the client never saw still belong to it, and a flush that

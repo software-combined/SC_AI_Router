@@ -80,11 +80,13 @@ class HeldFrameTests(unittest.TestCase):
         record.flush(client)
         self.assertEqual(len(client.written), len(held))
 
-    def test_streamed_metrics_report_both_counters(self):
+    def test_streamed_metrics_report_every_counter(self):
         record = stream_relay.StreamRecord()
         record.forwarded_bytes, record.content_delta_bytes = 11, 4
+        record.reasoning_bytes = 6
         self.assertEqual(stream_relay.streamed_metrics(record),
-                         {'forwarded_delta_bytes': 11, 'content_delta_bytes': 4})
+                         {'forwarded_delta_bytes': 11, 'content_delta_bytes': 4,
+                          'reasoning_delta_bytes': 6})
 
     def test_clear_terminal_fields_drops_only_the_verdict(self):
         metrics = {'code': 'UPSTREAM_STREAM_FAILED', 'upstream_code': 'server_error',
