@@ -13,7 +13,7 @@ from tests.install_fixtures import _ok_run, _patch_attrs, install_mod
 
 svc = install_mod._svc
 ORIGIN = 'https://dist.softwarecombined.com'
-GITHUB_BUNDLE = ('https://github.com/software-combined/SC_OpenRouter_adapter'
+GITHUB_BUNDLE = ('https://github.com/software-combined/SC_AI_Router'
                  '/releases/download/v1.0.0/ai-router-1.0.0.tar.gz')
 
 

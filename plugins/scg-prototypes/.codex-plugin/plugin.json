@@ -15,5 +15,5 @@
     "capabilities": [],
     "defaultPrompt": "Use the publish-prototype skill to publish this prototype and give me the URL."
   },
-  "repository": "https://github.com/software-combined/SC_OpenRouter_adapter"
+  "repository": "https://github.com/software-combined/SC_AI_Router"
 }

@@ -13,9 +13,9 @@ authors = [
 
 [project.urls]
 Homepage = "https://www.softwarecombined.com"
-Repository = "https://github.com/software-combined/SC_OpenRouter_adapter"
-Changelog = "https://github.com/software-combined/SC_OpenRouter_adapter/blob/main/CHANGELOG.md"
-Issues = "https://github.com/software-combined/SC_OpenRouter_adapter/issues"
+Repository = "https://github.com/software-combined/SC_AI_Router"
+Changelog = "https://github.com/software-combined/SC_AI_Router/blob/main/CHANGELOG.md"
+Issues = "https://github.com/software-combined/SC_AI_Router/issues"
 
 [tool.ruff]
 target-version = "py39"
