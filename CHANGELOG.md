@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.70
+
+- The router no longer holds the request body and its parsed form for the
+  duration of a streamed turn: the relay now runs after the request frame
+  returns, so both buffers die before the stream starts.
+
 ## 0.6.69
 
 - Upstream reads are bounded the way request bodies are: SSE adapters parse

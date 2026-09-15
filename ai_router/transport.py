@@ -44,6 +44,8 @@ def passthrough(response):
 
 MAX_UPSTREAM_BODY = 16 * 1024 * 1024  # matches runtime.MAX_BODY; pinned by a test
 ERROR_BODY_LIMIT = 1024 * 1024  # an error envelope is parsed, never relayed whole
+# Operation timeout on the upstream socket, not a turn deadline.
+UPSTREAM_TIMEOUT_S = 120
 
 
 def read_capped(response, limit):
