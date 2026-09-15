@@ -17,7 +17,7 @@ prompt to it.
 import json
 
 from . import errors, provider_defs
-from .capabilities import has_images
+from .image_items import has_images
 from .providers import ExternalResponsesProvider
 from .registry import by_slug
 from .runtime import log_event
