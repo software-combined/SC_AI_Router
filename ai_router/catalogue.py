@@ -149,16 +149,21 @@ BASE_INSTRUCTIONS = (Path(__file__).with_name('openrouter_base_instructions.txt'
 SUBAGENT_MODEL_PLACEHOLDER = '{{SUBAGENT_MODEL_IDS}}'
 
 
-def instructions_for(visible):
+def instructions_for(visible, client='codex'):
     """Served instructions with one roster line of visible model ids.
 
     The Codex client shows at most five spawn_agent model overrides, in
     catalogue order, so this line is how a routed session learns the ids it
     may still pass explicitly (Plan 151). Rendered from the picker's own
     projection, so a portco allowlist can never be widened by the text.
+    Codex-only sentences start with "On Codex," and are omitted for Claude.
     """
     roster = ', '.join(f'`{model.slug}`' for model in visible)
-    return BASE_INSTRUCTIONS.replace(SUBAGENT_MODEL_PLACEHOLDER, roster)
+    text = BASE_INSTRUCTIONS.replace(SUBAGENT_MODEL_PLACEHOLDER, roster)
+    if client != 'codex':
+        text = '\n'.join(line for line in text.splitlines()
+                         if not line.startswith('On Codex,'))
+    return text
 
 
 def catalog_name(model):
@@ -231,7 +236,7 @@ def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False,
     """
     visible, hidden_rows = _visible_rows(client, allowed, include_twins,
                                            available=available)
-    instructions = instructions_for(visible)
+    instructions = instructions_for(visible, client)
     shown = {m.slug for m in visible}
     hidden = {m.slug for m in hidden_rows}
     active = {m.slug for m in MODELS}
@@ -332,7 +337,7 @@ def check(path, client='codex', allowed=None, include_twins=False,
         if model.slug in existing:
             print(f'{model.slug}: hidden from the {client} picker but present')
             return False
-    instructions = instructions_for(visible)
+    instructions = instructions_for(visible, client)
     for model in visible:
         total += 1
         old = existing.get(model.slug)

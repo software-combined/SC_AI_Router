@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.6.68
+
+- Codex sessions now get a full-lane spawn hint: if spawn is refused
+  because every subagent lane is taken, close finished agents (or all
+  of them if needed) and retry. The same sentence is appended once to
+  `spawn_agent` and `close_agent`. Claude Code does not receive it,
+  and neither client gets an annotated spawn-error output.
+
+## 0.6.67
+
+- An image sent to a model that cannot read images no longer ends the
+  turn. The image is replaced with a note that tells the model to say
+  so in the conversation, and the turn continues.
+- Stream log lines name two more facts: `max_output_tokens`, the output
+  cap this request sent upstream (the twin row's own cap after a helper
+  fallback), and `reasoning_delta_bytes`, how much of the forwarded stream
+  arrived as reasoning output items rather than answer. The cap is exact;
+  the reasoning count covers item-shaped reasoning only.
+
+## 0.6.66
+
+- Codex deferred-tool search now tells the model to call the exact
+  returned name once, and to stop searching if the tool is missing.
+- Native installer CI jobs run only on pull requests into `main`;
+  develop PRs keep the cheap Ubuntu check. Develop `v*` tags still
+  publish through the release workflow.
+
 ## 0.6.65
 
 - An OpenRouter turn refused for funds now ends at once with a key

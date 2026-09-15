@@ -154,9 +154,9 @@ the subscription sign-in. See [docs/claude-code.md](docs/claude-code.md).
 ## Models and billing
 
 Switch models mid-thread from the picker. The thread keeps its text history and
-tools, subject to the new model's limits; image blocks do not carry over to
-text-only models, and an unsupported reasoning level is rejected with the
-levels the model accepts.
+tools, subject to the new model's limits; image blocks become a note
+that tells the model to say it cannot read them, and an unsupported
+reasoning level is rejected with the levels the model accepts.
 
 - Rows labelled `· OpenRouter` are billed to the OpenRouter API key. The
   remaining rows use the ChatGPT or Claude subscription.

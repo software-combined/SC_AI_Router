@@ -1,10 +1,10 @@
-"""Own image-block handling for the Responses input shape.
+"""Image-block helpers for the Responses input shape.
 
-The estimator and the modality check share these walkers so they cannot
-drift apart: an input_image block counts and detects the same wherever it
-nests in message content or tool output.
+An input_image block counts and detects the same wherever it nests in
+message content or tool output.
 """
-IMAGE_NOTE = '[image omitted: this model runs text-only]'
+IMAGE_NOTE = ('ERROR: Cannot read image (this model does not support '
+               'image input). Inform the user.')
 # Flat per-block allowance approximating provider image billing (observed
 # ~1.3k tokens for one detail: high screenshot); base64 payload length
 # must never reach the token estimate.

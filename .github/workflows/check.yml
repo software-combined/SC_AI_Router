@@ -17,9 +17,9 @@ concurrency:
 jobs:
   changes:
     name: Change scope
-    # Only pull requests need the scope. Push runs keep the static checks and
-    # skip the native installer jobs entirely (Plan 156).
-    if: github.event_name == 'pull_request'
+    # Native installer jobs are a main-PR cost. Develop PRs and every push
+    # skip them the same way (Plan 156, narrowed 2026-09-15).
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
