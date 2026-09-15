@@ -1,7 +1,7 @@
 # Cost-first pre-commit model routing
 
 Canonical authoring source: `plugins/scg-subagents/skills/optimal-subagents/references/reviews.md`
-in SC_OpenRouter_adapter. The review plugin bundles an unchanged release copy at
+in SC_AI_Router. The review plugin bundles an unchanged release copy at
 `references/reviews.md` so existing review-only installations remain usable.
 Edit the canonical source, synchronize the copy and release both affected plugins.
 Repository tests enforce equality. For a running review, the installed review

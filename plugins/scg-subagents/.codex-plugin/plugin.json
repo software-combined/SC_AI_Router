@@ -15,5 +15,5 @@
     "capabilities": [],
     "defaultPrompt": "Use the optimal-subagents skill to choose and coordinate models for this task."
   },
-  "repository": "https://github.com/software-combined/SC_OpenRouter_adapter"
+  "repository": "https://github.com/software-combined/SC_AI_Router"
 }

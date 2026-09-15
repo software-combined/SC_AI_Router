@@ -16,7 +16,7 @@ from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
-GITHUB_BASE = ('https://github.com/software-combined/SC_OpenRouter_adapter'
+GITHUB_BASE = ('https://github.com/software-combined/SC_AI_Router'
                '/releases/download')
 
 
