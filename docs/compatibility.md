@@ -415,9 +415,10 @@ more declared tools degrade the way the Grok row does instead of failing
 upstream.
 
 Text-only rows (`deepseek/deepseek-v4-pro-0813`, `z-ai/glm-5.3`) and the
-`drop_images` row (`x-ai/grok-4.6`) note historical images on the wire as
-`[image omitted: this model runs text-only]` instead of refusing the thread
-(router 0.6.56); only an image in the message being sent is still refused.
+`drop_images` row (`x-ai/grok-4.6`) replace images on the wire with
+`ERROR: Cannot read image (this model does not support image input). Inform the user.`
+instead of refusing the thread (router 0.6.67). The model is expected to
+say that in the conversation; the turn continues.
 
 ## Probe runs 2026-09-08
 
@@ -946,3 +947,67 @@ questions 1-3 still wait for a later approved session. Row edits proposed:
 none (parallel serialization is now an eight-vendor harness/client
 confound; image colour variance is vendor behaviour, not a roster pin;
 the Haiku gaps are harness confounds awaiting rerun).
+
+## Probe matrix 2026-09-15 session 7 (plan 175, router 0.6.65 isolated, tail legs)
+
+Session 7 of the paid matrix, on current develop (0.6.65 tree).
+Legenda unchanged from the 2026-09-14 table. All tabled legs below run
+on the isolated candidate router plus a disposable `--codex-home`; leg F
+uses the handoff probe's isolated-children mode (in-process candidate
+router, fresh token). One stopped attempt in plain `--live` mode did
+route parent traffic through the installed router before it was stopped
+(see below); no tabled leg uses the live install. This session works
+through the deferred gaps from the matrix close, cheapest first.
+
+| model | leg | effort | result | serving_endpoint |
+|---|---|---|---|---|
+| z-ai/glm-5.3-flash | A | max | passed | Together |
+| deepseek/deepseek-v4.1-flash | A | max | passed | Parasail |
+| google/gemini-3.8-flash | A | high | passed | Google |
+| z-ai/glm-5.3-flash | G | low | passed | Phala |
+| google/gemini-3.8-flash | G | low | passed | Google |
+| anthropic/claude-haiku-4.5 | C | none | passed, history preserved | none |
+| anthropic/claude-haiku-4.5 | D | - | not runnable: Haiku allows `none` only, DeepSeek allows `low` and up, one turn cannot satisfy both | - |
+| anthropic/claude-haiku-4.5 | E | none | failed: image reported not attached | none |
+| deepseek/deepseek-v4.1-flash | H | low | passed | Modal |
+| z-ai/glm-5.3-flash | H | low | passed | Parasail |
+| google/gemini-3.8-flash | H | low | passed | Google |
+| moonshotai/kimi-k3 | H | low | passed | none |
+| z-ai/glm-5.3-flash | F | max | passed: 3 of 3 markers replied through the isolated-children path | unattributed (ephemeral handoff log) |
+
+Row spend: ~27 counted calls on isolated legs, plus a stopped 12-call
+attempt in the wrong handoff mode. Notable: leg A at top effort passes on
+all three session-1 rows, so every probed row now has the full leg-A pair
+except Gemini Pro, whose base echo assert fails first. Haiku leg C passes
+at `none` after the effort-aware harness fix (two hard-coded `low`
+efforts in `tools/probe_codex_runtime.py` now follow `--effort`); leg D
+is untestable in one run across the effort boundary (one `--effort` value
+drives every turn, Haiku allows `none` only, DeepSeek allows `low` and
+up), which is a harness limitation, not row evidence. Haiku leg E at
+`none` reports no attachment, matching Sonnet's conversion observation on
+the same vendor. Leg H passes on all four rows attempted and narrows the
+endpoint set to one each (Modal, Parasail, Google); Kimi tool turns carry
+no endpoint metadata. Leg F passes on the GLM Flash child (DeepSeek
+parent, 3 of 3 markers, canonical replay true) through the isolated
+`--live-children` path without `--installed`; a prior attempt in plain
+`--live` mode was stopped after 12 calls because that mode points the
+parent at the installed router, which plan 175 STOPs on, and this client
+(`codex-cli 0.154.0-alpha.6.2`) never emits the collaboration aliases
+there. Open question 3 (a model calling `openrouter_web_search`) is not
+reproduced: the `--web-search` leg fails at app-server startup on this
+client build before any billed call, on retries as well as first attempt.
+Still open after this session: Haiku leg D (harness limitation), Gemini
+Pro legs B/C/D/G (narrated base echo), Qwen (key-blocked), remaining leg
+F rows and leg H rows, and open questions 1-3 (Q3 blocked at
+app-server startup on this client build).
+
+Harness change in this session: `run_switch_leg` and the image
+follow-up now take their effort from `--effort` instead of hard-coding
+`low`. Offline harness suite passes unchanged (34 tests). The change is
+required for any `none`-default row; every switch shape and the image
+follow-up now follow an explicit `--effort`, with `low` as the fallback.
+
+Row edits proposed: none (top-effort A legs pass; Haiku D is a harness
+limitation; Haiku E matches the known Sonnet conversion observation;
+leg-H narrowing is per-attempt evidence, not a pin yet; the GLM Flash F
+pass confirms the isolated handoff path but proposes no roster change).

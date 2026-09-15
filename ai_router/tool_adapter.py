@@ -13,6 +13,7 @@ from .registry import by_slug
 from . import agent_handoffs, sse, tool_aliases, tool_merge
 from .upstream import serving_endpoint
 SEARCH_NAME = 'codex_client_tool_search'
+SEARCH_NEXT = 'Call the exact returned name; do not search again.'
 # Bytes retained per body for the post-EOF identity parse. Overflow drops
 # the observation, never the forwarded bytes.
 _OBSERVE_LIMIT = 64 * 1024
@@ -172,7 +173,10 @@ def prepare_tools(payload):
                 if isinstance(entry, dict):
                     names.dropped.add(entry['name'])
         payload['tools'] = kept
-    for item in payload.get('input', []) if isinstance(payload.get('input'), list) else []:
+    items = payload.get('input', []) if isinstance(payload.get('input'), list) else []
+    latest_search = next((item for item in reversed(items)
+                          if item.get('type') == 'tool_search_output'), None)
+    for item in items:
         if item.get('type') == 'tool_search_call':
             item.pop('execution', None)
             item.update(type='function_call', name=SEARCH_NAME, arguments=json.dumps(item['arguments']))
@@ -181,7 +185,10 @@ def prepare_tools(payload):
             item.pop('status', None)
             visible = [{'name': wire_names.get((ns, tool.get('name')), tool.get('name')),
                         'description': tool.get('description', '')} for tool, ns in tool_entries(item.pop('tools'))]
-            item.update(type='function_call_output', output=json.dumps({'available_tools': visible}))
+            found = {'available_tools': visible}
+            if item is latest_search and visible:
+                found['how_to_use'] = SEARCH_NEXT
+            item.update(type='function_call_output', output=json.dumps(found))
         elif item.get('type') == 'custom_tool_call' and (
                 tool_key(item) in names or tool_key(item) in wire_names):
             key = tool_key(item)

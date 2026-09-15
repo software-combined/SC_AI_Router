@@ -25,13 +25,16 @@ class Prepared:
     """
 
     __slots__ = ('host', 'path', 'headers', 'body', 'tool_names', 'provider',
-                 'fallback')
+                 'fallback', 'output_cap')
 
     def __init__(self, host, path, headers, body, tool_names, provider,
-                 fallback=None):
+                 fallback=None, output_cap=None):
         self.host, self.path, self.headers = host, path, headers
         self.body, self.tool_names, self.provider = body, tool_names, provider
         self.fallback = fallback
+        # The output cap this request asks upstream for, when the adapter
+        # computes one; None when the client's own body passes through.
+        self.output_cap = output_cap
 
 
 def passthrough(response):
