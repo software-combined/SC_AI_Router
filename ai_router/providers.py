@@ -5,7 +5,7 @@ import time
 from . import capabilities, compaction as comp, local_services, agent_handoffs, provider_defs
 from .standalone_outputs import materialize_outputs
 from . import subscription_history, context_recovery
-from .capabilities import CANONICAL_ORDER, check_effort, check_images, input_modalities
+from .capabilities import CANONICAL_ORDER, check_effort, input_modalities
 from .image_items import note_images
 from .errors import PreparationError, SubscriptionRequired, UnknownModel
 from .registry import by_slug, near_miss
@@ -142,10 +142,6 @@ class ExternalResponsesProvider:
             tool_names = prepare_tools(payload)
             tool_names.handoffs = aliases
             rewritten = comp.strip_reasoning_blobs(comp.rewrite_input(payload.get('input', [])))
-        except ValueError as exc:
-            raise PreparationError(str(exc))
-        try:
-            check_images(model, rewritten)
         except ValueError as exc:
             raise PreparationError(str(exc))
         keep_images = 'image' in input_modalities(model) if isinstance(model, str) else True

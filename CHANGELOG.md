@@ -1,7 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.6.67
 
+- An image sent to a model that cannot read images no longer ends the
+  turn. The image is replaced with a note that tells the model to say
+  so in the conversation, and the turn continues.
 - Stream log lines name two more facts: `max_output_tokens`, the output
   cap this request sent upstream (the twin row's own cap after a helper
   fallback), and `reasoning_delta_bytes`, how much of the forwarded stream
