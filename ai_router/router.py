@@ -16,6 +16,8 @@ from .providers import is_native_service
 from .runtime import MAX_BODY, ROUTER_HOME, log_event
 
 MAX_INFLIGHT = 32
+# Bounds the client socket: idle pre-auth reads and blocked writes.
+CLIENT_TIMEOUT_S = 120
 
 
 def _harden_listener(sock, platform=None):
@@ -40,6 +42,9 @@ class Router(ThreadingHTTPServer):
     daemon_threads = True
     drain_deadline_s = 120
     max_inflight = MAX_INFLIGHT
+    # Parallel sub-agent connects burst past the stdlib backlog of 5; the
+    # in-flight cap still applies after accept, so this admits, not refuses.
+    request_queue_size = 64
     # Windows takes SO_EXCLUSIVEADDRUSE in server_bind instead; leaving
     # SO_REUSEADDR on would undo it.
     allow_reuse_address = os.name != 'nt'
@@ -73,7 +78,8 @@ class Router(ThreadingHTTPServer):
         self.credentials = credentials if credentials is not None else Credentials(state, ROUTER_HOME)
 
     def drain_and_exit(self):
-        self.draining = True
+        with self.lock:
+            self.draining = True
         log_event('draining', inflight=self.inflight)
         self.shutdown()
         deadline = time.monotonic() + self.drain_deadline_s
@@ -85,6 +91,8 @@ class Router(ThreadingHTTPServer):
 
 def _payload_has_image(payload):
     """True when the parsed turn carries an input_image block; False on doubt."""
+    # Kept eager: under 1 ms on a 4 MiB body; RecursionError is contained by
+    # the handler (plan 163).
     # ponytail: walk the parsed payload, don't substring-match or re-parse the body;
     # prose mentioning images must not count.
     if not isinstance(payload, dict):
@@ -94,7 +102,7 @@ def _payload_has_image(payload):
 
 class Handler(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
-    timeout = 120
+    timeout = CLIENT_TIMEOUT_S
 
     def log_message(self, *args):
         pass  # Request URLs and upstream credentials must never enter access logs.
@@ -148,16 +156,24 @@ class Handler(BaseHTTPRequestHandler):
                 != 'application/json':
             return self.error(errors.unsupported_media_type())
         # One slot spans read_body, prepare and relay; rejects above return first.
+        # The drain flag is re-read under the same lock so a drain that lands
+        # between admission and the increment cannot strand a request.
         with self.server.lock:
-            if self.server.inflight >= self.server.max_inflight:
-                over = True
+            if self.server.draining:
+                verdict = 'draining'
+            elif self.server.inflight >= self.server.max_inflight:
+                verdict = 'over'
             else:
                 self.server.inflight += 1
-                over = False
-        if over:
+                verdict = None
+        if verdict == 'draining':
+            return self.drain_reject()
+        if verdict == 'over':
             return self.retryable_reject(errors.too_many_inflight(), retry_after='1')
         try:
-            return self._owned_post(path, via_path, started)
+            ready = self._owned_post(path, via_path, started)
+            if ready is not None:
+                self.relay(*ready)
         finally:
             with self.server.lock:
                 self.server.inflight -= 1
@@ -165,7 +181,7 @@ class Handler(BaseHTTPRequestHandler):
     def _owned_post(self, path, via_path, started):
         provider = None
         policy = None
-        self.connection.settimeout(120)
+        self.connection.settimeout(CLIENT_TIMEOUT_S)
         try:
             raw, payload, size, decoded_len = self.read_body()
             read_done = time.monotonic()
@@ -232,7 +248,7 @@ class Handler(BaseHTTPRequestHandler):
                 % (exc, provider_defs.label_for(
                     defn.id if defn is not None else provider_defs.DEFAULT_EXTERNAL))))
         except (ValueError, KeyError, OSError, zstd.ZstdError,
-                AttributeError, TypeError) as exc:
+                AttributeError, TypeError, RecursionError) as exc:
             err = errors.map_client_error(exc)
             if err.code == 'INTERNAL_ERROR':
                 log_event('request_failed', code=err.code,
@@ -253,7 +269,7 @@ class Handler(BaseHTTPRequestHandler):
                    'read_ms': round((read_done - started) * 1000, 1),
                    'prepare_ms': round((prepare_done - read_done) * 1000, 1)}
         log_event('request_started', **metrics)
-        self.relay(provider, prepared, metrics, started, has_image)
+        return provider, prepared, metrics, started, has_image
 
     def read_body(self):
         return ingress.read_body(self, MAX_BODY)

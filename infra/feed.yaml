@@ -23,11 +23,11 @@ Parameters:
     Description: Bucket holding feeds and immutable bundles. Retained on delete.
   Repository:
     Type: String
-    Default: software-combined/SC_Unlimited_ai
+    Default: software-combined/SC_AI_Router
     Description: GitHub repository whose tag builds may assume the publisher role.
   ImmutableSubjectPrefix:
     Type: String
-    Default: software-combined@200868195/SC_Unlimited_ai@1360169840
+    Default: software-combined@200868195/SC_AI_Router@1360169840
     Description: >-
       Repository IDs GitHub emits in an immutable OIDC subject (owner@id/repo@id),
       kept beside the classic form so either claim can assume the role.

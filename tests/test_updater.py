@@ -26,7 +26,7 @@ def entry(plugin_id, version="0.1.0", enabled=True):
 def approved_source():
     return {"marketplaces": [{"name": updater.MARKETPLACE,
             "marketplaceSource": {"sourceType": "git",
-            "source": "https://github.com/software-combined/SC_OpenRouter_adapter.git"}}]}
+            "source": "https://github.com/software-combined/SC_AI_Router.git"}}]}
 
 
 class UpdaterTest(unittest.TestCase):

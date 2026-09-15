@@ -27,7 +27,7 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
                       model=metrics.get('model'), status=status, category='PROVIDER_REJECTED')
             return handler.error(errors.upstream_invalid_request(message) if status == 400
                                  else errors.retryable_preparation(message))
-    conn = http.client.HTTPSConnection(prepared.host, timeout=120)
+    conn = http.client.HTTPSConnection(prepared.host, timeout=transport.UPSTREAM_TIMEOUT_S)
     sent = False
     response = None
     record = None
@@ -39,14 +39,17 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
         if (provider.defn.dialect == 'openai'
                 and is_native_service(metrics['path'])
                 and response.status in (401, 403)):
-            response.read()
+            transport.read_capped(response, transport.ERROR_BODY_LIMIT)
             log_event('native_upstream_rejected', path=metrics['path'],
                       upstream_status=response.status)
             try:
                 local_services.answer(metrics['path'])
             except local_services.LocalAnswer as exc:
                 return handler.error(exc)
-        retry_after = upstream.upstream_retry_after(response, prepared, metrics)
+        drained = (transport.read_capped(response, transport.ERROR_BODY_LIMIT)
+                   if response.status == 429 else None)
+        retry_after = upstream.upstream_retry_after(
+            response, prepared, metrics, body=drained)
         if retry_after is not None:
             category, retry_after = retry_after
             if (category in ('quota', 'auth')
@@ -65,7 +68,7 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
                     'remaining credit; check the provider billing settings'))
             return subscription_fallback.refused(handler, prepared, retry_after, metrics, started)
         if response.status >= 400:
-            raw = response.read()
+            raw = transport.read_capped(response, transport.ERROR_BODY_LIMIT)
             transport.note_first_data(metrics, headers_done)
             # Gate the terminal-frame path on the protocol as well: the
             # Messages ingress shares the openrouter dialect but has no
@@ -89,7 +92,7 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
                 {'model': metrics.get('model'), 'provider': prepared.provider,
                  'protocol': metrics.get('protocol'),
                  'elapsed_ms': round((time.monotonic() - started) * 1000, 1),
-                 'timeout_s': 120,
+                 'timeout_s': transport.UPSTREAM_TIMEOUT_S,
                  'has_image': has_image, 'routed': routed})
             if described is not None:
                 status, message, code = described
@@ -242,7 +245,7 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
                 exc, None,
                 {'model': metrics.get('model'), 'provider': prepared.provider,
                  'host': prepared.host, 'elapsed_ms': total_ms,
-                 'timeout_s': 120,
+                 'timeout_s': transport.UPSTREAM_TIMEOUT_S,
                  'has_image': has_image})
             if described is not None:
                 status, message, _ = described

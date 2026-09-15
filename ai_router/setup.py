@@ -47,7 +47,9 @@ def valid_nonce(state, nonce, now=None):
     expected = cfg.get('nonce') if isinstance(cfg, dict) else None
     if not isinstance(expected, str) or not expected:
         return False
-    if not hmac.compare_digest(nonce, expected):
+    # Byte compares (Plan 136): compare_digest rejects non-ASCII str with
+    # TypeError, which would drop a live setup-window request.
+    if not hmac.compare_digest(nonce.encode('iso-8859-1'), expected.encode('iso-8859-1')):
         return False
     return setup_pending(state, now)
 
