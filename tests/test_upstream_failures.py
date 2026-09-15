@@ -243,6 +243,18 @@ class RelayEndpointLogTests(unittest.TestCase):
         self.assertEqual(len(unavailable), 1)
         self.assertEqual(unavailable[0]['serving_endpoint'], 'DeepSeek')
 
+    def test_402_logs_fixed_category_and_no_upstream_prose(self):
+        raw = json.dumps({'error': {'message': 'Provider blew up on MARKER-402',
+                                     'metadata': {'provider_name': 'Meta'}}}).encode()
+        events = self._relay(402, raw)
+        rejected = [f for e, f in events if e == 'upstream_rejected']
+        self.assertEqual(len(rejected), 1)
+        self.assertEqual(rejected[0]['code'], 'KEY_NO_CREDIT')
+        self.assertEqual(rejected[0]['category'], 'KEY_NO_CREDIT')
+        self.assertNotIn('serving_endpoint', rejected[0])
+        self.assertNotIn('parameter', rejected[0])
+        self.assertNotIn('MARKER-402', json.dumps(rejected))
+
 
 class RefusalCacheTests(unittest.TestCase):
     def setUp(self):
