@@ -27,7 +27,7 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
                       model=metrics.get('model'), status=status, category='PROVIDER_REJECTED')
             return handler.error(errors.upstream_invalid_request(message) if status == 400
                                  else errors.retryable_preparation(message))
-    conn = http.client.HTTPSConnection(prepared.host, timeout=120)
+    conn = http.client.HTTPSConnection(prepared.host, timeout=transport.UPSTREAM_TIMEOUT_S)
     sent = False
     response = None
     record = None
@@ -92,7 +92,7 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
                 {'model': metrics.get('model'), 'provider': prepared.provider,
                  'protocol': metrics.get('protocol'),
                  'elapsed_ms': round((time.monotonic() - started) * 1000, 1),
-                 'timeout_s': 120,
+                 'timeout_s': transport.UPSTREAM_TIMEOUT_S,
                  'has_image': has_image, 'routed': routed})
             if described is not None:
                 status, message, code = described
@@ -245,7 +245,7 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
                 exc, None,
                 {'model': metrics.get('model'), 'provider': prepared.provider,
                  'host': prepared.host, 'elapsed_ms': total_ms,
-                 'timeout_s': 120,
+                 'timeout_s': transport.UPSTREAM_TIMEOUT_S,
                  'has_image': has_image})
             if described is not None:
                 status, message, _ = described

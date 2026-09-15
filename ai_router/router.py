@@ -16,6 +16,8 @@ from .providers import is_native_service
 from .runtime import MAX_BODY, ROUTER_HOME, log_event
 
 MAX_INFLIGHT = 32
+# Bounds the client socket: idle pre-auth reads and blocked writes.
+CLIENT_TIMEOUT_S = 120
 
 
 def _harden_listener(sock, platform=None):
@@ -89,6 +91,8 @@ class Router(ThreadingHTTPServer):
 
 def _payload_has_image(payload):
     """True when the parsed turn carries an input_image block; False on doubt."""
+    # Kept eager: under 1 ms on a 4 MiB body; RecursionError is contained by
+    # the handler (plan 163).
     # ponytail: walk the parsed payload, don't substring-match or re-parse the body;
     # prose mentioning images must not count.
     if not isinstance(payload, dict):
@@ -98,7 +102,7 @@ def _payload_has_image(payload):
 
 class Handler(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
-    timeout = 120
+    timeout = CLIENT_TIMEOUT_S
 
     def log_message(self, *args):
         pass  # Request URLs and upstream credentials must never enter access logs.
@@ -167,7 +171,9 @@ class Handler(BaseHTTPRequestHandler):
         if verdict == 'over':
             return self.retryable_reject(errors.too_many_inflight(), retry_after='1')
         try:
-            return self._owned_post(path, via_path, started)
+            ready = self._owned_post(path, via_path, started)
+            if ready is not None:
+                self.relay(*ready)
         finally:
             with self.server.lock:
                 self.server.inflight -= 1
@@ -175,7 +181,7 @@ class Handler(BaseHTTPRequestHandler):
     def _owned_post(self, path, via_path, started):
         provider = None
         policy = None
-        self.connection.settimeout(120)
+        self.connection.settimeout(CLIENT_TIMEOUT_S)
         try:
             raw, payload, size, decoded_len = self.read_body()
             read_done = time.monotonic()
@@ -263,7 +269,7 @@ class Handler(BaseHTTPRequestHandler):
                    'read_ms': round((read_done - started) * 1000, 1),
                    'prepare_ms': round((prepare_done - read_done) * 1000, 1)}
         log_event('request_started', **metrics)
-        self.relay(provider, prepared, metrics, started, has_image)
+        return provider, prepared, metrics, started, has_image
 
     def read_body(self):
         return ingress.read_body(self, MAX_BODY)
