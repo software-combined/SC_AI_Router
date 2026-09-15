@@ -93,6 +93,13 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
                  'has_image': has_image, 'routed': routed})
             if described is not None:
                 status, message, code = described
+                if status == 400 and response.status == 402:
+                    # Key funds: a final 400 naming the cause, never a
+                    # Retry-After, never the dead-key window, never cached.
+                    log_event('upstream_rejected', status=response.status,
+                              client_status=status, code='KEY_NO_CREDIT',
+                              category='KEY_NO_CREDIT', **metrics)
+                    return handler.error(errors.key_no_credit(message))
                 if status == 503:
                     # Transient: retried, never remembered. `Retry-After` is
                     # inert for Codex (it paces itself) but other clients
