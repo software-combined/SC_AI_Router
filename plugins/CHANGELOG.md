@@ -1,5 +1,10 @@
 # Changelog
 
+## scg-review 0.4.6 and scg-subagents 0.5.4 — 2026-09-15
+
+- Route all four pre-commit review passes to Muse Spark Contributor 1.3 at
+  `xhigh`, keeping the existing bounded fallback policy and review gates.
+
 ## scg-review 0.4.5 — 2026-09-15
 
 - Pin the reviewer inspect commands in the brief: `git write-tree`, `git diff --cached --stat`, `git diff --cached`, and `git show :path` for listed staged files. Do not reconstruct trees, extract the repository, or rerun the same model with the same brief.
