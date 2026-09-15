@@ -1,4 +1,5 @@
 """Native key window: platform dialogs, the submit flow and its fallbacks."""
+import io
 import json
 import subprocess
 import sys
@@ -303,6 +304,14 @@ class RunWindowTests(unittest.TestCase):
             ('http://127.0.0.1:1/x', 'both'))
         self.assertEqual(key_prompt._parse(['https://example.com/x']),
                          (None, None))
+
+    def test_cli_reads_the_url_from_stdin(self):
+        with mock.patch.object(key_prompt.sys, 'stdin',
+                               io.StringIO('http://127.0.0.1:1/t/setup/n\n')):
+            self.assertEqual(key_prompt._parse(['--stdin', '--clients', 'both']),
+                             ('http://127.0.0.1:1/t/setup/n', 'both'))
+        with mock.patch.object(key_prompt.sys, 'stdin', io.StringIO('https://example.com/x\n')):
+            self.assertEqual(key_prompt._parse(['--stdin']), (None, None))
 
 
 class OpenWindowTests(unittest.TestCase):
