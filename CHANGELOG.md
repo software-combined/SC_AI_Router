@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Stream log lines name two more facts: `max_output_tokens`, the output
+  cap this request sent upstream (the twin row's own cap after a helper
+  fallback), and `reasoning_delta_bytes`, how much of the forwarded stream
+  arrived as reasoning output items rather than answer. The cap is exact;
+  the reasoning count covers item-shaped reasoning only.
+
 ## 0.6.66
 
 - Codex deferred-tool search now tells the model to call the exact

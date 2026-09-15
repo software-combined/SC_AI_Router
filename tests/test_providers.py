@@ -174,10 +174,14 @@ class OutputCapTests(unittest.TestCase):
         fake = SimpleNamespace(max_output_tokens=1000, context_window=100000)
         payload = {'model': 'fake/model', 'input': [], 'max_output_tokens': 5000}
         prepared = provider.prepare(fake, '/responses', payload, b'raw', {}, _stub_credentials())
-        self.assertEqual(json.loads(prepared.body)['max_output_tokens'], 1000)
+        sent = json.loads(prepared.body)['max_output_tokens']
+        self.assertEqual(sent, 1000)
+        self.assertEqual(prepared.output_cap, sent)
         payload = {'model': 'fake/model', 'input': []}
         prepared = provider.prepare(fake, '/responses', payload, b'raw', {}, _stub_credentials())
-        self.assertEqual(json.loads(prepared.body)['max_output_tokens'], 1000)
+        sent = json.loads(prepared.body)['max_output_tokens']
+        self.assertEqual(sent, 1000)
+        self.assertEqual(prepared.output_cap, sent)
 
     def test_output_cap_leaves_room_for_input(self):
         # Regression: a 943718 reservation on a 1048576 window leaves ~105k

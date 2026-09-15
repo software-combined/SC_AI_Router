@@ -179,7 +179,8 @@ class ExternalResponsesProvider:
         if window:
             default = min(default, window - window * 9 // 10)
         requested = payload.get('max_output_tokens')
-        payload['max_output_tokens'] = min(requested, limit) if requested else default
+        cap = min(requested, limit) if requested else default
+        payload['max_output_tokens'] = cap
         # Context size stays the provider's call: a chars-per-token estimate
         # refused long turns the client still had room for.
         headers = dict(self.defn.request_headers)
@@ -188,7 +189,8 @@ class ExternalResponsesProvider:
                         'Accept-Encoding': 'identity'})
         return Prepared(self.host, self.defn.path_for(provider_defs.RESPONSES, '/responses'),
                         headers,
-                        json.dumps(payload).encode(), tool_names, self.name)
+                        json.dumps(payload).encode(), tool_names, self.name,
+                        output_cap=cap)
 
     def adapt(self, response, tool_names, notes=None):
         if notes is not None and not tool_names and response.status == 200:
