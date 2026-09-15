@@ -13,7 +13,7 @@ from .protocols import select as select_protocol
 from .errors import InvalidSize, PreparationError
 from .image_items import has_images
 from .providers import is_native_service
-from .runtime import MAX_BODY, ROUTER_HOME, log_event
+from .runtime import MAX_BODY, MAX_DECODE_FACTOR, ROUTER_HOME, log_event
 
 MAX_INFLIGHT = 32
 # Bounds the client socket: idle pre-auth reads and blocked writes.
@@ -199,7 +199,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.error(errors.bearer_for_no_subscription_only())
             compact_call = policy.compaction_call(provider, model, path, payload)
             if compact_call is not None:
-                if decoded_len > MAX_BODY:
+                # zstd compacts share the ingress decode ceiling (bounded transcript).
+                if decoded_len > MAX_BODY * MAX_DECODE_FACTOR:
                     raise InvalidSize('Decoded request is too large')
                 # Compact before prepare(): a rejected effort must not block it.
                 # Key lookup stays outside the send try so credential
