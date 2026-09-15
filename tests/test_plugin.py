@@ -67,6 +67,18 @@ class PluginTest(unittest.TestCase):
         self.assertIn("same model with the same brief", review)
         self.assertNotRegex(review, r"muse-spark|glm-5\.3")
 
+    def test_simplification_wait_guidance_prevents_duplicate_passes(self):
+        review = (PLUGIN / "skills/pre-commit-review/SKILL.md").read_text()
+        simplifier = (PLUGIN / "skills/code-simplifier/SKILL.md").read_text()
+        tool_guide = (ROOT / "plugins/scg-subagents/skills/optimal-subagents/references/tool-guide.md").read_text()
+        for text in (review, simplifier, tool_guide):
+            self.assertIn("quiet", text.lower())
+            self.assertIn("duplicate", text)
+            self.assertIn("runtime/transport timeout", text)
+        self.assertIn("often the slowest", review)
+        self.assertIn("do not cancel, interrupt, respawn", review)
+        self.assertIn("Do not cancel or\nrestart an active simplifier", simplifier)
+
     def test_shared_updater_and_update_guide_are_synchronized_copies(self):
         marketplace = json.loads((ROOT / '.agents/plugins/marketplace.json').read_text())
         for entry in marketplace['plugins']:
