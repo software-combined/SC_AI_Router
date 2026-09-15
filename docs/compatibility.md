@@ -939,7 +939,8 @@ Matrix close: legs A to D are recorded for every row probed in sessions
 except where the harness effort gate blocked it, and leg G wherever the row
 and session caps allowed it. Still open: Haiku legs C/D/E (effort-aware
 rerun), leg A at the top listed effort on GLM Flash, DeepSeek Flash and
-Gemini Flash, leg G on GLM Flash and Gemini Flash, and Qwen, which stays
+Gemini Flash, leg G on GLM Flash and Gemini Flash, Gemini Pro legs B/C/D/G
+(blocked behind its narrated base echo, not the caps), and Qwen, which stays
 skipped until the key can use `qwen/qwen3.8-max-0902`. Legs F/H and open
 questions 1-3 still wait for a later approved session. Row edits proposed:
 none (parallel serialization is now an eight-vendor harness/client
