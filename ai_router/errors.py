@@ -198,6 +198,10 @@ def upstream_invalid_request(message):
     return _error(400, 'PROVIDER_REJECTED', message)
 
 
+def key_no_credit(message):
+    return _error(400, 'KEY_NO_CREDIT', message)
+
+
 def context_window(message='The model context window is full; compact or shorten the turn.'):
     return _error(400, 'context_length_exceeded', message)
 
