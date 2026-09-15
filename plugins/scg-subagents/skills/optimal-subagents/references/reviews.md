@@ -29,7 +29,7 @@ changes inspection depth and required evidence, not automatically the model bill
 
 | Pass | Default model, fixed effort | Ordered fallback models, fixed effort |
 | --- | --- | --- |
-| Simplification | `meta/muse-spark-1.3-contributor` at `xhigh` | `deepseek/deepseek-v4.1-flash` at `max` → `openai/gpt-5.6-luna` at `max` → `openai/gpt-5.6-sol` at `max` |
+| Simplification | `deepseek/deepseek-v4.1-flash` at `max` | `openai/gpt-5.6-luna` at `max` → `openai/gpt-5.6-sol` at `max` |
 | Correctness | `meta/muse-spark-1.3-contributor` at `xhigh` | `z-ai/glm-5.3-flash` at `max` → `openai/gpt-5.6-sol` at `max` → `meta/muse-spark-1.3` at `max` |
 | Quality | `meta/muse-spark-1.3-contributor` at `xhigh` | `deepseek/deepseek-v4.1-flash` at `max` → `openai/gpt-5.6-luna` at `max` → `openai/gpt-5.6-sol` at `max` |
 | Adversarial | `meta/muse-spark-1.3-contributor` at `xhigh` | `z-ai/glm-5.3-flash` at `max` → `meta/muse-spark-1.3` at `max` → `openai/gpt-5.6-sol` at `max` |
