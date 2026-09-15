@@ -655,3 +655,69 @@ Remaining rows (Kimi K3, Qwen, Muse rows, GLM 5.3, DeepSeek Pro after its
 routing check, Gemini Pro, Grok, Anthropic rows, GPT twins), legs F/G/H
 where skipped, and open questions 1-4 (Q1 partially informed by the leg H
 result above) wait for the next approved session.
+
+## Probe matrix 2026-09-15 (plan 175, router 0.6.63.65 isolated, legs A-G)
+
+Session 2 of the paid matrix. Isolated candidate router plus a disposable
+`--codex-home`; the live install and live Codex home were not used.
+`qwen/qwen3.8-max-0902` was skipped: the OpenRouter key cannot use that
+id (`/models/user` has other Qwen ids, not this one), so the live picker
+already hides it. Budget remaining after this session is unused rather
+than spent on a blocked row.
+
+Legenda unchanged from the 2026-09-14 table. Isolated catalogues still
+list the registry Qwen row because they do not apply the key filter;
+that is candidate-router behaviour, not live picker visibility.
+
+| model | leg | effort | result | serving_endpoint |
+|---|---|---|---|---|
+| moonshotai/kimi-k3 | A | low | passed | none |
+| moonshotai/kimi-k3 | A | max | passed | Together |
+| moonshotai/kimi-k3 | B | low | failed: calls serialized, leg asserts | none |
+| moonshotai/kimi-k3 | C | low | passed, history preserved | Together |
+| moonshotai/kimi-k3 | D | low | passed into DeepSeek, history preserved | Parasail (Kimi), Together (DeepSeek) |
+| moonshotai/kimi-k3 | E | low | failed: answered `Black` | Parasail |
+| moonshotai/kimi-k3 | F | - | not run (session cap) | - |
+| moonshotai/kimi-k3 | G | low | passed | Together |
+| moonshotai/kimi-k3 | H | - | not run (session cap) | - |
+
+Row spend: 16 counted calls. Notable: same parallel-serialization
+harness failure as 2026-09-14; image colour still wrong on Parasail
+(`Black`, matching the 2026-09-09 live-router image note).
+
+| meta/muse-spark-1.3 | A | low | passed | Meta |
+| meta/muse-spark-1.3 | A | max | passed | Meta |
+| meta/muse-spark-1.3 | B | low | failed: calls serialized, leg asserts | Meta |
+| meta/muse-spark-1.3 | C | low | passed, history preserved | Meta |
+| meta/muse-spark-1.3 | D | low | passed into DeepSeek, history preserved | Meta, Together |
+| meta/muse-spark-1.3 | E | low | passed, red seen | Meta |
+| meta/muse-spark-1.3 | F | - | not run (session cap) | - |
+| meta/muse-spark-1.3 | G | low | passed | Meta |
+| meta/muse-spark-1.3 | H | - | not run (session cap) | - |
+
+Row spend: 16 counted calls. Notable: image colour now passes on Meta
+(the 2026-09-09 live-router image leg on this row had answered
+`unknown`). Parallel serialization still matches the other vendors.
+
+| meta/muse-spark-1.3-contributor | A | low | passed | Meta |
+| meta/muse-spark-1.3-contributor | A | xhigh | passed | Meta |
+| meta/muse-spark-1.3-contributor | B | low | failed: calls serialized, leg asserts | Meta |
+| meta/muse-spark-1.3-contributor | C | low | passed, own reasoning replayed, history preserved | Meta |
+| meta/muse-spark-1.3-contributor | D | low | passed into DeepSeek, history preserved | Meta, Together |
+| meta/muse-spark-1.3-contributor | E | low | failed: answered `unknown` | Meta |
+| meta/muse-spark-1.3-contributor | F | - | not run (session cap) | - |
+| meta/muse-spark-1.3-contributor | G | low | passed | Meta |
+| meta/muse-spark-1.3-contributor | H | - | not run (session cap) | - |
+
+Row spend: 16 counted calls. Open question 4 (does Contributor accept
+its own reasoning item back): yes on leg C at `low` (`history_preserved`).
+Image colour still fails on this row (`unknown`), unlike standard Muse
+in this session.
+
+Session cap reached (3 rows: Kimi K3, Muse Spark, Muse Contributor).
+Remaining rows: GLM 5.3, DeepSeek Pro after its routing check, Gemini
+Pro, Grok, Anthropic rows, GPT twins. Qwen stays skipped until the key
+can use `qwen/qwen3.8-max-0902`. Legs F/H and open questions 1-3 still
+wait. Row edits proposed: none (parallel serialization remains a
+harness/client confound; image colour is vendor/endpoint behaviour, not
+a roster pin).
