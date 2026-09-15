@@ -39,14 +39,17 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
         if (provider.defn.dialect == 'openai'
                 and is_native_service(metrics['path'])
                 and response.status in (401, 403)):
-            response.read()
+            transport.read_capped(response, transport.ERROR_BODY_LIMIT)
             log_event('native_upstream_rejected', path=metrics['path'],
                       upstream_status=response.status)
             try:
                 local_services.answer(metrics['path'])
             except local_services.LocalAnswer as exc:
                 return handler.error(exc)
-        retry_after = upstream.upstream_retry_after(response, prepared, metrics)
+        drained = (transport.read_capped(response, transport.ERROR_BODY_LIMIT)
+                   if response.status == 429 else None)
+        retry_after = upstream.upstream_retry_after(
+            response, prepared, metrics, body=drained)
         if retry_after is not None:
             category, retry_after = retry_after
             if (category in ('quota', 'auth')
@@ -65,7 +68,7 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
                     'remaining credit; check the provider billing settings'))
             return subscription_fallback.refused(handler, prepared, retry_after, metrics, started)
         if response.status >= 400:
-            raw = response.read()
+            raw = transport.read_capped(response, transport.ERROR_BODY_LIMIT)
             transport.note_first_data(metrics, headers_done)
             # Gate the terminal-frame path on the protocol as well: the
             # Messages ingress shares the openrouter dialect but has no

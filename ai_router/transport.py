@@ -42,6 +42,33 @@ def passthrough(response):
         yield chunk
 
 
+MAX_UPSTREAM_BODY = 16 * 1024 * 1024  # matches runtime.MAX_BODY; pinned by a test
+ERROR_BODY_LIMIT = 1024 * 1024  # an error envelope is parsed, never relayed whole
+
+
+def read_capped(response, limit):
+    """The whole body, or ValueError once it exceeds `limit` bytes.
+
+    Reads in read1 pieces so a hostile upstream cannot make one call
+    allocate the full body before the check runs.
+    """
+    chunks, total = [], 0
+    read1 = getattr(response, 'read1', None)
+    if read1 is None:
+        # Test doubles shaped like the old whole-body surface; the real
+        # http.client.HTTPResponse always offers read1.
+        body = response.read()
+        if len(body) > limit:
+            raise ValueError('upstream body exceeds %d bytes' % limit)
+        return body
+    while piece := read1(65536):
+        total += len(piece)
+        if total > limit:
+            raise ValueError('upstream body exceeds %d bytes' % limit)
+        chunks.append(piece)
+    return b''.join(chunks)
+
+
 def post_with_phases(conn, prepared, metrics):
     """POST and wait for headers, recording connect/send/headers phases.
 
