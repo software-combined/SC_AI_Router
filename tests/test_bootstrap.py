@@ -1,4 +1,4 @@
-"""Bootstrap downloads: public feed, channel pinning, checksums (Plan 054 T)."""
+"""Bootstrap downloads: public feed, channel pinning, checksums (Plan 106 T)."""
 import hashlib
 import io
 import json

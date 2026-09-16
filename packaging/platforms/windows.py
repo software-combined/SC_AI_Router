@@ -1,4 +1,4 @@
-"""Windows backend (Plan 057 Stage 3). Task Scheduler lifecycle + ACL key protection.
+"""Windows backend (Plan 116 Stage 3). Task Scheduler lifecycle + ACL key protection.
 
 Per-user Scheduled Tasks at logon (no admin, no stored password), updater on
 a 4-hour repeat, pythonw.exe for both tasks through a home-root task
@@ -44,7 +44,7 @@ UNINSTALL_DRAIN_S = 30
 # each would flash a console window on the interactive desktop.
 _NO_WINDOW = {'creationflags': getattr(subprocess, 'CREATE_NO_WINDOW', 0)}
 
-# Plan 049 slice 4: logon trigger plus a one-minute repeated recovery
+# Plan 112 slice 4: logon trigger plus a one-minute repeated recovery
 # trigger (duplicate launches ignored), 4-hour updater, IgnoreNew,
 # unlimited router execution time (PT0S), battery settings that do not
 # stop working sessions, interactive-token least-privilege execution.

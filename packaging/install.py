@@ -328,7 +328,7 @@ def do_install(args, _fetch=fetch, _run=None):
         except KeyError:
             raise SystemExit('bundle has no MANIFEST.json')
     home.mkdir(mode=0o700, parents=True, exist_ok=True)
-    # Plan 057 Stage 2: harden the home before any token or key is minted
+    # Plan 116 Stage 2: harden the home before any token or key is minted
     # inside it (never widen-then-narrow); POSIX no-op, mode 0700 owns it.
     backend.protect_secret(home)
     (home / 'logs').mkdir(exist_ok=True)
@@ -657,7 +657,7 @@ def main(argv=None):
               do_update if args.update else
               do_check_update if args.check_update else
               do_install)
-    # Plan 057 Stage 1: read-only verbs run everywhere and take no lock; a
+    # Plan 116 Stage 1: read-only verbs run everywhere and take no lock; a
     # dry run mutates nothing and keeps its historic exemptions. --update is
     # the scheduled applying pass: it spawns the installer as a child and
     # that child takes the lock itself, so a parent holding it would make

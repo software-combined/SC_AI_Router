@@ -96,7 +96,7 @@ if '--help' in sys.argv or '-h' in sys.argv:
     raise SystemExit(0)
 cfg = {'model_provider': 'openai', 'model_reasoning_effort': 'low'}
 if '--reasoning-summary' in sys.argv:
-    # Plan 044 Step 3: ask the client for reasoning summaries on this thread.
+    # Plan 118 Step 3: ask the client for reasoning summaries on this thread.
     cfg['model_reasoning_summary'] = 'auto'
     if '--catalog' not in sys.argv:
         # Temporary catalogue flipping the target entry to auto summaries.
@@ -114,7 +114,7 @@ if '--reasoning-summary' in sys.argv:
                 _rs_path.write_text(json.dumps({'models': [_rs_entry]}))
                 cfg['model_catalog_json'] = str(_rs_path)
 if '--apply-patch' in sys.argv:
-    # Plan 044 Step 3: freeform apply_patch on a scratch dir. The temp
+    # Plan 118 Step 3: freeform apply_patch on a scratch dir. The temp
     # catalogue flips the target entry to freeform; the thread runs with
     # workspace-write sandbox rooted at a temp cwd holding note.txt.
     sys.path.insert(0, str(ROOT.parent))
@@ -130,7 +130,7 @@ if '--apply-patch' in sys.argv:
             _ap_path.write_text(json.dumps({'models': [_ap_entry]}))
             cfg['model_catalog_json'] = str(_ap_path)
 if '--experimental-tools' in sys.argv and '--catalog' not in sys.argv:
-    # Plan 044 Step 3: temporary catalogue advertising the clock tool.
+    # Plan 118 Step 3: temporary catalogue advertising the clock tool.
     # Built from the registry entry so other fields stay put.
     sys.path.insert(0, str(ROOT.parent))
     from ai_router import catalogue, registry
@@ -314,7 +314,7 @@ try:
             if item.get('type') == 'agentMessage':
                 answer = item.get('text', '')
             elif item.get('type') == 'reasoning' and '--reasoning-summary' in sys.argv:
-                # Plan 044 Step 3: pass on non-empty streamed summary text.
+                # Plan 118 Step 3: pass on non-empty streamed summary text.
                 for entry in item.get('summary', []) or []:
                     if isinstance(entry, dict) and (entry.get('text') or '').strip():
                         summary_seen.append(entry['text'].strip()[:120])
@@ -388,7 +388,7 @@ try:
             if event.get('method') == 'error':
                 raise RuntimeError(str(event['params']))
     if '--experimental-tools' in sys.argv:
-        # Plan 044 Step 3: pass when a tool item named clock completes.
+        # Plan 118 Step 3: pass when a tool item named clock completes.
         rpc('turn/start', {'threadId': thread, 'effort': _flag_value('--effort') or 'low',
             'input': [{'type': 'text', 'text': 'Use the clock tool and reply with the hour only.',
                        'text_elements': []}]})
@@ -414,7 +414,7 @@ try:
             if event.get('method') == 'error':
                 raise RuntimeError(str(event['params']))
     if '--web-search' in sys.argv:
-        # Plan 044 Step 3: pass when a webSearch item completes and the turn
+        # Plan 118 Step 3: pass when a webSearch item completes and the turn
         # completes. The date itself is never asserted.
         rpc('turn/start', {'threadId': thread, 'effort': _flag_value('--effort') or 'low',
             'input': [{'type': 'text', 'text': "What is today's date according to a web search? Reply with the date only.",

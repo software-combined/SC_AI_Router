@@ -17,7 +17,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# Sizes were read from the downloaded archives (see Plan 059 Stage 1).
+# Sizes were read from the downloaded archives (see Plan 105 Stage 1).
 EXPECTED = {
     ('darwin', 'arm64'): (26671536, 'python/bin/python3.14',
                           'python/lib/python3.14/LICENSE.txt'),

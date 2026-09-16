@@ -1,4 +1,4 @@
-"""Plan 055 Stages 1-2 operator provisioning against a fake Management API.
+"""Plan 107 Stages 1-2 operator provisioning against a fake Management API.
 
 No network, no real keys, no secrets in logs. Proves: the created key
 carries the verified email, limit, and monthly reset; a failed guardrail

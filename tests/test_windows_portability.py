@@ -1,4 +1,4 @@
-"""Plan 057: shared installer surfaces that Windows exposed as non-portable.
+"""Plan 116: shared installer surfaces that Windows exposed as non-portable.
 
 Pins the TOML path form in the Codex block, the windowless subprocess seam,
 and the platform-correct no-interpreter remedy. Offline; no real tasks.
