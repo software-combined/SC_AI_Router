@@ -1012,6 +1012,26 @@ limitation; Haiku E matches the known Sonnet conversion observation;
 leg-H narrowing is per-attempt evidence, not a pin yet; the GLM Flash F
 pass confirms the isolated handoff path but proposes no roster change).
 
+## Subagent visibility on the installed router, 2026-09-16 (plan 151)
+
+Real-machine check, no probe harness: the installed router's own log
+(`~/.codex/mixed-model-router/logs/router.jsonl`, router 0.6.70.74) recorded
+**1287 completed requests to `meta/muse-spark-1.3-contributor`**, every one
+attributed to **Meta**, between 10:41 and 14:25 UTC on 2026-09-16, alongside
+`deepseek/deepseek-v4.1-flash` traffic. Those are routed turns, so the client
+sent that OpenRouter row as a model id and the router served it.
+
+Limitation: the log carries no client version, so the delegating session's
+build is not recoverable from this evidence; the count is comparable across
+upgrades only as "an installed router served this row".
+
+Stage 3 decision, default taken under the plan's owner gate: the five override
+slots keep the roster first and no ordering change lands, so the picker and the
+existing pins are untouched.
+
+Row edits proposed: none. Still open: plan 151 stage 4, the no-billing capture
+that asserts the override set against a local sink.
+
 ## Leg F re-runs, 2026-09-16 (plan 175)
 
 Client: `codex-cli 0.154.0-alpha.6.2`; router 0.6.78 working tree. Same
