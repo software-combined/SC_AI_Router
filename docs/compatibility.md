@@ -1093,6 +1093,11 @@ on 2026-09-16, nine on 2026-09-17) rather than for anything the router did;
 it needs a quiet upstream window, and the run is cheap to repeat when one
 opens.
 
+Delivery note (plan 119): the GLM 5.3 leg above is the live half (3 of 3
+markers replied, canonical replay, alias emitted, no errors, inside the
+cap). The containment half stays offline in `tests/test_agent_containment.py`,
+where `prepare` rejects encrypted agent briefs and plaintext still prepares.
+
 ## Leg H `require_parameters` pin on the GLM 5.3 Flash row, 2026-09-16 (plan 175)
 
 Client: `codex-cli 0.154.0-alpha.6.2`, effort `low`; router 0.6.78 working
