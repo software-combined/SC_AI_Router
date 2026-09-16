@@ -1105,6 +1105,20 @@ the refusal is in the body Claude Code sends on the follow-up or in that
 endpoint's view of it. The next step is to capture both request bodies the CLI
 sends, which needs no paid call.
 
+Second narrowing, 2026-09-17: the CLI was pointed at a local Messages sink and
+both of its request bodies were captured - the opening turn and the follow-up
+carrying `tool_use` and `tool_result` - with identical headers apart from
+content-length. The router sends both verbatim (checked against the captured
+bytes), and both are accepted (200) when replayed straight to
+`openrouter.ai/api/v1/messages`, with and without the client's `anthropic-beta`
+list and the `?beta=true` query. So neither the client's body nor the router's
+forwarding explains the live refusal. What the sink capture cannot show is the
+one thing that makes the live follow-up different: it echoes the assistant
+content the router returned, thinking blocks included. Next step: take one
+live turn through the router, keep the response it returns, and post that
+response back as the assistant turn; a refusal there would put the trigger in
+the router's stream adaptation rather than in the request.
+
 ## Leg F re-runs with the corrected exit gate, 2026-09-17 (plan 175)
 
 Client: `codex-cli 0.154.0-alpha.6.2`; router 0.6.78 working tree.
