@@ -20,7 +20,7 @@ from . import errors, provider_defs
 from .image_items import has_images
 from .providers import ExternalResponsesProvider
 from .registry import by_slug
-from .runtime import log_event
+from .events import log_event
 
 HELPER_SOURCES = frozenset({'thread_title', 'thread_description',
                             'thread_summary', 'thread_title_reconsideration'})
