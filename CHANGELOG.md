@@ -27,6 +27,12 @@
   instead of carrying them in the tree, so the stack template and the release
   path no longer publish an AWS account id. A fork that runs a publisher with
   no arguments now fails instead of targeting our bucket.
+- The feed publisher role writes only what a release publishes --
+  `bundles/*` and the two channel documents -- and an explicit deny refuses a
+  delete or any change to the bucket's own configuration. Bundle uploads are
+  create-only, so S3 itself refuses a second write of a published key, and an
+  email reports every bundle write so a replacement that skips the flag is
+  visible.
 
 ## 0.6.74
 

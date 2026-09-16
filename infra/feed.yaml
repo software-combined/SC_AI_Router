@@ -33,6 +33,11 @@ Parameters:
     Description: >-
       Repository IDs GitHub emits in an immutable OIDC subject (owner@id/repo@id),
       kept beside the classic form so either claim can assume the role.
+  NotificationEmail:
+    Type: String
+    Description: >-
+      Address that receives one email per bundle write, including a second
+      write of an existing key. No default (Plan 167): the deploy passes it.
   SigningSeedArn:
     Type: String
     Description: >-
@@ -58,6 +63,10 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
+      NotificationConfiguration:
+        # EventBridge carries the event; the rule below filters and targets it.
+        EventBridgeConfiguration:
+          EventBridgeEnabled: true
 
   FeedBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -152,10 +161,43 @@ Resources:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
-                Action:
-                  - s3:PutObject
-                  - s3:GetObject
+                Action: s3:GetObject
                 Resource: !Sub ${FeedBucket.Arn}/*
+              # Writes are scoped to what the release publisher actually
+              # writes: bundles and the two channel documents. The
+              # first-install keys (runtimes*, bootstrap/*) stay out: that
+              # tool uploads with the operator's own credentials, and the
+              # tag-scoped release role has no reason to write the bootstrap
+              # every recipient downloads and executes (Plan 167).
+              - Effect: Allow
+                Action: s3:PutObject
+                Resource:
+                  - !Sub ${FeedBucket.Arn}/bundles/*
+                  - !Sub ${FeedBucket.Arn}/stable/latest.json
+                  - !Sub ${FeedBucket.Arn}/stable/latest.json.sig
+                  - !Sub ${FeedBucket.Arn}/stable/models.json
+                  - !Sub ${FeedBucket.Arn}/beta/latest.json
+                  - !Sub ${FeedBucket.Arn}/beta/latest.json.sig
+                  - !Sub ${FeedBucket.Arn}/beta/models.json
+              # Belt and braces: a later widening of the Allow above must not
+              # reach the bucket's own configuration or delete an object.
+              - Effect: Deny
+                Action:
+                  - s3:DeleteObject
+                  - s3:DeleteObjectVersion
+                  - s3:PutBucketPolicy
+                  - s3:PutBucketAcl
+                  - s3:PutLifecycleConfiguration
+                  - s3:PutBucketVersioning
+                  - s3:PutObjectAcl
+                  # The publish email depends on the bucket's notification
+                  # configuration, so a later widening must not be able to
+                  # drop it or re-encrypt the bucket either.
+                  - s3:PutBucketNotification
+                  - s3:PutEncryptionConfiguration
+                Resource:
+                  - !GetAtt FeedBucket.Arn
+                  - !Sub ${FeedBucket.Arn}/*
               # Absent-object HeadObject returns 403 without ListBucket, and
               # the publisher's immutability check keys on the 404.
               - Effect: Allow
@@ -170,6 +212,53 @@ Resources:
               - Effect: Allow
                 Action: secretsmanager:GetSecretValue
                 Resource: !Ref SigningSeedArn
+  # One email per bundle write. A second email for a key that already existed
+  # is the signal this plan exists to give: the supported publisher refuses
+  # the write, so a second write came from something that skipped it (167).
+  FeedPublishTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: SCG router feed bundle published
+  FeedPublishSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref FeedPublishTopic
+      Protocol: email
+      Endpoint: !Ref NotificationEmail
+  FeedPublishRule:
+    Type: AWS::Events::Rule
+    Properties:
+      EventPattern:
+        source: [aws.s3]
+        detail-type: [Object Created]
+        detail:
+          bucket:
+            name: [!Ref FeedBucket]
+          object:
+            key:
+              - prefix: bundles/
+      Targets:
+        - Id: feed-publish-email
+          Arn: !Ref FeedPublishTopic
+  # CloudFormation grants the publish permission for a Lambda target only, and
+  # cfn-lint cannot see the omission: without this the rule deploys clean and
+  # never delivers an email. SourceArn pins it to our rule (Plan 167).
+  FeedPublishTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref FeedPublishTopic
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref FeedPublishTopic
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !GetAtt FeedPublishRule.Arn
 Outputs:
   DistributionId:
     Description: Invalidation target; the release workflow reads this output.
