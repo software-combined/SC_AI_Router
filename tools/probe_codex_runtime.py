@@ -71,7 +71,7 @@ _child_env = (scrub_env(os.environ, AGENT_HANDOFFS, inject={'CODEX_HOME': _codex
 
 
 def print_usage():
-    print('usage: probe_codex_runtime.py <slug> [--effort L] [--router-state F] '
+    print('usage: probe_codex_runtime.py <slug> [--effort L] [--switch-effort L] [--router-state F] '
           '[--catalog F] [--provider P] [--codex-home DIR] [--parallel] '
           '[--switch --switch-to S [--switch-back]] [--switch-in S] [--compact] '
           '[--image] [--web-search] [--experimental-tools] [--apply-patch] '
@@ -86,8 +86,11 @@ def print_usage():
     print('  --parallel: second thread asks for echo_probe and timing_probe in '
           'one step; pass when both calls arrive and both are answered.',
           file=sys.stderr)
-    print('  --switch --switch-to S: switch out to S and back; --switch-in S: '
-          'start on the argv slug, switch into S.',
+    print('  --switch --switch-to S [--switch-back]: switch out to S and back; '
+          '--switch-in S [--switch-back]: start on the argv slug, switch into S.',
+          file=sys.stderr)
+    print('  --switch-effort L: effort for the switched turn only; the base turn '
+          'keeps --effort. Needed when the two rows allow different levels.',
           file=sys.stderr)
 
 
@@ -228,8 +231,11 @@ def media_items():
                       'url': 'data:audio/wav;base64,' + base64.b64encode(silent_wav()).decode()})
     return items
 
-def run_switch_leg(thread, target):
-    rpc('turn/start', {'threadId': thread, 'model': target, 'effort': _flag_value('--effort') or 'low',
+def run_switch_leg(thread, target, effort=None):
+    # Plan 175: the switched turn may need a different effort from the base
+    # turn (Haiku accepts `none` only, its partners `low` and up), so
+    # --switch-effort overrides --effort for that turn alone.
+    rpc('turn/start', {'threadId': thread, 'model': target, 'effort': effort or _flag_value('--effort') or 'low',
         'input': [{'type': 'text', 'text': 'Without calling any tools, repeat the exact result returned by echo_probe in the previous turn.', 'text_elements': []}]})
     answer = ''
     while True:
@@ -485,10 +491,13 @@ try:
         # native history out. Documented beside --switch/--switch-to.
         target = _flag_value('--switch-in')
         assert target, '--switch-in needs a target slug'
-        run_switch_leg(thread, target)
+        run_switch_leg(thread, target, _flag_value('--switch-effort'))
+        if '--switch-back' in sys.argv:
+            # Back to the argv slug, at that row's own effort again.
+            run_switch_leg(thread, model)
     compact_then_switch = '--compact-then-switch' in sys.argv
     if '--switch' in sys.argv and not compact_then_switch:
-        run_switch_leg(thread, switch_target())
+        run_switch_leg(thread, switch_target(), _flag_value('--switch-effort'))
         if '--switch-back' in sys.argv:
             run_switch_leg(thread, model)
     if '--compact' in sys.argv or compact_then_switch:
