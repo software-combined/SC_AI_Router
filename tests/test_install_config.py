@@ -27,6 +27,16 @@ from tests.install_fixtures import (
 )
 
 
+class _StubStdin:
+    """The key window's piped stdin: takes one write, then closes."""
+
+    def write(self, _data):
+        pass
+
+    def close(self):
+        pass
+
+
 def _fake_write_catalogue(home, release_dir, python):
     from ai_router.catalogue import merge, read_roster
     path = home / 'mixed-models.json'
@@ -252,6 +262,7 @@ class InstallConfigTests(unittest.TestCase):
             class FakePopen:
                 def __init__(self, cmd, **kwargs):
                     spawned.append((cmd, kwargs))
+                    self.stdin = _StubStdin()
 
             _patch_attrs(self, run=lambda cmd, **kwargs: _ok_run(cmd, **kwargs),
                          self_test=lambda *args: None,
@@ -270,12 +281,13 @@ class InstallConfigTests(unittest.TestCase):
             self.assertEqual(len(spawned), 1)
             cmd, kwargs = spawned[0]
             self.assertEqual(cmd[1:3], ['-m', 'ai_router.key_prompt'])
-            self.assertIn(f"/setup/{state['setup']['nonce']}", cmd[3])
+            self.assertFalse(any(a.startswith('http://') for a in cmd))
+            self.assertEqual(cmd[3:5], ['--stdin', '--clients'])
             self.assertEqual(kwargs['cwd'], str(install_mod.current_release_dir(home)))
-            # The popup must never hold the installer's pipes: an agent or
-            # script capturing the installer would block until the user
-            # answered the dialog.
-            self.assertEqual(kwargs['stdin'], install_mod.subprocess.DEVNULL)
+            # The popup must never hold the installer's pipes: the URL is
+            # written once and the pipe closed at once, never read back, so
+            # an agent capturing the installer cannot block on the dialog.
+            self.assertEqual(kwargs['stdin'], install_mod.subprocess.PIPE)
             self.assertEqual(kwargs['stdout'], install_mod.subprocess.DEVNULL)
             self.assertEqual(kwargs['stderr'], install_mod.subprocess.DEVNULL)
             config = Path(env['HOME']) / '.codex' / 'config.toml'
@@ -300,8 +312,13 @@ class InstallConfigTests(unittest.TestCase):
                 ['--feed', 'file:///latest.json', '--home', str(home), '--setup'])
             env = {'HOME': str(Path(tmp) / 'fakehome'), 'PATH': '/usr/bin:/bin'}
             out = Tty()
+
+            class _NullPopen:
+                def __init__(self, *a, **k):
+                    self.stdin = _StubStdin()
+
             with mock.patch.dict(os.environ, env, clear=True), \
-                    mock.patch.object(install_mod.subprocess, 'Popen', lambda *a, **k: None), \
+                    mock.patch.object(install_mod.subprocess, 'Popen', _NullPopen), \
                     mock.patch.object(install_mod.sys, 'stdout', out):
                 self.assertEqual(
                     install_mod.do_install(args, _fetch=_static_fetch(latest, blob)), 0)
@@ -317,6 +334,7 @@ class InstallConfigTests(unittest.TestCase):
             class FakePopen:
                 def __init__(self, cmd, **kwargs):
                     spawned.append(cmd)
+                    self.stdin = _StubStdin()
 
             _patch_attrs(self, run=lambda cmd, **kwargs: _ok_run(cmd, **kwargs),
                          self_test=lambda *args: None,
@@ -333,6 +351,37 @@ class InstallConfigTests(unittest.TestCase):
             self.assertEqual(len(spawned), 1)
             self.assertEqual(spawned[0][1:3], ['-m', 'ai_router.key_prompt'])
 
+    def test_a_dead_key_window_never_fails_the_install(self):
+        # The child can exit before the piped URL lands; a bare
+        # BrokenPipeError must not abort an install that already succeeded.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            blob, latest = _craft_bundle('1.0.0')
+
+            class _DeadStdin(_StubStdin):
+                def write(self, data):
+                    raise BrokenPipeError(32, 'Broken pipe')
+
+            class FakePopen:
+                def __init__(self, cmd, **kwargs):
+                    self.stdin = _DeadStdin()
+
+            _patch_attrs(self, run=lambda cmd, **kwargs: _ok_run(cmd, **kwargs),
+                         self_test=lambda *args: None,
+                         write_catalogue=_fake_write_catalogue,
+                         wait_version=lambda *args, **kwargs: True)
+            args = install_mod.build_parser().parse_args(
+                ['--feed', 'file:///latest.json', '--home', str(home)])
+            env = {'HOME': str(Path(tmp) / 'fakehome'), 'PATH': '/usr/bin:/bin'}
+            out = io.StringIO()
+            with mock.patch.dict(os.environ, env, clear=True), \
+                    mock.patch.object(install_mod.subprocess, 'Popen', FakePopen), \
+                    contextlib.redirect_stdout(out):
+                self.assertEqual(
+                    install_mod.do_install(args, _fetch=_static_fetch(latest, blob)), 0)
+            state = json.loads((home / 'mixed-router-state.json').read_text())
+            self.assertIn('setup', state)
+
     def test_claude_only_setup_still_asks_for_the_key(self):
         # The key window is not a Codex-only step: a Claude-only --setup run
         # must still prompt and pass its own client set through.
@@ -344,6 +393,7 @@ class InstallConfigTests(unittest.TestCase):
             class FakePopen:
                 def __init__(self, cmd, **kwargs):
                     spawned.append(cmd)
+                    self.stdin = _StubStdin()
 
             _patch_attrs(self, run=lambda cmd, **kwargs: _ok_run(cmd, **kwargs),
                          self_test=lambda *args: None,
@@ -388,7 +438,7 @@ class InstallConfigTests(unittest.TestCase):
                 ('packaging/install.py', '# updater re-invoke target'),
                 ('packaging/VERSION', '1.0.1\n')])
             latest = {'version': '1.0.1', 'url': 'file:///bundle.tar.gz',
-                      'sha256': None, 'min_python': '3.14'}
+                      'sha256': hashlib.sha256(blob).hexdigest(), 'min_python': '3.14'}
             seen = []
 
             def fake_run(cmd, **kwargs):

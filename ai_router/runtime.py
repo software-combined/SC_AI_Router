@@ -1,14 +1,11 @@
-"""Router home, state validation and structured logging."""
+"""Router home, state validation and the boot composition root (Plan 165)."""
 import json
-import logging
-import logging.handlers
-import os
 import string
-from datetime import datetime, timezone
 from pathlib import Path
 from . import provider_defs, registry, state as state_mod
-from .setup import setup_pending
-from .credentials import Credentials, default_home
+from .credentials import Credentials
+from .events import LOG, configure_logging, log_event  # noqa: F401 (re-exported)
+from .state import default_home, setup_pending
 
 ROUTER_HOME = default_home()
 STATE = state_mod.path(ROUTER_HOME)
@@ -19,8 +16,6 @@ MAX_BODY = 16 * 1024 * 1024
 MAX_DECODE_FACTOR = 4
 TOKEN_MIN_LENGTH = 32
 TOKEN_ALPHABET = frozenset(string.ascii_letters + string.digits + '_-')
-
-LOG = logging.getLogger('codex_router')
 
 def _release_version():
     # Installed releases report the full build version from the bundle
@@ -95,17 +90,3 @@ def load_state(path=STATE):
     if allowed is not None:
         state['allowed_models'] = list(allowed)
     return state
-
-
-def configure_logging(home=ROUTER_HOME):
-    (home / 'logs').mkdir(parents=True, exist_ok=True)
-    handler = logging.handlers.RotatingFileHandler(home / 'logs' / 'router.jsonl',
-                                                   maxBytes=5 * 1024 * 1024, backupCount=3)
-    handler.setFormatter(logging.Formatter('%(message)s'))
-    LOG.addHandler(handler)
-    LOG.setLevel(logging.DEBUG if os.environ.get('ROUTER_DEBUG') else logging.INFO)
-
-
-def log_event(event, **fields):
-    LOG.info(json.dumps({'ts': datetime.now(timezone.utc).isoformat(timespec='milliseconds'),
-                         'event': event, **fields}))

@@ -300,5 +300,26 @@ class IngressGuardTests(unittest.TestCase):
         self.assertIn('retry text-only', message)
 
 
+    def test_listen_backlog_covers_parallel_sub_agent_connects(self):
+        # The stdlib default backlog is 5; Codex opens several sub-agent
+        # connections at once, so the sixth pending connect would wait for
+        # a SYN retransmit before its turn begins.
+        self.assertEqual(router_mod.Router.request_queue_size, 64)
+
+    def test_a_deeply_nested_body_is_400_not_a_dropped_connection(self):
+        recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
+        server = self._server()
+        depth = 600
+        body = ('{"model": "z-ai/glm-5.3", "input": ' + '[' * depth
+                + '{"type": "input_text", "text": "x"}' + ']' * depth + '}').encode()
+        conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
+        conn.request('POST', '/test-token/responses', body=body,
+                     headers={'Content-Type': 'application/json'})
+        response = conn.getresponse()
+        self.assertEqual(response.status, 400)
+        self.assertEqual(json.loads(response.read())['error']['code'], 'INVALID_PAYLOAD')
+        self.assertEqual(recorded, [])
+
+
 if __name__ == '__main__':
     unittest.main()

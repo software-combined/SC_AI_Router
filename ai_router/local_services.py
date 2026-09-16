@@ -7,7 +7,7 @@ setting that unblocks approvals instead. Native paths are a prefix rule on
 the OpenAI definition (`provider_defs.native_service_path`), not a list.
 """
 from . import errors
-from .runtime import log_event
+from .events import log_event
 
 GUARDIAN_PATHS = {'/guardian', '/guardian-classifier'}
 

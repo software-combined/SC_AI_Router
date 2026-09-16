@@ -90,7 +90,7 @@ def craft_bundle(version):
                 {name: hashlib.sha256(data).hexdigest() for name, data in files.items()}}
     blob = tarball(files=[('MANIFEST.json', json.dumps(manifest)), *files.items()])
     latest = {'version': version, 'url': 'file:///bundle.tar.gz',
-              'sha256': None, 'min_python': '3.14'}
+              'sha256': hashlib.sha256(blob).hexdigest(), 'min_python': '3.14'}
     return blob, latest
 
 

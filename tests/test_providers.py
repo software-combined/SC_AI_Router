@@ -5,6 +5,7 @@ from contextlib import ExitStack
 from types import SimpleNamespace
 from unittest import mock
 from ai_router import provider_defs, providers
+from ai_router.image_items import IMAGE_NOTE
 from tests.harness import (
     isolated_home as _isolated_home,
     stub_credentials as _stub_credentials,
@@ -174,10 +175,14 @@ class OutputCapTests(unittest.TestCase):
         fake = SimpleNamespace(max_output_tokens=1000, context_window=100000)
         payload = {'model': 'fake/model', 'input': [], 'max_output_tokens': 5000}
         prepared = provider.prepare(fake, '/responses', payload, b'raw', {}, _stub_credentials())
-        self.assertEqual(json.loads(prepared.body)['max_output_tokens'], 1000)
+        sent = json.loads(prepared.body)['max_output_tokens']
+        self.assertEqual(sent, 1000)
+        self.assertEqual(prepared.output_cap, sent)
         payload = {'model': 'fake/model', 'input': []}
         prepared = provider.prepare(fake, '/responses', payload, b'raw', {}, _stub_credentials())
-        self.assertEqual(json.loads(prepared.body)['max_output_tokens'], 1000)
+        sent = json.loads(prepared.body)['max_output_tokens']
+        self.assertEqual(sent, 1000)
+        self.assertEqual(prepared.output_cap, sent)
 
     def test_output_cap_leaves_room_for_input(self):
         # Regression: a 943718 reservation on a 1048576 window leaves ~105k
@@ -418,17 +423,17 @@ class SummarizerRetryTests(unittest.TestCase):
                 self.assertEqual(len(calls), 1)
                 self.assertEqual(len(calls), len(closed))
 
-    def test_current_turn_image_still_refused_on_text_only_rows(self):
-        # Fail closed like the effort path: an image in the message being
-        # sent names the image content and the remedy, never silently drops.
+    def test_current_turn_image_is_noted_on_text_only_rows(self):
         payload = {'model': 'z-ai/glm-5.3', 'input': [
             {'type': 'message', 'role': 'user', 'content': [
                 {'type': 'input_text', 'text': 'look'},
                 {'type': 'input_image', 'image_url': 'data:image/png;base64,AAA'}]}]}
-        with self.assertRaisesRegex(providers.PreparationError,
-                                    'does not accept image input.*without images'):
-            _external_responses().prepare(
-                'z-ai/glm-5.3', '/responses', payload, b'raw', {}, _stub_credentials())
+        prepared = _external_responses().prepare(
+            'z-ai/glm-5.3', '/responses', payload, b'raw', {}, _stub_credentials())
+        body = json.dumps(json.loads(prepared.body)['input'])
+        self.assertIn('Cannot read image', body)
+        self.assertIn('Inform the user', body)
+        self.assertNotIn('input_image', body)
 
     def test_historical_image_is_noted_on_text_only_rows(self):
         payload = {'model': 'z-ai/glm-5.3', 'input': [
@@ -438,7 +443,7 @@ class SummarizerRetryTests(unittest.TestCase):
         prepared = _external_responses().prepare(
             'z-ai/glm-5.3', '/responses', payload, b'raw', {}, _stub_credentials())
         body = json.dumps(json.loads(prepared.body)['input'])
-        self.assertIn('[image omitted: this model runs text-only]', body)
+        self.assertIn('Cannot read image', body)
         self.assertNotIn('input_image', body)
 
     def test_image_capable_models_keep_image_blocks(self):
@@ -458,7 +463,7 @@ class SummarizerRetryTests(unittest.TestCase):
             'x-ai/grok-4.6', '/responses', grok_payload, b'raw', {}, _stub_credentials())
         self.assertEqual(json.loads(grok_prepared.body)['input'][0]['content'],
             [{'type': 'input_text', 'text': 'look'},
-             {'type': 'input_text', 'text': '[image omitted: this model runs text-only]'}])
+             {'type': 'input_text', 'text': IMAGE_NOTE}])
 
     def test_text_only_models_pass_without_images(self):
         payload = {'model': 'z-ai/glm-5.3', 'input': [

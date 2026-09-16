@@ -17,10 +17,10 @@ prompt to it.
 import json
 
 from . import errors, provider_defs
-from .capabilities import has_images
+from .image_items import has_images
 from .providers import ExternalResponsesProvider
 from .registry import by_slug
-from .runtime import log_event
+from .events import log_event
 
 HELPER_SOURCES = frozenset({'thread_title', 'thread_description',
                             'thread_summary', 'thread_title_reconsideration'})
@@ -140,7 +140,9 @@ def refused(handler, prepared, retry_after, metrics, started):
     twin_metrics = {k: metrics[k] for k in fields if k in metrics}
     twin_metrics.update(provider=defn.id, model=fallback.slug,
                         path=fallback.path, helper_fallback=True,
-                        protocol=provider_defs.RESPONSES)
+                        protocol=provider_defs.RESPONSES,
+                        # The twin's own cap, from its freshly prepared body.
+                        max_output_tokens=getattr(twin, 'output_cap', None))
     # The owned-request slot still covers this hand-off; relay no longer
     # takes or releases a slot of its own.
     return handler.relay(ExternalResponsesProvider(defn, _region), twin, twin_metrics, started,

@@ -15,7 +15,7 @@ import threading
 import time
 
 from . import provider_defs
-from .runtime import log_event
+from .events import log_event
 from .stream_errors import metadata_endpoint, is_context_error
 
 KEY_NO_CREDIT_MESSAGE = (
@@ -59,14 +59,15 @@ def classify_429(body):
     return 'transient'
 
 
-def upstream_retry_after(response, prepared, metrics):
+def upstream_retry_after(response, prepared, metrics, body):
     """Consume an upstream 429; return (category, Retry-After), else None.
 
     Codex treats a bare 429 as turn-fatal, so the caller must answer 503.
+    The caller passes the already-drained body: this module must never
+    import transport (domain boundary), so it never reads the socket itself.
     """
     if response.status != 429:
         return None
-    body = response.read()
     category = classify_429(body)
     log_event('upstream_rate_limited', provider=prepared.provider, path=metrics['path'],
               category=category)

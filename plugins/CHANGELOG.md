@@ -1,5 +1,17 @@
 # Changelog
 
+## scg-review 0.4.7 and scg-subagents 0.5.5 — 2026-09-15
+
+- Clarify that Pass 1 simplification can be the slowest review phase and may
+  stay quiet while the executor reads and reasons. Tell parent agents to wait
+  for the active child, avoid duplicate retries, and retry only after a
+  diagnosed runtime or transport failure.
+
+## scg-review 0.4.6 and scg-subagents 0.5.4 — 2026-09-15
+
+- Route all four pre-commit review passes to Muse Spark Contributor 1.3 at
+  `xhigh`, keeping the existing bounded fallback policy and review gates.
+
 ## scg-review 0.4.5 — 2026-09-15
 
 - Pin the reviewer inspect commands in the brief: `git write-tree`, `git diff --cached --stat`, `git diff --cached`, and `git show :path` for listed staged files. Do not reconstruct trees, extract the repository, or rerun the same model with the same brief.

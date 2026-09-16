@@ -140,6 +140,9 @@ class InstallerCiGateTests(unittest.TestCase):
         # installer job is ever selected, however correct the consumer is.
         self.assertIn('id: scope', self.CHECK)
         self.assertIn('installer: ${{ steps.scope.outputs.installer }}', self.CHECK)
+        self.assertIn(
+            "if: github.event_name == 'pull_request' && github.base_ref == 'main'",
+            self.CHECK)
         self.assertIn("if: needs.changes.outputs.installer == 'true'", self.CHECK)
         self.assertIn('tools/ci_scope.py --installer', self.CHECK)
         self.assertIn('tools/ci_scope.py --installer-tests', self.CHECK)
