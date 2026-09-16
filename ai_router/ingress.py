@@ -15,7 +15,7 @@ import io
 import json
 import secrets
 from compression import zstd
-from . import claude, errors, model_prompt_page, setup, sse
+from . import errors, model_prompt_page, protocols, setup, sse
 from .errors import InvalidSize
 from .runtime import MAX_DECODE_FACTOR, VERSION
 
@@ -167,7 +167,9 @@ def do_get(handler):
                                                'models': len(snap.get('models') or ()),
                                                'fetched_at': snap.get('fetched_at')})})
     if path == '/v1/models':
-        return handler.send_json(200, claude.models_listing())
+        listing = protocols.listing('GET', path,
+                                    handler.server.state.get('allowed_models'))
+        return handler.send_json(200, listing)
     if handler.server.draining:
         return handler.drain_reject()
     if handler.headers.get('Upgrade', '').lower() == 'websocket':

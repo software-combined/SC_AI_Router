@@ -6,15 +6,16 @@ and how it reports a plain message. `ai_router.key_prompt` owns the flow on
 top of it. The key is written by the dialog tool to stdout; it is never
 passed in argv, the environment, a file or a log.
 
-The copy and the icon follow the popup style rule in `AGENTS.md` section 4a:
-title, product icon, plain language and client-aware wording, shared with the
-update notice.
+The copy and the icon follow the popup style rule in `AGENTS.md` section 4a,
+shared with the update notice.
 """
 import json
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+from . import provider_defs
 
 TITLE = 'SCG Router'
 ICON = Path(__file__).resolve().parents[1] / 'packaging' / 'assets' / 'router-icon.png'
@@ -23,8 +24,8 @@ STARTERS = {'Everyday help': 'general', 'Coding help': 'dev'}
 CLIENTS = ('codex', 'claude', 'both', 'none')
 TIMEOUT_S = 900  # matches ai_router.setup.SETUP_TTL_S
 
-KEY_PROMPT = ('Paste the OpenRouter key you were given. It is checked before '
-              'it is saved, and kept only on this computer.')
+KEY_PROMPT = (f'Paste the {provider_defs.OPENROUTER.label} key you were given. '
+              'It is checked before it is saved, and kept only on this computer.')
 CODEX_QUESTION = 'Do you also use a ChatGPT subscription on this computer?'
 CLAUDE_QUESTION = 'Do you also use a Claude subscription for Claude Code?'
 STARTER_QUESTION = 'How should Codex write for you by default?'
@@ -42,8 +43,7 @@ def icon():
 def questions(which='codex'):
     """(field, question, answers) in the order the dialog asks them.
 
-    A service-only install asks for nothing but the key; the starter is a
-    Codex thing, so it follows the Codex question.
+    A service-only install asks only for the key; the starter follows the Codex question.
     """
     which = clients(which)
     asked = []

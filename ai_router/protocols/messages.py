@@ -3,12 +3,19 @@
 Owns the Claude Code Messages ingress. Bodies stay byte-identical; retry and
 model-header handling keep their existing shared behavior until a client
 contract test or live gate proves a divergence.
+
+Plan 155: the name is the constant the definition table exports, and this
+family owns the Anthropic-shaped discovery listing.
 """
-from .. import claude
+from .. import claude, provider_defs
 
 
 class _Policy:
-    name = 'messages'
+    name = provider_defs.MESSAGES
+
+    def listing(self, allowed=None):
+        """The discovery payload this family serves for a GET."""
+        return claude.models_listing(allowed)
 
     def select_provider(self, model, path, state, mode):
         return claude.select(model, path, mode,
