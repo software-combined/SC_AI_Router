@@ -1119,6 +1119,38 @@ live turn through the router, keep the response it returns, and post that
 response back as the assistant turn; a refusal there would put the trigger in
 the router's stream adaptation rather than in the request.
 
+Resolution, 2026-09-17: the refusal is the connector tool volume, not the
+router and not the shape of the client's body. Four observations, cheapest
+first:
+
+- The captured live follow-up body (168,406 bytes at the sink) replays
+  through the isolated router at 200, streamed and not streamed, on the
+  0.6.78 working tree.
+- Recapturing the live follow-up at the router's own upstream socket (an
+  in-process recorder wrapped around the relay connection) shows the live
+  follow-up is 1,465,284 bytes, of which 1,456,470 is the `tools` array:
+  **702 tools, up from 29 in the opening turn**. The first turn is where
+  Claude Code finishes loading the user's claude.ai connector MCP tools
+  (Apollo, Attio, Clay, Granola, Heyreach, Instantly, Microsoft 365, Xero,
+  Airwallex, monday.com, n8n and others), so every later turn carries them.
+- Posted straight to `openrouter.ai/api/v1/messages`, that body answers 400
+  with the reason the router's bounded log line drops: "This endpoint's
+  maximum context length is 200000 tokens. However, you requested about
+  398263 tokens (14845 of text input, 351418 of tool input, 32000 in the
+  output)." The same body with only its 33 non-MCP tools answers 200.
+- So the follow-up is a genuine over-context request - 351K tokens of tool
+  definitions alone against a 200K window - that any route would refuse.
+  The router forwards the body verbatim and, per plan 169, answers the
+  upstream refusal with a final 409 `PROVIDER_REJECTED`.
+
+Plan 115's first proof is met by re-running the leg with the connector servers
+excluded (`--strict-mcp-config --mcp-config '{"mcpServers": {}}'`): the same
+CLI, model and isolated-router shape completed the tool round trip - Read
+executed, the marker came back verbatim, two Messages requests, both 200
+(164,784 and 166,071 bytes). Operator note: `docs/claude-code.md` carries the
+caveat that a routed row inherits whatever the client loads from its
+connectors, and a tool list that large cannot fit any 200K row.
+
 ## Leg F re-runs with the corrected exit gate, 2026-09-17 (plan 175)
 
 Client: `codex-cli 0.154.0-alpha.6.2`; router 0.6.78 working tree.
