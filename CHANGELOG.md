@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Fifteen routed models now offer the client's freeform `apply_patch` tool,
+  where the row previously advertised no patch override: a live probe applied
+  a synthetic edit and read it back on each of them. The two Meta rows and the
+  xAI row keep the old state - Meta's upstream drops a turn carrying the tool,
+  and xAI's model never calls it. Reasoning summaries, the experimental
+  `clock` tool and the pinned-endpoint setting stay off everywhere they were
+  probed.
 - New models that arrive through the hourly model refresh are now offered
   with the restart prompt on the next update check, not only when a new
   version is installed.
