@@ -1343,3 +1343,92 @@ carries the same shape.
 Open question 4 was answered on 2026-09-15 (the Contributor row accepts its
 own reasoning item back, leg C), so the plan's four open questions now each
 carry a recorded answer or a recorded non-reproduction.
+
+## Leg F across the roster, 2026-09-17 (plan 175)
+
+Client: `codex-cli 0.154.0-alpha.6.2`; router 0.6.79 working tree; parent
+`z-ai/glm-5.3-flash` (the pairing that passed on 2026-09-17), wire mode
+classic, `--max-live-calls 18`. Each child ran once; `calls` is that run's own
+live call count.
+
+| child | result | calls | markers |
+|---|---|---|---|
+| moonshotai/kimi-k3 | passed, exit 0 | 15 | 3 of 3 |
+| deepseek/deepseek-v4-pro-0813 | passed, exit 0 | 15 | 3 of 3 |
+| openai/gpt-5.6-terra | passed, exit 0 | 14 | 3 of 3 |
+| openai/gpt-5.6-luna | passed, exit 0 | 16 | 3 of 3 |
+| deepseek/deepseek-v4.1-flash | three markers, five upstream 503s on the parent forced exit 1 | 18 | 3 of 3 |
+| meta/muse-spark-1.3-contributor | three markers, stopped at the cap | 18 | 3 of 3 |
+| anthropic/claude-sonnet-5 | one marker behind five 503s, then the cap | 18 | 1 of 3 |
+| meta/muse-spark-1.3 | stopped at the cap, no reply | 18 | 0 |
+| google/gemini-3.1-pro-preview | stopped at the cap, no reply | 18 | 0 |
+| x-ai/grok-4.6 | stopped at the cap, no reply | 18 | 0 |
+| anthropic/claude-haiku-4.5 | stopped at the cap, no reply | 18 | 0 |
+| anthropic/claude-opus-5 | stopped at the cap, no reply | 18 | 0 |
+| anthropic/claude-fable-5.1 | stopped at the cap, no reply | 18 | 0 |
+| openai/gpt-5.6-sol | stopped at the cap, no reply | 18 | 0 |
+| openai/gpt-6-astra | stopped at the cap, no reply | 18 | 0 |
+
+Reading: four children pass the harness's own exit gate and two more replay
+all three markers. Eight reach the 18-call cap without a reply; that is a
+budget outcome, not a handoff verdict, and those rows need a higher cap
+(still inside the plan's 23-call ceiling) or a quieter parent before anyone
+reads them as failures. With the earlier passes (GLM Flash, GLM 5.3, Gemini
+Flash) every routed row now has a recorded leg-F attempt except Qwen, which
+stays key-blocked.
+
+## Leg H `require_parameters` across the roster, 2026-09-17 (plan 175)
+
+One base tool round trip per row with `provider_prefs: {"require_parameters":
+true}` carried in `ai_router/models.json` for that run only and restored
+afterwards, through an isolated candidate router with a disposable Codex
+home. Effort `low`, except `anthropic/claude-haiku-4.5` at `none` (its row
+allows nothing else).
+
+| rows probed here | result |
+|---|---|
+| both Muse rows, DeepSeek Pro, Gemini Pro, Grok, all four Anthropic rows, all four GPT twins | upstream 404 with the pin, no endpoint attributed, final `PROVIDER_REJECTED` |
+| plus the earlier runs (GLM Flash, DeepSeek Flash, Gemini Flash, Kimi K3, GLM 5.3) | same 404 on every one |
+
+Reading: the pin fails closed on all 18 routed rows; there is no row where
+`require_parameters: true` narrows the endpoint set instead of refusing the
+turn. `provider_prefs` stays an available field and no row sets it, which is
+the decision plan 170 recorded.
+
+## Capability legs across the roster, 2026-09-17 (plan 118)
+
+Client `codex-cli 0.154.0-alpha.6.2`, router 0.6.79 working tree, one isolated
+candidate router and a disposable Codex home per leg; effort `low` except
+Haiku at `none`. Each leg uses the plan's own pass definition.
+
+| capability | passed | failed | not reached |
+|---|---|---|---|
+| freeform `apply_patch` | 15 rows: the four Anthropic rows, both DeepSeek rows, both Gemini rows, Kimi, the four GPT twins, both GLM rows (`fileChange items=1`, `note.txt='beta'`) | x-ai/grok-4.6: the model never called the tool (`fileChange items=0`, file unchanged) | both Muse rows: the Meta upstream dropped the turn twice (`responseStreamDisconnected`, "Upstream request failed") |
+| reasoning summaries | none | every row probed streamed no reasoning summary | google/gemini-3.1-pro-preview: the base leg's echo assert fails first (its 2026-09-15 note) |
+| experimental `clock` tool | none | every row probed never called `clock` | google/gemini-3.1-pro-preview, as above |
+| audio input | transport check only, not a model capability pass: the client attached a 4,844-byte silent WAV and the turn completed 200 on all four rows that advertise `audio` (both Muse rows, both Gemini rows) | none | the model's own reading of the clip is not asserted by this leg |
+| web search | not run | - | the `--web-search` leg still dies at app-server startup before any billed call on this client build |
+
+Row edits landed with this record (plan 118 step 4): `apply_patch:
+"freeform"` on the 15 rows whose patch leg passed. `reasoning_summary` stays
+`none` everywhere, no row gains `clock`, and `audio` stays advertised because
+the upstream refusal that made it unproven on 2026-09-09 did not reproduce.
+
+## Spawn override capture, 2026-09-17 (plan 151 stage 4)
+
+`python3.14 tools/probe_spawn_list.py` starts a real app-server thread against
+a local sink that answers 426 to the websocket upgrade, records the
+`/responses` body (zstd), reads `spawn_agent`'s "Available model overrides"
+text and asserts it against the first five picker rows of the catalogue the
+installed router serves. No model is called, so the run is free.
+
+| fact | value |
+|---|---|
+| client build | bundled app-server `0.154.0-alpha.6.2` |
+| advertised overrides | `gpt-6-astra`, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.5` |
+| catalogue head | identical, in catalogue order |
+| result | exit 0 |
+
+Reading: the five-slot cap holds on this build and every routed row stays out
+of that list, which is the behaviour plan 151 stage 3 decided to keep. Stages
+1-3 and the real-machine check were recorded earlier.
