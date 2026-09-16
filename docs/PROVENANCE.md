@@ -27,7 +27,7 @@ directory records internal infrastructure detail that must be reviewed
 before any publication.
 
 Open licensing question, unresolved at 2026-09-11: the wording in
-`ai_router/openrouter_base_instructions.txt` closely follows the Codex
+`ai_router/routed_base_instructions.txt` closely follows the Codex
 desktop application's own agent instructions, and shares several sentences
 with the published prompt files in `openai/codex` (Apache-2.0). The Codex
 desktop application itself is not open source, so the provenance and
