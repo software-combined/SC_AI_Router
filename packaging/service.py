@@ -90,28 +90,9 @@ trusted_origin = _feed.trusted_origin
 sibling_bundle = _feed.sibling_bundle
 channel_feed = _feed.channel_feed
 feed_source = _feed.feed_source
+fetch = _feed.fetch
+feed_read = _feed.feed_read
 notice = _notice
-
-
-def fetch(url):
-    """Single network entry point; tests inject a fake.
-
-    Only the public feed origin, or a local file for a manual install, is
-    accepted, so a compromised feed cannot redirect a host elsewhere.
-    """
-    if url.startswith('file://'):
-        return Path(url[len('file://'):]).read_bytes()
-    if not _feed.trusted_origin(url):
-        raise SystemExit('refusing untrusted feed URL: %s' % _feed._safe_url(url))
-    with _feed.opener().open(urllib.request.Request(url), timeout=30) as response:
-        return response.read()
-
-
-def feed_read(fetcher, url):
-    """Fetch one feed/bundle URL through the injected or default fetcher."""
-    if fetcher is fetch and not trusted_origin(url):
-        raise SystemExit('feed points off the trusted update origin; refusing')
-    return fetcher(url)
 
 
 def run(cmd, **kwargs):
