@@ -363,11 +363,17 @@ the failure; an oversized turn answers 400 with guidance instead of 413. The
 Anthropic Messages path keeps its existing answers except at that shared
 size boundary, where it answers 400 like Responses.
 
+A refused subscription turn (an upstream 429 on a login the client owns)
+answers 503 `UPSTREAM_RATE_LIMITED` whose message names the model and the
+subscription that refused it and says the turn was not served, to retry
+shortly or to select a routed model. An external route's transient 429
+keeps the neutral text, and neither answer carries upstream prose.
+
 | Event | Meaning |
 |---|---|
 | `upstream_unavailable` | an upstream 5xx or 408 on a Responses turn, answered 503 |
 | `client_disconnected` | the client hung up mid-stream; previously counted as `transport_error` |
-| `upstream_rate_limited` | an upstream 429, with `category` `quota`, `auth` or `transient`; on Responses a quota 429 answers 400 `PROVIDER_REJECTED` and an auth 429 opens the key window |
+| `upstream_rate_limited` | an upstream 429, with `category` `quota`, `auth` or `transient`; on Responses a quota 429 answers 400 `PROVIDER_REJECTED` and an auth 429 opens the key window; a subscription turn's `transient` 429 answers 503 naming the model and the subscription |
 
 ## Stream identity observation (last-observed, not proof)
 

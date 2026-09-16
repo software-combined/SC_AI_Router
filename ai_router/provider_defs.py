@@ -63,12 +63,13 @@ class ProviderDef:
     __slots__ = ('id', 'label', 'kind', 'host', 'responses_path',
                  'messages_path', 'key', 'catalogue_url', 'catalogue_shape',
                  'key_info_url', 'key_info_shape', 'dialect', 'native_prefixes',
-                 'request_headers')
+                 'request_headers', 'subscription_label')
 
     def __init__(self, id, label, kind, host, responses_path=None,
                  messages_path=None, key=None, catalogue_url=None,
                  catalogue_shape='manual', key_info_url=None,
                  key_info_shape='openrouter', dialect=None,
+                 subscription_label=None,
                  native_prefixes=(), request_headers=()):
         if kind not in (EXTERNAL, SUBSCRIPTION):
             raise ValueError(f'{id}: bad kind {kind!r}')
@@ -92,6 +93,12 @@ class ProviderDef:
         self.key, self.catalogue_url = key, catalogue_url
         self.catalogue_shape, self.key_info_url = catalogue_shape, key_info_url
         self.key_info_shape, self.dialect = key_info_shape, dialect
+        # Client-facing wording for the login this provider serves. An
+        # external route serves no login, so it carries None and its
+        # refusals keep the neutral text.
+        self.subscription_label = None
+        if kind == SUBSCRIPTION:
+            self.subscription_label = subscription_label or f'{label} subscription'
         self.native_prefixes = native_prefixes
         request_headers = tuple(request_headers)
         for pair in request_headers:
@@ -168,11 +175,13 @@ OPENAI = ProviderDef(
     id='openai', label='OpenAI', kind=SUBSCRIPTION, host='chatgpt.com',
     responses_path='/backend-api/codex', dialect=DIALECT_OPENAI,
     key_info_shape='none',
+    subscription_label='ChatGPT subscription',
     native_prefixes=('/alpha/', '/guardian'))
 
 ANTHROPIC = ProviderDef(
     id='anthropic', label='Anthropic', kind=SUBSCRIPTION, host='api.anthropic.com',
-    messages_path='', dialect=DIALECT_ANTHROPIC, key_info_shape='none')
+    messages_path='', dialect=DIALECT_ANTHROPIC, key_info_shape='none',
+    subscription_label='Claude subscription')
 
 
 PROVIDERS = (OPENROUTER, OPENAI, ANTHROPIC)

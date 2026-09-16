@@ -121,9 +121,27 @@ class RefusedHelperTurnTests(unittest.TestCase):
         server = self._server()
         response = self._turn(server, HEADERS)
         self.assertEqual(response.status, 503)
-        self.assertEqual(json.loads(response.read())['error']['code'],
-                         'UPSTREAM_RATE_LIMITED')
+        body = json.loads(response.read())
+        self.assertEqual(body['error']['code'], 'UPSTREAM_RATE_LIMITED')
+        # The refusal names the model and the subscription that refused it,
+        # and the opaque text it replaced is gone.
+        self.assertIn(HELPER, body['error']['message'])
+        self.assertIn('ChatGPT subscription', body['error']['message'])
+        self.assertIn('select a routed model instead', body['error']['message'])
+        self.assertNotIn('Upstream rate limited', body['error']['message'])
         self.assertEqual([call[0] for call in recorded], ['chatgpt.com'])
+
+    def test_unreadable_refusal_body_never_reaches_the_message(self):
+        # The wording is fixed: a 429 body the router cannot read must not
+        # change the answer, and none of it may be echoed back.
+        install_fake(self, lambda: FakeUpstream(429, b'<html>slow down</html>', []))
+        server = self._server()
+        response = self._turn(server)
+        self.assertEqual(response.status, 503)
+        message = json.loads(response.read())['error']['message']
+        self.assertIn('ChatGPT subscription', message)
+        self.assertNotIn('slow down', message)
+        self.assertNotIn('html', message)
 
     def test_enabled_flag_answers_the_helper_turn_from_the_twin_row(self):
         recorded = install_fake(self, self._refusal())

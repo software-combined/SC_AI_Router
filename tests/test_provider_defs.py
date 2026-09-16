@@ -46,6 +46,19 @@ class DefinitionTests(unittest.TestCase):
                     self.assertIsNone(defn.key)
                     self.assertIsNone(defn.key_info_url)
 
+    def test_only_subscription_defs_carry_a_login_label(self):
+        # Refusal wording reads this; an external route has no login to name.
+        for defn in provider_defs.PROVIDERS:
+            with self.subTest(provider=defn.id):
+                if defn.kind == provider_defs.SUBSCRIPTION:
+                    self.assertTrue(defn.subscription_label)
+                else:
+                    self.assertIsNone(defn.subscription_label)
+        default = provider_defs.ProviderDef(
+            id='x', label='X', kind='subscription', host='example.invalid',
+            responses_path='/r', dialect=provider_defs.DIALECT_ANTHROPIC)
+        self.assertEqual(default.subscription_label, 'X subscription')
+
     def test_path_prefixes_compose(self):
         self.assertEqual(
             provider_defs.OPENROUTER.path_for(provider_defs.MESSAGES, '/v1/messages'),

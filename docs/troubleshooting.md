@@ -85,7 +85,7 @@ one replaces the subscription credential the router forwards.
 | 400 | Model id, payload or local key configuration is invalid |
 | 403 | Missing or wrong path token, or a browser-originated request was refused |
 | 409 | The provider cannot serve this request, for example an unsupported reasoning level; the message names the allowed levels |
-| 503 with `Retry-After` | Not served: the router is draining for an update (`SERVER_DRAINING`) or mapped an upstream 429 (`UPSTREAM_RATE_LIMITED`); retry after the delay |
+| 503 with `Retry-After` | Not served: the router is draining for an update (`SERVER_DRAINING`) or mapped an upstream 429 (`UPSTREAM_RATE_LIMITED`); retry after the delay. A refused subscription turn names the model and the subscription: retry shortly, or select a routed model |
 
 ## The key is missing or was revoked
 
