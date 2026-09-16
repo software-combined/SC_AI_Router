@@ -76,6 +76,24 @@ class PolicyScanTests(unittest.TestCase):
         self.assertTrue(module.check_secrets())
         self.assertTrue(module.check_publication_identifiers())
         self.assertTrue(module.check_setup_single_owner())
+        self.assertTrue(module.check_dialect_literals())
+
+    def test_dialect_literal_outside_the_definition_table_is_caught(self):
+        # Plan 152: a call site reads the constant the table exports, in
+        # either comparison order; the definition table itself may name the
+        # dialect.
+        probes = (b"if provider.defn.dialect == 'probe':\n",
+                  b"if provider.defn.dialect != 'probe':\n",
+                  b"if provider.defn.dialect in ('probe',):\n",
+                  b"if 'probe' == provider.defn.dialect:\n")
+        for probe in probes:
+            with self.subTest(probe=probe[:12]):
+                root = self._tree()
+                (root / 'ai_router' / 'site.py').write_bytes(probe)
+                self.assertFalse(_load(root).check_dialect_literals())
+                (root / 'ai_router' / 'site.py').unlink()
+                (root / 'ai_router' / 'provider_defs.py').write_bytes(probe)
+                self.assertTrue(_load(root).check_dialect_literals())
 
     def test_an_account_identifier_anywhere_is_caught(self):
         # Non-vacuous: an account id inside an ARN, and one inside a
