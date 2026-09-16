@@ -109,28 +109,40 @@ def combo_name(index):
 
 
 def _labelled(index, prompt, answers):
-    """PowerShell that adds one labelled combo box to the open form."""
+    """PowerShell that adds one labelled combo box to the layout panel."""
     label, combo = '$l%d' % index, combo_name(index)
     return ("%s = New-Object System.Windows.Forms.Label; %s.AutoSize = $true; "
-            "%s.Text = '%s'; $f.Controls.Add(%s); "
-            "%s = New-Object System.Windows.Forms.ComboBox; %s.DropDownStyle = 3; "
+            "%s.Margin = New-Object System.Windows.Forms.Padding(0, 8, 0, 2); "
+            "%s.Text = '%s'; $p.Controls.Add(%s); "
+            "%s = New-Object System.Windows.Forms.ComboBox; "
+            "%s.DropDownStyle = 'DropDownList'; "
             "%s.Items.AddRange(@('%s')); %s.SelectedIndex = 0; "
-            "%s.Width = 420; $f.Controls.Add(%s); "
-            % (label, label, label, prompt.replace("'", "''"), label,
+            "%s.Width = 420; $p.Controls.Add(%s); "
+            % (label, label, label, label, prompt.replace("'", "''"), label,
                combo, combo, combo,
                "', '".join(answer.replace("'", "''") for answer in answers),
                combo, combo, combo))
 
 
 def _windows_script(which='codex'):
-    """One WinForms form: product icon, masked key and each question."""
+    """One WinForms form: product icon, masked key and each question.
+
+    Every control goes into an explicit top-down FlowLayoutPanel. WinForms
+    gives a control added straight to a Form the default Location (0, 0), so
+    without a layout container the whole dialog stacks in the top-left
+    corner: the key box and both buttons end up hidden behind the label and
+    the operator cannot type or submit. macOS and Linux are unaffected,
+    because osascript and zenity lay their own dialogs out.
+    """
     picture = ''
     if icon():
         picture = ("$i = $null; try { $i = [System.Drawing.Image]::FromFile('%s') } "
                    "catch { }; if ($i) { $pic = New-Object "
                    "System.Windows.Forms.PictureBox; $pic.Image = $i; "
                    "$pic.Size = New-Object System.Drawing.Size(48, 48); "
-                   "$pic.SizeMode = 'Zoom'; $f.Controls.Add($pic) }; "
+                   "$pic.SizeMode = 'Zoom'; "
+                   "$pic.Margin = New-Object System.Windows.Forms.Padding(0, 0, 0, 8); "
+                   "$p.Controls.Add($pic) }; "
                    % icon().replace("'", "''"))
     asked = questions(which)
     boxes = ''.join(_labelled(index, question, answers)
@@ -141,18 +153,37 @@ def _windows_script(which='codex'):
     return (
         "Add-Type -AssemblyName System.Windows.Forms; "
         "Add-Type -AssemblyName System.Drawing; "
+        "[System.Windows.Forms.Application]::EnableVisualStyles(); "
         "$f = New-Object System.Windows.Forms.Form; $f.Text = '%s'; "
-        "$f.TopMost = $true; $f.AutoSize = $true; $f.StartPosition = 'CenterScreen'; "
+        "$f.TopMost = $true; $f.StartPosition = 'CenterScreen'; "
+        "$f.FormBorderStyle = 'FixedDialog'; $f.MaximizeBox = $false; "
+        "$f.MinimizeBox = $false; $f.AutoSize = $true; "
+        "$f.AutoSizeMode = 'GrowAndShrink'; "
+        "$f.Padding = New-Object System.Windows.Forms.Padding(14); "
+        "$p = New-Object System.Windows.Forms.FlowLayoutPanel; "
+        "$p.FlowDirection = 'TopDown'; $p.WrapContents = $false; "
+        "$p.AutoSize = $true; $p.AutoSizeMode = 'GrowAndShrink'; $p.Dock = 'Fill'; "
         "%s"
         "$t = New-Object System.Windows.Forms.Label; $t.AutoSize = $true; "
-        "$t.Text = '%s'; $f.Controls.Add($t); "
+        "$t.MaximumSize = New-Object System.Drawing.Size(420, 0); "
+        "$t.Margin = New-Object System.Windows.Forms.Padding(0, 0, 0, 6); "
+        "$t.Text = '%s'; $p.Controls.Add($t); "
         "$k = New-Object System.Windows.Forms.TextBox; $k.Width = 420; "
-        "$k.UseSystemPasswordChar = $true; $f.Controls.Add($k); "
+        "$k.UseSystemPasswordChar = $true; $p.Controls.Add($k); "
         "%s"
+        "$r = New-Object System.Windows.Forms.FlowLayoutPanel; "
+        "$r.FlowDirection = 'LeftToRight'; $r.WrapContents = $false; "
+        "$r.AutoSize = $true; $r.AutoSizeMode = 'GrowAndShrink'; "
+        "$r.Margin = New-Object System.Windows.Forms.Padding(0, 12, 0, 0); "
         "$b = New-Object System.Windows.Forms.Button; $b.Text = 'Save and connect'; "
-        "$b.Add_Click({ $f.Close() }); $f.Controls.Add($b); "
+        "$b.AutoSize = $true; "
+        "$b.Add_Click({ $f.Close() }); $r.Controls.Add($b); "
         "$c = New-Object System.Windows.Forms.Button; $c.Text = 'Cancel'; "
-        "$c.Add_Click({ $f.Tag = 'cancel'; $f.Close() }); $f.Controls.Add($c); "
+        "$c.AutoSize = $true; "
+        "$c.Add_Click({ $f.Tag = 'cancel'; $f.Close() }); $r.Controls.Add($c); "
+        "$p.Controls.Add($r); $f.Controls.Add($p); "
+        "$f.AcceptButton = $b; $f.CancelButton = $c; "
+        "$f.Add_Shown({ $f.Activate(); $k.Focus() }); "
         "[void]$f.ShowDialog(); if ($f.Tag -eq 'cancel') { exit 2 }; "
         "%s" % (TITLE, picture, KEY_PROMPT.replace("'", "''"), boxes, output))
 
