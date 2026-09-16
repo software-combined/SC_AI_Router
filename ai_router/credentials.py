@@ -8,18 +8,14 @@ import json
 import os
 from pathlib import Path
 
-from . import provider_defs
+from . import key_store, provider_defs, state as state_mod
+from .state import default_home  # used below and re-exported for importers
 
 ENV_VAR = provider_defs.OPENROUTER.key.env
 
 # Per-module flag so tests can drive the Windows branch without patching
 # global os.name (which pathlib itself reads).
 _ON_WINDOWS = os.name == 'nt'
-
-
-def default_home():
-    """Router home, resolved at call time so tests can patch the env var."""
-    return Path(os.environ.get('ROUTER_HOME', Path.home() / '.codex' / 'mixed-model-router'))
 
 
 def opencode_auth_path(env=None):
@@ -120,12 +116,10 @@ class Credentials:
         The env key is not the effective credential when set, and an armed
         setup window already answers the raw 401, so both return False.
         """
-        from . import key_store
         spec = self.key_spec(provider_id)
         if spec is None or self.env.get(spec.env, '').strip():
             return False
-        from . import setup
-        if setup.setup_pending(self.state):
+        if state_mod.setup_pending(self.state):
             return False
         try:
             stored = (self.home / spec.file).read_text().strip()

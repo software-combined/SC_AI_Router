@@ -15,7 +15,7 @@ import threading
 import time
 
 from . import provider_defs
-from .runtime import log_event
+from .events import log_event
 from .stream_errors import metadata_endpoint, is_context_error
 
 KEY_NO_CREDIT_MESSAGE = (

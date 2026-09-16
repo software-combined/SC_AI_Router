@@ -61,6 +61,20 @@ class SetupUnitTests(unittest.TestCase):
         self.assertFalse(setup.valid_nonce({}, 'n' * 16, NOW))
         self.assertFalse(setup.valid_nonce(state, '\xff', NOW))
 
+    def test_setup_pending_moved_verbatim_into_the_state_leaf(self):
+        # Plan 165: the same function object must serve both spellings, and
+        # the expiry/bool rules must survive the move (the keyless-boot gate
+        # in runtime.load_state depends on them).
+        from ai_router import state as state_mod
+        self.assertIs(setup.setup_pending, state_mod.setup_pending)
+        fresh = {'setup': {'nonce': 'n' * 16, 'expires': NOW + 60}}
+        self.assertTrue(state_mod.setup_pending(fresh, NOW))
+        self.assertFalse(state_mod.setup_pending(
+            {'setup': {'nonce': 'n' * 16, 'expires': NOW - 1}}, NOW))
+        self.assertFalse(state_mod.setup_pending(
+            {'setup': {'nonce': 'n' * 16, 'expires': True}}, NOW))
+        self.assertFalse(state_mod.setup_pending({}, NOW))
+
     def test_get_renders_form(self):
         home = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, home, True)
@@ -356,7 +370,7 @@ class KeyWindowTests(unittest.TestCase):
         server.state = {'port': 1, 'token': 't'}
         buf = io.StringIO()
         with mock.patch.object(setup.sys.stdout, 'isatty', return_value=False):
-            with mock.patch('ai_router.runtime.log_event') as logged:
+            with mock.patch('ai_router.setup.log_event') as logged:
                 import contextlib as _ctx
                 with _ctx.redirect_stdout(buf):
                     setup.open_key_window(server, home, _opener=lambda url: True,

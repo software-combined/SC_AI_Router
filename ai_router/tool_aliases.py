@@ -10,6 +10,7 @@ import hashlib
 import re
 
 from .standalone_outputs import DELIVERED_NAMES
+from .events import log_event
 
 # Provider function-name ceiling; the disambiguated fallback also fits it.
 LIMIT = 64
@@ -241,7 +242,6 @@ def repair_item(item, names, notes, logged):
     key = item.get('id') or item.get('call_id') or called
     if key not in logged:
         logged.add(key)
-        from .runtime import log_event
         model = notes.get('model') if isinstance(notes, dict) else None
         cause = 'unknown'
         if isinstance(called, str) and called in DELIVERED_NAMES:
