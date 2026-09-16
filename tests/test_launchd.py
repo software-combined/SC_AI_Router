@@ -313,7 +313,7 @@ class EnsureServingTests(unittest.TestCase):
 
 
 class SupervisorLogRotationTests(unittest.TestCase):
-    """Bounded retention for supervisor-captured logs (Plan 058 Stage 5a).
+    """Bounded retention for supervisor-captured logs (Plan 117 Stage 5a).
 
     router.jsonl already rotates via RotatingFileHandler; launchd.log and
     update.log were unbounded supervisor sinks. rotate_log bounds them with

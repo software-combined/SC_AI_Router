@@ -1,4 +1,4 @@
-"""Plan 057 Stage 2: Windows key ACL hardening, proven offline.
+"""Plan 116 Stage 2: Windows key ACL hardening, proven offline.
 
 Write-side protect_file restricts parent-first then verifies; read-side
 winacl.check refuses widened ACLs mirroring the POSIX gate. Fake icacls

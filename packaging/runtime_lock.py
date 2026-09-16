@@ -1,4 +1,4 @@
-"""Pinned private CPython runtime lock (Plan 059 Stage 1). Python 3.9-safe.
+"""Pinned private CPython runtime lock (Plan 105 Stage 1). Python 3.9-safe.
 
 packaging/runtime.lock names one install-only distribution per qualified
 target. Pins (URL, SHA-256) land only through reviewed lock changes: an

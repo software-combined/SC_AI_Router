@@ -1,4 +1,4 @@
-"""Plan 058 Stage 1: one preflight before anything is written.
+"""Plan 117 Stage 1: one preflight before anything is written.
 
 Runs on every platform, so it lives outside the Unix-only install class.
 """

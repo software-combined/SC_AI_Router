@@ -1,4 +1,4 @@
-"""Drain, socket activation, and graceful-restart behavior (Plan 045)."""
+"""Drain, socket activation, and graceful-restart behavior (Plan 109)."""
 import http.client
 import inspect
 import json

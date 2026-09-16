@@ -1,4 +1,4 @@
-"""Plan 057 Stage 3: Windows Task Scheduler backend, proven offline against a
+"""Plan 116 Stage 3: Windows Task Scheduler backend, proven offline against a
 fake schtasks. Pins real-machine facts (Windows 11, 2026-09-10): a repeating
 trigger needs a StartBoundary, an unscoped logon trigger needs elevation,
 deleting a task leaves its instance running, console tasks show a window."""

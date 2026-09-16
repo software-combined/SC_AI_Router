@@ -1,4 +1,4 @@
-"""Fresh-install picker catalogue: config flag and merge seeding (Plan 041/039).
+"""Fresh-install picker catalogue: config flag and merge seeding (Plan 110/039).
 
 Reuses the tests.install_fixtures rig, so test_install.py keeps tests only.
 """

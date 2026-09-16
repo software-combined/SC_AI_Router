@@ -1,4 +1,4 @@
-"""Plan 059 Stage 1: one runtime lock, validated offline.
+"""Plan 105 Stage 1: one runtime lock, validated offline.
 
 Missing/duplicate targets, bad digests, table drift, and unpinned entries
 fail closed. The shipped lock carries reviewed live pins (CPython 3.14.7,
