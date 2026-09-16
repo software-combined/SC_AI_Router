@@ -28,7 +28,7 @@ class CatalogueFlagTests(unittest.TestCase):
         self.assertEqual(entry['web_search_tool_type'], 'text')
 
     def test_defaults_keep_current_catalogue_values(self):
-        entry = external_entry(by_slug('z-ai/glm-5.3-flash'))
+        entry = external_entry(by_slug('x-ai/grok-4.6'))
         self.assertEqual(entry['default_reasoning_summary'], 'none')
         self.assertFalse(entry['supports_reasoning_summary_parameter'])
         self.assertIsNone(entry['apply_patch_tool_type'])
