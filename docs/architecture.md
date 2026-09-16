@@ -136,7 +136,9 @@ them while the child installer retains its own installation lock.
   shared transport in `transport.py`, and dispatch in `protocols/`.
 - `ai_router/catalogue.py` + `models.py` + `live_refresh.py` share client
   projection duties through `model_metadata.py` (pure normalization) and
-  `clients/` (capability projection, picker visibility).
+  `clients/` (capability projection, picker visibility); the served
+  instruction text and its capped delegation roster live in the
+  `model_instructions.py` leaf (Plan 154).
 - Client activation lives in `packaging/codex_config.py`: the Codex block,
   picker preservation, guidance, and receipts. `--client none` runs the
   router lifecycle without touching client settings; absence of a client

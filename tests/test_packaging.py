@@ -57,7 +57,8 @@ class PackagingTests(unittest.TestCase):
             self.assertIn(path.relative_to(root).as_posix(), bundled,
                           'runtime module missing from the bundle')
         for dep in ('ai_router/models.json',
-                    'ai_router/openrouter_base_instructions.txt'):
+                    'ai_router/routed_base_instructions.txt',
+                    'ai_router/subscription_base_instructions.txt'):
             self.assertIn(dep, bundled, dep)
         for tool in ('tools/probe_codex_runtime.py', 'tools/disable.py'):
             self.assertIn(tool, bundled, tool)

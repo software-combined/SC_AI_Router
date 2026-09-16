@@ -10,6 +10,13 @@
   provider's own definition, so a new provider supplies its own login label.
 - `pyproject.toml` moves back in step with `packaging/VERSION`, which the
   version-match test had been failing on since 0.6.73.
+- The picker file no longer carries a model roster that grows with the
+  visible rows: past forty ids the instruction text lists that many and
+  points at the router's own model listing, and subscription rows are served
+  their own wording instead of being told they run a routed model. For the
+  current 27-row roster that takes the merged file from about 630 KB to
+  485 KB, and
+  `catalogue --merge` now reports its row count and size.
 - The Windows key window lays its controls out. WinForms gives a control
   added straight to a form the corner (0, 0), so the key box and both
   buttons were stacked behind the icon and prompt and the key could not be
