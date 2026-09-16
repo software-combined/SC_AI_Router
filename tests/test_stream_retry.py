@@ -74,6 +74,8 @@ class UpstreamTerminalRetryTests(_ServerFixture):
 
         def answer():
             item = next(upcoming)
+            if callable(item):
+                item = item()
             if isinstance(item, BaseException):  # how a test fails the retry connect
                 raise item
             return item
@@ -183,8 +185,10 @@ class UpstreamTerminalRetryTests(_ServerFixture):
         created = self._created()
 
         class DyingUpstream(FakeUpstream):
-            def __iter__(self):
-                yield from self._buf.splitlines(keepends=True)
+            def read1(self, count):
+                data = super().read1(count)
+                if data:
+                    return data
                 raise OSError('upstream closed')
 
         body, _, logs = self._stream_response(self._responder(
@@ -205,7 +209,7 @@ class UpstreamTerminalRetryTests(_ServerFixture):
         # The at-most-one-retry and replay-idempotency boundary: two upstream
         # calls, one retry event, one terminal frame for the client.
         body, recorded, logs = self._stream_response(
-            self._responder(self._failed_attempt()))
+            self._responder(lambda: self._failed_attempt()))
         self.assertEqual(len(recorded), 2)
         events = self._events(body)
         self.assertEqual([e['type'] for e in events],
