@@ -1,5 +1,5 @@
 """First-run key window over loopback (Plan 047 G). No network: OpenRouter
-key checks run through an injected urlopen fake."""
+key checks run through the no-redirect opener seam, faked per test."""
 import http.client
 import json
 import os
@@ -58,7 +58,7 @@ class SetupHandlerTests(unittest.TestCase):
         self.addCleanup(shutil.rmtree, home, True)
         server = self._server(home)
         origin = f'http://127.0.0.1:{server.server_port}'
-        with mock.patch('urllib.request.urlopen', _key_ok()):
+        with mock.patch('ai_router.key_store._open_without_redirects', _key_ok()):
             response = self._post(server.server_port,
                                   '/test-token/setup/' + 'n' * 16,
                                   b'key=sk-live&mode=subscription', origin)
@@ -70,7 +70,7 @@ class SetupHandlerTests(unittest.TestCase):
         home = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, home, True)
         server = self._server(home)
-        with mock.patch('urllib.request.urlopen', _key_ok()):
+        with mock.patch('ai_router.key_store._open_without_redirects', _key_ok()):
             response = self._post(server.server_port,
                                   '/test-token/setup/' + 'n' * 16,
                                   b'key=sk-live&mode=none&profile=dev',
@@ -85,7 +85,7 @@ class SetupHandlerTests(unittest.TestCase):
         home = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, home, True)
         server = self._server(home)
-        with mock.patch('urllib.request.urlopen', _key_ok()):
+        with mock.patch('ai_router.key_store._open_without_redirects', _key_ok()):
             response = self._post(server.server_port,
                                   '/test-token/setup/' + 'n' * 16,
                                   b'key=sk-live&mode=none&profile=general'
@@ -101,7 +101,7 @@ class SetupHandlerTests(unittest.TestCase):
         home = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, home, True)
         server = self._server(home, clients='claude')
-        with mock.patch('urllib.request.urlopen', _key_ok()):
+        with mock.patch('ai_router.key_store._open_without_redirects', _key_ok()):
             response = self._post(server.server_port,
                                   '/test-token/setup/' + 'n' * 16,
                                   b'key=sk-live&mode=none')
@@ -116,7 +116,7 @@ class SetupHandlerTests(unittest.TestCase):
         (home / 'mixed-router-state.json').write_text(json.dumps(
             json.loads((home / 'mixed-router-state.json').read_text()) | {
                 'agents_profile': 'dev'}))
-        with mock.patch('urllib.request.urlopen', _key_ok()), \
+        with mock.patch('ai_router.key_store._open_without_redirects', _key_ok()), \
                 mock.patch('ai_router.agents.install') as installed:
             response = self._post(server.server_port,
                                   '/test-token/setup/' + 'n' * 16,
@@ -165,7 +165,7 @@ class SetupHandlerTests(unittest.TestCase):
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         self.addCleanup(server.shutdown)
-        with mock.patch('urllib.request.urlopen', _key_ok()):
+        with mock.patch('ai_router.key_store._open_without_redirects', _key_ok()):
             conn = http.client.HTTPConnection('127.0.0.1', port, timeout=10)
             conn.request('POST', '/test-token/setup/' + 'n' * 16,
                          body=b'key=sk-live&mode=subscription',
@@ -200,7 +200,7 @@ class SetupHandlerTests(unittest.TestCase):
         home = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, home, True)
         server = self._server(home)
-        with mock.patch('urllib.request.urlopen', _key_ok()):
+        with mock.patch('ai_router.key_store._open_without_redirects', _key_ok()):
             first = self._post(server.server_port,
                                '/test-token/setup/' + 'n' * 16,
                                b'key=sk-live&mode=subscription')

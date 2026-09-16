@@ -80,6 +80,35 @@ class RedirectPinningTests(unittest.TestCase):
         self.assertIsNone(key_store._NoRedirects().redirect_request(
             urllib.request.Request(url), None, 302, 'Found', {}, url))
 
+    def test_the_default_opener_resolves_at_call_time(self):
+        # Plan 161 follow-up: the two-argument call (the router's
+        # credentials.key_rejected probe) must honour a swapped seam.
+        called = []
+
+        def fake(req, timeout=None):
+            called.append(req.full_url)
+            response = mock.Mock()
+            response.read.return_value = b'{"data": {"label": "probe"}}'
+            response.__enter__ = lambda s: s
+            response.__exit__ = lambda s, *a: False
+            return response
+
+        with mock.patch.object(key_store, '_open_without_redirects', fake):
+            label, _limit, _usage = key_store.check_key('openrouter', 'sk-live')
+        self.assertEqual(label, 'probe')
+        self.assertEqual(len(called), 1)
+
+    def test_a_redirect_through_the_default_path_is_an_oserror(self):
+        # Fail closed on the default path too: a 3xx is unreachable, never a
+        # dead key, so key_rejected cannot mistake it for a 401/403.
+        def redirecting(req, timeout=None):
+            raise urllib.error.HTTPError(req.full_url, 302, 'Found', {}, None)
+
+        with mock.patch.object(key_store, '_open_without_redirects', redirecting):
+            with self.assertRaises(OSError) as caught:
+                key_store.check_key('openrouter', 'sk-live')
+        self.assertNotIsInstance(caught.exception, key_store.KeyRejected)
+
     def test_setup_submit_uses_the_no_redirect_opener(self):
         state = {'setup': {'nonce': 'n' * 16, 'expires': 9_999_999_999},
                  'port': 1, 'token': 'x'}
