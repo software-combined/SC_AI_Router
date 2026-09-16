@@ -19,7 +19,7 @@ from . import provider_defs
 from .apply_catalogue import write_guarded
 from .capabilities import CANONICAL_ORDER
 from .model_metadata import project_modalities, qualify_name
-from .registry import load, picker_key
+from .registry import load, picker_key, upstream_id_for
 
 MODELS_PATH = Path(__file__).with_name('models.json')
 COMPAT_PATH = Path(__file__).resolve().parents[1] / 'docs' / 'compatibility.md'
@@ -83,6 +83,8 @@ def derive_row(slug, live, provider_id=provider_defs.DEFAULT_EXTERNAL):
     pricing = live.get('pricing') or {}
     return {'slug': slug,
             'provider': provider_id,
+            # Empty unless the provider expects another id for this model.
+            'upstream_id': '',
             'display_name': f'{qualified} \xb7 {defn.label}',
             'vendor': vendor,
             'reasoning': reasoning,
@@ -108,7 +110,8 @@ def read_rows(path):
 
 
 def cmd_add(path, slug, live_by_id, tier=None, dry_run=False, probe=False,
-           _probe=None, provider_id=provider_defs.DEFAULT_EXTERNAL):
+           _probe=None, provider_id=provider_defs.DEFAULT_EXTERNAL,
+           upstream_id=''):
     require_live_shape(provider_id)
     if live_by_id is None:
         live_by_id = fetch_live(provider_id)
@@ -121,6 +124,7 @@ def cmd_add(path, slug, live_by_id, tier=None, dry_run=False, probe=False,
         raise SystemExit(f'{slug} is already in {path}')
     live = live_by_id[slug]
     row = derive_row(slug, live, provider_id)
+    row['upstream_id'] = upstream_id
     if tier is not None:
         if tier not in ('preview', 'verified'):
             raise SystemExit('--tier must be preview or verified')
@@ -138,6 +142,9 @@ def cmd_add(path, slug, live_by_id, tier=None, dry_run=False, probe=False,
         row['tier'] = 'preview'
         row['listed'] = False
     rows = renumbered(rows + [row])
+    # Fail closed before the write: the router loads this file at import time,
+    # so a row it would refuse must never reach disk (Plan 153).
+    load(json.dumps(rows))
     row = next(entry for entry in rows if entry['slug'] == slug)
     if dry_run:
         # Never writes and never bills: preview what a plain add would store.
@@ -216,6 +223,10 @@ def cmd_check(path, live_by_id, provider_id=provider_defs.DEFAULT_EXTERNAL):
     priorities = [row.get('priority') for row in rows]
     if len(set(priorities)) != len(priorities):
         problems.append('duplicate priority')
+    pairs = [(row.get('provider') or provider_defs.DEFAULT_EXTERNAL,
+              upstream_id_for(row)) for row in rows]
+    if len(set(pairs)) != len(pairs):
+        problems.append('duplicate provider upstream_id')
     if valid:
         ordered = [row['priority'] for row in sorted(rows, key=row_key)]
         if ordered != sorted(ordered):
@@ -284,6 +295,7 @@ def main(argv=None):
     add.add_argument('--dry-run', action='store_true')
     add.add_argument('--tier', default=None)
     add.add_argument('--provider', default=provider_defs.DEFAULT_EXTERNAL)
+    add.add_argument('--upstream-id', default='')
     sub.add_parser('remove').add_argument('slug')
     check = sub.add_parser('check')
     check.add_argument('--offline', action='store_true')
@@ -296,7 +308,7 @@ def main(argv=None):
     if args.command == 'add':
         cmd_add(path, args.slug, None, tier=args.tier,
                 dry_run=args.dry_run, probe=args.probe,
-                provider_id=args.provider)
+                provider_id=args.provider, upstream_id=args.upstream_id)
     elif args.command == 'remove':
         cmd_remove(path, args.slug)
     elif args.command == 'check':

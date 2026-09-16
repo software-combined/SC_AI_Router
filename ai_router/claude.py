@@ -18,7 +18,7 @@ import sys
 from . import provider_defs, transport
 from .errors import ClaudeSubscriptionRequired, PreparationError, UnknownModel
 from . import registry
-from .registry import by_slug
+from .registry import by_slug, upstream_id_for
 
 # POST-only Messages paths; a future GET-only route (like /v1/models) must
 # not silently become POST-routable.
@@ -134,11 +134,15 @@ class ExternalMessagesProvider:
             raise PreparationError('Claude ingress serves messages only')
         body = raw_body
         slug = resolve(model)
+        entry = by_slug(slug) if isinstance(slug, str) else None
+        upstream = upstream_id_for(entry) if entry is not None else slug
         # resolve() only returns a different string for a known registry slug.
         # payload is the parsed form of this same body, so rewrite the alias
-        # there instead of decoding raw_body again.
-        if isinstance(model, str) and slug != model and isinstance(payload, dict):
-            payload['model'] = slug
+        # there instead of decoding raw_body again. A row whose upstream id is
+        # its own slug leaves the body byte-identical, which is the ingress
+        # contract.
+        if isinstance(model, str) and upstream != model and isinstance(payload, dict):
+            payload['model'] = upstream
             body = json.dumps(payload).encode()
         return transport.Prepared(
             self.host, self.defn.path_for(provider_defs.MESSAGES, path),
