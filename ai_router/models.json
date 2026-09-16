@@ -25,7 +25,7 @@
     "priority": 100,
     "max_output_tokens": 128000,
     "reasoning_summary": "none",
-    "apply_patch": "none",
+    "apply_patch": "freeform",
     "experimental_tools": [],
     "web_search": true,
     "tier": "verified"
@@ -52,7 +52,7 @@
     "priority": 101,
     "max_output_tokens": 64000,
     "reasoning_summary": "none",
-    "apply_patch": "none",
+    "apply_patch": "freeform",
     "experimental_tools": [],
     "web_search": true,
     "tier": "verified"
@@ -83,7 +83,7 @@
     "priority": 102,
     "max_output_tokens": 128000,
     "reasoning_summary": "none",
-    "apply_patch": "none",
+    "apply_patch": "freeform",
     "experimental_tools": [],
     "web_search": true,
     "tier": "verified"
@@ -114,7 +114,7 @@
     "priority": 103,
     "max_output_tokens": 128000,
     "reasoning_summary": "none",
-    "apply_patch": "none",
+    "apply_patch": "freeform",
     "experimental_tools": [],
     "web_search": true,
     "tier": "verified"
@@ -142,7 +142,7 @@
     "priority": 104,
     "max_output_tokens": 384000,
     "reasoning_summary": "none",
-    "apply_patch": "none",
+    "apply_patch": "freeform",
     "experimental_tools": [],
     "web_search": false,
     "tier": "verified"
@@ -171,7 +171,7 @@
     "priority": 105,
     "max_output_tokens": 384000,
     "reasoning_summary": "none",
-    "apply_patch": "none",
+    "apply_patch": "freeform",
     "experimental_tools": [],
     "web_search": false,
     "tier": "verified"
@@ -201,7 +201,7 @@
     "priority": 106,
     "max_output_tokens": 65536,
     "reasoning_summary": "none",
-    "apply_patch": "none",
+    "apply_patch": "freeform",
     "experimental_tools": [],
     "web_search": true,
     "tier": "verified"
@@ -231,7 +231,7 @@
     "priority": 107,
     "max_output_tokens": 65536,
     "reasoning_summary": "none",
-    "apply_patch": "none",
+    "apply_patch": "freeform",
     "experimental_tools": [],
     "web_search": true,
     "tier": "verified"
@@ -327,7 +327,7 @@
     "priority": 110,
     "max_output_tokens": 943718,
     "reasoning_summary": "none",
-    "apply_patch": "none",
+    "apply_patch": "freeform",
     "experimental_tools": [],
     "web_search": true,
     "tier": "verified"
@@ -358,7 +358,7 @@
     "priority": 111,
     "max_output_tokens": 128000,
     "reasoning_summary": "none",
-    "apply_patch": "none",
+    "apply_patch": "freeform",
     "experimental_tools": [],
     "web_search": true,
     "tier": "verified"
@@ -389,7 +389,7 @@
     "priority": 112,
     "max_output_tokens": 128000,
     "reasoning_summary": "none",
-    "apply_patch": "none",
+    "apply_patch": "freeform",
     "experimental_tools": [],
     "web_search": true,
     "tier": "verified"
@@ -420,7 +420,7 @@
     "priority": 113,
     "max_output_tokens": 128000,
     "reasoning_summary": "none",
-    "apply_patch": "none",
+    "apply_patch": "freeform",
     "experimental_tools": [],
     "web_search": true,
     "tier": "verified"
@@ -451,7 +451,7 @@
     "priority": 114,
     "max_output_tokens": 128000,
     "reasoning_summary": "none",
-    "apply_patch": "none",
+    "apply_patch": "freeform",
     "experimental_tools": [],
     "web_search": true,
     "tier": "verified"
@@ -541,7 +541,7 @@
     "priority": 117,
     "max_output_tokens": 131072,
     "reasoning_summary": "none",
-    "apply_patch": "none",
+    "apply_patch": "freeform",
     "experimental_tools": [],
     "web_search": true,
     "tier": "verified"
@@ -569,7 +569,7 @@
     "priority": 118,
     "max_output_tokens": 943718,
     "reasoning_summary": "none",
-    "apply_patch": "none",
+    "apply_patch": "freeform",
     "experimental_tools": [],
     "web_search": true,
     "tier": "verified"
