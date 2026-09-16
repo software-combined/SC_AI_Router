@@ -94,9 +94,12 @@ class StreamRecord:
 
 def streamed_metrics(record):
     """The counters every log line for this response carries."""
+    unattributed = (record.forwarded_bytes - record.content_delta_bytes
+                    - record.reasoning_bytes)
     return {'forwarded_delta_bytes': record.forwarded_bytes,
             'content_delta_bytes': record.content_delta_bytes,
-            'reasoning_delta_bytes': record.reasoning_bytes}
+            'reasoning_delta_bytes': record.reasoning_bytes,
+            'unattributed_delta_bytes': unattributed}
 
 
 def relay_stream(handler, provider, response, prepared, metrics, started,

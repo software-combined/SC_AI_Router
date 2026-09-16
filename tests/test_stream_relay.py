@@ -86,7 +86,8 @@ class HeldFrameTests(unittest.TestCase):
         record.reasoning_bytes = 6
         self.assertEqual(stream_relay.streamed_metrics(record),
                          {'forwarded_delta_bytes': 11, 'content_delta_bytes': 4,
-                          'reasoning_delta_bytes': 6})
+                          'reasoning_delta_bytes': 6,
+                          'unattributed_delta_bytes': 1})
 
     def test_clear_terminal_fields_drops_only_the_verdict(self):
         metrics = {'code': 'UPSTREAM_STREAM_FAILED', 'upstream_code': 'server_error',
