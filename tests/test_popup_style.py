@@ -76,6 +76,28 @@ class PopupStyleTests(unittest.TestCase):
         self.assertIn('"Cancel"', macos)
         self.assertIn("'Cancel'", key_dialog.argv('C:/powershell.exe', 'win32')[-1])
 
+    def test_windows_dialog_lays_every_control_out(self):
+        # WinForms gives a control added straight to a form the Location
+        # (0, 0), so with no layout container every control stacks in the
+        # corner: the key box and both buttons are covered and unusable.
+        # Found live on Windows, 2026-09-16.
+        script = key_dialog.argv('C:/powershell.exe', 'win32')[-1]
+        self.assertEqual(script.count('$f.Controls.Add('), 1,
+                         'only the layout panel belongs to the form itself')
+        for control in ('$p.Controls.Add($pic)', '$p.Controls.Add($t)',
+                        '$p.Controls.Add($k)', '$p.Controls.Add($r)',
+                        '$r.Controls.Add($b)', '$r.Controls.Add($c)'):
+            with self.subTest(control):
+                self.assertIn(control, script)
+
+    def test_windows_combo_uses_the_enum_name(self):
+        # DropDownStyle = 3 is not a member of ComboBoxStyle: PowerShell
+        # throws a non-terminating error and leaves an editable combo, whose
+        # free text collect() then refuses.
+        script = key_dialog.argv('C:/powershell.exe', 'win32')[-1]
+        self.assertIn("DropDownStyle = 'DropDownList'", script)
+        self.assertNotIn('DropDownStyle = 3', script)
+
 
 if __name__ == '__main__':
     unittest.main()
