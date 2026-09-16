@@ -270,17 +270,17 @@ def _rollback_failed_install(home, state, backend, latest, previous, catalog_pat
 
 def _open_key_window(python, home, setup_url, clients):
     """Open the native key window; the setup URL prints only on a TTY."""
-    if sys.stdout.isatty():
-        print(f'open {setup_url} to connect your OpenRouter key')
-    try:
-        subprocess.Popen([python, '-m', 'ai_router.key_prompt', setup_url, '--clients', clients],
-                         cwd=str(current_release_dir(home)), start_new_session=True,
-                         creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
-                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                         stderr=subprocess.DEVNULL)
+    if sys.stdout.isatty(): print(f'open {setup_url} to connect your OpenRouter key')
+    try:  # URL on stdin, never argv; write once, close, never read.
+        proc = subprocess.Popen([python, '-m', 'ai_router.key_prompt', '--stdin', '--clients',
+                                 clients], cwd=str(current_release_dir(home)),
+                                start_new_session=True, stdin=subprocess.PIPE,
+                                creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try: proc.stdin.write((setup_url + '\n').encode()); proc.stdin.close()
+        except OSError: pass
     except OSError:
-        if not sys.stdout.isatty():
-            print('could not open the key window; the next request opens it')
+        if not sys.stdout.isatty(): print('could not open the key window; the next request opens it')
 
 
 def do_install(args, _fetch=fetch, _run=None):
@@ -318,9 +318,9 @@ def do_install(args, _fetch=fetch, _run=None):
         return 0
     backend = platform_backend()
     backend.check(home)
+    want = _updater._required_sha256(latest)
     tarball = _svc.feed_read(_fetch, _svc.sibling_bundle(feed, latest['url']))
-    if latest.get('sha256'):
-        verify_sha256(tarball, latest['sha256'])
+    verify_sha256(tarball, want)
     manifest_doc = {'files': {}}
     with tarfile.open(fileobj=io.BytesIO(tarball), mode='r') as tar:
         try:

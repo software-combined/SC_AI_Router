@@ -67,10 +67,16 @@ RULES = {
     'ai_router/tool_adapter.py': ('router', 'providers'),
     'ai_router/providers.py': ('router', 'claude'),
     'ai_router/claude.py': ('router', 'providers'),
-    'ai_router/upstream.py': ('router', 'claude', 'providers', 'transport'),
+    # Plan 165: upstream is wire/failure policy. It logs through the events
+    # leaf, so it must never reach the boot graph (runtime, setup,
+    # credentials, key_prompt) to write one line.
+    'ai_router/upstream.py': ('router', 'claude', 'providers', 'transport',
+                              'runtime', 'setup', 'credentials', 'key_prompt'),
     'ai_router/setup_page.py': ('router', 'providers', 'credentials', 'key_prompt'),
     'ai_router/transport.py': ('router', 'providers', 'claude', 'registry',
-                                  'catalogue', 'models', 'setup'),
+                                  'catalogue', 'models', 'setup', 'runtime'),
+    'ai_router/stream_errors.py': ('router', 'providers', 'claude', 'runtime',
+                                   'setup'),
     'ai_router/protocols/__init__.py': ('router',),
     'ai_router/protocols/responses.py': ('router',),
     'ai_router/protocols/messages.py': ('router', 'providers'),
@@ -80,6 +86,17 @@ RULES = {
 class DomainBoundaryTests(unittest.TestCase):
     def test_boundaries_hold(self):
         self.assertEqual(_check_rules(RULES), [])
+
+    def test_leaf_modules_import_nothing_local_at_module_level(self):
+        # Plan 165: `state` imports nothing local at all, and `events` is a
+        # leaf whose only local import is the call-time `state.default_home`
+        # inside configure_logging. tests/test_import_graph.py owns the
+        # full-graph rules; this row keeps the intent beside the other
+        # boundary rules.
+        events = ast.parse((ROOT / 'ai_router' / 'events.py').read_text())
+        local = [node for node in events.body
+                 if isinstance(node, ast.ImportFrom) and node.level]
+        self.assertEqual(local, [])
 
     def test_detector_rejects_a_synthetic_violation(self):
         # The check must fail when a rule is actually broken, not pass

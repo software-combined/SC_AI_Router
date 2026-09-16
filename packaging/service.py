@@ -103,7 +103,7 @@ def fetch(url):
         return Path(url[len('file://'):]).read_bytes()
     if not _feed.trusted_origin(url):
         raise SystemExit('refusing untrusted feed URL: %s' % _feed._safe_url(url))
-    with urllib.request.urlopen(url, timeout=30) as response:
+    with _feed.opener().open(urllib.request.Request(url), timeout=30) as response:
         return response.read()
 
 

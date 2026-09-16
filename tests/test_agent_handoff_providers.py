@@ -7,6 +7,7 @@ from unittest.mock import Mock
 
 from ai_router import agent_handoffs, compaction, providers, upstream
 from tests.test_agent_handoffs import alias_call, native_tools
+from ai_router.tool_adapter import tool_entries
 
 
 def _external_responses():
@@ -44,11 +45,39 @@ class ProviderTests(unittest.TestCase):
             credentials)
         return prepared, credentials, original
 
+    def test_codex_prepare_hints_spawn_and_close(self):
+        tools = native_tools('spawn_agent', 'wait_agent')
+        tools[0]['tools'].append(
+            {'type': 'function', 'name': 'close_agent', 'description': 'Close it.',
+             'parameters': {'type': 'object', 'properties': {
+                 'target': {'type': 'string'}}, 'required': ['target'],
+                 'additionalProperties': False}, 'strict': True})
+        for provider in (providers.SubscriptionProvider(), _external_responses()):
+            with self.subTest(provider=provider.name):
+                prepared, _, original = self.prepare(provider, deepcopy(tools))
+                body = json.loads(prepared.body)
+                hinted, skipped = [], []
+                for tool, _ in tool_entries(body['tools']):
+                    name, desc = tool.get('name', ''), tool.get('description', '')
+                    base = name.rsplit('__', 1)[-1]
+                    if base == 'wait_agent':
+                        skipped.append(desc)
+                    elif base in agent_handoffs.LANE_HINT_NAMES:
+                        hinted.append(desc)
+                self.assertTrue(hinted)
+                self.assertTrue(all(agent_handoffs.LANE_HINT in desc for desc in hinted))
+                self.assertTrue(all(agent_handoffs.LANE_HINT not in desc for desc in skipped))
+                self.assertNotIn(agent_handoffs.LANE_HINT,
+                                 original['tools'][0]['tools'][0]['description'])
+
     def test_native_reserialized_headers_and_encrypted_tools(self):
         prepared, credentials, original = self.prepare(providers.SubscriptionProvider(),
                                                        native_tools('spawn_agent'))
         body = json.loads(prepared.body)
-        self.assertEqual(body['tools'][0], original['tools'][0])
+        native = body['tools'][0]
+        self.assertEqual(native['name'], 'collaboration')
+        self.assertEqual(native['tools'][0]['name'], 'spawn_agent')
+        self.assertIn(agent_handoffs.LANE_HINT, native['tools'][0]['description'])
         self.assertEqual(prepared.headers['Authorization'], 'Bearer synthetic-subscription')
         self.assertEqual(prepared.headers['Accept-Encoding'], 'identity')
         self.assertFalse(any(k.lower() in ('content-length', 'content-encoding')

@@ -1,19 +1,28 @@
-"""Which frames count as the client's answer, and so block a retry."""
+"""Which frames count as the client's answer, and which as reasoning."""
 import json
 import unittest
+from unittest import mock
 
+from ai_router import router as router_mod
 from ai_router import sse, stream_errors
+from tests.fakes import FakeUpstream, install_fake
+from tests.harness import post as _post, start_auth_server as _start_auth_server
 
 
 def _frame(event):
     return sse.frame(json.dumps(event).encode())
 
 
+def _marker(event, key):
+    """The per-frame marker `normalize` leaves in metrics, or None."""
+    metrics = {}
+    list(stream_errors.normalize([_frame(event)], metrics))
+    return metrics.get(key)
+
+
 class AnswerFrameTests(unittest.TestCase):
     def _answer(self, event):
-        metrics = {}
-        list(stream_errors.normalize([_frame(event)], metrics))
-        return metrics.get('answer_frame')
+        return _marker(event, 'answer_frame')
 
     def test_reasoning_items_are_replaceable(self):
         # A reasoning item added before a failure is not answer bytes: a retry
@@ -43,6 +52,69 @@ class AnswerFrameTests(unittest.TestCase):
         for kind in ('response.created', 'response.in_progress', 'unknown.kind'):
             with self.subTest(kind=kind):
                 self.assertIsNone(self._answer({'type': kind}))
+
+
+class ReasoningFrameTests(unittest.TestCase):
+    """The reasoning marker names replaceable bytes without calling them answer."""
+
+    def test_reasoning_items_set_the_reasoning_marker(self):
+        for kind in ('response.output_item.added', 'response.output_item.done'):
+            with self.subTest(kind=kind):
+                event = {'type': kind, 'item': {'type': 'reasoning', 'id': 'rs_1'}}
+                self.assertEqual(_marker(event, 'reasoning_frame'), kind)
+                # Reasoning stays replaceable plumbing, never an answer frame.
+                self.assertIsNone(_marker(event, 'answer_frame'))
+
+    def test_other_items_and_setup_frames_stay_unattributed(self):
+        events = (
+            {'type': 'response.output_item.added', 'item': {'type': 'message'}},
+            {'type': 'response.output_item.done', 'item': {'type': 'function_call'}},
+            {'type': 'response.reasoning_summary_text.delta', 'delta': 'x'},
+            {'type': 'response.created'},
+        )
+        for event in events:
+            with self.subTest(kind=event['type'], item=event.get('item', {}).get('type')):
+                self.assertIsNone(_marker(event, 'reasoning_frame'))
+
+
+class ReasoningBytesTests(unittest.TestCase):
+    """End to end through the relay: reasoning bytes are counted, never answer.
+
+    The 2026-09-15 incident: a stream ended on the prepared output cap after
+    forwarding megabytes the log called unattributed, because nothing said
+    which cap was sent or that the bytes were reasoning.
+    """
+
+    MODEL = 'deepseek/deepseek-v4.1-flash'
+
+    def test_reasoning_then_cap_limited_incomplete_is_read_from_the_log(self):
+        reasoning = _frame({'type': 'response.output_item.added',
+                            'item': {'type': 'reasoning', 'id': 'rs_1'}})
+        wire = (_frame({'type': 'response.created', 'response': {
+                    'id': 'r1', 'model': self.MODEL}})
+                + reasoning
+                + _frame({'type': 'response.incomplete', 'response': {
+                    'id': 'r1', 'incomplete_details': {'reason': 'max_output_tokens'}}}))
+        recorded = install_fake(self, lambda: FakeUpstream(
+            200, wire, [('Content-Type', 'text/event-stream')]))
+        server = _start_auth_server(self)
+        with mock.patch.object(router_mod, 'log_event') as logged:
+            response = _post(server.server_port, '/test-token/responses',
+                             {'model': self.MODEL, 'input': [], 'stream': True,
+                              'tools': [{'type': 'custom', 'name': 'exec'}]})
+            self.assertEqual(response.status, 200)
+            body = response.read()
+        self.assertIn(b'response.incomplete', body)
+        failures = [c for c in logged.call_args_list if c.args[0] == 'request_failed']
+        self.assertEqual(len(failures), 1)
+        kwargs = failures[0].kwargs
+        self.assertGreater(kwargs['reasoning_delta_bytes'], 0)
+        self.assertLess(kwargs['reasoning_delta_bytes'], kwargs['forwarded_delta_bytes'])
+        self.assertEqual(kwargs['content_delta_bytes'], 0)
+        self.assertEqual(kwargs['upstream_reason'], 'max_output_tokens')
+        # The cap the log names is the cap the request actually sent.
+        self.assertEqual(kwargs['max_output_tokens'],
+                         json.loads(recorded[0][3])['max_output_tokens'])
 
 
 class RewrittenTerminalTests(unittest.TestCase):

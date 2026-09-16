@@ -11,6 +11,8 @@ import json
 import os
 from pathlib import Path
 
+from .events import log_event
+
 POLICY_FILE = 'model-policy.json'
 
 # Per-module flag so tests can drive the Windows branch without patching
@@ -27,7 +29,6 @@ def load(home):
     ignored by the caller at merge time, never fatal here. Never logs
     content.
     """
-    from .runtime import log_event
     path = Path(home) / POLICY_FILE
     try:
         raw = path.read_text()

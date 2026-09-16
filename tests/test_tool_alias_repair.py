@@ -79,7 +79,7 @@ class AliasSchemeTests(unittest.TestCase):
 
     def test_near_miss_readable_alias_is_repaired(self):
         names, _ = _prepare('alpha', 'send_message')
-        with mock.patch('ai_router.runtime.log_event') as logged:
+        with mock.patch('ai_router.tool_aliases.log_event') as logged:
             back = ToolEvents(names, {'model': 'm'}).item(_call('alpha__send_messag'))
         self.assertEqual((back.get('namespace'), back.get('name')),
                          ('alpha', 'send_message'))
@@ -115,7 +115,7 @@ class AliasSchemeTests(unittest.TestCase):
         output = tool_aliases.annotate('unsupported call: delivered_message', names)
         self.assertIn(HINT_DELIVERED, output)
         self.assertNotIn('probe__echo', output)
-        with mock.patch('ai_router.runtime.log_event') as logged:
+        with mock.patch('ai_router.tool_aliases.log_event') as logged:
             ToolEvents(names, {'model': 'm'}).item(_call('delivered_message'))
         causes = [call.kwargs['cause'] for call in logged.call_args_list
                   if call.args[0] == 'tool_call_unresolved']
@@ -224,7 +224,7 @@ class AliasSchemeTests(unittest.TestCase):
         payload = {'model': 'z-ai/glm-5.3',
                    'tools': [top] + _namespaced('probe', 'echo'), 'input': []}
         names = prepare_tools(payload)
-        with mock.patch('ai_router.runtime.log_event') as logged:
+        with mock.patch('ai_router.tool_aliases.log_event') as logged:
             back = ToolEvents(names, {'model': 'z-ai/glm-5.3'}).item(_call('echo'))
         self.assertEqual(back['name'], 'echo')
         self.assertNotIn('namespace', back)
@@ -287,7 +287,7 @@ class LoggingTests(unittest.TestCase):
         adapter = ToolEvents(names, {'model': 'z-ai/glm-5.3'})
         repaired = _call(wire[:-1])
         unknown = _call('nope', id='fc2', call_id='c2')
-        with mock.patch('ai_router.runtime.log_event') as logged:
+        with mock.patch('ai_router.tool_aliases.log_event') as logged:
             for _ in range(2):
                 adapter.event({'type': 'response.output_item.added',
                                'item': {**repaired, 'arguments': ''}})

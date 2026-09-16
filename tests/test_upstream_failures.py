@@ -377,18 +377,17 @@ class RefusalCacheTests(unittest.TestCase):
         logged = []
         with mock.patch.object(upstream, 'log_event',
                                lambda event, **f: logged.append((event, f))):
-            response = SimpleNamespace(status=429, read=lambda *a: b'{"error": {"code": "x"}}',
-                                       getheader=lambda *a, **k: '7')
+            response = SimpleNamespace(status=429, getheader=lambda *a, **k: '7')
             prepared = SimpleNamespace(provider='openrouter')
             self.assertEqual(upstream.upstream_retry_after(
-                response, prepared, {'path': '/responses'}), ('transient', '7'))
+                response, prepared, {'path': '/responses'},
+                body=b'{"error": {"code": "x"}}'), ('transient', '7'))
             self.assertEqual(logged[-1], ('upstream_rate_limited',
                                           {'provider': 'openrouter', 'path': '/responses',
                                            'category': 'transient'}))
-            other = SimpleNamespace(status=200, read=lambda *a: b'',
-                                    getheader=lambda *a, **k: '2')
+            other = SimpleNamespace(status=200, getheader=lambda *a, **k: '2')
             self.assertIsNone(upstream.upstream_retry_after(
-                other, prepared, {'path': '/responses'}))
+                other, prepared, {'path': '/responses'}, body=b''))
 
     def test_transient_upstream_failure_dispatches_again(self):
         from ai_router import relay

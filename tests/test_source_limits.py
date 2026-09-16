@@ -1,9 +1,8 @@
-"""The limits baseline is exact: stale, wrong and new overruns all fail.
+"""Each baseline entry is a ceiling: shrinking passes, growth fails.
 
-Plan 156 item 4: the old check read the baseline only for files above the
-soft cap, so a shrunken file or an edited count drifted silently. The tool
-now also rejects nonexistent files, incorrect counts and exemptions that are
-no longer needed.
+Plan 166 on top of landed Plan 156 item 4: the tool already rejects missing
+files, unknown areas and entries back under the soft cap. The recorded count
+is a growth ceiling, not an exact claim about the current size.
 """
 import json
 import subprocess
@@ -55,10 +54,15 @@ class SourceLimitsBaselineTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn('BASELINE ai_router/gone.py: no such file', result.stdout)
 
-    def test_a_wrong_baseline_count_fails(self):
+    def test_a_shrunken_file_passes_against_its_ceiling(self):
         result = self.fixture({'ai_router/x.py': OVER}, {'ai_router/x.py': OVER + 9})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('failures=0', result.stdout)
+
+    def test_growth_past_the_ceiling_fails(self):
+        result = self.fixture({'ai_router/x.py': OVER + 10}, {'ai_router/x.py': OVER + 9})
         self.assertEqual(result.returncode, 1)
-        self.assertIn('baseline says %d' % (OVER + 9), result.stdout)
+        self.assertIn('baseline ceiling %d' % (OVER + 9), result.stdout)
 
     def test_a_baseline_below_the_soft_cap_fails(self):
         result = self.fixture({'ai_router/x.py': 10}, {'ai_router/x.py': 10})
@@ -69,6 +73,18 @@ class SourceLimitsBaselineTests(unittest.TestCase):
         result = self.fixture({'config/x.py': 10}, {'config/x.py': 999})
         self.assertEqual(result.returncode, 1)
         self.assertIn('unknown area', result.stdout)
+
+    def test_a_non_integer_ceiling_fails(self):
+        for bad in (OVER + 0.5, '260', True):
+            with self.subTest(bad=bad):
+                result = self.fixture({'ai_router/x.py': OVER}, {'ai_router/x.py': bad})
+                self.assertEqual(result.returncode, 1, bad)
+                self.assertIn('ceiling is not an integer', result.stdout)
+
+    def test_the_live_baseline_passes_the_tool(self):
+        result = run_tool(ROOT)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('failures=0', result.stdout)
 
     def test_the_hard_cap_fails_even_with_an_exact_baseline(self):
         result = self.fixture({'ai_router/x.py': 401}, {'ai_router/x.py': 401})

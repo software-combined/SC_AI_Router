@@ -9,6 +9,8 @@ hidden in a private copy of the parse.
 Python 3.9-safe and stdlib only; the installer loads it by path.
 """
 import json
+import os
+import time
 from pathlib import Path
 
 STATE_NAME = 'mixed-router-state.json'
@@ -17,6 +19,27 @@ STATE_NAME = 'mixed-router-state.json'
 def path(home):
     """The state document under one router home."""
     return Path(home) / STATE_NAME
+
+
+def default_home():
+    """Router home, resolved at call time so tests can patch the env var."""
+    return Path(os.environ.get('ROUTER_HOME', Path.home() / '.codex' / 'mixed-model-router'))
+
+
+def setup_pending(state, now=None):
+    """True while a fresh unexpired setup nonce is installed.
+
+    Plan 165: moved from setup.py so the boot composition root can ask the
+    question without importing the key window.
+    """
+    cfg = state.get('setup') if isinstance(state, dict) else None
+    if not isinstance(cfg, dict):
+        return False
+    if not isinstance(cfg.get('nonce'), str) or not cfg['nonce']:
+        return False
+    if not isinstance(cfg.get('expires'), (int, float)) or isinstance(cfg.get('expires'), bool):
+        return False
+    return cfg['expires'] > (time.time() if now is None else now)
 
 
 class StateUnreadable(ValueError):

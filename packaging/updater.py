@@ -37,6 +37,16 @@ NOTIFY_NAMES = 3
 REPLY_LIMIT = 1 << 20
 _NONCE_SHAPE = re.compile(r'[A-Za-z0-9_\-]{16,}')
 
+_SHA256_SHAPE = re.compile(r'^[0-9a-f]{64}$')
+
+
+def _required_sha256(latest):
+    """The feed document's bundle checksum, or an UpdateError when unusable."""
+    value = latest.get('sha256')
+    if not isinstance(value, str) or not _SHA256_SHAPE.fullmatch(value.strip().lower()):
+        raise UpdateError('feed_invalid', 'feed document has no usable bundle checksum')
+    return value.strip().lower()
+
 # Closed set of codes the state document may carry as `last_error` (Plan
 # 147). The doctor and the support bundle read only these names; the
 # updater's free text never travels with them.
@@ -374,7 +384,10 @@ def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
     read_feed = _read_feed or (lambda url, etag: _svc.fetch_feed(url, etag, injected))
     etag_path = home / 'update-etag'
     etag = etag_path.read_text().strip() if etag_path.exists() else None
-    status, body, etag = _read_feed_pass(feed, etag, read_feed, sleep)
+    try:
+        status, body, etag = _read_feed_pass(feed, etag, read_feed, sleep)
+    except SystemExit as exc:
+        raise UpdateError('feed_untrusted', str(exc) or 'feed redirected off the trusted update origin')
     if status == 304:
         if express_only:
             return 0
@@ -423,12 +436,15 @@ def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
         state = json.loads((home / 'mixed-router-state.json').read_text())
     except (OSError, ValueError):
         raise UpdateError('update_failed', 'router state is missing or unreadable')
-    tarball = _fetch(bundle_url)
-    if latest.get('sha256'):
-        try:
-            verify_sha256(tarball, latest['sha256'])
-        except SystemExit as exc:
-            raise UpdateError('bundle_checksum', str(exc) or 'bundle checksum mismatch')
+    want = _required_sha256(latest)
+    try:
+        tarball = _fetch(bundle_url)
+    except SystemExit as exc:
+        raise UpdateError('feed_untrusted', str(exc) or 'feed redirected off the trusted update origin')
+    try:
+        verify_sha256(tarball, want)
+    except SystemExit as exc:
+        raise UpdateError('bundle_checksum', str(exc) or 'bundle checksum mismatch')
     with tempfile.TemporaryDirectory() as tmp:
         try:
             _svc.safe_extract(tarball, tmp)

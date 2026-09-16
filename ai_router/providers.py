@@ -2,14 +2,14 @@
 import http.client
 import json
 import time
-from . import capabilities, compaction as comp, local_services, agent_handoffs, provider_defs
+from . import capabilities, compaction as comp, local_services, agent_handoffs, provider_defs, transport
 from .standalone_outputs import materialize_outputs
 from . import subscription_history, context_recovery
-from .capabilities import CANONICAL_ORDER, check_effort, check_images, input_modalities
+from .capabilities import CANONICAL_ORDER, check_effort, input_modalities
 from .image_items import note_images
 from .errors import PreparationError, SubscriptionRequired, UnknownModel
 from .registry import by_slug, near_miss
-from .runtime import log_event
+from .events import log_event
 from .discovered import remember
 from .tool_adapter import prepare_tools, snoop_response_identity, stream_events, ToolEvents
 
@@ -81,10 +81,14 @@ class SubscriptionProvider:
         history_changed = normalized is not payload
         payload = normalized
         try:
-            names = agent_handoffs.add_plaintext_tools(payload) if path == '/responses' else set()
+            names = set()
+            hinted = False
+            if path == '/responses':
+                names = agent_handoffs.add_plaintext_tools(payload)
+                hinted = agent_handoffs.hint_full_lanes(payload)
         except ValueError as exc:
             raise PreparationError(str(exc)) from exc
-        if names or history_changed:
+        if names or history_changed or hinted:
             fwd = {k: v for k, v in fwd.items() if k.lower() not in ('content-encoding', 'accept-encoding')}
             fwd['Accept-Encoding'] = 'identity'
             raw_body = json.dumps(payload).encode()
@@ -139,13 +143,10 @@ class ExternalResponsesProvider:
         payload['input'] = comp.scrub_tool_fragments(payload.get('input', []))
         try:
             aliases = agent_handoffs.add_plaintext_tools(payload)
+            agent_handoffs.hint_full_lanes(payload)
             tool_names = prepare_tools(payload)
             tool_names.handoffs = aliases
             rewritten = comp.strip_reasoning_blobs(comp.rewrite_input(payload.get('input', [])))
-        except ValueError as exc:
-            raise PreparationError(str(exc))
-        try:
-            check_images(model, rewritten)
         except ValueError as exc:
             raise PreparationError(str(exc))
         keep_images = 'image' in input_modalities(model) if isinstance(model, str) else True
@@ -179,7 +180,8 @@ class ExternalResponsesProvider:
         if window:
             default = min(default, window - window * 9 // 10)
         requested = payload.get('max_output_tokens')
-        payload['max_output_tokens'] = min(requested, limit) if requested else default
+        cap = min(requested, limit) if requested else default
+        payload['max_output_tokens'] = cap
         # Context size stays the provider's call: a chars-per-token estimate
         # refused long turns the client still had room for.
         headers = dict(self.defn.request_headers)
@@ -188,7 +190,8 @@ class ExternalResponsesProvider:
                         'Accept-Encoding': 'identity'})
         return Prepared(self.host, self.defn.path_for(provider_defs.RESPONSES, '/responses'),
                         headers,
-                        json.dumps(payload).encode(), tool_names, self.name)
+                        json.dumps(payload).encode(), tool_names, self.name,
+                        output_cap=cap)
 
     def adapt(self, response, tool_names, notes=None):
         if notes is not None and not tool_names and response.status == 200:
@@ -197,7 +200,7 @@ class ExternalResponsesProvider:
             if 'text/event-stream' in response.getheader('Content-Type', ''):
                 yield from stream_events(response, tool_names, notes)
             else:
-                result = json.load(response)
+                result = json.loads(transport.read_capped(response, transport.MAX_UPSTREAM_BODY))
                 if notes is not None and isinstance(result.get('model'), str):
                     notes['served_model'] = result['model']
                 adapter = ToolEvents(tool_names, notes)
@@ -280,7 +283,7 @@ class ExternalResponsesProvider:
                     headers=headers)
                 resp = conn.getresponse()
                 try:
-                    data = json.load(resp)
+                    data = json.loads(transport.read_capped(resp, transport.MAX_UPSTREAM_BODY))
                 except ValueError:
                     raise OSError('Summarizer returned invalid JSON')
                 summary = comp.extract_summary(resp.status, data)

@@ -11,20 +11,16 @@ import json
 import os
 import threading
 from copy import deepcopy
-from pathlib import Path
 from .compaction import SUMMARY_PREFIX, decode_summary
 from .atomic_write import replace_text
+from .state import default_home
 from .tool_merge import merge_tool_defs
 
 _MEMORY, _LOCK, _MAX = {}, threading.Lock(), 16
 
 
-def _home():
-    return Path(os.environ.get('ROUTER_HOME', Path.home() / '.codex' / 'mixed-model-router'))
-
-
 def _store_dir():
-    return _home() / 'discovered-tools'
+    return default_home() / 'discovered-tools'
 
 
 def _key(summary):

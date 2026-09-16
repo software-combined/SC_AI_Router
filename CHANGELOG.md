@@ -1,6 +1,65 @@
 # Changelog
 
-## Unreleased
+## 0.6.72
+
+- A feed document without a bundle checksum is refused instead of
+  installing an unverified tarball, and feed, bundle and key-check fetches
+  never follow a redirect off the trusted origin.
+
+## 0.6.71
+
+- An oversized compact now summarizes instead of refusing: V1
+  `/responses/compact` and inline V2 triggers decode up to the existing
+  64 MiB zstd ceiling before the local summarizer runs, which still sends
+  only a bounded transcript upstream. Past that ceiling the turn keeps
+  today's 400 `BODY_TOO_LARGE`.
+
+## 0.6.70
+
+- The router no longer holds the request body and its parsed form for the
+  duration of a streamed turn: the relay now runs after the request frame
+  returns, so both buffers die before the stream starts.
+
+## 0.6.69
+
+- Upstream reads are bounded the way request bodies are: SSE adapters parse
+  bounded line pieces, whole-body reads are capped at 16 MiB (1 MiB for
+  error envelopes), and an over-cap upstream ends the turn 502 instead of
+  growing the router without bound.
+
+## 0.6.68
+
+- Codex sessions now get a full-lane spawn hint: if spawn is refused
+  because every subagent lane is taken, close finished agents (or all
+  of them if needed) and retry. The same sentence is appended once to
+  `spawn_agent` and `close_agent`. Claude Code does not receive it,
+  and neither client gets an annotated spawn-error output.
+- A deeply nested request body now ends the turn with a 400 instead of
+  dropping the loopback connection, and drain admission is decided under
+  one lock so a drain landing mid-admission still refuses cleanly.
+- The installer hands the setup URL to the key window on stdin instead of
+  the command line, so it never appears in `ps` output on a shared machine.
+
+## 0.6.67
+
+- An image sent to a model that cannot read images no longer ends the
+  turn. The image is replaced with a note that tells the model to say
+  so in the conversation, and the turn continues.
+- Stream log lines name two more facts: `max_output_tokens`, the output
+  cap this request sent upstream (the twin row's own cap after a helper
+  fallback), and `reasoning_delta_bytes`, how much of the forwarded stream
+  arrived as reasoning output items rather than answer. The cap is exact;
+  the reasoning count covers item-shaped reasoning only.
+
+## 0.6.66
+
+- Codex deferred-tool search now tells the model to call the exact
+  returned name once, and to stop searching if the tool is missing.
+- Native installer CI jobs run only on pull requests into `main`;
+  develop PRs keep the cheap Ubuntu check. Develop `v*` tags still
+  publish through the release workflow.
+
+## 0.6.65
 
 - An OpenRouter turn refused for funds now ends at once with a key
   credit message naming the model and pointing to IT for a topped-up
