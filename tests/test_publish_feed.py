@@ -137,8 +137,20 @@ class PublishFeedTests(unittest.TestCase):
         with self.assertRaises(SystemExit) as caught:
             with mock.patch.object(publish, 'run', _Aws(existing='b' * 64)):
                 publish.main(['--dist', str(dist), '--channel', 'beta',
+                              '--bucket', 'feed-bucket',
                               '--sign', str(self._seed(dist))])
         self.assertIn('immutable', str(caught.exception))
+
+    def test_a_missing_bucket_is_refused(self):
+        # No default exists, so a fork cannot publish to someone else's
+        # bucket by running the tool with no arguments (Plan 160).
+        dist = self._dist()
+        err = io.StringIO()
+        with redirect_stderr(err):
+            with self.assertRaises(SystemExit) as caught:
+                publish.main(['--dist', str(dist), '--channel', 'beta'])
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn('--bucket', err.getvalue())
 
     def test_unreadable_bundle_state_is_refused(self):
         """A head-object failure that is not a 404 must not skip the guard."""

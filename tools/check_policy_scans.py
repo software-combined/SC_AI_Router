@@ -36,6 +36,14 @@ SETUP_PIN_RE = re.compile(rb'actions/setup-python@[0-9a-f]{40}')
 SETUP_STEP_RE = re.compile(
     rb'(?m)^[ \t]*(?:-[ \t]+)?uses: \./\.github/actions/setup'
     rb'(?:[ \t]*#.*)?[ \t]*\r?$')
+# An AWS account id inside an ARN, or a bucket-shaped name carrying one, is a
+# publication identifier (Plan 160): it belongs in repository variables, so a
+# copy returning to the tree fails here. Neither pattern spells an account id,
+# so this file needs no self-exclusion; `plans/` is gitignored working notes
+# that never ship.
+ACCOUNT_ARN_RE = re.compile(rb'arn:aws[a-z-]*:[a-z0-9-]+:[a-z0-9-]*:\d{12}:')
+ACCOUNT_BUCKET_RE = re.compile(rb'\b[a-z0-9][a-z0-9.-]{2,}-\d{12}-[a-z0-9-]+')
+GITIGNORED = ('plans',)
 WORKFLOWS = ('check.yml', 'release.yml')
 
 SELF = Path(__file__).resolve()
@@ -90,6 +98,25 @@ def check_secrets():
     return True
 
 
+def check_publication_identifiers():
+    """No AWS account id or bucket name in tracked source (Plan 160)."""
+    hits = []
+    for path in _iter_files(SCAN_ALL):
+        rel = path.relative_to(ROOT)
+        if rel.parts and rel.parts[0] in GITIGNORED:
+            continue
+        text = path.read_bytes()
+        if ACCOUNT_ARN_RE.search(text) or ACCOUNT_BUCKET_RE.search(text):
+            hits.append(str(rel))
+    if hits:
+        print('AWS account id or bucket name committed; it belongs in '
+              'repository variables, not the tree (Plan 160)')
+        for hit in hits:
+            print(f'  {hit}')
+        return False
+    return True
+
+
 def check_setup_single_owner():
     """The composite owns the setup-python pin; workflows use it."""
     action = ROOT / '.github' / 'actions' / 'setup' / 'action.yml'
@@ -125,7 +152,8 @@ def check_setup_single_owner():
 
 def main():
     # Every scan runs (no short-circuit) so one run reports all failures.
-    results = (check_request_cap(), check_secrets(), check_setup_single_owner())
+    results = (check_request_cap(), check_secrets(),
+               check_publication_identifiers(), check_setup_single_owner())
     ok = all(results)
     print(f'policy-scans: {"pass" if ok else "FAIL"}')
     return 0 if ok else 1

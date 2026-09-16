@@ -20,6 +20,10 @@ CAP_BYTES = b'DEFAULT_' + b'REQUEST' + b'_CAP = 5\n'
 # The scan-check name is built the same way: this file is inside the scanned
 # tree, so it must not carry the literal it exists to detect.
 CAP_CHECK = 'check_' + 'request' + '_cap'
+# Assembled from fragments for the same reason: the account-id scan reads this
+# file too, and a literal here would (correctly) fail its own gate.
+ACCOUNT_PROBE = (b'arn:aws:iam::' + b'1' * 12 + b':role/publisher')
+BUCKET_PROBE = b'scg-router-feed-' + b'2' * 12 + b'-apse2'
 
 
 class ProviderKeyIgnoreTests(unittest.TestCase):
@@ -70,7 +74,21 @@ class PolicyScanTests(unittest.TestCase):
         module = _load(self._tree())
         self.assertTrue(getattr(module, CAP_CHECK)())
         self.assertTrue(module.check_secrets())
+        self.assertTrue(module.check_publication_identifiers())
         self.assertTrue(module.check_setup_single_owner())
+
+    def test_an_account_identifier_anywhere_is_caught(self):
+        # Non-vacuous: an account id inside an ARN, and one inside a
+        # bucket-shaped name, each fail the scan on a tree that is otherwise
+        # clean (Plan 160).
+        for probe in (ACCOUNT_PROBE, BUCKET_PROBE):
+            with self.subTest(probe=probe[:10]):
+                root = self._tree()
+                (root / 'infra').mkdir(exist_ok=True)
+                (root / 'infra' / 'feed.yaml').write_bytes(
+                    b'BucketName: ' + probe + b'\n')
+                module = _load(root)
+                self.assertFalse(module.check_publication_identifiers())
 
     def test_cap_token_outside_the_old_directories_is_caught(self):
         root = self._tree()

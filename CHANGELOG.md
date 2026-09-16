@@ -22,6 +22,11 @@
   buttons were stacked behind the icon and prompt and the key could not be
   typed or submitted; every control now sits in a top-down panel. Its combo
   boxes also use the enum name instead of an invalid ordinal.
+- The feed publishers require `--bucket` and the release workflow reads the
+  feed bucket, publisher role and signing-seed ARN from repository settings
+  instead of carrying them in the tree, so the stack template and the release
+  path no longer publish an AWS account id. A fork that runs a publisher with
+  no arguments now fails instead of targeting our bucket.
 
 ## 0.6.74
 
