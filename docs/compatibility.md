@@ -1297,3 +1297,49 @@ second attempt for a transient one). The probe tool itself could not start:
 it still called `probe_context_budget.Client` without the `mode` argument
 that signature gained, so the run died before the client booted. That is
 fixed in this change and the run above is the evidence.
+
+## Leg F on the Gemini Flash child with a GLM parent, 2026-09-17 (plan 175)
+
+Client: `codex-cli 0.154.0-alpha.6.2`; router 0.6.78 working tree.
+`tools/probe_agent_handoffs.py --live --live-children --max-live-calls 18
+--parent z-ai/glm-5.3-flash --child google/gemini-3.8-flash --wire-mode classic`.
+
+| fact | value |
+|---|---|
+| calls | 17, inside the 18-call run cap and the row's 23-call cap |
+| markers replied | 3 of 3 (`SYNTH_066_INITIAL`, `SYNTH_066_FOLLOWUP`, `SYNTH_066_MESSAGE`) |
+| canonical replay | true |
+| alias emitted | true |
+| encrypted child | false |
+| errors | none; one stray `responseStreamDisconnected` (404) appears in the per-turn tool failures |
+
+Reading: leg F passes on the Gemini Flash child in this shape - one classic
+wire-mode run with a GLM Flash parent, on one quiet-upstream window. The
+three earlier attempts all used DeepSeek V4.1 Flash as the parent, which is
+the pairing the plan names, and died behind that parent's transient 503s;
+swapping the parent closes the leg, so the failure sat in the parent's
+upstream window rather than in this child. Two shapes stay open for this
+child: the DeepSeek parent the plan names, and Lite wire mode. The rest of
+the matrix is unchanged - the F and H rows the 2026-09-14 to 2026-09-15
+tables mark `not run (session cap)` for other children are still open, and
+Qwen stays key-blocked.
+
+## Open questions 1 to 3, 2026-09-17 (plan 175)
+
+Instruments: direct `POST https://openrouter.ai/api/v1/responses` turns on
+`deepseek/deepseek-v4.1-flash` at the row's default effort, with
+`X-OpenRouter-Metadata: enabled` and no router in the path; five billed
+turns total, all inside the row's call cap: three for question 2 (one per
+item type), and two endpoint-pinned turns for question 1. The unpinned
+question 1 configuration is the question 2 `custom_tool_call` turn, which
+carries the same shape.
+
+| question | result |
+|---|---|
+| 1. Does OpenRouter annotate converted tool calls with `tool_kind` / `responses_item_id` / `responses_item_status`, and which DeepSeek endpoint refuses them? | not reproduced: a `custom_tool_call` + its output returned 200 both unpinned and pinned to Together and to Parasail with `allow_fallbacks: false`, so the 2026-09-13 "Extra inputs are not permitted" refusal was not measured on either endpoint in this configuration |
+| 2. Do `compaction`, `additional_tools` and `custom_tool_call` items survive the conversion for a non-OpenAI vendor when sent unconverted? | all three survive: one turn each returned 200 and the model answered the marker, so DeepSeek V4.1 Flash accepts them as sent |
+| 3. Does a model ever call `openrouter_web_search` when the client's `web_search` tool rides along? | not reproduced (unchanged from 2026-09-15): the `--web-search` runtime leg still fails at app-server startup on this client build before any billed call |
+
+Open question 4 was answered on 2026-09-15 (the Contributor row accepts its
+own reasoning item back, leg C), so the plan's four open questions now each
+carry a recorded answer or a recorded non-reproduction.
