@@ -29,8 +29,27 @@ CERT="$(aws cloudformation describe-stacks --stack-name scg-router-feed-cert \
   --query "Stacks[0].Outputs[?OutputKey=='CertificateArn'].OutputValue" --output text)"
 aws cloudformation deploy --stack-name scg-router-feed --region ap-southeast-2 \
   --template-file infra/feed.yaml --capabilities CAPABILITY_NAMED_IAM \
-  --parameter-overrides CertificateArn="$CERT"
+  --parameter-overrides CertificateArn="$CERT" \
+    BucketName="$FEED_BUCKET" SigningSeedArn="$FEED_SIGNING_SEED_ARN"
 ```
+
+### Where the feed identifiers live (Plan 160)
+
+The template carries no account-bearing default, and the tree carries no
+account id, bucket name or role ARN. The release workflow reads three
+**repository variables** (repository settings, not the tree; never written
+down here):
+
+| Variable | What it is | What uses it |
+|---|---|---|
+| `FEED_BUCKET` | the feed bucket the publisher writes to | `tools/publish_feed.py --bucket`, the deploy override above |
+| `FEED_ROLE` | the publisher role the release workflow assumes by OIDC | the workflow's AWS credentials step |
+| `FEED_SIGNING_SEED_ARN` | the Secrets Manager secret holding the feed signing seed | the workflow's publish step, and the template's `SigningSeedArn` |
+
+`FEED_STACK` stays a literal in the workflow: a stack name carries no account
+id. Both publishers now require `--bucket`, so a fork that runs them with no
+arguments fails with a message naming the argument instead of publishing to
+someone else's bucket.
 
 `infra/feed.yaml` owns the versioned bucket (private to S3, served publicly
 through CloudFront), the CloudFront distribution, the DNS alias, and the
@@ -119,8 +138,8 @@ mutable entry point: they are replaced when they change and cached for
 five minutes, so a wrapper fix can still reach new installers.
 
 ```sh
-python3.14 tools/publish_first_install.py --dry-run   # plan only
-python3.14 tools/publish_first_install.py             # download, verify, upload
+python3.14 tools/publish_first_install.py --bucket "$FEED_BUCKET" --dry-run  # plan only
+python3.14 tools/publish_first_install.py --bucket "$FEED_BUCKET"  # download, verify, upload
 ```
 
 Hand a recipient the bootstrap URL for their OS:

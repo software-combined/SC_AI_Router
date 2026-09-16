@@ -14,12 +14,16 @@ concurrency:
 
 env:
   AWS_REGION: ap-southeast-2
+  # Stack name only: it carries no account id, so it may stay a literal here.
   FEED_STACK: scg-router-feed
-  FEED_BUCKET: router-feed-publication
-  FEED_ROLE: arn:aws:iam::${AWS_ACCOUNT_ID}:role/scg-router-feed-publisher
+  # Repository variables, not secrets and not literals (Plan 160): an account
+  # id, a bucket name or a role ARN in the tree is an identifier disclosure and
+  # a fork running the publisher must not inherit our target by default.
+  FEED_BUCKET: ${{ vars.FEED_BUCKET }}
+  FEED_ROLE: ${{ vars.FEED_ROLE }}
   # ARN of the Secrets Manager secret holding the feed signing seed.
   # Empty fails closed rather than shipping unsigned.
-  FEED_SIGNING_SEED_ARN: 'arn:aws:secretsmanager:ap-southeast-2:${AWS_ACCOUNT_ID}:secret:scg/router/feed-signing-seed-R3XEWU'
+  FEED_SIGNING_SEED_ARN: ${{ vars.FEED_SIGNING_SEED_ARN }}
 
 jobs:
   installer-macos:
@@ -83,6 +87,15 @@ jobs:
         run: |
           echo "an installer check did not succeed: ${{ join(needs.*.result, ', ') }}"
           exit 1
+      - name: Require the feed variables
+        # A fork or a misconfigured repository must fail here, before it tries
+        # to assume a role it cannot assume (Plan 160).
+        run: |
+          for name in FEED_BUCKET FEED_ROLE FEED_SIGNING_SEED_ARN; do
+            if [ -z "${!name}" ]; then
+              echo "repository variable $name is empty; set it in repository settings (docs/operations.md)"; exit 1
+            fi
+          done
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
