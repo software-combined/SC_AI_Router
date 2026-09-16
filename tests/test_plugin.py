@@ -82,6 +82,15 @@ class PluginTest(unittest.TestCase):
         self.assertIn("do not cancel, interrupt, respawn", review)
         self.assertIn("Do not cancel or\nrestart an active simplifier", simplifier)
 
+    def test_lane_verdicts_keep_their_label_and_emoji_in_every_relay(self):
+        review = (PLUGIN / "skills/pre-commit-review/SKILL.md").read_text()
+        for verdict in ("`✅ All Clear`", "`📝 Proceed With Notes`", "`❌ Block`"):
+            self.assertIn(verdict, review)
+        self.assertIn("whole verdict vocabulary", review)
+        self.assertIn("interim update", review)
+        self.assertIn("from the first mention, not only in the recap", review)
+        self.assertIn("never paraphrased", review)
+
     def test_shared_updater_and_update_guide_are_synchronized_copies(self):
         marketplace = json.loads(
             (ROOT / '.agents/plugins/marketplace.json').read_text(encoding="utf-8"))
