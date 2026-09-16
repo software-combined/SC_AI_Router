@@ -11,11 +11,26 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
+# POSIX fcntl locks the registry in the publish script; it cannot import on
+# Windows. The publish path runs on macOS/Linux release hosts. Import it only
+# on POSIX; on Windows the classes below are skipped via the ``load_tests``
+# hook, so the fcntl-dependent script is never touched. A module-level
+# ``raise SkipTest`` would surface as a collection ERROR, not a clean skip.
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "plugins/scg-prototypes/skills/publish-prototype/scripts/prototypes.py"
-spec = importlib.util.spec_from_file_location("scg_prototypes", SCRIPT)
-prototypes = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(prototypes)
+if os.name == 'nt':
+    prototypes = None
+else:
+    spec = importlib.util.spec_from_file_location("scg_prototypes", SCRIPT)
+    prototypes = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(prototypes)
+
+
+def load_tests(loader, tests, pattern):
+    """Skip this module cleanly on Windows (see the note above)."""
+    if os.name == 'nt':
+        return unittest.TestSuite()
+    return tests
 
 CONFIG = {
     "account": "852138521410",

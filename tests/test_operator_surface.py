@@ -17,7 +17,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from tests._platform import requires_posix_perms
+from tests._platform import assert_owner_only, requires_posix_perms
 from tests.install_fixtures import _craft_bundle, _ok_run, _patch_attrs, install_mod
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -443,7 +443,7 @@ class OperatorSurfaceTests(unittest.TestCase):
         self.assertEqual(rc, 0)
         path = Path(buf.getvalue().strip())
         self.assertTrue(path.is_file())
-        self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+        assert_owner_only(self, path)
         self.assertNotIn(str(home), path.read_text())
 
 
