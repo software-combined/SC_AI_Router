@@ -61,7 +61,7 @@ class CatalogueFlagTests(unittest.TestCase):
         self.assertNotIn(SUBAGENT_MODEL_PLACEHOLDER, template)
         self.assertIn('## Subagent model overrides', template)
         self.assertTrue(template.startswith(
-            'You are Codex, a coding agent running the selected OpenRouter model.'))
+            'You are Codex, a coding agent running the selected routed model.'))
         merged = merge({'models': []})
         for item in merged['models']:
             self.assertNotIn('base_instructions', item)

@@ -83,7 +83,8 @@ class ReleaseTests(unittest.TestCase):
         with tarfile.open(tarball, mode='r') as tar:
             names = tar.getnames()
         for dep in ('ai_router/models.json',
-                    'ai_router/openrouter_base_instructions.txt',
+                    'ai_router/routed_base_instructions.txt',
+                    'ai_router/subscription_base_instructions.txt',
                     'packaging/router_launch.py',
                     'packaging/service.py',
                     'packaging/feed.py',
