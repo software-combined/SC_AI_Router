@@ -529,6 +529,16 @@ on it, subscription rows unaffected. Offboarding: remove the user from
 the subgroup and delete their OpenRouter key by id; the policy file goes
 with the machine's decommissioning, never as a revocation control.
 
+Managed installs: the state file may carry `policy_enforced: true`, set
+only by the trusted provisioning path (the installer flag, MDM, or the central
+grant tool) and never by a user or a routine update. With the flag set, a
+missing policy denies external routing instead of granting it, and the router
+logs one token-free `model_policy_rejected` event with reason
+`enforced_without_policy` (Plan 176). An unreadable or invalid policy denies on
+any install, each with its own reason. A personal install never sets the flag,
+so an absent policy keeps today's behaviour. A value that is not true or false
+stops the boot with `policy_enforced must be true or false`.
+
 ## Windows (Task Scheduler)
 
 The Windows backend (`packaging/platforms/windows.py`) registers two
