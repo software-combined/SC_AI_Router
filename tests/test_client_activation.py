@@ -130,7 +130,7 @@ class ClientActivationTests(unittest.TestCase):
 
 
 class ReceiptVersionTests(unittest.TestCase):
-    # Plan 049: versioned receipts carry a clients map; legacy flat
+    # Plan 112: versioned receipts carry a clients map; legacy flat
     # receipts import as the codex attachment with restore info intact.
     def _mod(self):
         import importlib.util as _ilu
@@ -315,7 +315,7 @@ class ServiceOnlyTests(unittest.TestCase):
                     self.assertNotIn('codex-model-router', agents.read_text())
 
     def test_codex_reinstall_never_silently_detaches_claude(self):
-        # Plan 049: setup attaches selected clients and never silently
+        # Plan 112: setup attaches selected clients and never silently
         # detaches an already attached one. A codex reinstall keeps the
         # Claude settings and claim untouched.
         # A sibling client attachment survives the codex detach: only the

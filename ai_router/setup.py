@@ -145,7 +145,7 @@ def _submit(state, home, form, _urlopen):
 def open_key_window(server, home, provider_id=None, _opener=None, _prompt=None):
     """Mint one setup nonce and open the key window; True when opened.
 
-    Plan 055 Stage 3: at most one window per live nonce. When
+    Plan 107 Stage 3: at most one window per live nonce. When
     `setup_pending` already holds, the existing page is the window and no
     new nonce is minted. The nonce persists atomically (temp file plus
     `os.replace`), never through a truncating rewrite.

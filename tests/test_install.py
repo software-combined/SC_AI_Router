@@ -1,4 +1,4 @@
-"""Plan 041 installer tests. install.py imports cleanly as a module."""
+"""Plan 110 installer tests. install.py imports cleanly as a module."""
 import contextlib
 import hashlib
 import importlib.util as _ilu

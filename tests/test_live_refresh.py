@@ -1,4 +1,4 @@
-"""Derived-field refresh from live OpenRouter metadata (Plan 044)."""
+"""Derived-field refresh from live OpenRouter metadata (Plan 118)."""
 import unittest
 from ai_router.live_refresh import derive, refresh
 

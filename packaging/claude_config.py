@@ -1,4 +1,4 @@
-"""Claude Code activation adapter (Plan 049). Python 3.9-safe helper.
+"""Claude Code activation adapter (Plan 112). Python 3.9-safe helper.
 
 Owns the two owned `env` settings merged into the user's settings.json,
 conflict refusal on hand-edited owned values, and activation receipt

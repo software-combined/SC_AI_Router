@@ -1,4 +1,4 @@
-"""Model onboarding command (Plan 046 Step 2). Offline fixtures only."""
+"""Model onboarding command (Plan 099 Step 2). Offline fixtures only."""
 import contextlib
 import io
 import json
