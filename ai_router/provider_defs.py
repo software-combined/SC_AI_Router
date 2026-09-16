@@ -23,6 +23,19 @@ MESSAGES = 'messages'
 EXTERNAL = 'external'
 SUBSCRIPTION = 'subscription'
 
+DIALECT_OPENROUTER = 'openrouter'
+DIALECT_OPENAI = 'openai'
+DIALECT_ANTHROPIC = 'anthropic'
+DIALECT_OPENAI_COMPATIBLE = 'openai_compatible'
+# Dialects billed on the provider's own key. They share the deterministic
+# refusal cache, the context-error frame and the key window a 401 opens.
+# The subscription dialects answer with the client's own login instead.
+EXTERNAL_DIALECTS = (DIALECT_OPENROUTER, DIALECT_OPENAI_COMPATIBLE)
+DIALECTS = EXTERNAL_DIALECTS + (DIALECT_OPENAI, DIALECT_ANTHROPIC)
+# Key-info body shapes a provider may declare: OpenRouter's {"data": {...}}
+# envelope, any 2xx meaning a live key, or no endpoint at all.
+KEY_INFO_SHAPES = ('openrouter', 'plain', 'none')
+
 
 class KeySpec:
     """Where one provider's API key resolves from, in precedence order.
@@ -49,15 +62,21 @@ class ProviderDef:
 
     __slots__ = ('id', 'label', 'kind', 'host', 'responses_path',
                  'messages_path', 'key', 'catalogue_url', 'catalogue_shape',
-                 'key_info_url', 'dialect', 'native_prefixes',
+                 'key_info_url', 'key_info_shape', 'dialect', 'native_prefixes',
                  'request_headers')
 
     def __init__(self, id, label, kind, host, responses_path=None,
                  messages_path=None, key=None, catalogue_url=None,
-                 catalogue_shape='manual', key_info_url=None, dialect=None,
+                 catalogue_shape='manual', key_info_url=None,
+                 key_info_shape='openrouter', dialect=None,
                  native_prefixes=(), request_headers=()):
         if kind not in (EXTERNAL, SUBSCRIPTION):
             raise ValueError(f'{id}: bad kind {kind!r}')
+        dialect = dialect or id
+        if dialect not in DIALECTS:
+            raise ValueError(f'{id}: bad dialect {dialect!r}')
+        if key_info_shape not in KEY_INFO_SHAPES:
+            raise ValueError(f'{id}: bad key info shape {key_info_shape!r}')
         if kind == EXTERNAL and key is None:
             raise ValueError(f'{id}: an external provider needs a key spec')
         if kind == SUBSCRIPTION and key is not None:
@@ -72,7 +91,7 @@ class ProviderDef:
         self.responses_path, self.messages_path = responses_path, messages_path
         self.key, self.catalogue_url = key, catalogue_url
         self.catalogue_shape, self.key_info_url = catalogue_shape, key_info_url
-        self.dialect = dialect or id
+        self.key_info_shape, self.dialect = key_info_shape, dialect
         self.native_prefixes = native_prefixes
         request_headers = tuple(request_headers)
         for pair in request_headers:
@@ -93,6 +112,18 @@ class ProviderDef:
         prefix = self.responses_path if protocol == RESPONSES else self.messages_path
         return (prefix or '') + path
 
+    def sends_context_error_frame(self):
+        """True when this upstream's error body can name a context overrun."""
+        return self.dialect in EXTERNAL_DIALECTS
+
+    def opens_key_window_on_auth_failure(self):
+        """True when a rejected key should offer this provider's key window."""
+        return self.dialect in EXTERNAL_DIALECTS
+
+    def caches_deterministic_refusals(self):
+        """True when this upstream repeats itself, so a refusal can be cached."""
+        return self.dialect in EXTERNAL_DIALECTS
+
 
 OPENROUTER = ProviderDef(
     id='openrouter', label='OpenRouter', kind=EXTERNAL, host='openrouter.ai',
@@ -102,7 +133,7 @@ OPENROUTER = ProviderDef(
     catalogue_url='https://openrouter.ai/api/v1/models',
     catalogue_shape='openrouter',
     key_info_url='https://openrouter.ai/api/v1/auth/key',
-    dialect='openrouter',
+    dialect=DIALECT_OPENROUTER,
     request_headers=(('X-OpenRouter-Metadata', 'enabled'),))
 
 # Regional endpoint profiles for one external provider. A profile names the
@@ -135,12 +166,13 @@ def valid_region(region):
 
 OPENAI = ProviderDef(
     id='openai', label='OpenAI', kind=SUBSCRIPTION, host='chatgpt.com',
-    responses_path='/backend-api/codex', dialect='openai',
+    responses_path='/backend-api/codex', dialect=DIALECT_OPENAI,
+    key_info_shape='none',
     native_prefixes=('/alpha/', '/guardian'))
 
 ANTHROPIC = ProviderDef(
     id='anthropic', label='Anthropic', kind=SUBSCRIPTION, host='api.anthropic.com',
-    messages_path='', dialect='anthropic')
+    messages_path='', dialect=DIALECT_ANTHROPIC, key_info_shape='none')
 
 
 PROVIDERS = (OPENROUTER, OPENAI, ANTHROPIC)

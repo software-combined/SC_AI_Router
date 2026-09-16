@@ -81,7 +81,7 @@ class ClaudeSubscriptionRequired(ValueError):
 
     def __init__(self):
         super().__init__('Model is not available without a Claude subscription; '
-                         'use an OpenRouter model')
+                         'select a routed model instead')
 
 
 def _error(status, code, message):
@@ -152,7 +152,7 @@ def subscription_required(model=None):
 def claude_subscription_required():
     return _error(400, 'CLAUDE_SUBSCRIPTION_REQUIRED',
                   'Model is not available without a Claude subscription; '
-                  'use an OpenRouter model')
+                  'select a routed model instead')
 
 
 def credential_problem(detail):

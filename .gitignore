@@ -11,7 +11,7 @@ before-*/
 *.tmp
 dist/
 .DS_Store
-openrouter.key
+*.key
 .ruff_cache/
 .venv/
 ci-catalogue.json

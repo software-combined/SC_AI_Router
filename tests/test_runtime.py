@@ -146,7 +146,7 @@ class LoadStateTests(unittest.TestCase):
             id='acme', label='Acme', kind=provider_defs.EXTERNAL,
             host='acme.example', responses_path='/v1',
             key=provider_defs.KeySpec('ACME_API_KEY', 'acme.key'),
-            dialect='acme')
+            dialect=provider_defs.DIALECT_OPENAI_COMPATIBLE)
         provider_defs.PROVIDERS = provider_defs.PROVIDERS + (acme,)
         provider_defs.BY_ID = {p.id: p for p in provider_defs.PROVIDERS}
         def restore():

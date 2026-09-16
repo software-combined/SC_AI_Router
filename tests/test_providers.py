@@ -86,7 +86,7 @@ class DefinitionHeaderTests(unittest.TestCase):
     def test_definition_headers_cannot_override_credentials(self):
         defn = provider_defs.ProviderDef(
             id='x', label='X', kind='external', host='example.invalid',
-            responses_path='/r',
+            responses_path='/r', dialect=provider_defs.DIALECT_OPENAI_COMPATIBLE,
             key=provider_defs.KeySpec('X_KEY', 'x.key'),
             request_headers=(('Authorization', 'Bearer spoof'),
                              ('Content-Type', 'text/plain'),
