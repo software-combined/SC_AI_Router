@@ -1119,6 +1119,38 @@ live turn through the router, keep the response it returns, and post that
 response back as the assistant turn; a refusal there would put the trigger in
 the router's stream adaptation rather than in the request.
 
+Resolution, 2026-09-17: the refusal is the connector tool volume, not the
+router and not the shape of the client's body. Four observations, cheapest
+first:
+
+- The captured live follow-up body (168,406 bytes at the sink) replays
+  through the isolated router at 200, streamed and not streamed, on the
+  0.6.78 working tree.
+- Recapturing the live follow-up at the router's own upstream socket (an
+  in-process recorder wrapped around the relay connection) shows the live
+  follow-up is 1,465,284 bytes, of which 1,456,470 is the `tools` array:
+  **702 tools, up from 29 in the opening turn**. The first turn is where
+  Claude Code finishes loading the user's claude.ai connector MCP tools
+  (Apollo, Attio, Clay, Granola, Heyreach, Instantly, Microsoft 365, Xero,
+  Airwallex, monday.com, n8n and others), so every later turn carries them.
+- Posted straight to `openrouter.ai/api/v1/messages`, that body answers 400
+  with the reason the router's bounded log line drops: "This endpoint's
+  maximum context length is 200000 tokens. However, you requested about
+  398263 tokens (14845 of text input, 351418 of tool input, 32000 in the
+  output)." The same body with only its 33 non-MCP tools answers 200.
+- So the follow-up is a genuine over-context request - 351K tokens of tool
+  definitions alone against a 200K window - that any route would refuse.
+  The router forwards the body verbatim and, per plan 169, answers the
+  upstream refusal with a final 409 `PROVIDER_REJECTED`.
+
+Plan 115's first proof is met by re-running the leg with the connector servers
+excluded (`--strict-mcp-config --mcp-config '{"mcpServers": {}}'`): the same
+CLI, model and isolated-router shape completed the tool round trip - Read
+executed, the marker came back verbatim, two Messages requests, both 200
+(164,784 and 166,071 bytes). Operator note: `docs/claude-code.md` carries the
+caveat that a routed row inherits whatever the client loads from its
+connectors, and a tool list that large cannot fit any 200K row.
+
 ## Leg F re-runs with the corrected exit gate, 2026-09-17 (plan 175)
 
 Client: `codex-cli 0.154.0-alpha.6.2`; router 0.6.78 working tree.
@@ -1265,3 +1297,49 @@ second attempt for a transient one). The probe tool itself could not start:
 it still called `probe_context_budget.Client` without the `mode` argument
 that signature gained, so the run died before the client booted. That is
 fixed in this change and the run above is the evidence.
+
+## Leg F on the Gemini Flash child with a GLM parent, 2026-09-17 (plan 175)
+
+Client: `codex-cli 0.154.0-alpha.6.2`; router 0.6.78 working tree.
+`tools/probe_agent_handoffs.py --live --live-children --max-live-calls 18
+--parent z-ai/glm-5.3-flash --child google/gemini-3.8-flash --wire-mode classic`.
+
+| fact | value |
+|---|---|
+| calls | 17, inside the 18-call run cap and the row's 23-call cap |
+| markers replied | 3 of 3 (`SYNTH_066_INITIAL`, `SYNTH_066_FOLLOWUP`, `SYNTH_066_MESSAGE`) |
+| canonical replay | true |
+| alias emitted | true |
+| encrypted child | false |
+| errors | none; one stray `responseStreamDisconnected` (404) appears in the per-turn tool failures |
+
+Reading: leg F passes on the Gemini Flash child in this shape - one classic
+wire-mode run with a GLM Flash parent, on one quiet-upstream window. The
+three earlier attempts all used DeepSeek V4.1 Flash as the parent, which is
+the pairing the plan names, and died behind that parent's transient 503s;
+swapping the parent closes the leg, so the failure sat in the parent's
+upstream window rather than in this child. Two shapes stay open for this
+child: the DeepSeek parent the plan names, and Lite wire mode. The rest of
+the matrix is unchanged - the F and H rows the 2026-09-14 to 2026-09-15
+tables mark `not run (session cap)` for other children are still open, and
+Qwen stays key-blocked.
+
+## Open questions 1 to 3, 2026-09-17 (plan 175)
+
+Instruments: direct `POST https://openrouter.ai/api/v1/responses` turns on
+`deepseek/deepseek-v4.1-flash` at the row's default effort, with
+`X-OpenRouter-Metadata: enabled` and no router in the path; five billed
+turns total, all inside the row's call cap: three for question 2 (one per
+item type), and two endpoint-pinned turns for question 1. The unpinned
+question 1 configuration is the question 2 `custom_tool_call` turn, which
+carries the same shape.
+
+| question | result |
+|---|---|
+| 1. Does OpenRouter annotate converted tool calls with `tool_kind` / `responses_item_id` / `responses_item_status`, and which DeepSeek endpoint refuses them? | not reproduced: a `custom_tool_call` + its output returned 200 both unpinned and pinned to Together and to Parasail with `allow_fallbacks: false`, so the 2026-09-13 "Extra inputs are not permitted" refusal was not measured on either endpoint in this configuration |
+| 2. Do `compaction`, `additional_tools` and `custom_tool_call` items survive the conversion for a non-OpenAI vendor when sent unconverted? | all three survive: one turn each returned 200 and the model answered the marker, so DeepSeek V4.1 Flash accepts them as sent |
+| 3. Does a model ever call `openrouter_web_search` when the client's `web_search` tool rides along? | not reproduced (unchanged from 2026-09-15): the `--web-search` runtime leg still fails at app-server startup on this client build before any billed call |
+
+Open question 4 was answered on 2026-09-15 (the Contributor row accepts its
+own reasoning item back, leg C), so the plan's four open questions now each
+carry a recorded answer or a recorded non-reproduction.
