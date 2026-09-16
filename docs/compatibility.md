@@ -1012,6 +1012,27 @@ limitation; Haiku E matches the known Sonnet conversion observation;
 leg-H narrowing is per-attempt evidence, not a pin yet; the GLM Flash F
 pass confirms the isolated handoff path but proposes no roster change).
 
+## Leg H `require_parameters` pin on the GLM 5.3 Flash row, 2026-09-16 (plan 175)
+
+Client: `codex-cli 0.154.0-alpha.6.2`, effort `low`; router 0.6.78 working
+tree in an isolated home on its own port and token. The row carried
+`provider_prefs: {"require_parameters": true}` in `ai_router/models.json` for
+the duration of the run only, and the file was restored afterwards; the offline
+tests in `tests/test_providers.py` already prove that object reaches the
+upstream request body.
+
+| step | result |
+|---|---|
+| base tool round trip with the pin | failed: upstream 404, router answers a final 400 `PROVIDER_REJECTED`, the client turn raises |
+| completions | none |
+
+Reading: no endpoint on this row accepts every parameter the client sends, so
+OpenRouter answers 404 in both attempts and the pin turns a working row into a
+refused turn; the unpinned baseline on the same row passes leg A. This is the
+concrete counter-example the pin question needed: `provider_prefs` stays an
+available field, and no row should set `require_parameters` without evidence
+that its endpoints accept every parameter in the request.
+
 ## Leg F on the GLM 5.3 child, 2026-09-16 (plan 175)
 
 Client: `codex-cli 0.154.0-alpha.6.2`; router 0.6.78 working tree.
