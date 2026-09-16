@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.73
+
+- Update notices, the picker baseline and the model catalogue are written
+  through the same atomic writer as the rest of the router, so on Windows a
+  destination that is read-only or briefly locked is retried instead of
+  dropping the write.
+
 ## 0.6.72
 
 - A feed document without a bundle checksum is refused instead of
