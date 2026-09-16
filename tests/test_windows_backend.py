@@ -333,6 +333,42 @@ class InstallTests(unittest.TestCase):
             with self.assertRaisesRegex(SystemExit, 'CodexMixedModelRouter'):
                 _install(backend.Backend(service, run), Path(tmp) / 'home')
 
+    def test_registration_recovers_from_a_cross_principal_denied_create(self):
+        # A task first registered under a different principal (e.g. a local
+        # account) is "Access is denied" to `/create /f` from this token. The
+        # backend must delete the stale task, then re-create so it lands under
+        # the current principal. First /create per task is denied, the delete
+        # clears it, the retry succeeds.
+        calls, denied = [], set()
+
+        def run(cmd, **kwargs):
+            calls.append(list(cmd))
+            if cmd[:1] == ['whoami']:
+                return SimpleNamespace(returncode=0, stdout=USER + '\n', stderr='')
+            if cmd[:2] == ['schtasks', '/create']:
+                name = cmd[cmd.index('/tn') + 1]
+                if name not in denied:
+                    denied.add(name)
+                    return SimpleNamespace(returncode=1, stdout='',
+                                           stderr='ERROR: Access is denied.')
+                xml_path = Path(cmd[cmd.index('/xml') + 1])
+                xml_path.read_text(encoding='utf-16')
+                return SimpleNamespace(returncode=0, stdout='SUCCESS', stderr='')
+            if cmd[:2] == ['schtasks', '/query']:
+                return SimpleNamespace(returncode=0, stdout=QUERY_READY, stderr='')
+            return SimpleNamespace(returncode=0, stdout='SUCCESS', stderr='')
+
+        with tempfile.TemporaryDirectory() as tmp:
+            _install(backend.Backend(service, run), Path(tmp) / 'home')
+        # The router task was denied once, deleted, then created again.
+        def _for(name):
+            return [c[:2] for c in calls if c[:1] == ['schtasks']
+                    and '/tn' in c and c[c.index('/tn') + 1] == name]
+        router = _for('CodexMixedModelRouter')
+        self.assertIn(['schtasks', '/delete'], router)
+        creates = [c for c in router if c == ['schtasks', '/create']]
+        self.assertEqual(len(creates), 2, 'denied create is retried once')
+
     def test_every_console_child_is_spawned_windowless(self):
         seen = []
 
