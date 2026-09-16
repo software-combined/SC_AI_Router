@@ -8,7 +8,7 @@ from . import subscription_history, context_recovery
 from .capabilities import CANONICAL_ORDER, check_effort, input_modalities
 from .image_items import note_images
 from .errors import PreparationError, SubscriptionRequired, UnknownModel
-from .registry import by_slug, near_miss
+from .registry import by_slug, near_miss, upstream_id_for
 from .events import log_event
 from .discovered import remember
 from .tool_adapter import prepare_tools, snoop_response_identity, stream_events, ToolEvents
@@ -168,6 +168,9 @@ class ExternalResponsesProvider:
             # not a matching registry row, so this only fires for a direct
             # prepare() call and never for a routed request.
             raise PreparationError(f'unknown model: {model}')
+        # The client id is the registry slug; the provider may expect another
+        # id for the same model (Plan 153).
+        payload['model'] = upstream_id_for(entry)
         if getattr(entry, 'provider_prefs', None):
             payload['provider'] = dict(entry.provider_prefs)
         limit = entry.max_output_tokens
@@ -263,7 +266,8 @@ class ExternalResponsesProvider:
                 log_event('compact_summary_attempt', model=model, attempt=attempt,
                           max_output_tokens=budget, outcome='deadline')
                 raise TimeoutError('Compaction summarizer deadline exceeded')
-            body = {'model': model, 'input': [comp.user_message_item(prompt)],
+            upstream = upstream_id_for(entry) if entry is not None else model
+            body = {'model': upstream, 'input': [comp.user_message_item(prompt)],
                     'max_output_tokens': budget}
             if getattr(entry, 'provider_prefs', None):
                 body['provider'] = dict(entry.provider_prefs)
