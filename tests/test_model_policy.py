@@ -186,6 +186,63 @@ class ModelPolicyTests(unittest.TestCase):
                 plain = load_state(state_path)
             self.assertNotIn('allowed_models', plain)
 
+    def test_a_managed_install_denies_when_no_policy_is_provisioned(self):
+        # Plan 176: `policy_enforced` is the managed marker, so an absent
+        # policy denies instead of granting. A personal install is unchanged.
+        import json
+        import tempfile
+        from pathlib import Path
+        from ai_router.runtime import load_state
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            state_path = home / 'mixed-router-state.json'
+            auth = home / '.local' / 'share' / 'opencode' / 'auth.json'
+            auth.parent.mkdir(parents=True)
+            auth.write_text(json.dumps(
+                {'openrouter': {'type': 'api', 'key': 'k'}}))
+            state_path.write_text(json.dumps(
+                {'port': 0, 'token': 't' * 32, 'openai_models': [],
+                 'policy_enforced': True, 'opencode_auth': str(auth)}))
+            self.assertEqual(model_policy.load(home), (None, None, ()))
+            with mock.patch('ai_router.runtime.ROUTER_HOME', home), \
+                    mock.patch.dict(os.environ, {'HOME': str(home)}):
+                state = load_state(state_path)
+            self.assertEqual(state['allowed_models'], [])
+            state_path.write_text(json.dumps(
+                {'port': 0, 'token': 't' * 32, 'openai_models': [],
+                 'policy_enforced': False, 'opencode_auth': str(auth)}))
+            self.assertEqual(model_policy.load(home), (None, None, None))
+
+    def test_a_managed_install_still_reads_a_valid_policy(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / 'mixed-router-state.json').write_text(json.dumps(
+                {'port': 0, 'token': 't' * 32, 'openai_models': [],
+                 'policy_enforced': True}))
+            policy = home / 'model-policy.json'
+            policy.write_text(json.dumps(
+                {'portco': 'acme', 'department': None,
+                 'allowed_models': list(ALLOWED)}))
+            policy.chmod(0o600)
+            self.assertEqual(model_policy.load(home)[2], tuple(ALLOWED))
+
+    def test_a_mistyped_managed_flag_stops_the_boot(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        from ai_router.runtime import load_state
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            state_path = home / 'mixed-router-state.json'
+            state_path.write_text(json.dumps(
+                {'port': 0, 'token': 't' * 32, 'openai_models': [],
+                 'policy_enforced': 'yes'}))
+            with self.assertRaises(SystemExit):
+                load_state(state_path)
+
     def test_protocol_threading_rejects_disallowed_model(self):
         from ai_router.protocols import responses, messages
         state = {'openai_models': ['gpt-6-astra'],
