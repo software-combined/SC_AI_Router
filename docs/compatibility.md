@@ -1012,6 +1012,20 @@ limitation; Haiku E matches the known Sonnet conversion observation;
 leg-H narrowing is per-attempt evidence, not a pin yet; the GLM Flash F
 pass confirms the isolated handoff path but proposes no roster change).
 
+## Gemini Pro base echo re-run, 2026-09-16 (plan 175 leg A)
+
+Client: `codex-cli 0.154.0-alpha.6.2`, effort `low`; router 0.6.78 working
+tree in an isolated home on its own port and token, with a disposable Codex
+home. `tools/probe_codex_runtime.py google/gemini-3.1-pro-preview` on the
+current client: two completed requests served by Google, plus the expected
+426 websocket fallback.
+
+Result unchanged from 2026-09-15. The row calls `echo_probe` correctly
+(`calls=1`) and then narrates the answer (`The tool result is
+CODEX_OPENROUTER_OK_719.`), so the base leg's strict echo assert fails on the
+model's final text, not on a router gap. The base leg gates the rest of a
+session, so Gemini Pro legs B/C/D/G stay unrun.
+
 ## Muse Contributor carried-history probe, 2026-09-16 (plan 150)
 
 Client: `codex-cli 0.154.0-alpha.6.2`, the app-server build, effort `low`.
