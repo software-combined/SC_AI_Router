@@ -17,6 +17,7 @@ from . import provider_defs
 from .apply_catalogue import write_guarded
 from .capabilities import CANONICAL_ORDER
 from .model_metadata import project_modalities, refresh_display_name
+from .registry import upstream_id_for
 
 def derive(row, live):
     """Derived fields for one registry row from its live metadata entry."""
@@ -53,7 +54,9 @@ def refresh(rows, live_by_id, provider_id=provider_defs.DEFAULT_EXTERNAL):
         if not owned_by(row, provider_id):
             out.append(row)
             continue
-        live = live_by_id.get(row['slug'])
+        # The live list is keyed by the id the provider serves, which is not
+        # always the id clients send (Plan 153).
+        live = live_by_id.get(upstream_id_for(row))
         if live is None:
             out.append(row)
             continue

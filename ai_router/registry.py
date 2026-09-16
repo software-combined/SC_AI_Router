@@ -19,6 +19,9 @@ FIELDS = ('slug', 'provider', 'display_name', 'vendor', 'reasoning',
           'context_window', 'priority', 'max_output_tokens',
           'reasoning_summary', 'apply_patch', 'experimental_tools',
           'web_search', 'tier')
+# Fields a row may carry or omit. `upstream_id` empty (or absent) means the
+# slug is the id the provider expects, which every current row relies on.
+OPTIONAL_FIELDS = ('listed', 'provider_prefs', 'upstream_id')
 
 
 @dataclass(frozen=True)
@@ -47,6 +50,7 @@ class Model:
     listed: bool = True              # picker visibility; new rows land False
     provider_prefs: dict | None = None  # OpenRouter `provider` routing object
                                         # (plan 175 evidence only; no row sets it)
+    upstream_id: str = ''            # id the provider expects; '' means the slug
 
 
 # Documented OpenRouter `provider` object keys (router-metadata guide,
@@ -101,13 +105,19 @@ def load(text):
         raise SystemExit('models.json must be a non-empty list')
     models = []
     seen = set()
+    seen_upstream = {}
     for i, row in enumerate(rows):
         if (not isinstance(row, dict)
-                or set(row) - {'listed', 'provider_prefs'} != set(FIELDS)):
+                or set(row) - set(OPTIONAL_FIELDS) != set(FIELDS)):
             raise SystemExit(f'models.json row {i} must have exactly: {", ".join(FIELDS)}')
         if row['slug'] in seen:
             raise SystemExit(f'models.json duplicate slug: {row["slug"]}')
         seen.add(row['slug'])
+        upstream_id = row.get('upstream_id', '')
+        if (not isinstance(upstream_id, str)
+                or (upstream_id and (upstream_id != upstream_id.strip()
+                                     or any(c.isspace() for c in upstream_id)))):
+            raise SystemExit(f'models.json {row["slug"]}: bad upstream_id')
         if not provider_defs.is_external(row['provider']) \
                 and row['provider'] not in provider_defs.subscription_ids():
             raise SystemExit(f'models.json {row["slug"]}: bad provider')
@@ -141,6 +151,16 @@ def load(text):
             raise SystemExit(f'models.json {row["slug"]}: bad provider_prefs')
         if row.get('listed', False) and row['tier'] != 'verified':
             raise SystemExit(f'models.json {row["slug"]}: preview row must not be listed')
+        # One upstream model may appear on several providers, but the picker
+        # must be able to tell them apart: two rows that share an upstream id
+        # may not share a label.
+        key = upstream_id or row['slug']
+        labels = seen_upstream.setdefault(key, {})
+        if row['display_name'] in labels:
+            raise SystemExit(
+                f'models.json {row["slug"]}: display_name collides with '
+                f'{labels[row["display_name"]]} for the same upstream model ({key})')
+        labels[row['display_name']] = row['slug']
         models.append(Model(
             slug=row['slug'], provider=row['provider'], display_name=row['display_name'],
             vendor=row['vendor'], reasoning=tuple(row['reasoning']),
@@ -153,7 +173,8 @@ def load(text):
             experimental_tools=tuple(row['experimental_tools']),
             web_search=row['web_search'], tier=row['tier'],
             listed=row.get('listed', True),
-            provider_prefs=dict(prefs) if prefs is not None else None))
+            provider_prefs=dict(prefs) if prefs is not None else None,
+            upstream_id=upstream_id))
     return tuple(models)
 
 
@@ -163,6 +184,17 @@ BY_SLUG = {m.slug: m for m in MODELS}
 
 def by_slug(slug):
     return BY_SLUG.get(slug)
+
+
+def upstream_id_for(entry):
+    """The id this row sends upstream; the slug when the row does not differ.
+
+    Accepts a Model, a raw models.json dict, or a test double carrying only
+    the fields it exercises, so no caller repeats the fallback (Plan 153).
+    A Model always has the field; the default only ever covers a double."""
+    if isinstance(entry, dict):
+        return entry.get('upstream_id') or entry['slug']
+    return getattr(entry, 'upstream_id', '') or entry.slug
 
 
 def near_miss(model):

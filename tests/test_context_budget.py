@@ -51,7 +51,9 @@ class ContextBudgetTests(unittest.TestCase):
                                           (100000, 5000, 5000),
                                           (0, 100000, 32000), (0, 1000, 1000)):
             with self.subTest(window=window, ceiling=ceiling):
-                model = SimpleNamespace(context_window=window, max_output_tokens=ceiling)
+                model = SimpleNamespace(context_window=window,
+                                        max_output_tokens=ceiling,
+                                        slug='fake/model')
                 sent = self.prepare({'model': 'fake/model', 'input': []}, model)
                 self.assertEqual(sent['max_output_tokens'], expected)
 
