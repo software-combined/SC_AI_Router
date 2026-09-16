@@ -106,7 +106,10 @@ class TemplateGuardTests(unittest.TestCase):
         text = _template()
         policy = text.split('Policies:', 1)[1] if 'Policies:' in text else ''
         self.assertTrue(policy, 'the publisher role carries no inline policy')
-        self.assertNotIn('s3:DeleteObject', text)
+        # No Allow grants a delete; a Deny may list one (Plan 167).
+        allow = policy.split('Effect: Deny', 1)[0]
+        self.assertNotIn('s3:DeleteObject', allow)
+        self.assertIn('Effect: Deny', policy, 'the delete deny is missing')
         self.assertNotIn('cloudfront-keyvaluestore', text)
         self.assertNotIn('ssm:PutParameter', text)
         self.assertNotIn('ssm:GetParameter', text)
@@ -120,6 +123,22 @@ class TemplateGuardTests(unittest.TestCase):
         policy = _template().split('Policies:', 1)[1]
         self.assertIn('s3:ListBucket', policy)
         self.assertIn('Resource: !GetAtt FeedBucket.Arn', policy)
+
+    def test_the_role_can_write_every_key_the_publisher_writes(self):
+        """The Allow list must cover `publish_feed.main`'s writes (Plan 167).
+
+        A missing key fails AccessDenied halfway through a release, after the
+        bundle and channel document are already published, so the key set is
+        enumerated here rather than trusted. Update this list with the
+        publisher.
+        """
+        policy = _template().split('PolicyName: publish-router-feed', 1)[1]
+        allow = policy.split('Effect: Deny', 1)[0]
+        for key in ('bundles/', 'stable/latest.json', 'stable/latest.json.sig',
+                    'stable/models.json', 'beta/latest.json',
+                    'beta/latest.json.sig', 'beta/models.json'):
+            with self.subTest(key=key):
+                self.assertIn(f'${{FeedBucket.Arn}}/{key}', allow)
 
     def test_certificate_stack_uses_dns_validation(self):
         text = (ROOT / 'infra' / 'feed-cert.yaml').read_text()

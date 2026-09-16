@@ -41,9 +41,10 @@ class _Result:
 class _Aws:
     """Recorded aws CLI: answers head-object, else ''."""
 
-    def __init__(self, existing=None, head_error=None):
+    def __init__(self, existing=None, head_error=None, put_error=None):
         self.existing = existing
         self.head_error = head_error
+        self.put_error = put_error
         self.calls = []
 
     def __call__(self, argv, **kwargs):
@@ -54,6 +55,10 @@ class _Aws:
             if self.existing is None:
                 return _Result('', returncode=1, stderr='404 Not Found')
             return _Result(self.existing + '\n')
+        if 'put-object' in argv:
+            # S3's create-only refusal, as the CLI reports it on a 412.
+            return _Result('', returncode=1, stderr=self.put_error) if self.put_error \
+                else _Result('{}')
         if 'create-invalidation' in argv:
             return _Result('INV1\n')
         return _Result('')
@@ -173,8 +178,13 @@ class PublishFeedTests(unittest.TestCase):
         code, out = self._run(dist, runner, extra=['--distribution-id', 'EDIST'])
         self.assertEqual(code, 0)
         bundle = 'ai-router-0.6.21.7.tar.gz'
+        writes = [call for call in runner.calls if call[1:3] == ['s3api', 'put-object']]
+        self.assertEqual(len(writes), 1, 'the bundle is written once, create-only')
+        write = writes[0]
+        self.assertEqual(write[write.index('--body') + 1], str(dist / bundle))
+        self.assertEqual(write[write.index('--key') + 1], f'bundles/{bundle}')
+        self.assertEqual(write[write.index('--if-none-match') + 1], '*')
         uploaded = [call for call in runner.calls if call[1:3] == ['s3', 'cp']]
-        self.assertIn(str(dist / bundle), [call[3] for call in uploaded])
         self.assertIn('s3://feed-bucket/beta/latest.json',
                       [call[4] for call in uploaded])
         channel_uploads = [call for call in uploaded
@@ -216,10 +226,21 @@ class PublishFeedTests(unittest.TestCase):
         runner = _Aws(existing=sha)
         code, out = self._run(dist, runner)
         self.assertEqual(code, 0)
-        uploaded = [call for call in runner.calls if call[1:3] == ['s3', 'cp']]
-        self.assertNotIn(str(dist / 'ai-router-0.6.21.7.tar.gz'),
-                         [call[3] for call in uploaded])
+        writes = [call for call in runner.calls if call[1:3] == ['s3api', 'put-object']]
+        self.assertEqual(writes, [], 'an identical bundle is never re-written')
         self.assertIn('bundle already published', out)
+
+    def test_a_precondition_failure_is_an_immutability_refusal(self):
+        # S3's own create-only refusal, in the CLI's real wording, maps to the
+        # same message as the pre-check (Plan 167).
+        dist = self._dist()
+        runner = _Aws(put_error=(
+            'An error occurred (PreconditionFailed) when calling the PutObject '
+            'operation: At least one of the pre-conditions you specified did '
+            'not hold'))
+        with self.assertRaises(SystemExit) as caught:
+            self._run(dist, runner)
+        self.assertIn('immutable', str(caught.exception))
 
     def test_dry_run_calls_nothing_and_writes_nothing(self):
         dist = self._dist()
