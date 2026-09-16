@@ -5,7 +5,10 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
-from ai_router.credentials import Credentials, ENV_VAR
+from ai_router import provider_defs
+from ai_router.credentials import Credentials
+
+ENV_VAR = provider_defs.OPENROUTER.key.env
 
 needs_posix = unittest.skipIf(os.name == 'nt', 'POSIX permission bits only')
 
