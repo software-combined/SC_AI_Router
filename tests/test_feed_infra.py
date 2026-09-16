@@ -8,6 +8,8 @@ publish workflow.
 """
 import unittest
 from pathlib import Path
+import json
+import re
 
 ROOT = Path(__file__).resolve().parents[1]
 FEED_TEMPLATE = ROOT / 'infra' / 'feed.yaml'
@@ -16,6 +18,19 @@ RELEASE_WORKFLOW = ROOT / '.github' / 'workflows' / 'release.yml'
 
 def _template():
     return FEED_TEMPLATE.read_text()
+
+
+def _input_template():
+    """The EventBridge InputTemplate body, unindented."""
+    lines = _template().splitlines()
+    start = next(i for i, line in enumerate(lines) if 'InputTemplate: |' in line)
+    indent = len(lines[start]) - len(lines[start].lstrip())
+    body = []
+    for line in lines[start + 1:]:
+        if line.strip() and len(line) - len(line.lstrip()) <= indent:
+            break
+        body.append(line.strip())
+    return '\n'.join(body).strip()
 
 
 class PublicFeedTemplateTests(unittest.TestCase):
@@ -96,6 +111,55 @@ class PublishWorkflowTests(unittest.TestCase):
 
 
 class TemplateGuardTests(unittest.TestCase):
+    def test_publish_email_is_a_short_readable_message(self):
+        """The alarm is for a person: the raw S3 envelope is not (Plan 167)."""
+        text = _template()
+        self.assertIn('InputTransformer:', text)
+        self.assertIn('one email per bundle', text.lower())
+        for path in ('$.detail.object.size', '$.detail.object.version-id', '$.time',
+                     '$.detail.reason'):
+            with self.subTest(path=path):
+                self.assertIn(path, text)
+
+    def test_message_substitutes_no_value_a_writer_controls(self):
+        """A crafted key would break the JSON template and silence the alarm.
+
+        EventBridge substitutes raw, so quoting the object key into the
+        template lets the actor this alert watches suppress its own email by
+        writing a key that carries a double quote.
+        """
+        lines = _template().splitlines()
+        start = next(i for i, line in enumerate(lines) if 'InputPathsMap:' in line)
+        paths = []
+        for line in lines[start + 1:]:
+            if line.strip() and len(line) - len(line.lstrip()) <= 12:
+                break
+            if ':' in line:
+                paths.append(line.split(':', 1)[1].strip())
+        self.assertNotIn('$.detail.object.key', paths)
+        self.assertTrue(paths, 'the transformer maps no input paths')
+
+    def test_message_template_survives_substitution_as_json(self):
+        """EventBridge needs valid JSON, so a broken template fails silently.
+
+        A person would simply stop receiving the alarm, which is the failure
+        this test exists to prevent.
+        """
+        # Account-shaped values would trip the Plan 160 identifier scan; the
+        # substitution check needs a shape, not a real account.
+        sample = {'<size>': '514300', '<bucket>': 'scg-router-feed-apse2',
+                  '<time>': '2026-09-16T23:25:31Z', '<reason>': 'PutObject',
+                  '<requester>': 'publishing-account', '<version>': 'version-id'}
+        body = _input_template()
+        self.assertEqual(sorted(re.findall(r'<[a-z]+>', body)), sorted(sample))
+        for token, value in sample.items():
+            body = body.replace(token, value)
+        message = json.loads(body)
+        for expected in ('514300 bytes', 'version-id', 'PutObject',
+                         'without going through the publisher'):
+            with self.subTest(expected=expected):
+                self.assertIn(expected, message)
+
     def test_bucket_is_private_and_retained(self):
         text = _template()
         self.assertIn('DeletionPolicy: Retain', text)
