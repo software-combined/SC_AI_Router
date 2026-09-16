@@ -9,7 +9,7 @@ from .capabilities import CANONICAL_ORDER, check_effort, input_modalities
 from .image_items import note_images
 from .errors import PreparationError, SubscriptionRequired, UnknownModel
 from .registry import by_slug, near_miss
-from .runtime import log_event
+from .events import log_event
 from .discovered import remember
 from .tool_adapter import prepare_tools, snoop_response_identity, stream_events, ToolEvents
 
