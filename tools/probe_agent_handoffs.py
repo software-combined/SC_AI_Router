@@ -123,8 +123,7 @@ class Probe:
                     safe = 'tool_output_reported_failure'
                     if safe not in self.facts['tool_failures']:
                         self.facts['tool_failures'].append(safe)
-        # The probe exposes only collaboration, never file/shell/app tools.
-        # Structural turn log only: namespace names and tool counts, no payload.
+        # Collaboration tools only; the turn log is structural, no payload.
         offered = body.get('tools', []) if isinstance(body.get('tools'), list) else []
         self.facts.setdefault('turns', []).append({
             'model': body.get('model'),
@@ -245,8 +244,7 @@ def run(args, probe_type=Probe):
             pass
 
         def do_GET(self):
-            # Match the router's unsupported WebSocket route so Codex can
-            # fall back to Responses HTTP rather than fail HTTP/1.0 parsing.
+            # Match the router's unsupported route (404) so Codex falls back.
             self.send_response(404)
             self.send_header('Content-Length', '0')
             self.send_header('Connection', 'close')
@@ -353,8 +351,7 @@ def run(args, probe_type=Probe):
         sequence = 0
         def record_failure(event):
             # Probe policy: every dequeued event is scanned for failures and
-            # recorded in facts. Lives in the probe via the on_event hook so
-            # the shared class never learns this probe's fact shape.
+            # recorded via the on_event hook; the shared class stays generic.
             params = event.get('params', {})
             failure = params.get('error') if event.get('method') == 'error' else None
             if event.get('method') == 'turn/completed' and params.get('turn', {}).get('status') == 'failed':
@@ -365,9 +362,8 @@ def run(args, probe_type=Probe):
                 if safe not in probe.facts['tool_failures']:
                     probe.facts['tool_failures'].append(safe)
         # Piped stderr drained silently, plain terminate, ambient-adjacent
-        # scrub above: the shared AppServer default. The global deadline is
-        # threaded through next_event: this probe keeps its own reply loop and
-        # never calls the shared rpc, so the shared cap is left at its default.
+        # scrub: the shared AppServer default. This probe keeps its own reply
+        # loop and never calls the shared rpc, so the shared cap is untouched.
         server_process = AppServer(command, cwd=temp, env=env, stderr=subprocess.PIPE,
                                    on_event=record_failure)
         def send(value):
@@ -427,7 +423,11 @@ def run(args, probe_type=Probe):
                 answer = turn(prompt_text)
                 if probe.required_final and probe.required_final not in answer:
                     raise ValueError('parent did not finish after handoff recovery')
-            expected_replies = {'SYNTH_NATIVE_CONTROL'} if args.native_only else set(ALL_MARKERS)
+            # A non-native parent drives the plaintext path only (leg F).
+            expected_replies = (
+                {'SYNTH_NATIVE_CONTROL'} if args.native_only
+                else set(ALL_MARKERS) if PARENT.startswith('gpt-')
+                else set(MARKERS))
             settle = min(deadline, time.monotonic() + (120 if args.live_children else 2))
             while time.monotonic() < settle:
                 if args.live_children and expected_replies <= set(probe.facts['replies']):
@@ -476,7 +476,7 @@ def run(args, probe_type=Probe):
                     or (PARENT.startswith('gpt-') and not probe.facts['encrypted_child'])
                     or not probe.facts['canonical_replay']):
                 return 1
-            if args.live_children and not set(ALL_MARKERS) <= set(probe.facts['replies']):
+            if args.live_children and not expected_replies <= set(probe.facts['replies']):
                 return 1
             return 0 if set(probe.facts['markers']) == set(MARKERS) else 1
         except Exception as exc:

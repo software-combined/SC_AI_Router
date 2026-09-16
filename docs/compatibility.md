@@ -1050,6 +1050,13 @@ unproven: the parent's DeepSeek turns hit transient 503s, which the probe
 counts as errors and which pushed the run into the cap, so it needs a
 quiet-upstream re-run.
 
+Correction, 2026-09-17: the GLM 5.3 pass above rested on the printed facts,
+not on the harness's exit code. The live-children gate also demanded the
+native control marker (`SYNTH_NATIVE_CONTROL`), which a non-native parent never
+produces, so every run of this shape exited 1 whatever its facts. The gate now
+requires that marker only for a `gpt-` parent; the re-runs below carry real
+exit codes.
+
 ## Haiku legs C and D, 2026-09-16 (plan 175)
 
 Client: `codex-cli 0.154.0-alpha.6.2`; router 0.6.78 working tree in an
@@ -1068,6 +1075,23 @@ Eight completions across the row's eight turns plus two expected 426 websocket
 fallbacks, inside the plan's 23-call cap. Haiku reports no `serving_endpoint`,
 so its own upstream stays unattributed; the DeepSeek turn lands on Together as
 in the other sessions.
+
+## Leg F re-runs with the corrected exit gate, 2026-09-17 (plan 175)
+
+Client: `codex-cli 0.154.0-alpha.6.2`; router 0.6.78 working tree.
+`tools/probe_agent_handoffs.py --live --live-children --max-live-calls 20
+--parent deepseek/deepseek-v4.1-flash --wire-mode classic`.
+
+| child | exit | facts |
+|---|---|---|
+| z-ai/glm-5.3 | 0, passed | 3 of 3 markers, all three replied, no errors, canonical replay, alias emitted, 20 calls inside the cap |
+| google/gemini-3.8-flash | 1, inconclusive | nine upstream 503s on the parent and five cap errors; markers never arrived this time |
+
+Reading: leg F passes on GLM 5.3 under the harness's own exit gate. Gemini
+Flash stays unproven and has now failed twice for upstream reasons (six 503s
+on 2026-09-16, nine on 2026-09-17) rather than for anything the router did;
+it needs a quiet upstream window, and the run is cheap to repeat when one
+opens.
 
 ## Leg H `require_parameters` pin on the GLM 5.3 Flash row, 2026-09-16 (plan 175)
 
