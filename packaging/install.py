@@ -37,11 +37,11 @@ _desktop_config = _svc.load(
 _diag = _svc.load(
     'router_diagnostics', Path(__file__).resolve().parent / 'diagnostics.py')
 # Never name a packaging module after a standard-library one: scripts run with
-# packaging/ as sys.path[0] (python packaging/install.py), so packaging/operator.py
-# shadowed the stdlib operator that collections imports, breaking every entry
-# point with a circular import.
+# packaging/ as sys.path[0], so packaging/operator.py shadowed the stdlib
+# operator that collections imports, breaking every entry point with a circular import.
 _operator = _svc.load(
     'router_operator_surface', Path(__file__).resolve().parent / 'operator_surface.py')
+_client_roster = _svc.load('router_client_roster', Path(__file__).resolve().parents[1] / 'ai_router' / 'clients' / 'roster.py')
 _linux = _platforms._linux_mod().systemd
 _updater = _svc.load(
     'router_updater', Path(__file__).resolve().parent / 'updater.py')
@@ -211,7 +211,7 @@ def _sync_seams():
 def _resolve_clients_and_modes(args, home, state):
     # Absence in legacy state means Codex, not service-only.
     client = args.client or state.get('client', 'codex')
-    if client not in ('codex', 'none'):
+    if client not in (_client_roster.DEFAULT_CLIENT, 'none'):
         raise SystemExit('client must be codex or none')
     changed = state.get('client', 'codex') != client
     if changed: state['client'] = client
@@ -221,7 +221,7 @@ def _resolve_clients_and_modes(args, home, state):
     # Codex settings.
     clients = args.clients
     if clients is None: clients = 'none' if client == 'none' else 'codex'
-    if clients not in ('codex', 'claude', 'both', 'none'):
+    if clients not in _client_roster.CLIENT_IDS + ('both', 'none'):
         raise SystemExit('clients must be codex, claude, both, or none')
     if client == 'none' and clients != 'none':
         raise SystemExit('--client none conflicts with --clients %s' % clients)
@@ -626,10 +626,10 @@ def build_parser():
                         choices=('subscription', 'none'),
                         help='Independent Claude subscription choice; '
                              'unset follows the OpenAI mode as before.')
-    parser.add_argument('--client', default=None, choices=('codex', 'none'),
+    parser.add_argument('--client', default=None, choices=(_client_roster.DEFAULT_CLIENT, 'none'),
                         help='Client to activate (default codex); none leaves '
                              'all client settings and guidance untouched.')
-    parser.add_argument('--clients', default=None, choices=('codex', 'claude', 'both'),
+    parser.add_argument('--clients', default=None, choices=_client_roster.CLIENT_IDS + ('both',),
                         help='Clients to attach (default codex); both attaches '
                              'Codex and Claude Code.')
     parser.add_argument('--claude-mode', default=None,
