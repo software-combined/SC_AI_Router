@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- A managed install, one whose state sets `policy_enforced`, now denies
+  external routing when its model policy is missing or unreadable instead of
+  allowing every model. A personal install is unchanged.
 - A managed install now lists only the models it is allowed to route, on the
   Claude model listing as well as the picker. A personal install is
   unchanged.

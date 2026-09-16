@@ -2,16 +2,18 @@
 
 The router holds no group truth: the central grant row resolves membership
 to a slug list, and the machine stores and enforces that list only. Absent
-file means no policy provisioned (today's behavior). Anything unreadable
-or invalid fails closed to an empty OpenRouter set (subscription rows
-unaffected) and logs a token-free event. Mirrors the credentials.py
-owner-only file contract.
+file means no policy provisioned (today's behavior) on a personal install;
+on a managed one (`policy_enforced` in the state) an absent policy denies
+instead of granting (Plan 176). Anything unreadable or invalid fails closed
+to an empty OpenRouter set (subscription rows unaffected) and logs a
+token-free event. Mirrors the credentials.py owner-only file contract.
 """
 import json
 import os
 from pathlib import Path
 
 from .events import log_event
+from . import state as state_mod
 
 POLICY_FILE = 'model-policy.json'
 
@@ -20,19 +22,37 @@ POLICY_FILE = 'model-policy.json'
 _ON_WINDOWS = os.name == 'nt'
 
 
-def load(home):
+def is_enforced(home):
+    """True when the state under this home marks the install as managed.
+
+    The flag is set by the trusted provisioning path (the installer flag, MDM
+    or the central grant tool); an absent or unreadable state means a personal
+    install, which keeps today's behaviour.
+    """
+    doc = state_mod.read(state_mod.path(home))
+    return bool(doc) and doc.get('policy_enforced') is True
+
+
+def load(home, enforced=None):
     """Resolved (portco, department, allowed) or (None, None, None).
 
     Absent file means no policy provisioned (None: today's behavior).
-    Anything else unreadable or invalid fails closed to an empty
-    OpenRouter set (subscription rows unaffected). Unknown slugs are
-    ignored by the caller at merge time, never fatal here. Never logs
-    content.
+    `enforced` is the managed marker; when it is None the state under this
+    home answers. Anything else unreadable or invalid fails closed to an
+    empty OpenRouter set (subscription rows unaffected), and so does an
+    absent policy on a managed install. Unknown slugs are ignored by the
+    caller at merge time, never fatal here. Never logs content.
     """
+    if enforced is None:
+        enforced = is_enforced(home)
     path = Path(home) / POLICY_FILE
     try:
         raw = path.read_text()
     except FileNotFoundError:
+        if enforced:
+            log_event('model_policy_rejected',
+                      reason='enforced_without_policy')
+            return None, None, ()
         return None, None, None
     except OSError:
         log_event('model_policy_rejected', reason='unreadable')
