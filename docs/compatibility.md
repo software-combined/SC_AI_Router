@@ -1011,3 +1011,23 @@ Row edits proposed: none (top-effort A legs pass; Haiku D is a harness
 limitation; Haiku E matches the known Sonnet conversion observation;
 leg-H narrowing is per-attempt evidence, not a pin yet; the GLM Flash F
 pass confirms the isolated handoff path but proposes no roster change).
+
+## History switch and refusal classes, 2026-09-16
+
+Client: `codex-cli 0.154.0-alpha.6.2`, the app-server inside
+`/Applications/ChatGPT.app/Contents/Resources/codex`; router 0.6.77 working
+tree. Fake upstream, no model calls billed; `tools/probe_history_switch.py`.
+
+| Scenario | Result | Upstream attempts | Models |
+|---|---|---|---|
+| switch, carried history out and back | passed | 3 | DeepSeek V4.1 Flash, GPT-6 Astra, DeepSeek V4.1 Flash |
+| deterministic refusal | passed | 1 | GPT-6 Astra |
+| transient upstream failure, then success | passed | 2 | GPT-6 Astra |
+
+The switch leg asserts that the router replays the foreign provider's
+reasoning on the way back, which is plan 150's contract; the other two pin
+plan 169's final-versus-retryable split (one attempt for a final refusal, a
+second attempt for a transient one). The probe tool itself could not start:
+it still called `probe_context_budget.Client` without the `mode` argument
+that signature gained, so the run died before the client booted. That is
+fixed in this change and the run above is the evidence.
