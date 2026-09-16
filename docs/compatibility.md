@@ -1012,6 +1012,28 @@ limitation; Haiku E matches the known Sonnet conversion observation;
 leg-H narrowing is per-attempt evidence, not a pin yet; the GLM Flash F
 pass confirms the isolated handoff path but proposes no roster change).
 
+## Muse Contributor carried-history probe, 2026-09-16 (plan 150)
+
+Client: `codex-cli 0.154.0-alpha.6.2`, the app-server build, effort `low`.
+Router: 0.6.78 working tree in an isolated home on its own port and token.
+
+Plan 150's last open item, re-run because the desktop has upgraded since the
+2026-09-12 refusal. `tools/probe_codex_runtime.py deepseek/deepseek-v4.1-flash
+--switch-in meta/muse-spark-1.3-contributor` with an isolated `--router-state`
+and a disposable `--codex-home`:
+
+| step | result | serving_endpoint |
+|---|---|---|
+| base tool round trip on DeepSeek V4.1 Flash | passed | Together |
+| switch into Muse Spark 1.3 Contributor, prompted without tools | passed, marker recalled; tool-call absence is not asserted by this leg | Meta |
+
+Three completed requests (two DeepSeek, one Muse) plus the expected 426
+websocket fallback. The switch turn recalling the marker is the contract the
+2026-09-12 incident broke twelve times on carried reasoning, so the
+`history_mode: portable` row now has live evidence on this client build.
+Slices 2c/2d stay unproven by their own rule: reopen only on a new refusal
+shape.
+
 ## Isolated candidate round trip, 2026-09-16 (plan 175 row re-check)
 
 Client: `codex-cli 0.154.0-alpha.6.2` (the app-server build), effort `low`.
