@@ -16,7 +16,7 @@ from .atomic_write import replace_json
 from .capabilities import (COMP_HASH, MULTI_AGENT_VERSION, NODE_REPL_DISABLED,
                            catalogue_patch, describe)
 from .clients.codex import capability_fields as codex_projection
-from .clients import models_for
+from .clients import client_ids, models_for
 from .model_instructions import (SUBAGENT_MODEL_PLACEHOLDER,
                                  SUBSCRIBER_INSTRUCTIONS, instructions_for,
                                  is_routed_text)
@@ -371,7 +371,7 @@ if __name__ == '__main__':
     args = sys.argv[1:]
     client = 'codex'
     if args[:1] == ['--client']:
-        if len(args) < 2 or args[1] not in ('codex', 'claude'):
+        if len(args) < 2 or args[1] not in client_ids():
             raise SystemExit(USAGE)
         client = args[1]
         args = args[2:]
