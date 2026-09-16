@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Stream log lines name a fourth fact, `unattributed_delta_bytes`: the
+  forwarded bytes that are neither the model's answer nor item-shaped
+  reasoning. A turn that dies mid-stream can now be explained from its log
+  line alone. Reasoning a provider streams as text rather than as an item
+  (`response.reasoning_text.*`) counts as reasoning instead of landing in that
+  residue; a 2026-09-16 capture found that shape on
+  `deepseek/deepseek-v4.1-flash`.
 - A managed install, one whose state sets `policy_enforced`, now denies
   external routing when its model policy is missing or unreadable instead of
   allowing every model. A personal install is unchanged.
