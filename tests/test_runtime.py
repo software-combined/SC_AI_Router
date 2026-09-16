@@ -117,7 +117,13 @@ class LoadStateTests(unittest.TestCase):
         auth, env = self._auth({'openrouter': {'type': 'api', 'key': 'k'}})
         path = self._write({'port': 0, 'token': TOKEN, 'openai_models': [],
                             'opencode_auth': str(auth)})
-        with mock.patch.dict(os.environ, env, clear=True):
+        # Isolate ROUTER_HOME: on a machine where the router is installed, the
+        # real ~/.codex/mixed-model-router/openrouter.key is read before the
+        # opencode_auth key here and can fail the lookup closed.
+        home = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, str(home), True)
+        with mock.patch('ai_router.runtime.ROUTER_HOME', home), \
+                mock.patch.dict(os.environ, env, clear=True):
             self.assertEqual(load_state(Path(path))['token'], TOKEN)
 
     def test_load_state_without_opencode_auth_needs_env_or_key_file(self):

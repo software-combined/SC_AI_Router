@@ -30,9 +30,12 @@ SETUP_PIN_RE = re.compile(rb'actions/setup-python@[0-9a-f]{40}')
 # A real step, not a comment or a substring elsewhere: either the inline
 # `- uses:` form (optionally with a trailing comment) or a two-line step
 # whose `uses:` line sits at step indent.
+# `\r?` before the line end keeps the match on CRLF checkouts (a Windows
+# developer with core.autocrlf, or a fixture written in text mode) as well
+# as on the LF files CI reads.
 SETUP_STEP_RE = re.compile(
-    rb'(?m)^\s*(?:-[ \t]+)?uses: \./\.github/actions/setup'
-    rb'(?:[ \t]*#.*)?[ \t]*$')
+    rb'(?m)^[ \t]*(?:-[ \t]+)?uses: \./\.github/actions/setup'
+    rb'(?:[ \t]*#.*)?[ \t]*\r?$')
 WORKFLOWS = ('check.yml', 'release.yml')
 
 SELF = Path(__file__).resolve()

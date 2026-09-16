@@ -13,6 +13,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from ai_router import key_store, provider_defs, setup, setup_page
+from tests._platform import assert_owner_only
 
 NOW = 1_700_000_000
 
@@ -210,4 +211,4 @@ class StoreKeyTests(unittest.TestCase):
             path = self._key_path(tmp)
             key_store.store_key(tmp, 'sk-new', _check_live=lambda stored: False)
             self.assertEqual(path.read_text(), 'sk-new\n')
-            self.assertEqual(oct(path.stat().st_mode & 0o777), '0o600')
+            assert_owner_only(self, path)
