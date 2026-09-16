@@ -111,6 +111,14 @@ class AddTests(unittest.TestCase):
             with self.assertRaisesRegex(SystemExit, 'already in'):
                 cmd_add(path, 'qwen/qwen4-coder', LIVE)
 
+    def test_a_bad_upstream_id_is_refused_before_the_write(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = _seeded(tmp, [_row()])
+            before = path.read_text()
+            with self.assertRaisesRegex(SystemExit, 'bad upstream_id'):
+                cmd_add(path, 'qwen/qwen4-coder', LIVE, upstream_id=' trailing ')
+            self.assertEqual(path.read_text(), before)
+
     def test_dry_run_writes_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = _seeded(tmp, [_row()])
