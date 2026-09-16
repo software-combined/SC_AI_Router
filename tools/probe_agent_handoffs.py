@@ -503,13 +503,13 @@ if __name__ == '__main__':
     parser.add_argument('--native-only', action='store_true')
     parser.add_argument('--lifecycle', action='store_true')
     parser.add_argument('--max-live-calls', type=int, default=0)
-    parser.add_argument('--parent', choices=('gpt-6-astra', 'gpt-5.6-luna', 'z-ai/glm-5.3-flash',
-                                                 'deepseek/deepseek-v4.1-flash'), default=PARENT)
-    parser.add_argument('--child', default=CHILD,
-                        choices=('deepseek/deepseek-v4.1-flash', 'z-ai/glm-5.3-flash',
-                                 'z-ai/glm-5.3', 'google/gemini-3.8-flash'),
-                        help='Child row slug for leg F (default: %(default)s).')
+    # Any routed row may be the child: leg F is that row's own evidence leg, so
+    # the roster owns the list; a parent may be a client-native subscription id.
+    parser.add_argument('--parent', default=PARENT, help='Parent row slug for leg F.')
+    parser.add_argument('--child', default=CHILD, help='Child row slug for leg F.')
     arguments = parser.parse_args()
+    if by_slug(arguments.child) is None:
+        parser.error('unknown child row: ' + arguments.child)
     PARENT = arguments.parent
     CHILD = arguments.child
     raise SystemExit(run(arguments))

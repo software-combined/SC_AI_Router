@@ -15,8 +15,8 @@ import time
 import unittest
 from pathlib import Path
 from tests._platform import unix_only
-from tools.appserver_probe import (AGENT_HANDOFFS, AMBIENT, CONTEXT_BUDGET,
-                                   AppServer, scrub_env)
+from tools.appserver_probe import AGENT_HANDOFFS, AMBIENT, CONTEXT_BUDGET, AppServer, scrub_env
+from tools.probe_spawn_list import declared_tools, expected_overrides, spawn_override_models
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -216,6 +216,56 @@ class AppServerTests(unittest.TestCase):
     def test_scrub_unknown_mode_raises(self):
         with self.assertRaises(ValueError):
             scrub_env({}, 'nope')
+
+
+class SpawnListCaptureTests(unittest.TestCase):
+    """Plan 151 stage 4: the override-list parse and the capture's two shapes.
+
+    The live capture needs the desktop app-server; these cases pin the parts a
+    change can silently break: which ids count, where a build puts its tools,
+    and which rows win the five slots.
+    """
+
+    DESCRIPTION = (
+        "\n        Available model overrides (optional; inherited parent model "
+        "is preferred):\n- `gpt-6-astra`: Our most capable model.\n"
+        "- `gpt-5.6-sol`: Reliable agentic workhorse.\n"
+        "        Spawns an agent to work on the specified task. If your current "
+        "task is `/root/task1` and you spawn_agent with task_name \"task_3\" the "
+        "agent will have canonical task name `/root/task1/task_3`.\n")
+
+    def test_only_the_bullet_list_counts_as_overrides(self):
+        # The trailing prose names more ids; counting them would misreport a
+        # five-row list as ten rows.
+        self.assertEqual(spawn_override_models(self.DESCRIPTION),
+                         ['gpt-6-astra', 'gpt-5.6-sol'])
+
+    def test_missing_override_block_is_empty(self):
+        self.assertEqual(spawn_override_models('Spawns an agent.'), [])
+
+    def test_declared_tools_reads_both_client_shapes(self):
+        # This build sends an `additional_tools` developer item; older builds
+        # sent a top-level array. A capture must see the spawn_agent in either.
+        spawn = {'name': 'spawn_agent', 'description': 'Available model overrides: x'}
+        namespaced = {'type': 'additional_tools', 'role': 'developer',
+                      'tools': [{'type': 'namespace', 'name': 'collaboration',
+                                 'tools': [spawn]}]}
+        self.assertEqual([t['name'] for t in declared_tools({'input': [namespaced]})],
+                         ['spawn_agent'])
+        self.assertEqual([t['name'] for t in declared_tools({'tools': [spawn]})],
+                         ['spawn_agent'])
+        self.assertEqual(list(declared_tools({'input': [{'type': 'message'}]})), [])
+
+    def test_expected_overrides_takes_the_first_five_visible_rows(self):
+        rows = [{'slug': 'hidden', 'visibility': 'hidden', 'multi_agent_version': 'v2'},
+                {'slug': 'no-multi', 'visibility': 'list'},
+                {'slug': 'a', 'visibility': 'list', 'multi_agent_version': 'v2'},
+                {'slug': 'b', 'visibility': 'list', 'multi_agent_version': 'v1'},
+                {'slug': 'c', 'visibility': 'list', 'multi_agent_version': 'v2'},
+                {'slug': 'd', 'visibility': 'list', 'multi_agent_version': 'v1'},
+                {'slug': 'e', 'visibility': 'list', 'multi_agent_version': 'v2'},
+                {'slug': 'f', 'visibility': 'list', 'multi_agent_version': 'v2'}]
+        self.assertEqual(expected_overrides(rows), ['a', 'b', 'c', 'd', 'e'])
 
 
 if __name__ == '__main__':
