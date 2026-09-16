@@ -1076,6 +1076,26 @@ fallbacks, inside the plan's 23-call cap. Haiku reports no `serving_endpoint`,
 so its own upstream stays unattributed; the DeepSeek turn lands on Together as
 in the other sessions.
 
+## Claude CLI tool round trip on an OpenRouter-routed Claude row, 2026-09-17 (plan 115)
+
+Client: the installed Claude Code CLI (`2.1.223 (Claude Code)`) against an isolated
+router (0.6.78 working tree, own home, port and token), model
+`anthropic/claude-haiku-4.5`, with `ANTHROPIC_AUTH_TOKEN` unset so the CLI's
+own bearer is used. The session
+was asked to read a synthetic marker file with the Read tool.
+
+| step | result |
+|---|---|
+| first Messages request | completed, 200 |
+| follow-up carrying the tool result | upstream 400 `invalid_request`; the router answers a final 409 `PROVIDER_REJECTED` |
+| attempts | 11, then the CLI stopped with "Do not retry the unchanged request" |
+
+Result: the tool round trip does not complete on this route, so plan 115's
+first proof is not met. The failure sits on the follow-up body - the first
+request of the same session was served - and the provider names only
+`invalid_request`, so the next step is to capture which part of that body the
+OpenRouter-backed Anthropic endpoint refuses, not to re-run the leg.
+
 ## Leg F re-runs with the corrected exit gate, 2026-09-17 (plan 175)
 
 Client: `codex-cli 0.154.0-alpha.6.2`; router 0.6.78 working tree.
