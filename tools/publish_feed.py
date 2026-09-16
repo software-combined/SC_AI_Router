@@ -89,17 +89,35 @@ def bundle_state(bucket, key):
 
 
 def publish_bundle(bucket, key, path, sha256):
-    """Upload an immutable bundle once; refuse to replace different bytes."""
+    """Upload an immutable bundle once; refuse to replace different bytes.
+
+    The upload is create-only: S3 refuses a second write with
+    PreconditionFailed, so the window the head-object pre-check leaves cannot
+    replace published bytes on the supported path. A role holder that skips
+    the flag can still replace a key; the publish notification reports it and
+    versioning recovers it (Plan 167).
+    """
     existing = bundle_state(bucket, key)
     if existing == sha256:
         return 'already published'
     if existing:
         raise SystemExit(f'{key} holds a different sha256 ({existing[:12]}); '
                          'bundles are immutable')
-    _aws(['s3', 'cp', str(path), f's3://{bucket}/{key}',
-          '--cache-control', BUNDLE_CACHE_CONTROL,
-          '--content-type', 'application/gzip',
-          '--metadata', f'sha256={sha256}'])
+    try:
+        result = run(['aws', 's3api', 'put-object', '--bucket', bucket,
+                      '--key', key, '--body', str(path),
+                      '--if-none-match', '*',
+                      '--cache-control', BUNDLE_CACHE_CONTROL,
+                      '--content-type', 'application/gzip',
+                      '--metadata', f'sha256={sha256}'],
+                     capture_output=True, text=True)
+    except OSError as exc:
+        raise SystemExit(f'cannot run the aws CLI: {exc}')
+    if result.returncode:
+        stderr = result.stderr or ''
+        if 'PreconditionFailed' in stderr:
+            raise SystemExit(f'{key} already exists; bundles are immutable')
+        raise SystemExit(f'cannot publish {key}: {_clean(stderr)}')
     return 'uploaded'
 
 

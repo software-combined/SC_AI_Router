@@ -30,8 +30,15 @@ CERT="$(aws cloudformation describe-stacks --stack-name scg-router-feed-cert \
 aws cloudformation deploy --stack-name scg-router-feed --region ap-southeast-2 \
   --template-file infra/feed.yaml --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides CertificateArn="$CERT" \
-    BucketName="$FEED_BUCKET" SigningSeedArn="$FEED_SIGNING_SEED_ARN"
+    BucketName="$FEED_BUCKET" SigningSeedArn="$FEED_SIGNING_SEED_ARN" \
+    NotificationEmail="$EMAIL"
 ```
+
+The subscription needs one click: SNS emails `NotificationEmail` and waits.
+Confirm it, then re-check with
+`aws sns list-subscriptions-by-topic --topic-arn <topic>` that it no longer
+reads `PendingConfirmation`; until it does, the publish email never arrives
+and the second-write signal is silently missing.
 
 ### Where the feed identifiers live (Plan 160)
 
@@ -58,10 +65,27 @@ publisher role. The role is assumable only by
 refs: `repo:software-combined/SC_Unlimited_ai:ref:refs/tags/v*` in the
 classic subject form, or
 `repo:software-combined@200868195/SC_Unlimited_ai@1360169840:ref:refs/tags/v*`
-in GitHub's immutable form. It can read and write objects in the feed
-bucket, list the bucket, invalidate the feed, and read the stack outputs.
-It cannot delete objects or touch any other resource. The feed and its
-bundles are public: readers need no credential.
+in GitHub's immutable form. It may read any object in the feed bucket and
+write only what a release publishes: `bundles/*` and, per channel,
+`latest.json`, `latest.json.sig` and `models.json`. It can also list the
+bucket, invalidate the feed, read the stack outputs and read the signing
+seed. An explicit deny refuses a delete or any change to the bucket's own
+configuration, so a later widening of the allow cannot reach them. The
+first-install keys (`runtimes*`, `bootstrap/*`) are outside it on purpose:
+that tool uploads with the operator's own credentials.
+
+The publisher's bundle upload is create-only (`--if-none-match '*'`), so a
+second write of a published key is refused by S3 itself. A role holder that
+skips the flag can still replace a key: the publish email reports it (one
+message per `bundles/*` write, so a second message for an existing key is
+the signal), and bucket versioning recovers the replaced bytes afterwards.
+When that second message arrives, recover deliberately: list the key's
+versions (`aws s3api list-object-versions --bucket "$FEED_BUCKET"
+--prefix bundles/<name>`), compare each version's `Metadata.sha256` against
+the feed document that names the bundle, copy the matching version back over
+the key with `aws s3api copy-object --copy-source <bucket>/<key>?versionId=...`,
+then find out what held the publisher role.
+The feed and its bundles are public: readers need no credential.
 
 Verify the feed before trusting a release. Before the first publish the
 channel documents do not exist; run the positive check after the first
