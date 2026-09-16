@@ -1012,6 +1012,26 @@ limitation; Haiku E matches the known Sonnet conversion observation;
 leg-H narrowing is per-attempt evidence, not a pin yet; the GLM Flash F
 pass confirms the isolated handoff path but proposes no roster change).
 
+## Leg F on the GLM 5.3 child, 2026-09-16 (plan 175)
+
+Client: `codex-cli 0.154.0-alpha.6.2`; router 0.6.78 working tree.
+`tools/probe_agent_handoffs.py --live --live-children --max-live-calls 12
+--parent deepseek/deepseek-v4.1-flash --child z-ai/glm-5.3 --wire-mode
+classic`.
+
+| fact | value |
+|---|---|
+| markers delivered to the child | 3 of 3 |
+| canonical replay | true |
+| alias emitted | true |
+| encrypted child | false (plaintext shape) |
+| end state | not reached: parent kept calling collaboration tools to the 12-call cap |
+
+Reading: 3 of 3 markers reached the child with canonical replay and alias
+emission, but the leg did not finish inside the cap. Inconclusive at the cap,
+not a handoff failure; re-run with higher `--max-live-calls` inside the
+plan's 23-call budget.
+
 ## Gemini Pro base echo re-run, 2026-09-16 (plan 175 leg A)
 
 Client: `codex-cli 0.154.0-alpha.6.2`, effort `low`; router 0.6.78 working
