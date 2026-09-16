@@ -438,7 +438,7 @@ class InstallConfigTests(unittest.TestCase):
                 ('packaging/install.py', '# updater re-invoke target'),
                 ('packaging/VERSION', '1.0.1\n')])
             latest = {'version': '1.0.1', 'url': 'file:///bundle.tar.gz',
-                      'sha256': None, 'min_python': '3.14'}
+                      'sha256': hashlib.sha256(blob).hexdigest(), 'min_python': '3.14'}
             seen = []
 
             def fake_run(cmd, **kwargs):

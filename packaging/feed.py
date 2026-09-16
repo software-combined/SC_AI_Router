@@ -64,9 +64,23 @@ def channel_feed(home):
     return FEED_URL
 
 
+class _PinnedRedirects(urllib.request.HTTPRedirectHandler):
+    """Follow a redirect only when it stays on a trusted origin."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if not trusted_origin(newurl) or newurl.startswith('file://'):
+            raise SystemExit('feed redirected off the trusted update origin; refusing')
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def opener():
+    """The one opener every unattended feed or bundle fetch goes through."""
+    return urllib.request.build_opener(_PinnedRedirects())
+
+
 def _get(url, headers, etag):
     """One GET; keeps the caller's ETag when the response carries none."""
-    with urllib.request.urlopen(
+    with opener().open(
             urllib.request.Request(url, headers=headers), timeout=30) as response:
         return (response.status, response.read(),
                 response.headers.get('ETag', etag))
