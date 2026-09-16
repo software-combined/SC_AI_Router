@@ -318,9 +318,9 @@ def do_install(args, _fetch=fetch, _run=None):
         return 0
     backend = platform_backend()
     backend.check(home)
+    want = _updater._required_sha256(latest)
     tarball = _svc.feed_read(_fetch, _svc.sibling_bundle(feed, latest['url']))
-    if latest.get('sha256'):
-        verify_sha256(tarball, latest['sha256'])
+    verify_sha256(tarball, want)
     manifest_doc = {'files': {}}
     with tarfile.open(fileobj=io.BytesIO(tarball), mode='r') as tar:
         try:
