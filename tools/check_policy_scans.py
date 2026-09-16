@@ -7,6 +7,8 @@ Implements the two greps that used to be inline shell in
 - request-cap scan: the cap was removed by owner decision
   (`docs/operations.md`); any reintroduction fails.
 - secrets scan: OpenRouter keys and bearer tokens must never be committed.
+- dialect scan: an upstream dialect comparison reads the constant the
+  definition table exports, never a raw string (Plan 152).
 
 Both scans read files as bytes, matching historical `grep -r` behaviour
 on text and binary files alike. This script necessarily names the
@@ -43,6 +45,16 @@ SETUP_STEP_RE = re.compile(
 # that never ship.
 ACCOUNT_ARN_RE = re.compile(rb'arn:aws[a-z-]*:[a-z0-9-]+:[a-z0-9-]*:\d{12}:')
 ACCOUNT_BUCKET_RE = re.compile(rb'\b[a-z0-9][a-z0-9.-]{2,}-\d{12}-[a-z0-9-]+')
+# A dialect comparison against a raw string (Plan 152): `provider_defs` owns
+# the dialect, so a call site compares the constant it exports. Only the
+# comparison is forbidden, not the table's own definitions. Every comparison
+# operator counts, in either order: a gate that only knows `==` misses the
+# `!=` and `in` forms of the same fork.
+DIALECT_OPERATOR = rb'(?:==|!=|not\s+in|in)'
+DIALECT_LITERAL_RE = re.compile(
+    rb"""dialect\s*""" + rb'''(?:''' + DIALECT_OPERATOR + rb""")\s*[(\[]?\s*['"]"""
+    rb"""|['"]\s*(?:""" + DIALECT_OPERATOR + rb""")\s*[\w.]*dialect""")
+TABLE_OWNER = 'ai_router/provider_defs.py'
 GITIGNORED = ('plans',)
 WORKFLOWS = ('check.yml', 'release.yml')
 
@@ -150,10 +162,29 @@ def check_setup_single_owner():
     return ok
 
 
+def check_dialect_literals():
+    """The definition table owns the dialect; call sites read its constant."""
+    hits = []
+    for path in _iter_files(('ai_router',)):
+        rel = path.relative_to(ROOT)
+        if rel.as_posix() == TABLE_OWNER:
+            continue
+        if DIALECT_LITERAL_RE.search(path.read_bytes()):
+            hits.append(str(rel))
+    if hits:
+        print('dialect compared against a raw string; read the constant in '
+              f'{TABLE_OWNER} instead (Plan 152)')
+        for hit in hits:
+            print(f'  {hit}')
+        return False
+    return True
+
+
 def main():
     # Every scan runs (no short-circuit) so one run reports all failures.
     results = (check_request_cap(), check_secrets(),
-               check_publication_identifiers(), check_setup_single_owner())
+               check_publication_identifiers(), check_setup_single_owner(),
+               check_dialect_literals())
     ok = all(results)
     print(f'policy-scans: {"pass" if ok else "FAIL"}')
     return 0 if ok else 1
