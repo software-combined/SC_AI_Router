@@ -1,5 +1,6 @@
 """Public feed: origin resolution, channel selection, and fetch."""
 import contextlib
+import hashlib
 import io
 import json
 import os
@@ -89,7 +90,9 @@ class FeedTests(unittest.TestCase):
             self.assertIsNone(req.get_header('X-scg-feed-token'))
             raise svc.urllib.error.HTTPError(req.full_url, 304, 'Not Modified', {}, None)
 
-        with mock.patch.object(svc.urllib.request, 'urlopen', side_effect=fake_urlopen):
+        fake_opener = mock.Mock()
+        fake_opener.open.side_effect = fake_urlopen
+        with mock.patch.object(svc._feed, 'opener', return_value=fake_opener):
             status, body, etag = svc.fetch_feed(ORIGIN + '/stable/latest.json', 'etag-1')
         self.assertEqual((status, body, etag), (304, b'', 'etag-1'))
 
@@ -105,7 +108,7 @@ class FeedTests(unittest.TestCase):
         (home / 'releases' / '1.0.0' / 'packaging' / 'VERSION').write_text('1.0.0\n')
         (home / 'current').write_text('1.0.0\n')
         latest = {'version': '2.0.0', 'url': ORIGIN + '/bundles/2.0.0.tar.gz',
-                  'sha256': None, 'serial': 1}
+                  'sha256': hashlib.sha256(b'blob').hexdigest(), 'serial': 1}
         seen = []
         import importlib.util as _ilu
         _spec = _ilu.spec_from_file_location(
@@ -138,8 +141,10 @@ class FeedTests(unittest.TestCase):
         updater_mod._FEED_VERIFY_KEY = _pub
         args = install_mod.build_parser().parse_args(['--home', str(home)])
         try:
-            with mock.patch.object(svc.urllib.request, 'urlopen', side_effect=fake_urlopen):
-                with mock.patch.object(install_mod._svc.urllib.request, 'urlopen', side_effect=fake_urlopen):
+            fake_opener = mock.Mock()
+            fake_opener.open.side_effect = fake_urlopen
+            with mock.patch.object(svc._feed, 'opener', return_value=fake_opener):
+                with mock.patch.object(install_mod._svc._feed, 'opener', return_value=fake_opener):
                     with contextlib.redirect_stdout(io.StringIO()):
                         rc = install_mod.do_update(args, _sleep=lambda s: None)
         finally:

@@ -13,13 +13,12 @@ import json
 import os
 import sys
 import time
-import urllib.error
-import urllib.request
 from pathlib import Path
 from urllib.parse import parse_qsl
 
 from . import key_prompt, key_store, provider_defs, setup_page, state as state_mod
 from .atomic_write import StaleTmp, replace_json
+from .events import log_event
 
 _ON_WINDOWS = os.name == 'nt'
 
@@ -27,16 +26,7 @@ SETUP_TTL_S = 15 * 60
 FORM_LIMIT = 4096
 
 
-def setup_pending(state, now=None):
-    """True while a fresh unexpired setup nonce is installed."""
-    cfg = state.get('setup') if isinstance(state, dict) else None
-    if not isinstance(cfg, dict):
-        return False
-    if not isinstance(cfg.get('nonce'), str) or not cfg['nonce']:
-        return False
-    if not isinstance(cfg.get('expires'), (int, float)) or isinstance(cfg.get('expires'), bool):
-        return False
-    return cfg['expires'] > (time.time() if now is None else now)
+setup_pending = state_mod.setup_pending
 
 
 def valid_nonce(state, nonce, now=None):
@@ -85,7 +75,7 @@ def handle_setup_json(state, home, nonce, form, _urlopen=None, _now=None):
 
 def _submit(state, home, form, _urlopen):
     """(status, result) for a setup POST: one writer, both renderers."""
-    _fetch = _urlopen or urllib.request.urlopen
+    _fetch = _urlopen or key_store._open_without_redirects
     provider_id = key_store.window_provider(state)
     fields = dict(parse_qsl(form.decode('utf-8', 'replace'), keep_blank_values=True))
     key = fields.get('key', '').strip()
@@ -205,9 +195,8 @@ def open_key_window(server, home, provider_id=None, _opener=None, _prompt=None):
         print('open %s to connect your %s key'
               % (url, provider_defs.label_for(provider_id)))
     else:
-        from .runtime import log_event as _log_event
-        _log_event('setup_window_opened' if opened else 'setup_window_pending',
-                   port=state.get('port'), path='/setup/')
+        log_event('setup_window_opened' if opened else 'setup_window_pending',
+                  port=state.get('port'), path='/setup/')
     return opened
 
 

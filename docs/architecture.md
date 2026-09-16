@@ -7,12 +7,19 @@ transitional owners name the plan that will move them.
 ## Domains and direction
 
 ```
-provider_defs (leaf: one definition per upstream, imports nothing)
+provider_defs (one definition per upstream, imports nothing) + errors, sse,
+tool_merge, image_items, atomic_write, state, events (leaves: no module-level
+local imports; events' one call-time state lookup is the only exception)
   ^
   |
-registry / capabilities / image_items (leaves: model facts, stdlib + dataclasses only)
-  ^            ^
-  |            |
+registry / capabilities (model facts; stdlib plus the provider table only)
+  ^
+  |
+transport (Prepared, hop-header rules, raw stream, header relay) + upstream
+(failure policy) + stream_errors (classification) + stream_relay (one stream
+for relay.py): wire and failure policy, consumed by the adapters below
+  ^
+  |
 catalogue / models / live_refresh / apply_catalogue (client projections)
   |
 agent_handoffs / compaction / tool_adapter / tool_aliases / discovered
@@ -20,14 +27,19 @@ agent_handoffs / compaction / tool_adapter / tool_aliases / discovered
   |
 providers (Responses adapters) + claude (Messages adapters)
   |
-protocols (explicit method/path dispatch table; no policy of its own)
-  |
-transport (Prepared, hop-header rules, raw stream, header relay) + upstream (failure policy)
+protocols (explicit method/path dispatch table; imports the adapters because
+it selects one, and holds no policy of its own)
   |
 ingress (auth/rebinding, body limits, GET routes, error shaping) + relay (upstream loop)
   |
-router (HTTP control: drain/inflight and POST orchestration)
+router (HTTP control: drain/inflight and POST orchestration) + runtime (boot
+composition: state, credentials, policy) + __main__ (process entry)
 ```
+
+`events.py` owns the event log; only `router.py`, `ingress.py` and
+`__main__.py` still import `runtime` (for the boot constants and the
+handler's injected `log_event`), and nothing else under `ai_router/` does.
+`tests/test_import_graph.py` is the enforcement, not this page.
 
 Rules:
 

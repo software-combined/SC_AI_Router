@@ -6,6 +6,7 @@ releases (never the JSON feed), and a failed first install must not read
 as up to date on retry.
 """
 import contextlib
+import hashlib
 import io
 import json
 import os
@@ -345,8 +346,9 @@ class InstallLifecycleTests(unittest.TestCase):
         # activate the requested version.
         with tempfile.TemporaryDirectory() as tmp:
             home = self._update_home(tmp)
+            blob, _ = _craft_bundle('9.9.9')
             latest = {'version': '9.9.9', 'url': 'file:///bundle.tar.gz',
-                      'sha256': None, 'min_python': '3.14'}
+                      'sha256': hashlib.sha256(blob).hexdigest(), 'min_python': '3.14'}
             attempts = []
 
             def flaky_read(feed, etag):
@@ -355,7 +357,6 @@ class InstallLifecycleTests(unittest.TestCase):
                     raise OSError('simulated transient network failure')
                 return 200, json.dumps(latest).encode(), 'etag-B'
 
-            blob, _ = _craft_bundle('9.9.9')
             _patch_attrs(self, run=lambda cmd, **kw: _ok_run(cmd, **kw))
             args = self._update_args(home)
             buf = io.StringIO()
@@ -381,6 +382,7 @@ class SafeUpdateTests(unittest.TestCase):
             home = Path(tmp) / 'home'
             blob, latest = _craft_bundle('9.9.9')
             bad_blob = _remanifest(blob, version='9.9.8')
+            latest = dict(latest, sha256=hashlib.sha256(bad_blob).hexdigest())
             calls = []
             _patch_attrs(self, run=_recording(calls),
                          self_test=lambda *a: None,
