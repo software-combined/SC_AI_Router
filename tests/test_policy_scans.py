@@ -6,6 +6,7 @@ Runs against a temporary tree so nothing here touches the real repository.
 """
 import importlib.util
 import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -19,6 +20,22 @@ CAP_BYTES = b'DEFAULT_' + b'REQUEST' + b'_CAP = 5\n'
 # The scan-check name is built the same way: this file is inside the scanned
 # tree, so it must not carry the literal it exists to detect.
 CAP_CHECK = 'check_' + 'request' + '_cap'
+
+
+class ProviderKeyIgnoreTests(unittest.TestCase):
+    """A provider's key file must be ignored before anyone writes one."""
+
+    def test_every_external_key_file_is_ignored(self):
+        from ai_router import provider_defs
+        names = sorted(defn.key.file for defn in provider_defs.external_defs())
+        self.assertTrue(names)
+        result = subprocess.run(['git', 'check-ignore', *names], cwd=ROOT,
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        ignored = result.stdout.split()
+        for name in names:
+            with self.subTest(key_file=name):
+                self.assertIn(name, ignored)
 
 
 def _load(root):

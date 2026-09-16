@@ -35,6 +35,23 @@ def _open_without_redirects(req, timeout):
     return urllib.request.build_opener(_NoRedirects()).open(req, timeout=timeout)
 
 
+def _key_info_openrouter(payload, label):
+    """OpenRouter's {"data": {label, limit, usage}} envelope."""
+    data = payload.get('data') if isinstance(payload, dict) else None
+    if not isinstance(data, dict):
+        raise KeyRejected(label + ' returned an unexpected key response')
+    return (data.get('label') or 'key', data.get('limit'), data.get('usage'))
+
+
+def _key_info_plain(payload, label):
+    """Any 2xx means the endpoint accepted the key; it reports no numbers."""
+    return (label, None, None)
+
+
+KEY_INFO_READERS = {'openrouter': _key_info_openrouter,
+                    'plain': _key_info_plain}
+
+
 def check_key(provider_id, key, _urlopen=None):
     """(label, limit, usage) for a live key; KeyRejected when refused, OSError when down.
 
@@ -48,21 +65,22 @@ def check_key(provider_id, key, _urlopen=None):
         _urlopen = _open_without_redirects
     defn = provider_defs.get(provider_id)
     label = provider_defs.label_for(provider_id)
-    if defn is None or not defn.key_info_url:
+    if defn is None or not defn.key_info_url or defn.key_info_shape == 'none':
         return (label, None, None)
+    reader = KEY_INFO_READERS.get(defn.key_info_shape)
+    if reader is None:
+        raise KeyRejected(label + ' has no key check for its shape')
     req = urllib.request.Request(defn.key_info_url,
                                  headers={'Authorization': 'Bearer ' + key})
     try:
         with _urlopen(req, timeout=20) as response:
-            payload = json.load(response)
+            payload = (json.load(response)
+                       if defn.key_info_shape != 'plain' else None)
     except urllib.error.HTTPError as exc:
         if 300 <= exc.code < 400:
             raise OSError('key check was redirected; refusing to follow')
         raise KeyRejected(label + ' rejected the key', status=exc.code)
-    data = payload.get('data') if isinstance(payload, dict) else None
-    if not isinstance(data, dict):
-        raise KeyRejected(label + ' returned an unexpected key response')
-    return (data.get('label') or 'key', data.get('limit'), data.get('usage'))
+    return reader(payload, label)
 
 
 def window_provider(state):

@@ -167,14 +167,17 @@ def serving_endpoint(body):
     return None
 
 
-def _provider_reason(body):
+def _provider_reason(body, dialect=None):
     """(provider_name, fixed_category, wire_tool, bounded_code) from an error body.
 
     Only structural fragments leave this function: never raw bodies, schemas,
     argument values, secret-bearing text, or arbitrary upstream prose. The
     category is fixed wording chosen from the error shape; the offending tool
     is kept only after the bounded identity match below; the code comes from
-    fixed code fields only.
+    fixed code fields only. `dialect` picks the envelope reader: OpenRouter
+    nests the upstream text in `error.metadata.raw`, while an
+    OpenAI-compatible body carries `error.message` directly. Every other
+    dialect keeps the metadata reader, so the built-in paths are unchanged.
     """
     try:
         payload = json.loads(body.decode() if isinstance(body, bytes) else body)
@@ -187,14 +190,15 @@ def _provider_reason(body):
         return None
     metadata = error.get('metadata')
     provider = metadata.get('provider_name') if isinstance(metadata, dict) else None
-    raw = metadata.get('raw') if isinstance(metadata, dict) else None
     text, inner = None, None
-    if isinstance(raw, str):
-        try:
-            inner = json.loads(raw)
-            text = inner.get('error') if isinstance(inner, dict) else raw
-        except ValueError:
-            text = raw
+    if dialect != provider_defs.DIALECT_OPENAI_COMPATIBLE:
+        raw = metadata.get('raw') if isinstance(metadata, dict) else None
+        if isinstance(raw, str):
+            try:
+                inner = json.loads(raw)
+                text = inner.get('error') if isinstance(inner, dict) else raw
+            except ValueError:
+                text = raw
     inner_error = inner.get('error') if isinstance(inner, dict) else None
     if not isinstance(text, str):
         text = error.get('message') if isinstance(error.get('message'), str) else None
@@ -304,22 +308,23 @@ def describe_failure(exc, response, info):
     """
     model = info.get('model', 'the model')
     timeout = info.get('timeout_s', 120)
+    dialect = info.get('dialect')
     if response is not None:
         if response.get('status') == 429:
             return None  # existing Retry-After path owns 429s
         if response.get('status') == 402:
             # Status alone names the cause: the key cannot afford the turn.
             # The code comes from fixed fields only; prose never classifies.
-            parsed = _provider_reason(response.get('body', b''))
+            parsed = _provider_reason(response.get('body', b''), dialect)
             code = parsed[3] if parsed is not None else None
             return 400, KEY_NO_CREDIT_MESSAGE.format(model=model), code
         if (info.get('protocol') == provider_defs.RESPONSES
                 and (response.get('status', 0) >= 500 or response.get('status') == 408)):
-            parsed = _provider_reason(response.get('body', b'')) or (None,)
+            parsed = _provider_reason(response.get('body', b''), dialect) or (None,)
             who = f'upstream {parsed[0]}' if parsed[0] else 'upstream'
             return 503, (f'{model} is unavailable at {who} '
                          f'(HTTP {response.get("status")}); retry shortly'), None
-        parsed = _provider_reason(response.get('body', b''))
+        parsed = _provider_reason(response.get('body', b''), dialect)
         if parsed is None:
             return None
         provider, reason, tool, code = parsed
