@@ -64,6 +64,8 @@ def load_state(path=STATE):
         raise SystemExit('anthropic_mode must be subscription or none')
     if 'openai_helper_fallback' in state and not isinstance(state['openai_helper_fallback'], bool):
         raise SystemExit('openai_helper_fallback must be true or false')
+    if 'policy_enforced' in state and not isinstance(state['policy_enforced'], bool):
+        raise SystemExit('policy_enforced must be true or false')
     if 'openrouter_region' in state and not provider_defs.valid_region(state['openrouter_region']):
         raise SystemExit("openrouter_region must be one of 'global', 'us' or 'eu'")
     # Every external provider the registry routes to needs its own key, but
@@ -82,8 +84,10 @@ def load_state(path=STATE):
         raise SystemExit(f'{provider_defs.label_for(missing[0][0])} '
                          f'credential problem: {detail}')
     # Plan 068: resolved portco allowlist rides alongside the roster. No
-    # policy fetch may block startup: absent file means no policy (None),
-    # and the loader fails closed to empty on malformed input.
+    # policy fetch may block startup: absent file means no policy (None) on a
+    # personal install, while a managed one (`policy_enforced`) denies rather
+    # than grants (Plan 176), and the loader fails closed to empty on
+    # malformed input.
     from .model_policy import load as _load_policy
     home = path.parent if path != STATE else ROUTER_HOME
     _, _, allowed = _load_policy(home)
