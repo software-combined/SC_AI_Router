@@ -38,6 +38,7 @@ load ai_router/provider_defs.py
 load ai_router/retired_slugs.py
 load ai_router/state.py
 load ai_router/subscription_roster.py
+load ai_router/clients/roster.py
 load ai_router/winacl.py
 parse packaging/router_launch.py
 parse packaging/runtime_lock.py

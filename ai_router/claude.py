@@ -18,6 +18,7 @@ import sys
 from . import provider_defs, transport
 from .errors import ClaudeSubscriptionRequired, PreparationError, UnknownModel
 from . import registry
+from .clients import registry as client_table
 from .registry import by_slug, upstream_id_for
 
 # POST-only Messages paths; a future GET-only route (like /v1/models) must
@@ -73,11 +74,12 @@ def models_listing():
     from . import availability as _availability
     snap = _availability.current()
     avail = None if snap is None else (snap.get('models') or frozenset())
+    defn = client_table.get('claude')
     ordered = sorted(registry.MODELS, key=lambda m: (m.tier != 'verified',
                                             m.display_name.casefold()))
     rows = []
     for entry in ordered:
-        if not entry.listed:
+        if not defn.discovery_visible(entry):
             continue
         if (avail is not None
                 and provider_defs.is_external(entry.provider)
