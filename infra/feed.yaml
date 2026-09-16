@@ -19,8 +19,10 @@ Parameters:
     Description: Public hosted zone for softwarecombined.com.
   BucketName:
     Type: String
-    Default: router-feed-publication
-    Description: Bucket holding feeds and immutable bundles. Retained on delete.
+    Description: >-
+      Bucket holding feeds and immutable bundles. Retained on delete. No
+      default (Plan 160): an account-bearing bucket name in the template is an
+      identifier disclosure, so the deploy passes it.
   Repository:
     Type: String
     Default: software-combined/SC_Unlimited_ai
@@ -33,10 +35,10 @@ Parameters:
       kept beside the classic form so either claim can assume the role.
   SigningSeedArn:
     Type: String
-    Default: 'arn:aws:secretsmanager:ap-southeast-2:${AWS_ACCOUNT_ID}:secret:scg/router/feed-signing-seed-UNSET'
-    Description: ARN of the Secrets Manager secret holding the feed signing
-      seed (Plan 145). The owner replaces the placeholder with the real
-      secret ARN at deploy time.
+    Description: >-
+      ARN of the Secrets Manager secret holding the feed signing seed
+      (Plan 145), passed at deploy time. No default (Plan 160), because the
+      ARN carries the account id.
     AllowedPattern: '^arn:aws[A-Za-z-]*:secretsmanager:[a-z0-9-]+:\d{12}:secret:.+$'
 Resources:
   FeedBucket:

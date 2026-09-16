@@ -1,7 +1,7 @@
 """Publish one built release to the public update feed (Plan 139).
 
 Usage: python tools/publish_feed.py --dist dist --channel stable
-       [--bucket B] [--distribution-id D] [--dry-run]
+       --bucket B [--distribution-id D] [--dry-run]
 
 The release workflow runs this before it creates the GitHub Release, so the
 feed always serves a release before the release page advertises it. The
@@ -14,7 +14,6 @@ import subprocess
 from pathlib import Path
 
 FEED_ORIGIN = 'https://dist.softwarecombined.com'
-DEFAULT_BUCKET = 'router-feed-publication'
 FEED_DOCUMENT = 'feed-latest.json'
 RELEASE_DOCUMENT = 'release-latest.json'
 FEED_SIG_DOCUMENT = 'feed-latest.json.sig'
@@ -169,7 +168,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description='Publish a built release to the feed.')
     parser.add_argument('--dist', default='dist', help='directory packaging/release.py wrote')
     parser.add_argument('--channel', required=True, choices=CHANNELS)
-    parser.add_argument('--bucket', default=DEFAULT_BUCKET)
+    parser.add_argument('--bucket', required=True,
+                        help='feed bucket; no default, so a fork cannot publish to ours')
     parser.add_argument('--distribution-id', default='')
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--sign', metavar='SEEDFILE',
