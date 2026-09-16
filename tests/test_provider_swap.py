@@ -5,7 +5,9 @@ the whole surface follows it: routing target, credential, picker label,
 capability gates, the portco allowlist, and per-provider fail-closed
 behaviour. No network: the credential is a file in a temp home.
 """
+import contextlib
 import http.client
+import io
 import json
 import os
 import shutil
@@ -22,6 +24,8 @@ from tests.harness import start_server
 
 ACME_KEY = 'ACME_API_KEY'
 ACME_FILE = 'acme.key'
+OPUS_SLUG = 'anthropic/claude-opus-5'
+OPUS_UPSTREAM = 'claude-opus-5'
 ACME_ROW = {
     'slug': 'acme/one', 'provider': 'acme', 'display_name': 'Acme: One \u00b7 Acme',
     'vendor': 'Acme', 'reasoning': ['low'], 'default_reasoning': 'low',
@@ -52,6 +56,7 @@ class ProviderSwapTests(unittest.TestCase):
         self.addCleanup(shutil.rmtree, str(self.home), True)
         self._defs = (provider_defs.PROVIDERS, provider_defs.BY_ID)
         self._registry = (registry.MODELS, registry.BY_SLUG)
+        self._catalogue_models = catalogue.MODELS
         self._caps = (capabilities.EXTERNAL_MODELS, capabilities.IMAGE_INPUT_MODELS,
                       capabilities.REASONING_LEVELS, capabilities.EXCLUDED_EFFORTS)
         # Registered before the first mutation so a failure mid-setup cannot
@@ -63,11 +68,13 @@ class ProviderSwapTests(unittest.TestCase):
             Path(registry.__file__).with_name('models.json').read_text())
         rows = registry.load(json.dumps(existing + [ACME_ROW]))
         registry.MODELS, registry.BY_SLUG = rows, {m.slug: m for m in rows}
+        catalogue.MODELS = rows
         model_refresh.apply(rows)
 
     def _restore(self):
         provider_defs.PROVIDERS, provider_defs.BY_ID = self._defs
         registry.MODELS, registry.BY_SLUG = self._registry
+        catalogue.MODELS = self._catalogue_models
         (capabilities.EXTERNAL_MODELS, capabilities.IMAGE_INPUT_MODELS,
          capabilities.REASONING_LEVELS, capabilities.EXCLUDED_EFFORTS) = self._caps
 
@@ -155,6 +162,84 @@ class ProviderSwapTests(unittest.TestCase):
         self._key_file(ACME_FILE, 'sk-file\n')
         self.assertEqual(self._credentials({ACME_KEY: 'sk-env'}).key_for('acme'), 'sk-env')
         self.assertEqual(self._credentials().key_for('acme'), 'sk-file')
+
+    def _rows(self):
+        return json.loads(Path(registry.__file__).with_name('models.json').read_text())
+
+    def _with_twin(self, **overrides):
+        twin = {**ACME_ROW, 'slug': 'acme/claude-opus-5',
+                'upstream_id': OPUS_UPSTREAM,
+                'display_name': 'Anthropic: Opus 5 \u00b7 Acme', **overrides}
+        rows = registry.load(json.dumps(self._rows() + [twin]))
+        registry.MODELS, registry.BY_SLUG = rows, {m.slug: m for m in rows}
+        catalogue.MODELS = rows
+        model_refresh.apply(rows)
+
+    def test_two_providers_serve_one_upstream_model(self):
+        # The same upstream model on two providers: distinct client ids,
+        # hosts and keys, with the provider's own id on the wire.
+        self._with_twin()
+        self._key_file(ACME_FILE, 'sk-acme\n')
+        self._key_file('openrouter.key', 'sk-or\n')
+        creds = self._credentials()
+        self.assertEqual(registry.by_slug('acme/claude-opus-5').upstream_id,
+                         OPUS_UPSTREAM)
+        self.assertEqual(registry.upstream_id_for(registry.by_slug(OPUS_SLUG)),
+                         OPUS_SLUG)
+        acme = providers.select('acme/claude-opus-5', '/responses', [])
+        router_row = providers.select(OPUS_SLUG, '/responses', [])
+        self.assertEqual((acme.name, router_row.name), ('acme', 'openrouter'))
+        direct = acme.prepare('acme/claude-opus-5', '/responses',
+                              {'model': 'acme/claude-opus-5', 'input': []},
+                              b'raw', {}, creds)
+        routed = router_row.prepare(OPUS_SLUG, '/responses',
+                                    {'model': OPUS_SLUG, 'input': []},
+                                    b'raw', {}, creds)
+        self.assertEqual(direct.host, 'acme.example')
+        self.assertEqual(json.loads(direct.body)['model'], OPUS_UPSTREAM)
+        self.assertEqual(direct.headers['Authorization'], 'Bearer sk-acme')
+        self.assertEqual(json.loads(routed.body)['model'], OPUS_SLUG)
+        self.assertEqual(routed.headers['Authorization'], 'Bearer sk-or')
+        self.assertNotIn('sk-or', json.dumps(direct.headers))
+        self.assertNotIn('sk-acme', json.dumps(routed.headers))
+        messages = claude.select('acme/claude-opus-5', '/v1/messages')
+        prepared = messages.prepare('acme/claude-opus-5', '/v1/messages',
+                                    {'model': 'acme/claude-opus-5'},
+                                    b'{"model":"acme/claude-opus-5"}', {}, creds)
+        self.assertEqual(json.loads(prepared.body)['model'], OPUS_UPSTREAM)
+        merged = catalogue.merge({'models': []}, roster=(), client='codex')
+        rows = [row for row in merged['models'] if row['slug'] in
+                (OPUS_SLUG, 'acme/claude-opus-5')]
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(len({row['display_name'] for row in rows}), 2)
+
+    def test_a_shared_upstream_model_needs_distinct_labels(self):
+        # An ambiguous picker cannot ship: the loader refuses two rows for one
+        # upstream model that read the same, even when the pair is not the
+        # first row carrying that upstream id.
+        twin = {**ACME_ROW, 'slug': 'acme/opus-one',
+                 'upstream_id': OPUS_UPSTREAM,
+                 'display_name': 'Anthropic: Opus 5 \u00b7 Acme'}
+        clash = {**twin, 'slug': 'acme/opus-two', 'priority': 211,
+                 'display_name': 'Anthropic: Opus 5 (two) \u00b7 Acme'}
+        third = {**clash, 'slug': 'acme/opus-three', 'priority': 212}
+        with self.assertRaises(SystemExit) as ctx:
+            registry.load(json.dumps(self._rows() + [twin, clash, third]))
+        self.assertIn('display_name collides', str(ctx.exception))
+
+    def test_models_check_refuses_a_duplicated_upstream_id(self):
+        twin = {**ACME_ROW, 'upstream_id': OPUS_UPSTREAM, 'priority': 210}
+        path = self.home / 'models.json'
+        path.write_text(json.dumps(self._rows() + [
+            {**twin, 'slug': 'acme/opus-one',
+             'display_name': 'Anthropic: Opus 5 \u00b7 Acme'},
+            {**twin, 'slug': 'acme/opus-two', 'priority': 211,
+             'display_name': 'Anthropic: Opus 5 (two) \u00b7 Acme'}]))
+        stream = io.StringIO()
+        with contextlib.redirect_stdout(stream):
+            code = models.cmd_check(str(path), None)
+        self.assertEqual(code, 1)
+        self.assertIn('duplicate provider upstream_id', stream.getvalue())
 
     def test_a_provider_without_the_responses_path_is_refused_for_codex(self):
         self._key_file(ACME_FILE, 'sk-acme\n')
