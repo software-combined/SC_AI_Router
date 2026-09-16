@@ -52,8 +52,9 @@ def _payload(status, body):
 
 
 def _mode_line(mode):
-    return ('ChatGPT subscription and OpenRouter' if mode == 'subscription'
-            else 'OpenRouter models only')
+    label = provider_defs.OPENROUTER.label
+    return ('ChatGPT subscription and %s' % label if mode == 'subscription'
+            else '%s models only' % label)
 
 
 def _confirm_text(payload, which='codex'):

@@ -10,7 +10,7 @@ import urllib.error
 from pathlib import Path
 from unittest import mock
 
-from ai_router import key_dialog, key_prompt
+from ai_router import key_dialog, key_prompt, provider_defs
 
 KEY = 'sk-or-v1-secret'
 
@@ -62,7 +62,7 @@ class DialogArgvTests(unittest.TestCase):
     def test_linux_zenity_form_fields(self):
         argv = key_dialog.argv('/usr/bin/zenity', 'linux')
         self.assertIn('--forms', argv)
-        self.assertIn('--add-password=OpenRouter key', argv)
+        self.assertIn('--add-password=%s key' % provider_defs.OPENROUTER.label, argv)
         self.assertIn('--add-combo=' + key_dialog.CODEX_QUESTION, argv)
         self.assertIn('--combo-values=I have one|No subscription', argv)
         self.assertIn('--combo-values=Everyday help|Coding help', argv)
@@ -293,7 +293,7 @@ class RunWindowTests(unittest.TestCase):
                                        platform_name='darwin', clients='claude')
         self.assertEqual(rc, 0)
         self.assertEqual(posted, {'key': KEY, 'claude_mode': 'none'})
-        self.assertIn('Claude Code: OpenRouter models only', messages[-1])
+        self.assertIn('Claude Code: %s models only' % provider_defs.OPENROUTER.label, messages[-1])
         self.assertIn('restart claude code', messages[-1].lower())
 
     def test_cli_parses_the_client_set(self):
