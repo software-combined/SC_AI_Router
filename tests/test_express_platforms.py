@@ -58,6 +58,7 @@ class ExpressPlatforms(unittest.TestCase):
         self.assertEqual(list(agents.iterdir()), [])
         self.assertFalse(domain.loaded(launchd.EXPRESS_LABEL))
 
+    @unix_only
     def test_linux_enables_both_timers_without_stopping_its_installer(self):
         def run(cmd, **kwargs):
             self.calls.append(cmd)

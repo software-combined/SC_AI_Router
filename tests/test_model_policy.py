@@ -176,7 +176,10 @@ class ModelPolicyTests(unittest.TestCase):
                 {'portco': 'acme', 'department': None,
                  'allowed_models': list(ALLOWED)}))
             policy.chmod(0o600)
-            with mock.patch.dict(os.environ, {'HOME': str(home)}):
+            # Isolate ROUTER_HOME: on a machine with the router installed, the
+            # real openrouter.key is read before this state's opencode_auth.
+            with mock.patch('ai_router.runtime.ROUTER_HOME', home), \
+                    mock.patch.dict(os.environ, {'HOME': str(home)}):
                 state = load_state(state_path)
                 self.assertEqual(state['allowed_models'], list(ALLOWED))
                 policy.unlink()
