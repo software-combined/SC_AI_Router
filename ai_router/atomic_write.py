@@ -10,15 +10,58 @@ is the installed file when `mode` is None, up to the process umask).
 
 Python 3.9-safe and stdlib only: the installer loads this leaf by path
 (`packaging/atomic_write.py` re-exports it) and the runtime imports it.
+
+The final rename is `os.replace`, which is atomic on POSIX and Windows
+alike. Windows differs in two ways POSIX does not: `MoveFileExW` refuses to
+overwrite a destination carrying the read-only attribute, and it can fail
+transiently with a sharing violation while another process holds the
+destination open (an antivirus scan, a reader). `_replace` clears the
+read-only attribute and retries the sharing violation briefly on Windows;
+on POSIX it is a plain `os.replace`.
 """
 import json
 import os
+import stat as _stat
+import time
 import tempfile
 from pathlib import Path
+
+# Errors Windows raises for a destination that is momentarily unavailable:
+# ERROR_ACCESS_DENIED (5) and ERROR_SHARING_VIOLATION (32).
+_WINDOWS_TRANSIENT_REPLACE = frozenset((5, 32))
 
 
 class StaleTmp(OSError):
     """A deterministic temp file was left behind and could not be cleared."""
+
+
+def _replace(tmp, path):
+    """os.replace, made robust against Windows read-only and lock races.
+
+    POSIX takes the first os.replace and returns. Windows clears a read-only
+    destination and retries a sharing violation for up to ~1s before giving
+    the caller the original OSError.
+    """
+    if os.name != 'nt':
+        os.replace(tmp, path)
+        return
+    deadline = time.monotonic() + 1.0
+    while True:
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError as exc:
+            # A read-only destination blocks the overwrite; drop the bit and
+            # retry once before treating it as a genuine transient race.
+            if os.path.exists(path):
+                try:
+                    os.chmod(path, _stat.S_IWRITE | _stat.S_IREAD)
+                except OSError:
+                    pass
+            if exc.winerror not in _WINDOWS_TRANSIENT_REPLACE \
+                    or time.monotonic() >= deadline:
+                raise
+            time.sleep(0.02)
 
 
 def _open_tmp(path, tmp_name, stale_tmp):
@@ -45,13 +88,29 @@ def replace_text(path, text, mode=0o600, tmp_name=None, stale_tmp='reuse'):
     """Atomically replace path with text; unique tmp unless tmp_name is set."""
     path = Path(path)
     fd, tmp = _open_tmp(path, tmp_name, stale_tmp)
+    stream = None
     try:
-        with os.fdopen(fd, 'w') as stream:
-            stream.write(text)
+        stream = os.fdopen(fd, 'w')
+        fd = None  # the stream owns the descriptor now
+        stream.write(text)
+        stream.close()
+        stream = None
         if mode is not None:
             os.chmod(tmp, mode)
-        os.replace(tmp, path)
+        _replace(tmp, path)
     except BaseException:
+        # Close the descriptor before unlinking: Windows refuses to remove a
+        # file that still has an open handle, which would strand the temp.
+        if stream is not None:
+            try:
+                stream.close()
+            except OSError:
+                pass
+        elif fd is not None:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
         try:
             os.unlink(tmp)
         except OSError:
