@@ -14,6 +14,7 @@ out its whole timeout for a label that cannot leave the domain and returns
 without ever bootstrapping -- the updater is gone and the run still succeeds.
 """
 import contextlib
+import hashlib
 import io
 import json
 import os
@@ -221,7 +222,8 @@ class InstallLockTests(unittest.TestCase):
             bundle.write_bytes(blob)
             feed_doc = Path(tmp) / 'latest.json'
             feed_doc.write_text(json.dumps(
-                dict(latest, url='file://' + str(bundle), sha256=None)))
+                dict(latest, url='file://' + str(bundle),
+                     sha256=hashlib.sha256(blob).hexdigest())))
             child = []
 
             def fake_run(cmd, **kwargs):

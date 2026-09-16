@@ -88,7 +88,8 @@ feeds with the `feed_signature` code (Plan 145). `file://` manual installs
 stay operator-trusted when no sidecar is present. SHA-256 verification of
 every bundle, version and identity checks, and the feed serial replay guard
 still apply on top. Feeds and bundles off the trusted origins are
-refused. A manual install passes `--feed` with a downloaded release
+refused. Feeds and bundles never follow a redirect off that
+origin, and a feed document without a bundle checksum is refused. A manual install passes `--feed` with a downloaded release
 document; `--status` reports the feed source (`cloudfront`) and the
 channel. A leftover `feed-token` file on an older host is inert and can
 be ignored or deleted. The signing seed lives in Secrets Manager
