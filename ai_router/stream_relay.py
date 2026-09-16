@@ -119,7 +119,7 @@ def relay_stream(handler, provider, response, prepared, metrics, started,
     attempt_metrics = {'model': metrics.get('model')}
     pending = record.pending
     chunks = provider.adapt(response, prepared.tool_names, attempt_metrics)
-    normalized = (provider.defn.dialect == 'openrouter'
+    normalized = (provider.defn.dialect == provider_defs.DIALECT_OPENROUTER
                   and metrics.get('protocol') == provider_defs.RESPONSES
                   and metrics['response_kind'] == 'sse'
                   and metrics['response_encoding'] == 'identity')
