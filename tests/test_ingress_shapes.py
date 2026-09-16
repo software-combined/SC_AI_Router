@@ -11,6 +11,7 @@ import unittest
 from unittest import mock
 from compression import zstd
 
+from ai_router import providers as providers_mod
 from ai_router import router as router_mod
 from tests.fakes import FakeUpstream, install_fake
 from tests.harness import (
@@ -218,14 +219,69 @@ class IngressShapeTests(unittest.TestCase):
                  'Content-Length: %d' % len(packed)], packed)
             self.rejected(response, 400, 'BODY_TOO_LARGE', recorded)
 
-    def test_zstd_compaction_over_the_cap_is_400(self):
+    def test_zstd_compaction_trigger_under_decode_ceiling_succeeds(self):
+        # A zstd V2 trigger decoded over the cap but under 4x summarizes
+        # locally: one compaction item, no full-turn upstream call.
         payload = {'model': 'z-ai/glm-5.3',
                    'input': [{'type': 'message', 'role': 'user',
                               'content': 'x' * 1200},
                              {'type': 'compaction_trigger'}]}
-        packed = zstd.compress(json.dumps(payload).encode())
+        wire = json.dumps(payload).encode()
+        packed = zstd.compress(wire)
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
         with mock.patch.object(router_mod, 'MAX_BODY', 900):
+            self.assertGreater(len(wire), 900)
+            self.assertLess(len(packed), 900)
+            self.assertLess(len(wire), 900 * 4)
+            with mock.patch.object(
+                    providers_mod.ExternalResponsesProvider,
+                    'summarize', return_value='handoff done'):
+                response = self.raw_request(
+                    '/%s/responses' % TOKEN,
+                    ['Content-Type: application/json',
+                     'Content-Encoding: zstd',
+                     'Content-Length: %d' % len(packed)], packed)
+            self.assertEqual(response.status, 200)
+            body = json.loads(response.read())
+            self.assertEqual(len(body['output']), 1)
+            self.assertEqual(body['output'][0]['type'], 'compaction')
+        self.assertEqual(recorded, [])
+
+    def test_zstd_v1_compact_under_decode_ceiling_succeeds(self):
+        # V1 /responses/compact gets the same ceiling: summarize, not 400.
+        payload = {'model': 'z-ai/glm-5.3',
+                   'input': [{'type': 'message', 'role': 'user',
+                              'content': 'do the task ' + 'x' * 1200}]}
+        wire = json.dumps(payload).encode()
+        packed = zstd.compress(wire)
+        recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
+        with mock.patch.object(router_mod, 'MAX_BODY', 900):
+            self.assertGreater(len(wire), 900)
+            self.assertLess(len(packed), 900)
+            self.assertLess(len(wire), 900 * 4)
+            with mock.patch.object(
+                    providers_mod.ExternalResponsesProvider,
+                    'summarize', return_value='handoff done'):
+                response = self.raw_request(
+                    '/%s/responses/compact' % TOKEN,
+                    ['Content-Type: application/json',
+                     'Content-Encoding: zstd',
+                     'Content-Length: %d' % len(packed)], packed)
+            self.assertEqual(response.status, 200)
+            body = json.loads(response.read())
+            self.assertIn('handoff done',
+                          json.dumps(body['output']))
+        self.assertEqual(recorded, [])
+
+    def test_zstd_compaction_beyond_decode_ceiling_is_400(self):
+        # Past 4x the cap the compact still refuses without summarizing.
+        payload = {'model': 'z-ai/glm-5.3',
+                   'input': [{'type': 'message', 'role': 'user',
+                              'content': 'x' * 5000},
+                             {'type': 'compaction_trigger'}]}
+        packed = zstd.compress(json.dumps(payload).encode())
+        recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
+        with mock.patch.object(router_mod, 'MAX_BODY', 200):
             response = self.raw_request(
                 '/%s/responses' % TOKEN,
                 ['Content-Type: application/json', 'Content-Encoding: zstd',
