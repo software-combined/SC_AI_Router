@@ -10,6 +10,11 @@
   provider's own definition, so a new provider supplies its own login label.
 - `pyproject.toml` moves back in step with `packaging/VERSION`, which the
   version-match test had been failing on since 0.6.73.
+- The Windows key window lays its controls out. WinForms gives a control
+  added straight to a form the corner (0, 0), so the key box and both
+  buttons were stacked behind the icon and prompt and the key could not be
+  typed or submitted; every control now sits in a top-down panel. Its combo
+  boxes also use the enum name instead of an invalid ordinal.
 
 ## 0.6.74
 
