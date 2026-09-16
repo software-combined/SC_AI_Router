@@ -101,6 +101,9 @@ Every user-visible router change updates `CHANGELOG.md` and
 `packaging/VERSION` (semver). Releases are cut by tag `v<VERSION>` and the
 release workflow. Plugin-only changes ride the plugin release train instead
 (section 9); they never bump `packaging/VERSION` or trigger router tags.
+New entries go under `## Unreleased` and move under the version heading when
+the tag is cut; entries older than the current minor series move, unedited,
+to `docs/changelog-archive.md`.
 
 ## 7. Compatibility rule
 
