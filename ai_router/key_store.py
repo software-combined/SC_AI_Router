@@ -26,13 +26,26 @@ class KeyRejected(ValueError):
         self.status = status
 
 
-def check_key(provider_id, key, _urlopen=urllib.request.urlopen):
+class _NoRedirects(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None  # urllib raises HTTPError(code) instead of following
+
+
+def _open_without_redirects(req, timeout):
+    return urllib.request.build_opener(_NoRedirects()).open(req, timeout=timeout)
+
+
+def check_key(provider_id, key, _urlopen=None):
     """(label, limit, usage) for a live key; KeyRejected when refused, OSError when down.
 
     A provider with a key-info endpoint is validated before anything is
     stored. One without it stores unvalidated and still fails closed on the
-    first request, so no provider is blocked on an endpoint it lacks.
+    first request, so no provider is blocked on an endpoint it lacks. The
+    no-redirect default resolves at call time, so a test that swaps
+    `_open_without_redirects` is honoured; production never rebinds it.
     """
+    if _urlopen is None:
+        _urlopen = _open_without_redirects
     defn = provider_defs.get(provider_id)
     label = provider_defs.label_for(provider_id)
     if defn is None or not defn.key_info_url:
@@ -43,6 +56,8 @@ def check_key(provider_id, key, _urlopen=urllib.request.urlopen):
         with _urlopen(req, timeout=20) as response:
             payload = json.load(response)
     except urllib.error.HTTPError as exc:
+        if 300 <= exc.code < 400:
+            raise OSError('key check was redirected; refusing to follow')
         raise KeyRejected(label + ' rejected the key', status=exc.code)
     data = payload.get('data') if isinstance(payload, dict) else None
     if not isinstance(data, dict):

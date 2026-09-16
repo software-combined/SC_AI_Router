@@ -168,7 +168,7 @@ class InstallTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             latest = {'version': '9.9.9', 'url': 'file:///bundle.tar.gz',
-                      'sha256': None, 'min_python': '3.14'}
+                      'sha256': hashlib.sha256(b'').hexdigest(), 'min_python': '3.14'}
             args = install_mod.build_parser().parse_args(
                 ['--feed', 'file:///latest.json', '--home', str(home), '--dry-run'])
             rc = install_mod.do_install(args, _fetch=_static_fetch(latest, b''))
@@ -393,7 +393,7 @@ class InstallTests(unittest.TestCase):
             home.mkdir(parents=True, exist_ok=True)
             os.symlink(str(rel), home / 'current')
             latest = {'version': '9.9.9', 'url': 'file:///bundle.tar.gz',
-                      'sha256': None, 'min_python': '3.14'}
+                      'sha256': hashlib.sha256(b'').hexdigest(), 'min_python': '3.14'}
 
             def fake_read(feed, etag):
                 self.assertIsNone(etag)

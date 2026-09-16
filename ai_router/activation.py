@@ -1,7 +1,7 @@
 """Inherit the launchd listening socket when socket-activated."""
 import ctypes
 import threading
-from .runtime import log_event
+from .events import log_event
 
 # launch_activate_socket is synchronous launchd IPC (ctypes releases the GIL):
 # instant when healthy, but it never returns in some hosted macOS contexts,
