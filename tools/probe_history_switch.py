@@ -131,7 +131,9 @@ def run(binary, scenario, home):
             url = f'http://127.0.0.1:{server.server_port}/probe-token/backend-api/codex'
             client = None
             try:
-                client = Client(binary, home, url, catalog)
+                # The carried-history path is not the V2 compaction path, so
+                # this probe drives the client's default (v1) feature set.
+                client = Client(binary, home, url, catalog, 'v1')
                 client.rpc('initialize', {'clientInfo': {'name': 'history_probe', 'version': '1'},
                                          'capabilities': {'experimentalApi': True}})
                 client.send({'method': 'initialized', 'params': {}})
