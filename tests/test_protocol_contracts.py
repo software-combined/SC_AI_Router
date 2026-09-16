@@ -90,6 +90,24 @@ class ProtocolContractTests(unittest.TestCase):
                          _messages(), {'Authorization': 'Bearer subscription-secret'})
         self.assertEqual(response.status, 503)
         self.assertEqual(response.getheader('Retry-After'), '7')
+        # An external route's transient 429 keeps the neutral wording.
+        self.assertEqual(json.loads(response.read())['error']['message'],
+                         'Upstream rate limited')
+
+    def test_messages_subscription_429_names_the_claude_subscription(self):
+        # The subscription row's refusal names the model and the
+        # subscription; the external row above keeps the neutral text.
+        install_fake(self, lambda: FakeUpstream(
+            429, b'{"error": "slow"}', [('Content-Type', 'application/json')]))
+        server = self._server()
+        response = _post(server.server_port, '/test-token/v1/messages',
+                         _messages('claude-opus-4-6'),
+                         {'Authorization': 'Bearer subscription-secret'})
+        self.assertEqual(response.status, 503)
+        body = json.loads(response.read())
+        self.assertEqual(body['error']['code'], 'UPSTREAM_RATE_LIMITED')
+        self.assertIn('claude-opus-4-6 is rate limited on your Claude subscription',
+                      body['error']['message'])
 
     def test_messages_response_shares_the_model_pin_behavior(self):
         # Coupling pin: the shared relay path currently pins openai-model on

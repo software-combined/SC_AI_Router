@@ -234,8 +234,8 @@ def draining():
     return _error(503, 'SERVER_DRAINING', 'Server draining')
 
 
-def upstream_rate_limited():
-    return _error(503, 'UPSTREAM_RATE_LIMITED', 'Upstream rate limited')
+def upstream_rate_limited(message='Upstream rate limited'):
+    return _error(503, 'UPSTREAM_RATE_LIMITED', message)
 
 
 # Upstream transport.
