@@ -104,3 +104,25 @@ def owner_only(path):
         return not (path.stat().st_mode & 0o077)
     except OSError:
         return False
+
+
+def require_owner_only(path, windows=None):
+    """Raise PermissionError unless this key file is owner-only (Plan 131).
+
+    Keeps each platform's own message: POSIX names `chmod 600`, Windows keeps
+    the `icacls` line from `check`. `owner_only` is the boolean form for
+    callers that only report presence. `windows` lets a caller pass its own
+    per-module flag (credentials._ON_WINDOWS) so tests can drive the branch
+    without patching os.name.
+    """
+    import os as _os
+    on_windows = _os.name == 'nt' if windows is None else windows
+    if on_windows:
+        try:
+            check(path)
+        except SystemExit as exc:
+            raise PermissionError(str(exc))
+        return
+    if not owner_only(path):
+        raise PermissionError(f'{path} must be readable by the owner only '
+                              '(chmod 600)')

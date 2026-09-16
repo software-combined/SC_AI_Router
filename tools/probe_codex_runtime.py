@@ -102,9 +102,8 @@ if '--reasoning-summary' in sys.argv:
     # Plan 118 Step 3: ask the client for reasoning summaries on this thread.
     cfg['model_reasoning_summary'] = 'auto'
     if '--catalog' not in sys.argv:
-        # Temporary catalogue flipping the target entry to auto summaries.
-        # The leg requires default_reasoning_summary auto with parameter
-        # support; built from the registry entry so other fields stay put.
+        # Temporary catalogue flipping the target entry to auto summaries;
+        # the leg needs the parameter supported, so it is built from the row.
         sys.path.insert(0, str(ROOT.parent))
         from ai_router import catalogue, registry
         if len(sys.argv) > 1 and not sys.argv[1].startswith('-'):
@@ -117,9 +116,8 @@ if '--reasoning-summary' in sys.argv:
                 _rs_path.write_text(json.dumps({'models': [_rs_entry]}))
                 cfg['model_catalog_json'] = str(_rs_path)
 if '--apply-patch' in sys.argv:
-    # Plan 118 Step 3: freeform apply_patch on a scratch dir. The temp
-    # catalogue flips the target entry to freeform; the thread runs with
-    # workspace-write sandbox rooted at a temp cwd holding note.txt.
+    # Plan 118 Step 3: freeform apply_patch on a scratch dir: the temp
+    # catalogue flips the row to freeform and the thread runs workspace-write.
     sys.path.insert(0, str(ROOT.parent))
     from ai_router import catalogue, registry
     _ap_dir = Path(tempfile.mkdtemp(prefix='ap-probe-'))
@@ -134,7 +132,6 @@ if '--apply-patch' in sys.argv:
             cfg['model_catalog_json'] = str(_ap_path)
 if '--experimental-tools' in sys.argv and '--catalog' not in sys.argv:
     # Plan 118 Step 3: temporary catalogue advertising the clock tool.
-    # Built from the registry entry so other fields stay put.
     sys.path.insert(0, str(ROOT.parent))
     from ai_router import catalogue, registry
     if len(sys.argv) > 1 and not sys.argv[1].startswith('-'):
@@ -153,8 +150,7 @@ if '--router-state' in sys.argv:
     state = json.loads(Path(sys.argv[sys.argv.index('--router-state') + 1]).read_text())
     cfg['openai_base_url'] = f"http://127.0.0.1:{state['port']}/{state['token']}/backend-api/codex"
 if '--provider' in sys.argv:
-    # No-subscription acceptance: drive thread/start on a custom provider
-    # (e.g. scg_router) instead of the default ChatGPT-subscription one.
+    # No-subscription acceptance: drive a custom provider, e.g. scg_router.
     cfg['model_provider'] = sys.argv[sys.argv.index('--provider') + 1]
 cfg.update(project_doc_max_bytes=0, developer_instructions='Synthetic protocol test only.',
            web_search='enabled' if '--web-search' in sys.argv else 'disabled',
@@ -189,8 +185,7 @@ def on_event(event):
             print(re.sub(r'https?://[^\s"<>]+', '[URL]', json.dumps(event.get('params')))[:1800], flush=True)
 
 
-# Piped stderr drained silently, plain terminate: the shared AppServer
-# default. Per-call timeout keeps the global-deadline wait shape.
+# Piped stderr drained silently, plain terminate: the shared AppServer default.
 server = AppServer(args, cwd=ROOT, env=_child_env, stderr=subprocess.PIPE,
                     on_event=on_event)
 
@@ -225,16 +220,14 @@ def media_items():
         items.append({'type': 'image',
                       'url': 'data:image/png;base64,' + base64.b64encode(red_png()).decode()})
     if '--audio' in sys.argv:
-        # Audio key mirrors the verified image shape; still unproven live
-        # (upstream rejects the leg with invalid_prompt).
+        # Audio key mirrors the image shape; upstream still rejects this leg.
         items.append({'type': 'audio',
                       'url': 'data:audio/wav;base64,' + base64.b64encode(silent_wav()).decode()})
     return items
 
 def run_switch_leg(thread, target, effort=None):
     # Plan 175: the switched turn may need a different effort from the base
-    # turn (Haiku accepts `none` only, its partners `low` and up), so
-    # --switch-effort overrides --effort for that turn alone.
+    # (Haiku allows `none` only), so --switch-effort overrides it.
     rpc('turn/start', {'threadId': thread, 'model': target, 'effort': effort or _flag_value('--effort') or 'low',
         'input': [{'type': 'text', 'text': 'Without calling any tools, repeat the exact result returned by echo_probe in the previous turn.', 'text_elements': []}]})
     answer = ''
@@ -280,8 +273,7 @@ try:
         input_schema['$defs'] = {'Node': {'type': 'object', 'properties': {
             'name': {'type': 'string'}, 'children': {'type': 'array', 'items': {'$ref': '#/$defs/Node'}}}}}
     if '--union-root' in sys.argv:
-        # xAI rejects non-object parameter roots; the router must string-wrap
-        # this union the same way it wraps Meta's recursive schemas.
+        # xAI rejects non-object parameter roots; wrap it like Meta's schemas.
         input_schema = {'anyOf': [dict(input_schema), {'type': 'string'}]}
     dynamic = {'type': 'function', 'name': 'echo_probe', 'deferLoading': '--deferred' in sys.argv,
                'description': 'Looks up and returns a synthetic test result for the supplied probe name.', 'inputSchema': input_schema}
@@ -345,8 +337,7 @@ try:
                 sys.exit(0)
             raise RuntimeError(str(params.get('error', {}).get('codexErrorInfo', 'Provider error')))
     if '--parallel' in sys.argv:
-        # Plan 175 Step 1: open a second thread with timing_probe alongside
-        # echo_probe and ask for both calls at once.
+        # Plan 175 Step 1: a second thread asks echo_probe and timing_probe together.
         second = {'type': 'function', 'name': 'timing_probe',
                   'description': 'Returns a synthetic timing marker.',
                   'inputSchema': {'type': 'object', 'properties': {}}}

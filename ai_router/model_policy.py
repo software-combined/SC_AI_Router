@@ -72,15 +72,13 @@ def load(home, enforced=None):
             or any(not isinstance(s, str) for s in doc['allowed_models'])):
         log_event('model_policy_rejected', reason='invalid_shape')
         return None, None, ()
-    if os.name != 'nt' and path.stat().st_mode & 0o077:
+    # One owner for the key-privacy gate (Plan 131): the platform branch
+    # and its message live in winacl.
+    from . import winacl as _winacl
+    try:
+        _winacl.require_owner_only(path, _ON_WINDOWS)
+    except PermissionError:
         log_event('model_policy_rejected', reason='permissions')
         return None, None, ()
-    if _ON_WINDOWS:
-        from . import winacl as _winacl
-        try:
-            _winacl.check(path)
-        except SystemExit:
-            log_event('model_policy_rejected', reason='permissions')
-            return None, None, ()
     return (doc['portco'], doc.get('department'),
             tuple(doc['allowed_models']))
