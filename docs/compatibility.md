@@ -1096,6 +1096,15 @@ request of the same session was served - and the provider names only
 `invalid_request`, so the next step is to capture which part of that body the
 OpenRouter-backed Anthropic endpoint refuses, not to re-run the leg.
 
+Offline narrowing, 2026-09-17: `ExternalMessagesProvider.prepare` forwards the
+client's Messages body verbatim for this row - a synthetic
+text/tool_use/tool_result body comes back byte-identical, with only the model
+id rewritten when a row carries a different upstream id - and posts it to
+`openrouter.ai/api/v1/messages`. So the router adds no translation here, and
+the refusal is in the body Claude Code sends on the follow-up or in that
+endpoint's view of it. The next step is to capture both request bodies the CLI
+sends, which needs no paid call.
+
 ## Leg F re-runs with the corrected exit gate, 2026-09-17 (plan 175)
 
 Client: `codex-cli 0.154.0-alpha.6.2`; router 0.6.78 working tree.
