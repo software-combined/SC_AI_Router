@@ -116,18 +116,35 @@ def prepare(provider, model, path, payload, raw_body, headers, server):
     return prepared
 
 
+def refusal_message(prepared, metrics):
+    """Answer text for a refused turn: whose limit it is, and what to do.
+
+    Fixed wording from the provider's own definition, never upstream prose.
+    An external route names no subscription, so it keeps the neutral text.
+    """
+    defn = provider_defs.get(prepared.provider)
+    label = None if defn is None else defn.subscription_label
+    if label is None:
+        return 'Upstream rate limited'
+    model = metrics.get('model')
+    model = model if isinstance(model, str) and model else 'This model'
+    return (f'{model} is rate limited on your {label}; the turn was not served. '
+            'Retry shortly, or select a routed model instead.')
+
+
 def refused(handler, prepared, retry_after, metrics, started):
-    """Answer a refused turn: the planned twin row, else the existing 503."""
+    """Answer a refused turn: the planned twin row, else the retryable 503."""
+    refusal = errors.upstream_rate_limited(refusal_message(prepared, metrics))
     fallback = prepared.fallback
     if fallback is None:
-        return handler.retryable_reject(errors.upstream_rate_limited(), retry_after)
+        return handler.retryable_reject(refusal, retry_after)
     try:
         twin = fallback.prepared()
     except (LookupError, ValueError, PermissionError, OSError) as exc:
         # No key, unreadable twin row, rejected effort: keep today's answer.
         log_event('subscription_fallback_unavailable', model=metrics.get('model'),
                   fallback_model=fallback.slug, reason=type(exc).__name__)
-        return handler.retryable_reject(errors.upstream_rate_limited(), retry_after)
+        return handler.retryable_reject(refusal, retry_after)
     log_event('subscription_fallback', model=metrics.get('model'),
               fallback_model=fallback.slug, path=fallback.path)
     fields = ('request_bytes', 'stream', 'reasoning_effort', 'tool_definitions',

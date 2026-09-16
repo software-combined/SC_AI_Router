@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.75
+
+- A turn a subscription route refused now answers with the model, the
+  subscription that refused it and the next step - retry shortly, or select
+  a routed model - instead of the bare "Upstream rate limited". The status,
+  the code and `Retry-After` are unchanged, and an external provider's
+  transient 429 keeps the neutral wording. The message comes from the
+  provider's own definition, so a new provider supplies its own login label.
+- `pyproject.toml` moves back in step with `packaging/VERSION`, which the
+  version-match test had been failing on since 0.6.73.
+
 ## 0.6.74
 
 - A model refused because it needs a subscription now says to select a routed
