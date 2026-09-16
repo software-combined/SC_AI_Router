@@ -1,5 +1,6 @@
 """Linux installer lifecycle with fake OS commands and an isolated home."""
 import contextlib
+import hashlib
 import io
 import json
 import os
@@ -154,6 +155,9 @@ class SystemdTests(unittest.TestCase):
         # check-update needs an installer member; the child invocation is mocked.
         from tests.install_fixtures import _tarball
         blob = _tarball(files=[('packaging/install.py', '# installer')])
+        # Re-digest the swapped blob so this deferred-path test clears the
+        # mandatory checksum and reaches the child at all.
+        latest = dict(latest, sha256=hashlib.sha256(blob).hexdigest())
         (self.home / 'update-etag').write_text('old')
         args = install_mod.build_parser().parse_args(['--home', str(self.home)])
         from tests.fakes import signed_static_fetch
