@@ -1,5 +1,12 @@
 # Changelog
 
+## scg-review 0.4.9 — 2026-09-16
+
+- Keep lane verdicts legible in every relay: `✅ All Clear`, `📝 Proceed With Notes` and
+  `❌ Block` stay verbatim with their emoji in the reviewer's own summary, in the main
+  agent's interim update while other lanes still run, and in the final recap. Never
+  paraphrase the verdict, drop its emoji, or substitute another symbol.
+
 ## scg-review 0.4.7 and scg-subagents 0.5.5 — 2026-09-15
 
 - Clarify that Pass 1 simplification can be the slowest review phase and may

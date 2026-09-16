@@ -142,6 +142,12 @@ Each reviewer returns a Markdown lane summary written for a person, not a parser
 - `📝 Proceed With Notes`
 - `❌ Block`
 
+These three labels are the whole verdict vocabulary. A verdict keeps its label and its
+emoji wherever it is relayed — a reviewer's own summary, the main agent's interim update
+while other lanes still run, and the final recap — and is never paraphrased into prose
+(`All Clear`, `blocks`, `passed`), stripped of its emoji, or replaced by another symbol
+such as `🟡` or `🔴`.
+
 Name the model that actually ran the lane on the next line as `Model: <returned-model> at <effort>` (use `unverified` when serving identity is missing). Then confirm ponytail and full staged-index inspection, inspected files, evidence-backed findings, missing tests, and residual risks. Each finding includes staged `file:line`, failure path, impact, confidence, and the smallest remedy. Omit empty findings, missing-test, and risk sections; `✅ All Clear` requires all three to be empty. Any `CRITICAL` or `HIGH` finding or missing test requires `❌ Block`. Keep snake_case only for the Git-hook `--decision` values below.
 
 A finding is reportable only when all of these hold: the staged change introduced or materially worsened it; the reviewer names an executable or deterministic failure path with exact staged evidence; the concern is realistic rather than speculative (theoretical edge cases without a reachable path, defense-in-depth-only observations, and completeness for its own sake are omitted even when technically arguable); the impact is at least `MEDIUM`; and confidence is at least `0.80`. Each finding recommends the smallest in-scope remedy, including narrowing or reverting the staged change. A real blocker with no safe in-scope remedy is reported as `❌ Block` with a request for scope or owner direction, never suppressed.
@@ -161,7 +167,8 @@ Missing tests are reportable only at `HIGH` or `CRITICAL`: the change alters hig
 4. Fix accepted `CRITICAL` and `HIGH` findings and missing tests. Stop if an accepted blocker requires user or product input. Do not automatically fix `MEDIUM` findings: accept the concrete residual risk with rationale as `📝 Proceed With Notes`, or ask the owner to expand scope.
 5. Run all required verification commands. A failed required command blocks the commit. If one cannot run because of an environment or dependency blocker, record the exact blocker, residual risk, and next verification step before allowing `📝 Proceed With Notes`.
 6. Record in the task notes when available: staged scope; simplification outcome (ran or no-op, files changed, verification); reviewed tree id; requested and returned model plus effort per lane; reviewer verdicts; fixed findings; final staged delta after review; accepted residual risks; verification commands and results.
-7. After adjudication, write a short person-facing recap in the main-agent reply: the combined verdict, then one bullet per lane with that lane's verdict and the model that ran it (`Model: <returned-model> at <effort>`, or `unverified`). For `📝 Proceed With Notes` or `❌ Block`, add a second flat bullet list of the accepted notes: lane, one-line point, and why it was accepted or why it blocks. Do not dump snake_case tokens in that recap.
+7. After adjudication, write a short person-facing recap in the main-agent reply: the combined verdict, then one bullet per lane with that lane's verdict and the model that ran it (`Model: <returned-model> at <effort>`, or `unverified`). Lane verdicts carry their
+   label and emoji from the first mention, not only in the recap. For `📝 Proceed With Notes` or `❌ Block`, add a second flat bullet list of the accepted notes: lane, one-line point, and why it was accepted or why it blocks. Do not dump snake_case tokens in that recap.
 8. Apply the Re-Review Rule, then record the approval and commit as described below.
 
 Combined decision (same human labels as the lane verdicts):
