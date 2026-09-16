@@ -1012,6 +1012,29 @@ limitation; Haiku E matches the known Sonnet conversion observation;
 leg-H narrowing is per-attempt evidence, not a pin yet; the GLM Flash F
 pass confirms the isolated handoff path but proposes no roster change).
 
+## Isolated candidate round trip, 2026-09-16 (plan 175 row re-check)
+
+Client: `codex-cli 0.154.0-alpha.6.2` (the app-server build), effort `low`.
+Router: 0.6.77 working tree. Billed: yes, one row, four legs.
+
+The paid path was re-validated before the remaining matrix legs run, because
+the history-switch probe tool had gone stale and no paid leg had run since
+2026-09-15. `ai_router.candidate` booted a throwaway router from the working
+tree with its own home, port, token and catalogue, and ran the row's implied
+legs through `tools/probe_codex_runtime.py` with a disposable Codex home.
+
+| model | legs, by plan 175 letter | result |
+|---|---|---|
+| z-ai/glm-5.3-flash | tool and stream (A), image (E), compact (G) | passed |
+
+No row edit is proposed; this re-establishes leg A on 0.6.77 and repeats E and
+G. Provenance limit: the candidate captures the probe's own output rather than
+printing it, so this entry carries no per-leg `serving_endpoint` and no exact
+call count. Endpoint drift on this row (Together, Venice and Parasail across
+sessions) stays visible only in sessions that run `probe_codex_runtime.py`
+directly with `--router-state`, as the 2026-09-15 sections do, until the
+candidate surfaces the probe detail.
+
 ## History switch and refusal classes, 2026-09-16
 
 Client: `codex-cli 0.154.0-alpha.6.2`, the app-server inside
