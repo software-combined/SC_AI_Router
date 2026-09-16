@@ -1,12 +1,9 @@
 """Scheduled-update orchestration, extracted from install.py (Plan 067).
 
-Runs on Python 3.9+ like the installer. Loaded via the installer's
-file-based import pattern, never `import packaging.updater`, so installed
-bundles without a `packaging` distribution keep working.
-
-The installer injects its own seams after load: `bind(newer=...,
-verify_sha256=..., sync_seams=...)`. Until bound, module-level defaults
-provide the same behavior for direct/extracted use.
+Runs on Python 3.9+ like the installer and is loaded through the installer's
+file-based import pattern, never `import packaging.updater`. The installer
+injects its own seams after load (`bind(newer=..., verify_sha256=...,
+sync_seams=...)`); until bound, the module defaults behave the same.
 """
 import hashlib
 import json
@@ -47,9 +44,8 @@ def _required_sha256(latest):
         raise UpdateError('feed_invalid', 'feed document has no usable bundle checksum')
     return value.strip().lower()
 
-# Closed set of codes the state document may carry as `last_error` (Plan
-# 147). The doctor and the support bundle read only these names; the
-# updater's free text never travels with them.
+# Closed set of `last_error` codes (Plan 147): the doctor and the support
+# bundle read only these names; the updater's free text never travels.
 ERROR_CODES = (
     'feed_unreachable', 'feed_invalid', 'feed_serial', 'feed_untrusted',
     'feed_signature',
@@ -78,9 +74,8 @@ def _record_pass(home, error=_KEEP, applied=None):
 
     `error` is a code from ERROR_CODES, or '' to clear the previous one;
     omitted it leaves the stored value alone. The read-modify-write goes
-    through the single state writer (Plan 131), so the updater's own
-    failure counter and pass record never drop each other. An unreadable
-    state file stays untouched.
+    through the single state writer (Plan 131), so the failure counter and
+    the pass record never drop each other.
     """
     try:
         state = _svc._state.read(_svc._state.path(home))
@@ -119,8 +114,7 @@ def _noop_sync():
 def _pending_reply(state, _urlopen=None):
     """{'pending': [...], 'url': ...} from the running router, or {}.
 
-    The URL carries the per-install path token and the single-use nonce, so
-    it is returned to the caller only and never printed.
+    The URL carries the path token and the single-use nonce: caller only.
     """
     port, token = state.get('port'), state.get('token')
     if not isinstance(port, int) or not 0 < port < 65536:
@@ -162,8 +156,7 @@ def _open_command(url, platform):
 def _page_url(reply, state):
     """The reply's page URL, accepted only when it is this install's own.
 
-    The router builds it from the token and the requested port; a reply
-    pointing anywhere else is ignored rather than opened.
+    The router builds it from the token and port; anything else is ignored.
     """
     url = reply.get('url')
     port, token = state.get('port'), state.get('token')
@@ -177,9 +170,8 @@ def _page_url(reply, state):
 def _codex_attached(state):
     """True when this install serves Codex, so the offer is not a dead end.
 
-    `--clients` records the attachments; legacy state carries only `client`,
-    whose absence means Codex. A Claude-only or service-only install is never
-    told to restart an app it does not run.
+    `--clients` records the attachments; legacy state carries only `client`
+    (absence means Codex). Claude-only and service-only installs are skipped.
     """
     clients = state.get('clients')
     if clients is not None:
@@ -191,9 +183,9 @@ def _announce_new_models(state, _run=None, _urlopen=None, _which=None,
                          platform=None):
     """Offer a Codex restart when the router reports new models.
 
-    Best-effort by contract: this runs after the update log is written, and
-    no notification, opener or loopback failure may change the update result
-    or the exit code. The page URL is opened but never printed.
+    Best-effort by contract: it runs after the update log is written, and no
+    notification, opener or loopback failure may change the update result or
+    the exit code. The page URL is opened but never printed.
     """
     try:
         if os.environ.get('ROUTER_NO_NOTICE') == '1':
@@ -238,9 +230,9 @@ def bind(**overrides):
 def _read_failures(home):
     """State document plus its failure map; (None, {}) when unreadable.
 
-    Update-failure owner (Plan 131): moved out of service.py; service keeps
-    thin re-exports. Always read fresh: the child installer writes the same
-    file, and merging onto a stale copy would drop its changes.
+    Update-failure owner (Plan 131), moved out of service.py. Always read
+    fresh: the child installer writes the same file, and merging onto a
+    stale copy would drop its changes.
     """
     state = _svc._state.read(_svc._state.path(home))
     if state is None:
@@ -278,9 +270,8 @@ def _park(home, etag, etag_path, version):
     """Count a failed attempt and stop retrying once it is hopeless.
 
     A version that has failed this often will not start working on its own,
-    and every pass costs a service restart. The saved ETag skips even the
-    feed re-read when the edge answers 304, and the count in the state file
-    is the hard stop.
+    and every pass costs a service restart. The saved ETag skips the feed
+    re-read on a 304; the state count is the hard stop.
     """
     count = record_update_failure(home, version)
     if count < MAX_VERSION_FAILURES:
@@ -303,13 +294,12 @@ def _read_feed_pass(feed, etag, read_feed, sleep):
             print(f'retrying feed fetch ({exc})')
 
 
-
 def _persist_models_url(home, latest):
     """Remember the feed's models_url for the router's refresh thread.
 
-    Plan 099 Step 3: the router boots from this file with a channel
-    default; a missing or malformed URL leaves the previous file alone.
-    Never raises: a stale URL is safer than a broken update.
+    Plan 099 Step 3: the router boots from this file with a channel default;
+    a missing or malformed URL leaves the previous file alone, and a stale
+    URL is safer than a broken update.
     """
     url = latest.get('models_url')
     if not isinstance(url, str) or not url.startswith('https://'):
@@ -320,8 +310,7 @@ def _persist_models_url(home, latest):
         pass
 
 
-# Test seam: tests set this to an ephemeral public key so signed
-# fixtures verify without touching the compiled production key.
+# Test seam: tests inject an ephemeral public key so signed fixtures verify.
 _FEED_VERIFY_KEY = None
 
 
@@ -329,8 +318,8 @@ def _verified_feed(feed, body, _fetch):
     """Parse one feed document after Ed25519 verification (Plan 145).
 
     `https` feeds must carry a valid detached sidecar; rejection raises
-    `UpdateError('feed_signature', ...)`. `file://` feeds without a sidecar
-    stay operator-trusted; with one, it must verify.
+    `UpdateError('feed_signature', ...)`. A `file://` feed stays
+    operator-trusted without a sidecar, and must verify with one.
     """
     import importlib.util as _ilu
     spec = _ilu.spec_from_file_location(
@@ -372,13 +361,29 @@ def _verified_feed(feed, body, _fetch):
         raise UpdateError('feed_signature', str(exc) or 'feed signature rejected')
 
 
+def _up_to_date(home, announce, etag_path=None, etag=None):
+    """Report a check that installs nothing, then offer any new models.
+
+    Plan 135: refresh-added rows ride an ordinary check; express never does.
+    """
+    if etag_path is not None and etag:
+        etag_path.write_text(etag + '\n')
+    _record_pass(home, error='')
+    print(f"up to date {_svc.current_version(home)}")
+    try:
+        state = json.loads((home / 'mixed-router-state.json').read_text())
+        (announce or _announce_new_models)(state)
+    except Exception:
+        pass
+
+
 def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
     """One applying pass; behavior matches the pre-split code."""
     sync_seams()
     express_only = getattr(args, 'express_only', False)
     feed = args.feed or _svc.channel_feed(home)
     # Feeds and bundles come from the public feed origin; an injected fake
-    # keeps its one-argument shape all the way down.
+    # keeps its one-argument shape.
     injected = _fetch
     _fetch = injected or _svc.fetch
     read_feed = _read_feed or (lambda url, etag: _svc.fetch_feed(url, etag, injected))
@@ -391,8 +396,7 @@ def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
     if status == 304:
         if express_only:
             return 0
-        _record_pass(home, error='')
-        print(f"up to date {_svc.current_version(home)}")
+        _up_to_date(home, _announce)
         return 0
     try:
         latest = _verified_feed(feed, body, _fetch)
@@ -416,10 +420,7 @@ def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
     if not newer(latest['version'], _svc.current_version(home)):
         if express_only:
             return 0  # The pointer may be mid-install; do not mask a later rollback.
-        if etag:
-            etag_path.write_text(etag + '\n')
-        _record_pass(home, error='')
-        print(f"up to date {_svc.current_version(home)}")
+        _up_to_date(home, _announce, etag_path, etag)
         return 0
     failed = update_failures(home).get(latest['version'], 0)
     if express_only and failed:
@@ -515,8 +516,7 @@ def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
 def do_update(args, _fetch=None, _read_feed=None, _sleep=None, _announce=None):
     """Scheduled pass: check the feed and apply a newer release.
 
-    Records recency and a closed-set error code in the shared state
-    document, then re-raises so the timer sees the failure unchanged.
+    Records recency and a closed-set error code, then re-raises for the timer.
     """
     import random
     home = Path(args.home).expanduser()
