@@ -1012,6 +1012,24 @@ limitation; Haiku E matches the known Sonnet conversion observation;
 leg-H narrowing is per-attempt evidence, not a pin yet; the GLM Flash F
 pass confirms the isolated handoff path but proposes no roster change).
 
+## Leg F re-runs, 2026-09-16 (plan 175)
+
+Client: `codex-cli 0.154.0-alpha.6.2`; router 0.6.78 working tree. Same
+in-process candidate recipe as the first F run, now with
+`--max-live-calls 20 --parent deepseek/deepseek-v4.1-flash --wire-mode
+classic`.
+
+| child | result | facts |
+|---|---|---|
+| z-ai/glm-5.3 | passed | 3 of 3 markers, canonical replay, alias emitted; the earlier 12-call run was cut by the cap, not by a defect |
+| google/gemini-3.8-flash | inconclusive | 3 of 3 markers, canonical replay, alias emitted, but six upstream 503s on the parent plus five cap errors ended the run |
+
+Reading: the markers replayed on both children, with a full pass on GLM 5.3
+once the cap left room for the parent's extra turns. Gemini Flash stays
+unproven: the parent's DeepSeek turns hit transient 503s, which the probe
+counts as errors and which pushed the run into the cap, so it needs a
+quiet-upstream re-run.
+
 ## Haiku legs C and D, 2026-09-16 (plan 175)
 
 Client: `codex-cli 0.154.0-alpha.6.2`; router 0.6.78 working tree in an
