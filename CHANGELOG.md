@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- New models that arrive through the hourly model refresh are now offered
+  with the restart prompt on the next update check, not only when a new
+  version is installed.
 - Stream log lines name a fourth fact, `unattributed_delta_bytes`: the
   forwarded bytes that are neither the model's answer nor item-shaped
   reasoning. A turn that dies mid-stream can now be explained from its log

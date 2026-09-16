@@ -12,8 +12,8 @@ import urllib.error
 from pathlib import Path
 from unittest import mock
 
-from ai_router import (capabilities, claude, model_refresh, provider_defs,
-                       providers, registry)
+from ai_router import (capabilities, catalogue, claude, model_refresh,
+                       provider_defs, providers, registry)
 
 
 def _external_responses():
@@ -55,8 +55,10 @@ class ModelRefreshTests(unittest.TestCase):
         self._image = capabilities.IMAGE_INPUT_MODELS
         self._excluded = capabilities.EXCLUDED_EFFORTS
         self._levels = capabilities.REASONING_LEVELS
+        self._catalogue = catalogue.MODELS
         self.addCleanup(setattr, registry, 'MODELS', self._models)
         self.addCleanup(setattr, registry, 'BY_SLUG', self._by_slug)
+        self.addCleanup(setattr, catalogue, 'MODELS', self._catalogue)
         self.addCleanup(setattr, capabilities, 'EXTERNAL_MODELS', self._openrouter)
         self.addCleanup(setattr, capabilities, 'IMAGE_INPUT_MODELS', self._image)
         self.addCleanup(setattr, capabilities, 'EXCLUDED_EFFORTS', self._excluded)
@@ -99,6 +101,22 @@ class ModelRefreshTests(unittest.TestCase):
             self.assertEqual(seen.get('reasoning'), {'effort': 'low'})
             cache = json.loads((Path(tmp) / 'models-cache.json').read_text())
             self.assertEqual(len(cache), 2)
+
+    def test_refresh_keeps_the_new_model_snapshot_current(self):
+        # Plans 099 and 135: a row that arrives through the refresh must read
+        # as pending for the updater's offer, not be seeded away silently by
+        # the first query. check_pending seeds on the first call and diffs
+        # afterwards, and it never raises into the refresh loop.
+        from ai_router import model_prompt
+        with tempfile.TemporaryDirectory() as tmp:
+            model_refresh.check_pending(tmp)
+            self.assertEqual(model_prompt.pending(tmp), [])
+            model_refresh.check_pending(tmp + '/missing')  # guarded, no raise
+            added = model_refresh.validate(json.dumps([_row(), _row('qwen/qwen-1')]))
+            model_refresh.apply(added)
+            model_refresh.check_pending(tmp)
+            self.assertEqual([slug for slug, _ in model_prompt.pending(tmp)],
+                             ['qwen/qwen-1'])
 
     def test_304_and_offline_keep_current_with_failure_log(self):
         with tempfile.TemporaryDirectory() as tmp:
