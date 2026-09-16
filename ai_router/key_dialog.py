@@ -192,7 +192,7 @@ def _zenity_argv(tool_path, which='codex'):
     argv = [tool_path, '--forms', '--title=' + TITLE, '--text=' + KEY_PROMPT]
     if icon():
         argv.append('--window-icon=' + icon())
-    argv.append('--add-password=OpenRouter key')
+    argv.append('--add-password=%s key' % provider_defs.OPENROUTER.label)
     for _field, question, answers in questions(which):
         argv.append('--add-combo=' + question)
         argv.append('--combo-values=' + '|'.join(answers))
