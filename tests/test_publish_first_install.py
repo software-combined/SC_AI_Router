@@ -10,7 +10,7 @@ import hashlib
 import importlib.util
 import io
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest import mock
 
@@ -207,6 +207,16 @@ class FirstInstallTests(unittest.TestCase):
             code = publish.main(['--bucket', 'feed-bucket', '--dry-run'])
         self.assertEqual(code, 0)
         self.assertIn('dry run', out.getvalue())
+
+    def test_a_missing_bucket_is_refused(self):
+        # No default exists, so a fork cannot publish to someone else's
+        # bucket by running the tool with no arguments (Plan 160).
+        err = io.StringIO()
+        with redirect_stderr(err):
+            with self.assertRaises(SystemExit) as caught:
+                publish.main([])
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn('--bucket', err.getvalue())
 
     def test_missing_bootstrap_is_refused(self):
         lock = _lock()

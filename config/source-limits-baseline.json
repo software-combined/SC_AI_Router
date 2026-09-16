@@ -40,6 +40,7 @@
   "tests/test_probe_harness.py": 469,
   "tests/test_provider_swap.py": 343,
   "tests/test_providers.py": 477,
+  "tests/test_publish_feed.py": 309,
   "tests/test_registry.py": 320,
   "tests/test_runtime.py": 327,
   "tests/test_setup.py": 413,
