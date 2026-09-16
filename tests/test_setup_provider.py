@@ -49,7 +49,8 @@ def _register_acme(test):
         host='acme.example', responses_path='/v1',
         key=provider_defs.KeySpec('ACME_API_KEY', 'acme.key',
                                   example='sk-acme-...'),
-        catalogue_shape='manual', dialect='acme')
+        catalogue_shape='manual',
+        dialect=provider_defs.DIALECT_OPENAI_COMPATIBLE)
     test.addCleanup(setattr, provider_defs, 'PROVIDERS', provider_defs.PROVIDERS)
     test.addCleanup(setattr, provider_defs, 'BY_ID', dict(provider_defs.BY_ID))
     provider_defs.PROVIDERS = provider_defs.PROVIDERS + (acme,)
@@ -107,7 +108,8 @@ class ProviderWindowTests(unittest.TestCase):
             host='acme.example', responses_path='/v1',
             key=provider_defs.KeySpec('ACME_API_KEY', 'acme.key',
                                       example='sk-acme-...'),
-            catalogue_shape='manual', dialect='acme')
+            catalogue_shape='manual',
+            dialect=provider_defs.DIALECT_OPENAI_COMPATIBLE)
         self.addCleanup(setattr, provider_defs, 'PROVIDERS', provider_defs.PROVIDERS)
         self.addCleanup(setattr, provider_defs, 'BY_ID', dict(provider_defs.BY_ID))
         provider_defs.PROVIDERS = provider_defs.PROVIDERS + (acme,)
@@ -141,7 +143,8 @@ class ProviderWindowTests(unittest.TestCase):
             id='acme', label='Acme', kind=provider_defs.EXTERNAL,
             host='acme.example', responses_path='/v1',
             key=provider_defs.KeySpec('ACME_API_KEY', 'acme.key'),
-            catalogue_shape='manual', dialect='acme')
+            catalogue_shape='manual',
+            dialect=provider_defs.DIALECT_OPENAI_COMPATIBLE)
         self.addCleanup(setattr, provider_defs, 'PROVIDERS', provider_defs.PROVIDERS)
         self.addCleanup(setattr, provider_defs, 'BY_ID', dict(provider_defs.BY_ID))
         provider_defs.PROVIDERS = provider_defs.PROVIDERS + (acme,)
@@ -171,7 +174,8 @@ class ProviderWindowTests(unittest.TestCase):
             id='acme', label='Acme', kind=provider_defs.EXTERNAL,
             host='acme.example', responses_path='/v1',
             key=provider_defs.KeySpec('ACME_API_KEY', 'acme.key'),
-            catalogue_shape='manual', dialect='acme')
+            catalogue_shape='manual',
+            dialect=provider_defs.DIALECT_OPENAI_COMPATIBLE)
         self.addCleanup(setattr, provider_defs, 'PROVIDERS', provider_defs.PROVIDERS)
         self.addCleanup(setattr, provider_defs, 'BY_ID', dict(provider_defs.BY_ID))
         provider_defs.PROVIDERS = provider_defs.PROVIDERS + (acme,)

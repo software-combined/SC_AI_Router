@@ -78,6 +78,15 @@ class DefinitionTests(unittest.TestCase):
             provider_defs.ProviderDef(
                 id='x', label='X', kind='subscription', host='example.invalid',
                 responses_path='/r', native_prefixes=('alpha/',))
+        with self.assertRaises(ValueError):  # dialect outside the table
+            provider_defs.ProviderDef(
+                id='x', label='X', kind='external', host='example.invalid',
+                responses_path='/r', key=provider_defs.KeySpec('X_KEY', 'x.key'),
+                dialect='acme')
+        with self.assertRaises(ValueError):  # no default dialect for an id
+            provider_defs.ProviderDef(
+                id='acme', label='Acme', kind='external', host='example.invalid',
+                responses_path='/r', key=provider_defs.KeySpec('X_KEY', 'acme.key'))
 
     def test_native_service_path_is_a_guarded_prefix_rule(self):
         native = provider_defs.native_service_path

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.74
+
+- A model refused because it needs a subscription now says to select a routed
+  model instead, without naming a provider. Failure describing, the key check
+  and the context frame now follow the provider's own definition, so a second
+  provider is one table entry rather than a name compare.
+
 ## 0.6.73
 
 - Update notices, the picker baseline and the model catalogue are written
