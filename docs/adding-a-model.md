@@ -85,6 +85,23 @@ Picker labels follow the naming convention in `AGENTS.md` section 8
 (`<Vendor>: <Model> <Version?>`); `models add` and `live_refresh` produce
 conforming rows automatically.
 
+Two ids, one model
+
+`slug` is the id clients send: it is the routing key and it must stay unique
+across the registry. `upstream_id` is the id the provider expects on the
+wire, and it is optional: leave it out (or empty) when the provider serves
+the slug itself, which every current row does. Set it, or pass
+`models add --upstream-id`, when a provider names the model differently, for
+example a direct Anthropic key serving `claude-opus-5` under the client id
+`acme/claude-opus-5`.
+
+One upstream model may appear on several providers. Each row keeps its own
+host, key and label, so the picker shows `Anthropic: Claude Opus 5 ·
+OpenRouter` beside `Anthropic: Opus 5 · Acme`; two rows that share an
+`upstream_id` must not share a `display_name`, and the loader refuses the
+pair if they do. `models check` also refuses two rows on one provider with
+the same upstream id.
+
 Models with optional reasoning but no advertised effort controls use
 `none` (reasoning disabled); non-reasoning models also use `none`. Mandatory
 reasoning without known effort controls is refused. This does not invent

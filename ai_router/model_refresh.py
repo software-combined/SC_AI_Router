@@ -35,9 +35,10 @@ def validate(text):
     if len(models) > 200:
         raise SystemExit('model refresh: more than 200 models')
     for model in models:
-        for part in model.slug.split('/'):
-            if not part or not all(c.isalnum() or c in '._-:~' for c in part):
-                raise SystemExit('model refresh: bad slug %r' % model.slug)
+        for identifier in (model.slug, registry.upstream_id_for(model)):
+            for part in identifier.split('/'):
+                if not part or not all(c.isalnum() or c in '._-:~' for c in part):
+                    raise SystemExit('model refresh: bad slug %r' % identifier)
     return models
 
 
