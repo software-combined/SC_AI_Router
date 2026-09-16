@@ -64,22 +64,29 @@ def family_tier(alias):
     return FAMILY_TIER_DEFAULT
 
 
-def models_listing():
+def models_listing(allowed=None):
     """Anthropic-style {data: [{id, display_name, anthropic_family_tier}]}.
 
     Verified rows first A-Z by display name, then preview rows A-Z.
     External rows outside the key-filtered snapshot hide, matching the
     picker, the prompt and request routing; subscription rows list on.
+    A portco allowlist (Plan 068) hides external rows it does not name, so
+    a managed install without a policy announces nothing external.
     """
     from . import availability as _availability
     snap = _availability.current()
     avail = None if snap is None else (snap.get('models') or frozenset())
+    allowset = None if allowed is None else frozenset(allowed)
     defn = client_table.get('claude')
     ordered = sorted(registry.MODELS, key=lambda m: (m.tier != 'verified',
                                             m.display_name.casefold()))
     rows = []
     for entry in ordered:
         if not defn.discovery_visible(entry):
+            continue
+        if (allowset is not None
+                and provider_defs.is_external(entry.provider)
+                and entry.slug not in allowset):
             continue
         if (avail is not None
                 and provider_defs.is_external(entry.provider)

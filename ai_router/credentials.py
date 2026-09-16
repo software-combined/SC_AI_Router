@@ -11,8 +11,6 @@ from pathlib import Path
 from . import key_store, provider_defs, state as state_mod
 from .state import default_home  # used below and re-exported for importers
 
-ENV_VAR = provider_defs.OPENROUTER.key.env
-
 # Per-module flag so tests can drive the Windows branch without patching
 # global os.name (which pathlib itself reads).
 _ON_WINDOWS = os.name == 'nt'

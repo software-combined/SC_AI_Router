@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- A managed install now lists only the models it is allowed to route, on the
+  Claude model listing as well as the picker. A personal install is
+  unchanged.
+- The first-run key window reads the provider's own name instead of a
+  hardcoded one, so a second external provider cannot be labelled OpenRouter.
+
 ## 0.6.75
 
 - A turn a subscription route refused now answers with the model, the
