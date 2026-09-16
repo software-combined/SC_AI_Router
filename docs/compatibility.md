@@ -1012,6 +1012,25 @@ limitation; Haiku E matches the known Sonnet conversion observation;
 leg-H narrowing is per-attempt evidence, not a pin yet; the GLM Flash F
 pass confirms the isolated handoff path but proposes no roster change).
 
+## Haiku legs C and D, 2026-09-16 (plan 175)
+
+Client: `codex-cli 0.154.0-alpha.6.2`; router 0.6.78 working tree in an
+isolated home on its own port and token, with a disposable Codex home. These
+two legs carried the plan's last harness limitation: Haiku accepts `none` only
+while its partners accept `low` and up, so one `--effort` could not serve both
+turns. The probe now takes `--switch-effort` for the switched turn alone and
+accepts `--switch-back` after `--switch-in`.
+
+| leg | turns | result | serving_endpoint |
+|---|---|---|---|
+| C, same-slug replay | base `none`, out and back | passed: both switch turns recalled the marker | not reported |
+| D, into DeepSeek and back | base `none`, out at `low`, back at `none` | passed: both switch turns recalled the marker | DeepSeek on Together; Haiku unnamed |
+
+Eight completions across the row's eight turns plus two expected 426 websocket
+fallbacks, inside the plan's 23-call cap. Haiku reports no `serving_endpoint`,
+so its own upstream stays unattributed; the DeepSeek turn lands on Together as
+in the other sessions.
+
 ## Leg H `require_parameters` pin on the GLM 5.3 Flash row, 2026-09-16 (plan 175)
 
 Client: `codex-cli 0.154.0-alpha.6.2`, effort `low`; router 0.6.78 working
