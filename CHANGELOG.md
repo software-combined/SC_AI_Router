@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.72
+
+- A feed document without a bundle checksum is refused instead of
+  installing an unverified tarball, and feed, bundle and key-check fetches
+  never follow a redirect off the trusted origin.
+
 ## 0.6.71
 
 - An oversized compact now summarizes instead of refusing: V1

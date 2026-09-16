@@ -13,8 +13,6 @@ import json
 import os
 import sys
 import time
-import urllib.error
-import urllib.request
 from pathlib import Path
 from urllib.parse import parse_qsl
 
@@ -85,7 +83,7 @@ def handle_setup_json(state, home, nonce, form, _urlopen=None, _now=None):
 
 def _submit(state, home, form, _urlopen):
     """(status, result) for a setup POST: one writer, both renderers."""
-    _fetch = _urlopen or urllib.request.urlopen
+    _fetch = _urlopen or key_store._open_without_redirects
     provider_id = key_store.window_provider(state)
     fields = dict(parse_qsl(form.decode('utf-8', 'replace'), keep_blank_values=True))
     key = fields.get('key', '').strip()
