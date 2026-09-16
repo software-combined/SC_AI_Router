@@ -329,7 +329,7 @@ class HandlerCharacterisationTests(unittest.TestCase):
         return server, home, opened
 
     def test_keyless_request_opens_window_once_with_clear_message(self):
-        # Plan 055 Stage 3: no key file and no env key means LookupError;
+        # Plan 107 Stage 3: no key file and no env key means LookupError;
         # the request opens the setup page once and says so.
         server, home, opened = self._window_server()
         first = _post(server.server_port, '/test-token/responses',

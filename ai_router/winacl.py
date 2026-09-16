@@ -1,4 +1,4 @@
-"""Windows owner-only file verification (Plan 057 Stage 2). Stdlib only.
+"""Windows owner-only file verification (Plan 116 Stage 2). Stdlib only.
 
 icacls-based counterpart to the POSIX mode-bit gate in credentials.py.
 The check runs wherever a key is read; protection at write time lives in

@@ -1,4 +1,4 @@
-"""Operator key provisioning (Plan 055 Stages 1-2, offline-capable).
+"""Operator key provisioning (Plan 107 Stages 1-2, offline-capable).
 
 Creates one per-person OpenRouter key with a monthly limit, assigns the
 person's guardrail so the budget follows them across keys, and records an
@@ -77,7 +77,7 @@ def main(argv=None, _urlopen=urllib.request.urlopen):
     parser.add_argument('--machine', required=True, help='machine label')
     parser.add_argument('--limit', type=float, required=True, help='spend limit')
     parser.add_argument('--guardrail', default='', help='guardrail id for the person')
-    parser.add_argument('--install-token', default='', help='Plan 054 install token id')
+    parser.add_argument('--install-token', default='', help='Plan 106 install token id')
     parser.add_argument('--codex-email', default='', help='Codex account email (reconciliation only)')
     parser.add_argument('--audit', required=True, help='audit log path (key ids, never secrets)')
     parser.add_argument('--revoke', default='', help='delete one key by id and exit')
