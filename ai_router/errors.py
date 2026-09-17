@@ -160,6 +160,15 @@ def too_many_inflight():
                   'The router is busy with other turns; retry shortly.')
 
 
+def oversize_busy():
+    return _error(503, 'OVERSIZE_BUSY',
+                  'The router is still reading another oversized turn; retry shortly')
+
+
+class OversizeBusy(Exception):
+    """Another turn already holds the single oversized-read slot."""
+
+
 def unsupported_media_type():
     return _error(415, 'UNSUPPORTED_MEDIA_TYPE',
                   'The router could not read this request. Reopen the app and retry.')

@@ -25,6 +25,18 @@ def count_images(value):
     return 0
 
 
+def image_payload_bytes(value):
+    """Carried bytes inside input_image blocks, however deep they nest."""
+    if is_image(value):
+        return sum(len(v) for key, v in value.items()
+                   if key in ('url', 'image_url', 'data') and isinstance(v, str))
+    if isinstance(value, dict):
+        return sum(image_payload_bytes(v) for v in value.values())
+    if isinstance(value, list):
+        return sum(image_payload_bytes(v) for v in value)
+    return 0
+
+
 def has_images(items):
     return count_images(items) > 0
 

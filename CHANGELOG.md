@@ -22,6 +22,24 @@
   catalogue stays inside its recorded size ceiling. `errors.redact` still
   works for existing callers.
 
+## 0.6.85
+
+- A search-heavy Codex thread no longer dies at the request-size gate. The
+  zstd decode ceiling that exists so prepare can slim released-tool schemas
+  now reaches six times the request cap (96 MiB decoded; the compressed body
+  is still capped at 16 MiB), so a 67 MB thread like the 2026-09-16 one
+  (2,690 tool-search results, about 1 MB prepared) is prepared instead of
+  refused.
+- One oversized body is expanded and prepared at a time. The slot is taken on
+  decoded bytes, the moment a turn passes the 16 MiB cap, so a second one -
+  including parallel sub-agents replaying the same large history - gets one
+  retryable 503 `OVERSIZE_BUSY` until the slot frees. A body inside the
+  ordinary cap never touches the slot.
+- A refused turn logs one `turn_refused` line naming its sizes and what the
+  turn carried, by class and byte weight (released-tool results, tool
+  outputs, reasoning, messages, images). No content is logged, and the
+  client-visible message is unchanged.
+
 ## 0.6.83
 
 - The Codex picker no longer keeps a ChatGPT subscription model that cannot
