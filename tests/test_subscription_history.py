@@ -115,10 +115,11 @@ class ReplayHandlerTests(unittest.TestCase):
                                 {'model': model, 'input': [], 'stream': True})
                 self.assertEqual(response.status, 400)
                 message = json.loads(response.read())['error']['message']
-                self.assertIn('array_above_max_length', message)
-                self.assertIn('input[0].content', message)
+                self.assertNotIn('array_above_max_length', message)
+                self.assertNotIn('input[0].content', message)
                 self.assertNotIn('PRIVATE-CANARY', message + str(log.call_args_list))
                 rejected = next(c.kwargs for c in log.call_args_list if c.args == ('upstream_rejected',))
+                self.assertEqual(rejected['code'], 'array_above_max_length')
                 self.assertEqual(rejected['parameter'], 'input[0].content')
 
 

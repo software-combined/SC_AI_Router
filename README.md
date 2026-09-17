@@ -289,7 +289,10 @@ as the older spelling of `--rollback --to <version>`. If something looks wrong,
   or to select a routed model; routed models reached through the external
   provider keep the neutral text.
 - Logs live under `logs/` in the router home, and `update.log` records the
-  source of each install.
+  source of each install. A file there is deleted 30 days after its last
+  write, at each router start and scheduled update, apart from the three the
+  running router writes (`router.jsonl`, `launchd.log`, `update.log`), which
+  keep their size caps (about 25 MB all in).
 
 ## Security
 

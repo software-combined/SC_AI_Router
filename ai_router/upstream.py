@@ -116,6 +116,16 @@ def rejection_parameter(body):
     return None
 
 
+def rejection_tool(body, dialect=None):
+    """The offending tool's bounded name, or None; never arbitrary prose.
+
+    The client message no longer names the tool, so the rejection log line
+    carries it. The name already passed `_provider_reason`'s identity match.
+    """
+    parsed = _provider_reason(body, dialect)
+    return parsed[2] if parsed is not None else None
+
+
 def _error_code(error, inner_error):
     """A provider code only when the field is already code-shaped.
 
@@ -305,9 +315,10 @@ def describe_failure(exc, response, info):
     Unknown shapes return None so the caller keeps existing behavior. The
     switch-back recovery joins the message only for a routed turn
     (`info['routed']`), where a mid-thread model swap is the likely cause.
+    Provider detail - status, provider, code, tool, field, elapsed time -
+    never reaches this sentence; the caller's log line is where it lives.
     """
     model = info.get('model', 'the model')
-    timeout = info.get('timeout_s', 120)
     dialect = info.get('dialect')
     if response is not None:
         if response.get('status') == 429:
@@ -320,43 +331,30 @@ def describe_failure(exc, response, info):
             return 400, KEY_NO_CREDIT_MESSAGE.format(model=model), code
         if (info.get('protocol') == provider_defs.RESPONSES
                 and (response.get('status', 0) >= 500 or response.get('status') == 408)):
-            parsed = _provider_reason(response.get('body', b''), dialect) or (None,)
-            who = f'upstream {parsed[0]}' if parsed[0] else 'upstream'
-            return 503, (f'{model} is unavailable at {who} '
-                         f'(HTTP {response.get("status")}); retry shortly'), None
+            return 503, (f'{model} is temporarily unavailable and the turn was '
+                         'not served. Retry shortly.'), None
         parsed = _provider_reason(response.get('body', b''), dialect)
         if parsed is None:
             return None
-        provider, reason, tool, code = parsed
-        who = f'upstream {provider}' if provider else 'upstream'
-        message = (f'{model} was rejected by {who} '
-                   f'(HTTP {response.get("status")}'
-                   f'{", code " + code if code else ""}): {reason}. ')
+        _, reason, _, code = parsed
+        message = f'{model} refused this request: {reason}. '
         if info.get('routed'):
             message += ('Switch this thread back to the previous model, '
                         f'or start a new thread for {model}. ')
-        message += 'Do not retry the unchanged request'
-        if tool:
-            message += f'; offending tool: {tool}'
-        param = rejection_parameter(response.get('body', b''))
-        if param:
-            message += f'; field: {param}'
+        message += 'Do not retry it unchanged'
         if (info.get('protocol') == provider_defs.RESPONSES
                 and not is_context_error(response.get('body', b''))):
             return 400, message, code
         return 409, message, code
     if isinstance(exc, TimeoutError):
-        elapsed = round((info.get('elapsed_ms') or 0) / 1000)
-        message = (f'{model} did not answer within {timeout}s '
-                   f'(waited {elapsed}s). Retry a shorter turn')
+        message = (f'{model} did not answer in time and this turn was not sent. '
+                   'Retry a shorter turn')
         # Tilde aliases and pinned ids share the vendor prefix.
         if (isinstance(model, str) and model.removeprefix('~').startswith('x-ai/')
                 and info.get('has_image')):
-            message += '; Grok image turns stall upstream, retry text-only'
+            message += '; retry without the image'
         return 502, message, None
     if isinstance(exc, OSError):
-        host = info.get('host')
-        if host:
-            return 502, f'{model} is unreachable at {host}: check the network connection and retry', None
-        return 502, f'{model} lost its upstream connection before responding; retry', None
+        return 502, (f'{model} could not be reached. '
+                     'Check the network connection and retry.'), None
     return None

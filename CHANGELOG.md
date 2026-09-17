@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.6.84
+
+- Error messages are plain language, and the technical reason rides the log
+  line instead. A provider's status, code, provider name, offending tool and
+  field, the wait time, and a credential failure's OS reason no longer appear
+  in the sentence Codex or Claude shows; `ai_router/errors.py` remains the one
+  catalogue. Statuses, `error.code`, `Retry-After` and every frame shape are
+  unchanged.
+- Every refusal now leaves one `request_rejected` line, including the
+  retryable 503s (draining, busy, refused subscription turn, unavailable
+  provider) that used to answer with no log line at all. Credential detail is
+  logged as a bounded, path-redacted `detail`, and `upstream_rejected` carries
+  the bounded name of the tool the provider refused.
+- Logs age out. A file under `logs/` is deleted 30 days after its last write,
+  at every router start and every scheduled update, so a machine that has been
+  updating for years keeps no pile. The three files a running router writes
+  (`router.jsonl`, `launchd.log`, `update.log`) are never removed by age and
+  keep their existing size caps.
+- Path redaction moved to `ai_router/redaction.py`, a leaf, so the message
+  catalogue stays inside its recorded size ceiling. `errors.redact` still
+  works for existing callers.
+
 ## 0.6.83
 
 - The Codex picker no longer keeps a ChatGPT subscription model that cannot

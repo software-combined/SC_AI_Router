@@ -129,8 +129,11 @@ class ProtocolContractTests(unittest.TestCase):
         self.assertEqual(response.status, 503)
         self.assertEqual(response.getheader('Retry-After'), '7')
         # An external route's transient 429 keeps the neutral wording.
-        self.assertEqual(json.loads(response.read())['error']['message'],
-                         'Upstream rate limited')
+        body = json.loads(response.read())
+        self.assertEqual(body['error']['code'], 'UPSTREAM_RATE_LIMITED')
+        self.assertEqual(body['error']['message'],
+                         'The model is rate limited right now and the turn was '
+                         'not served. Retry shortly.')
 
     def test_messages_subscription_429_names_the_claude_subscription(self):
         # The subscription row's refusal names the model and the
