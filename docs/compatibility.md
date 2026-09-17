@@ -1433,6 +1433,12 @@ Reading: the five-slot cap holds on this build and every routed row stays out
 of that list, which is the behaviour plan 151 stage 3 decided to keep. Stages
 1-3 and the real-machine check were recorded earlier.
 
+Stage 5 filed the upstream report on 2026-09-17:
+<https://github.com/openai/codex/issues/46087> - the override list is capped at
+five rows and reads as if five were all there is, with the capture above as the
+evidence and "list every eligible model, raise the cap, or say `and N more`" as
+the suggestions.
+
 ## Leg F at the plan's full cap, 2026-09-17 (plan 175)
 
 The eight children that had stopped at the 18-call cap re-ran with
@@ -1485,4 +1491,3 @@ so the transport is fine; no model chose to call the search tool when asked
 for a date. That closes plan 175's open question 3 as not reproduced, and it
 is a model-behaviour observation rather than a roster defect - no row edit
 follows. The leg keeps its own `passed`/`failed` contract for future runs.
-
