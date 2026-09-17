@@ -65,14 +65,27 @@ def send_compaction_stream(handler, output):
         handler.close_connection = True
 
 
-def error(handler, err, *, log_event):
+MAX_LOG_DETAIL = 200
+
+
+def error(handler, err, *, log_event, retry_after=None):
+    """Log the rejection, then answer it. `detail` is the log's copy of the
+    technical reason the plain message leaves out; every refusal, retryable
+    or not, leaves one line here."""
     prefix = '/' + handler.server.state.get('token', '')
     raw = handler.path
     suffix = raw[len(prefix):] if prefix != '/' and raw.startswith(prefix) else '<unrouted>'
-    log_event('request_rejected', status=err.status, code=err.code,
-              path=suffix.split('?')[0][:200])
+    fields = {'status': err.status, 'code': err.code,
+              'path': suffix.split('?')[0][:200]}
+    detail = getattr(err, 'detail', None)
+    if detail:
+        fields['detail'] = str(detail)[:MAX_LOG_DETAIL]
+    if retry_after:
+        fields['retry_after'] = retry_after
+    log_event('request_rejected', **fields)
     try:
-        handler.send_json(err.status, err.body())
+        handler.send_json(err.status, err.body(),
+                          {'Retry-After': retry_after} if retry_after else None)
     except OSError:
         pass  # Client already disconnected; the event log keeps the record.
 

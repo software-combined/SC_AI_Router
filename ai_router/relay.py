@@ -108,22 +108,22 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
                     return handler.error(errors.key_no_credit(message))
                 if status == 503:
                     # Transient: retried, never remembered. `Retry-After` is
-                    # inert for Codex (it paces itself) but other clients
-                    # may honour it.
+                    # inert for Codex but other clients may honour it.
                     log_event('upstream_unavailable', status=response.status,
                               client_status=status, code=code,
                               parameter=upstream.rejection_parameter(raw),
                               serving_endpoint=upstream.serving_endpoint(raw),
                               category='UPSTREAM_UNAVAILABLE',
                               **metrics, **upstream.rejection_fingerprint(prepared.body))
-                    return handler.retryable_reject(errors.upstream_unavailable(message),
-                                                    retry_after='2')
+                    return handler.error(errors.upstream_unavailable(message),
+                                         retry_after='2')
                 # A cached answer must be one the client treats as final.
                 if status == 400 and routed and response.status < 500:
                     upstream.remember_refusal(prepared.provider, metrics.get('model'),
                                               prepared.body, message)
                 log_event('upstream_rejected', status=response.status,
                           client_status=status, code=code,
+                          tool=upstream.rejection_tool(raw, provider.defn.dialect),
                           parameter=upstream.rejection_parameter(raw),
                           serving_endpoint=upstream.serving_endpoint(raw),
                           category='PROVIDER_REJECTED',

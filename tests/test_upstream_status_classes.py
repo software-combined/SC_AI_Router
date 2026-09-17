@@ -112,7 +112,8 @@ class UpstreamStatusClassTests(unittest.TestCase):
         self.assertEqual(response.getheader('Retry-After'), '2')
         # An external route names no subscription: the text is unchanged.
         self.assertEqual(json.loads(response.read())['error']['message'],
-                         'Upstream rate limited')
+                         'The model is rate limited right now and the turn was '
+                         'not served. Retry shortly.')
 
     def test_responses_upstream_502_is_a_retryable_503(self):
         install_fake(self, lambda: FakeUpstream(
@@ -124,5 +125,5 @@ class UpstreamStatusClassTests(unittest.TestCase):
         self.assertEqual(response.status, 503)
         body = json.loads(response.read())
         self.assertEqual(body['error']['code'], 'UPSTREAM_UNAVAILABLE')
-        self.assertIn('retry shortly', body['error']['message'])
+        self.assertIn('Retry shortly', body['error']['message'])
         self.assertEqual(response.getheader('Retry-After'), '2')

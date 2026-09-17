@@ -17,7 +17,7 @@ are never copied between machines.
 `ai_router/capabilities.py`, `ai_router/compaction.py`,
 `ai_router/compaction_result.py`, `ai_router/history_portability.py`,
 `ai_router/standalone_outputs.py`, `ai_router/discovered.py`,
-`ai_router/errors.py`, `ai_router/candidate.py`,
+`ai_router/errors.py`, `ai_router/redaction.py`, `ai_router/candidate.py`,
 `ai_router/setup.py`, `ai_router/setup_page.py`, `ai_router/key_store.py`,
 `ai_router/key_dialog.py`, `ai_router/key_prompt.py`, `ai_router/runtime.py`,
 `ai_router/catalogue.py`, `ai_router/local_services.py`,

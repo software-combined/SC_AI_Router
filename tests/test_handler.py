@@ -168,10 +168,10 @@ class HandlerCharacterisationTests(unittest.TestCase):
                          {'model': 'x-ai/grok-4.6', 'input': []})
         self.assertEqual(response.status, 400)
         message = json.loads(response.read())['error']['message']
-        self.assertIn('xAI', message)
-        self.assertIn('ns_abc123def456_tool_update', message)
+        self.assertIn('x-ai/grok-4.6', message)
         self.assertIn('tool schema was rejected', message)
-        self.assertNotIn('Failed to start sampling', message)
+        self.assertNotIn('xAI', message)
+        self.assertNotIn('ns_abc123def456_tool_update', message)
         self.assertEqual(response.getheader('openai-model'), None)
 
     def test_unparseable_upstream_400_passes_through_with_clean_accounting(self):
@@ -208,7 +208,7 @@ class HandlerCharacterisationTests(unittest.TestCase):
         self.assertEqual(response.status, 502)
         message = json.loads(response.read())['error']['message']
         self.assertIn('x-ai/grok-4.6', message)
-        self.assertIn('120', message)
+        self.assertIn('Retry a shorter turn', message)
 
     def test_upstream_429_becomes_retryable_503(self):
         for headers, expected in (([], '2'), ([('Retry-After', '9')], '9')):
@@ -336,7 +336,7 @@ class HandlerCharacterisationTests(unittest.TestCase):
                       {'model': 'z-ai/glm-5.3', 'input': []})
         self.assertEqual(first.status, 400)
         body = json.loads(first.read())
-        self.assertIn('setup page', json.dumps(body))
+        self.assertIn('key window', json.dumps(body))
         second = _post(server.server_port, '/test-token/responses',
                        {'model': 'z-ai/glm-5.3', 'input': []})
         self.assertEqual(second.status, 400)

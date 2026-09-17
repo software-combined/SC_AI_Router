@@ -335,7 +335,7 @@ class HandlerPathTests(unittest.TestCase):
 
 
 class UpstreamHintTests(unittest.TestCase):
-    def test_readable_alias_is_named_in_schema_rejection(self):
+    def test_schema_rejection_message_names_no_tool(self):
         raw = ('{"code": "invalid-argument", "error": "Failed to start sampling: '
                '[invalid_client_tool_schema] probe__echo: tool parameter '
                'root must be an object type"}')
@@ -346,7 +346,7 @@ class UpstreamHintTests(unittest.TestCase):
             {'model': 'x-ai/grok-4.6', 'provider': 'openrouter', 'protocol': 'responses',
              'elapsed_ms': 1831.8, 'timeout_s': 120, 'has_image': False})
         self.assertEqual(status, 400)
-        self.assertIn('probe__echo', message)
+        self.assertNotIn('probe__echo', message)
         self.assertIn('tool schema was rejected', message)
 
 
