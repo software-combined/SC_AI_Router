@@ -4,7 +4,8 @@ __pycache__/
 mixed-router-state.json
 activation.json
 mixed-models.json
-config-before.toml
+config-before-*.toml
+logs/
 compatibility-release.json
 before-*/
 *.bak
@@ -16,3 +17,24 @@ dist/
 .venv/
 ci-catalogue.json
 plans/
+# Per-install router state a working tree can pick up when ROUTER_HOME is
+# the checkout. None of it belongs in a public tree: the policy names the
+# portco's allowed models, the rest is cache and prompt bookkeeping.
+model-policy.json
+model-prompt.json
+models-cache.json
+models-availability.json
+picker-baseline.json
+update-notice.json
+models-etag
+models-url
+channel
+# Build and packaging byproducts (a bundle or its detached signature).
+build/
+*.egg-info/
+*.json.sig
+# Local key material of any shape, and editors.
+*.pem
+._*
+.vscode/
+.idea/

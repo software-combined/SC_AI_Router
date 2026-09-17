@@ -98,6 +98,19 @@ back over the key with `aws s3api copy-object --copy-source
 <bucket>/<key>?versionId=...`, then find out what held the publisher role.
 The feed and its bundles are public: readers need no credential.
 
+### When the alert itself fails
+
+A publish email that never arrives is reported too: the rule's target carries
+a dead-letter queue (`<stack>-alert-dlq`, 14-day retention) and an alarm on
+`FailedInvocations` - one failure in a five-minute period sends an email to
+the same topic. So a mail whose body is an alarm, not a bundle, means the
+formatter could not deliver the bundle mail; the event it could not format is
+in the queue. Read it with `aws sqs receive-message --queue-url <queue url>`
+plus `--attribute-names All`, and the failure itself in
+`/aws/lambda/<function name>` in CloudWatch Logs. CloudWatch tells the topic
+about a state change only, so a long outage sends one alarm mail rather than
+one per attempt while the queue keeps every failed event for its 14 days.
+
 Verify the feed before trusting a release. Before the first publish the
 channel documents do not exist; run the positive check after the first
 release.
