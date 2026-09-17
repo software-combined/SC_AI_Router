@@ -96,6 +96,11 @@
   duration of a streamed turn: the relay now runs after the request frame
   returns, so both buffers die before the stream starts.
 
+- Rename the product and GitHub repository to SC AI Router
+  (`software-combined/SC_AI_Router`). Active documentation, release metadata,
+  feed trust references and plugin marketplace sources now use the new name;
+  the previous GitHub URL remains accepted during the redirect transition.
+
 ## 0.6.69
 
 - Upstream reads are bounded the way request bodies are: SSE adapters parse

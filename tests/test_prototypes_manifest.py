@@ -83,7 +83,7 @@ class PrototypeManifestTest(unittest.TestCase):
         self.assertEqual((ROOT / entries["scg-prototypes"]["source"]["path"]).resolve(), plugin)
         manifest = json.loads((plugin / ".codex-plugin/plugin.json").read_text())
         self.assertEqual(manifest["name"], "scg-prototypes")
-        self.assertEqual(manifest["repository"], "https://github.com/software-combined/SC_OpenRouter_adapter")
+        self.assertEqual(manifest["repository"], "https://github.com/software-combined/SC_AI_Router")
         self.assertRegex(manifest["version"], r"^\d+\.\d+\.\d+(?:\+[A-Za-z0-9.-]+)?$")
         self.assertTrue((plugin / "skills/publish-prototype/SKILL.md").is_file())
         for markdown in (plugin / "skills").glob("*/SKILL.md"):
