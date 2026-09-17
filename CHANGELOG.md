@@ -1,7 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.6.81
 
+- On Windows, task registration now recovers when a stale Task Scheduler task
+  belongs to a different principal. A local-account install is "Access is
+  denied" to the same person's domain token (and the reverse), which left
+  auto-update parked and re-installs failing with `Access is denied`; a failed
+  `schtasks /create /f` now deletes the stale task and re-creates it under the
+  current account. A first, clean install is untouched.
 - Fifteen routed models now offer the client's freeform `apply_patch` tool,
   where the row previously advertised no patch override: a live probe applied
   a synthetic edit and read it back on each of them. The two Meta rows and the
