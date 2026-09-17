@@ -69,12 +69,26 @@ class ReasoningFrameTests(unittest.TestCase):
         events = (
             {'type': 'response.output_item.added', 'item': {'type': 'message'}},
             {'type': 'response.output_item.done', 'item': {'type': 'function_call'}},
-            {'type': 'response.reasoning_summary_text.delta', 'delta': 'x'},
             {'type': 'response.created'},
         )
         for event in events:
             with self.subTest(kind=event['type'], item=event.get('item', {}).get('type')):
                 self.assertIsNone(_marker(event, 'reasoning_frame'))
+
+    def test_reasoning_text_deltas_are_reasoning_not_answer(self):
+        # The plan 177 capture: deepseek-v4.1-flash streams reasoning as text,
+        # and those bytes reached the log unattributed until this marker.
+        for kind in ('response.reasoning_text.delta', 'response.reasoning_text.done'):
+            with self.subTest(kind=kind):
+                event = {'type': kind, 'delta': 'x'}
+                self.assertEqual(_marker(event, 'reasoning_frame'), kind)
+                self.assertIsNone(_marker(event, 'answer_frame'))
+
+    def test_the_two_frame_sets_are_disjoint(self):
+        # A kind in both sets would be counted as content and as reasoning in
+        # the same frame, so forwarded bytes would stop being their sum.
+        self.assertEqual(stream_errors.ANSWER_FRAME_TYPES
+                         & stream_errors.REASONING_FRAME_TYPES, frozenset())
 
 
 class ReasoningBytesTests(unittest.TestCase):

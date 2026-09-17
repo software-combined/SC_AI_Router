@@ -6,6 +6,7 @@ Runs against a temporary tree so nothing here touches the real repository.
 """
 import importlib.util
 import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -19,6 +20,26 @@ CAP_BYTES = b'DEFAULT_' + b'REQUEST' + b'_CAP = 5\n'
 # The scan-check name is built the same way: this file is inside the scanned
 # tree, so it must not carry the literal it exists to detect.
 CAP_CHECK = 'check_' + 'request' + '_cap'
+# Assembled from fragments for the same reason: the account-id scan reads this
+# file too, and a literal here would (correctly) fail its own gate.
+ACCOUNT_PROBE = (b'arn:aws:iam::' + b'1' * 12 + b':role/publisher')
+BUCKET_PROBE = b'scg-router-feed-' + b'2' * 12 + b'-apse2'
+
+
+class ProviderKeyIgnoreTests(unittest.TestCase):
+    """A provider's key file must be ignored before anyone writes one."""
+
+    def test_every_external_key_file_is_ignored(self):
+        from ai_router import provider_defs
+        names = sorted(defn.key.file for defn in provider_defs.external_defs())
+        self.assertTrue(names)
+        result = subprocess.run(['git', 'check-ignore', *names], cwd=ROOT,
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        ignored = result.stdout.split()
+        for name in names:
+            with self.subTest(key_file=name):
+                self.assertIn(name, ignored)
 
 
 def _load(root):
@@ -53,7 +74,39 @@ class PolicyScanTests(unittest.TestCase):
         module = _load(self._tree())
         self.assertTrue(getattr(module, CAP_CHECK)())
         self.assertTrue(module.check_secrets())
+        self.assertTrue(module.check_publication_identifiers())
         self.assertTrue(module.check_setup_single_owner())
+        self.assertTrue(module.check_dialect_literals())
+
+    def test_dialect_literal_outside_the_definition_table_is_caught(self):
+        # Plan 152: a call site reads the constant the table exports, in
+        # either comparison order; the definition table itself may name the
+        # dialect.
+        probes = (b"if provider.defn.dialect == 'probe':\n",
+                  b"if provider.defn.dialect != 'probe':\n",
+                  b"if provider.defn.dialect in ('probe',):\n",
+                  b"if 'probe' == provider.defn.dialect:\n")
+        for probe in probes:
+            with self.subTest(probe=probe[:12]):
+                root = self._tree()
+                (root / 'ai_router' / 'site.py').write_bytes(probe)
+                self.assertFalse(_load(root).check_dialect_literals())
+                (root / 'ai_router' / 'site.py').unlink()
+                (root / 'ai_router' / 'provider_defs.py').write_bytes(probe)
+                self.assertTrue(_load(root).check_dialect_literals())
+
+    def test_an_account_identifier_anywhere_is_caught(self):
+        # Non-vacuous: an account id inside an ARN, and one inside a
+        # bucket-shaped name, each fail the scan on a tree that is otherwise
+        # clean (Plan 160).
+        for probe in (ACCOUNT_PROBE, BUCKET_PROBE):
+            with self.subTest(probe=probe[:10]):
+                root = self._tree()
+                (root / 'infra').mkdir(exist_ok=True)
+                (root / 'infra' / 'feed.yaml').write_bytes(
+                    b'BucketName: ' + probe + b'\n')
+                module = _load(root)
+                self.assertFalse(module.check_publication_identifiers())
 
     def test_cap_token_outside_the_old_directories_is_caught(self):
         root = self._tree()

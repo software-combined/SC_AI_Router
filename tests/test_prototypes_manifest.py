@@ -2,6 +2,7 @@
 import importlib.util
 import hashlib
 import json
+import os
 import re
 import sys
 import tempfile
@@ -10,11 +11,28 @@ from argparse import Namespace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+# The prototypes publish script locks its registry with POSIX ``fcntl``,
+# which has no stdlib equivalent on Windows, so the module cannot even be
+# imported there. The publish path runs on the macOS/Linux release hosts.
+# Import it only on POSIX; on Windows the classes below are skipped via the
+# ``load_tests`` hook, so the script (and its ``fcntl`` import) is never
+# touched. A module-level ``raise SkipTest`` would surface as a collection
+# ERROR under ``python -m unittest <name>``, not a clean skip.
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "plugins/scg-prototypes/skills/publish-prototype/scripts/prototypes.py"
-spec = importlib.util.spec_from_file_location("scg_prototypes", SCRIPT)
-prototypes = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(prototypes)
+if os.name == 'nt':
+    prototypes = None
+else:
+    spec = importlib.util.spec_from_file_location("scg_prototypes", SCRIPT)
+    prototypes = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(prototypes)
+
+
+def load_tests(loader, tests, pattern):
+    """Skip this module cleanly on Windows (see the note above)."""
+    if os.name == 'nt':
+        return unittest.TestSuite()
+    return tests
 
 CONFIG = {
     "account": "852138521410",

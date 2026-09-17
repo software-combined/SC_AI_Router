@@ -1,4 +1,4 @@
-"""Plan 049 step 1: plugin manifests stay valid, versioned, and consistent.
+"""Plan 112 step 1: plugin manifests stay valid, versioned, and consistent.
 
 Proves: both manifests parse, carry the same name and the packaging/VERSION
 semver, the shared skill exists with the required front-matter, and the

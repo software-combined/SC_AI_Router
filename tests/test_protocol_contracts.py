@@ -35,7 +35,45 @@ class ProtocolContractTests(unittest.TestCase):
             protocols.owned_paths(),
             frozenset(providers_mod.NATIVE_SERVICE_PATHS)
             | claude_mod.CLAUDE_POST_PATHS
-            | {'/responses', '/responses/compact'})
+            | {'/responses', '/responses/compact', '/v1/models'})
+
+    def test_policy_names_are_the_definition_constants(self):
+        # Plan 155 (F10): the table exports the protocol names, so a policy
+        # name cannot drift into a second literal.
+        from ai_router import provider_defs
+        from ai_router.protocols import messages as messages_mod
+        from ai_router.protocols import responses as responses_mod
+        self.assertEqual(responses_mod.POLICY.name, provider_defs.RESPONSES)
+        self.assertEqual(messages_mod.POLICY.name, provider_defs.MESSAGES)
+
+    def test_the_discovery_listing_is_a_table_row(self):
+        # Plan 155 (F10): the handler asks the table, so the GET is owned by
+        # the Messages family; an allowlist that names nothing lists nothing,
+        # and the Responses family serves no listing at all.
+        from ai_router import protocols
+        from ai_router.protocols import messages as messages_mod
+        self.assertIs(protocols.select('GET', '/v1/models'), messages_mod.POLICY)
+        self.assertIsNone(protocols.select('POST', '/v1/models'))
+        self.assertIsNone(protocols.listing('GET', '/responses'))
+        self.assertEqual(protocols.listing('GET', '/v1/models', allowed=()),
+                         {'data': []})
+
+    def test_the_listing_hides_rows_outside_the_allowlist(self):
+        # Every row this listing serves is externally routed, so the portco
+        # allowlist is the whole answer: one named slug, one row.
+        from ai_router import claude, protocols, registry
+        from ai_router.clients import client_table
+        defn = client_table.get('claude')
+        slug = next(m.slug for m in registry.MODELS
+                    if defn.discovery_visible(m) and claude.claude_alias(m.slug))
+        listed = protocols.listing('GET', '/v1/models', allowed=(slug,))
+        self.assertEqual([row['id'] for row in listed['data']],
+                         [claude.claude_alias(slug)])
+
+    def test_the_listing_without_an_allowlist_is_unchanged(self):
+        from ai_router import claude, protocols
+        self.assertEqual(protocols.listing('GET', '/v1/models'),
+                         claude.models_listing())
 
     def test_native_prefix_paths_select_the_responses_policy(self):
         # Plan 171: the prefix rule routes new backend paths with no second
@@ -90,6 +128,24 @@ class ProtocolContractTests(unittest.TestCase):
                          _messages(), {'Authorization': 'Bearer subscription-secret'})
         self.assertEqual(response.status, 503)
         self.assertEqual(response.getheader('Retry-After'), '7')
+        # An external route's transient 429 keeps the neutral wording.
+        self.assertEqual(json.loads(response.read())['error']['message'],
+                         'Upstream rate limited')
+
+    def test_messages_subscription_429_names_the_claude_subscription(self):
+        # The subscription row's refusal names the model and the
+        # subscription; the external row above keeps the neutral text.
+        install_fake(self, lambda: FakeUpstream(
+            429, b'{"error": "slow"}', [('Content-Type', 'application/json')]))
+        server = self._server()
+        response = _post(server.server_port, '/test-token/v1/messages',
+                         _messages('claude-opus-4-6'),
+                         {'Authorization': 'Bearer subscription-secret'})
+        self.assertEqual(response.status, 503)
+        body = json.loads(response.read())
+        self.assertEqual(body['error']['code'], 'UPSTREAM_RATE_LIMITED')
+        self.assertIn('claude-opus-4-6 is rate limited on your Claude subscription',
+                      body['error']['message'])
 
     def test_messages_response_shares_the_model_pin_behavior(self):
         # Coupling pin: the shared relay path currently pins openai-model on

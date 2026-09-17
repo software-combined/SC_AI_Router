@@ -294,7 +294,7 @@ class SetupUnitTests(unittest.TestCase):
                     load(path)
 
 class KeyWindowTests(unittest.TestCase):
-    # Plan 055 Stage 3: keyless boot, first-use window, revoked-key carve-out.
+    # Plan 107 Stage 3: keyless boot, first-use window, revoked-key carve-out.
     def _home(self):
         home = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, home, True)

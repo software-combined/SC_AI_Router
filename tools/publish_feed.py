@@ -1,7 +1,7 @@
 """Publish one built release to the public update feed (Plan 139).
 
 Usage: python tools/publish_feed.py --dist dist --channel stable
-       [--bucket B] [--distribution-id D] [--dry-run]
+       --bucket B [--distribution-id D] [--dry-run]
 
 The release workflow runs this before it creates the GitHub Release, so the
 feed always serves a release before the release page advertises it. The
@@ -14,7 +14,6 @@ import subprocess
 from pathlib import Path
 
 FEED_ORIGIN = 'https://dist.softwarecombined.com'
-DEFAULT_BUCKET = 'router-feed-publication'
 FEED_DOCUMENT = 'feed-latest.json'
 RELEASE_DOCUMENT = 'release-latest.json'
 FEED_SIG_DOCUMENT = 'feed-latest.json.sig'
@@ -90,17 +89,35 @@ def bundle_state(bucket, key):
 
 
 def publish_bundle(bucket, key, path, sha256):
-    """Upload an immutable bundle once; refuse to replace different bytes."""
+    """Upload an immutable bundle once; refuse to replace different bytes.
+
+    The upload is create-only: S3 refuses a second write with
+    PreconditionFailed, so the window the head-object pre-check leaves cannot
+    replace published bytes on the supported path. A role holder that skips
+    the flag can still replace a key; the publish notification reports it and
+    versioning recovers it (Plan 167).
+    """
     existing = bundle_state(bucket, key)
     if existing == sha256:
         return 'already published'
     if existing:
         raise SystemExit(f'{key} holds a different sha256 ({existing[:12]}); '
                          'bundles are immutable')
-    _aws(['s3', 'cp', str(path), f's3://{bucket}/{key}',
-          '--cache-control', BUNDLE_CACHE_CONTROL,
-          '--content-type', 'application/gzip',
-          '--metadata', f'sha256={sha256}'])
+    try:
+        result = run(['aws', 's3api', 'put-object', '--bucket', bucket,
+                      '--key', key, '--body', str(path),
+                      '--if-none-match', '*',
+                      '--cache-control', BUNDLE_CACHE_CONTROL,
+                      '--content-type', 'application/gzip',
+                      '--metadata', f'sha256={sha256}'],
+                     capture_output=True, text=True)
+    except OSError as exc:
+        raise SystemExit(f'cannot run the aws CLI: {exc}')
+    if result.returncode:
+        stderr = result.stderr or ''
+        if 'PreconditionFailed' in stderr:
+            raise SystemExit(f'{key} already exists; bundles are immutable')
+        raise SystemExit(f'cannot publish {key}: {_clean(stderr)}')
     return 'uploaded'
 
 
@@ -169,7 +186,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description='Publish a built release to the feed.')
     parser.add_argument('--dist', default='dist', help='directory packaging/release.py wrote')
     parser.add_argument('--channel', required=True, choices=CHANNELS)
-    parser.add_argument('--bucket', default=DEFAULT_BUCKET)
+    parser.add_argument('--bucket', required=True,
+                        help='feed bucket; no default, so a fork cannot publish to ours')
     parser.add_argument('--distribution-id', default='')
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--sign', metavar='SEEDFILE',

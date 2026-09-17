@@ -1,6 +1,6 @@
 """Publish first-install assets to the public feed (Plan 139 follow-up).
 
-Usage: python tools/publish_first_install.py [--bucket B] [--dry-run]
+Usage: python tools/publish_first_install.py --bucket B [--dry-run]
 
 Bundles and channel documents belong to tools/publish_feed.py; this tool
 owns the reserved first-install keys a machine needs to install without
@@ -27,7 +27,6 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_BUCKET = 'router-feed-publication'
 RUNTIMES_DOCUMENT = 'runtimes.json'
 BOOTSTRAP_PREFIX = 'bootstrap/'
 BOOTSTRAP_FILES = ('bootstrap.sh', 'bootstrap.ps1')
@@ -166,7 +165,8 @@ def _describe(args):
 def main(argv=None):
     parser = argparse.ArgumentParser(
         description='Publish first-install runtimes and bootstrap to the feed.')
-    parser.add_argument('--bucket', default=DEFAULT_BUCKET)
+    parser.add_argument('--bucket', required=True,
+                        help='feed bucket; no default, so a fork cannot publish to ours')
     parser.add_argument('--dry-run', action='store_true')
     args = parser.parse_args(argv)
     if args.dry_run:

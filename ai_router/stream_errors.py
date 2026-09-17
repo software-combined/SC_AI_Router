@@ -24,6 +24,14 @@ ANSWER_FRAME_TYPES = frozenset((
     'response.custom_tool_call_input.delta', 'response.custom_tool_call_input.done',
 ))
 
+# Reasoning a provider streams as text rather than as an item. The plan 177
+# capture saw these from deepseek-v4.1-flash, and their bytes were unattributed
+# before. Disjoint from ANSWER_FRAME_TYPES: a kind in both would be counted as
+# content and as reasoning in the same frame.
+REASONING_FRAME_TYPES = frozenset((
+    'response.reasoning_text.delta', 'response.reasoning_text.done',
+))
+
 
 def _answer_item(event):
     """True for an output-item frame that carries an item the client keeps.
@@ -275,7 +283,7 @@ def normalize(chunks, metrics):
             metrics.pop('answer_frame', None)
         # Reasoning is plumbing a retry replaces, but it can be most of the
         # forwarded bytes, so the log names it separately.
-        if item_frame and _reasoning_item(event):
+        if (item_frame and _reasoning_item(event)) or kind in REASONING_FRAME_TYPES:
             metrics['reasoning_frame'] = kind
         else:
             metrics.pop('reasoning_frame', None)

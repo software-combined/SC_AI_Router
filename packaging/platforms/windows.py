@@ -1,4 +1,4 @@
-"""Windows backend (Plan 057 Stage 3). Task Scheduler lifecycle + ACL key protection.
+"""Windows backend (Plan 116 Stage 3). Task Scheduler lifecycle + ACL key protection.
 
 Per-user Scheduled Tasks at logon (no admin, no stored password), updater on
 a 4-hour repeat, pythonw.exe for both tasks through a home-root task
@@ -44,7 +44,7 @@ UNINSTALL_DRAIN_S = 30
 # each would flash a console window on the interactive desktop.
 _NO_WINDOW = {'creationflags': getattr(subprocess, 'CREATE_NO_WINDOW', 0)}
 
-# Plan 049 slice 4: logon trigger plus a one-minute repeated recovery
+# Plan 112 slice 4: logon trigger plus a one-minute repeated recovery
 # trigger (duplicate launches ignored), 4-hour updater, IgnoreNew,
 # unlimited router execution time (PT0S), battery settings that do not
 # stop working sessions, interactive-token least-privilege execution.
@@ -236,6 +236,21 @@ class Backend:
         result = self._call(['schtasks', '/create', '/tn', name,
                              '/xml', str(xml_path), '/f'],
                             capture_output=True, text=True)
+        if result.returncode != 0:
+            # `/f` overwrites a task this caller already owns, but it CANNOT
+            # overwrite one registered under a different principal: an install
+            # first made under a local account (UserId = a local SID) is
+            # "Access is denied" to the same human's domain token
+            # (ACTIVATE\user), and vice versa. Deleting the stale task clears
+            # the owner, so a plain re-create then lands under the current
+            # principal. Verified on Windows 11 2026-09-16 (local->domain
+            # account switch). Only retried on failure, so a first, clean
+            # install keeps the running instance alive as before.
+            self._call(['schtasks', '/delete', '/tn', name, '/f'],
+                       capture_output=True, text=True)
+            result = self._call(['schtasks', '/create', '/tn', name,
+                                 '/xml', str(xml_path), '/f'],
+                                capture_output=True, text=True)
         if result.returncode != 0:
             raise SystemExit('Windows task registration failed for %s: %s'
                              % (name, _tail(result.stderr or result.stdout)))

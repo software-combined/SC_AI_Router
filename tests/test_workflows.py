@@ -105,6 +105,9 @@ class InstallerCiGateTests(unittest.TestCase):
             "contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')",
             self.CHECK)
 
+    @unittest.skipUnless(os.name == 'posix' and shutil.which('bash'),
+                         'runs the workflow step through a POSIX shell with a '
+                         'shell-script git stub; the gate itself runs on Ubuntu')
     def test_the_scope_step_fails_closed_and_writes_the_output(self):
         # The exact workflow step: a failed diff must fail it (pipefail), not
         # read as "no installer files changed" and silently skip the native

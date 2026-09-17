@@ -1,4 +1,4 @@
-"""Plan 066 Step 1: unreadable encrypted briefs fail closed before dispatch.
+"""Plan 119 Step 1: unreadable encrypted briefs fail closed before dispatch.
 
 A synthetic agent_message item with a routing label plus an encrypted block
 must raise PreparationError before credentials or any outbound connection

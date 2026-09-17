@@ -1,4 +1,4 @@
-"""Model onboarding command (Plan 046 Step 2). Offline fixtures only."""
+"""Model onboarding command (Plan 099 Step 2). Offline fixtures only."""
 import contextlib
 import io
 import json
@@ -110,6 +110,14 @@ class AddTests(unittest.TestCase):
             path = _seeded(tmp, [_row('qwen/qwen4-coder')])
             with self.assertRaisesRegex(SystemExit, 'already in'):
                 cmd_add(path, 'qwen/qwen4-coder', LIVE)
+
+    def test_a_bad_upstream_id_is_refused_before_the_write(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = _seeded(tmp, [_row()])
+            before = path.read_text()
+            with self.assertRaisesRegex(SystemExit, 'bad upstream_id'):
+                cmd_add(path, 'qwen/qwen4-coder', LIVE, upstream_id=' trailing ')
+            self.assertEqual(path.read_text(), before)
 
     def test_dry_run_writes_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:

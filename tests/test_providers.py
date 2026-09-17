@@ -86,7 +86,7 @@ class DefinitionHeaderTests(unittest.TestCase):
     def test_definition_headers_cannot_override_credentials(self):
         defn = provider_defs.ProviderDef(
             id='x', label='X', kind='external', host='example.invalid',
-            responses_path='/r',
+            responses_path='/r', dialect=provider_defs.DIALECT_OPENAI_COMPATIBLE,
             key=provider_defs.KeySpec('X_KEY', 'x.key'),
             request_headers=(('Authorization', 'Bearer spoof'),
                              ('Content-Type', 'text/plain'),
@@ -172,7 +172,7 @@ class ProviderPrefsTests(unittest.TestCase):
 class OutputCapTests(unittest.TestCase):
     def test_output_cap_follows_registry(self):
         provider = _external_responses()
-        fake = SimpleNamespace(max_output_tokens=1000, context_window=100000)
+        fake = SimpleNamespace(max_output_tokens=1000, context_window=100000, slug='fake/model')
         payload = {'model': 'fake/model', 'input': [], 'max_output_tokens': 5000}
         prepared = provider.prepare(fake, '/responses', payload, b'raw', {}, _stub_credentials())
         sent = json.loads(prepared.body)['max_output_tokens']
@@ -344,7 +344,7 @@ class SummarizerRetryTests(unittest.TestCase):
             if ceiling is not None:
                 stack.enter_context(mock.patch.object(
                     providers, 'by_slug',
-                    return_value=SimpleNamespace(max_output_tokens=ceiling)))
+                    return_value=SimpleNamespace(max_output_tokens=ceiling, slug=model)))
             try:
                 result = _external_responses().summarize(model, 'key', [
                     {'type': 'message', 'role': 'user', 'content': 'marker'}])

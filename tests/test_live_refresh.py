@@ -1,4 +1,4 @@
-"""Derived-field refresh from live OpenRouter metadata (Plan 044)."""
+"""Derived-field refresh from live OpenRouter metadata (Plan 118)."""
 import unittest
 from ai_router.live_refresh import derive, refresh
 
@@ -20,6 +20,13 @@ def _live(**over):
 
 
 class LiveRefreshTests(unittest.TestCase):
+    def test_refresh_follows_the_upstream_id(self):
+        # The live list is keyed by the id the provider serves, which is not
+        # always the id clients send (Plan 153).
+        row = _row(slug='acme/claude-opus-5', upstream_id='claude-opus-5')
+        out = refresh([row], {'claude-opus-5': _live()}, 'openrouter')
+        self.assertEqual(out[0]['context_window'], 100)
+
     def test_modalities_keep_codex_vocabulary_only(self):
         derived = derive(_row(), _live())
         self.assertEqual(derived['modalities'], ['text', 'image', 'audio'])

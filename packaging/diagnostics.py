@@ -1,6 +1,6 @@
 """Read-only installer diagnostics, extracted from install.py.
 
-`do_preflight` (Plan 058 Stage 1) and `do_status` (Plan 049) never write
+`do_preflight` (Plan 117 Stage 1) and `do_status` (Plan 112) never write
 and never lock. The only network use is the loopback `/health` probe;
 nothing external is contacted. Runs on Python 3.9+ like the
 installer. Loaded via the installer's file-based import pattern, never
@@ -78,7 +78,7 @@ def bind(**overrides):
 def do_preflight(args):
     """Report missing install prerequisites together; change nothing.
 
-    Plan 058 Stage 1: one check before anything is written, with a
+    Plan 117 Stage 1: one check before anything is written, with a
     platform-correct remedy per missing item. Never creates the router
     home and never touches the network: the public feed needs no
     credential check here, and the bundle is verified when it is fetched.
@@ -112,7 +112,7 @@ def do_preflight(args):
 def _status_document(home):
     """Read-only status facts for one router home.
 
-    Plan 049: read-only diagnostics for the manage-router skill. Exit 0
+    Plan 112: read-only diagnostics for the manage-router skill. Exit 0
     even when nothing is installed. Key validity is never probed here;
     `key_usable` means the local gates pass (env set, or a non-empty
     owner-only key file, or opencode_auth when no key file shadows it).

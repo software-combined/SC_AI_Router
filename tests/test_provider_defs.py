@@ -46,6 +46,19 @@ class DefinitionTests(unittest.TestCase):
                     self.assertIsNone(defn.key)
                     self.assertIsNone(defn.key_info_url)
 
+    def test_only_subscription_defs_carry_a_login_label(self):
+        # Refusal wording reads this; an external route has no login to name.
+        for defn in provider_defs.PROVIDERS:
+            with self.subTest(provider=defn.id):
+                if defn.kind == provider_defs.SUBSCRIPTION:
+                    self.assertTrue(defn.subscription_label)
+                else:
+                    self.assertIsNone(defn.subscription_label)
+        default = provider_defs.ProviderDef(
+            id='x', label='X', kind='subscription', host='example.invalid',
+            responses_path='/r', dialect=provider_defs.DIALECT_ANTHROPIC)
+        self.assertEqual(default.subscription_label, 'X subscription')
+
     def test_path_prefixes_compose(self):
         self.assertEqual(
             provider_defs.OPENROUTER.path_for(provider_defs.MESSAGES, '/v1/messages'),
@@ -78,6 +91,15 @@ class DefinitionTests(unittest.TestCase):
             provider_defs.ProviderDef(
                 id='x', label='X', kind='subscription', host='example.invalid',
                 responses_path='/r', native_prefixes=('alpha/',))
+        with self.assertRaises(ValueError):  # dialect outside the table
+            provider_defs.ProviderDef(
+                id='x', label='X', kind='external', host='example.invalid',
+                responses_path='/r', key=provider_defs.KeySpec('X_KEY', 'x.key'),
+                dialect='acme')
+        with self.assertRaises(ValueError):  # no default dialect for an id
+            provider_defs.ProviderDef(
+                id='acme', label='Acme', kind='external', host='example.invalid',
+                responses_path='/r', key=provider_defs.KeySpec('X_KEY', 'acme.key'))
 
     def test_native_service_path_is_a_guarded_prefix_rule(self):
         native = provider_defs.native_service_path

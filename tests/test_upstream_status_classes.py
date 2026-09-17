@@ -110,6 +110,9 @@ class UpstreamStatusClassTests(unittest.TestCase):
                          {'model': 'z-ai/glm-5.3', 'input': []})
         self.assertEqual(response.status, 503)
         self.assertEqual(response.getheader('Retry-After'), '2')
+        # An external route names no subscription: the text is unchanged.
+        self.assertEqual(json.loads(response.read())['error']['message'],
+                         'Upstream rate limited')
 
     def test_responses_upstream_502_is_a_retryable_503(self):
         install_fake(self, lambda: FakeUpstream(

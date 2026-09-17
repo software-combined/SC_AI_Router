@@ -29,8 +29,44 @@ CERT="$(aws cloudformation describe-stacks --stack-name scg-router-feed-cert \
   --query "Stacks[0].Outputs[?OutputKey=='CertificateArn'].OutputValue" --output text)"
 aws cloudformation deploy --stack-name scg-router-feed --region ap-southeast-2 \
   --template-file infra/feed.yaml --capabilities CAPABILITY_NAMED_IAM \
-  --parameter-overrides CertificateArn="$CERT"
+  --parameter-overrides CertificateArn="$CERT" \
+    BucketName="$FEED_BUCKET" SigningSeedArn="$FEED_SIGNING_SEED_ARN" \
+    NotificationEmail="$EMAIL"
 ```
+
+The subscription needs one click: SNS emails `NotificationEmail` and waits.
+Confirm it, then re-check with
+`aws sns list-subscriptions-by-topic --topic-arn <topic>` that it no longer
+reads `PendingConfirmation`; until it does, the publish email never arrives
+and the second-write signal is silently missing.
+
+Each `bundles/` write then mails one short message - subject, object, size,
+S3 version id, time and the PutObject actor - instead of the raw S3 event. The
+small `FeedAlertFunction` owns that wording. It exists rather than an
+EventBridge `InputTemplate` because a template substitutes raw: an object key
+carrying a double quote would break the template and stop delivery, letting
+the writer this alert watches silence their own alarm. The function also sets
+the mail subject. `tests/test_feed_infra.py` compiles the inlined function,
+drives it with a hostile key and pins the grants (the rule may invoke only
+this function; the function may publish only to this topic).
+
+### Where the feed identifiers live (Plan 160)
+
+The template carries no account-bearing default, and the tree carries no
+account id, bucket name or role ARN. The release workflow reads three
+**repository variables** (repository settings, not the tree; never written
+down here):
+
+| Variable | What it is | What uses it |
+|---|---|---|
+| `FEED_BUCKET` | the feed bucket the publisher writes to | `tools/publish_feed.py --bucket`, the deploy override above |
+| `FEED_ROLE` | the publisher role the release workflow assumes by OIDC | the workflow's AWS credentials step |
+| `FEED_SIGNING_SEED_ARN` | the Secrets Manager secret holding the feed signing seed | the workflow's publish step, and the template's `SigningSeedArn` |
+
+`FEED_STACK` stays a literal in the workflow: a stack name carries no account
+id. Both publishers now require `--bucket`, so a fork that runs them with no
+arguments fails with a message naming the argument instead of publishing to
+someone else's bucket.
 
 `infra/feed.yaml` owns the versioned bucket (private to S3, served publicly
 through CloudFront), the CloudFront distribution, the DNS alias, and the
@@ -39,10 +75,28 @@ publisher role. The role is assumable only by
 refs: `repo:software-combined/SC_AI_Router:ref:refs/tags/v*` in the
 classic subject form, or
 `repo:software-combined@200868195/SC_AI_Router@1360169840:ref:refs/tags/v*`
-in GitHub's immutable form. It can read and write objects in the feed
-bucket, list the bucket, invalidate the feed, and read the stack outputs.
-It cannot delete objects or touch any other resource. The feed and its
-bundles are public: readers need no credential.
+in GitHub's immutable form. It may read any object in the feed bucket and
+write only what a release publishes: `bundles/*` and, per channel,
+`latest.json`, `latest.json.sig` and `models.json`. It can also list the
+bucket, invalidate the feed, read the stack outputs and read the signing
+seed. An explicit deny refuses a delete or any change to the bucket's own
+configuration, so a later widening of the allow cannot reach them. The
+first-install keys (`runtimes*`, `bootstrap/*`) are outside it on purpose:
+that tool uploads with the operator's own credentials.
+
+The publisher's bundle upload is create-only (`--if-none-match '*'`), so a
+second write of a published key is refused by S3 itself. A role holder that
+skips the flag can still replace a key: the publish email reports it (one
+message per `bundles/*` write, so a second message for an existing key is
+the signal), and bucket versioning recovers the replaced bytes afterwards.
+When that second message arrives, recover deliberately: the email names the
+object and the version it wrote, so list that key's versions (`aws s3api
+list-object-versions --bucket "$FEED_BUCKET" --prefix bundles/<name>`),
+match the emailed `VersionId`, compare each version's `Metadata.sha256`
+against the feed document that names the bundle, copy the matching version
+back over the key with `aws s3api copy-object --copy-source
+<bucket>/<key>?versionId=...`, then find out what held the publisher role.
+The feed and its bundles are public: readers need no credential.
 
 Verify the feed before trusting a release. Before the first publish the
 channel documents do not exist; run the positive check after the first
@@ -119,8 +173,8 @@ mutable entry point: they are replaced when they change and cached for
 five minutes, so a wrapper fix can still reach new installers.
 
 ```sh
-python3.14 tools/publish_first_install.py --dry-run   # plan only
-python3.14 tools/publish_first_install.py             # download, verify, upload
+python3.14 tools/publish_first_install.py --bucket "$FEED_BUCKET" --dry-run  # plan only
+python3.14 tools/publish_first_install.py --bucket "$FEED_BUCKET"  # download, verify, upload
 ```
 
 Hand a recipient the bootstrap URL for their OS:
@@ -363,11 +417,17 @@ the failure; an oversized turn answers 400 with guidance instead of 413. The
 Anthropic Messages path keeps its existing answers except at that shared
 size boundary, where it answers 400 like Responses.
 
+A refused subscription turn (an upstream 429 on a login the client owns)
+answers 503 `UPSTREAM_RATE_LIMITED` whose message names the model and the
+subscription that refused it and says the turn was not served, to retry
+shortly or to select a routed model. An external route's transient 429
+keeps the neutral text, and neither answer carries upstream prose.
+
 | Event | Meaning |
 |---|---|
 | `upstream_unavailable` | an upstream 5xx or 408 on a Responses turn, answered 503 |
 | `client_disconnected` | the client hung up mid-stream; previously counted as `transport_error` |
-| `upstream_rate_limited` | an upstream 429, with `category` `quota`, `auth` or `transient`; on Responses a quota 429 answers 400 `PROVIDER_REJECTED` and an auth 429 opens the key window |
+| `upstream_rate_limited` | an upstream 429, with `category` `quota`, `auth` or `transient`; on Responses a quota 429 answers 400 `PROVIDER_REJECTED` and an auth 429 opens the key window; a subscription turn's `transient` 429 answers 503 naming the model and the subscription |
 
 ## Stream identity observation (last-observed, not proof)
 
@@ -479,6 +539,16 @@ and `updated_at`. The router loads it at startup into
 on it, subscription rows unaffected. Offboarding: remove the user from
 the subgroup and delete their OpenRouter key by id; the policy file goes
 with the machine's decommissioning, never as a revocation control.
+
+Managed installs: the state file may carry `policy_enforced: true`, set
+only by the trusted provisioning path (the installer flag, MDM, or the central
+grant tool) and never by a user or a routine update. With the flag set, a
+missing policy denies external routing instead of granting it, and the router
+logs one token-free `model_policy_rejected` event with reason
+`enforced_without_policy` (Plan 176). An unreadable or invalid policy denies on
+any install, each with its own reason. A personal install never sets the flag,
+so an absent policy keeps today's behaviour. A value that is not true or false
+stops the boot with `policy_enforced must be true or false`.
 
 ## Windows (Task Scheduler)
 

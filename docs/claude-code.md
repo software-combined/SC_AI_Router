@@ -87,10 +87,17 @@ hand-edited conflict instead of overwriting it.
   refused; OpenRouter models still serve.
 - The Claude path is pure passthrough, so `/health` `served_models`
   does not track it and no compaction endpoint exists for it.
-- Live verification is pending: run a paid probe with one OpenRouter
-  model and one subscription model through real Claude Code sessions
-  before relying on this, and record the Claude Code version in
-  `docs/compatibility.md`.
+- A routed row inherits whatever tools the client has loaded. Claude
+  Code adds every claude.ai connector MCP tool to its request once the
+  first turn has loaded them; on a machine with hundreds of connector
+  tools that tool list alone can exceed the model's context window, and
+  upstream refuses the turn with a context error. Exclude them for a
+  routed session (`--strict-mcp-config --mcp-config '{"mcpServers": {}}'`)
+  when the tool list does not fit the row.
+- Live verification, 2026-09-17: a real Claude Code session
+  (`2.1.223`) completed a Read-tool round trip through the router on
+  `anthropic/claude-haiku-4.5` with those connector servers excluded;
+  the version and the run are recorded in `docs/compatibility.md`.
 
 ## Claude desktop third-party gateway (Preview)
 

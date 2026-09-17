@@ -27,6 +27,8 @@ _spec.loader.exec_module(_svc)
 _diag = _svc.load('router_diagnostics',
                   Path(__file__).resolve().parent / 'diagnostics.py')
 _updater = _svc.load('router_updater', Path(__file__).resolve().parent / 'updater.py')
+_atomic = _svc.load('router_atomic_write',
+                    Path(__file__).resolve().parent / 'atomic_write.py')
 
 OK, WARN, FAIL = 'OK', 'WARN', 'FAIL'
 _MAX_FAILURES = _updater.MAX_VERSION_FAILURES
@@ -380,13 +382,8 @@ def do_support(args):
     except OSError:
         raise SystemExit('could not create the logs directory for the bundle')
     path = logs / ('support-%s.json' % time.strftime('%Y%m%dT%H%M%SZ', time.gmtime()))
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, 'w') as stream:
-        stream.write(payload + '\n')
-    try:
-        os.chmod(path, 0o600)
-    except OSError:
-        pass
+    # Shared atomic writer (Plan 131): one owner for whole-file writes.
+    _atomic.replace_text(path, payload + '\n', mode=0o600)
     print(str(path))
     return 0
 

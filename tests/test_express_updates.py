@@ -38,7 +38,7 @@ class ExpressUpdates(unittest.TestCase):
         (self.home / 'current').write_text('9.9.9')
         return SimpleNamespace(returncode=0, stdout='', stderr='')
 
-    def run_update(self, express=True, status=200):
+    def run_update(self, express=True, status=200, announce=None):
         args = install_mod.build_parser().parse_args(
             ['--home', str(self.home), '--update'] + (['--express-only'] if express else []))
 
@@ -66,9 +66,22 @@ class ExpressUpdates(unittest.TestCase):
         try:
             with contextlib.redirect_stdout(io.StringIO()):
                 return install_mod.do_update(args, _read_feed=read, _fetch=fetch,
-                                             _sleep=self.sleeps.append, _announce=lambda s: None)
+                                             _sleep=self.sleeps.append,
+                                             _announce=announce or (lambda s: None))
         finally:
             updater_mod._FEED_VERIFY_KEY = old_key
+
+    def test_up_to_date_check_still_offers_new_models(self):
+        # Plans 099 and 135: the hourly model refresh can add rows with no
+        # version change, so the offer rides an ordinary check. Express stays
+        # quiet: it runs every minute and would repeat the notification.
+        offered = []
+        self.assertEqual(self.run_update(express=False, status=304,
+                                         announce=offered.append), 0)
+        self.assertEqual([state['port'] for state in offered], [1])
+        self.assertEqual(self.run_update(express=True, status=304,
+                                         announce=offered.append), 0)
+        self.assertEqual(len(offered), 1)
 
     def test_ordinary_metadata_does_not_consume_the_regular_update(self):
         before = (self.home / 'mixed-router-state.json').read_bytes()

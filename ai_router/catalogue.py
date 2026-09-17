@@ -2,7 +2,7 @@
 
 Every non-model-specific field lives in ROW_TEMPLATE. Per-model
 values come from ai_router/registry.py rows. Pure: no network, no
-state; the instructions text is read once at import.
+state; the served instructions come from the model_instructions leaf.
 
 The picker label suffix and billing line come from the row's provider
 definition (`provider_defs.label_for`), so a second provider reads as its
@@ -16,7 +16,10 @@ from .atomic_write import replace_json
 from .capabilities import (COMP_HASH, MULTI_AGENT_VERSION, NODE_REPL_DISABLED,
                            catalogue_patch, describe)
 from .clients.codex import capability_fields as codex_projection
-from .clients import models_for
+from .clients import client_ids, models_for
+from .model_instructions import (SUBAGENT_MODEL_PLACEHOLDER,
+                                 SUBSCRIBER_INSTRUCTIONS, instructions_for,
+                                 is_routed_text)
 from .registry import MODELS, picker_key
 from .retired_slugs import SUBSCRIPTION as RETIRED_SUBSCRIPTION_SLUGS
 from .subscription_roster import SUBSCRIPTION_SLUGS
@@ -129,7 +132,8 @@ def subscription_stub(slug, instructions=None):
     name = SUBSCRIPTION_DISPLAY_NAMES.get(slug, slug)
     default, efforts = SUBSCRIPTION_REASONING.get(slug, ('medium', ('medium',)))
     if instructions is None:
-        instructions = instructions_for(_visible_rows('codex', None)[0])
+        instructions = instructions_for(_visible_rows('codex', None)[0],
+                                        base=SUBSCRIBER_INSTRUCTIONS)
     return {**ROW_TEMPLATE,
             'slug': slug,
             'display_name': name,
@@ -143,27 +147,6 @@ def subscription_stub(slug, instructions=None):
             'input_modalities': ['text', 'image'],
             'priority': 1,
             'model_messages': {'instructions_template': instructions}}
-
-
-BASE_INSTRUCTIONS = (Path(__file__).with_name('openrouter_base_instructions.txt')).read_text()
-SUBAGENT_MODEL_PLACEHOLDER = '{{SUBAGENT_MODEL_IDS}}'
-
-
-def instructions_for(visible, client='codex'):
-    """Served instructions with one roster line of visible model ids.
-
-    The Codex client shows at most five spawn_agent model overrides, in
-    catalogue order, so this line is how a routed session learns the ids it
-    may still pass explicitly (Plan 151). Rendered from the picker's own
-    projection, so a portco allowlist can never be widened by the text.
-    Codex-only sentences start with "On Codex," and are omitted for Claude.
-    """
-    roster = ', '.join(f'`{model.slug}`' for model in visible)
-    text = BASE_INSTRUCTIONS.replace(SUBAGENT_MODEL_PLACEHOLDER, roster)
-    if client != 'codex':
-        text = '\n'.join(line for line in text.splitlines()
-                         if not line.startswith('On Codex,'))
-    return text
 
 
 def catalog_name(model):
@@ -237,6 +220,8 @@ def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False,
     visible, hidden_rows = _visible_rows(client, allowed, include_twins,
                                            available=available)
     instructions = instructions_for(visible, client)
+    sub_instructions = instructions_for(visible, client,
+                                        base=SUBSCRIBER_INSTRUCTIONS)
     shown = {m.slug for m in visible}
     hidden = {m.slug for m in hidden_rows}
     active = {m.slug for m in MODELS}
@@ -247,8 +232,14 @@ def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False,
                for m in models}
     for slug, row in entries.items():
         if slug in SUBSCRIPTION_SLUGS:
-            row['model_messages'] = context_recovery.refresh_model_messages(
-                row.get('model_messages'), instructions)
+            # A row an older merge wrote with the routed text is upgraded to
+            # the subscription wording; a hand-tuned row is left alone.
+            template = (row.get('model_messages') or {}).get('instructions_template')
+            if is_routed_text(template):
+                row['model_messages'] = {'instructions_template': sub_instructions}
+            else:
+                row['model_messages'] = context_recovery.refresh_model_messages(
+                    row.get('model_messages'), instructions)
         # Frozen 0.6.10.23 single-medium signature, exact match only.
         if (slug in SUBSCRIPTION_REASONING
                 and row.get('default_reasoning_level') == 'medium'
@@ -267,7 +258,7 @@ def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False,
         # A roster stub repairs a fresh file only, never a hidden row.
         if (slug not in entries and slug not in RETIRED_SUBSCRIPTION_SLUGS
                 and slug not in hidden):
-            entries[slug] = subscription_stub(slug, instructions)
+            entries[slug] = subscription_stub(slug, sub_instructions)
     if include_twins:
         subs = []
     else:
@@ -338,6 +329,13 @@ def check(path, client='codex', allowed=None, include_twins=False,
             print(f'{model.slug}: hidden from the {client} picker but present')
             return False
     instructions = instructions_for(visible, client)
+    sub_instructions = instructions_for(visible, client,
+                                        base=SUBSCRIBER_INSTRUCTIONS)
+    for slug in SUBSCRIPTION_SLUGS:
+        row = existing.get(slug) or {}
+        if is_routed_text((row.get('model_messages') or {}).get('instructions_template')):
+            print(f'{slug}: subscription row carries the routed instructions')
+            return False
     for model in visible:
         total += 1
         old = existing.get(model.slug)
@@ -373,7 +371,7 @@ if __name__ == '__main__':
     args = sys.argv[1:]
     client = 'codex'
     if args[:1] == ['--client']:
-        if len(args) < 2 or args[1] not in ('codex', 'claude'):
+        if len(args) < 2 or args[1] not in client_ids():
             raise SystemExit(USAGE)
         client = args[1]
         args = args[2:]
@@ -381,7 +379,8 @@ if __name__ == '__main__':
     allowed, args = _take_set(args, '--allowed')
     available, args = _take_set(args, '--available')
     if args[:1] == ['--merge'] and len(args) == 2:
-        merge_file(Path(args[1]), client, allowed, available=available)
+        merged = merge_file(Path(args[1]), client, allowed, available=available)
+        print(f'rows={len(merged.get("models", []))} bytes={Path(args[1]).stat().st_size}')
     elif args[:1] == ['--check'] and len(args) == 2:
         sys.exit(0 if check(args[1], client, allowed,
                             include_twins=read_openai_mode(args[1]) == 'none',
