@@ -7,7 +7,8 @@ import time
 from compression import zstd
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from . import (errors, ingress, local_services, model_prompt_page,
-               provider_defs, relay, setup, subscription_fallback, transport)
+               provider_defs, relay, setup, subscription_fallback, transport,
+               turn_budget)
 from .credentials import Credentials
 from .protocols import select as select_protocol
 from .errors import InvalidSize, PreparationError
@@ -72,6 +73,9 @@ class Router(ThreadingHTTPServer):
             self.server_activate()
         self.state = state
         self.lock = threading.Lock()
+        # One oversized body at a time: the expanded form costs roughly five
+        # times its bytes once parsed, and sub-agents replay the same history.
+        self.oversize_lock = threading.Lock()
         self.inflight = 0
         self.draining = False
         self.served_models = {}
@@ -103,6 +107,8 @@ def _payload_has_image(payload):
 class Handler(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
     timeout = CLIENT_TIMEOUT_S
+    # True while this request holds the server's single oversized-read slot.
+    oversize_held = False
 
     def log_message(self, *args):
         pass  # Request URLs and upstream credentials must never enter access logs.
@@ -169,19 +175,34 @@ class Handler(BaseHTTPRequestHandler):
             return self.error(errors.too_many_inflight(), retry_after='1')
         try:
             ready = self._owned_post(path, via_path, started)
+            if self.oversize_held:
+                # Both request buffers die when _owned_post returns; the slot
+                # covers reading and preparing, never the stream.
+                self.server.oversize_lock.release()
+                self.oversize_held = False
             if ready is not None:
                 self.relay(*ready)
         finally:
+            if self.oversize_held:
+                self.server.oversize_lock.release()
+                self.oversize_held = False
             with self.server.lock:
                 self.server.inflight -= 1
 
     def _owned_post(self, path, via_path, started):
         provider = None
         policy = None
+        # Facts for the refusal line: sizes and classes, never content.
+        facts = {'compressed_bytes': self._declared_bytes(),
+                 'decode_limit_bytes': MAX_BODY * MAX_DECODE_FACTOR}
         self.connection.settimeout(CLIENT_TIMEOUT_S)
         try:
             raw, payload, size, decoded_len = self.read_body()
             read_done = time.monotonic()
+            facts.update(compressed_bytes=size, decoded_bytes=decoded_len)
+            if decoded_len > MAX_BODY:
+                # The client's own composition, before prepare rewrites it.
+                facts.update(turn_budget.class_stats(payload.get('input')))
             # Snapshot before provider.prepare mutates or strips the payload.
             has_image = _payload_has_image(payload)
             model = payload.get('model')
@@ -214,10 +235,12 @@ class Handler(BaseHTTPRequestHandler):
                     return self.error(errors.compaction_unavailable())
             try:
                 prepared = subscription_fallback.prepare(provider, model, path, payload,
-                                                         raw, dict(self.headers), self.server)
+                                                         raw, dict(self.headers), self.server,
+                                                         decoded_len=decoded_len)
                 # Passthrough keeps the client's compressed bytes; use the
                 # decoded length there so a 16-64 MiB zstd turn cannot leak.
                 if (decoded_len if prepared.body is raw else len(prepared.body)) > MAX_BODY:
+                    facts['prepared_bytes'] = len(prepared.body)
                     raise InvalidSize('Decoded request is too large')
             except local_services.LocalAnswer as exc:
                 return self.error(exc)
@@ -225,8 +248,12 @@ class Handler(BaseHTTPRequestHandler):
                 log_event('provider_selected', provider=provider.name, model=model, path=path)
         except PermissionError as exc:
             return self.error(errors.map_client_error(exc))
+        except errors.OversizeBusy:
+            return self.error(errors.oversize_busy(), retry_after='2')
         except InvalidSize as exc:
-            return self.error(errors.invalid_size(str(exc)))
+            err = errors.invalid_size(str(exc))
+            log_event('turn_refused', code=err.code, **facts)
+            return self.error(err)
         except PreparationError as exc:
             # Responses 400 ends the turn at once; the Messages path keeps
             # today's 409 (Claude Code's retry semantics are out of scope).
@@ -259,6 +286,7 @@ class Handler(BaseHTTPRequestHandler):
                    'stream': payload.get('stream') is True,
                    'reasoning_effort': _reasoning.get('effort') if isinstance(_reasoning, dict) else None,
                    'max_output_tokens': getattr(prepared, 'output_cap', None),
+                   'context_tokens': prepared.context_tokens,
                    'tool_definitions': len(payload.get('tools', [])),
                    'local_prepare_ms': round((time.monotonic() - started) * 1000, 1),
                    # Per-phase detail; cumulative fields keep their meaning.
@@ -268,7 +296,26 @@ class Handler(BaseHTTPRequestHandler):
         return provider, prepared, metrics, started, has_image
 
     def read_body(self):
-        return ingress.read_body(self, MAX_BODY)
+        return ingress.read_body(self, MAX_BODY, self._take_oversize_slot)
+
+    def _take_oversize_slot(self):
+        """Take the slot the moment this body expands past the ordinary cap.
+
+        False means another oversized turn holds it; the reader raises
+        OversizeBusy, and the caller answers the retryable 503 without
+        expanding the rest of the body.
+        """
+        if not self.server.oversize_lock.acquire(blocking=False):
+            return False
+        self.oversize_held = True
+        return True
+
+    def _declared_bytes(self):
+        try:
+            size = int(self.headers.get('Content-Length', '-1'))
+        except (TypeError, ValueError):
+            return None
+        return size if size >= 0 else None
 
     def relay(self, provider, prepared, metrics, started, has_image=False):
         return relay.relay(self, provider, prepared, metrics, started, has_image,

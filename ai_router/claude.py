@@ -138,7 +138,7 @@ class ExternalMessagesProvider:
         self.host = provider_defs.region_host(defn.id, self.region) or defn.host
         self.kind = defn.kind
 
-    def prepare(self, model, path, payload, raw_body, headers, credentials):
+    def prepare(self, model, path, payload, raw_body, headers, credentials, decoded_len=None):
         if path not in CLAUDE_POST_PATHS:
             raise PreparationError('Claude ingress serves messages only')
         body = raw_body
@@ -172,7 +172,7 @@ class ClaudeSubscriptionProvider:
         self.host = self.defn.host
         self.kind = self.defn.kind
 
-    def prepare(self, model, path, payload, raw_body, headers, credentials):
+    def prepare(self, model, path, payload, raw_body, headers, credentials, decoded_len=None):
         auth = headers.get('Authorization', '')
         if not (auth.startswith('Bearer ') or 'x-api-key' in headers):
             raise PermissionError('Claude subscription authentication required')

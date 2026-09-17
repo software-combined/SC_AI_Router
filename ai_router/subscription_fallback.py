@@ -108,10 +108,11 @@ def plan(state, prepared, path, payload, raw_body, headers, credentials):
     return Plan(slug, path, payload, raw_body, headers, credentials, region)
 
 
-def prepare(provider, model, path, payload, raw_body, headers, server):
+def prepare(provider, model, path, payload, raw_body, headers, server, decoded_len=None):
     """provider.prepare plus the refused-turn fallback plan when eligible."""
     subscription_gate.remember_login(provider.name, headers)
-    prepared = provider.prepare(model, path, payload, raw_body, headers, server.credentials)
+    prepared = provider.prepare(model, path, payload, raw_body, headers,
+                                server.credentials, decoded_len=decoded_len)
     prepared.fallback = plan(server.state, prepared, path, payload, raw_body, headers,
                              server.credentials)
     return prepared

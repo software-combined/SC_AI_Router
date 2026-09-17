@@ -9,7 +9,7 @@ import unittest
 from unittest import mock
 
 from ai_router import router as router_mod
-from ai_router import sse, transport
+from ai_router import sse, transport, turn_budget
 from ai_router.tool_adapter import stream_events
 from tests.fakes import FakeUpstream, install_fake
 from tests.harness import (
@@ -32,6 +32,7 @@ class ReadCappedTests(unittest.TestCase):
 
     def test_caps_match_the_request_ceiling(self):
         self.assertEqual(transport.MAX_UPSTREAM_BODY, router_mod.MAX_BODY)
+        self.assertEqual(turn_budget.BODY_BUDGET, router_mod.MAX_BODY)
         self.assertLess(transport.ERROR_BODY_LIMIT, transport.MAX_UPSTREAM_BODY)
 
 
