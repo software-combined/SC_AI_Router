@@ -71,7 +71,8 @@ class SubscriptionProvider:
             return entry.provider == provider_defs.OPENAI.id
         return isinstance(model, str) and model in openai_models
 
-    def prepare(self, model, path, payload, raw_body, headers, credentials):
+    def prepare(self, model, path, payload, raw_body, headers, credentials, decoded_len=None):
+        del decoded_len  # Subscription rows keep the provider's own usage.
         # The URL path token is the loopback auth; Codex >=0.153.4 omits the
         # subscription Authorization header, so forward client headers unchanged.
         fwd = {k: v for k, v in headers.items() if k.lower() not in HOP_HEADERS}
@@ -128,9 +129,12 @@ class ExternalResponsesProvider:
         from . import availability as _availability
         return _availability.permitted(model)
 
-    def prepare(self, model, path, payload, raw_body, headers, credentials):
+    def prepare(self, model, path, payload, raw_body, headers, credentials, decoded_len=None):
         if path not in ('/responses', '/responses/compact'):
             raise PreparationError(f'{self.defn.label} supports responses only')
+        # Before any rewrite: what this client's thread carries. The slim below
+        # is invisible upstream, so provider usage alone never moves the trigger.
+        carried = turn_budget.carried_tokens(payload, decoded_len) if decoded_len else None
         # Contain before anything else: an opaque brief must never reach
         # credential lookup or upstream dispatch, where a child would infer
         # its assignment from inherited context instead.
@@ -176,6 +180,7 @@ class ExternalResponsesProvider:
             payload['provider'] = dict(entry.provider_prefs)
         limit = entry.max_output_tokens
         window = getattr(entry, 'context_window', 0) or 0
+        carried = min(carried, window) if carried and window else carried
         if window:  # reservation counts against context; keep half for input
             limit = min(limit, window // 2)
         # Codex omits the cap and compacts at 90% of context. Its remaining
@@ -199,7 +204,8 @@ class ExternalResponsesProvider:
                 body = json.dumps(payload).encode()
                 log_event('turn_trimmed', model=model, prepared_bytes=len(body), **stats)
         return Prepared(self.host, self.defn.path_for(provider_defs.RESPONSES, '/responses'),
-                        headers, body, tool_names, self.name, output_cap=cap)
+                        headers, body, tool_names, self.name, output_cap=cap,
+                        context_tokens=carried)
 
     def adapt(self, response, tool_names, notes=None):
         if notes is not None and not tool_names and response.status == 200:
@@ -213,6 +219,7 @@ class ExternalResponsesProvider:
                     notes['served_model'] = result['model']
                 adapter = ToolEvents(tool_names, notes)
                 result['output'] = [adapter.item(item) for item in result.get('output', [])]
+                turn_budget.report_usage(result.get('usage'), notes)
                 yield json.dumps(result).encode()
         else:
             yield from _passthrough(response)
@@ -335,7 +342,8 @@ class LocalServicesProvider:
         del allowed  # Native service paths are never allowlisted.
         return openai_mode == 'none' and is_native_service(path)
 
-    def prepare(self, model, path, payload, raw_body, headers, credentials):
+    def prepare(self, model, path, payload, raw_body, headers, credentials, decoded_len=None):
+        del decoded_len  # This adapter answers locally; nothing is carried.
         local_services.answer(path)
         raise AssertionError('unreachable')
 

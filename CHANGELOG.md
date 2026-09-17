@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.87
+
+- A routed Codex turn that carries tools now reports the weight of the
+  history the thread actually carries, so the client compacts before a thread
+  outgrows the request budget. The completed frame's `input_tokens` is raised - never
+  lowered - to `bytes / 5.8` for text plus the flat image allowance, clamped
+  to the row's context window, and `total_tokens` follows. Provider detail
+  fields are untouched, the helper twin and subscription passthrough keep the
+  provider's own usage - as do tool-free responses, which keep their verbatim
+  forwarding - and one `usage_reported` line records the change.
+  Without this the slim the router performs is invisible upstream: the
+  2026-09-16 thread carried 67 MB while upstream was billed about 1 MB, so
+  Codex never reached 90% of the window and never compacted.
+
 ## 0.6.86
 
 - A routed turn that is over the 16 MiB prepared budget is now reduced with
