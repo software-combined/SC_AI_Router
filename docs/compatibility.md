@@ -16,31 +16,25 @@ the in-process router and a fake upstream passes every scenario of
 still compacts, because the router reported the weight of the history the
 thread carries.
 
-## Subscription picker gate, 2026-09-17
+## Subscription picker gate withdrawn, 2026-09-17
 
-Implemented as Plan 178 on `develop` (branch
-`cyril/subscription-picker-gate-20260917`), targeting the next router
-release. The client contract is unchanged: the gate only writes
-`mixed-models.json`, which Codex reads at startup (verified 2026-09-12
-against codex-cli 0.153.4, quoted in `docs/troubleshooting.md`).
+Plan 178 shipped in 0.6.83 and was withdrawn in 0.6.89 after the live
+trial it had been waiting for. On the owner's machine, with the ChatGPT
+allowance exhausted, the gate fired exactly as designed: at 22:03:43 the
+router read an `x-codex-primary/secondary-used-percent` header at 100%, logged
+`subscription_gate_changed` with `source: headers` and `blocked: true`,
+and rewrote `mixed-models.json`; the helper turn was then answered by
+`openai/gpt-5.6-luna` and billed to OpenRouter.
 
-Offline proof, per `tests/test_subscription_gate.py`,
-`tests/test_subscription_watch.py` and `tests/test_subscription_probe.py`:
-the verdict rules (100% usage header, 429, 401/403, success, malformed
-values, the reset cap and the one-hour bound), the picker round trip through
-`catalogue.merge_file` including the twin swap in both directions, the login
-memory, the probe's outcomes and caps, and one handler turn per case
-(subscription 429 blocks and rewrites, subscription 200 releases, external
-429 leaves the gate absent). No network, no paid call. The install-time
-default is proved in `tests/test_install_catalogue.py` with a synthetic Codex
-`auth.json`; the header names in the allowlist are a live contract, not a
-source-verified one, and the code degrades to the refusal signal when they
-are absent.
-
-Pending, and it is a separate gate: a real install on the owner Mac, one
-real Codex turn while the allowance is exhausted, the picker read back after
-a Codex restart, and one `subscription_probe` event from a forced tick. No
-live probe has been run for this change yet.
+That is what killed the design. The twin swap put an OpenRouter-billed row
+in the subscription row's place, under the same model name, so the picker
+kept offering "Luna" while the subscription could not run - and the client,
+which reads its catalogue only at startup, showed the pre-swap list either
+way until it was reopened. The picker now lists every subscription row and
+its twin beside it, labelled `· OpenRouter`, and an exhausted row answers
+the refusal message instead of moving. Evidence, state file and four-hourly
+probe are all gone; the helper-turn fallback and the install-time
+no-subscription default stay.
 
 ## Model-switch history boundary, 2026-09-13
 

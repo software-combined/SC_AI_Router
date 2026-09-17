@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.89
+
+- The subscription picker gate is gone. A ChatGPT subscription row is always
+  listed, exhausted or not, and its OpenRouter twin (`openai/<slug>`, labelled
+  `· OpenRouter`) is listed beside it, so the paid route is chosen on purpose
+  rather than swapped in under the subscription row's name. An exhausted row
+  answers the refusal message that names the model and points at a routed row.
+- Removed with the gate: its state document, the usage and refusal evidence
+  reader, the four-hourly recheck (`subscription_probe` in router state is now
+  ignored), and the `subscription_gate_changed` and `subscription_probe`
+  events. The helper-turn OpenRouter fallback and the install-time
+  no-subscription default stay. The next install re-merges `mixed-models.json`,
+  so the rows come back without further steps.
+
 ## 0.6.88
 
 - A routed Codex turn that carries tools now reports the weight of the

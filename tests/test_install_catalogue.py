@@ -109,17 +109,15 @@ class InstallCatalogueTests(unittest.TestCase):
             self.assertTrue(any(_is_catalogue(cmd) and '--merge' in cmd for cmd in calls))
             catalog = json.loads((home / 'mixed-models.json').read_text())
             slugs = {m['slug'] for m in catalog['models']}
-            from ai_router import subscription_gate
-            twins = subscription_gate.twin_hidden(
-                install_mod.DEFAULT_OPENAI_MODELS, frozenset())
             for model in models_for(MODELS, 'codex'):
-                if model.provider == 'openrouter' and model.slug not in twins:
+                if model.provider == 'openrouter':
                     self.assertIn(model.slug, slugs)
-            # A subscription install lists the subscription rows; each twin
-            # waits for that row to be refused (Plan 178's second half).
+            # A subscription install lists the subscription rows and the
+            # OpenRouter twins beside them, so an exhausted row still has a
+            # paid route the user picks deliberately.
             for slug in ('openai/gpt-6-astra', 'openai/gpt-5.6-sol',
                          'openai/gpt-5.6-luna', 'openai/gpt-5.6-terra'):
-                self.assertNotIn(slug, slugs)
+                self.assertIn(slug, slugs)
             self.assertTrue(check(str(home / 'mixed-models.json')))
 
     def test_install_catalogue_contains_subscription_roster(self):
