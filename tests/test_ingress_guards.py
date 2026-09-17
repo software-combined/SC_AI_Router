@@ -297,7 +297,7 @@ class IngressGuardTests(unittest.TestCase):
         response = conn.getresponse()
         self.assertEqual(response.status, 502)
         message = json.loads(response.read())['error']['message']
-        self.assertIn('retry text-only', message)
+        self.assertIn('retry without the image', message)
 
 
     def test_listen_backlog_covers_parallel_sub_agent_connects(self):

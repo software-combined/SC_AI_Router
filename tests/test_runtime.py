@@ -192,8 +192,8 @@ class CredentialRequestMappingTests(unittest.TestCase):
             body = json.loads(response.read())
         self.assertEqual(response.status, 401)
         self.assertEqual(body['error']['code'], 'CREDENTIAL_PERMISSION')
-        self.assertIn('[path]', body['error']['message'])
-        self.assertIn('readable by the owner only', body['error']['message'])
+        self.assertNotIn('[path]', body['error']['message'])
+        self.assertNotIn('readable by the owner only', body['error']['message'])
         self.assertNotIn(str(home), body['error']['message'])
 
     def _server_without_opencode(self, home):
@@ -231,7 +231,7 @@ class CredentialRequestMappingTests(unittest.TestCase):
             response = self._post(server, {'model': 'z-ai/glm-5.3', 'input': []})
             self.assertEqual(response.status, 400)
             message = json.loads(response.read())['error']['message']
-        self.assertIn('No OpenRouter key', message)
+        self.assertIn('could not use your key', message)
         self.assertNotIn(str(home), message)
 
 

@@ -7,17 +7,17 @@ from ai_router import provider_defs, upstream
 
 
 class FailureDescriptionTests(unittest.TestCase):
-    def test_stall_before_headers_names_model_and_timeout(self):
+    def test_stall_before_headers_names_model_and_retry(self):
         status, message, _ = upstream.describe_failure(
             TimeoutError('timed out'), None,
             {'model': 'x-ai/grok-4.6', 'provider': 'openrouter',
              'elapsed_ms': 120001.0, 'timeout_s': 120, 'has_image': False})
         self.assertEqual(status, 502)
         self.assertIn('x-ai/grok-4.6', message)
-        self.assertIn('120', message)
-        self.assertIn('shorter', message)
+        self.assertIn('Retry a shorter turn', message)
+        self.assertNotIn('120', message)
 
-    def test_grok_image_stall_suggests_text_only(self):
+    def test_grok_image_stall_suggests_dropping_the_image(self):
         # The hint matches the pinned id and any tilde alias of the vendor.
         for model in ('x-ai/grok-4.6', '~x-ai/grok-latest'):
             with self.subTest(model=model):
@@ -26,21 +26,22 @@ class FailureDescriptionTests(unittest.TestCase):
                     {'model': model, 'provider': 'openrouter',
                      'elapsed_ms': 120001.0, 'timeout_s': 120, 'has_image': True})
                 self.assertEqual(status, 502)
-                self.assertIn('text-only', message)
+                self.assertIn('retry without the image', message)
         _, message, _ = upstream.describe_failure(
             TimeoutError('timed out'), None,
             {'model': 'z-ai/glm-5.3', 'provider': 'openrouter',
              'elapsed_ms': 120001.0, 'timeout_s': 120, 'has_image': True})
-        self.assertNotIn('text-only', message)
+        self.assertNotIn('image', message)
 
-    def test_dns_failure_names_host(self):
+    def test_dns_failure_names_the_model_and_leaves_the_host_to_the_log(self):
         status, message, _ = upstream.describe_failure(
             OSError('Name or service not known'), None,
             {'model': 'z-ai/glm-5.3', 'provider': 'openrouter',
              'host': 'openrouter.ai', 'elapsed_ms': 12.0, 'timeout_s': 120,
              'has_image': False})
         self.assertEqual(status, 502)
-        self.assertIn('openrouter.ai', message)
+        self.assertIn('z-ai/glm-5.3', message)
+        self.assertNotIn('openrouter.ai', message)
 
     def test_nested_provider_400_becomes_actionable_400(self):
         raw = ('{"code": "invalid-argument", "error": "Failed to start sampling: '
@@ -53,9 +54,10 @@ class FailureDescriptionTests(unittest.TestCase):
             {'model': 'x-ai/grok-4.6', 'provider': 'openrouter', 'protocol': 'responses',
              'elapsed_ms': 1831.8, 'timeout_s': 120, 'has_image': False})
         self.assertEqual(status, 400)
-        self.assertIn('xAI', message)
-        self.assertIn('ns_abc123def456_tool_update', message)
+        self.assertIn('x-ai/grok-4.6', message)
         self.assertIn('tool schema was rejected', message)
+        self.assertNotIn('xAI', message)
+        self.assertNotIn('ns_abc123def456_tool_update', message)
         self.assertNotIn('Failed to start sampling', message)
         self.assertNotIn('arguments_json', message)
 
@@ -73,12 +75,13 @@ class FailureDescriptionTests(unittest.TestCase):
         self.assertIn('Switch this thread back to the previous model, '
                       'or start a new thread for meta/muse-spark-1.3-contributor',
                       message)
-        self.assertIn('Do not retry the unchanged request', message)
+        self.assertIn('Do not retry it unchanged', message)
         self.assertNotIn('code ', message)
         self.assertNotIn('Provider returned error', message)
 
-    def test_only_a_code_shaped_field_reaches_the_client(self):
-        # A code-shaped value surfaces; prose, however short, never does.
+    def test_only_a_code_shaped_field_reaches_the_log(self):
+        # A code-shaped value surfaces as the returned code, which the relay
+        # logs; prose, however short, never does, in message or log.
         for raw_code, expected in ((' INVALID_Request-9 ', 'invalid_request-9'),
                                    ('MY secret token ABC123 x', None),
                                    ('invalid-request!!', None),
@@ -97,10 +100,7 @@ class FailureDescriptionTests(unittest.TestCase):
                      'routed': True})
                 self.assertEqual(code, expected)
                 self.assertNotIn('MY SECRET-SCHEMA', message)
-                if expected:
-                    self.assertIn(', code ' + expected, message)
-                else:
-                    self.assertNotIn('code ', message)
+                self.assertNotIn('code ', message)
 
     def test_routed_flag_controls_the_recovery_sentence(self):
         body = json.dumps({'error': {'message': 'Provider returned error',
@@ -116,7 +116,7 @@ class FailureDescriptionTests(unittest.TestCase):
              'elapsed_ms': 1500.0, 'timeout_s': 120, 'has_image': False})[1]
         self.assertIn('Switch this thread back to the previous model', routed_message)
         self.assertNotIn('Switch this thread back', plain_message)
-        self.assertIn('Do not retry the unchanged request', plain_message)
+        self.assertIn('Do not retry it unchanged', plain_message)
 
     def test_error_type_and_inner_raw_code_win_in_order(self):
         body = json.dumps({'error': {'message': 'Provider returned error',
@@ -211,8 +211,7 @@ class RelayEndpointLogTests(unittest.TestCase):
         handler = SimpleNamespace(
             server=SimpleNamespace(credentials=SimpleNamespace(
                 key_rejected=lambda provider: False)),
-            error=lambda err: None,
-            retryable_reject=lambda err, **k: None)
+            error=lambda err, **k: None)
         provider = SimpleNamespace(defn=provider_defs.OPENROUTER)
         body = json.dumps({'model': 'm', 'input': []}).encode()
         prepared = Prepared('openrouter.ai', '/responses', {}, body, {}, 'openrouter')
@@ -339,7 +338,7 @@ class RefusalCacheTests(unittest.TestCase):
              'elapsed_ms': 10.0, 'timeout_s': 120, 'has_image': False, 'routed': True})
         self.assertEqual(status, 503)
         self.assertIn('unavailable', message)
-        self.assertIn('retry shortly', message)
+        self.assertIn('Retry shortly', message)
         self.assertNotIn('Do not retry', message)
 
     def test_responses_upstream_408_is_a_retryable_503(self):
@@ -357,7 +356,7 @@ class RefusalCacheTests(unittest.TestCase):
             {'model': 'm', 'provider': 'openrouter', 'protocol': 'messages',
              'elapsed_ms': 10.0, 'timeout_s': 120, 'has_image': False})
         self.assertEqual(status, 409)
-        self.assertIn('Do not retry the unchanged request', message)
+        self.assertIn('Do not retry it unchanged', message)
 
     def test_classify_429_quota_auth_and_transient(self):
         quota = json.dumps({'error': {'message': 'slow down', 'code': 'insufficient_quota'}})

@@ -55,7 +55,9 @@ systemctl --user status codex-mixed-model-router.service
 schtasks /Query /TN CodexMixedModelRouter /V /FO LIST
 ```
 
-- Logs live under `logs/` in the router home.
+- Logs live under `logs/` in the router home. A file there is deleted 30 days
+  after its last write, at each router start and scheduled update, apart from
+  the three the running router writes, which keep their size caps.
 
 ## Codex does not show the OpenRouter models
 

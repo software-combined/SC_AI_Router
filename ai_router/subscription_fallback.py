@@ -126,7 +126,9 @@ def refusal_message(prepared, metrics):
     defn = provider_defs.get(prepared.provider)
     label = None if defn is None else defn.subscription_label
     if label is None:
-        return 'Upstream rate limited'
+        # An external route has no subscription to name: the catalogue's
+        # neutral rate-limit case owns that wording.
+        return errors.upstream_rate_limited().message
     model = metrics.get('model')
     model = model if isinstance(model, str) and model else 'This model'
     return (f'{model} is rate limited on your {label}; the turn was not served. '
@@ -138,14 +140,14 @@ def refused(handler, prepared, retry_after, metrics, started):
     refusal = errors.upstream_rate_limited(refusal_message(prepared, metrics))
     fallback = prepared.fallback
     if fallback is None:
-        return handler.retryable_reject(refusal, retry_after)
+        return handler.error(refusal, retry_after)
     try:
         twin = fallback.prepared()
     except (LookupError, ValueError, PermissionError, OSError) as exc:
         # No key, unreadable twin row, rejected effort: keep today's answer.
         log_event('subscription_fallback_unavailable', model=metrics.get('model'),
                   fallback_model=fallback.slug, reason=type(exc).__name__)
-        return handler.retryable_reject(refusal, retry_after)
+        return handler.error(refusal, retry_after)
     log_event('subscription_fallback', model=metrics.get('model'),
               fallback_model=fallback.slug, path=fallback.path)
     fields = ('request_bytes', 'stream', 'reasoning_effort', 'tool_definitions',

@@ -113,8 +113,8 @@ class Handler(BaseHTTPRequestHandler):
     def send_compaction_stream(self, output):
         return ingress.send_compaction_stream(self, output)
 
-    def error(self, err):
-        return ingress.error(self, err, log_event=log_event)
+    def error(self, err, retry_after=None):
+        return ingress.error(self, err, log_event=log_event, retry_after=retry_after)
 
     def authorized_path(self):
         return ingress.authorized_path(self)
@@ -126,10 +126,7 @@ class Handler(BaseHTTPRequestHandler):
         return ingress.do_get(self)
 
     def drain_reject(self):
-        return self.retryable_reject(errors.draining())
-
-    def retryable_reject(self, err, retry_after='2'):
-        self.send_json(err.status, err.body(), {'Retry-After': retry_after})
+        return self.error(errors.draining(), retry_after='2')
 
     def do_POST(self):
         started = time.monotonic()
@@ -169,7 +166,7 @@ class Handler(BaseHTTPRequestHandler):
         if verdict == 'draining':
             return self.drain_reject()
         if verdict == 'over':
-            return self.retryable_reject(errors.too_many_inflight(), retry_after='1')
+            return self.error(errors.too_many_inflight(), retry_after='1')
         try:
             ready = self._owned_post(path, via_path, started)
             if ready is not None:
@@ -242,12 +239,10 @@ class Handler(BaseHTTPRequestHandler):
                 # keep the original payload-error mapping and open no window.
                 return self.error(errors.map_client_error(exc))
             defn = provider.defn if provider is not None else None
-            setup.open_key_window(self.server, self.server.credentials.home,
-                                  defn.id if defn is not None else None)
+            pid = defn.id if defn is not None else provider_defs.DEFAULT_EXTERNAL
+            setup.open_key_window(self.server, self.server.credentials.home, pid)
             return self.error(errors.credential_problem(
-                '%s Open the key setup page to connect a %s key.'
-                % (exc, provider_defs.label_for(
-                    defn.id if defn is not None else provider_defs.DEFAULT_EXTERNAL))))
+                detail='%s: %s' % (provider_defs.label_for(pid), exc)))
         except (ValueError, KeyError, OSError, zstd.ZstdError,
                 AttributeError, TypeError, RecursionError) as exc:
             err = errors.map_client_error(exc)
