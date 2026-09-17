@@ -69,16 +69,11 @@ quit and reopen Codex.
 - The catalogue Codex reads is `mixed-models.json` in the router home.
 - A model outside this machine's policy is not listed; `--status` shows the
   router state, and the request log records a refusal rather than serving it.
-- A ChatGPT subscription row can also be absent on purpose: the router
-  hides one whose allowance upstream refused (or whose usage headers report
-  a window at 100%) and brings it back when a turn succeeds or the
-  four-hour recheck finds the allowance returned. See `subscription-gate.json`
-  in the router home and the `subscription_gate_changed` log events; a
-  running Codex shows the change only after it reopens.
-- When a subscription row is hidden that way, its OpenRouter twin
-  (`openai/<slug>`) takes its place in the picker, and the twin leaves again
-  as soon as the subscription row works. Seeing the `openai/` row is not a
-  broken install: it is the paid route for that model.
+- A ChatGPT subscription row is always listed, exhausted or not, and its
+  OpenRouter twin (`openai/<slug>`, labelled `· OpenRouter`) is listed beside
+  it: picking the twin bills OpenRouter deliberately when the subscription
+  cannot run. An exhausted subscription row answers the refusal message that
+  names the model and points at a routed row.
 
 ## Claude Code stopped using the router
 

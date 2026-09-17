@@ -1,7 +1,7 @@
 """Run the router: python3.14 -m ai_router"""
 import signal
 import threading
-from . import activation, availability, model_refresh, provider_defs, subscription_probe
+from . import activation, availability, model_refresh, provider_defs
 from .registry import external_slugs
 from .router import Router
 from .runtime import VERSION, ROUTER_HOME, configure_logging, load_state, log_event
@@ -55,8 +55,6 @@ def main():
             provider_defs.DEFAULT_EXTERNAL, _region(server.state)),
             lambda: server.credentials.key_for(),
             ROUTER_HOME, lambda: _region(server.state))
-    # Subscription picker gate: recheck blocked rows every four hours.
-    subscription_probe.start(ROUTER_HOME)
     signal.signal(signal.SIGTERM, lambda signum, frame: _start_drain_thread(server))
     server.serve_forever()
 

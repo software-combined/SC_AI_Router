@@ -564,53 +564,6 @@ holding the loopback path token can present a helper-shaped turn and have
 its prompt answered - and billed - by an allowed twin. It grants no other
 rerouting.
 
-## Subscription picker gate
-
-A ChatGPT subscription slug that upstream refuses is worse than useless in
-the picker: it stays selectable and fails the turn. The router therefore
-hides one from `mixed-models.json` once it has evidence that this slug
-cannot run, and puts it back when it can.
-
-Three kinds of evidence move the gate, all read from turns the client
-already makes (`ai_router/subscription_gate.py` owns the state and the
-rules; `ai_router/subscription_watch.py` watches and rewrites the picker;
-`ai_router/subscription_probe.py` rechecks):
-
-- `x-codex-primary/secondary-used-percent` response headers, when the
-  upstream sends them, are authoritative: a window at 100% blocks that slug
-  until its reported reset (capped at seven days), and any lower reading
-  clears it.
-- A refused subscription turn (429) or an auth refusal (401/403) blocks the
-  slug for an hour, refreshed by later refusals; a turn that succeeds
-  clears it at once.
-- While a slug is blocked, the router asks the subscription upstream once
-  about that slug - the first attempt on the next tick (up to twenty minutes
-  later), then at most once every four hours - one attempt, no retries, a
-  short timeout - using the login the client last presented. That login
-  lives in the running process only: it is never written to disk, never
-  logged, dropped when nothing is blocked, and dropped at once if upstream
-  refuses it. Set
-  `subscription_probe: false` in `mixed-router-state.json` (restart the
-  service) to disable the recheck; with no login seen, the pass sends
-  nothing.
-
-State is `subscription-gate.json` beside the router state: one entry per
-slug with its source, start and expiry. A missing or malformed document
-means no gate, which is the behaviour before this existed. Changes are
-silent and log one `subscription_gate_changed` event per change; every probe
-that reaches upstream logs one `subscription_probe` event, while a pass with
-no login sends nothing and logs nothing. The picker file is rewritten at
-once, but Codex reads its catalogue at startup, so a running client shows
-the result only after it reopens.
-
-The OpenRouter twin of a subscription model (`openai/<slug>`) is that
-model's paid route, and the two never list together: the twin is hidden
-while its subscription row is the working route and appears only while that
-row is hidden, so the same model still has a selectable paid fallback. An
-install that serves no subscription at all (`openai_mode: none`) lists the
-twins and no subscription rows, as it always did. The key-filtered
-`/models/user` gate is untouched, and the Claude listing is out of scope.
-
 ## Key rotation
 
 Replace the `openrouter.key` file contents. No restart is needed; the
@@ -678,6 +631,11 @@ Request cap removed. Compaction runs through a billable summariser
 call. The catalogue is a generated snapshot from the registry (live
 in-router catalogue pending); live model metadata refreshes weekly
 into the registry. Model rows are data; new behaviour is always code.
+Subscription picker gate removed (Plan 178): the twin swap left an
+OpenRouter-billed row wearing the subscription row's name, and the picker
+only reloads when the client starts. Every subscription row is listed
+again, with its twin beside it, and an exhausted row answers the refusal
+message instead of moving.
 
 ## One-time cleanup after 0.4.0
 

@@ -7,7 +7,7 @@ model_instructions leaf. Pure: no network, no state.
 import json
 import sys
 from pathlib import Path
-from . import context_recovery, provider_defs, state as state_mod, subscription_gate
+from . import context_recovery, provider_defs, state as state_mod
 from .atomic_write import replace_json
 from .capabilities import (COMP_HASH, MULTI_AGENT_VERSION, NODE_REPL_DISABLED,
                            catalogue_patch, describe)
@@ -173,24 +173,20 @@ def external_entry(model, instructions=None):
             'web_search_tool_type': 'text_and_image' if model.web_search else 'text'}
 
 
-def _visible_rows(client, allowed, include_twins=False, available=None,
-                  twins_hidden=()):
+def _visible_rows(client, allowed, include_twins=False, available=None):
     """(visible, hidden) external registry rows for one client and allowlist.
 
     `allowed` is the optional portco allowlist (Plan 068); `available` is
     the optional key-filtered id set from `/models/user`. Either None
-    preserves today's behavior; a set hides rows the key cannot use, and
-    `twins_hidden` hides the twins whose subscription row runs instead.
+    preserves today's behavior; a set hides rows the key cannot use.
     The registry is never pruned: hidden rows return with the next merge.
     """
     allowset = None if allowed is None else frozenset(allowed)
     avail = None if available is None else frozenset(available)
-    twins = frozenset(twins_hidden or ())
     visible = [m for m in models_for(MODELS, client, include_twins=include_twins)
                if provider_defs.is_external(m.provider)
                and (allowset is None or m.slug in allowset)
-               and (avail is None or m.slug in avail)
-               and m.slug not in twins]
+               and (avail is None or m.slug in avail)]
     shown = {m.slug for m in visible}
     hidden = [m for m in MODELS
               if provider_defs.is_external(m.provider) and m.slug not in shown]
@@ -198,21 +194,15 @@ def _visible_rows(client, allowed, include_twins=False, available=None,
 
 
 def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False,
-          available=None, blocked=None, twins_hidden=None):
+          available=None):
     """Merge registry OpenRouter entries into one client catalogue.
 
     Emits models_for(client) rows only; see _visible_rows for the
-    allowlist and key filters, plus `blocked` for the subscription gate.
-    Roster stubs repair fresh files; routing never consults this filter.
+    allowlist and key filters. Roster stubs repair fresh files; routing
+    never consults this filter.
     """
-    # Only a roster row can be restored, so only a roster row may be gated.
-    gated = frozenset(blocked or ()) & frozenset(roster)
-    if twins_hidden is None:
-        twins_hidden = (frozenset() if include_twins
-                        else subscription_gate.twin_hidden(roster, gated))
     visible, hidden_rows = _visible_rows(client, allowed, include_twins,
-                                           available=available,
-                                           twins_hidden=twins_hidden)
+                                         available=available)
     instructions = instructions_for(visible, client)
     sub_instructions = instructions_for(visible, client,
                                         base=SUBSCRIBER_INSTRUCTIONS)
@@ -221,7 +211,7 @@ def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False,
     active = {m.slug for m in MODELS}
     models = [m for m in catalog.get('models', [])
               if (m['slug'] not in RETIRED_SLUGS or m['slug'] in active)
-              and m['slug'] not in hidden and m['slug'] not in gated]
+              and m['slug'] not in hidden]
     entries = {m['slug']: {**subscription_stub(m['slug'], instructions), **m}
                for m in models}
     for slug, row in entries.items():
@@ -250,7 +240,7 @@ def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False,
     for slug in roster:
         # A roster stub repairs a fresh file only, never a hidden row.
         if (slug not in entries and slug not in RETIRED_SUBSCRIPTION_SLUGS
-                and slug not in hidden and slug not in gated):
+                and slug not in hidden):
             entries[slug] = subscription_stub(slug, sub_instructions)
     if include_twins:
         subs = []
@@ -289,11 +279,8 @@ def merge_file(path, client='codex', allowed=None, openai_mode=None,
     mode = openai_mode if openai_mode is not None else read_openai_mode(path)
     base = json.loads(path.read_text()) if path.exists() else {'models': []}
     roster = read_roster(path)
-    blocked, twins = subscription_gate.picker_rows(path.parent, roster,
-                                                   mode == 'none')
     merged = merge(base, roster, client, allowed,
-                   include_twins=(mode == 'none'), available=available,
-                   blocked=blocked, twins_hidden=twins)
+                   include_twins=(mode == 'none'), available=available)
     replace_json(path, merged)
     return merged
 
@@ -312,10 +299,8 @@ def check(path, client='codex', allowed=None, include_twins=None,
     catalog = json.loads(Path(path).read_text())
     existing = {m['slug']: m for m in catalog.get('models', [])}
     roster = read_roster(path)
-    blocked, twins = subscription_gate.picker_rows(path.parent, roster,
-                                                   include_twins)
     for slug in roster:
-        if (slug in blocked or include_twins) != (slug not in existing):
+        if include_twins == (slug in existing):
             print(f'{slug}: roster row is {"still listed" if slug in existing else "missing"}')
             return False
     for slug, row in existing.items():
@@ -328,8 +313,7 @@ def check(path, client='codex', allowed=None, include_twins=None,
             print(f'{slug}: unrendered model roster placeholder')
             return False
     visible, hidden = _visible_rows(client, allowed, include_twins,
-                                    available=available,
-                                    twins_hidden=twins)
+                                    available=available)
     identical, total = 0, 0
     for model in hidden:
         if model.slug in existing:
