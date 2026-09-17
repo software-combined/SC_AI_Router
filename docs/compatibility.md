@@ -1,5 +1,31 @@
 # Compatibility
 
+## Subscription picker gate, 2026-09-17
+
+Implemented as Plan 178 on `develop` (branch
+`cyril/subscription-picker-gate-20260917`), targeting the next router
+release. The client contract is unchanged: the gate only writes
+`mixed-models.json`, which Codex reads at startup (verified 2026-09-12
+against codex-cli 0.153.4, quoted in `docs/troubleshooting.md`).
+
+Offline proof, per `tests/test_subscription_gate.py`,
+`tests/test_subscription_watch.py` and `tests/test_subscription_probe.py`:
+the verdict rules (100% usage header, 429, 401/403, success, malformed
+values, the reset cap and the one-hour bound), the picker round trip through
+`catalogue.merge_file` including the twin swap in both directions, the login
+memory, the probe's outcomes and caps, and one handler turn per case
+(subscription 429 blocks and rewrites, subscription 200 releases, external
+429 leaves the gate absent). No network, no paid call. The install-time
+default is proved in `tests/test_install_catalogue.py` with a synthetic Codex
+`auth.json`; the header names in the allowlist are a live contract, not a
+source-verified one, and the code degrades to the refusal signal when they
+are absent.
+
+Pending, and it is a separate gate: a real install on the owner Mac, one
+real Codex turn while the allowance is exhausted, the picker read back after
+a Codex restart, and one `subscription_probe` event from a forced tick. No
+live probe has been run for this change yet.
+
 ## Model-switch history boundary, 2026-09-13
 
 The client's `<model_switch>` developer message (`core/src/session/mod.rs:4289`

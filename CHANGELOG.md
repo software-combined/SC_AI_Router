@@ -10,6 +10,24 @@
   the refused slug moves, and only when the install's own roster names it: a
   bucket that still works (for example `gpt-5.3-codex-spark`) stays
   selectable.
+- The OpenRouter twin of a subscription model (`openai/<slug>`) now takes
+  the hidden row's place instead of listing beside it, so the same model
+  never appears twice: the twin shows while the subscription row cannot
+  run, and hides again once it works. An install with no subscription at
+  all keeps listing the twins exactly as before.
+- While a slug is blocked, the router rechecks it against the subscription
+  upstream once every four hours - one bounded request, using the login the
+  client last presented, held in memory only, never written to disk and
+  never logged - so a replenished allowance brings its rows back without
+  waiting for a turn. `subscription_probe: false` in router state disables
+  the recheck. Every change is silent and logs one `subscription_gate_changed`
+  event, and every recheck that reaches upstream logs one `subscription_probe`
+  event.
+- A fresh install on a client with no ChatGPT login now defaults to
+  `--openai-mode none` by reading the presence of a Codex `tokens` block (no
+  token value is ever read or logged), so the picker never offers rows that
+  cannot run. An explicit flag or the stored mode still wins, and an
+  unreadable store keeps the old default.
 
 ## 0.6.82
 

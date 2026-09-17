@@ -129,7 +129,9 @@ class HandlerEvidenceTests(unittest.TestCase):
             self.assertEqual(
                 self._turn(server, {'model': HELPER, 'input': []}).status, 503)
             self.assertEqual(subscription_gate.blocked(home), {HELPER})
-            self.assertNotIn(HELPER, _rows(home))
+            rows = _rows(home)
+            self.assertNotIn(HELPER, rows)
+            self.assertIn('openai/gpt-5.6-luna', rows)
 
     def test_a_served_subscription_turn_releases_the_slug(self):
         with tempfile.TemporaryDirectory() as home:
@@ -143,7 +145,9 @@ class HandlerEvidenceTests(unittest.TestCase):
             self.assertEqual(
                 self._turn(server, {'model': HELPER, 'input': []}).status, 200)
             self.assertEqual(subscription_gate.blocked(home), set())
-            self.assertIn(HELPER, _rows(home))
+            rows = _rows(home)
+            self.assertIn(HELPER, rows)
+            self.assertNotIn('openai/gpt-5.6-luna', rows)
 
     def test_an_external_refusal_leaves_the_gate_alone(self):
         with tempfile.TemporaryDirectory() as home:

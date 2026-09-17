@@ -16,7 +16,7 @@ prompt to it.
 """
 import json
 
-from . import errors, provider_defs, subscription_gate
+from . import errors, provider_defs, subscription_gate, subscription_roster
 from .image_items import has_images
 from .providers import ExternalResponsesProvider
 from .registry import by_slug
@@ -26,7 +26,7 @@ HELPER_SOURCES = frozenset({'thread_title', 'thread_description',
                             'thread_summary', 'thread_title_reconsideration'})
 METADATA_HEADER = 'x-codex-turn-metadata'
 MAX_METADATA_BYTES = 8192
-TWIN_PREFIX = 'openai/'
+TWIN_PREFIX = subscription_roster.TWIN_PREFIX
 
 
 def helper_turn(headers):

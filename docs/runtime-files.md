@@ -34,6 +34,7 @@ are never copied between machines.
 `ai_router/transport.py`, `ai_router/subscription_fallback.py`,
 `ai_router/subscription_history.py`, `ai_router/context_recovery.py`,
 `ai_router/subscription_gate.py`, `ai_router/subscription_watch.py`,
+`ai_router/subscription_probe.py`,
 `ai_router/provider_defs.py`, `ai_router/upstream.py`, `ai_router/ingress.py`,
 `ai_router/relay.py`, `ai_router/tool_merge.py`, `ai_router/atomic_write.py`,
 `ai_router/stream_relay.py`,

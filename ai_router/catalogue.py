@@ -1,17 +1,13 @@
 """Generate external-provider catalogue entries from the registry.
 
-Every non-model-specific field lives in ROW_TEMPLATE. Per-model
-values come from ai_router/registry.py rows. Pure: no network, no
-state; the served instructions come from the model_instructions leaf.
-
-The picker label suffix and billing line come from the row's provider
-definition (`provider_defs.label_for`), so a second provider reads as its
-own label with no code change here.
+Every non-model-specific field lives in ROW_TEMPLATE, per-model values come
+from ai_router/registry.py rows, and the served instructions come from the
+model_instructions leaf. Pure: no network, no state.
 """
 import json
 import sys
 from pathlib import Path
-from . import context_recovery, provider_defs, state as state_mod
+from . import context_recovery, provider_defs, state as state_mod, subscription_gate
 from .atomic_write import replace_json
 from .capabilities import (COMP_HASH, MULTI_AGENT_VERSION, NODE_REPL_DISABLED,
                            catalogue_patch, describe)
@@ -53,16 +49,13 @@ ROW_TEMPLATE = {
     'tool_mode': None,
     'multi_agent_version': MULTI_AGENT_VERSION,
     'multi_agent_reasoning_effort': None,
-    # Codex >=0.153.4 catalogue schema: every row must carry these or chat
-    # creation fails with 'missing field' (2026-09-08, Codex 26.901.51231).
-    # Defaults mirror the client's own embedded model catalogue.
+    # Codex >=0.153.4 needs these too or chat creation fails without them.
     'available_in_plans': ['business', 'edu', 'edu_plus', 'edu_pro', 'education',
-                           'enterprise', 'enterprise_cbp_automation',
-                           'enterprise_cbp_trial', 'enterprise_cbp_usage_based',
-                           'finserv', 'free', 'free_workspace', 'go', 'hc', 'k12',
-                           'plus', 'pro', 'prolite', 'quorum', 'sci',
-                           'self_serve_business_prolite',
-                           'self_serve_business_usage_based', 'team'],
+                           'enterprise', 'enterprise_cbp_automation', 'enterprise_cbp_trial',
+                           'enterprise_cbp_usage_based', 'finserv', 'free', 'free_workspace',
+                           'go', 'hc', 'k12', 'plus', 'pro', 'prolite', 'quorum', 'sci',
+                           'self_serve_business_prolite', 'self_serve_business_usage_based',
+                           'team'],
     'prefer_websockets': True,
     'minimal_client_version': '0.153.0',
     'supports_parallel_tool_calls': True,
@@ -73,8 +66,7 @@ ROW_TEMPLATE = {
     'auto_review_model_override': None,
 }
 
-# Claude, Gemini and Grok pin exact ids, so their latest aliases retire.
-# DeepSeek keeps Pro 0813 + V4.1 Flash; its alias and Vision rows retire too.
+# Pinned-id vendors retire their aliases; DeepSeek keeps both its rows.
 RETIRED_SLUGS = {'~anthropic/claude-sonnet-latest', '~anthropic/claude-fable-latest',
                  '~anthropic/claude-haiku-latest', '~anthropic/claude-opus-latest',
                  '~google/gemini-flash-latest', '~google/gemini-pro-latest',
@@ -84,11 +76,9 @@ RETIRED_SLUGS = {'~anthropic/claude-sonnet-latest', '~anthropic/claude-fable-lat
                  '~deepseek/deepseek-v4-flash-latest',
                  'deepseek/deepseek-v4-flash-vision-exp'}
 
-# Retired subscription slugs live in retired_slugs.py (Plan 100 single source,
-# shared with the installer prune); merge() drops them from stale machines.
+# Retired subscription slugs live in retired_slugs.py, shared with the prune.
 
-# Native reasoning levels per subscription slug (2026-09-07 owner-Mac
-# models_cache). Fresh installs seed these so the effort picker works.
+# Native reasoning levels per subscription slug; fresh installs seed these.
 _A = ('low', 'medium', 'high', 'xhigh', 'max', 'ultra')
 _M = ('low', 'medium', 'high', 'xhigh', 'max')
 _X = ('low', 'medium', 'high', 'xhigh')
@@ -101,8 +91,6 @@ SUBSCRIPTION_REASONING = {
 
 
 # Picker labels for the subscription side, matching the live Codex picker.
-# Codex >=0.153.4 requires every catalogue row to carry display_name and the
-# full schema, so roster rows can no longer seed as bare {'slug': ...} stubs.
 SUBSCRIPTION_DISPLAY_NAMES = {
     'gpt-6-astra': 'GPT-6-Astra',
     'gpt-5.6-sol': 'GPT-5.6-Sol',
@@ -115,9 +103,7 @@ SUBSCRIPTION_DISPLAY_NAMES = {
 }
 
 
-# Plan 123: the roster leaf owns the subscription slug set; these tables own
-# the per-slug presentation values. Fail closed at import when they disagree
-# so a half-added row can never ship; the coupling test pins the same set.
+# Plan 123: the roster leaf owns the slug set, these tables the presentation.
 if (set(SUBSCRIPTION_REASONING) != set(SUBSCRIPTION_SLUGS)
         or set(SUBSCRIPTION_DISPLAY_NAMES) != set(SUBSCRIPTION_SLUGS)):
     raise ValueError('subscription roster and catalogue tables disagree')
@@ -127,20 +113,19 @@ def subscription_stub(slug, instructions=None):
     """Full-schema placeholder row for a subscription-side picker slug.
 
     Routing ignores these fields (the subscription provider owns the slug),
-    but the Codex catalogue parser requires the complete schema.
+    but the Codex parser requires the complete schema.
     """
-    name = SUBSCRIPTION_DISPLAY_NAMES.get(slug, slug)
     default, efforts = SUBSCRIPTION_REASONING.get(slug, ('medium', ('medium',)))
     if instructions is None:
         instructions = instructions_for(_visible_rows('codex', None)[0],
                                         base=SUBSCRIBER_INSTRUCTIONS)
     return {**ROW_TEMPLATE,
             'slug': slug,
-            'display_name': name,
+            'display_name': SUBSCRIPTION_DISPLAY_NAMES.get(slug, slug),
             'description': 'ChatGPT subscription billing.',
             'default_reasoning_level': default,
-            'supported_reasoning_levels': [
-                {'effort': level, 'description': describe(level)} for level in efforts],
+            'supported_reasoning_levels': [{'effort': level, 'description': describe(level)}
+                                           for level in efforts],
             'supports_reasoning_summary_parameter': False,
             'context_window': 272000,
             'max_context_window': 272000,
@@ -171,8 +156,8 @@ def external_entry(model, instructions=None):
                              if model.tier == 'preview' else model.display_name),
             'description': (('Preview, not yet verified with Codex. '
                              if model.tier == 'preview' else '')
-                            + f'{label} billing. Switch to this model mid-thread; history carries over. '
-                            + label + ': ' + catalog_name(model)),
+                            + f'{label} billing. Switch to this model mid-thread; '
+                            + f'history carries over. {label}: ' + catalog_name(model)),
             'default_reasoning_level': model.default_reasoning,
             'supported_reasoning_levels': projected['supported_reasoning_levels'],
             'priority': model.priority,
@@ -188,21 +173,24 @@ def external_entry(model, instructions=None):
             'web_search_tool_type': 'text_and_image' if model.web_search else 'text'}
 
 
-def _visible_rows(client, allowed, include_twins=False, available=None):
+def _visible_rows(client, allowed, include_twins=False, available=None,
+                  twins_hidden=()):
     """(visible, hidden) external registry rows for one client and allowlist.
 
     `allowed` is the optional portco allowlist (Plan 068); `available` is
     the optional key-filtered id set from `/models/user`. Either None
-    preserves today's behavior; a set hides rows the key cannot use. The
-    registry is never pruned: hidden rows stay out of this catalogue
-    until the key may use them again.
+    preserves today's behavior; a set hides rows the key cannot use, and
+    `twins_hidden` hides the twins whose subscription row runs instead.
+    The registry is never pruned: hidden rows return with the next merge.
     """
     allowset = None if allowed is None else frozenset(allowed)
     avail = None if available is None else frozenset(available)
+    twins = frozenset(twins_hidden or ())
     visible = [m for m in models_for(MODELS, client, include_twins=include_twins)
                if provider_defs.is_external(m.provider)
                and (allowset is None or m.slug in allowset)
-               and (avail is None or m.slug in avail)]
+               and (avail is None or m.slug in avail)
+               and m.slug not in twins]
     shown = {m.slug for m in visible}
     hidden = [m for m in MODELS
               if provider_defs.is_external(m.provider) and m.slug not in shown]
@@ -210,19 +198,21 @@ def _visible_rows(client, allowed, include_twins=False, available=None):
 
 
 def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False,
-          available=None, blocked=None):
+          available=None, blocked=None, twins_hidden=None):
     """Merge registry OpenRouter entries into one client catalogue.
 
     Emits models_for(client) rows only; see _visible_rows for the
     allowlist and key filters, plus `blocked` for the subscription gate.
-    Roster stubs repair fresh files; retired subscription slugs never
-    return. Routing never consults this filter.
+    Roster stubs repair fresh files; routing never consults this filter.
     """
-    # Only a roster row can be restored, so only a roster row may be gated:
-    # dropping a carried-over row the roster no longer names would lose it.
+    # Only a roster row can be restored, so only a roster row may be gated.
     gated = frozenset(blocked or ()) & frozenset(roster)
+    if twins_hidden is None:
+        twins_hidden = (frozenset() if include_twins
+                        else subscription_gate.twin_hidden(roster, gated))
     visible, hidden_rows = _visible_rows(client, allowed, include_twins,
-                                           available=available)
+                                           available=available,
+                                           twins_hidden=twins_hidden)
     instructions = instructions_for(visible, client)
     sub_instructions = instructions_for(visible, client,
                                         base=SUBSCRIBER_INSTRUCTIONS)
@@ -254,8 +244,7 @@ def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False,
             row['supported_reasoning_levels'] = fresh['supported_reasoning_levels']
     for model in visible:
         entries[model.slug] = external_entry(model, instructions)
-    # Retired subscription rows never come back: a roster or catalogue that
-    # still names one loses it here, so the dead picker row cannot linger.
+    # Retired subscription rows never come back: naming one loses it here.
     for slug in RETIRED_SUBSCRIPTION_SLUGS:
         entries.pop(slug, None)
     for slug in roster:
@@ -267,8 +256,8 @@ def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False,
         subs = []
     else:
         subs = [s for s in dict.fromkeys(roster) if s in entries]
-        subs += [m['slug'] for m in models
-                 if m['slug'] in entries and m['slug'] not in shown and m['slug'] not in subs]
+        subs += [m['slug'] for m in models if m['slug'] in entries
+                 and m['slug'] not in shown and m['slug'] not in subs]
     def rank(slug):
         model = next(m for m in visible if m.slug == slug)
         return picker_key(model.vendor, model.tier, model.display_name, model.slug)
@@ -296,13 +285,15 @@ def read_openai_mode(catalog_path):
 def merge_file(path, client='codex', allowed=None, openai_mode=None,
                available=None):
     """Merge the catalogue file for the install's openai_mode and write it atomically."""
-    from . import subscription_gate
     path = Path(path)
     mode = openai_mode if openai_mode is not None else read_openai_mode(path)
     base = json.loads(path.read_text()) if path.exists() else {'models': []}
-    merged = merge(base, read_roster(path), client, allowed,
+    roster = read_roster(path)
+    blocked, twins = subscription_gate.picker_rows(path.parent, roster,
+                                                   mode == 'none')
+    merged = merge(base, roster, client, allowed,
                    include_twins=(mode == 'none'), available=available,
-                   blocked=subscription_gate.blocked(path.parent))
+                   blocked=blocked, twins_hidden=twins)
     replace_json(path, merged)
     return merged
 
@@ -314,10 +305,19 @@ def _same(old, new, key):
     return old.get(key) == new.get(key)
 
 
-def check(path, client='codex', allowed=None, include_twins=False,
+def check(path, client='codex', allowed=None, include_twins=None,
           available=None):
+    path = Path(path)
+    include_twins = read_openai_mode(path) == 'none' if include_twins is None else include_twins
     catalog = json.loads(Path(path).read_text())
     existing = {m['slug']: m for m in catalog.get('models', [])}
+    roster = read_roster(path)
+    blocked, twins = subscription_gate.picker_rows(path.parent, roster,
+                                                   include_twins)
+    for slug in roster:
+        if (slug in blocked or include_twins) != (slug not in existing):
+            print(f'{slug}: roster row is {"still listed" if slug in existing else "missing"}')
+            return False
     for slug, row in existing.items():
         missing = subscription_stub(slug).keys() - row.keys()
         if missing:
@@ -328,7 +328,8 @@ def check(path, client='codex', allowed=None, include_twins=False,
             print(f'{slug}: unrendered model roster placeholder')
             return False
     visible, hidden = _visible_rows(client, allowed, include_twins,
-                                        available=available)
+                                    available=available,
+                                    twins_hidden=twins)
     identical, total = 0, 0
     for model in hidden:
         if model.slug in existing:
@@ -389,7 +390,6 @@ if __name__ == '__main__':
         print(f'rows={len(merged.get("models", []))} bytes={Path(args[1]).stat().st_size}')
     elif args[:1] == ['--check'] and len(args) == 2:
         sys.exit(0 if check(args[1], client, allowed,
-                            include_twins=read_openai_mode(args[1]) == 'none',
                             available=available) else 1)
     else:
         raise SystemExit(USAGE)
