@@ -160,6 +160,21 @@ class TemplateGuardTests(unittest.TestCase):
         self.assertIn('Resource: !Ref FeedPublishTopic', policy)
         self.assertNotIn('Resource: \'*\'', policy)
 
+    def test_a_failed_alert_is_kept_and_alarmed(self):
+        """EventBridge retries a failed invoke, then drops it (Plan 167).
+
+        Without the queue the event is gone; without the alarm nobody learns
+        that the mail did not go out.
+        """
+        text = _template()
+        self.assertIn('DeadLetterConfig:', text)
+        self.assertIn('Arn: !GetAtt FeedAlertDlq.Arn', text)
+        self.assertIn('Action: sqs:SendMessage', text)
+        self.assertIn('MetricName: FailedInvocations', text)
+        self.assertIn('Value: !Ref FeedPublishRule', text)
+        self.assertIn('AlarmActions:', text)
+        self.assertIn('Service: cloudwatch.amazonaws.com', text)
+
     def test_handler_mails_a_readable_message(self):
         published = []
         self._handler(published)(self.BODY, None)

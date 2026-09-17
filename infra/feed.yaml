@@ -240,6 +240,66 @@ Resources:
       Targets:
         - Id: feed-publish-email
           Arn: !GetAtt FeedAlertFunction.Arn
+          # EventBridge retries a failed invoke, then drops it. The queue keeps
+          # the event, and the alarm below says the mail did not go out (167).
+          DeadLetterConfig:
+            Arn: !GetAtt FeedAlertDlq.Arn
+  FeedAlertDlq:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${AWS::StackName}-alert-dlq'
+      MessageRetentionPeriod: 1209600
+  FeedAlertDlqPolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref FeedAlertDlq
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt FeedAlertDlq.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !GetAtt FeedPublishRule.Arn
+  FeedAlertFailureAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: >-
+        The feed publish alert could not be delivered; the events are in the
+        dead-letter queue. Check the function's log group.
+      Namespace: AWS/Events
+      MetricName: FailedInvocations
+      Dimensions:
+        - Name: RuleName
+          Value: !Ref FeedPublishRule
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref FeedPublishTopic
+  FeedAlertTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref FeedPublishTopic
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudwatch.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref FeedPublishTopic
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !GetAtt FeedAlertFailureAlarm.Arn
   # The mail is written here rather than by an EventBridge InputTemplate
   # (Plan 167): a template substitutes raw, so an object key carrying a double
   # quote would break the JSON and silence the very alarm that write should
