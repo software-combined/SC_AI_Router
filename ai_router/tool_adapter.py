@@ -10,10 +10,14 @@ from .capabilities import has_recursive_refs
 from .history_portability import portable_history
 from .discovered import recall
 from .registry import by_slug
-from . import agent_handoffs, sse, tool_aliases, tool_merge, transport
+from . import agent_handoffs, sse, tool_aliases, tool_merge, transport, turn_budget
+from .tool_merge import tool_entries
 from .upstream import serving_endpoint
 SEARCH_NAME = 'codex_client_tool_search'
 SEARCH_NEXT = 'Call the exact returned name; do not search again.'
+# Deliberately terse: this replaces a repeated listing, so every byte here is
+# charged 2,690 times on the thread this exists for.
+SEARCH_REPEAT_NOTE = 'repeated search result omitted'
 # Bytes retained per body for the post-EOF identity parse. Overflow drops
 # the observation, never the forwarded bytes.
 _OBSERVE_LIMIT = 64 * 1024
@@ -44,13 +48,6 @@ def integer_json(text):
         return text  # Leave malformed arguments for the native validator to reject.
     return re.sub(r'("(?:\\.|[^"\\])*")|(-?\d+)\.0+(?=\s*[,}\]]|\s*$)',
                   lambda match: match[1] if match[1] is not None else match[2], text)
-
-def tool_entries(tools, namespace=None):
-    for tool in tools:
-        if tool.get('type') == 'namespace':
-            yield from tool_entries(tool.get('tools', []), tool['name'])
-        else:
-            yield tool, namespace
 
 def tool_key(item):
     return (item.get('namespace'), item.get('name'))
@@ -174,8 +171,8 @@ def prepare_tools(payload):
                     names.dropped.add(entry['name'])
         payload['tools'] = kept
     items = payload.get('input', []) if isinstance(payload.get('input'), list) else []
-    latest_search = next((item for item in reversed(items)
-                          if item.get('type') == 'tool_search_output'), None)
+    # Newest listing per tool key wins; an earlier repeat gets the note below.
+    latest_search, listings = tool_merge.newest_listings(items, wire_names)
     for item in items:
         if item.get('type') == 'tool_search_call':
             item.pop('execution', None)
@@ -183,10 +180,10 @@ def prepare_tools(payload):
         elif item.get('type') == 'tool_search_output':
             item.pop('execution', None)
             item.pop('status', None)
-            visible = [{'name': wire_names.get((ns, tool.get('name')), tool.get('name')),
-                        'description': tool.get('description', '')} for tool, ns in tool_entries(item.pop('tools'))]
-            found = {'available_tools': visible}
-            if item is latest_search and visible:
+            item.pop('tools', None)
+            entries = listings[id(item)]
+            found = {'available_tools': entries or [SEARCH_REPEAT_NOTE]}
+            if item is latest_search and entries:
                 found['how_to_use'] = SEARCH_NEXT
             item.update(type='function_call_output', output=json.dumps(found))
         elif item.get('type') == 'custom_tool_call' and (
@@ -304,6 +301,7 @@ class ToolEvents:
             response['output'] = [self.item(item) for item in response.get('output', [])]
             if kind == 'response.completed' and self.notes is not None:
                 _note_identity(response, self.notes)
+                self.changed |= turn_budget.report_usage(response.get('usage'), self.notes)
         return event
 
 def snoop_response_identity(response, notes):

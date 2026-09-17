@@ -23,6 +23,41 @@ def key_of(tool, namespace=None):
     return namespace, tool.get('name')
 
 
+def tool_entries(tools, namespace=None):
+    """Flatten namespace wrappers into (tool, effective namespace) pairs."""
+    for tool in tools:
+        if tool.get('type') == 'namespace':
+            yield from tool_entries(tool.get('tools', []), tool['name'])
+        else:
+            yield tool, namespace
+
+
+def newest_listings(items, wire_names=None):
+    """Newest search item plus {id(item): visible entries} for each result.
+
+    Results are walked newest first and a key already listed by a newer result
+    is skipped, so the schemas a turn released last stay visible while every
+    earlier repeat collapses to an empty list the caller notes instead.
+    """
+    listed, listings, latest = set(), {}, None
+    for item in reversed(items):
+        if not isinstance(item, dict) or item.get('type') != 'tool_search_output':
+            continue
+        latest = latest or item
+        visible = []
+        for tool, namespace in tool_entries(item.get('tools') or []):
+            key = key_of(tool, namespace)
+            if key in listed:
+                continue
+            listed.add(key)
+            name = tool.get('name')
+            visible.append({'name': (name if wire_names is None
+                                     else wire_names.get((namespace, name), name)),
+                            'description': tool.get('description', '')})
+        listings[id(item)] = visible
+    return latest, listings
+
+
 def missing_schema(existing, candidate):
     """True when candidate holds the parameter schema an existing stub lacks."""
     return (existing.get('parameters') is None

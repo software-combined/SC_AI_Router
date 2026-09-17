@@ -1,5 +1,21 @@
 # Compatibility
 
+## Oversized routed threads, 2026-09-17
+
+Thread `01a0ab7c` (`meta/muse-spark-1.3-contributor`) died with the router's
+`BODY_TOO_LARGE`: 2,690 released-tool search results from 9 distinct queries
+carried 63.7 MB of repeated schemas inside a 67.3 MB decoded body - past the
+64 MiB decode ceiling that exists so prepare can slim exactly that shape. The
+handoff bundle records 12,197 session lines, one failed turn after 5.25 h, and
+the work intact in its worktree.
+
+The fix is verified offline, with no paid calls: `codex-cli 0.153.1` against
+the in-process router and a fake upstream passes every scenario of
+`tools/probe_context_budget.py` in both compaction modes, including the added
+`carried_usage` leg - the provider reports 1,000 input tokens and the client
+still compacts, because the router reported the weight of the history the
+thread carries.
+
 ## Subscription picker gate, 2026-09-17
 
 Implemented as Plan 178 on `develop` (branch
@@ -383,6 +399,16 @@ provider-reported usage rather than payload bytes, and maps a
 own history estimator already discounts base64 image payloads — including
 images inside `function_call_output` — to a flat ~1,844 tokens per
 non-original-detail image (`codex-rs/core/src/context_manager/history.rs`).
+From 0.6.86 the router reports that threshold's input in the terms the
+client compacts on: a routed Codex turn carrying tools has its
+`response.completed` usage raised, never lowered, to the weight of the history the thread actually
+carries (`bytes / 5.8` for text plus the flat image allowance, clamped to the
+row's window). Without that the slim the router performs is invisible
+upstream, so a byte-heavy thread never crossed 90% of the window - the
+2026-09-16 thread carried 67 MB while upstream was billed about 1 MB.
+Subscription passthrough, tool-free responses (which keep their verbatim
+forwarding contract) and the Claude Code Messages path keep the provider's
+own usage.
 OpenCode v1.18.25 treats the same code as recoverable: `SessionProcessor.halt`
 sets `needsCompaction` and the run loop compacts
 (`packages/opencode/src/session/processor.ts`). OpenCode is a credential

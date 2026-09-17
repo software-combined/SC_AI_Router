@@ -119,7 +119,8 @@ def relay_stream(handler, provider, response, prepared, metrics, started,
     """
     # Adapters hand this mapping to the tool repair helpers, whose log lines
     # carry the model; the request metrics are the only place it exists.
-    attempt_metrics = {'model': metrics.get('model')}
+    attempt_metrics = {'model': metrics.get('model'),
+                       'context_tokens': metrics.get('context_tokens')}
     pending = record.pending
     chunks = provider.adapt(response, prepared.tool_names, attempt_metrics)
     normalized = (provider.defn.dialect == provider_defs.DIALECT_OPENROUTER
