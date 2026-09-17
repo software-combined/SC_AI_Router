@@ -5,7 +5,7 @@
   "ai_router/errors.py": 292,
   "ai_router/key_dialog.py": 291,
   "ai_router/models.py": 333,
-  "ai_router/providers.py": 384,
+  "ai_router/providers.py": 389,
   "ai_router/relay.py": 263,
   "ai_router/router.py": 330,
   "ai_router/setup.py": 341,
