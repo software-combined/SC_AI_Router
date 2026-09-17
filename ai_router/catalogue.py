@@ -210,13 +210,17 @@ def _visible_rows(client, allowed, include_twins=False, available=None):
 
 
 def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False,
-          available=None):
+          available=None, blocked=None):
     """Merge registry OpenRouter entries into one client catalogue.
 
     Emits models_for(client) rows only; see _visible_rows for the
-    allowlist and key filters. Roster stubs repair fresh files; retired
-    subscription slugs never return. Routing never consults this filter.
+    allowlist and key filters, plus `blocked` for the subscription gate.
+    Roster stubs repair fresh files; retired subscription slugs never
+    return. Routing never consults this filter.
     """
+    # Only a roster row can be restored, so only a roster row may be gated:
+    # dropping a carried-over row the roster no longer names would lose it.
+    gated = frozenset(blocked or ()) & frozenset(roster)
     visible, hidden_rows = _visible_rows(client, allowed, include_twins,
                                            available=available)
     instructions = instructions_for(visible, client)
@@ -227,7 +231,7 @@ def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False,
     active = {m.slug for m in MODELS}
     models = [m for m in catalog.get('models', [])
               if (m['slug'] not in RETIRED_SLUGS or m['slug'] in active)
-              and m['slug'] not in hidden]
+              and m['slug'] not in hidden and m['slug'] not in gated]
     entries = {m['slug']: {**subscription_stub(m['slug'], instructions), **m}
                for m in models}
     for slug, row in entries.items():
@@ -257,7 +261,7 @@ def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False,
     for slug in roster:
         # A roster stub repairs a fresh file only, never a hidden row.
         if (slug not in entries and slug not in RETIRED_SUBSCRIPTION_SLUGS
-                and slug not in hidden):
+                and slug not in hidden and slug not in gated):
             entries[slug] = subscription_stub(slug, sub_instructions)
     if include_twins:
         subs = []
@@ -292,11 +296,13 @@ def read_openai_mode(catalog_path):
 def merge_file(path, client='codex', allowed=None, openai_mode=None,
                available=None):
     """Merge the catalogue file for the install's openai_mode and write it atomically."""
+    from . import subscription_gate
     path = Path(path)
     mode = openai_mode if openai_mode is not None else read_openai_mode(path)
     base = json.loads(path.read_text()) if path.exists() else {'models': []}
     merged = merge(base, read_roster(path), client, allowed,
-                   include_twins=(mode == 'none'), available=available)
+                   include_twins=(mode == 'none'), available=available,
+                   blocked=subscription_gate.blocked(path.parent))
     replace_json(path, merged)
     return merged
 

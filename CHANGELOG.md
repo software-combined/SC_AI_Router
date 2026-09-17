@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.83
+
+- The Codex picker no longer keeps a ChatGPT subscription model that cannot
+  run. The router reads the allowance evidence its own turns already carry -
+  the usage headers when upstream sends them, a refused turn, or an auth
+  refusal - and drops that slug from `mixed-models.json` until a turn
+  succeeds, its reported window resets, or the hour long bound expires. Only
+  the refused slug moves, and only when the install's own roster names it: a
+  bucket that still works (for example `gpt-5.3-codex-spark`) stays
+  selectable.
+
 ## 0.6.82
 
 No change to what a running router does: this release carries the publish
