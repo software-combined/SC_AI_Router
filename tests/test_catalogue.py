@@ -70,7 +70,7 @@ class CatalogueFlagTests(unittest.TestCase):
     def test_merge_orders_subscriptions_then_vendor_groups(self):
         from tests.install_fixtures import install_mod
         roster = list(install_mod.DEFAULT_OPENAI_MODELS)
-        merged = merge({'models': []}, roster=tuple(roster), twins_hidden=frozenset())
+        merged = merge({'models': []}, roster=tuple(roster))
         slugs = [m['slug'] for m in merged['models']]
         self.assertEqual(slugs[:len(roster)], roster)
         registry = {m.slug: m for m in models_for(MODELS, 'codex')}
@@ -440,7 +440,7 @@ class CatalogueSchemaCompatTests(unittest.TestCase):
 
 class CatalogueRosterTests(unittest.TestCase):
     def test_merge_seeds_missing_roster_slugs_as_stubs(self):
-        merged = merge({'models': []}, roster=('gpt-6-astra', 'gpt-5.6-luna'), twins_hidden=frozenset())
+        merged = merge({'models': []}, roster=('gpt-6-astra', 'gpt-5.6-luna'))
         by_slug = {m['slug']: m for m in merged['models']}
         self.assertEqual(by_slug['gpt-6-astra']['slug'], 'gpt-6-astra')
         self.assertEqual(by_slug['gpt-5.6-luna']['slug'], 'gpt-5.6-luna')
