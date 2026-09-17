@@ -1,46 +1,27 @@
 """One catalog for every defined router failure.
 
-HTTP keeps its current message text and gains a stable code; logs record the
-same code. Callers select a case, never invent wording. Never include keys,
-tokens, paths carrying tokens, or request content in a message.
+Callers select a case, never invent wording; no key, token, path or request
+content enters a message or a log line. Status and code stay the wire
+contract, the message is plain language, and detail rides the log line.
 """
-import re
+from .redaction import redact  # noqa: F401 (re-exported: errors.redact)
 
 ROUTER_TYPE = 'router_error'
 
-_PART = r"[^\\/\s,;:'\"]+"        # one path segment, no separator or delimiter
-_SPACED = rf"{_PART}(?:\s+{_PART})*"   # a segment that may contain spaces
-_TAIL = rf"{_SPACED}?"
-_PATH = re.compile(
-    rf"(?<![\w:./])"                            # not inside a word, URL or path
-    rf"(?:"
-    rf"\\\\\?\\[A-Za-z]:\\(?:{_SPACED}\\)*{_TAIL}"      # \\?\C:\dir\file
-    rf"|(?:\\\\|//)(?:{_SPACED}[\\/])+{_TAIL}"          # \\server\share or //server/share
-    rf"|[A-Za-z]:\\(?:{_SPACED}\\)*{_TAIL}"             # C:\dir\file
-    rf"|~?/(?:{_SPACED}/)*{_TAIL}"                      # /dir/file or ~/dir/file
-    rf")")
-
-
-def redact(text):
-    """Replace filesystem paths in a diagnostic with a fixed marker.
-
-    Error bodies and logs must stay useful without naming where a key or
-    credential file lives. Path components may contain spaces; a trailing
-    explanation after the path is kept.
-    """
-    if not isinstance(text, str):
-        return text
-    return _PATH.sub('[path]', text)
-
 
 class RouterError(Exception):
-    """Defined HTTP failure: status, stable code, user-facing message."""
+    """Defined HTTP failure: status, stable code, user-facing message.
 
-    def __init__(self, status, code, message):
+    `detail` is log-only, path-redacted evidence: the person reads the plain
+    message while the log keeps the technical reason.
+    """
+
+    def __init__(self, status, code, message, detail=None):
         super().__init__(message)
         self.status = status
         self.code = code
         self.message = message
+        self.detail = redact(detail) if detail else None
 
     def body(self):
         return {'error': {'message': self.message, 'type': ROUTER_TYPE,
@@ -84,27 +65,29 @@ class ClaudeSubscriptionRequired(ValueError):
                          'select a routed model instead')
 
 
-def _error(status, code, message):
-    return RouterError(status, code, message)
+def _error(status, code, message, detail=None):
+    return RouterError(status, code, message, detail)
 
 
 # Loopback boundary.
 def forbidden():
-    return _error(403, 'FORBIDDEN', 'Forbidden')
+    return _error(403, 'FORBIDDEN', 'The router refused this request. If this app has '
+                  'stopped working, re-run the router installer to attach it again.')
 
 
 def websocket_rejected():
     return _error(426, 'WEBSOCKET_REJECTED',
-                  'Use HTTP streaming for this local trial')
+                  'This connection type is not supported. Reopen the app and retry.')
 
 
 def unsupported_route():
-    return _error(404, 'UNSUPPORTED_ROUTE', 'Unsupported route')
+    return _error(404, 'UNSUPPORTED_ROUTE', 'The router does not serve this request.')
 
 
 # Request shape.
 def missing_model():
-    return _error(400, 'MISSING_MODEL', 'Missing model')
+    return _error(400, 'MISSING_MODEL',
+                  'The request did not name a model. Select a model in the app and retry.')
 
 
 def invalid_size(message):
@@ -118,7 +101,8 @@ def invalid_size(message):
 # Auth and catalog membership.
 def bearer_for_no_subscription_only():
     return _error(401, 'BEARER_NO_SUBSCRIPTION_ONLY',
-                  'Bearer auth is for no-subscription mode only')
+                  'This app is signed in a way this router does not accept. '
+                  'Re-run the router installer to attach it again.')
 
 
 class _UnknownModelError(RouterError):
@@ -126,11 +110,11 @@ class _UnknownModelError(RouterError):
 
     def __init__(self, model, candidates=()):
         listed = tuple(s for s in candidates if isinstance(s, str) and s)[:1]
-        hint = f" (did you mean '{listed[0]}'?)" if listed else ''
+        hint = f" Did you mean '{listed[0]}'?" if listed else ''
         super().__init__(400, 'UNKNOWN_MODEL',
-                         'Model is not in the configured catalog' + hint)
-        # The shape stays as it was minus the caller's id: a named model gets
-        # a candidates list (possibly empty), an unnamed one gets nothing.
+                         'That model is not available on this machine. '
+                         'Select another model and retry.' + hint)
+        # Shape minus the caller's id: named gets candidates, unnamed nothing.
         self.details = {'candidates': list(listed)} if model else {}
 
     def body(self):
@@ -146,40 +130,51 @@ def unknown_model(model, candidates=()):
 
 def subscription_required(model=None):
     return _error(400, 'SUBSCRIPTION_REQUIRED',
-                  'Model is not available without a ChatGPT subscription')
+                  'That model needs a ChatGPT subscription, and this machine is in '
+                  'no-subscription mode. Select a routed model instead.')
 
 
 def claude_subscription_required():
     return _error(400, 'CLAUDE_SUBSCRIPTION_REQUIRED',
-                  'Model is not available without a Claude subscription; '
-                  'select a routed model instead')
+                  'That model needs a Claude subscription. '
+                  'Select a routed model instead.')
 
 
-def credential_problem(detail):
-    detail = redact(detail)
-    return _error(400, 'CREDENTIAL_PROBLEM',
-                  f'Invalid model, payload, or local authentication configuration: {detail}'
-                  if detail else
-                  'Invalid model, payload, or local authentication configuration')
+CREDENTIAL_MESSAGE = ('The router could not use your key for this turn. '
+                      'Open the key window and enter a working key, then retry.')
+
+
+def credential_problem(message='', detail=''):
+    """Key trouble. `message` is the caller's plain sentence, `detail` the log's."""
+    return _error(400, 'CREDENTIAL_PROBLEM', redact(message) or CREDENTIAL_MESSAGE, detail)
+
+
+def credential_permission(detail=''):
+    return _error(401, 'CREDENTIAL_PERMISSION',
+                  'The router could not read its stored key. Open the key window '
+                  'and enter your key again.', detail)
 
 
 def too_many_inflight():
     return _error(429, 'TOO_MANY_REQUESTS',
-                  'Too many concurrent requests; retry shortly')
+                  'The router is busy with other turns; retry shortly.')
 
 
 def unsupported_media_type():
     return _error(415, 'UNSUPPORTED_MEDIA_TYPE',
-                  'Content-Type must be application/json')
+                  'The router could not read this request. Reopen the app and retry.')
 
 
 def invalid_payload():
     return _error(400, 'INVALID_PAYLOAD',
-                  'Invalid model, payload, or local authentication configuration')
+                  'The router could not send this turn. Start a new thread, or '
+                  'switch models and retry.')
 
 
 def internal_error():
-    return _error(500, 'INTERNAL_ERROR', 'Internal router error')
+    return _error(500, 'INTERNAL_ERROR',
+                  'The router hit an unexpected error and did not send this turn. '
+                  'Retry once; if it fails again, re-run the router installer.')
 
 
 # Provider preparation: only 400 ends a Responses turn at once (Codex
@@ -206,7 +201,7 @@ def context_window(message='The model context window is full; compact or shorten
     return _error(400, 'context_length_exceeded', message)
 
 
-def upstream_invalid_prompt(message=('OpenRouter refused this request before answering. '
+def upstream_invalid_prompt(message=('The model refused this request before answering. '
                                      'Retrying it unchanged will fail again; switch models '
                                      'or start a new thread.'), code='UPSTREAM_INVALID_PROMPT'):
     """A provider 400 raised after the stream opened, replayable only as a new turn."""
@@ -222,7 +217,8 @@ def guardian_needs_subscription():
 
 def native_unavailable():
     return LocalAnswer(404, 'NATIVE_UNAVAILABLE',
-                       'Native service unavailable without a ChatGPT subscription')
+                       'This feature needs a ChatGPT subscription and is not '
+                       'available in no-subscription mode.')
 
 
 # Retryable states.
@@ -231,21 +227,26 @@ def upstream_unavailable(message):
 
 
 def draining():
-    return _error(503, 'SERVER_DRAINING', 'Server draining')
+    return _error(503, 'SERVER_DRAINING',
+                  'The router is restarting for an update and did not send this '
+                  'turn. Retry in a moment.')
 
 
-def upstream_rate_limited(message='Upstream rate limited'):
+def upstream_rate_limited(message=('The model is rate limited right now and the turn '
+                                   'was not served. Retry shortly.')):
     return _error(503, 'UPSTREAM_RATE_LIMITED', message)
 
 
 # Upstream transport.
 def compaction_unavailable():
     return _error(502, 'COMPACTION_UNAVAILABLE',
-                  'Compaction summarizer unavailable')
+                  'The thread could not be compacted right now. Retry in a moment, '
+                  'or start a new thread.')
 
 
 def upstream_failed():
-    return _error(502, 'UPSTREAM_FAILED', 'Upstream request failed')
+    return _error(502, 'UPSTREAM_FAILED',
+                  'The model stopped responding and this turn was not sent. Retry.')
 
 
 def upstream_described(message):
@@ -257,15 +258,14 @@ def map_client_error(exc):
     """Split the old vague catch-all: bugs 500, credentials 400/401, else payload/model 400.
 
     The caller logs request_failed with a traceback for INTERNAL_ERROR;
-    the traceback never leaves the log.
+    the traceback never leaves the log. Credential detail is log-only.
     """
     if isinstance(exc, (AttributeError, TypeError)):
         return internal_error()
     if isinstance(exc, PermissionError):
-        return _error(401, 'CREDENTIAL_PERMISSION', redact(str(exc)) or
-                      'Invalid model, payload, or local authentication configuration')
+        return credential_permission(str(exc))
     if isinstance(exc, LookupError):
-        return credential_problem(str(exc))
+        return credential_problem(detail=str(exc))
     if isinstance(exc, UnknownModel):
         return unknown_model(exc.model, exc.candidates)
     if isinstance(exc, ClaudeSubscriptionRequired):
@@ -278,6 +278,6 @@ def map_client_error(exc):
         if 'not in the configured catalog' in text or 'unknown model:' in lowered:
             return unknown_model(None)
         if 'api key' in lowered:
-            return credential_problem(text)
+            return credential_problem(detail=text)
         return invalid_payload()
     return invalid_payload()

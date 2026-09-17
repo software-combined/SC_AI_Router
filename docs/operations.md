@@ -436,8 +436,17 @@ subscription that refused it and says the turn was not served, to retry
 shortly or to select a routed model. An external route's transient 429
 keeps the neutral text, and neither answer carries upstream prose.
 
+Every refusal, retryable or final, leaves one `request_rejected` line with
+`status`, `code` and `path`, plus `retry_after` when a retry hint went out and
+a bounded, path-redacted `detail` when the plain message left a technical
+reason behind (a credential problem's OS text). An upstream rejection keeps
+its own line (`upstream_rejected`: `status`, `code`, `parameter`,
+`serving_endpoint`, and the bounded `tool`), so the status, codes, field and
+tool names a person no longer reads stay searchable in the log.
+
 | Event | Meaning |
 |---|---|
+| `request_rejected` | one per refusal, retryable or final: `status`, `code`, `path`, `retry_after`, bounded `detail` |
 | `upstream_unavailable` | an upstream 5xx or 408 on a Responses turn, answered 503 |
 | `client_disconnected` | the client hung up mid-stream; previously counted as `transport_error` |
 | `upstream_rate_limited` | an upstream 429, with `category` `quota`, `auth` or `transient`; on Responses a quota 429 answers 400 `PROVIDER_REJECTED` and an auth 429 opens the key window; a subscription turn's `transient` 429 answers 503 naming the model and the subscription |
@@ -624,7 +633,9 @@ its own definition; and an interactive-token console task shows its window,
 so both tasks run `pythonw.exe` through `task_launch.py` in the router home
 (rewritten on every install), which appends stdout and stderr to
 `logs\launchd.log` and `logs\update.log` (rotated at 1 MB, one backup). Every console child (`schtasks`, `icacls`, `whoami`, `python`)
-is spawned without a window.
+is spawned without a window; on every platform, a file under `logs/` is
+deleted 30 days after its last write, at each service start and scheduled
+update, apart from the live files, which keep their caps.
 
 Restart and update: the task allows one instance (`IgnoreNew`), so a
 handover posts the authenticated `/shutdown`, waits for the instance to
