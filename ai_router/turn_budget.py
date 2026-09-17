@@ -6,8 +6,9 @@ value taken from an image is the byte length of its payload.
 """
 import json
 
-from .image_items import (IMAGE_TRIM_NOTE, count_images, image_blocks,
-                          image_payload_bytes)
+from .events import log_event
+from .image_items import (IMAGE_TOKEN_ALLOWANCE, IMAGE_TRIM_NOTE, count_images,
+                          image_blocks, image_payload_bytes)
 
 # Named in the refusal line, in the order a search-heavy thread grows them.
 CLASSES = ('tool_search_output', 'function_call_output', 'reasoning', 'message')
@@ -24,6 +25,47 @@ OUTPUT_HEAD = 16 * 1024
 OUTPUT_TAIL = 2 * 1024
 OUTPUT_TRIM_NOTE = ('\n[... earlier tool output truncated to fit the router '
                     'request limit; re-run the tool if it matters ...]\n')
+# Live 2026-09-11: a 4,324,328-byte turn billed 750,806 input tokens, so four
+# characters per token under-counts a carried Codex thread; the image
+# allowance mirrors the client's own flat discount for base64 payloads.
+BYTES_PER_TOKEN = 5.8
+
+
+def carried_tokens(payload, decoded_bytes):
+    """Input tokens this thread's own history weighs.
+
+    The client compacts on provider-reported usage, and the router's slim is
+    invisible upstream, so a byte-heavy thread has to say what it carries or
+    it never compacts (2026-09-16: 67 MB carried, about 1 MB billed).
+    Image bytes ride the flat allowance; the caller clamps to its own window.
+    """
+    if not isinstance(payload, dict):
+        return 0
+    items = payload.get('input')
+    images = image_payload_bytes(items)
+    return int(max(decoded_bytes - images, 0) / BYTES_PER_TOKEN
+               + count_images(items) * IMAGE_TOKEN_ALLOWANCE)
+
+
+def report_usage(usage, notes):
+    """Raise a routed frame's reported input tokens to what the thread carries.
+
+    Returns True when the frame changed. The provider's own number is never
+    lowered, its detail fields are left alone, and a turn without a carried
+    figure (subscription passthrough, the helper twin) stays untouched.
+    """
+    carried = (notes or {}).get('context_tokens')
+    reported = usage.get('input_tokens') if isinstance(usage, dict) else None
+    if (not carried or isinstance(reported, bool) or not isinstance(reported, int)
+            or carried <= reported):
+        return False
+    usage['input_tokens'] = carried
+    output = usage.get('output_tokens')
+    if isinstance(output, int) and not isinstance(output, bool):
+        usage['total_tokens'] = carried + output
+    log_event('usage_reported', model=(notes or {}).get('model'),
+              reported=reported, carried=carried)
+    return True
 
 
 def class_stats(items):

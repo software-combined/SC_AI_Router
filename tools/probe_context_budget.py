@@ -22,6 +22,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ai_router.catalogue import external_entry
 from ai_router.registry import by_slug
+from ai_router import turn_budget
 from tools.appserver_probe import AppServer, CONTEXT_BUDGET, scrub_env
 
 MODEL = 'meta/muse-spark-1.3-contributor'
@@ -110,6 +111,10 @@ class Upstream:
             assert MARKER in json.dumps(payload['input']), 'post-compact request lost marker'
         used = 943719 if self.scenario in ('threshold', 'truncated') \
             and self.calls == 1 else 1000
+        if self.scenario == 'carried_usage':
+            # The provider figure must stay small: only the router's reported
+            # carried weight may push the client over its compaction threshold.
+            assert used == 1000, 'provider usage must not trigger compaction'
         output = message(MARKER)
         response = {'id': 'resp_probe', 'model': MODEL, 'status': 'completed',
                     'output': [output], 'usage': {'input_tokens': used, 'output_tokens': 10,
@@ -237,6 +242,9 @@ def run(binary, mode, scenario, home):
             return raw, payload, size, decoded_len
 
         with mock.patch.object(Handler, 'read_body', observe_read_body), \
+                mock.patch.object(turn_budget, 'BYTES_PER_TOKEN',
+                                  1e-6 if scenario == 'carried_usage'
+                                  else turn_budget.BYTES_PER_TOKEN), \
                 mock.patch.object(http.client, 'HTTPSConnection', upstream.connection):
             server = Router({'port': 0, 'token': 'probe-token', 'openai_models': []},
                             credentials=SimpleNamespace(
@@ -254,7 +262,7 @@ def run(binary, mode, scenario, home):
                     'cwd': str(home), 'approvalPolicy': 'never', 'sandbox': 'read-only'})
                 thread = result['thread']['id']
                 client.turn(thread)
-                context_error = scenario not in ('threshold', 'truncated')
+                context_error = scenario not in ('threshold', 'truncated', 'carried_usage')
                 if context_error:
                     client.turn(thread, expect_error=True)
                     # This client recognizes the error but does not reliably
@@ -297,7 +305,7 @@ def main():
     modes = ('v1', 'v2') if args.mode == 'both' else (args.mode,)
     for mode in modes:
         for scenario in ('threshold', 'context_error', 'stream_context_error',
-                         'metadata_context_error'):
+                         'metadata_context_error', 'carried_usage'):
             with tempfile.TemporaryDirectory(prefix='context-probe-') as tmp:
                 run(args.codex_bin, mode, scenario, Path(tmp))
     if args.mode in ('both', 'v2'):

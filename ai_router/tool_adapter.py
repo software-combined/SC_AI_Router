@@ -10,7 +10,7 @@ from .capabilities import has_recursive_refs
 from .history_portability import portable_history
 from .discovered import recall
 from .registry import by_slug
-from . import agent_handoffs, sse, tool_aliases, tool_merge, transport
+from . import agent_handoffs, sse, tool_aliases, tool_merge, transport, turn_budget
 from .tool_merge import tool_entries
 from .upstream import serving_endpoint
 SEARCH_NAME = 'codex_client_tool_search'
@@ -301,6 +301,7 @@ class ToolEvents:
             response['output'] = [self.item(item) for item in response.get('output', [])]
             if kind == 'response.completed' and self.notes is not None:
                 _note_identity(response, self.notes)
+                self.changed |= turn_budget.report_usage(response.get('usage'), self.notes)
         return event
 
 def snoop_response_identity(response, notes):

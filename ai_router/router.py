@@ -235,7 +235,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self.error(errors.compaction_unavailable())
             try:
                 prepared = subscription_fallback.prepare(provider, model, path, payload,
-                                                         raw, dict(self.headers), self.server)
+                                                         raw, dict(self.headers), self.server,
+                                                         decoded_len=decoded_len)
                 # Passthrough keeps the client's compressed bytes; use the
                 # decoded length there so a 16-64 MiB zstd turn cannot leak.
                 if (decoded_len if prepared.body is raw else len(prepared.body)) > MAX_BODY:
@@ -285,6 +286,7 @@ class Handler(BaseHTTPRequestHandler):
                    'stream': payload.get('stream') is True,
                    'reasoning_effort': _reasoning.get('effort') if isinstance(_reasoning, dict) else None,
                    'max_output_tokens': getattr(prepared, 'output_cap', None),
+                   'context_tokens': prepared.context_tokens,
                    'tool_definitions': len(payload.get('tools', [])),
                    'local_prepare_ms': round((time.monotonic() - started) * 1000, 1),
                    # Per-phase detail; cumulative fields keep their meaning.
