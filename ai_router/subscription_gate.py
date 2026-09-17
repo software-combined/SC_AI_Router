@@ -4,8 +4,7 @@ The picker catalogue is merged once, at client startup, so a subscription
 row that upstream refuses is worse than useless: it stays selectable and
 fails the turn. This leaf owns the evidence and the state that merge reads.
 
-- Evidence rides turns the client already makes (see `subscription_watch`):
-  no credential is stored and the router sends nothing of its own.
+- Evidence rides turns the client already makes (see `subscription_watch`).
 - `x-codex-*` usage headers, when present, are authoritative: a window at
   100% blocks that slug until its reported reset, any lower reading clears.
 - A refused turn (429) or an auth refusal (401/403) blocks the slug for
@@ -27,6 +26,7 @@ from .events import log_event
 from .transport import HOP_HEADERS
 
 GATE_NAME = 'subscription-gate.json'
+TWIN_PREFIX = subscription_roster.TWIN_PREFIX
 # The client path of a model turn; native service paths are not model turns.
 CLIENT_PATH = '/responses'
 CLEAR = ('clear',)
@@ -176,10 +176,17 @@ def _write_needed(current, entry, now):
     return current['until'] - now <= REFUSAL_TTL_S // 2
 
 
-def record(home, slug, change, now):
+def record(home, slug, change, now, probed=None):
     """Store one verdict for a slug; True when the stored gate changed."""
     gate = read(home)
     current = gate.get(slug)
+    if change is None:
+        # A verdict-less attempt (a skipped or failed probe) only notes when
+        # the next one is due, so a dead probe cannot extend a block.
+        if current is None or probed is None or current['probed'] == probed:
+            return False
+        current['probed'] = probed
+        return write(home, gate)
     if change == CLEAR:
         if current is None:
             return False
@@ -187,11 +194,14 @@ def record(home, slug, change, now):
         del gate[slug]
     else:
         _, source, until = change
+        stamp = current['probed'] if current is not None else 0
         entry = {'source': source, 'until': until,
-                 'probed': current['probed'] if current is not None else 0,
+                 'probed': stamp if probed is None else probed,
                  'since': now if current is None or current['source'] != source
                  else current['since']}
-        if current is not None and not _write_needed(current, entry, now):
+        # A probe always stamps itself, so an unmoved expiry stays due-free.
+        if (current is not None and probed is None
+                and not _write_needed(current, entry, now)):
             return False
         gate[slug] = entry
     if not write(home, gate):
@@ -206,9 +216,8 @@ def record(home, slug, change, now):
 def remember_login(provider_id, headers):
     """Keep the last subscription request headers in memory only.
 
-    The recheck speaks with the client's own login: these headers are never
-    written to disk, never logged, replaced by the next turn, and dropped
-    once the gate empties.
+    The recheck speaks with the client's own login: never written to disk,
+    never logged, replaced by the next turn, dropped once the gate empties.
     """
     global _LOGIN
     if provider_id != provider_defs.OPENAI.id or not headers:
@@ -221,3 +230,21 @@ def remember_login(provider_id, headers):
     if kept:
         with _LOCK:
             _LOGIN = kept
+
+
+def twin_hidden(roster, gated):
+    """Twin slugs to hide because the subscription row is the working route.
+
+    The OpenRouter twin of a subscription model is that model's paid
+    fallback: it lists while the subscription row cannot run, and hides while
+    it can, so the same model never appears twice in the picker.
+    """
+    return frozenset(TWIN_PREFIX + slug for slug in roster
+                     if slug in subscription_roster.SUBSCRIPTION_SLUGS
+                     and slug not in gated)
+
+
+def picker_rows(home, roster, include_twins=False):
+    """(gated roster slugs, twin slugs to hide) for the catalogue beside `home`."""
+    gated = blocked(home) & frozenset(roster)
+    return gated, frozenset() if include_twins else twin_hidden(roster, gated)

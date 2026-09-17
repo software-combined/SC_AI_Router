@@ -109,12 +109,17 @@ class InstallCatalogueTests(unittest.TestCase):
             self.assertTrue(any(_is_catalogue(cmd) and '--merge' in cmd for cmd in calls))
             catalog = json.loads((home / 'mixed-models.json').read_text())
             slugs = {m['slug'] for m in catalog['models']}
+            from ai_router import subscription_gate
+            twins = subscription_gate.twin_hidden(
+                install_mod.DEFAULT_OPENAI_MODELS, frozenset())
             for model in models_for(MODELS, 'codex'):
-                if model.provider == 'openrouter':
+                if model.provider == 'openrouter' and model.slug not in twins:
                     self.assertIn(model.slug, slugs)
+            # A subscription install lists the subscription rows; each twin
+            # waits for that row to be refused (Plan 178's second half).
             for slug in ('openai/gpt-6-astra', 'openai/gpt-5.6-sol',
                          'openai/gpt-5.6-luna', 'openai/gpt-5.6-terra'):
-                self.assertIn(slug, slugs)
+                self.assertNotIn(slug, slugs)
             self.assertTrue(check(str(home / 'mixed-models.json')))
 
     def test_install_catalogue_contains_subscription_roster(self):
@@ -151,6 +156,59 @@ class InstallCatalogueTests(unittest.TestCase):
                     install_mod.do_install(_args(home), _fetch=fake_fetch,
                                            _run=_recording_run([], fail_catalogue=True))
             self.assertFalse((home / 'releases' / version).exists())
+
+    def test_a_client_with_no_chatgpt_login_installs_without_subscription(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home, _, fake_fetch = _setup(self, tmp)[:3]
+            codex_home = Path(tmp) / 'fakehome' / '.codex'
+            codex_home.mkdir(parents=True)
+            (codex_home / 'auth.json').write_text(json.dumps(
+                {'auth_mode': 'apikey', 'OPENAI_API_KEY': 'sk-not-a-subscription'}))
+            config = _install(self, tmp, home, fake_fetch, _recording_run([]))
+            state = json.loads((home / 'mixed-router-state.json').read_text())
+            self.assertEqual(state.get('openai_mode'), 'none')
+            self.assertIn('model_provider = "scg_router"', config.read_text())
+            catalog = json.loads((home / 'mixed-models.json').read_text())
+            slugs = {m['slug'] for m in catalog['models']}
+            self.assertNotIn('gpt-5.6-luna', slugs)
+            self.assertIn('openai/gpt-5.6-luna', slugs)
+
+
+class DefaultModeTests(unittest.TestCase):
+    """The install-time default reads Codex's own login store, never a token."""
+    def _mode(self, document, name='auth.json'):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Path(tmp) / '.codex' / 'config.toml'
+            config.parent.mkdir(parents=True)
+            if document is not None:
+                (config.parent / name).write_text(document)
+            return install_mod._codex_config.default_mode(config)
+
+    def test_a_chatgpt_login_keeps_the_subscription_default(self):
+        self.assertEqual(self._mode(json.dumps(
+            {'auth_mode': 'chatgpt', 'tokens': {'access_token': 'x'}})),
+            'subscription')
+
+    def test_a_readable_store_without_tokens_is_no_subscription(self):
+        for document in ({'auth_mode': 'apikey', 'OPENAI_API_KEY': 'k'},
+                         {'tokens': {}},
+                         {'auth_mode': 'chatgpt', 'tokens': None},
+                         {}):
+            with self.subTest(document=document):
+                self.assertEqual(self._mode(json.dumps(document)), 'none')
+
+    def test_an_unknown_client_keeps_the_historical_default(self):
+        for document in (None, 'not json', '[]', '"text"'):
+            with self.subTest(document=document):
+                self.assertEqual(self._mode(document), 'subscription')
+
+    def test_the_default_path_is_the_codex_home_beside_the_config(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            codex_home = Path(tmp) / '.codex'
+            codex_home.mkdir()
+            (codex_home / 'auth.json').write_text(json.dumps({'tokens': {}}))
+            with mock.patch.object(Path, 'home', return_value=Path(tmp)):
+                self.assertEqual(install_mod._codex_config.default_mode(), 'none')
 
 
 if __name__ == '__main__':

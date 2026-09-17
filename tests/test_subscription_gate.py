@@ -185,7 +185,10 @@ class PickerRowTests(unittest.TestCase):
             _state(home)
             picker = Path(home) / 'mixed-models.json'
             catalogue.merge_file(picker)
-            self.assertIn(HELPER, _rows(home))
+            rows = _rows(home)
+            self.assertIn(HELPER, rows)
+            # The twin waits for the subscription row to be refused.
+            self.assertNotIn(TWIN, rows)
             now = time.time()
             subscription_gate.record(
                 home, HELPER, ('block', 'refusal', now + 3600), now)
@@ -194,9 +197,14 @@ class PickerRowTests(unittest.TestCase):
             self.assertNotIn(HELPER, rows)
             self.assertIn(TWIN, rows)
             self.assertIn('gpt-5.3-codex-spark', rows)
+            # The verification path agrees with the merge it checks.
+            self.assertTrue(catalogue.check(picker))
             subscription_gate.record(home, HELPER, subscription_gate.CLEAR, now)
             catalogue.merge_file(picker)
-            self.assertIn(HELPER, _rows(home))
+            rows = _rows(home)
+            self.assertIn(HELPER, rows)
+            self.assertNotIn(TWIN, rows)
+            self.assertTrue(catalogue.check(picker))
 
     def test_the_merge_hides_only_the_blocked_roster_rows(self):
         merged = catalogue.merge({'models': []}, roster=(HELPER,),

@@ -64,6 +64,8 @@ def load_state(path=STATE):
         raise SystemExit('anthropic_mode must be subscription or none')
     if 'openai_helper_fallback' in state and not isinstance(state['openai_helper_fallback'], bool):
         raise SystemExit('openai_helper_fallback must be true or false')
+    if 'subscription_probe' in state and not isinstance(state['subscription_probe'], bool):
+        raise SystemExit('subscription_probe must be true or false')
     if 'policy_enforced' in state and not isinstance(state['policy_enforced'], bool):
         raise SystemExit('policy_enforced must be true or false')
     if 'openrouter_region' in state and not provider_defs.valid_region(state['openrouter_region']):
