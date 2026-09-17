@@ -430,6 +430,15 @@ the failure; an oversized turn answers 400 with guidance instead of 413. The
 Anthropic Messages path keeps its existing answers except at that shared
 size boundary, where it answers 400 like Responses.
 
+One oversized body is expanded at a time. A zstd turn takes the single
+oversized-read slot the moment it decodes past the 16 MiB request cap, before
+the rest of the body is expanded; a second such turn arriving while it is
+held answers 503 `OVERSIZE_BUSY` with `Retry-After: 2` and no upstream call.
+The decision is on decoded bytes, because the schema-heavy turns that need
+the headroom compress at ratios no declared-size check predicts. Turns inside
+the ordinary cap never touch the slot, and the slot covers reading and
+preparing only: the expanded buffers die before the stream starts.
+
 A refused subscription turn (an upstream 429 on a login the client owns)
 answers 503 `UPSTREAM_RATE_LIMITED` whose message names the model and the
 subscription that refused it and says the turn was not served, to retry
@@ -450,6 +459,7 @@ tool names a person no longer reads stay searchable in the log.
 | `upstream_unavailable` | an upstream 5xx or 408 on a Responses turn, answered 503 |
 | `client_disconnected` | the client hung up mid-stream; previously counted as `transport_error` |
 | `upstream_rate_limited` | an upstream 429, with `category` `quota`, `auth` or `transient`; on Responses a quota 429 answers 400 `PROVIDER_REJECTED` and an auth 429 opens the key window; a subscription turn's `transient` 429 answers 503 naming the model and the subscription |
+| `turn_refused` | a turn refused before any upstream call for its size (`BODY_TOO_LARGE`, `INVALID_REQUEST_SIZE`), with compressed, decoded, limit and prepared bytes plus counts and byte weight per carried class and images; no content |
 
 ## Stream identity observation (last-observed, not proof)
 

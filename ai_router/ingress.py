@@ -16,7 +16,7 @@ import json
 import secrets
 from compression import zstd
 from . import errors, model_prompt_page, protocols, setup, sse
-from .errors import InvalidSize
+from .errors import InvalidSize, OversizeBusy
 from .runtime import MAX_DECODE_FACTOR, VERSION
 
 
@@ -191,9 +191,12 @@ def do_get(handler):
     return handler.error(errors.unsupported_route())
 
 
-def read_body(handler, max_body):
+def read_body(handler, max_body, oversize_guard=None):
     # max_body arrives from the handler so the existing patch point on
     # ai_router.router.MAX_BODY still bounds this read (Plan 128).
+    # `oversize_guard` is asked once, on decoded bytes, before a body past the
+    # ordinary cap is expanded further: the schema-heavy turns that need the
+    # headroom compress at ratios no declared-size check can predict.
     size = int(handler.headers.get('Content-Length', '-1'))
     if size < 0 or size > max_body or handler.headers.get('Transfer-Encoding'):
         raise InvalidSize('Invalid request size')
@@ -203,7 +206,11 @@ def read_body(handler, max_body):
     limit = max_body * MAX_DECODE_FACTOR if encoding == 'zstd' else max_body
     if encoding == 'zstd':
         with zstd.ZstdFile(io.BytesIO(body)) as stream:
-            decoded = stream.read(limit + 1)
+            decoded = stream.read(max_body + 1)
+            if len(decoded) > max_body:
+                if oversize_guard is not None and not oversize_guard():
+                    raise OversizeBusy()
+                decoded += stream.read(limit - max_body + 1)
     else:
         decoded = body
     if len(decoded) > limit:
