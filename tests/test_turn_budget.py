@@ -7,7 +7,7 @@ import json
 import unittest
 from unittest import mock
 
-from ai_router import provider_defs, providers, sse, turn_budget
+from ai_router import provider_defs, providers, turn_budget
 from ai_router.image_items import IMAGE_TRIM_NOTE
 from ai_router.registry import by_slug
 from ai_router.tool_adapter import SEARCH_REPEAT_NOTE, prepare_tools, stream_events
