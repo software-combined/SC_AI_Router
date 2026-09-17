@@ -2,7 +2,8 @@
 import http.client
 import json
 import time
-from . import capabilities, compaction as comp, local_services, agent_handoffs, provider_defs, transport
+from . import (capabilities, compaction as comp, local_services, agent_handoffs,
+               provider_defs, transport, turn_budget)
 from .standalone_outputs import materialize_outputs
 from . import subscription_history, context_recovery
 from .capabilities import CANONICAL_ORDER, check_effort, input_modalities
@@ -191,10 +192,14 @@ class ExternalResponsesProvider:
         headers.update({'Authorization': 'Bearer ' + credentials.key_for(self.defn.id),
                         'Content-Type': 'application/json',
                         'Accept-Encoding': 'identity'})
+        body = json.dumps(payload).encode()
+        if len(body) > turn_budget.BODY_BUDGET:
+            stats = turn_budget.fit(payload, turn_budget.BODY_BUDGET, len(body))
+            if stats:
+                body = json.dumps(payload).encode()
+                log_event('turn_trimmed', model=model, prepared_bytes=len(body), **stats)
         return Prepared(self.host, self.defn.path_for(provider_defs.RESPONSES, '/responses'),
-                        headers,
-                        json.dumps(payload).encode(), tool_names, self.name,
-                        output_cap=cap)
+                        headers, body, tool_names, self.name, output_cap=cap)
 
     def adapt(self, response, tool_names, notes=None):
         if notes is not None and not tool_names and response.status == 200:

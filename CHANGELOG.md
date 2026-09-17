@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.86
+
+- A routed turn that is over the 16 MiB prepared budget is now reduced with
+  visible notes instead of being refused outright. Repeated released-tool
+  listings collapse to the newest copy per tool (the 2026-09-16 thread
+  carried the same three namespaces 2,690 times), the oldest images past the
+  newest four become a note, and long old tool outputs are truncated head and
+  tail. Tool call/output pairing and the newest items are never touched, and
+  a turn with nothing reducible left still answers today's 400.
+- One `turn_trimmed` line records what each trim replaced, by count and byte
+  weight. No content is logged.
+
 ## 0.6.84
 
 - Error messages are plain language, and the technical reason rides the log

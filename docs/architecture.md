@@ -8,9 +8,9 @@ transitional owners name the plan that will move them.
 
 ```
 provider_defs (one definition per upstream, imports nothing) + errors,
-redaction, sse, tool_merge, image_items, atomic_write, state, events (leaves:
-no module-level local imports; events' one call-time state lookup is the only
-exception)
+redaction, sse, tool_merge, image_items, turn_budget, atomic_write, state,
+events (leaves: no module-level local imports; events' one call-time state
+lookup is the only exception)
   ^
   |
 registry / capabilities (model facts; stdlib plus the provider table only)
