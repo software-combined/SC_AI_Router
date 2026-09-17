@@ -100,7 +100,7 @@ class PublishWorkflowTests(unittest.TestCase):
         self.assertIn('ref:refs/tags/v*', _template())
         # This repository emits GitHub's immutable OIDC subject, so the
         # classic form alone could never assume the role.
-        self.assertIn('software-combined@200868195/SC_Unlimited_ai@1360169840', _template())
+        self.assertIn('software-combined@200868195/SC_AI_Router@1360169840', _template())
         self.assertIn('${ImmutableSubjectPrefix}:ref:refs/tags/v*', _template())
         # Plan 145: the publisher may read exactly one secret, the signing
         # seed, and nothing else.

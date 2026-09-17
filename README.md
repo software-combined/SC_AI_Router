@@ -5,20 +5,20 @@
   </picture>
 </p>
 
-<h1 align="center">SC Unlimited AI</h1>
+<h1 align="center">SC AI Router</h1>
 
 <p align="center">
 One local endpoint for Codex and Claude Code. All models from your ChatGPT, Claude and OpenRouter are side by side in the picker, subscription billing is kept separate.
 </p>
 
 <p align="center">
-  <a href="https://github.com/software-combined/SC_Unlimited_ai/actions/workflows/check.yml"><img alt="Checks on GitHub Actions" src="https://img.shields.io/badge/checks-GitHub_Actions-blue"></a>
-  <a href="https://github.com/software-combined/SC_Unlimited_ai/releases/latest"><img alt="Releases on GitHub" src="https://img.shields.io/badge/releases-GitHub-blue"></a>
+  <a href="https://github.com/software-combined/SC_AI_Router/actions/workflows/check.yml"><img alt="Checks on GitHub Actions" src="https://img.shields.io/badge/checks-GitHub_Actions-blue"></a>
+  <a href="https://github.com/software-combined/SC_AI_Router/releases/latest"><img alt="Releases on GitHub" src="https://img.shields.io/badge/releases-GitHub-blue"></a>
   <a href="LICENSE"><img alt="Licence: Apache-2.0" src="https://img.shields.io/badge/licence-Apache--2.0-blue"></a>
   <img alt="Python 3.14, standard library only" src="https://img.shields.io/badge/python-3.14%20stdlib%20only-3776AB">
 </p>
 
-SC Unlimited AI is a small service that runs on your own machine. It speaks the
+SC AI Router is a small service that runs on your own machine. It speaks the
 Codex and Claude Code wire protocols on a loopback port, so both clients see
 one model list: the models your existing ChatGPT or Claude sign-in already
 includes, plus approved models billed to an OpenRouter API key. You choose
@@ -90,8 +90,8 @@ state, the key file and logs live there.
 Needs Python 3.14. Build a local release, then install from it:
 
 ```sh
-git clone https://github.com/software-combined/SC_Unlimited_ai.git
-cd SC_Unlimited_ai
+git clone https://github.com/software-combined/SC_AI_Router.git
+cd SC_AI_Router
 python3.14 packaging/release.py --out dist --url-base "file://$PWD/dist"
 python3.14 packaging/install.py --feed "file://$PWD/dist/latest.json"
 ```
@@ -349,7 +349,7 @@ This repo also hosts the private `scg-agent-plugins` marketplace:
 Every plugin works in Codex and Claude Code and ships automatic updates.
 
 ```sh
-codex plugin marketplace add software-combined/SC_Unlimited_ai --ref main
+codex plugin marketplace add software-combined/SC_AI_Router --ref main
 codex plugin add scg-review@scg-agent-plugins
 ```
 
@@ -376,7 +376,7 @@ the repository, including `CONTRIBUTING.md`, `SECURITY.md`, `docs/assets/`,
 
 ## Licence
 
-SC Unlimited AI is open source under the [Apache License 2.0](LICENSE). You can use,
+SC AI Router is open source under the [Apache License 2.0](LICENSE). You can use,
 modify and redistribute it, including commercially, under the terms of that
 licence. Attribution and licence notices must be preserved as the licence
 requires.
