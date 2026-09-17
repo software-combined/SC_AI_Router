@@ -72,9 +72,9 @@ someone else's bucket.
 through CloudFront), the CloudFront distribution, the DNS alias, and the
 publisher role. The role is assumable only by
 `token.actions.githubusercontent.com`, and only for this repository's tag
-refs: `repo:software-combined/SC_Unlimited_ai:ref:refs/tags/v*` in the
+refs: `repo:software-combined/SC_AI_Router:ref:refs/tags/v*` in the
 classic subject form, or
-`repo:software-combined@200868195/SC_Unlimited_ai@1360169840:ref:refs/tags/v*`
+`repo:software-combined@200868195/SC_AI_Router@1360169840:ref:refs/tags/v*`
 in GitHub's immutable form. It may read any object in the feed bucket and
 write only what a release publishes: `bundles/*` and, per channel,
 `latest.json`, `latest.json.sig` and `models.json`. It can also list the
