@@ -427,9 +427,8 @@ class ProbeHarnessTests(unittest.TestCase):
         self.assertIn('"result": "passed"', proc.stdout)
         # Search answer content itself never reaches stdout.
         self.assertNotIn('synthetic-search-answer-482', proc.stdout)
-        # The leg's core contract: the web_search feature reaches -c flags as enabled.
         self.assertEqual([f for f in flags if f.startswith('web_search=')],
-                         ['web_search="enabled"'], flags)
+                         ['web_search="live"'], flags)
 
     def test_web_search_fails_without_search_item(self):
         proc = self._run('z-ai/glm-5.3-flash', '--web-search', FAKE_WEB_SEARCH='skipped')

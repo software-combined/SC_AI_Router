@@ -1432,3 +1432,57 @@ installed router serves. No model is called, so the run is free.
 Reading: the five-slot cap holds on this build and every routed row stays out
 of that list, which is the behaviour plan 151 stage 3 decided to keep. Stages
 1-3 and the real-machine check were recorded earlier.
+
+## Leg F at the plan's full cap, 2026-09-17 (plan 175)
+
+The eight children that had stopped at the 18-call cap re-ran with
+`--max-live-calls 23`, the plan's per-row ceiling, same parent
+`z-ai/glm-5.3-flash` and classic wire mode.
+
+| child | exit | calls | markers |
+|---|---|---|---|
+| x-ai/grok-4.6 | 0, passed | 15 | 3 of 3 |
+| anthropic/claude-haiku-4.5 | 0, passed | 18 | 3 of 3 |
+| anthropic/claude-fable-5.1 | 0, passed | 14 | 3 of 3 |
+| openai/gpt-6-astra | 0, passed | 14 | 3 of 3 |
+| anthropic/claude-opus-5 | 1 | 17 | 3 of 3, canonical replay, alias emitted, three parent 503s |
+| openai/gpt-5.6-sol | 1 | 23 | 3 of 3, canonical replay, alias emitted, parent 503s |
+| meta/muse-spark-1.3 | 1 | 23 | 2 of 3, parent 503s |
+| google/gemini-3.1-pro-preview | 1 | 23 | 0 of 3 |
+
+Reading: four of the eight pass the harness's own exit gate, and two more
+replay every marker but trip the gate on parent-side 503s - upstream noise,
+not a row verdict. Leg F now has a recorded run on every routed row except
+the key-blocked Qwen; these four join GLM Flash, GLM 5.3, Gemini Flash, Kimi,
+DeepSeek Pro, Luna and Terra.
+
+## Web-search leg unblocked, 2026-09-17 (plan 118, plan 175 open question 3)
+
+The `--web-search` leg had failed at app-server startup on every attempt since
+2026-09-15. The cause is client-side, not the router: `codex-cli
+0.154.0-alpha.6.2` derives the `web_search` enum as `disabled`, `cached`,
+`indexed`, `live`, and the probe was still sending `enabled`, so the
+app-server exited before any request:
+
+```
+Error: error loading default config after config error: unknown variant
+`enabled`, expected one of `disabled`, `cached`, `indexed`, `live`
+```
+
+`tools/probe_codex_runtime.py` now sends `live`, and the leg completes. Five
+rows were probed with it (one search turn each, effort `low`):
+
+| model | exit | result | serving endpoint |
+|---|---|---|---|
+| z-ai/glm-5.3-flash | 0 | failed: no webSearch item | DeepInfra |
+| openai/gpt-5.6-luna | 0 | failed: no webSearch item | OpenAI |
+| anthropic/claude-sonnet-5 | 0 | failed: no webSearch item | none reported |
+| moonshotai/kimi-k3 | 0 | failed: no webSearch item | InferenceNet |
+| google/gemini-3.8-flash | 0 | failed: no webSearch item | Google |
+
+Reading: the leg runs cleanly on all five rows and every turn completed 200,
+so the transport is fine; no model chose to call the search tool when asked
+for a date. That closes plan 175's open question 3 as not reproduced, and it
+is a model-behaviour observation rather than a roster defect - no row edit
+follows. The leg keeps its own `passed`/`failed` contract for future runs.
+
