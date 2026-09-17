@@ -18,18 +18,20 @@ spec.loader.exec_module(setup)
 
 class PluginTest(unittest.TestCase):
     def test_marketplace_and_bundled_skills_resolve_inside_package(self):
-        marketplace = json.loads((ROOT / ".agents/plugins/marketplace.json").read_text())
+        marketplace = json.loads(
+            (ROOT / ".agents/plugins/marketplace.json").read_text(encoding="utf-8"))
         entry = marketplace["plugins"][0]
         self.assertEqual(marketplace["name"], "scg-agent-plugins")
         self.assertEqual((ROOT / entry["source"]["path"]).resolve(), PLUGIN)
-        manifest = json.loads((PLUGIN / ".codex-plugin/plugin.json").read_text())
+        manifest = json.loads(
+            (PLUGIN / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
         self.assertEqual(entry["name"], manifest["name"])
         self.assertEqual(manifest["repository"], "https://github.com/software-combined/SC_AI_Router")
         self.assertRegex(manifest["version"], r"^\d+\.\d+\.\d+(?:\+[A-Za-z0-9.-]+)?$")
         for skill in ("pre-commit-review", "code-simplifier", "ponytail", "review-setup"):
             self.assertTrue((PLUGIN / "skills" / skill / "SKILL.md").is_file())
         for markdown in (PLUGIN / "skills").glob("*/SKILL.md"):
-            for target in re.findall(r"\]\(([^)]+)\)", markdown.read_text()):
+            for target in re.findall(r"\]\(([^)]+)\)", markdown.read_text(encoding="utf-8")):
                 path = target.split("#")[0]
                 if path and "://" not in path:
                     resolved = (markdown.parent / path).resolve()
@@ -38,24 +40,25 @@ class PluginTest(unittest.TestCase):
 
     def test_review_routing_is_one_synchronized_source_with_fixed_efforts(self):
         skills = PLUGIN / "skills"
-        review = (skills / "pre-commit-review/SKILL.md").read_text()
+        review = (skills / "pre-commit-review/SKILL.md").read_text(encoding="utf-8")
         policy_root = ROOT / 'plugins/scg-subagents/skills/optimal-subagents/references'
-        canonical = (policy_root / 'reviews.md').read_text()
-        self.assertEqual((PLUGIN / 'references/reviews.md').read_text(), canonical)
+        canonical = (policy_root / 'reviews.md').read_text(encoding="utf-8")
+        self.assertEqual((PLUGIN / 'references/reviews.md').read_text(encoding="utf-8"), canonical)
         self.assertIn('../../references/reviews.md', review)
         self.assertIn('listed eligible fallback', review)
         self.assertIn('Exact user or project model/effort', review)
-        efforts = json.loads((policy_root / 'model-evidence.json').read_text())['prescribed_efforts']
+        efforts = json.loads(
+            (policy_root / 'model-evidence.json').read_text(encoding="utf-8"))['prescribed_efforts']
         for model, effort in re.findall(r'`([^`]+)` at `([^`]+)`', canonical):
             self.assertEqual(efforts[model], effort)
         for lane in ('Simplification', 'Correctness', 'Quality', 'Adversarial'):
             self.assertEqual(canonical.count('| ' + lane + ' |'), 1)
         self.assertNotRegex(review, r"muse-spark|glm-5\.3")
         for markdown in skills.glob("*/SKILL.md"):
-            self.assertNotRegex(markdown.read_text().lower(), r"kimi|luna")
+            self.assertNotRegex(markdown.read_text(encoding="utf-8").lower(), r"kimi|luna")
 
     def test_review_brief_pins_inspect_commands(self):
-        review = (PLUGIN / "skills/pre-commit-review/SKILL.md").read_text()
+        review = (PLUGIN / "skills/pre-commit-review/SKILL.md").read_text(encoding="utf-8")
         for command in (
             "git write-tree",
             "git diff --cached --stat",
@@ -79,31 +82,47 @@ class PluginTest(unittest.TestCase):
         self.assertIn("do not cancel, interrupt, respawn", review)
         self.assertIn("Do not cancel or\nrestart an active simplifier", simplifier)
 
+    def test_lane_verdicts_keep_their_label_and_emoji_in_every_relay(self):
+        review = (PLUGIN / "skills/pre-commit-review/SKILL.md").read_text()
+        for verdict in ("`✅ All Clear`", "`📝 Proceed With Notes`", "`❌ Block`"):
+            self.assertIn(verdict, review)
+        self.assertIn("whole verdict vocabulary", review)
+        self.assertIn("interim update", review)
+        self.assertIn("from the first mention, not only in the recap", review)
+        self.assertIn("never paraphrased", review)
+
     def test_shared_updater_and_update_guide_are_synchronized_copies(self):
-        marketplace = json.loads((ROOT / '.agents/plugins/marketplace.json').read_text())
+        marketplace = json.loads(
+            (ROOT / '.agents/plugins/marketplace.json').read_text(encoding="utf-8"))
         for entry in marketplace['plugins']:
             plugin = ROOT / entry['source']['path']
             for name in ('updater.py', 'scheduling.py'):
                 self.assertEqual((plugin / 'scripts' / name).read_bytes(),
                                  (PLUGIN / 'scripts' / name).read_bytes())
             for skill in (plugin / 'skills').glob('*/SKILL.md'):
-                self.assertIn('updates.md', skill.read_text(), str(skill))
+                self.assertIn('updates.md', skill.read_text(encoding="utf-8"), str(skill))
         subagents = ROOT / "plugins/scg-subagents"
         self.assertEqual(
             (subagents / "skills/optimal-subagents/references/updates.md").read_bytes(),
             (PLUGIN / "references/updates.md").read_bytes())
 
     def test_every_marketplace_plugin_ships_matching_dual_manifests(self):
-        marketplace = json.loads((ROOT / '.agents/plugins/marketplace.json').read_text())
+        marketplace = json.loads(
+            (ROOT / '.agents/plugins/marketplace.json').read_text(encoding="utf-8"))
         for entry in marketplace['plugins']:
             plugin = ROOT / entry['source']['path']
             with self.subTest(plugin=entry['name']):
-                codex = json.loads((plugin / '.codex-plugin/plugin.json').read_text())
-                claude = json.loads((plugin / '.claude-plugin/plugin.json').read_text())
+                codex = json.loads(
+                    (plugin / '.codex-plugin/plugin.json').read_text(encoding="utf-8"))
+                claude = json.loads(
+                    (plugin / '.claude-plugin/plugin.json').read_text(encoding="utf-8"))
                 self.assertEqual(codex['name'], entry['name'])
                 self.assertEqual(claude['name'], codex['name'])
                 self.assertEqual(claude['version'], codex['version'])
 
+    @unittest.skipIf(os.name == 'nt',
+                     'execs a /bin/sh scanner stub and installs a POSIX git '
+                     'hook; the hook path itself is exercised on macOS/Linux')
     def test_provision_preserves_existing_configuration_and_requires_matching_pin(self):
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)

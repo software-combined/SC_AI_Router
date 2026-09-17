@@ -52,8 +52,9 @@ def _payload(status, body):
 
 
 def _mode_line(mode):
-    return ('ChatGPT subscription and OpenRouter' if mode == 'subscription'
-            else 'OpenRouter models only')
+    label = provider_defs.OPENROUTER.label
+    return ('ChatGPT subscription and %s' % label if mode == 'subscription'
+            else '%s models only' % label)
 
 
 def _confirm_text(payload, which='codex'):
@@ -72,7 +73,7 @@ def _confirm_text(payload, which='codex'):
                setup_page.RESTART[key_dialog.clients(which)].lower()))
 
 
-def _open_page(url, opener=None, label='OpenRouter'):
+def _open_page(url, opener=None, label=provider_defs.label_for(provider_defs.DEFAULT_EXTERNAL)):
     """Loopback-page fallback; the URL is printed only on a TTY."""
     try:
         opened = (opener or webbrowser.open)(url) is not False
@@ -84,7 +85,8 @@ def _open_page(url, opener=None, label='OpenRouter'):
 
 
 def run_window(url, tool_path=None, platform_name=None, which=None, run=None,
-               opener=None, clients='codex', post=None, label='OpenRouter'):
+               opener=None, clients='codex', post=None,
+               label=provider_defs.label_for(provider_defs.DEFAULT_EXTERNAL)):
     """Prompt, submit, confirm. 0 stored, 2 cancelled, 3 no GUI, 1 refused."""
     if platform_name is None:
         platform_name = sys.platform

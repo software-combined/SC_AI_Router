@@ -1011,3 +1011,424 @@ Row edits proposed: none (top-effort A legs pass; Haiku D is a harness
 limitation; Haiku E matches the known Sonnet conversion observation;
 leg-H narrowing is per-attempt evidence, not a pin yet; the GLM Flash F
 pass confirms the isolated handoff path but proposes no roster change).
+
+## Subagent visibility on the installed router, 2026-09-16 (plan 151)
+
+Real-machine check, no probe harness: the installed router's own log
+(`~/.codex/mixed-model-router/logs/router.jsonl`, router 0.6.70.74) recorded
+**1287 completed requests to `meta/muse-spark-1.3-contributor`**, every one
+attributed to **Meta**, between 10:41 and 14:25 UTC on 2026-09-16, alongside
+`deepseek/deepseek-v4.1-flash` traffic. Those are routed turns, so the client
+sent that OpenRouter row as a model id and the router served it.
+
+Limitation: the log carries no client version, so the delegating session's
+build is not recoverable from this evidence; the count is comparable across
+upgrades only as "an installed router served this row".
+
+Stage 3 decision, default taken under the plan's owner gate: the five override
+slots keep the roster first and no ordering change lands, so the picker and the
+existing pins are untouched.
+
+Row edits proposed: none. Still open: plan 151 stage 4, the no-billing capture
+that asserts the override set against a local sink.
+
+## Leg F re-runs, 2026-09-16 (plan 175)
+
+Client: `codex-cli 0.154.0-alpha.6.2`; router 0.6.78 working tree. Same
+in-process candidate recipe as the first F run, now with
+`--max-live-calls 20 --parent deepseek/deepseek-v4.1-flash --wire-mode
+classic`.
+
+| child | result | facts |
+|---|---|---|
+| z-ai/glm-5.3 | passed | 3 of 3 markers, canonical replay, alias emitted; the earlier 12-call run was cut by the cap, not by a defect |
+| google/gemini-3.8-flash | inconclusive | 3 of 3 markers, canonical replay, alias emitted, but six upstream 503s on the parent plus five cap errors ended the run |
+
+Reading: the markers replayed on both children, with a full pass on GLM 5.3
+once the cap left room for the parent's extra turns. Gemini Flash stays
+unproven: the parent's DeepSeek turns hit transient 503s, which the probe
+counts as errors and which pushed the run into the cap, so it needs a
+quiet-upstream re-run.
+
+Correction, 2026-09-17: the GLM 5.3 pass above rested on the printed facts,
+not on the harness's exit code. The live-children gate also demanded the
+native control marker (`SYNTH_NATIVE_CONTROL`), which a non-native parent never
+produces, so every run of this shape exited 1 whatever its facts. The gate now
+requires that marker only for a `gpt-` parent; the re-runs below carry real
+exit codes.
+
+## Haiku legs C and D, 2026-09-16 (plan 175)
+
+Client: `codex-cli 0.154.0-alpha.6.2`; router 0.6.78 working tree in an
+isolated home on its own port and token, with a disposable Codex home. These
+two legs carried the plan's last harness limitation: Haiku accepts `none` only
+while its partners accept `low` and up, so one `--effort` could not serve both
+turns. The probe now takes `--switch-effort` for the switched turn alone and
+accepts `--switch-back` after `--switch-in`.
+
+| leg | turns | result | serving_endpoint |
+|---|---|---|---|
+| C, same-slug replay | base `none`, out and back | passed: both switch turns recalled the marker | not reported |
+| D, into DeepSeek and back | base `none`, out at `low`, back at `none` | passed: both switch turns recalled the marker | DeepSeek on Together; Haiku unnamed |
+
+Eight completions across the row's eight turns plus two expected 426 websocket
+fallbacks, inside the plan's 23-call cap. Haiku reports no `serving_endpoint`,
+so its own upstream stays unattributed; the DeepSeek turn lands on Together as
+in the other sessions.
+
+## Claude CLI tool round trip on an OpenRouter-routed Claude row, 2026-09-17 (plan 115)
+
+Client: the installed Claude Code CLI (`2.1.223 (Claude Code)`) against an isolated
+router (0.6.78 working tree, own home, port and token), model
+`anthropic/claude-haiku-4.5`, with `ANTHROPIC_AUTH_TOKEN` unset so the CLI's
+own bearer is used. The session
+was asked to read a synthetic marker file with the Read tool.
+
+| step | result |
+|---|---|
+| first Messages request | completed, 200 |
+| follow-up carrying the tool result | upstream 400 `invalid_request`; the router answers a final 409 `PROVIDER_REJECTED` |
+| attempts | 11, then the CLI stopped with "Do not retry the unchanged request" |
+
+Result: the tool round trip does not complete on this route, so plan 115's
+first proof is not met. The failure sits on the follow-up body - the first
+request of the same session was served - and the provider names only
+`invalid_request`, so the next step is to capture which part of that body the
+OpenRouter-backed Anthropic endpoint refuses, not to re-run the leg.
+
+Offline narrowing, 2026-09-17: `ExternalMessagesProvider.prepare` forwards the
+client's Messages body verbatim for this row - a synthetic
+text/tool_use/tool_result body comes back byte-identical, with only the model
+id rewritten when a row carries a different upstream id - and posts it to
+`openrouter.ai/api/v1/messages`. So the router adds no translation here, and
+the refusal is in the body Claude Code sends on the follow-up or in that
+endpoint's view of it. The next step is to capture both request bodies the CLI
+sends, which needs no paid call.
+
+Second narrowing, 2026-09-17: the CLI was pointed at a local Messages sink and
+both of its request bodies were captured - the opening turn and the follow-up
+carrying `tool_use` and `tool_result` - with identical headers apart from
+content-length. The router sends both verbatim (checked against the captured
+bytes), and both are accepted (200) when replayed straight to
+`openrouter.ai/api/v1/messages`, with and without the client's `anthropic-beta`
+list and the `?beta=true` query. So neither the client's body nor the router's
+forwarding explains the live refusal. What the sink capture cannot show is the
+one thing that makes the live follow-up different: it echoes the assistant
+content the router returned, thinking blocks included. Next step: take one
+live turn through the router, keep the response it returns, and post that
+response back as the assistant turn; a refusal there would put the trigger in
+the router's stream adaptation rather than in the request.
+
+Resolution, 2026-09-17: the refusal is the connector tool volume, not the
+router and not the shape of the client's body. Four observations, cheapest
+first:
+
+- The captured live follow-up body (168,406 bytes at the sink) replays
+  through the isolated router at 200, streamed and not streamed, on the
+  0.6.78 working tree.
+- Recapturing the live follow-up at the router's own upstream socket (an
+  in-process recorder wrapped around the relay connection) shows the live
+  follow-up is 1,465,284 bytes, of which 1,456,470 is the `tools` array:
+  **702 tools, up from 29 in the opening turn**. The first turn is where
+  Claude Code finishes loading the user's claude.ai connector MCP tools
+  (Apollo, Attio, Clay, Granola, Heyreach, Instantly, Microsoft 365, Xero,
+  Airwallex, monday.com, n8n and others), so every later turn carries them.
+- Posted straight to `openrouter.ai/api/v1/messages`, that body answers 400
+  with the reason the router's bounded log line drops: "This endpoint's
+  maximum context length is 200000 tokens. However, you requested about
+  398263 tokens (14845 of text input, 351418 of tool input, 32000 in the
+  output)." The same body with only its 33 non-MCP tools answers 200.
+- So the follow-up is a genuine over-context request - 351K tokens of tool
+  definitions alone against a 200K window - that any route would refuse.
+  The router forwards the body verbatim and, per plan 169, answers the
+  upstream refusal with a final 409 `PROVIDER_REJECTED`.
+
+Plan 115's first proof is met by re-running the leg with the connector servers
+excluded (`--strict-mcp-config --mcp-config '{"mcpServers": {}}'`): the same
+CLI, model and isolated-router shape completed the tool round trip - Read
+executed, the marker came back verbatim, two Messages requests, both 200
+(164,784 and 166,071 bytes). Operator note: `docs/claude-code.md` carries the
+caveat that a routed row inherits whatever the client loads from its
+connectors, and a tool list that large cannot fit any 200K row.
+
+## Leg F re-runs with the corrected exit gate, 2026-09-17 (plan 175)
+
+Client: `codex-cli 0.154.0-alpha.6.2`; router 0.6.78 working tree.
+`tools/probe_agent_handoffs.py --live --live-children --max-live-calls 20
+--parent deepseek/deepseek-v4.1-flash --wire-mode classic`.
+
+| child | exit | facts |
+|---|---|---|
+| z-ai/glm-5.3 | 0, passed | 3 of 3 markers, all three replied, no errors, canonical replay, alias emitted, 20 calls inside the cap |
+| google/gemini-3.8-flash | 1, inconclusive | nine upstream 503s on the parent and five cap errors; markers never arrived this time |
+
+Reading: leg F passes on GLM 5.3 under the harness's own exit gate. Gemini
+Flash stays unproven and has now failed twice for upstream reasons (six 503s
+on 2026-09-16, nine on 2026-09-17) rather than for anything the router did;
+it needs a quiet upstream window, and the run is cheap to repeat when one
+opens.
+
+Third attempt, later on 2026-09-17: same shape, nine upstream 503s on the parent,
+no markers, exit 1. Three attempts have now failed, the last two without markers, so the leg
+should not be retried blind; next retry needs a different parent than
+DeepSeek V4.1 Flash or a parent-upstream quiet window.
+
+Delivery note (plan 119): the GLM 5.3 leg above is the live half (3 of 3
+markers replied, canonical replay, alias emitted, no errors, inside the
+cap). The containment half stays offline in `tests/test_agent_containment.py`,
+where `prepare` rejects encrypted agent briefs and plaintext still prepares.
+
+## Leg H `require_parameters` pin on the GLM 5.3 Flash row, 2026-09-16 (plan 175)
+
+Client: `codex-cli 0.154.0-alpha.6.2`, effort `low`; router 0.6.78 working
+tree in an isolated home on its own port and token. The row carried
+`provider_prefs: {"require_parameters": true}` in `ai_router/models.json` for
+the duration of the run only, and the file was restored afterwards; the offline
+tests in `tests/test_providers.py` already prove that object reaches the
+upstream request body.
+
+| step | result |
+|---|---|
+| base tool round trip with the pin | failed: upstream 404, router answers a final 400 `PROVIDER_REJECTED`, the client turn raises |
+| completions | none |
+
+Reading: no endpoint on this row accepts every parameter the client sends, so
+OpenRouter answers 404 in both attempts and the pin turns a working row into a
+refused turn; the unpinned baseline on the same row passes leg A. This is the
+concrete counter-example the pin question needed: `provider_prefs` stays an
+available field, and no row should set `require_parameters` without evidence
+that its endpoints accept every parameter in the request.
+
+## Leg F on the GLM 5.3 child, 2026-09-16 (plan 175)
+
+Client: `codex-cli 0.154.0-alpha.6.2`; router 0.6.78 working tree.
+`tools/probe_agent_handoffs.py --live --live-children --max-live-calls 12
+--parent deepseek/deepseek-v4.1-flash --child z-ai/glm-5.3 --wire-mode
+classic`.
+
+| fact | value |
+|---|---|
+| markers delivered to the child | 3 of 3 |
+| canonical replay | true |
+| alias emitted | true |
+| encrypted child | false (plaintext shape) |
+| end state | not reached: parent kept calling collaboration tools to the 12-call cap |
+
+Reading: 3 of 3 markers reached the child with canonical replay and alias
+emission, but the leg did not finish inside the cap. Inconclusive at the cap,
+not a handoff failure; re-run with higher `--max-live-calls` inside the
+plan's 23-call budget.
+
+## Gemini Pro base echo re-run, 2026-09-16 (plan 175 leg A)
+
+Client: `codex-cli 0.154.0-alpha.6.2`, effort `low`; router 0.6.78 working
+tree in an isolated home on its own port and token, with a disposable Codex
+home. `tools/probe_codex_runtime.py google/gemini-3.1-pro-preview` on the
+current client: two completed requests served by Google, plus the expected
+426 websocket fallback.
+
+Result unchanged from 2026-09-15. The row calls `echo_probe` correctly
+(`calls=1`) and then narrates the answer (`The tool result is
+CODEX_OPENROUTER_OK_719.`), so the base leg's strict echo assert fails on the
+model's final text, not on a router gap. The base leg gates the rest of a
+session, so Gemini Pro legs B/C/D/G stay unrun.
+
+## Muse Contributor carried-history probe, 2026-09-16 (plan 150)
+
+Client: `codex-cli 0.154.0-alpha.6.2`, the app-server build, effort `low`.
+Router: 0.6.78 working tree in an isolated home on its own port and token.
+
+Plan 150's last open item, re-run because the desktop has upgraded since the
+2026-09-12 refusal. `tools/probe_codex_runtime.py deepseek/deepseek-v4.1-flash
+--switch-in meta/muse-spark-1.3-contributor` with an isolated `--router-state`
+and a disposable `--codex-home`:
+
+| step | result | serving_endpoint |
+|---|---|---|
+| base tool round trip on DeepSeek V4.1 Flash | passed | Together |
+| switch into Muse Spark 1.3 Contributor, prompted without tools | passed, marker recalled; tool-call absence is not asserted by this leg | Meta |
+
+Three completed requests (two DeepSeek, one Muse) plus the expected 426
+websocket fallback. The switch turn recalling the marker is the contract the
+2026-09-12 incident broke twelve times on carried reasoning, so the
+`history_mode: portable` row now has live evidence on this client build.
+Slices 2c/2d stay unproven by their own rule: reopen only on a new refusal
+shape.
+
+## Isolated candidate round trip, 2026-09-16 (plan 175 row re-check)
+
+Client: `codex-cli 0.154.0-alpha.6.2` (the app-server build), effort `low`.
+Router: 0.6.77 working tree. Billed: yes, one row, four legs.
+
+The paid path was re-validated before the remaining matrix legs run, because
+the history-switch probe tool had gone stale and no paid leg had run since
+2026-09-15. `ai_router.candidate` booted a throwaway router from the working
+tree with its own home, port, token and catalogue, and ran the row's implied
+legs through `tools/probe_codex_runtime.py` with a disposable Codex home.
+
+| model | legs, by plan 175 letter | result |
+|---|---|---|
+| z-ai/glm-5.3-flash | tool and stream (A), image (E), compact (G) | passed |
+
+No row edit is proposed; this re-establishes leg A on 0.6.77 and repeats E and
+G. Provenance limit: the candidate captures the probe's own output rather than
+printing it, so this entry carries no per-leg `serving_endpoint` and no exact
+call count. Endpoint drift on this row (Together, Venice and Parasail across
+sessions) stays visible only in sessions that run `probe_codex_runtime.py`
+directly with `--router-state`, as the 2026-09-15 sections do, until the
+candidate surfaces the probe detail.
+
+## History switch and refusal classes, 2026-09-16
+
+Client: `codex-cli 0.154.0-alpha.6.2`, the app-server inside
+`/Applications/ChatGPT.app/Contents/Resources/codex`; router 0.6.77 working
+tree. Fake upstream, no model calls billed; `tools/probe_history_switch.py`.
+
+| Scenario | Result | Upstream attempts | Models |
+|---|---|---|---|
+| switch, carried history out and back | passed | 3 | DeepSeek V4.1 Flash, GPT-6 Astra, DeepSeek V4.1 Flash |
+| deterministic refusal | passed | 1 | GPT-6 Astra |
+| transient upstream failure, then success | passed | 2 | GPT-6 Astra |
+
+The switch leg asserts that the router replays the foreign provider's
+reasoning on the way back, which is plan 150's contract; the other two pin
+plan 169's final-versus-retryable split (one attempt for a final refusal, a
+second attempt for a transient one). The probe tool itself could not start:
+it still called `probe_context_budget.Client` without the `mode` argument
+that signature gained, so the run died before the client booted. That is
+fixed in this change and the run above is the evidence.
+
+## Leg F on the Gemini Flash child with a GLM parent, 2026-09-17 (plan 175)
+
+Client: `codex-cli 0.154.0-alpha.6.2`; router 0.6.78 working tree.
+`tools/probe_agent_handoffs.py --live --live-children --max-live-calls 18
+--parent z-ai/glm-5.3-flash --child google/gemini-3.8-flash --wire-mode classic`.
+
+| fact | value |
+|---|---|
+| calls | 17, inside the 18-call run cap and the row's 23-call cap |
+| markers replied | 3 of 3 (`SYNTH_066_INITIAL`, `SYNTH_066_FOLLOWUP`, `SYNTH_066_MESSAGE`) |
+| canonical replay | true |
+| alias emitted | true |
+| encrypted child | false |
+| errors | none; one stray `responseStreamDisconnected` (404) appears in the per-turn tool failures |
+
+Reading: leg F passes on the Gemini Flash child in this shape - one classic
+wire-mode run with a GLM Flash parent, on one quiet-upstream window. The
+three earlier attempts all used DeepSeek V4.1 Flash as the parent, which is
+the pairing the plan names, and died behind that parent's transient 503s;
+swapping the parent closes the leg, so the failure sat in the parent's
+upstream window rather than in this child. Two shapes stay open for this
+child: the DeepSeek parent the plan names, and Lite wire mode. The rest of
+the matrix is unchanged - the F and H rows the 2026-09-14 to 2026-09-15
+tables mark `not run (session cap)` for other children are still open, and
+Qwen stays key-blocked.
+
+## Open questions 1 to 3, 2026-09-17 (plan 175)
+
+Instruments: direct `POST https://openrouter.ai/api/v1/responses` turns on
+`deepseek/deepseek-v4.1-flash` at the row's default effort, with
+`X-OpenRouter-Metadata: enabled` and no router in the path; five billed
+turns total, all inside the row's call cap: three for question 2 (one per
+item type), and two endpoint-pinned turns for question 1. The unpinned
+question 1 configuration is the question 2 `custom_tool_call` turn, which
+carries the same shape.
+
+| question | result |
+|---|---|
+| 1. Does OpenRouter annotate converted tool calls with `tool_kind` / `responses_item_id` / `responses_item_status`, and which DeepSeek endpoint refuses them? | not reproduced: a `custom_tool_call` + its output returned 200 both unpinned and pinned to Together and to Parasail with `allow_fallbacks: false`, so the 2026-09-13 "Extra inputs are not permitted" refusal was not measured on either endpoint in this configuration |
+| 2. Do `compaction`, `additional_tools` and `custom_tool_call` items survive the conversion for a non-OpenAI vendor when sent unconverted? | all three survive: one turn each returned 200 and the model answered the marker, so DeepSeek V4.1 Flash accepts them as sent |
+| 3. Does a model ever call `openrouter_web_search` when the client's `web_search` tool rides along? | not reproduced (unchanged from 2026-09-15): the `--web-search` runtime leg still fails at app-server startup on this client build before any billed call |
+
+Open question 4 was answered on 2026-09-15 (the Contributor row accepts its
+own reasoning item back, leg C), so the plan's four open questions now each
+carry a recorded answer or a recorded non-reproduction.
+
+## Leg F across the roster, 2026-09-17 (plan 175)
+
+Client: `codex-cli 0.154.0-alpha.6.2`; router 0.6.79 working tree; parent
+`z-ai/glm-5.3-flash` (the pairing that passed on 2026-09-17), wire mode
+classic, `--max-live-calls 18`. Each child ran once; `calls` is that run's own
+live call count.
+
+| child | result | calls | markers |
+|---|---|---|---|
+| moonshotai/kimi-k3 | passed, exit 0 | 15 | 3 of 3 |
+| deepseek/deepseek-v4-pro-0813 | passed, exit 0 | 15 | 3 of 3 |
+| openai/gpt-5.6-terra | passed, exit 0 | 14 | 3 of 3 |
+| openai/gpt-5.6-luna | passed, exit 0 | 16 | 3 of 3 |
+| deepseek/deepseek-v4.1-flash | three markers, five upstream 503s on the parent forced exit 1 | 18 | 3 of 3 |
+| meta/muse-spark-1.3-contributor | three markers, stopped at the cap | 18 | 3 of 3 |
+| anthropic/claude-sonnet-5 | one marker behind five 503s, then the cap | 18 | 1 of 3 |
+| meta/muse-spark-1.3 | stopped at the cap, no reply | 18 | 0 |
+| google/gemini-3.1-pro-preview | stopped at the cap, no reply | 18 | 0 |
+| x-ai/grok-4.6 | stopped at the cap, no reply | 18 | 0 |
+| anthropic/claude-haiku-4.5 | stopped at the cap, no reply | 18 | 0 |
+| anthropic/claude-opus-5 | stopped at the cap, no reply | 18 | 0 |
+| anthropic/claude-fable-5.1 | stopped at the cap, no reply | 18 | 0 |
+| openai/gpt-5.6-sol | stopped at the cap, no reply | 18 | 0 |
+| openai/gpt-6-astra | stopped at the cap, no reply | 18 | 0 |
+
+Reading: four children pass the harness's own exit gate and two more replay
+all three markers. Eight reach the 18-call cap without a reply; that is a
+budget outcome, not a handoff verdict, and those rows need a higher cap
+(still inside the plan's 23-call ceiling) or a quieter parent before anyone
+reads them as failures. With the earlier passes (GLM Flash, GLM 5.3, Gemini
+Flash) every routed row now has a recorded leg-F attempt except Qwen, which
+stays key-blocked.
+
+## Leg H `require_parameters` across the roster, 2026-09-17 (plan 175)
+
+One base tool round trip per row with `provider_prefs: {"require_parameters":
+true}` carried in `ai_router/models.json` for that run only and restored
+afterwards, through an isolated candidate router with a disposable Codex
+home. Effort `low`, except `anthropic/claude-haiku-4.5` at `none` (its row
+allows nothing else).
+
+| rows probed here | result |
+|---|---|
+| both Muse rows, DeepSeek Pro, Gemini Pro, Grok, all four Anthropic rows, all four GPT twins | upstream 404 with the pin, no endpoint attributed, final `PROVIDER_REJECTED` |
+| plus the earlier runs (GLM Flash, DeepSeek Flash, Gemini Flash, Kimi K3, GLM 5.3) | same 404 on every one |
+
+Reading: the pin fails closed on all 18 routed rows; there is no row where
+`require_parameters: true` narrows the endpoint set instead of refusing the
+turn. `provider_prefs` stays an available field and no row sets it, which is
+the decision plan 170 recorded.
+
+## Capability legs across the roster, 2026-09-17 (plan 118)
+
+Client `codex-cli 0.154.0-alpha.6.2`, router 0.6.79 working tree, one isolated
+candidate router and a disposable Codex home per leg; effort `low` except
+Haiku at `none`. Each leg uses the plan's own pass definition.
+
+| capability | passed | failed | not reached |
+|---|---|---|---|
+| freeform `apply_patch` | 15 rows: the four Anthropic rows, both DeepSeek rows, both Gemini rows, Kimi, the four GPT twins, both GLM rows (`fileChange items=1`, `note.txt='beta'`) | x-ai/grok-4.6: the model never called the tool (`fileChange items=0`, file unchanged) | both Muse rows: the Meta upstream dropped the turn twice (`responseStreamDisconnected`, "Upstream request failed") |
+| reasoning summaries | none | every row probed streamed no reasoning summary | google/gemini-3.1-pro-preview: the base leg's echo assert fails first (its 2026-09-15 note) |
+| experimental `clock` tool | none | every row probed never called `clock` | google/gemini-3.1-pro-preview, as above |
+| audio input | transport check only, not a model capability pass: the client attached a 4,844-byte silent WAV and the turn completed 200 on all four rows that advertise `audio` (both Muse rows, both Gemini rows) | none | the model's own reading of the clip is not asserted by this leg |
+| web search | not run | - | the `--web-search` leg still dies at app-server startup before any billed call on this client build |
+
+Row edits landed with this record (plan 118 step 4): `apply_patch:
+"freeform"` on the 15 rows whose patch leg passed. `reasoning_summary` stays
+`none` everywhere, no row gains `clock`, and `audio` stays advertised because
+the upstream refusal that made it unproven on 2026-09-09 did not reproduce.
+
+## Spawn override capture, 2026-09-17 (plan 151 stage 4)
+
+`python3.14 tools/probe_spawn_list.py` starts a real app-server thread against
+a local sink that answers 426 to the websocket upgrade, records the
+`/responses` body (zstd), reads `spawn_agent`'s "Available model overrides"
+text and asserts it against the first five picker rows of the catalogue the
+installed router serves. No model is called, so the run is free.
+
+| fact | value |
+|---|---|
+| client build | bundled app-server `0.154.0-alpha.6.2` |
+| advertised overrides | `gpt-6-astra`, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.5` |
+| catalogue head | identical, in catalogue order |
+| result | exit 0 |
+
+Reading: the five-slot cap holds on this build and every routed row stays out
+of that list, which is the behaviour plan 151 stage 3 decided to keep. Stages
+1-3 and the real-machine check were recorded earlier.

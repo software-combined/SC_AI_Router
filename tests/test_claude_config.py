@@ -1,4 +1,4 @@
-"""Plan 049 Claude attach: two-key merge, conflict refusal, receipt record.
+"""Plan 112 Claude attach: two-key merge, conflict refusal, receipt record.
 
 Synthetic settings only; never touches the operator's real settings.json.
 """
@@ -266,7 +266,7 @@ class ClaudeMergeTests(unittest.TestCase):
 
     @unix_only
     def test_uninstall_detaches_claude_only_attachment(self):
-        # Plan 049: uninstall with only a Claude attachment restores its
+        # Plan 112: uninstall with only a Claude attachment restores its
         # settings instead of taking the service-only early return.
         import tempfile as _tf
         from unittest import mock as _mock

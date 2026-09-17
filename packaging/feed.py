@@ -128,6 +128,29 @@ def feed_source(feed_url):
     return 'https'
 
 
+def fetch(url):
+    """Single network entry point; tests inject a fake.
+
+    Only the public feed origin, or a local file for a manual install, is
+    accepted, so a compromised feed cannot redirect a host elsewhere. Moved
+    out of service.py (Plan 131); service re-exports it, so the installer's
+    seam and any `service.fetch` patch still resolve.
+    """
+    if url.startswith('file://'):
+        return Path(url[len('file://'):]).read_bytes()
+    if not trusted_origin(url):
+        raise SystemExit('refusing untrusted feed URL: %s' % _safe_url(url))
+    with opener().open(urllib.request.Request(url), timeout=30) as response:
+        return response.read()
+
+
+def feed_read(fetcher, url):
+    """Fetch one feed/bundle URL through the injected or default fetcher."""
+    if fetcher is fetch and not trusted_origin(url):
+        raise SystemExit('feed points off the trusted update origin; refusing')
+    return fetcher(url)
+
+
 def fetch_feed(url, etag, _fetch=None, _live_feed=None):
     """Read a feed document, revalidating with a saved ETag.
 

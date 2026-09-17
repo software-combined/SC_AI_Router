@@ -24,6 +24,12 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+import importlib.util as _ilu
+_spec = _ilu.spec_from_file_location(
+    'router_atomic_write', Path(__file__).resolve().parent / 'atomic_write.py')
+_atomic_write = _ilu.module_from_spec(_spec)
+_spec.loader.exec_module(_atomic_write)
+
 NOTICE_FILE = 'update-notice.json'
 CATALOGUE_FILE = 'mixed-models.json'
 PICKER_BASELINE_FILE = 'picker-baseline.json'
@@ -84,12 +90,6 @@ def _home_icon(home):
         return str(target)
     except OSError:
         return None
-
-
-def _write_notice(path, doc):
-    tmp = path.parent / (path.name + '.tmp')
-    tmp.write_text(json.dumps(doc) + '\n')
-    os.replace(tmp, path)
 
 
 def _dialog_pid(doc):
@@ -169,7 +169,7 @@ def _remember_picker(home, slugs):
     if slugs is None:
         return
     try:
-        _write_notice(Path(home) / PICKER_BASELINE_FILE, sorted(slugs))
+        _atomic_write.replace_json(Path(home) / PICKER_BASELINE_FILE, sorted(slugs))
     except OSError:
         pass
 
@@ -234,7 +234,7 @@ def record(home, previous, version, clients=None):
         pid = _dialog_pid(existing)
         if pid:
             doc['pid'] = pid
-        _write_notice(path, doc)
+        _atomic_write.replace_json(path, doc)
         # Only a staged notice marks rows as announced; a write that failed
         # leaves the baseline alone so the next install retries.
         _remember_picker(home, picker)
@@ -482,19 +482,19 @@ def show_pending(home, spawn=None, pid_alive=None):
                 return False
             if sent.returncode:
                 return False
-            _write_notice(path, shown)
+            _atomic_write.replace_json(path, shown)
             return True
         pid = _dialog_pid(doc)
         if pid and pid_alive(pid):
-            _write_notice(path, {'version': version, 'shown': True,
-                                 'pid': pid, 'at': _utcnow()})
+            _atomic_write.replace_json(path, {'version': version, 'shown': True,
+                                              'pid': pid, 'at': _utcnow()})
             return False
         pid = _dialog_pid({'pid': spawn(cmd)})
         if pid:
             if not _dialog_up(pid, pid_alive):
                 return False
             shown['pid'] = pid
-        _write_notice(path, shown)
+        _atomic_write.replace_json(path, shown)
         return True
     except (OSError, ValueError):
         return False

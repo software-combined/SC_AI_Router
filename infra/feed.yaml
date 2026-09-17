@@ -19,8 +19,10 @@ Parameters:
     Description: Public hosted zone for softwarecombined.com.
   BucketName:
     Type: String
-    Default: scg-router-feed-651116729473-apse2
-    Description: Bucket holding feeds and immutable bundles. Retained on delete.
+    Description: >-
+      Bucket holding feeds and immutable bundles. Retained on delete. No
+      default (Plan 160): an account-bearing bucket name in the template is an
+      identifier disclosure, so the deploy passes it.
   Repository:
     Type: String
     Default: software-combined/SC_AI_Router
@@ -31,12 +33,17 @@ Parameters:
     Description: >-
       Repository IDs GitHub emits in an immutable OIDC subject (owner@id/repo@id),
       kept beside the classic form so either claim can assume the role.
+  NotificationEmail:
+    Type: String
+    Description: >-
+      Address that receives one email per bundle write, including a second
+      write of an existing key. No default (Plan 167): the deploy passes it.
   SigningSeedArn:
     Type: String
-    Default: 'arn:aws:secretsmanager:ap-southeast-2:651116729473:secret:scg/router/feed-signing-seed-UNSET'
-    Description: ARN of the Secrets Manager secret holding the feed signing
-      seed (Plan 145). The owner replaces the placeholder with the real
-      secret ARN at deploy time.
+    Description: >-
+      ARN of the Secrets Manager secret holding the feed signing seed
+      (Plan 145), passed at deploy time. No default (Plan 160), because the
+      ARN carries the account id.
     AllowedPattern: '^arn:aws[A-Za-z-]*:secretsmanager:[a-z0-9-]+:\d{12}:secret:.+$'
 Resources:
   FeedBucket:
@@ -56,6 +63,10 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
+      NotificationConfiguration:
+        # EventBridge carries the event; the rule below filters and targets it.
+        EventBridgeConfiguration:
+          EventBridgeEnabled: true
 
   FeedBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -150,10 +161,43 @@ Resources:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
-                Action:
-                  - s3:PutObject
-                  - s3:GetObject
+                Action: s3:GetObject
                 Resource: !Sub ${FeedBucket.Arn}/*
+              # Writes are scoped to what the release publisher actually
+              # writes: bundles and the two channel documents. The
+              # first-install keys (runtimes*, bootstrap/*) stay out: that
+              # tool uploads with the operator's own credentials, and the
+              # tag-scoped release role has no reason to write the bootstrap
+              # every recipient downloads and executes (Plan 167).
+              - Effect: Allow
+                Action: s3:PutObject
+                Resource:
+                  - !Sub ${FeedBucket.Arn}/bundles/*
+                  - !Sub ${FeedBucket.Arn}/stable/latest.json
+                  - !Sub ${FeedBucket.Arn}/stable/latest.json.sig
+                  - !Sub ${FeedBucket.Arn}/stable/models.json
+                  - !Sub ${FeedBucket.Arn}/beta/latest.json
+                  - !Sub ${FeedBucket.Arn}/beta/latest.json.sig
+                  - !Sub ${FeedBucket.Arn}/beta/models.json
+              # Belt and braces: a later widening of the Allow above must not
+              # reach the bucket's own configuration or delete an object.
+              - Effect: Deny
+                Action:
+                  - s3:DeleteObject
+                  - s3:DeleteObjectVersion
+                  - s3:PutBucketPolicy
+                  - s3:PutBucketAcl
+                  - s3:PutLifecycleConfiguration
+                  - s3:PutBucketVersioning
+                  - s3:PutObjectAcl
+                  # The publish email depends on the bucket's notification
+                  # configuration, so a later widening must not be able to
+                  # drop it or re-encrypt the bucket either.
+                  - s3:PutBucketNotification
+                  - s3:PutEncryptionConfiguration
+                Resource:
+                  - !GetAtt FeedBucket.Arn
+                  - !Sub ${FeedBucket.Arn}/*
               # Absent-object HeadObject returns 403 without ListBucket, and
               # the publisher's immutability check keys on the 404.
               - Effect: Allow
@@ -168,6 +212,121 @@ Resources:
               - Effect: Allow
                 Action: secretsmanager:GetSecretValue
                 Resource: !Ref SigningSeedArn
+  # One email per bundle write. A second email for a key that already existed
+  # is the signal this plan exists to give: the supported publisher refuses
+  # the write, so a second write came from something that skipped it (167).
+  FeedPublishTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: SCG router feed bundle published
+  FeedPublishSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref FeedPublishTopic
+      Protocol: email
+      Endpoint: !Ref NotificationEmail
+  FeedPublishRule:
+    Type: AWS::Events::Rule
+    Properties:
+      EventPattern:
+        source: [aws.s3]
+        detail-type: [Object Created]
+        detail:
+          bucket:
+            name: [!Ref FeedBucket]
+          object:
+            key:
+              - prefix: bundles/
+      Targets:
+        - Id: feed-publish-email
+          Arn: !GetAtt FeedAlertFunction.Arn
+  # The mail is written here rather than by an EventBridge InputTemplate
+  # (Plan 167): a template substitutes raw, so an object key carrying a double
+  # quote would break the JSON and silence the very alarm that write should
+  # raise. Code can quote the key properly, and it sets the mail subject too.
+  FeedAlertFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: Formats one feed-publish event into the short alert email.
+      Runtime: python3.13
+      Architectures: [arm64]
+      Handler: index.handler
+      Timeout: 30
+      Role: !GetAtt FeedAlertRole.Arn
+      Environment:
+        Variables:
+          TOPIC_ARN: !Ref FeedPublishTopic
+      Code:
+        ZipFile: |
+          """One S3 Object Created event -> the feed alert email (Plan 167)."""
+          import os
+
+          import boto3
+
+          TOPIC_ARN = os.environ['TOPIC_ARN']
+          TAIL = ('One email per bundle write is expected. A second email for a '
+                  'bundle that already existed means something wrote to the feed '
+                  'without going through the publisher.')
+
+
+          def display(key):
+              """One printable ASCII line: a subject rejects anything else."""
+              line = ''.join(ch if 32 <= ord(ch) < 127 else ' ' for ch in str(key))
+              return ' '.join(line.split())
+
+
+          def handler(event, context):
+              detail = event.get('detail') or {}
+              obj = detail.get('object') or {}
+              bucket = (detail.get('bucket') or {}).get('name', 'the feed bucket')
+              key = display(obj.get('key', 'unknown object'))
+              subject = 'SCG router feed: ' + key
+              if len(subject) > 96:
+                  subject = subject[:93] + '...'
+              message = '\n'.join([
+                  'A bundle was written to ' + bucket + '.',
+                  '',
+                  'Object:  ' + key,
+                  'Size:    ' + str(obj.get('size', 'unknown')) + ' bytes',
+                  'Version: ' + str(obj.get('version-id', 'unknown')),
+                  'Time:    ' + str(event.get('time', 'unknown')),
+                  'By:      ' + str(detail.get('reason', 'a write'))
+                  + ' from account ' + str(detail.get('requester', 'unknown')),
+                  '',
+                  TAIL,
+              ])
+              boto3.client('sns').publish(TopicArn=TOPIC_ARN, Subject=subject,
+                                          Message=message)
+  # The function publishes to the topic; the rule invokes the function. Both
+  # grants are pinned, and the old events.amazonaws.com topic permission goes
+  # with the SNS target it existed for.
+  FeedAlertRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: publish-feed-alert
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: sns:Publish
+                Resource: !Ref FeedPublishTopic
+  FeedAlertPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref FeedAlertFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt FeedPublishRule.Arn
 Outputs:
   DistributionId:
     Description: Invalidation target; the release workflow reads this output.

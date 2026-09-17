@@ -284,7 +284,10 @@ as the older spelling of `--rollback --to <version>`. If something looks wrong,
 - A 503 with `Retry-After` means the request was not served: either the router
   is draining for an update (`SERVER_DRAINING`) or an upstream 429 was mapped
   to a retryable answer (`UPSTREAM_RATE_LIMITED`). The JSON body names the
-  code; retry after the delay.
+  code; retry after the delay. When a subscription route refused the turn,
+  the message names the model and the subscription and says to retry shortly
+  or to select a routed model; routed models reached through the external
+  provider keep the neutral text.
 - Logs live under `logs/` in the router home, and `update.log` records the
   source of each install.
 

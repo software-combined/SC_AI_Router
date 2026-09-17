@@ -1,4 +1,4 @@
-"""Offline checks for synthetic probe media (Plan 044 test plan)."""
+"""Offline checks for synthetic probe media (Plan 118 test plan)."""
 import io
 import struct
 import unittest

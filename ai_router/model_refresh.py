@@ -21,7 +21,7 @@ import urllib.request
 from pathlib import Path
 from .atomic_write import replace_text
 
-from . import registry
+from . import catalogue, model_prompt, registry
 
 LOG = logging.getLogger('codex_router')
 CACHE_NAME = 'models-cache.json'
@@ -35,9 +35,10 @@ def validate(text):
     if len(models) > 200:
         raise SystemExit('model refresh: more than 200 models')
     for model in models:
-        for part in model.slug.split('/'):
-            if not part or not all(c.isalnum() or c in '._-:~' for c in part):
-                raise SystemExit('model refresh: bad slug %r' % model.slug)
+        for identifier in (model.slug, registry.upstream_id_for(model)):
+            for part in identifier.split('/'):
+                if not part or not all(c.isalnum() or c in '._-:~' for c in part):
+                    raise SystemExit('model refresh: bad slug %r' % identifier)
     return models
 
 
@@ -102,8 +103,26 @@ def apply(models):
     """
     registry.MODELS = models
     registry.BY_SLUG = {m.slug: m for m in models}
+    # catalogue reads its own import-time snapshot for the picker merge and
+    # the prompt's visible set, so it belongs to the same swap (Plan 125).
+    catalogue.MODELS = models
     from . import capabilities
     capabilities.rebuild(models)
+
+
+def check_pending(home):
+    """Keep the new-model snapshot current; never disturb the refresh.
+
+    Plan 135: the offer itself belongs to the updater's notify path, which
+    queries the running router over loopback. This call keeps the seen-set
+    honest, so a model that arrives through the refresh reads there as a
+    difference instead of being seeded away silently by the first query.
+    Any failure is ignored: the refresh outcome must not change.
+    """
+    try:
+        model_prompt.pending(home)
+    except Exception:
+        pass
 
 
 def start(models_url, home, _urlopen=urllib.request.urlopen):
@@ -113,6 +132,7 @@ def start(models_url, home, _urlopen=urllib.request.urlopen):
     cached = cached_models(home)
     if cached is not None:
         apply(cached)
+        check_pending(home)
     etag_path = Path(home) / 'models-etag'
     try:
         etag = etag_path.read_text().strip() or None
@@ -127,6 +147,7 @@ def start(models_url, home, _urlopen=urllib.request.urlopen):
             models, etag = poll_once(models_url, home, etag, _urlopen)
             if models is not None:
                 apply(models)
+                check_pending(home)
             if etag:
                 try:
                     replace_text(etag_path, etag + '\n')

@@ -17,7 +17,7 @@ from .providers import is_native_service
 
 
 def relay(handler, provider, prepared, metrics, started, has_image=False, *, log_event):
-    routed = (prepared.provider == provider_defs.OPENROUTER.id
+    routed = (provider.defn.caches_deterministic_refusals()
               and metrics.get('protocol') == provider_defs.RESPONSES)
     if routed:
         cached = upstream.recall_refusal(prepared.provider, metrics.get('model'), prepared.body)
@@ -36,7 +36,7 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
         # Phases land inside post_with_phases even on failure.
         response, headers_done = transport.post_with_phases(
             conn, prepared, metrics)
-        if (provider.defn.dialect == 'openai'
+        if (provider.defn.dialect == provider_defs.DIALECT_OPENAI
                 and is_native_service(metrics['path'])
                 and response.status in (401, 403)):
             transport.read_capped(response, transport.ERROR_BODY_LIMIT)
@@ -54,7 +54,7 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
             category, retry_after = retry_after
             if (category in ('quota', 'auth')
                     and metrics.get('protocol') == provider_defs.RESPONSES
-                    and prepared.provider == provider_defs.OPENROUTER.id):
+                    and provider.defn.opens_key_window_on_auth_failure()):
                 if category == 'auth':
                     if handler.server.credentials.key_rejected(prepared.provider):
                         setup.open_key_window(handler.server,
@@ -73,11 +73,11 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
             # Gate the terminal-frame path on the protocol as well: the
             # Messages ingress shares the openrouter dialect but has no
             # Responses failure frame to send.
-            if (provider.defn.dialect == 'openrouter'
+            if (provider.defn.sends_context_error_frame()
                     and metrics.get('protocol') == provider_defs.RESPONSES
                     and upstream.is_context_error(raw)):
                 return handler.context_error(metrics['stream'])
-            if (provider.defn.dialect == 'openrouter'
+            if (provider.defn.opens_key_window_on_auth_failure()
                     and response.status in (401, 403)
                     and metrics.get('protocol') == provider_defs.RESPONSES
                     and handler.server.credentials.key_rejected(prepared.provider)):
@@ -91,6 +91,7 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
                 None, {'status': response.status, 'body': raw},
                 {'model': metrics.get('model'), 'provider': prepared.provider,
                  'protocol': metrics.get('protocol'),
+                 'dialect': provider.defn.dialect,
                  'elapsed_ms': round((time.monotonic() - started) * 1000, 1),
                  'timeout_s': transport.UPSTREAM_TIMEOUT_S,
                  'has_image': has_image, 'routed': routed})

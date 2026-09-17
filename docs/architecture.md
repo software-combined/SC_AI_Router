@@ -105,6 +105,32 @@ marketplace outside the router dependency map: no `ai_router/`, `tools/` or
 `packaging/` module imports from `plugins/`, and plugin scripts never import
 router code.
 
+## Client contract
+
+`ai_router/clients/registry.py` is the one owner of who sees what: one row per
+client, carrying the wire protocol the router already serves, the picker
+predicate and the discovery predicate. Both Claude projections read it, and
+`packaging/install.py` derives its `--client`/`--clients` choices from the
+`ai_router/clients/roster.py` leaf, which is import-free so the installer can
+spec-load it (`packaging/service.py::load`). Adding a client means:
+
+1. a row in `ai_router/clients/registry.py` (and its id in the roster leaf);
+2. a protocol the router already dispatches on -- `/responses` or
+   `/v1/messages`, per `protocols/TABLE` -- or a STOP: a third protocol is a
+   decision, not an edit;
+3. a capability projection under `ai_router/clients/` only if the client's
+   catalogue shape differs from Codex's;
+4. an activation adapter under `packaging/` owning that client's config file,
+   the keys it owns, its conflict refusal and its detach path, following
+   `claude_config.py` as the smaller of the two examples;
+5. a receipt entry through the shared receipt writer, so `--status` and
+   `--uninstall` know what was touched;
+6. an entry in `docs/compatibility.md` naming the client version verified.
+
+The genuinely hard case is a client that speaks neither protocol: it needs a
+new adapter class behind the definition table, never a branch in the request
+path (`AGENTS.md` section 3).
+
 ## Distribution (outside the request path)
 
 `infra/` owns the update feed as code (repository-only templates, deployed from a checkout): the certificate stack, the private
@@ -136,7 +162,9 @@ them while the child installer retains its own installation lock.
   shared transport in `transport.py`, and dispatch in `protocols/`.
 - `ai_router/catalogue.py` + `models.py` + `live_refresh.py` share client
   projection duties through `model_metadata.py` (pure normalization) and
-  `clients/` (capability projection, picker visibility).
+  `clients/` (capability projection, picker visibility); the served
+  instruction text and its capped delegation roster live in the
+  `model_instructions.py` leaf (Plan 154).
 - Client activation lives in `packaging/codex_config.py`: the Codex block,
   picker preservation, guidance, and receipts. `--client none` runs the
   router lifecycle without touching client settings; absence of a client

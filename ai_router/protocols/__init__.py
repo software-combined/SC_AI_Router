@@ -13,6 +13,7 @@ from .. import claude, provider_defs, providers
 from . import messages, responses
 
 POST = 'POST'
+GET = 'GET'
 
 TABLE = (
     # Responses family: Codex turns, compaction, native service paths.
@@ -24,15 +25,32 @@ TABLE = (
     # Messages family: Claude Code ingress.
     {'methods': (POST,), 'paths': claude.CLAUDE_POST_PATHS,
      'policy': messages.POLICY},
+    # Claude discovery: the Messages family's Anthropic-shaped listing. One
+    # row owns the path, so the handler asks the table instead of carrying a
+    # second branch (Plan 155, F10).
+    {'methods': (GET,), 'paths': frozenset({'/v1/models'}),
+     'policy': messages.POLICY},
 )
 
 
 def owned_paths():
-    """Every path any protocol row owns; the handler allowlist."""
+    """Every path any protocol row owns, for either method."""
     paths = set()
     for row in TABLE:
         paths |= row['paths']
     return frozenset(paths)
+
+
+def listing(method, path, allowed=None):
+    """Discovery payload for a GET row this table owns, else None.
+
+    The owning policy supplies the shape; the allowlist rides along so a
+    managed install's listing cannot announce a model its routing refuses.
+    """
+    policy = select(method, path)
+    if policy is None or policy.listing is None:
+        return None
+    return policy.listing(allowed)
 
 
 def select(method, path):

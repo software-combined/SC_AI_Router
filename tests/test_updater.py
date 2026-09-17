@@ -9,6 +9,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from tests._platform import unix_only
+
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location(
     "updater", ROOT / "plugins/scg-review/scripts/updater.py")
@@ -104,6 +106,7 @@ class UpdaterTest(unittest.TestCase):
             self.assertEqual(run.call_args.kwargs["env"]["GIT_TERMINAL_PROMPT"], "0")
             self.assertEqual(run.call_args.kwargs["timeout"], 120)
 
+    @unix_only
     def test_schedule_is_stable_and_refuses_unknown_files(self):
         with tempfile.TemporaryDirectory() as tmp, \
                 patch.object(updater.Path, "home", return_value=Path(tmp)), \
@@ -132,6 +135,7 @@ class UpdaterTest(unittest.TestCase):
             self.assertEqual(script.read_text(), "existing user content")
             run.assert_not_called()
 
+    @unix_only
     def test_migration_retires_released_per_plugin_schedulers_once(self):
         digest = lambda text: hashlib.sha256(text).hexdigest()
         legacy = (
@@ -240,6 +244,7 @@ class UpdaterTest(unittest.TestCase):
             self.assertEqual(script.read_bytes(), b"released review updater")
             run.assert_not_called()
 
+    @unix_only
     def test_migration_resumes_after_interrupt_and_preflights_before_retiring(self):
         legacy = (
             ("com.softwarecombined.agent-plugins.update",

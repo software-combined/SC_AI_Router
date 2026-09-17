@@ -37,11 +37,11 @@ _desktop_config = _svc.load(
 _diag = _svc.load(
     'router_diagnostics', Path(__file__).resolve().parent / 'diagnostics.py')
 # Never name a packaging module after a standard-library one: scripts run with
-# packaging/ as sys.path[0] (python packaging/install.py), so packaging/operator.py
-# shadowed the stdlib operator that collections imports, breaking every entry
-# point with a circular import.
+# packaging/ as sys.path[0], so packaging/operator.py shadowed the stdlib
+# operator that collections imports, breaking every entry point with a circular import.
 _operator = _svc.load(
     'router_operator_surface', Path(__file__).resolve().parent / 'operator_surface.py')
+_client_roster = _svc.load('router_client_roster', Path(__file__).resolve().parents[1] / 'ai_router' / 'clients' / 'roster.py')
 _linux = _platforms._linux_mod().systemd
 _updater = _svc.load(
     'router_updater', Path(__file__).resolve().parent / 'updater.py')
@@ -211,7 +211,7 @@ def _sync_seams():
 def _resolve_clients_and_modes(args, home, state):
     # Absence in legacy state means Codex, not service-only.
     client = args.client or state.get('client', 'codex')
-    if client not in ('codex', 'none'):
+    if client not in (_client_roster.DEFAULT_CLIENT, 'none'):
         raise SystemExit('client must be codex or none')
     changed = state.get('client', 'codex') != client
     if changed: state['client'] = client
@@ -221,7 +221,7 @@ def _resolve_clients_and_modes(args, home, state):
     # Codex settings.
     clients = args.clients
     if clients is None: clients = 'none' if client == 'none' else 'codex'
-    if clients not in ('codex', 'claude', 'both', 'none'):
+    if clients not in _client_roster.CLIENT_IDS + ('both', 'none'):
         raise SystemExit('clients must be codex, claude, both, or none')
     if client == 'none' and clients != 'none':
         raise SystemExit('--client none conflicts with --clients %s' % clients)
@@ -328,7 +328,7 @@ def do_install(args, _fetch=fetch, _run=None):
         except KeyError:
             raise SystemExit('bundle has no MANIFEST.json')
     home.mkdir(mode=0o700, parents=True, exist_ok=True)
-    # Plan 057 Stage 2: harden the home before any token or key is minted
+    # Plan 116 Stage 2: harden the home before any token or key is minted
     # inside it (never widen-then-narrow); POSIX no-op, mode 0700 owns it.
     backend.protect_secret(home)
     (home / 'logs').mkdir(exist_ok=True)
@@ -626,10 +626,10 @@ def build_parser():
                         choices=('subscription', 'none'),
                         help='Independent Claude subscription choice; '
                              'unset follows the OpenAI mode as before.')
-    parser.add_argument('--client', default=None, choices=('codex', 'none'),
+    parser.add_argument('--client', default=None, choices=(_client_roster.DEFAULT_CLIENT, 'none'),
                         help='Client to activate (default codex); none leaves '
                              'all client settings and guidance untouched.')
-    parser.add_argument('--clients', default=None, choices=('codex', 'claude', 'both'),
+    parser.add_argument('--clients', default=None, choices=_client_roster.CLIENT_IDS + ('both',),
                         help='Clients to attach (default codex); both attaches '
                              'Codex and Claude Code.')
     parser.add_argument('--claude-mode', default=None,
@@ -657,7 +657,7 @@ def main(argv=None):
               do_update if args.update else
               do_check_update if args.check_update else
               do_install)
-    # Plan 057 Stage 1: read-only verbs run everywhere and take no lock; a
+    # Plan 116 Stage 1: read-only verbs run everywhere and take no lock; a
     # dry run mutates nothing and keeps its historic exemptions. --update is
     # the scheduled applying pass: it spawns the installer as a child and
     # that child takes the lock itself, so a parent holding it would make

@@ -1,4 +1,4 @@
-"""Plan 049 --status: read-only redacted diagnostics, install or not.
+"""Plan 112 --status: read-only redacted diagnostics, install or not.
 
 Never touches the network: health checks run through the injected seam,
 and key validity is never probed. Asserts no secret-bearing value in

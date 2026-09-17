@@ -1,8 +1,8 @@
 """Apply capabilities.py to external catalogue entries with backup and guards."""
 import json
-import os
 import sys
 from pathlib import Path
+from .atomic_write import replace_text
 from .capabilities import EXTERNAL_MODELS, catalogue_patch
 from .clients.codex import capability_fields as codex_projection
 from .registry import by_slug
@@ -25,16 +25,10 @@ def apply(catalog, live):
     return catalog
 
 def write_guarded(path, before, text):
-    temp = path.with_name(path.name + f'.{os.getpid()}.tmp')
-    temp.write_text(text)
-    try:
-        if path.read_text() != before:
-            raise SystemExit('Catalog changed concurrently; no changes applied')
-        backup = path.with_name(path.name + '.bak')
-        backup.write_text(before)
-        os.replace(temp, path)
-    finally:
-        temp.unlink(missing_ok=True)
+    if path.read_text() != before:
+        raise SystemExit('Catalog changed concurrently; no changes applied')
+    path.with_name(path.name + '.bak').write_text(before)
+    replace_text(path, text)
 
 if __name__ == '__main__':
     catalog_path, live_path = Path(sys.argv[1]), Path(sys.argv[2])

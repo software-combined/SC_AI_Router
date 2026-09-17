@@ -18,7 +18,8 @@ import sys
 from . import provider_defs, transport
 from .errors import ClaudeSubscriptionRequired, PreparationError, UnknownModel
 from . import registry
-from .registry import by_slug
+from .clients import registry as client_table
+from .registry import by_slug, upstream_id_for
 
 # POST-only Messages paths; a future GET-only route (like /v1/models) must
 # not silently become POST-routable.
@@ -63,21 +64,29 @@ def family_tier(alias):
     return FAMILY_TIER_DEFAULT
 
 
-def models_listing():
+def models_listing(allowed=None):
     """Anthropic-style {data: [{id, display_name, anthropic_family_tier}]}.
 
     Verified rows first A-Z by display name, then preview rows A-Z.
     External rows outside the key-filtered snapshot hide, matching the
     picker, the prompt and request routing; subscription rows list on.
+    A portco allowlist (Plan 068) hides external rows it does not name, so
+    a managed install without a policy announces nothing external.
     """
     from . import availability as _availability
     snap = _availability.current()
     avail = None if snap is None else (snap.get('models') or frozenset())
+    allowset = None if allowed is None else frozenset(allowed)
+    defn = client_table.get('claude')
     ordered = sorted(registry.MODELS, key=lambda m: (m.tier != 'verified',
                                             m.display_name.casefold()))
     rows = []
     for entry in ordered:
-        if not entry.listed:
+        if not defn.discovery_visible(entry):
+            continue
+        if (allowset is not None
+                and provider_defs.is_external(entry.provider)
+                and entry.slug not in allowset):
             continue
         if (avail is not None
                 and provider_defs.is_external(entry.provider)
@@ -134,11 +143,15 @@ class ExternalMessagesProvider:
             raise PreparationError('Claude ingress serves messages only')
         body = raw_body
         slug = resolve(model)
+        entry = by_slug(slug) if isinstance(slug, str) else None
+        upstream = upstream_id_for(entry) if entry is not None else slug
         # resolve() only returns a different string for a known registry slug.
         # payload is the parsed form of this same body, so rewrite the alias
-        # there instead of decoding raw_body again.
-        if isinstance(model, str) and slug != model and isinstance(payload, dict):
-            payload['model'] = slug
+        # there instead of decoding raw_body again. A row whose upstream id is
+        # its own slug leaves the body byte-identical, which is the ingress
+        # contract.
+        if isinstance(model, str) and upstream != model and isinstance(payload, dict):
+            payload['model'] = upstream
             body = json.dumps(payload).encode()
         return transport.Prepared(
             self.host, self.defn.path_for(provider_defs.MESSAGES, path),

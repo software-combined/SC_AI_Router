@@ -94,9 +94,12 @@ class StreamRecord:
 
 def streamed_metrics(record):
     """The counters every log line for this response carries."""
+    unattributed = (record.forwarded_bytes - record.content_delta_bytes
+                    - record.reasoning_bytes)
     return {'forwarded_delta_bytes': record.forwarded_bytes,
             'content_delta_bytes': record.content_delta_bytes,
-            'reasoning_delta_bytes': record.reasoning_bytes}
+            'reasoning_delta_bytes': record.reasoning_bytes,
+            'unattributed_delta_bytes': unattributed}
 
 
 def relay_stream(handler, provider, response, prepared, metrics, started,
@@ -119,7 +122,7 @@ def relay_stream(handler, provider, response, prepared, metrics, started,
     attempt_metrics = {'model': metrics.get('model')}
     pending = record.pending
     chunks = provider.adapt(response, prepared.tool_names, attempt_metrics)
-    normalized = (provider.defn.dialect == 'openrouter'
+    normalized = (provider.defn.dialect == provider_defs.DIALECT_OPENROUTER
                   and metrics.get('protocol') == provider_defs.RESPONSES
                   and metrics['response_kind'] == 'sse'
                   and metrics['response_encoding'] == 'identity')

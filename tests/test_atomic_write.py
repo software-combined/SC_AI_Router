@@ -2,12 +2,12 @@
 import json
 import os
 import shutil
-import stat
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
+from tests._platform import assert_owner_only
 from tests.install_fixtures import install_mod
 
 
@@ -43,7 +43,7 @@ class AtomicWriteTests(unittest.TestCase):
         home = self._dir()
         target = home / 'config.toml'
         mod.replace_text(target, 'x = 1\n')
-        self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o600)
+        assert_owner_only(self, target)
 
     def test_failed_write_keeps_original_and_no_temp(self):
         mod = _mod()
@@ -91,7 +91,7 @@ class AtomicWriteTests(unittest.TestCase):
         target = root / 'config.toml'
         mod.replace_text(target, 'x = 1\n')
         self.assertEqual(target.read_text(), 'x = 1\n')
-        self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o600)
+        assert_owner_only(self, target)
 
     def test_concurrent_writers_leave_one_complete_file(self):
         # Plan 094 core claim: unique temp names mean two writers cannot unlink
@@ -134,7 +134,15 @@ class AtomicWriteTests(unittest.TestCase):
             def write(self, text):
                 raise OSError('disk full')
 
-        with mock.patch.object(os, 'fdopen', return_value=_BadStream()):
+        def _fdopen(fd, *args, **kwargs):
+            # Real os.fdopen takes ownership of the descriptor; close it here
+            # too so the temp is not left open. Windows refuses to unlink a
+            # file with a live handle, so a mock that leaked fd would strand
+            # the temp there while POSIX quietly tolerated it.
+            os.close(fd)
+            return _BadStream()
+
+        with mock.patch.object(os, 'fdopen', side_effect=_fdopen):
             with self.assertRaises(OSError):
                 mod.replace_text(target, 'torn\n')
         self.assertEqual(target.read_text(), 'original\n')
@@ -148,7 +156,14 @@ class AtomicWriteTests(unittest.TestCase):
         real = home / 'managed.toml'
         real.write_text('managed\n')
         link = home / 'config.toml'
-        link.symlink_to(real)
+        try:
+            link.symlink_to(real)
+        except OSError as exc:
+            # Windows only lets a process create symlinks with Developer Mode
+            # enabled or SeCreateSymbolicLinkPrivilege held (WinError 1314).
+            # The replace-the-link-itself behaviour is unchanged by that; skip
+            # rather than fail where the OS forbids making the link at all.
+            self.skipTest(f'symlink creation not permitted here: {exc}')
         mod.replace_text(link, 'new\n')
         self.assertFalse(link.is_symlink())
         self.assertEqual(link.read_text(), 'new\n')

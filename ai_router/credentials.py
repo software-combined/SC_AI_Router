@@ -11,8 +11,6 @@ from pathlib import Path
 from . import key_store, provider_defs, state as state_mod
 from .state import default_home  # used below and re-exported for importers
 
-ENV_VAR = provider_defs.OPENROUTER.key.env
-
 # Per-module flag so tests can drive the Windows branch without patching
 # global os.name (which pathlib itself reads).
 _ON_WINDOWS = os.name == 'nt'
@@ -63,14 +61,10 @@ class Credentials:
             return value
         key_file = self.home / spec.file
         if key_file.exists():
-            if os.name != 'nt' and key_file.stat().st_mode & 0o077:
-                raise PermissionError(f'{key_file} must be readable by the owner only (chmod 600)')
-            if _ON_WINDOWS:
-                from . import winacl as _winacl
-                try:
-                    _winacl.check(key_file)
-                except SystemExit as exc:
-                    raise PermissionError(str(exc))
+            # One owner for the key-privacy gate (Plan 131): the platform
+            # branch and its message live in winacl.
+            from . import winacl as _winacl
+            _winacl.require_owner_only(key_file, _ON_WINDOWS)
             value = key_file.read_text().strip()
             if value:
                 return value
