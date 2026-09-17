@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.87
+## 0.6.88
 
 - A routed Codex turn that carries tools now reports the weight of the
   history the thread actually carries, so the client compacts before a thread
@@ -14,6 +14,11 @@
   2026-09-16 thread carried 67 MB while upstream was billed about 1 MB, so
   Codex never reached 90% of the window and never compacted.
 
+The first beta tag for this change set, `v0.6.87-beta`, failed its native
+installer checks before anything was published (`ai_router/turn_budget.py` was
+missing from `docs/runtime-files.md`); tags are immutable, so the version
+rolled forward.
+
 ## 0.6.86
 
 - A routed turn that is over the 16 MiB prepared budget is now reduced with
@@ -25,6 +30,24 @@
   a turn with nothing reducible left still answers today's 400.
 - One `turn_trimmed` line records what each trim replaced, by count and byte
   weight. No content is logged.
+
+## 0.6.85
+
+- A search-heavy Codex thread no longer dies at the request-size gate. The
+  zstd decode ceiling that exists so prepare can slim released-tool schemas
+  now reaches six times the request cap (96 MiB decoded; the compressed body
+  is still capped at 16 MiB), so a 67 MB thread like the 2026-09-16 one
+  (2,690 tool-search results, about 1 MB prepared) is prepared instead of
+  refused.
+- One oversized body is expanded and prepared at a time. The slot is taken on
+  decoded bytes, the moment a turn passes the 16 MiB cap, so a second one -
+  including parallel sub-agents replaying the same large history - gets one
+  retryable 503 `OVERSIZE_BUSY` until the slot frees. A body inside the
+  ordinary cap never touches the slot.
+- A refused turn logs one `turn_refused` line naming its sizes and what the
+  turn carried, by class and byte weight (released-tool results, tool
+  outputs, reasoning, messages, images). No content is logged, and the
+  client-visible message is unchanged.
 
 ## 0.6.84
 
@@ -47,24 +70,6 @@
 - Path redaction moved to `ai_router/redaction.py`, a leaf, so the message
   catalogue stays inside its recorded size ceiling. `errors.redact` still
   works for existing callers.
-
-## 0.6.85
-
-- A search-heavy Codex thread no longer dies at the request-size gate. The
-  zstd decode ceiling that exists so prepare can slim released-tool schemas
-  now reaches six times the request cap (96 MiB decoded; the compressed body
-  is still capped at 16 MiB), so a 67 MB thread like the 2026-09-16 one
-  (2,690 tool-search results, about 1 MB prepared) is prepared instead of
-  refused.
-- One oversized body is expanded and prepared at a time. The slot is taken on
-  decoded bytes, the moment a turn passes the 16 MiB cap, so a second one -
-  including parallel sub-agents replaying the same large history - gets one
-  retryable 503 `OVERSIZE_BUSY` until the slot frees. A body inside the
-  ordinary cap never touches the slot.
-- A refused turn logs one `turn_refused` line naming its sizes and what the
-  turn carried, by class and byte weight (released-tool results, tool
-  outputs, reasoning, messages, images). No content is logged, and the
-  client-visible message is unchanged.
 
 ## 0.6.83
 
