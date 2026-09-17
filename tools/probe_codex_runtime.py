@@ -153,7 +153,7 @@ if '--provider' in sys.argv:
     # No-subscription acceptance: drive a custom provider, e.g. scg_router.
     cfg['model_provider'] = sys.argv[sys.argv.index('--provider') + 1]
 cfg.update(project_doc_max_bytes=0, developer_instructions='Synthetic protocol test only.',
-           web_search='enabled' if '--web-search' in sys.argv else 'disabled',
+           web_search='live' if '--web-search' in sys.argv else 'disabled',
            approval_policy='never',
            sandbox_mode='workspace-write' if '--apply-patch' in sys.argv else 'read-only')
 cfg['features'] = {k: False for k in ['apps', 'shell_tool', 'collab', 'multi_agent', 'code_mode']}
