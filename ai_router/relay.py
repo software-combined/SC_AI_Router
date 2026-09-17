@@ -12,7 +12,7 @@ the injected object, never a fresh import.
 import http.client
 import json
 import time
-from . import errors, local_services, provider_defs, setup, stream_errors, stream_relay, subscription_fallback, transport, upstream
+from . import errors, local_services, provider_defs, setup, stream_errors, stream_relay, subscription_fallback, subscription_watch, transport, upstream
 from .providers import is_native_service
 
 
@@ -36,6 +36,8 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
         # Phases land inside post_with_phases even on failure.
         response, headers_done = transport.post_with_phases(
             conn, prepared, metrics)
+        subscription_watch.observe(getattr(handler.server.credentials, 'home', None),
+                                   metrics, prepared, response)
         if (provider.defn.dialect == provider_defs.DIALECT_OPENAI
                 and is_native_service(metrics['path'])
                 and response.status in (401, 403)):
