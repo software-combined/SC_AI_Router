@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.6.82
+
+No change to what a running router does: this release carries the publish
+alert's failure handling and the probe tooling that landed after 0.6.81.
+
+- A feed publish alert that cannot be delivered is no longer silent. A failed
+  delivery is kept in a dead-letter queue, and an alarm on the rule mails the
+  operator through the same topic, so a formatter failure reaches a person
+  instead of only a log line. The bundle mail itself is unchanged.
+- The capability probe's web-search leg runs again. The client renamed the
+  config value it reads for search, and the probe was still sending the old
+  one, which stopped the probe's client from starting at all; it sends the
+  client's live-search value now. Probe tooling only.
+- Documentation and hygiene riding the same release: the probe matrix and the
+  filed upstream report are recorded in `docs/compatibility.md`, and
+  `.gitignore` now keeps per-install router state, logs and local artefacts
+  out of a checkout.
+
 ## 0.6.81
 
 - On Windows, task registration now recovers when a stale Task Scheduler task
