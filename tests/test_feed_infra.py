@@ -7,9 +7,12 @@ also pin the absence of an edge gate and of any token plumbing in the
 publish workflow.
 """
 import unittest
+from copy import deepcopy
 from pathlib import Path
-import json
-import re
+import os
+import sys
+import types
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 FEED_TEMPLATE = ROOT / 'infra' / 'feed.yaml'
@@ -20,17 +23,17 @@ def _template():
     return FEED_TEMPLATE.read_text()
 
 
-def _input_template():
-    """The EventBridge InputTemplate body, unindented."""
+def _inline_code():
+    """The formatter's ZipFile source, unindented."""
     lines = _template().splitlines()
-    start = next(i for i, line in enumerate(lines) if 'InputTemplate: |' in line)
+    start = next(i for i, line in enumerate(lines) if 'ZipFile: |' in line)
     indent = len(lines[start]) - len(lines[start].lstrip())
     body = []
     for line in lines[start + 1:]:
         if line.strip() and len(line) - len(line.lstrip()) <= indent:
             break
-        body.append(line.strip())
-    return '\n'.join(body).strip()
+        body.append(line[indent + 2:] if line.strip() else '')
+    return '\n'.join(body) + '\n'
 
 
 class PublicFeedTemplateTests(unittest.TestCase):
@@ -111,54 +114,97 @@ class PublishWorkflowTests(unittest.TestCase):
 
 
 class TemplateGuardTests(unittest.TestCase):
-    def test_publish_email_is_a_short_readable_message(self):
-        """The alarm is for a person: the raw S3 envelope is not (Plan 167)."""
+    BODY = {'detail': {'bucket': {'name': 'the-feed-bucket'},
+                       'object': {'key': 'bundles/ai-router-0.6.80.78.tar.gz',
+                                  'size': 514300, 'version-id': 'version-id'},
+                       'reason': 'PutObject', 'requester': 'an-account'},
+            'time': '2026-09-16T23:25:31Z'}
+
+    def _handler(self, published):
+        """Exec the formatter's inline source against a stubbed SNS client.
+
+        The stub enforces the documented SNS subject contract, so a subject
+        the service would reject fails here instead of silently silencing the
+        alert in production.
+        """
+        code = _inline_code()
+        compile(code, 'feed-alert-inline', 'exec')
+        stub = types.ModuleType('boto3')
+
+        def publish(**kwargs):
+            subject = kwargs['Subject']
+            assert len(subject) < 100, 'SNS caps subjects under 100 characters'
+            assert subject.isascii() and all(32 <= ord(c) < 127 for c in subject), \
+                'SNS rejects line breaks and control characters in a subject'
+            published.append(kwargs)
+
+        stub.client = lambda name, **kw: types.SimpleNamespace(publish=publish)
+        namespace = {}
+        with mock.patch.dict(sys.modules, {'boto3': stub}), \
+                mock.patch.dict(os.environ, {'TOPIC_ARN': 'topic-arn'}):
+            exec(code, namespace)
+        return namespace['handler']
+
+    def test_rule_invokes_the_formatter_not_the_topic(self):
+        """The rule drives the function; the old SNS target is gone (Plan 167)."""
         text = _template()
-        self.assertIn('InputTransformer:', text)
-        self.assertIn('one email per bundle', text.lower())
-        for path in ('$.detail.object.size', '$.detail.object.version-id', '$.time',
-                     '$.detail.reason'):
-            with self.subTest(path=path):
-                self.assertIn(path, text)
+        self.assertIn('!GetAtt FeedAlertFunction.Arn', text)
+        self.assertNotIn('InputTransformer', text)
+        self.assertNotIn('FeedPublishTopicPolicy', text)
+        self.assertIn('Principal: events.amazonaws.com', text)
+        self.assertIn('SourceArn: !GetAtt FeedPublishRule.Arn', text)
 
-    def test_message_substitutes_no_value_a_writer_controls(self):
-        """A crafted key would break the JSON template and silence the alarm.
+    def test_formatter_role_can_only_publish_to_the_topic(self):
+        policy = _template().split('publish-feed-alert', 1)[1]
+        self.assertIn('Action: sns:Publish', policy)
+        self.assertIn('Resource: !Ref FeedPublishTopic', policy)
+        self.assertNotIn('Resource: \'*\'', policy)
 
-        EventBridge substitutes raw, so quoting the object key into the
-        template lets the actor this alert watches suppress its own email by
-        writing a key that carries a double quote.
-        """
-        lines = _template().splitlines()
-        start = next(i for i, line in enumerate(lines) if 'InputPathsMap:' in line)
-        paths = []
-        for line in lines[start + 1:]:
-            if line.strip() and len(line) - len(line.lstrip()) <= 12:
-                break
-            if ':' in line:
-                paths.append(line.split(':', 1)[1].strip())
-        self.assertNotIn('$.detail.object.key', paths)
-        self.assertTrue(paths, 'the transformer maps no input paths')
-
-    def test_message_template_survives_substitution_as_json(self):
-        """EventBridge needs valid JSON, so a broken template fails silently.
-
-        A person would simply stop receiving the alarm, which is the failure
-        this test exists to prevent.
-        """
-        # Account-shaped values would trip the Plan 160 identifier scan; the
-        # substitution check needs a shape, not a real account.
-        sample = {'<size>': '514300', '<bucket>': 'scg-router-feed-apse2',
-                  '<time>': '2026-09-16T23:25:31Z', '<reason>': 'PutObject',
-                  '<requester>': 'publishing-account', '<version>': 'version-id'}
-        body = _input_template()
-        self.assertEqual(sorted(re.findall(r'<[a-z]+>', body)), sorted(sample))
-        for token, value in sample.items():
-            body = body.replace(token, value)
-        message = json.loads(body)
-        for expected in ('514300 bytes', 'version-id', 'PutObject',
+    def test_handler_mails_a_readable_message(self):
+        published = []
+        self._handler(published)(self.BODY, None)
+        self.assertEqual(len(published), 1)
+        sent = published[0]
+        self.assertEqual(sent['TopicArn'], 'topic-arn')
+        self.assertIn('bundles/ai-router-0.6.80.78.tar.gz', sent['Subject'])
+        for expected in ('bundles/ai-router-0.6.80.78.tar.gz', '514300 bytes',
+                         'version-id', '2026-09-16T23:25:31Z', 'PutObject',
                          'without going through the publisher'):
             with self.subTest(expected=expected):
-                self.assertIn(expected, message)
+                self.assertIn(expected, sent['Message'])
+
+    def test_handler_mails_a_hostile_key_instead_of_dropping_it(self):
+        """A crafted key must not silence the alarm this exists to raise.
+
+        An EventBridge InputTemplate substitutes raw, so a quoting formatter
+        upstream of it could be broken by the writer it watches; code quotes
+        the key as one printable line and sends regardless: a key with a line
+        break, a 1008-character key and a non-ASCII key all still mail.
+        """
+        hostile = ('bundles/evil".tar.gz\nsecond line',
+                   'bundles/' + 'x' * 1000 + '.tar.gz',
+                   'bundles/héllo\x00world.tar.gz')
+        for key in hostile:
+            with self.subTest(key=key[:40]):
+                published = []
+                event = deepcopy(self.BODY)
+                event['detail']['object']['key'] = key
+                self._handler(published)(event, None)
+                self.assertEqual(len(published), 1)
+                subject = published[0]['Subject']
+                self.assertLess(len(subject), 100)
+                message = published[0]['Message']
+                # One line per field: a key that carries newlines must not be
+                # able to forge a second Version: or Time: line.
+                for label in ('Object:', 'Size:', 'Version:', 'Time:', 'By:'):
+                    with self.subTest(label=label):
+                        self.assertEqual(
+                            sum(line.startswith(label) for line in message.splitlines()), 1)
+                object_line = next(line for line in message.splitlines()
+                                   if line.startswith('Object:'))
+                self.assertTrue(object_line.isascii())
+                self.assertIn('bundles/', object_line)
+                self.assertIn('without going through the publisher', message)
 
     def test_bucket_is_private_and_retained(self):
         text = _template()
