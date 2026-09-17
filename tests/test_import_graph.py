@@ -14,16 +14,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# Measured after Plan 165's moves: 27 function-local ai_router imports, all
-# deliberate (platform-only winacl, client-facing availability, CLI-only
+# Measured after Plan 165's moves and again after Plan 178's picker gate was
+# withdrawn in 0.6.89: 27 function-local ai_router imports, all deliberate
+# (platform-only winacl, client-facing availability, CLI-only
 # candidate/catalogue, the transport/errors boundary, the events leaf's one
-# call-time home lookup, runtime's policy load). Plan 178's subscription
-# picker gate adds two: subscription_watch borrows availability for the
-# picker rewrite, and subscription_probe borrows providers for its probe
-# turn, because the gate leaf may import neither without closing a cycle.
-# This is a ceiling, not a target: shrinking it is welcome, and raising it
-# again needs a comment naming the module and why.
-LAZY_IMPORT_CEILING = 29
+# call-time home lookup, runtime's policy load). This is a ceiling, not a
+# target: shrinking it is welcome, and raising it again needs a comment
+# naming the module and why.
+LAZY_IMPORT_CEILING = 27
 
 # Only the composition root's three importers may name `runtime`.
 RUNTIME_IMPORTERS = {'ai_router/router.py', 'ai_router/ingress.py',
