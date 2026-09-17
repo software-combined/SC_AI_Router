@@ -40,15 +40,15 @@ Confirm it, then re-check with
 reads `PendingConfirmation`; until it does, the publish email never arrives
 and the second-write signal is silently missing.
 
-Each `bundles/` write then mails one short message - bucket, size, S3 version
-id, time and the PutObject actor - instead of the raw S3 event. The object key
-is deliberately not quoted into it: EventBridge substitutes raw, so a crafted
-key carrying a double quote would break the JSON template and silence the
-alarm the write should raise; the message says which version to look up
-instead. The rule's `InputTransformer` owns that wording, and
-`tests/test_feed_infra.py` keeps it valid JSON and keeps any writer-controlled
-value out of it, because a template EventBridge cannot parse stops delivery
-without an error anywhere a person would see.
+Each `bundles/` write then mails one short message - subject, object, size,
+S3 version id, time and the PutObject actor - instead of the raw S3 event. The
+small `FeedAlertFunction` owns that wording. It exists rather than an
+EventBridge `InputTemplate` because a template substitutes raw: an object key
+carrying a double quote would break the template and stop delivery, letting
+the writer this alert watches silence their own alarm. The function also sets
+the mail subject. `tests/test_feed_infra.py` compiles the inlined function,
+drives it with a hostile key and pins the grants (the rule may invoke only
+this function; the function may publish only to this topic).
 
 ### Where the feed identifiers live (Plan 160)
 
@@ -89,14 +89,13 @@ second write of a published key is refused by S3 itself. A role holder that
 skips the flag can still replace a key: the publish email reports it (one
 message per `bundles/*` write, so a second message for an existing key is
 the signal), and bucket versioning recovers the replaced bytes afterwards.
-When that second message arrives, recover deliberately. The email names the
-version, not the key, so start from the version and let it name the object:
-`aws s3api list-object-versions --bucket "$FEED_BUCKET" --prefix bundles/`
-lists every version with its key, and the emailed `VersionId` selects the one
-written. Compare that key's versions' `Metadata.sha256` against the feed
-document that names the bundle, copy the matching version back over the key
-with `aws s3api copy-object --copy-source <bucket>/<key>?versionId=...`, then
-find out what held the publisher role.
+When that second message arrives, recover deliberately: the email names the
+object and the version it wrote, so list that key's versions (`aws s3api
+list-object-versions --bucket "$FEED_BUCKET" --prefix bundles/<name>`),
+match the emailed `VersionId`, compare each version's `Metadata.sha256`
+against the feed document that names the bundle, copy the matching version
+back over the key with `aws s3api copy-object --copy-source
+<bucket>/<key>?versionId=...`, then find out what held the publisher role.
 The feed and its bundles are public: readers need no credential.
 
 Verify the feed before trusting a release. Before the first publish the
