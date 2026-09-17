@@ -237,6 +237,21 @@ class Backend:
                              '/xml', str(xml_path), '/f'],
                             capture_output=True, text=True)
         if result.returncode != 0:
+            # `/f` overwrites a task this caller already owns, but it CANNOT
+            # overwrite one registered under a different principal: an install
+            # first made under a local account (UserId = a local SID) is
+            # "Access is denied" to the same human's domain token
+            # (ACTIVATE\user), and vice versa. Deleting the stale task clears
+            # the owner, so a plain re-create then lands under the current
+            # principal. Verified on Windows 11 2026-09-16 (local->domain
+            # account switch). Only retried on failure, so a first, clean
+            # install keeps the running instance alive as before.
+            self._call(['schtasks', '/delete', '/tn', name, '/f'],
+                       capture_output=True, text=True)
+            result = self._call(['schtasks', '/create', '/tn', name,
+                                 '/xml', str(xml_path), '/f'],
+                                capture_output=True, text=True)
+        if result.returncode != 0:
             raise SystemExit('Windows task registration failed for %s: %s'
                              % (name, _tail(result.stderr or result.stdout)))
 
