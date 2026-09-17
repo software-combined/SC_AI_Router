@@ -47,6 +47,28 @@ def build_block(home, state, mode):
             + catalog_line + END + '\n')
 
 
+def default_mode(config_path=None):
+    """Install-time default when neither the flag nor stored state speaks.
+
+    Codex keeps its own login beside its configuration. A readable store
+    with no ChatGPT tokens (an API-key-only or signed-out client) means
+    this install serves no subscription, so the picker never offers rows
+    that cannot run. Only the presence of that block is read, never a
+    token value, and a missing or unreadable store keeps the historical
+    default: an unknown client is not a subscription-less one.
+    """
+    path = (Path.home() / '.codex' / 'config.toml' if config_path is None
+            else Path(config_path))
+    try:
+        doc = json.loads((path.parent / 'auth.json').read_text())
+    except (OSError, ValueError):
+        return 'subscription'
+    if not isinstance(doc, dict):
+        return 'subscription'
+    tokens = doc.get('tokens')
+    return 'subscription' if isinstance(tokens, dict) and tokens else 'none'
+
+
 def preserve_picker_selection(config_path, previous_block, block):
     """Carry owner-chosen picker lines across managed block rewrites.
 

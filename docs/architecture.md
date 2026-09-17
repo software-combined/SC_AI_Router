@@ -100,6 +100,20 @@ leaf beside `stream_errors.py`, never a dispatcher or a credential owner.
    deliberate exception is `tools/disable.py`, the installed-host remover
    that `packaging/install.py` runs.
 
+`subscription_gate.py` owns the ChatGPT subscription picker gate: one JSON
+document beside the router state, the verdict rules the picker merge reads,
+and the login the recheck borrows (memory only, never persisted). It imports
+the definition table, the subscription roster leaf, transport's hop list and
+the event log, and it may import neither `catalogue` nor `availability`:
+`catalogue` imports the gate, and `availability` borrows `catalogue` for the
+picker rewrite, so an edge back would close a cycle (Plan 178).
+`subscription_watch.py` is its
+worker beside the transport leaves, consumed by `relay` and `__main__`: the
+request-path `observe` hook and the picker rewrite through
+`availability.sync_catalogue`. `subscription_probe.py` is its timer-driven
+sibling: the bounded four-hour recheck that borrows `providers` for one probe
+turn. Nothing under `packaging/` imports these modules.
+
 `plugins/` and `.agents/plugins/marketplace.json` host the SCG agent-plugin
 marketplace outside the router dependency map: no `ai_router/`, `tools/` or
 `packaging/` module imports from `plugins/`, and plugin scripts never import

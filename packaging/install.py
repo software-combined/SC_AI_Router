@@ -236,7 +236,7 @@ def _resolve_clients_and_modes(args, home, state):
         state['claude_mode'] = claude_mode; changed = True
     if args.anthropic_mode is not None and args.anthropic_mode != state.get('anthropic_mode'):
         state['anthropic_mode'] = args.anthropic_mode; changed = True
-    mode = args.openai_mode or state.get('openai_mode', 'subscription')
+    mode = args.openai_mode or state.get('openai_mode') or _codex_config.default_mode()
     if mode not in ('subscription', 'none'):
         raise SystemExit('openai_mode must be subscription or none')
     if state.get('openai_mode') != mode:

@@ -16,7 +16,7 @@ prompt to it.
 """
 import json
 
-from . import errors, provider_defs
+from . import errors, provider_defs, subscription_gate, subscription_roster
 from .image_items import has_images
 from .providers import ExternalResponsesProvider
 from .registry import by_slug
@@ -26,7 +26,7 @@ HELPER_SOURCES = frozenset({'thread_title', 'thread_description',
                             'thread_summary', 'thread_title_reconsideration'})
 METADATA_HEADER = 'x-codex-turn-metadata'
 MAX_METADATA_BYTES = 8192
-TWIN_PREFIX = 'openai/'
+TWIN_PREFIX = subscription_roster.TWIN_PREFIX
 
 
 def helper_turn(headers):
@@ -110,6 +110,7 @@ def plan(state, prepared, path, payload, raw_body, headers, credentials):
 
 def prepare(provider, model, path, payload, raw_body, headers, server):
     """provider.prepare plus the refused-turn fallback plan when eligible."""
+    subscription_gate.remember_login(provider.name, headers)
     prepared = provider.prepare(model, path, payload, raw_body, headers, server.credentials)
     prepared.fallback = plan(server.state, prepared, path, payload, raw_body, headers,
                              server.credentials)
