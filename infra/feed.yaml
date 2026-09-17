@@ -240,6 +240,21 @@ Resources:
       Targets:
         - Id: feed-publish-email
           Arn: !Ref FeedPublishTopic
+          # A person reading this email needs four facts and one reason, not
+          # the raw S3 envelope (Plan 167). InputTemplate must be valid JSON
+          # and EventBridge substitutes raw, so only values AWS generates are
+          # quoted into it: a crafted object key carrying a double quote would
+          # otherwise break the JSON and silence the very alarm it should raise.
+          InputTransformer:
+            InputPathsMap:
+              bucket: $.detail.bucket.name
+              size: $.detail.object.size
+              time: $.time
+              reason: $.detail.reason
+              requester: $.detail.requester
+              version: $.detail.object.version-id
+            InputTemplate: |
+              "SCG router feed: a bundle was written to <bucket>.\n\nSize: <size> bytes\nVersion: <version>\nTime: <time>\nBy: <reason> from account <requester>\n\nThe object key is in the event record; match on this version. One email per bundle write is expected. A second email for a bundle that already existed means something wrote to the feed without going through the publisher."
   # CloudFormation grants the publish permission for a Lambda target only, and
   # cfn-lint cannot see the omission: without this the rule deploys clean and
   # never delivers an email. SourceArn pins it to our rule (Plan 167).
