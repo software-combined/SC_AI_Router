@@ -8,6 +8,12 @@ user turns carry no such source. When the ChatGPT allowance is exhausted,
 upstream answers 429 for every helper turn and the client stores a slice
 of the prompt as the title instead.
 
+Client 0.154 attaches the read-only app tool allowlist it derives from the
+installed apps and MCP servers to those helper turns, so a helper turn can
+carry tools. Tools do not disqualify a turn here: the twin is prepared from
+the client's own payload, tools included, the same way a directly requested
+external row is.
+
 With the `openai_helper_fallback` state flag on, the router answers those
 helper turns from the registry's external twin row (`openai/<slug>`) and
 relays that response. Ordinary turns keep today's refusal. The flag is off
@@ -78,14 +84,12 @@ class Plan:
 def plan(state, prepared, path, payload, raw_body, headers, credentials):
     """Fallback plan for this turn, or None when it is not eligible.
 
-    Only Responses turns the subscription owns, carrying a helper thread
-    source and no tools, qualify. The tool check keeps the twin's redispatch
-    body identical to the client's own payload, which the subscription
-    prepare may otherwise rewrite.
+    Only Responses turns the subscription owns that a helper thread source
+    marks qualify; tools do not disqualify one.
     """
     if not state.get('openai_helper_fallback') or path != '/responses':
         return None
-    if prepared.provider != provider_defs.OPENAI.id or payload.get('tools'):
+    if prepared.provider != provider_defs.OPENAI.id:
         return None
     if not helper_turn(headers):
         return None
