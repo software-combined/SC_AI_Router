@@ -47,7 +47,10 @@ def _scope(home):
 def _visible(client, allowed, available=None):
     visible, _hidden = catalogue._visible_rows(client, allowed,
                                                available=available)
-    return [(model.slug, model.display_name) for model in visible]
+    # The picker label, not the stored display name: the `· OpenRouter`
+    # suffix belongs to the picker's own route column, and an approval
+    # page or dialog that repeats it reads as noise.
+    return [(model.slug, catalogue.catalog_name(model)) for model in visible]
 
 
 def _available(home):
@@ -60,13 +63,15 @@ def _available(home):
 
 
 def visible_models(home, client='codex'):
-    """[(slug, display_name)] the client's picker would show right now.
+    """[(slug, label)] the client's picker would show right now.
 
     ``allowed`` is resolved per call from ``model-policy.json``: an absent
     policy is unfiltered and a rejected or unresolvable one is the empty
     set. The running router gates requests on the allowlist it captured at
     startup, so a policy delivered while it runs is visible here before it
     is routable. Rows that are not listed (Plan 145) are never returned.
+    The label is the picker's own (`<Vendor>: <Model> <Version?>`), so the
+    dialog, the approval page and the picker name a model the same way.
     """
     _scope_key, allowed = _scope(home)
     return _visible(_client(client), allowed, _available(home))
@@ -134,7 +139,7 @@ def _in_policy(seen, allowed):
 
 
 def pending(home, client='codex'):
-    """[(slug, display_name)] visible now that the snapshot has not seen.
+    """[(slug, label)] visible now that the snapshot has not seen.
 
     The first call for a scope seeds the snapshot with everything visible
     and returns []; a scope change re-seeds the same way. A rejected or

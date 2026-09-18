@@ -229,9 +229,13 @@ new permission.
 When a scheduled update lands a version that adds models for the machine's
 policy scope, the updater asks the running router over loopback (the 3.9
 updater never imports the runtime) and offers a Codex restart: a desktop
-notification names up to three of the new models (macOS always; Linux when
-`notify-send` is installed; Windows logs the offer only) and the approval
-page opens in the browser on macOS and Linux. The page is reachable only
+notification and the native restart dialog each name up to three of the new
+models (macOS always; Linux when `notify-send` is installed; Windows logs
+the notification only) and the approval page opens in the browser on macOS
+and Linux. All three name a model the way the picker does
+(`<Vendor>: <Model>`, without the `· OpenRouter` route suffix), and a dialog
+that cannot reach the running router keeps its version-only sentence, so a
+stopped service never delays an update. The page is reachable only
 through its single-use link, which carries the per-install path token plus
 a 48 h nonce; both Restart Codex and Later acknowledge, and only the
 Restart click quits and reopens Codex, on macOS. The offer is skipped on

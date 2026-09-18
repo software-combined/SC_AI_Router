@@ -87,11 +87,12 @@ class VisibleModelsTests(unittest.TestCase):
         self.assertNotIn(target.slug, slugs)
         self.assertIn('z-ai/glm-5.3-flash', slugs)
 
-    def test_display_names_come_from_the_registry_rows(self):
+    def test_picker_labels_come_from_the_registry_rows(self):
         with tempfile.TemporaryDirectory() as tmp:
             rows = dict(model_prompt.visible_models(tmp))
         self.assertEqual(rows['z-ai/glm-5.3-flash'],
-                         by_slug('z-ai/glm-5.3-flash').display_name)
+                         catalogue.catalog_name(by_slug('z-ai/glm-5.3-flash')))
+        self.assertNotIn(' · OpenRouter', rows['z-ai/glm-5.3-flash'])
 
     def test_unknown_client_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -121,7 +122,7 @@ class SnapshotTests(unittest.TestCase):
         model_prompt.pending(self.home)  # seed
         with mock.patch.object(catalogue, 'MODELS', _with_extra()):
             shown = model_prompt.pending(self.home)
-            self.assertEqual(shown, [(EXTRA, 'Acme: Test Model · OpenRouter')])
+            self.assertEqual(shown, [(EXTRA, 'Acme: Test Model')])
             acked = model_prompt.acknowledge(self.home)
             self.assertEqual(acked, shown)
             self.assertEqual(model_prompt.pending(self.home), [])

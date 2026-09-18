@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.92
+
+- The restart dialog after an update names the models that update added,
+  using the same picker labels the desktop notification and the approval
+  page show. A dialog that cannot reach the running router keeps its
+  version-only sentence, nothing outside the machine's policy is announced,
+  and the approval page no longer repeats a raw model id beside each name.
+
 ## 0.6.91
 
 - A fresh Codex install starts on DeepSeek V4.1 Flash at Max thinking. The
