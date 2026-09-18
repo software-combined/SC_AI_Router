@@ -224,12 +224,16 @@ names its backticked state path because Jev cannot see question IDs.
 Two `noul` propositions ask whether the pair's task-relevant facts are
 already covered by retained evidence, and whether knowing the call happened
 still matters. These are probabilities of propositions, not importance scores.
-The conservative experimental `THRESHOLD = 0.90` is applied directly to
-each returned value. Drop both members only when both values are below it.
-If the call meets the threshold but the facts do not, keep the call and the
-first 300 output characters and the removed character count; no re-run advice
-is added, since idempotency is not known here. Otherwise keep both verbatim,
-in original order. The threshold needs
+The conservative experimental `THRESHOLD = 0.90` is applied directly to each
+returned value, and both propositions are read positively: a pair drops only
+when the facts count as covered *and* the call no longer matters; covered
+evidence whose call still matters keeps the call with a shortened output; an
+uncovered pair is kept verbatim. An earlier revision compared both values
+below the threshold, which deleted exactly the pairs the judge had called
+uncovered; the benchmark measured it and the polarity is now pinned by tests.
+The first 300 output characters and the removed character count are kept, and
+no re-run advice is added, since idempotency is not known here. Otherwise keep
+both verbatim, in original order. The threshold needs
 shadow calibration; the previous live trial's 0.69 on a plainly true fact
 shows why the scores are not assumed production-quality calibration.
 
