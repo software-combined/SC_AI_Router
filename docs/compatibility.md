@@ -1,5 +1,41 @@
 # Compatibility
 
+## Oversized routed threads, 2026-09-17
+
+Thread `01a0ab7c` (`meta/muse-spark-1.3-contributor`) died with the router's
+`BODY_TOO_LARGE`: 2,690 released-tool search results from 9 distinct queries
+carried 63.7 MB of repeated schemas inside a 67.3 MB decoded body - past the
+64 MiB decode ceiling that exists so prepare can slim exactly that shape. The
+handoff bundle records 12,197 session lines, one failed turn after 5.25 h, and
+the work intact in its worktree.
+
+The fix is verified offline, with no paid calls: `codex-cli 0.153.1` against
+the in-process router and a fake upstream passes every scenario of
+`tools/probe_context_budget.py` in both compaction modes, including the added
+`carried_usage` leg - the provider reports 1,000 input tokens and the client
+still compacts, because the router reported the weight of the history the
+thread carries.
+
+## Subscription picker gate withdrawn, 2026-09-17
+
+Plan 178 shipped in 0.6.83 and was withdrawn in 0.6.89 after the live
+trial it had been waiting for. On the owner's machine, with the ChatGPT
+allowance exhausted, the gate fired exactly as designed: at 22:03:43 the
+router read an `x-codex-primary/secondary-used-percent` header at 100%, logged
+`subscription_gate_changed` with `source: headers` and `blocked: true`,
+and rewrote `mixed-models.json`; the helper turn was then answered by
+`openai/gpt-5.6-luna` and billed to OpenRouter.
+
+That is what killed the design. The twin swap put an OpenRouter-billed row
+in the subscription row's place, under the same model name, so the picker
+kept offering "Luna" while the subscription could not run - and the client,
+which reads its catalogue only at startup, showed the pre-swap list either
+way until it was reopened. The picker now lists every subscription row and
+its twin beside it, labelled `· OpenRouter`, and an exhausted row answers
+the refusal message instead of moving. Evidence, state file and four-hourly
+probe are all gone; the helper-turn fallback and the install-time
+no-subscription default stay.
+
 ## Model-switch history boundary, 2026-09-13
 
 The client's `<model_switch>` developer message (`core/src/session/mod.rs:4289`
@@ -357,6 +393,16 @@ provider-reported usage rather than payload bytes, and maps a
 own history estimator already discounts base64 image payloads — including
 images inside `function_call_output` — to a flat ~1,844 tokens per
 non-original-detail image (`codex-rs/core/src/context_manager/history.rs`).
+From 0.6.86 the router reports that threshold's input in the terms the
+client compacts on: a routed Codex turn carrying tools has its
+`response.completed` usage raised, never lowered, to the weight of the history the thread actually
+carries (`bytes / 5.8` for text plus the flat image allowance, clamped to the
+row's window). Without that the slim the router performs is invisible
+upstream, so a byte-heavy thread never crossed 90% of the window - the
+2026-09-16 thread carried 67 MB while upstream was billed about 1 MB.
+Subscription passthrough, tool-free responses (which keep their verbatim
+forwarding contract) and the Claude Code Messages path keep the provider's
+own usage.
 OpenCode v1.18.25 treats the same code as recoverable: `SessionProcessor.halt`
 sets `needsCompaction` and the run loop compacts
 (`packages/opencode/src/session/processor.ts`). OpenCode is a credential

@@ -30,7 +30,8 @@ try:
     _rotate_mod = _ilu.module_from_spec(_rotate_spec)
     _rotate_spec.loader.exec_module(_rotate_mod)
     _rotate_mod.rotate_log(home / 'logs' / 'launchd.log')
+    _rotate_mod.prune_logs(home / 'logs')
 except (OSError, ImportError, AttributeError):
-    pass  # Rotation is hygiene; an older release without it still boots.
+    pass  # Rotation and ageing are hygiene; an older release still boots.
 sys.path.insert(0, str(release))
 runpy.run_module(module, run_name='__main__')

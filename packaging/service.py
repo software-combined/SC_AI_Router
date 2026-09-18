@@ -395,6 +395,25 @@ def rotate_log(path, limit_bytes=1024 * 1024, backups=2):
         pass
 
 
+def prune_logs(logs_dir, days=30, now=None, live=('router.jsonl', 'launchd.log', 'update.log')):
+    """Age logs out; live sinks and symlinks stay, and OSError never escapes.
+
+    Rotated backups, old support bundles and task XML age out a month after
+    their last write; this runs at every service start and scheduled update.
+    """
+    cutoff = (time.time() if now is None else now) - days * 86400
+    removed = 0
+    try:
+        for path in list(Path(logs_dir).iterdir()):
+            if (path.name not in live and path.is_file()
+                    and not path.is_symlink() and path.stat().st_mtime < cutoff):
+                path.unlink()
+                removed += 1
+    except OSError:
+        pass
+    return removed
+
+
 def _install_home_file(home, release_dir, name, target=None):
     """Copy one stable entry point beside the state directory, atomically."""
     target = target or name

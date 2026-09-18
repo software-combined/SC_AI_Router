@@ -430,17 +430,45 @@ the failure; an oversized turn answers 400 with guidance instead of 413. The
 Anthropic Messages path keeps its existing answers except at that shared
 size boundary, where it answers 400 like Responses.
 
+One oversized body is expanded at a time. A zstd turn takes the single
+oversized-read slot the moment it decodes past the 16 MiB request cap, before
+the rest of the body is expanded; a second such turn arriving while it is
+held answers 503 `OVERSIZE_BUSY` with `Retry-After: 2` and no upstream call.
+The decision is on decoded bytes, because the schema-heavy turns that need
+the headroom compress at ratios no declared-size check predicts. Turns inside
+the ordinary cap never touch the slot, and the slot covers reading and
+preparing only: the expanded buffers die before the stream starts.
+
+A routed turn that is still over the 16 MiB prepared budget is reduced with
+visible notes before it is refused: repeated released-tool listings collapse to
+the newest copy per tool, the oldest images past the newest four (or 4 MiB)
+become a note, and long old tool outputs are truncated head and tail. Tool
+call/output pairing and the newest items are never touched, and a turn with
+nothing reducible left still answers 400 with today's message.
+
 A refused subscription turn (an upstream 429 on a login the client owns)
 answers 503 `UPSTREAM_RATE_LIMITED` whose message names the model and the
 subscription that refused it and says the turn was not served, to retry
 shortly or to select a routed model. An external route's transient 429
 keeps the neutral text, and neither answer carries upstream prose.
 
+Every refusal, retryable or final, leaves one `request_rejected` line with
+`status`, `code` and `path`, plus `retry_after` when a retry hint went out and
+a bounded, path-redacted `detail` when the plain message left a technical
+reason behind (a credential problem's OS text). An upstream rejection keeps
+its own line (`upstream_rejected`: `status`, `code`, `parameter`,
+`serving_endpoint`, and the bounded `tool`), so the status, codes, field and
+tool names a person no longer reads stay searchable in the log.
+
 | Event | Meaning |
 |---|---|
+| `request_rejected` | one per refusal, retryable or final: `status`, `code`, `path`, `retry_after`, bounded `detail` |
 | `upstream_unavailable` | an upstream 5xx or 408 on a Responses turn, answered 503 |
 | `client_disconnected` | the client hung up mid-stream; previously counted as `transport_error` |
 | `upstream_rate_limited` | an upstream 429, with `category` `quota`, `auth` or `transient`; on Responses a quota 429 answers 400 `PROVIDER_REJECTED` and an auth 429 opens the key window; a subscription turn's `transient` 429 answers 503 naming the model and the subscription |
+| `turn_refused` | a turn refused before any upstream call for its size (`BODY_TOO_LARGE`, `INVALID_REQUEST_SIZE`), with compressed, decoded, limit and prepared bytes plus counts and byte weight per carried class and images; no content |
+| `turn_trimmed` | an oversized routed turn was reduced with visible notes; names the bytes dropped and how many images and tool outputs were replaced |
+| `usage_reported` | a routed Codex turn carrying tools had its reported input tokens raised to what the thread carries (never lowered); names the provider's figure and the reported one |
 
 ## Stream identity observation (last-observed, not proof)
 
@@ -519,9 +547,12 @@ Thread titles, descriptions, summaries and title reconsiderations are the
 model calls behind the client's thread metadata. They run as their own
 helper threads and are the only turns whose `x-codex-turn-metadata` carries
 a `thread_source` of `thread_title`, `thread_description`, `thread_summary`
-or `thread_title_reconsideration`. When the ChatGPT allowance is exhausted
-upstream refuses those turns, and the client stores a slice of the prompt as
-the title instead. With `openai_helper_fallback` true in
+or `thread_title_reconsideration`. Client 0.154 also puts the read-only app
+tool allowlist it derives from the installed apps and MCP servers on those
+turns, so a helper turn carries tools; they do not make it ineligible.
+When the ChatGPT allowance is exhausted upstream refuses those turns, and
+the client stores a slice of the prompt as the title instead. With
+`openai_helper_fallback` true in
 `mixed-router-state.json` (default off; restart the service to load it), a
 429 on such a turn is answered from the OpenRouter twin row `openai/<slug>`
 and logged as `subscription_fallback`, or as
@@ -530,11 +561,12 @@ OpenRouter key, for example), which keeps the existing 503. Every other
 turn keeps that 503 unchanged. A provisioned portco list still gates the
 twin: an excluded `openai/<slug>` row is never used, so the helper path
 stays inside the same allowlist as a directly requested OpenRouter row.
-Enabling the flag means the helper prompt reaches OpenRouter and bills
-that key, and the helper marker is a client header: any local process
-holding the loopback path token can present a helper-shaped turn and have
-its prompt answered - and billed - by an allowed twin. It grants no other
-rerouting.
+The twin answers the client's own payload, tools included, so the helper
+thread keeps the tools its client granted it. Enabling the flag means the
+helper prompt reaches OpenRouter and bills that key, and the helper marker
+is a client header: any local process holding the loopback path token can
+present a helper-shaped turn and have its prompt answered - and billed - by
+an allowed twin. It grants no other rerouting.
 
 ## Key rotation
 
@@ -577,7 +609,9 @@ its own definition; and an interactive-token console task shows its window,
 so both tasks run `pythonw.exe` through `task_launch.py` in the router home
 (rewritten on every install), which appends stdout and stderr to
 `logs\launchd.log` and `logs\update.log` (rotated at 1 MB, one backup). Every console child (`schtasks`, `icacls`, `whoami`, `python`)
-is spawned without a window.
+is spawned without a window; on every platform, a file under `logs/` is
+deleted 30 days after its last write, at each service start and scheduled
+update, apart from the live files, which keep their caps.
 
 Restart and update: the task allows one instance (`IgnoreNew`), so a
 handover posts the authenticated `/shutdown`, waits for the instance to
@@ -601,6 +635,11 @@ Request cap removed. Compaction runs through a billable summariser
 call. The catalogue is a generated snapshot from the registry (live
 in-router catalogue pending); live model metadata refreshes weekly
 into the registry. Model rows are data; new behaviour is always code.
+Subscription picker gate removed (Plan 178): the twin swap left an
+OpenRouter-billed row wearing the subscription row's name, and the picker
+only reloads when the client starts. Every subscription row is listed
+again, with its twin beside it, and an exhausted row answers the refusal
+message instead of moving.
 
 ## One-time cleanup after 0.4.0
 

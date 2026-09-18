@@ -10,3 +10,7 @@ installer surface gate.
 SUBSCRIPTION_SLUGS = ('gpt-6-astra', 'gpt-5.6-sol', 'gpt-5.6-terra',
                       'gpt-5.6-luna', 'gpt-5.5', 'gpt-5.4-mini',
                       'gpt-5.3-codex-spark', 'codex-auto-review')
+# The registry row that serves the same model on the external provider, so a
+# model whose subscription cannot run still has a paid route; the two list
+# side by side and the twin carries the provider suffix in its label.
+TWIN_PREFIX = 'openai/'
