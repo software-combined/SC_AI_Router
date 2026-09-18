@@ -73,11 +73,14 @@ class HelperTurnTests(unittest.TestCase):
                     path='/responses', payload={'model': HELPER},
                     raw_body=b'{}', headers=HEADERS, credentials=object())
         self.assertIsNotNone(subscription_fallback.plan(**base))
+        # Client 0.154 puts its read-only app tool allowlist on helper turns.
+        tools = [{'type': 'function', 'name': 'read_file'}]
+        self.assertIsNotNone(
+            subscription_fallback.plan(**dict(base, payload={'model': HELPER, 'tools': tools})))
         disqualified = (('state', {}),
                         ('state', {'openai_helper_fallback': False}),
                         ('path', '/alpha/search'),
                         ('prepared', SimpleNamespace(provider='openrouter')),
-                        ('payload', {'model': HELPER, 'tools': [{'type': 'custom'}]}),
                         ('headers', {}),
                         ('payload', {'model': 'gpt-5.5'}))
         # Plan 068: a provisioned portco list gates the redispatch too.
@@ -116,6 +119,12 @@ class RefusedHelperTurnTests(unittest.TestCase):
                          (200, b'{"output": [], "model": "openai/gpt-5.6-luna"}',
                           [('Content-Type', 'application/json')]))
 
+    def _snapshot(self, models):
+        from ai_router import availability
+        snap, availability._SNAPSHOT = availability._SNAPSHOT, {
+            'key': 'k', 'region': 'global', 'models': frozenset(models), 'fetched_at': 0}
+        self.addCleanup(setattr, availability, '_SNAPSHOT', snap)
+
     def test_flag_off_keeps_the_existing_503(self):
         recorded = install_fake(self, self._refusal())
         server = self._server()
@@ -144,25 +153,31 @@ class RefusedHelperTurnTests(unittest.TestCase):
         self.assertNotIn('html', message)
 
     def test_enabled_flag_answers_the_helper_turn_from_the_twin_row(self):
-        recorded = install_fake(self, self._refusal())
-        server = self._server(openai_helper_fallback=True)
-        response = self._turn(server, HEADERS)
-        self.assertEqual(response.status, 200)
-        self.assertEqual(json.loads(response.read())['model'], 'openai/gpt-5.6-luna')
-        self.assertEqual([call[0] for call in recorded], ['chatgpt.com', 'openrouter.ai'])
-        _host, method, path, body, headers = recorded[1]
-        self.assertEqual((method, path), ('POST', '/api/v1/responses'))
-        self.assertEqual(json.loads(body)['model'], 'openai/gpt-5.6-luna')
-        self.assertEqual(headers['Authorization'], 'Bearer test-key')
-        self.assertEqual(server.inflight, 0)
-
-    def test_ordinary_and_tool_turns_keep_the_refusal(self):
-        for headers, payload in ((None, None),
-                                 (HEADERS, {'tools': [{'type': 'custom', 'name': 'exec'}]})):
-            with self.subTest(headers=headers, payload=payload):
+        # Client 0.154 sends the read-only app tool allowlist with the helper
+        # turn, and the twin answers the client's own payload, tools included.
+        tool_turn = {'tools': [{'type': 'function', 'name': 'read_file'}]}
+        for payload, tools in ((None, []), (tool_turn, ['read_file'])):
+            with self.subTest(payload=payload):
                 recorded = install_fake(self, self._refusal())
                 server = self._server(openai_helper_fallback=True)
-                response = self._turn(server, headers, payload)
+                response = self._turn(server, HEADERS, payload)
+                self.assertEqual(response.status, 200)
+                self.assertEqual(json.loads(response.read())['model'], 'openai/gpt-5.6-luna')
+                self.assertEqual([call[0] for call in recorded], ['chatgpt.com', 'openrouter.ai'])
+                _host, method, path, body, headers = recorded[1]
+                self.assertEqual((method, path), ('POST', '/api/v1/responses'))
+                sent = json.loads(body)
+                self.assertEqual(sent['model'], 'openai/gpt-5.6-luna')
+                self.assertEqual([t['name'] for t in sent.get('tools', [])], tools)
+                self.assertEqual(headers['Authorization'], 'Bearer test-key')
+                self.assertEqual(server.inflight, 0)
+
+    def test_ordinary_turns_keep_the_refusal(self):
+        for payload in (None, {'tools': [{'type': 'custom', 'name': 'exec'}]}):
+            with self.subTest(payload=payload):
+                recorded = install_fake(self, self._refusal())
+                server = self._server(openai_helper_fallback=True)
+                response = self._turn(server, None, payload)
                 self.assertEqual(response.status, 503)
                 response.read()
                 self.assertEqual([call[0] for call in recorded], ['chatgpt.com'])
@@ -197,7 +212,6 @@ class RefusedHelperTurnTests(unittest.TestCase):
             calls.append(dict(metrics))
             return real_relay(self, provider, prepared, metrics, started, has_image)
 
-        import unittest.mock as mock
         with mock.patch.object(Handler, 'relay', relay):
             response = self._turn(server, HEADERS)
         self.assertEqual(response.status, 200)
@@ -221,12 +235,7 @@ class RefusedHelperTurnTests(unittest.TestCase):
     def test_snapshot_excluded_twin_keeps_the_refusal(self):
         # Key-filtered availability gates the twin like a direct request,
         # so a twin outside the `/models/user` snapshot must never bill.
-        from ai_router import availability
-        snap = availability._SNAPSHOT
-        availability._SNAPSHOT = {'key': 'k', 'region': 'global',
-                                  'models': frozenset({'z-ai/glm-5.3'}),
-                                  'fetched_at': 0}
-        self.addCleanup(setattr, availability, '_SNAPSHOT', snap)
+        self._snapshot({'z-ai/glm-5.3'})
         recorded = install_fake(self, self._refusal())
         server = self._server(openai_helper_fallback=True)
         response = self._turn(server, HEADERS)
@@ -236,12 +245,7 @@ class RefusedHelperTurnTests(unittest.TestCase):
         self.assertEqual([call[0] for call in recorded], ['chatgpt.com'])
 
     def test_snapshot_included_twin_answers_the_helper_turn(self):
-        from ai_router import availability
-        snap = availability._SNAPSHOT
-        availability._SNAPSHOT = {'key': 'k', 'region': 'global',
-                                  'models': frozenset({'openai/gpt-5.6-luna'}),
-                                  'fetched_at': 0}
-        self.addCleanup(setattr, availability, '_SNAPSHOT', snap)
+        self._snapshot({'openai/gpt-5.6-luna'})
         recorded = install_fake(self, self._refusal())
         server = self._server(openai_helper_fallback=True)
         response = self._turn(server, HEADERS)
@@ -250,12 +254,7 @@ class RefusedHelperTurnTests(unittest.TestCase):
                          ['chatgpt.com', 'openrouter.ai'])
 
     def test_snapshot_excluded_twin_gets_no_plan(self):
-        from ai_router import availability
-        snap = availability._SNAPSHOT
-        availability._SNAPSHOT = {'key': 'k', 'region': 'global',
-                                  'models': frozenset({'z-ai/glm-5.3'}),
-                                  'fetched_at': 0}
-        self.addCleanup(setattr, availability, '_SNAPSHOT', snap)
+        self._snapshot({'z-ai/glm-5.3'})
         base = dict(state={'openai_helper_fallback': True},
                     prepared=SimpleNamespace(provider='openai'),
                     path='/responses', payload={'model': HELPER},
