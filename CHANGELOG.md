@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.92
+## 0.6.93
 
 - The restart dialog after an update names the models that update added,
   using the same picker labels the desktop notification and the approval
