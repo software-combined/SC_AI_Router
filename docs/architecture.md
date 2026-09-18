@@ -27,6 +27,7 @@ agent_handoffs / compaction / tool_adapter / tool_aliases / discovered
 (request normalization)
   |
 providers (Responses adapters) + claude (Messages adapters)
+decisions (one typed-decision side-call: no policy, off the request path)
   |
 protocols (explicit method/path dispatch table; imports the adapters because
 it selects one, and holds no policy of its own)
@@ -81,6 +82,9 @@ leaf beside `stream_errors.py`, never a dispatcher or a credential owner.
    with a different wire format is a new adapter class, never a branch in
    the request path. External headers start fresh every request;
    subscription headers never accompany an externally billed request.
+   `decisions.py` is the one client for a provider's typed-decision endpoint
+   (Jev today): it holds no policy and answers only what it can validate, so
+   every consumer fails closed on its refusals and nothing runs it by default.
 4. Installer orchestration (`packaging/install.py`, `bundle.py`,
    `service.py`, `updater.py`) calls one explicit platform backend;
    `bundle.py` owns the release lifecycle (verify, install, prune,
@@ -179,3 +183,82 @@ them while the child installer retains its own installation lock.
 Source, packaged imports, native lifecycle, real-client tools, billing, and
 release acceptance are different gates. Record client and OS evidence by
 version; a global model tier never asserts every combination works.
+
+## Proposed Jev consumer: compaction evidence
+
+At `155b268`, 2026-09-18 AEST; design, not implementation. Jev supplies
+small semantic judgments, not a summary, planner or permission check. Choose
+(a), compaction, first: narrow exposure and unchanged model/effort. Routing
+(b) fits Jev's primitives too, but changes every turn's capabilities, billing
+and cache behavior. Defer its ingress at `router.Handler._owned_post` before
+`policy.select_provider`; `ai_router/policy.py` does not exist.
+
+**Boundary.** Keep `providers.compaction_call`'s external-only V1/V2 gate.
+Call proposed `compaction_decisions.prune_for_summary(items, *, defn, key,
+region, mode='off') -> list` immediately before `compaction.transcript_for_summary`
+inside `ExternalResponsesProvider.summarize`. Dependencies flow providers ->
+consumer -> decisions/compaction -> leaves. Keep policy out of the adapter,
+retain original items for user extraction and `remember`, and change neither
+summary validation nor envelopes. Extract orchestration if necessary; never
+grow a baselined file or add packaging machinery.
+
+**Installed-host switch (proposed, not implemented).** Store `jev-compaction`
+beside `channel` in the active router home. Accept trimmed `off` or `shadow`;
+absent, unreadable, empty or invalid means off. `prune` is not accepted until
+evaluated. The composition layer reads the file before eligible compactions
+and passes `mode`; the wire adapter never reads host configuration. No restart.
+For the default home, set the shell variable below; substitute the actual
+service home for custom installations. These commands are inert until the
+consumer ships. Reading shows the configured value; only `shadow` enables.
+
+| Shell | Select home | Enable shadow | Disable | Read setting |
+|---|---|---|---|---|
+| macOS/Linux | `RH="${ROUTER_HOME:-$HOME/.codex/mixed-model-router}"` | `printf 'shadow\n' > "$RH/jev-compaction"` | `printf 'off\n' > "$RH/jev-compaction"` | `cat "$RH/jev-compaction"` |
+| PowerShell | `$rh = if ($env:ROUTER_HOME) { $env:ROUTER_HOME } else { Join-Path $HOME '.codex/mixed-model-router' }` | `Set-Content "$rh/jev-compaction" shadow -Encoding ascii` | `Set-Content "$rh/jev-compaction" off -Encoding ascii` | `Get-Content "$rh/jev-compaction"` |
+
+Opt-in permits eligible text to TypeSafe only within existing data policy.
+Use the verified global definition and external key; regional/other routes
+skip. No subscription headers, normal-turn calls or global fallback.
+
+**Efficient judgment.** Deterministic code matches complete pairs and protects
+instructions, mutations, errors, delegation, discovery, opaque items and the
+latest two tool runs. Unrecognized tool semantics or ambiguous IDs mean keep;
+do not parse arbitrary shell commands for safety. Evaluate at most eight
+read-only pairs from the actual summary window, largest first. Skip exact
+duplicates already decidable in code and pairs the summarizer would omit.
+Build `task`, `retained` and `candidates` as named text fields, capped at
+16 KiB including questions; no secrets or raw transcripts. Incomplete evidence
+means skip, never truncate.
+`retained` must be immutable evidence guaranteed to survive transcript
+budgeting, never another candidate: otherwise a batch can delete both copies.
+
+One `ask(..., defn=defn, key=key, timeout=1.0)` batches independent
+`question('noul', instructions)` judgments. Each instruction explicitly names
+`candidates.p0.result` and asks whether its task-relevant facts are preserved
+in `retained`, considering its call. Question IDs are invisible to Jev.
+Do not equate probability with importance or multiply correlated judgments.
+Use `choice` only for genuinely exclusive alternatives, with an unknown option.
+
+**Acceptance/failure.** `0.99` is an evaluation candidate, not calibrated
+permission to delete; the live trial passed no pair at that threshold.
+Shadow submits at most one observation to a nonqueued daemon-worker slot and
+returns original input immediately; busy means skip. All results are telemetry
+only. A 520 (`upstream_error`) records a skipped observation, never a chat error,
+negative judgment, model switch, extra turn or retry. Hold the slot until exit;
+socket timeout does not guarantee total wall time. No fallback or transcript
+logs. Any future pruning mode must keep all items on error, retain uncertain
+pairs, bound foreground wait to two seconds and discard late results.
+
+**Economics and proof.** Four batched judgments cost US$0.000028434 versus
+US$0.00004578 for just two singles; savings are workload-dependent. Pin the
+verified snapshot; no decision cache initially. Prompt/state/model changes
+invalidate calibration; changed summaries can lose prefix-cache hits.
+Measure actual transcript bytes, not removed history bytes: the 24,000-character
+window may refill. Require offline V1/V2, pair-closure, retained-anchor,
+immutability, nonblocking shadow/520, home-file modes, timeout, fallback,
+regional and import/size tests. Compare Jev
+with unchanged and deterministic-only baselines on held-out synthetic tasks;
+automatic pruning needs zero critical losses, positive net benefit and
+downstream task parity. The eight-call/4-KiB-per-call/US$0.03 trial is complete
+(US$0.000224994), not calibration proof. No consumer, `score`, picker row or
+per-turn steering is enabled. Details and primary sources: `compatibility.md`.

@@ -63,13 +63,15 @@ class ProviderDef:
     __slots__ = ('id', 'label', 'kind', 'host', 'responses_path',
                  'messages_path', 'key', 'catalogue_url', 'catalogue_shape',
                  'key_info_url', 'key_info_shape', 'dialect', 'native_prefixes',
-                 'request_headers', 'subscription_label')
+                 'request_headers', 'subscription_label', 'decisions_path',
+                 'decisions_model')
 
     def __init__(self, id, label, kind, host, responses_path=None,
                  messages_path=None, key=None, catalogue_url=None,
                  catalogue_shape='manual', key_info_url=None,
                  key_info_shape='openrouter', dialect=None,
                  subscription_label=None,
+                 decisions_path=None, decisions_model=None,
                  native_prefixes=(), request_headers=()):
         if kind not in (EXTERNAL, SUBSCRIPTION):
             raise ValueError(f'{id}: bad kind {kind!r}')
@@ -106,6 +108,12 @@ class ProviderDef:
                     or not all(isinstance(part, str) and part for part in pair)):
                 raise ValueError(f'{id}: bad request header {pair!r}')
         self.request_headers = request_headers
+        # A typed-decision endpoint (Jev, TypeSafe System One) is not a
+        # chat route: nothing here serves a conversation turn, so both the
+        # path and the model it answers for stay beside the other upstream
+        # facts. None means this provider has no such endpoint.
+        self.decisions_path = decisions_path
+        self.decisions_model = decisions_model
 
     def serves(self, protocol):
         """True when this provider serves that protocol natively."""
@@ -141,6 +149,8 @@ OPENROUTER = ProviderDef(
     catalogue_shape='openrouter',
     key_info_url='https://openrouter.ai/api/v1/auth/key',
     dialect=DIALECT_OPENROUTER,
+    decisions_path='/api/alpha/decisions',
+    decisions_model='typesafe/jev-1.13-20260917',
     request_headers=(('X-OpenRouter-Metadata', 'enabled'),))
 
 # Regional endpoint profiles for one external provider. A profile names the
