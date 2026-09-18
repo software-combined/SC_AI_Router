@@ -2,6 +2,16 @@
 
 ## 0.6.95
 
+- Wide compactions now fit the request instead of refusing it. A real
+  window carries hundreds of items, and the state budget only shrank each
+  item, never the number of them, so 59 of 60 measured 600-item windows
+  declined before asking anything. After the per-item ladder the state now
+  keeps the newest 64 retained entries at 500 characters, then 32 at 120,
+  then 16 at 60, and records how many older entries it left out. A 20-window
+  replay at the same size: 17 of 20 now reach Jev, median request 7 KiB, and
+  the three that do not simply have no eligible pair. Thinning is not
+  one-way safe, so both questions name the omitted count and forbid
+  inferring coverage from absence.
 - Jev compaction now reads its own questions correctly. Both are positive
   propositions ("the facts are already covered", "knowing the call still
   matters"), but the rule compared each against the threshold backwards and

@@ -55,16 +55,21 @@ candidate, so it is kept either way. Closure is now local: only complete,
 ordered, unpinned pairs are eligible, duplicated ids protect every member,
 and anything unpairable is left verbatim. After the fix: **0 pair-closure
 refusals in both windows**, 749 pairs judgeable at 600 items and 795 at 160,
-against 209 and 376 before. (Sessions still decline for other reasons: at 600
-items 59 of 60 cannot fit the state budget below.)
+against 209 and 376 before. That count is about pairing alone; the state
+budget was a second, separate refusal reason, fixed below.
 
-**Open — the 32 KiB state budget declines wide windows.** The state ladder
-shrinks each item (2000, then 500, then 120 characters) but never the number
-of items, so a wide window cannot fit: at 600 items **59 of 60 sessions**
-decline with `request_too_large` before any call is made. Real Codex
-compactions see windows that large, so this is the next thing to fix; the
-conservative direction is to thin `retained` (newest first) with an explicit
-omitted count, because less evidence biases the judge toward keeping.
+**Fixed — the 32 KiB state budget declined wide windows.** The ladder shrank
+each item (2000, then 500, then 120 characters) but never the number of
+items, so a wide window could not fit: at 600 items **59 of 60 sessions**
+declined with `request_too_large` before any call was made. The state now
+also thins the newest evidence (64 entries at 500, 32 at 120, 16 at 60) and
+records how many older entries it left out. That is not one-way safe:
+thinning lowers the coverage score and the "call still matters" score as
+well, which can turn a truncation into a drop, so both questions now name
+`retained_omitted` and forbid inferring coverage from absence.
+A 20-window replay at the same size: **17 of 20 reach Jev** (was 0 of 20
+before the fix), median request 7 KiB, and the remaining three have no
+eligible pair at all.
 
 ## Score distribution (756 values, live)
 
