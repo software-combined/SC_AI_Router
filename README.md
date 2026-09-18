@@ -63,7 +63,7 @@ subscription credentials never accompany a request billed to OpenRouter.
 | Platform | Service | Status |
 |---|---|---|
 | macOS | launchd user agent | Supported |
-| Linux with a systemd user manager | systemd user units | Supported |
+| Linux with a systemd user manager (x86_64 and arm64/glibc) | systemd user units | Supported |
 | Windows 11 x64 | per-user Scheduled Tasks | Install, update, rollback and uninstall verified; sign-out and sign-in relaunch still to be confirmed |
 
 Linux needs a running systemd user manager in the signed-in desktop session;
@@ -76,7 +76,8 @@ the client versions it was recorded against live in
 - Codex (desktop app or CLI) and/or Claude Code, installed and signed in.
 - Python 3.14 for a source install. The bootstrap supplies a pinned runtime,
   so no system Python 3.14 is needed; macOS and Linux still need any
-  `python3`, plus `curl`, `tar` and `shasum`. Windows needs no Python.
+  `python3`, plus `curl`, `tar` and either `shasum` or `sha256sum`.
+  Windows needs no Python.
 - An OpenRouter API key for any model billed to OpenRouter.
 
 The router home is `~/.codex/mixed-model-router`
