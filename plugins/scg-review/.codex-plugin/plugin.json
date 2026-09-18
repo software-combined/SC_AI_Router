@@ -1,6 +1,6 @@
 {
   "name": "scg-review",
-  "version": "0.4.9",
+  "version": "0.4.10",
   "description": "Simplification, secret scanning and three-lane review of the exact staged Git tree.",
   "author": {
     "name": "Software Combined"
