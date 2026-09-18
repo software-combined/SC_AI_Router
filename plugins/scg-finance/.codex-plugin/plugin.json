@@ -1,6 +1,6 @@
 {
   "name": "scg-finance",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Finance-director grade analysis grounded in the organisation's accounting data, whatever system it lives in.",
   "author": {
     "name": "Software Combined"

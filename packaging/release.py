@@ -31,6 +31,9 @@ PACKAGING_FILES = (
     'packaging/feed.py', 'packaging/feed_verify.py',
     'packaging/atomic_write.py',
     'packaging/notice.py',
+    # Plan 179: the router carries the agent skills, so a machine needs no
+    # git account and no marketplace command to receive them.
+    'packaging/agent_skills.py',
     'packaging/assets/router-icon.png',
     'packaging/systemd.py', 'packaging/update_launch.py',
     'packaging/task_launch.py',
@@ -61,8 +64,37 @@ def bundle_files(root):
         # the same page the repository shows.
         + sorted(p.relative_to(root).as_posix() for p in (root / 'docs').rglob('*.md'))
         + ['README.md']
+        + plugin_files(root)
         + list(PACKAGING_FILES)
     )
+
+
+def plugin_files(root):
+    """Plan 179: both plugin manifests and every skill file, per plugin.
+
+    The git updater's own scripts deliberately stay out: the router is the
+    delivery channel, so a shipped plugin never carries a second updater.
+    """
+    plugins = root / 'plugins'
+    if not plugins.is_dir():
+        return []
+    wanted = []
+    for plugin in sorted(p for p in plugins.iterdir() if p.is_dir()):
+        for manifest in ('.codex-plugin/plugin.json', '.claude-plugin/plugin.json'):
+            if (plugin / manifest).is_file():
+                wanted.append((plugin / manifest).relative_to(root).as_posix())
+        prefix = plugin.relative_to(root).as_posix() + '/'
+        for path in sorted(plugin.rglob('*')):
+            rel = path.relative_to(root).as_posix()
+            if not path.is_file() or '__pycache__' in path.parts or rel.endswith('.pyc'):
+                continue
+            # A shipped skill reads, links and runs more than skills/: the
+            # review gate reads references/ and runs scripts/setup.py. Only the
+            # git updater is withheld, because the router is the channel now.
+            if rel.startswith(prefix + 'scripts/') and path.name != 'setup.py':
+                continue
+            wanted.append(rel)
+    return wanted
 
 
 def release_tag(tag, base_version):
