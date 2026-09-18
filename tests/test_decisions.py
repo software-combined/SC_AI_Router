@@ -287,12 +287,12 @@ class AskTests(unittest.TestCase):
             body.read.assert_not_called()
             body.close.assert_called_once()
 
-    def test_adapter_has_no_runtime_importers(self):
+    def test_adapter_has_only_the_opt_in_compaction_consumer(self):
         from tests.test_import_graph import _graph
         _, graph, _, _, _ = _graph()
         self.assertEqual(graph['ai_router.decisions'], {'ai_router.provider_defs'})
         self.assertEqual([name for name, targets in graph.items()
-                          if 'ai_router.decisions' in targets], [])
+                          if 'ai_router.decisions' in targets], ['ai_router.jev_compaction'])
 
 
 if __name__ == '__main__':
