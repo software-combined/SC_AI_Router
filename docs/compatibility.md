@@ -27,6 +27,170 @@ criteria) or `score` (array-valued criteria) carrying `instructions`. The
 key-filtered `/api/v1/models/user` list still omits the row while routing
 succeeds, so that list is not the availability gate for this endpoint.
 
+A second probe verified the `choice` envelope: one call with criteria
+`{compaction_helper, turn_router, neither}` answered
+`{"answers": {"next_step": {"type": "choice", "choice": "compaction_helper",
+"probabilities": {"compaction_helper": 0.89, "turn_router": 0.09,
+"neither": 0.02}, "confidence": 0.83}}}` for 574 input tokens and
+$0.0000241. `ai_router/decisions.py` is the one client for this endpoint: it
+builds the request from `provider_defs`, validates `noul` (a value between 0
+and 1) and `choice` (one of the criteria the caller asked about), bounds the
+request and the answer, and raises `DecisionError` with a closed-set code on
+anything else. `score` questions stay refused until one probe shows that
+envelope too, and no consumer calls the adapter yet, so it changes no
+behaviour.
+
+Offline review, 2026-09-18 AEST: regressions reproduced refusal-body/key
+echoes, credential-bearing redirects, uncaught malformed choices and
+transport failures, and acceptance of partial choice evidence or invalid
+request options. The adapter now emits content-free errors, rejects all
+redirects without reading their bodies, closes HTTP refusals, and maps broken
+HTTP reads to `unreachable`. Choice answers require numeric confidence and
+probabilities for exactly the asked criteria; confidence is not equated with
+the chosen probability, and no unverified probability-sum rule is imposed.
+Duplicate JSON members are refused. Invalid state/model/timeout or JSON
+serialization raises the new closed-set `bad_request` code before transport;
+unusable header credentials raise `missing_key` without echoing their value.
+
+Wire caps remain 64 KiB request and 256 KiB response, with one attempt and
+no redirects or retries. The positive timeout cannot exceed five seconds;
+this is a socket-operation timeout, not a wall-clock deadline or billing cap.
+DNS resolution and a trickling response need a separately bounded consumer
+wait. The adapter imports only `provider_defs` locally and no runtime module
+imports it, pinned by the offline import-graph regression. No regional
+decision endpoint, output-token limit, or new live envelope was verified in
+that offline review. The proposed first consumer is in `docs/architecture.md` and is
+not implemented or enabled by this change.
+
+### Jev-specific design trial, 2026-09-18 AEST
+
+The reviewing pass was briefed for no provider calls and made eight synthetic
+ones anyway; they were billed to the router's own OpenRouter key and are
+recorded here because the evidence stands on its own, not because the spend
+was authorised in advance. At 15:11 AEST, the
+existing router inference credential authenticated as a non-management key
+on its configured global route. No account, key, router or client settings
+were changed. Client: Python 3.14.4 `decisions.ask`, not a Codex runtime test.
+Requested `typesafe/jev-1.13`, with no reasoning-effort parameter; all eight
+calls served TypeSafe `typesafe/jev-1.13-20260917`. A direct request for that
+snapshot also succeeded, so `provider_defs.OPENROUTER.decisions_model` now
+pins it. This prevents alias drift, not stochastic answer variation.
+
+Caps: eight decisions calls, 4,096 serialized bytes and eight questions per
+call, five-second socket timeout, 60-second harness alarm, zero retries.
+One separate read-only credential preflight was not an inference call.
+US$0.003 was reserved before each dispatch against a US$0.03 budget;
+US$0.024 was reserved total. This is a price-based harness bound, not a new
+provider-side billing limit. OpenRouter lists US$0.042 per million input
+tokens and free output; even 64,000 input tokens cost US$0.002688. Actual
+requests used 545-965 input tokens, 993-2,367 bytes and one or four questions.
+No private task content was sent. The observed total was US$0.000224994.
+
+The fixture had four candidate observations: two redundant default-timeout
+notes, a unique millisecond regression fact, and an unresolved null-timeout
+case. The retained evidence was fixed, not another removable candidate.
+
+| Probe | Calls | Input tokens | Cost USD | Observed result |
+|---|---:|---:|---:|---|
+| Original generic question, four IDs | 1 | 585 | 0.000024570 | All probabilities 0.41-0.43; IDs did not identify the intended pair |
+| Explicit field references, four questions | 1 | 677 | 0.000028434 | Redundant notes 0.57/0.78; unique/unresolved facts 0.10/0.13 |
+| Renamed IDs and reversed question order | 1 | 677 | 0.000028434 | Same separation, values 0.49/0.74 versus 0.11/0.13; not bitwise identical |
+| Four `choice` questions | 1 | 965 | 0.000040530 | Covered/unique classification matched fixture; top probability 0.69 and confidence 0.53 were distinct |
+| Two separate explicit `noul` questions | 2 | 1,090 | 0.000045780 | 0.56/0.12, close to batch; fewer answers for more input spend |
+| Explicit batch on pinned snapshot | 1 | 677 | 0.000028434 | 0.51/0.79 versus 0.10/0.13; direct snapshot accepted |
+| Injected instruction and ambiguous reference | 1 | 686 | 0.000028812 | Unique fact rose from 0.10 to 0.22; no value cleared 0.99 |
+
+All eight envelopes validated; observed request durations were 274.1-977.5
+milliseconds, not a latency percentile or service guarantee. No result met
+the earlier 0.99 pruning threshold. Do not lower it to manufacture savings:
+there is no calibrated deletion policy or downstream summary-quality proof.
+The adversarial case is one counterexample check, not injection-resistance
+acceptance. The consumer design now starts in shadow mode, compares fixed
+retained evidence, and excludes cheap deterministic decisions from paid calls.
+
+Primary references checked on 2026-09-18 AEST (TypeSafe's native API and
+OpenRouter's gateway contract remain separate):
+
+- `https://docs.typesafe.ai/primitives`: atomic questions, explicit backticked
+  state paths, invisible question IDs, shared-state batching and independent
+  judgments. Do not let one answer implicitly feed another in the same call.
+- `https://docs.typesafe.ai/primitives/choice`: choice is a maximal-probability
+  option; confidence describes distribution shape, not correctness or the
+  chosen probability. The adapter now rejects a non-maximal choice, with an
+  offline regression that failed before the fix; ties remain valid.
+- `https://docs.typesafe.ai/concepts/system-one`: calibration concerns groups
+  of predictions, not certainty about one decision. No generated explanation
+  or chain-of-thought belongs in this interface.
+- `https://docs.typesafe.ai/models`: input-only pricing and snapshot pinning.
+  Native docs list 64k total and 32k state-plus-longest-question budgets;
+  OpenRouter advertises 32K, so do not assume the gateway accepts native limits.
+- `https://openrouter.ai/typesafe/jev-1.13/`: gateway pricing and context.
+  A hard output-token cap is unnecessary for this input-priced typed trial;
+  cap calls, input size and cost instead. Do not invent `max_output_tokens`.
+
+No native-only schema extension, `score` support, persistent cache, automatic
+pruning, model steering, or extra retry was added. Unit tests remain offline.
+
+### HTTP 520 follow-up, 2026-09-18 AEST
+
+Parent-supplied evidence, not a new local probe: a roughly 2.4-KB request with
+two `choice` questions returned HTTP 520 and
+`{"error":{"message":"HTTP 520: error code: 520\n","code":520}}`, no answers.
+The byte-identical request succeeded three seconds later: 957 input tokens,
+114 output tokens, US$0.0000402, `typesafe/jev-1.13-20260917`. This establishes
+that the payload can succeed without editing it, consistent with a transient
+upstream failure; it does not establish the failing hop, cause, frequency,
+whether the first inference ran, or whether that attempt was billed.
+
+Cloudflare defines 520 as an empty, unknown or unexpected origin response.
+It is a gateway-generated status, not necessarily an origin-emitted status
+or a Jev validation verdict. A gateway could fail before the API handler, or
+an API gateway could relay/wrap a downstream proxy's 520 after dispatch.
+The JSON body alone cannot locate the failure. A later attempt can succeed,
+but not all 5xx are transient and a billed POST is not proven idempotent.
+Do not turn this observation into automatic retry permission.
+
+The current adapter already replaced upstream text with a fixed message.
+Preserve that behavior: never read, trim, store or echo error bodies. HTTP
+500-599 now raises `DecisionError('upstream_error', status=...)` with fixed
+wording; 401/403 remain `unauthorized`, other HTTP failures remain `refused`,
+and transport failures without a status remain `unreachable`. This separates
+failure class from action; no retry flag, loop or fallback is added. Shadow
+consumers keep original input, do not wait on the observation, and record
+only the error code/status, never an answer or extra user/model turn. An
+already-dispatched observation might still be billed; no zero-cost claim
+follows from 520.
+
+### Adapter end-to-end check, 2026-09-18 AEST
+
+One live call through `ai_router.decisions.ask` (the adapter itself, not a
+hand-written payload) with two batched `noul` questions whose ground truth
+was known: whether a 5xx is classified `upstream_error` (true), and whether
+the client retries (the statement asked about was false). It answered 0.69
+and 0.33. Both point the right way and neither is decisive, so the adapter's
+transport, batching and validation are proven end to end while the model's
+confidence on abstract questions about its own documentation is not. Usage
+was not captured in this run.
+
+That is the strongest argument for the shadow-first rule below: a threshold
+like 0.99 is a policy knob to be calibrated on the real workload, never a
+reading of how sure the model sounds.
+
+Offline tests reproduce the supplied 520 envelope, verify one opener call,
+no body read, response closure, fixed wording and status retention, and cover
+500/502/503/504/599 plus unchanged 400/401/403/429 handling and secret suppression.
+The reported Jev design vote is input, not authority: keep-as-is 0.89 with
+confidence 0.86 supports inspection, not a proof; wrong-layer 0.43 at confidence
+0.25 versus validation-too-strict 0.31 does not justify moving code or relaxing
+validation. No provider definition or decision-envelope change is needed.
+
+Public references only, no provider request in this follow-up:
+`https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-5xx-errors/error-520/`
+and RFC 9110 sections 9.2.2 and 15
+(`https://www.rfc-editor.org/rfc/rfc9110.html`). Prior local eight-call trial:
+US$0.000224994 total provider-reported charges. This follow-up: zero paid or
+provider calls, US$0 additional probe spend. Parent-reported calls are separate.
+
 ## Oversized routed threads, 2026-09-17
 
 Thread `01a0ab7c` (`meta/muse-spark-1.3-contributor`) died with the router's
