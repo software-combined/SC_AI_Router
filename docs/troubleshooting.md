@@ -55,7 +55,9 @@ systemctl --user status codex-mixed-model-router.service
 schtasks /Query /TN CodexMixedModelRouter /V /FO LIST
 ```
 
-- Logs live under `logs/` in the router home.
+- Logs live under `logs/` in the router home. A file there is deleted 30 days
+  after its last write, at each router start and scheduled update, apart from
+  the three the running router writes, which keep their size caps.
 
 ## Codex does not show the OpenRouter models
 
@@ -67,6 +69,11 @@ quit and reopen Codex.
 - The catalogue Codex reads is `mixed-models.json` in the router home.
 - A model outside this machine's policy is not listed; `--status` shows the
   router state, and the request log records a refusal rather than serving it.
+- A ChatGPT subscription row is always listed, exhausted or not, and its
+  OpenRouter twin (`openai/<slug>`, labelled `· OpenRouter`) is listed beside
+  it: picking the twin bills OpenRouter deliberately when the subscription
+  cannot run. An exhausted subscription row answers the refusal message that
+  names the model and points at a routed row.
 
 ## Claude Code stopped using the router
 
@@ -86,6 +93,16 @@ one replaces the subscription credential the router forwards.
 | 403 | Missing or wrong path token, or a browser-originated request was refused |
 | 409 | The provider cannot serve this request, for example an unsupported reasoning level; the message names the allowed levels |
 | 503 with `Retry-After` | Not served: the router is draining for an update (`SERVER_DRAINING`) or mapped an upstream 429 (`UPSTREAM_RATE_LIMITED`); retry after the delay. A refused subscription turn names the model and the subscription: retry shortly, or select a routed model |
+
+`BODY_TOO_LARGE` (`400`) means the turn itself outgrew the router: the
+expanded request passed 16 MiB. From 0.6.84 to 0.6.86 a long search-heavy
+thread is read, trimmed and served instead, and its carried size is reported
+on turns that carry tools - Codex's own turns always do - so it compacts at
+90% of the model's window. If it still happens, compact
+the thread (`/compact` in the client) or start a new one against the same
+working tree; the work on disk is untouched. `logs/router.jsonl` names what the
+turn carried in one `turn_refused` line, and one `turn_trimmed` line says what
+the router replaced.
 
 ## The key is missing or was revoked
 

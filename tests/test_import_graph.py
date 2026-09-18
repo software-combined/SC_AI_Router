@@ -14,12 +14,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# Measured after Plan 165's moves: 27 function-local ai_router imports, all
-# deliberate (platform-only winacl, client-facing availability, CLI-only
+# Measured after Plan 165's moves and again after Plan 178's picker gate was
+# withdrawn in 0.6.89: 27 function-local ai_router imports, all deliberate
+# (platform-only winacl, client-facing availability, CLI-only
 # candidate/catalogue, the transport/errors boundary, the events leaf's one
 # call-time home lookup, runtime's policy load). This is a ceiling, not a
-# target: shrinking it is welcome, raising it needs a comment naming the
-# module and why (Plan 165 maintenance notes).
+# target: shrinking it is welcome, and raising it again needs a comment
+# naming the module and why.
 LAZY_IMPORT_CEILING = 27
 
 # Only the composition root's three importers may name `runtime`.

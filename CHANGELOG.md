@@ -1,5 +1,128 @@
 # Changelog
 
+## 0.6.90
+
+- A ChatGPT helper turn that carries tools is answered from its OpenRouter
+  twin again. Client 0.154 puts the read-only app tool allowlist it derives
+  from the installed apps and MCP servers on the title, description and
+  summary helper turns, and the fallback refused every tool-bearing turn, so
+  an exhausted allowance left titles as slices of the prompt. The twin
+  answers the client's own payload, tools included.
+
+## 0.6.89
+
+- The subscription picker gate is gone. A ChatGPT subscription row is always
+  listed, exhausted or not, and its OpenRouter twin (`openai/<slug>`, labelled
+  `· OpenRouter`) is listed beside it, so the paid route is chosen on purpose
+  rather than swapped in under the subscription row's name. An exhausted row
+  answers the refusal message that names the model and points at a routed row.
+- Removed with the gate: its state document, the usage and refusal evidence
+  reader, the four-hourly recheck (`subscription_probe` in router state is now
+  ignored), and the `subscription_gate_changed` and `subscription_probe`
+  events. The helper-turn OpenRouter fallback and the install-time
+  no-subscription default stay. The next install re-merges `mixed-models.json`,
+  so the rows come back without further steps.
+
+## 0.6.88
+
+- A routed Codex turn that carries tools now reports the weight of the
+  history the thread actually carries, so the client compacts before a thread
+  outgrows the request budget. The completed frame's `input_tokens` is raised - never
+  lowered - to `bytes / 5.8` for text plus the flat image allowance, clamped
+  to the row's context window, and `total_tokens` follows. Provider detail
+  fields are untouched, the helper twin and subscription passthrough keep the
+  provider's own usage - as do tool-free responses, which keep their verbatim
+  forwarding - and one `usage_reported` line records the change.
+  Without this the slim the router performs is invisible upstream: the
+  2026-09-16 thread carried 67 MB while upstream was billed about 1 MB, so
+  Codex never reached 90% of the window and never compacted.
+
+The first beta tag for this change set, `v0.6.87-beta`, failed its native
+installer checks before anything was published (`ai_router/turn_budget.py` was
+missing from `docs/runtime-files.md`); tags are immutable, so the version
+rolled forward.
+
+## 0.6.86
+
+- A routed turn that is over the 16 MiB prepared budget is now reduced with
+  visible notes instead of being refused outright. Repeated released-tool
+  listings collapse to the newest copy per tool (the 2026-09-16 thread
+  carried the same three namespaces 2,690 times), the oldest images past the
+  newest four become a note, and long old tool outputs are truncated head and
+  tail. Tool call/output pairing and the newest items are never touched, and
+  a turn with nothing reducible left still answers today's 400.
+- One `turn_trimmed` line records what each trim replaced, by count and byte
+  weight. No content is logged.
+
+## 0.6.85
+
+- A search-heavy Codex thread no longer dies at the request-size gate. The
+  zstd decode ceiling that exists so prepare can slim released-tool schemas
+  now reaches six times the request cap (96 MiB decoded; the compressed body
+  is still capped at 16 MiB), so a 67 MB thread like the 2026-09-16 one
+  (2,690 tool-search results, about 1 MB prepared) is prepared instead of
+  refused.
+- One oversized body is expanded and prepared at a time. The slot is taken on
+  decoded bytes, the moment a turn passes the 16 MiB cap, so a second one -
+  including parallel sub-agents replaying the same large history - gets one
+  retryable 503 `OVERSIZE_BUSY` until the slot frees. A body inside the
+  ordinary cap never touches the slot.
+- A refused turn logs one `turn_refused` line naming its sizes and what the
+  turn carried, by class and byte weight (released-tool results, tool
+  outputs, reasoning, messages, images). No content is logged, and the
+  client-visible message is unchanged.
+
+## 0.6.84
+
+- Error messages are plain language, and the technical reason rides the log
+  line instead. A provider's status, code, provider name, offending tool and
+  field, the wait time, and a credential failure's OS reason no longer appear
+  in the sentence Codex or Claude shows; `ai_router/errors.py` remains the one
+  catalogue. Statuses, `error.code`, `Retry-After` and every frame shape are
+  unchanged.
+- Every refusal now leaves one `request_rejected` line, including the
+  retryable 503s (draining, busy, refused subscription turn, unavailable
+  provider) that used to answer with no log line at all. Credential detail is
+  logged as a bounded, path-redacted `detail`, and `upstream_rejected` carries
+  the bounded name of the tool the provider refused.
+- Logs age out. A file under `logs/` is deleted 30 days after its last write,
+  at every router start and every scheduled update, so a machine that has been
+  updating for years keeps no pile. The three files a running router writes
+  (`router.jsonl`, `launchd.log`, `update.log`) are never removed by age and
+  keep their existing size caps.
+- Path redaction moved to `ai_router/redaction.py`, a leaf, so the message
+  catalogue stays inside its recorded size ceiling. `errors.redact` still
+  works for existing callers.
+
+## 0.6.83
+
+- The Codex picker no longer keeps a ChatGPT subscription model that cannot
+  run. The router reads the allowance evidence its own turns already carry -
+  the usage headers when upstream sends them, a refused turn, or an auth
+  refusal - and drops that slug from `mixed-models.json` until a turn
+  succeeds, its reported window resets, or the hour long bound expires. Only
+  the refused slug moves, and only when the install's own roster names it: a
+  bucket that still works (for example `gpt-5.3-codex-spark`) stays
+  selectable.
+- The OpenRouter twin of a subscription model (`openai/<slug>`) now takes
+  the hidden row's place instead of listing beside it, so the same model
+  never appears twice: the twin shows while the subscription row cannot
+  run, and hides again once it works. An install with no subscription at
+  all keeps listing the twins exactly as before.
+- While a slug is blocked, the router rechecks it against the subscription
+  upstream once every four hours - one bounded request, using the login the
+  client last presented, held in memory only, never written to disk and
+  never logged - so a replenished allowance brings its rows back without
+  waiting for a turn. `subscription_probe: false` in router state disables
+  the recheck. Every change is silent and logs one `subscription_gate_changed`
+  event, and every recheck that reaches upstream logs one `subscription_probe`
+  event.
+- A fresh install on a client with no ChatGPT login now defaults to
+  `--openai-mode none` by reading the presence of a Codex `tokens` block (no
+  token value is ever read or logged), so the picker never offers rows that
+  cannot run. An explicit flag or the stored mode still wins, and an
+  unreadable store keeps the old default.
+
 ## 0.6.82
 
 No change to what a running router does: this release carries the publish

@@ -1,0 +1,19 @@
+{
+  "name": "scg-documentation",
+  "version": "0.1.0",
+  "description": "Write and maintain documentation that stays readable for readers at any technical level.",
+  "author": {
+    "name": "Software Combined"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "SCG Documentation",
+    "shortDescription": "Write documentation people can actually read.",
+    "longDescription": "Structure, voice, punctuation and reader-level clarity for READMEs, folder and module docs, technical articles and explanatory prose, including writing for readers at any technical skill level.",
+    "developerName": "Software Combined",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": "Use the documentation skill to write or revise this documentation."
+  },
+  "repository": "https://github.com/software-combined/SC_AI_Router"
+}

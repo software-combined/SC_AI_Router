@@ -16,7 +16,7 @@ import json
 import secrets
 from compression import zstd
 from . import errors, model_prompt_page, protocols, setup, sse
-from .errors import InvalidSize
+from .errors import InvalidSize, OversizeBusy
 from .runtime import MAX_DECODE_FACTOR, VERSION
 
 
@@ -65,14 +65,27 @@ def send_compaction_stream(handler, output):
         handler.close_connection = True
 
 
-def error(handler, err, *, log_event):
+MAX_LOG_DETAIL = 200
+
+
+def error(handler, err, *, log_event, retry_after=None):
+    """Log the rejection, then answer it. `detail` is the log's copy of the
+    technical reason the plain message leaves out; every refusal, retryable
+    or not, leaves one line here."""
     prefix = '/' + handler.server.state.get('token', '')
     raw = handler.path
     suffix = raw[len(prefix):] if prefix != '/' and raw.startswith(prefix) else '<unrouted>'
-    log_event('request_rejected', status=err.status, code=err.code,
-              path=suffix.split('?')[0][:200])
+    fields = {'status': err.status, 'code': err.code,
+              'path': suffix.split('?')[0][:200]}
+    detail = getattr(err, 'detail', None)
+    if detail:
+        fields['detail'] = str(detail)[:MAX_LOG_DETAIL]
+    if retry_after:
+        fields['retry_after'] = retry_after
+    log_event('request_rejected', **fields)
     try:
-        handler.send_json(err.status, err.body())
+        handler.send_json(err.status, err.body(),
+                          {'Retry-After': retry_after} if retry_after else None)
     except OSError:
         pass  # Client already disconnected; the event log keeps the record.
 
@@ -178,9 +191,12 @@ def do_get(handler):
     return handler.error(errors.unsupported_route())
 
 
-def read_body(handler, max_body):
+def read_body(handler, max_body, oversize_guard=None):
     # max_body arrives from the handler so the existing patch point on
     # ai_router.router.MAX_BODY still bounds this read (Plan 128).
+    # `oversize_guard` is asked once, on decoded bytes, before a body past the
+    # ordinary cap is expanded further: the schema-heavy turns that need the
+    # headroom compress at ratios no declared-size check can predict.
     size = int(handler.headers.get('Content-Length', '-1'))
     if size < 0 or size > max_body or handler.headers.get('Transfer-Encoding'):
         raise InvalidSize('Invalid request size')
@@ -190,7 +206,11 @@ def read_body(handler, max_body):
     limit = max_body * MAX_DECODE_FACTOR if encoding == 'zstd' else max_body
     if encoding == 'zstd':
         with zstd.ZstdFile(io.BytesIO(body)) as stream:
-            decoded = stream.read(limit + 1)
+            decoded = stream.read(max_body + 1)
+            if len(decoded) > max_body:
+                if oversize_guard is not None and not oversize_guard():
+                    raise OversizeBusy()
+                decoded += stream.read(limit - max_body + 1)
     else:
         decoded = body
     if len(decoded) > limit:

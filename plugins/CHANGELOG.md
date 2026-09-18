@@ -1,5 +1,17 @@
 # Changelog
 
+## scg-documentation 0.1.0 — 2026-09-18
+
+- Add the `documentation` skill as a new `scg-documentation` plugin:
+  structure, voice, punctuation and reader-level clarity for READMEs, folder
+  and module docs, technical articles and explanatory prose.
+- Lead with writing for readers at any technical skill level: expand jargon on
+  first use, never assume history, lead with the common case, prefer the short
+  common word, one idea per sentence, show rather than describe, and test the
+  document against a reader who lacks your context.
+- Ship both `.codex-plugin` and `.claude-plugin` manifests at the same
+  version, the shared marketplace updater, and the shared update guide.
+
 ## scg-review 0.4.9 — 2026-09-16
 
 - Keep lane verdicts legible in every relay: `✅ All Clear`, `📝 Proceed With Notes` and

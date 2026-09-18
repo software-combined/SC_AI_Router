@@ -8,6 +8,12 @@ user turns carry no such source. When the ChatGPT allowance is exhausted,
 upstream answers 429 for every helper turn and the client stores a slice
 of the prompt as the title instead.
 
+Client 0.154 attaches the read-only app tool allowlist it derives from the
+installed apps and MCP servers to those helper turns, so a helper turn can
+carry tools. Tools do not disqualify a turn here: the twin is prepared from
+the client's own payload, tools included, the same way a directly requested
+external row is.
+
 With the `openai_helper_fallback` state flag on, the router answers those
 helper turns from the registry's external twin row (`openai/<slug>`) and
 relays that response. Ordinary turns keep today's refusal. The flag is off
@@ -16,7 +22,7 @@ prompt to it.
 """
 import json
 
-from . import errors, provider_defs
+from . import errors, provider_defs, subscription_roster
 from .image_items import has_images
 from .providers import ExternalResponsesProvider
 from .registry import by_slug
@@ -26,7 +32,7 @@ HELPER_SOURCES = frozenset({'thread_title', 'thread_description',
                             'thread_summary', 'thread_title_reconsideration'})
 METADATA_HEADER = 'x-codex-turn-metadata'
 MAX_METADATA_BYTES = 8192
-TWIN_PREFIX = 'openai/'
+TWIN_PREFIX = subscription_roster.TWIN_PREFIX
 
 
 def helper_turn(headers):
@@ -78,14 +84,12 @@ class Plan:
 def plan(state, prepared, path, payload, raw_body, headers, credentials):
     """Fallback plan for this turn, or None when it is not eligible.
 
-    Only Responses turns the subscription owns, carrying a helper thread
-    source and no tools, qualify. The tool check keeps the twin's redispatch
-    body identical to the client's own payload, which the subscription
-    prepare may otherwise rewrite.
+    Only Responses turns the subscription owns that a helper thread source
+    marks qualify; tools do not disqualify one.
     """
     if not state.get('openai_helper_fallback') or path != '/responses':
         return None
-    if prepared.provider != provider_defs.OPENAI.id or payload.get('tools'):
+    if prepared.provider != provider_defs.OPENAI.id:
         return None
     if not helper_turn(headers):
         return None
@@ -108,9 +112,10 @@ def plan(state, prepared, path, payload, raw_body, headers, credentials):
     return Plan(slug, path, payload, raw_body, headers, credentials, region)
 
 
-def prepare(provider, model, path, payload, raw_body, headers, server):
+def prepare(provider, model, path, payload, raw_body, headers, server, decoded_len=None):
     """provider.prepare plus the refused-turn fallback plan when eligible."""
-    prepared = provider.prepare(model, path, payload, raw_body, headers, server.credentials)
+    prepared = provider.prepare(model, path, payload, raw_body, headers,
+                                server.credentials, decoded_len=decoded_len)
     prepared.fallback = plan(server.state, prepared, path, payload, raw_body, headers,
                              server.credentials)
     return prepared
@@ -125,7 +130,9 @@ def refusal_message(prepared, metrics):
     defn = provider_defs.get(prepared.provider)
     label = None if defn is None else defn.subscription_label
     if label is None:
-        return 'Upstream rate limited'
+        # An external route has no subscription to name: the catalogue's
+        # neutral rate-limit case owns that wording.
+        return errors.upstream_rate_limited().message
     model = metrics.get('model')
     model = model if isinstance(model, str) and model else 'This model'
     return (f'{model} is rate limited on your {label}; the turn was not served. '
@@ -137,14 +144,14 @@ def refused(handler, prepared, retry_after, metrics, started):
     refusal = errors.upstream_rate_limited(refusal_message(prepared, metrics))
     fallback = prepared.fallback
     if fallback is None:
-        return handler.retryable_reject(refusal, retry_after)
+        return handler.error(refusal, retry_after)
     try:
         twin = fallback.prepared()
     except (LookupError, ValueError, PermissionError, OSError) as exc:
         # No key, unreadable twin row, rejected effort: keep today's answer.
         log_event('subscription_fallback_unavailable', model=metrics.get('model'),
                   fallback_model=fallback.slug, reason=type(exc).__name__)
-        return handler.retryable_reject(refusal, retry_after)
+        return handler.error(refusal, retry_after)
     log_event('subscription_fallback', model=metrics.get('model'),
               fallback_model=fallback.slug, path=fallback.path)
     fields = ('request_bytes', 'stream', 'reasoning_effort', 'tool_definitions',

@@ -70,13 +70,13 @@ def _utc_now():
 
 
 def _record_pass(home, error=_KEEP, applied=None):
-    """Record one update pass in the shared state document.
+    """Record one update pass in the shared state document, ageing logs too.
 
     `error` is a code from ERROR_CODES, or '' to clear the previous one;
-    omitted it leaves the stored value alone. The read-modify-write goes
-    through the single state writer (Plan 131), so the failure counter and
-    the pass record never drop each other.
+    omitted leaves the stored value alone. The read-modify-write goes through
+    the single state writer (Plan 131): counter and pass record stay together.
     """
+    _svc.prune_logs(home / 'logs')
     try:
         state = _svc._state.read(_svc._state.path(home))
     except (AttributeError, OSError, ValueError):
