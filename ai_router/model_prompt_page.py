@@ -31,7 +31,6 @@ _STYLE = (
     'p{margin:0 0 1.25rem;color:hsl(215,16%,45%);font-size:.9375rem}'
     'ul{margin:0 0 1.5rem;padding-left:1.25rem;font-size:.9375rem}'
     'li{margin-bottom:.375rem}'
-    'li span{color:hsl(215,16%,45%)}'
     'form{display:flex;gap:.625rem}'
     'button{flex:1;min-height:2.75rem;padding:0 1rem;border:0;border-radius:.5rem;'
     'cursor:pointer;font:500 .9375rem/1 Inter,Arial,sans-serif}'
@@ -59,8 +58,8 @@ def not_found():
 
 def pending(rows):
     """The offer page: the visible names plus both actions."""
-    names = ''.join(f'<li>{html.escape(name)} <span>{html.escape(slug)}</span></li>'
-                    for slug, name in rows[:LIST_LIMIT])
+    names = ''.join(f'<li>{html.escape(name)}</li>'
+                    for _, name in rows[:LIST_LIMIT])
     if len(rows) > LIST_LIMIT:
         names += f'<li>and {len(rows) - LIST_LIMIT} more</li>'
     fields = ''.join(f'<input type="hidden" name="m" value="{html.escape(slug)}">'
