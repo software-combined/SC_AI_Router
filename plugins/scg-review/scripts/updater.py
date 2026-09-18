@@ -33,6 +33,7 @@ LEGACY = (
      ('704f610e262921e29040bf8848a20bc33968a59fd649b06aabd638e1f4bd4b56',
       '67819b4e806f76024a388cb2f697aeb4ba300c727f82b60eb10b7de7cea2f6ee',
       '8c06a8a7305e9b2d3344b66830834f07653acb9641c5035b769110e8ff353232',
+      'bd06fc556d4640f4dc4206209dd17fc41d4fcfd4904dc63d337ce55b9a88708b',
       '4ded20ea2db5a42c4641ccdbb2845e3f21513644a2d01d5acfa787e77ed9f83a'), True),
     ('com.softwarecombined.subagents.update',
      '.local/share/scg-subagents/updater.py',
