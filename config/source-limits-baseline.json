@@ -14,6 +14,7 @@
   "ai_router/tool_adapter.py": 400,
   "ai_router/tool_aliases.py": 279,
   "ai_router/upstream.py": 362,
+  "packaging/codex_config.py": 451,
   "packaging/install.py": 700,
   "packaging/notice.py": 500,
   "packaging/operator_surface.py": 421,

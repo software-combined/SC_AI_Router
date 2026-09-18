@@ -167,8 +167,9 @@ them while the child installer retains its own installation lock.
   instruction text and its capped delegation roster live in the
   `model_instructions.py` leaf (Plan 154).
 - Client activation lives in `packaging/codex_config.py`: the Codex block,
-  picker preservation, guidance, and receipts. `--client none` runs the
-  router lifecycle without touching client settings; absence of a client
+  picker preservation, the seeded startup model, the managed `[desktop]`
+  preferences, guidance, and receipts. `--client none` runs the router
+  lifecycle without touching client settings; absence of a client
   selection in legacy state means Codex. Subscription policy is per client:
   Responses follows `openai_mode`, Messages follows `anthropic_mode` when
   set, else the legacy `openai_mode` fallback.

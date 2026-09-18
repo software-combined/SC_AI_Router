@@ -79,12 +79,13 @@ RETIRED_SLUGS = {'~anthropic/claude-sonnet-latest', '~anthropic/claude-fable-lat
 # Retired subscription slugs live in retired_slugs.py, shared with the prune.
 
 # Native reasoning levels per subscription slug; fresh installs seed these.
-_A = ('low', 'medium', 'high', 'xhigh', 'max', 'ultra')
+# Ultra is never served: it is Codex's automatic-delegation level, so Max
+# is the top effort the picker offers (merge() strips it from stale rows).
 _M = ('low', 'medium', 'high', 'xhigh', 'max')
 _X = ('low', 'medium', 'high', 'xhigh')
 SUBSCRIPTION_REASONING = {
-    'gpt-6-astra': ('medium', _A), 'gpt-5.6-sol': ('low', _A),
-    'gpt-5.6-terra': ('medium', _A), 'gpt-5.6-luna': ('medium', _M),
+    'gpt-6-astra': ('medium', _M), 'gpt-5.6-sol': ('low', _M),
+    'gpt-5.6-terra': ('medium', _M), 'gpt-5.6-luna': ('medium', _M),
     'gpt-5.5': ('medium', _X), 'gpt-5.4-mini': ('medium', _X),
     'gpt-5.3-codex-spark': ('high', _X), 'codex-auto-review': ('medium', _M),
 }
@@ -193,6 +194,19 @@ def _visible_rows(client, allowed, include_twins=False, available=None):
     return visible, hidden
 
 
+def drop_ultra(row):
+    """Strip Ultra from one served row in place, stale rows included."""
+    levels = row.get('supported_reasoning_levels') or []
+    kept = [entry for entry in levels if entry.get('effort') != 'ultra']
+    if len(kept) == len(levels):
+        return
+    row['supported_reasoning_levels'] = kept
+    if row.get('default_reasoning_level') == 'ultra':
+        pinned = SUBSCRIPTION_REASONING.get(row.get('slug'))
+        row['default_reasoning_level'] = (pinned[0] if pinned
+                                          else (kept[0]['effort'] if kept else 'medium'))
+
+
 def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False,
           available=None):
     """Merge registry OpenRouter entries into one client catalogue.
@@ -242,6 +256,8 @@ def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False,
         if (slug not in entries and slug not in RETIRED_SUBSCRIPTION_SLUGS
                 and slug not in hidden):
             entries[slug] = subscription_stub(slug, sub_instructions)
+    for row in entries.values():  # Ultra never reaches the picker, at any age
+        drop_ultra(row)
     if include_twins:
         subs = []
     else:
