@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.90
+
+- A ChatGPT helper turn that carries tools is answered from its OpenRouter
+  twin again. Client 0.154 puts the read-only app tool allowlist it derives
+  from the installed apps and MCP servers on the title, description and
+  summary helper turns, and the fallback refused every tool-bearing turn, so
+  an exhausted allowance left titles as slices of the prompt. The twin
+  answers the client's own payload, tools included.
+
 ## 0.6.89
 
 - The subscription picker gate is gone. A ChatGPT subscription row is always
