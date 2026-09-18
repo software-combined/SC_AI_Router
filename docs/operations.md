@@ -185,7 +185,10 @@ stays whole. This conservative experimental threshold needs
 calibration from shadow data, not assumed safety: a previous trial scored a
 plainly true fact at 0.69, so the scores are not a calibrated guarantee.
 
-When the facts count as covered but the call still matters, the output keeps
+Wide windows keep their newest evidence and report how many older entries
+were left out as `retained_omitted`; both questions tell the judge not to
+infer coverage from that absence. When the facts
+count as covered but the call still matters, the output keeps
 its first 300 characters plus the number removed; the router never advises
 re-running a tool, because it cannot know whether that tool is idempotent.
 Ambiguous pairs, invalid or partial answers, decision failures,
