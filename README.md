@@ -188,8 +188,8 @@ The outgoing process finishes requests it has already accepted before the
 service restarts; on macOS launchd queues new connections through the
 handover, while Linux and Windows refuse new connections until the new
 process binds the port. After an update that adds picker models, the router
-offers a client restart and never forces one; the prompts each platform
-shows are described in
+offers a client restart, names up to three of the models it added, and never
+forces one; the prompts each platform shows are described in
 [docs/operations.md](docs/operations.md#new-model-notifications).
 
 - `python3.14 packaging/install.py --check-update` reports the installed and

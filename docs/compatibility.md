@@ -1,5 +1,32 @@
 # Compatibility
 
+## TypeSafe Jev decisions probe, 2026-09-18
+
+`typesafe/jev-1.13` answers with typed decisions rather than chat text: the
+OpenAI-compatible chat endpoint refuses it with `400 ... is a decisions
+model and cannot be used with the chat/completions endpoint. Use the
+/api/alpha/decisions endpoint instead.`, and routing is refused outright
+until the account's allowed-providers setting includes TypeSafe (`404 ...
+your account's allowed-providers setting permits only: ...`, with
+`typesafe` missing from that list). With the provider allowed, one
+synthetic call to `/api/alpha/decisions` (475-byte body, one question, no
+retries, $0.0000156) returned the verified envelope:
+
+    {"model": "typesafe/jev-1.13-20260917",
+     "answers": {"drop_p2": {"type": "noul", "noul": 0.91}},
+     "usage": {"input_tokens": 372, "output_tokens": 22, "cost": 0.000015624},
+     "id": "gen-dec-1789702759-I7LRUvr28GHweRLN7Ih2",
+     "provider": "TypeSafe"}
+
+A `noul` answer carries a confidence between 0 and 1, the answer map is
+keyed by the caller's own question id, and `model` echoes the served
+snapshot rather than the requested alias. The request shape came from
+validation errors, which bill nothing: `model`, `state` (string, record or
+array) and `questions`, each question a `noul`, `choice` (record-valued
+criteria) or `score` (array-valued criteria) carrying `instructions`. The
+key-filtered `/api/v1/models/user` list still omits the row while routing
+succeeds, so that list is not the availability gate for this endpoint.
+
 ## Oversized routed threads, 2026-09-17
 
 Thread `01a0ab7c` (`meta/muse-spark-1.3-contributor`) died with the router's
