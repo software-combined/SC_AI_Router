@@ -299,12 +299,16 @@ class Handler(BaseHTTPRequestHandler):
         return ingress.read_body(self, MAX_BODY, self._take_oversize_slot)
 
     def _take_oversize_slot(self):
-        """Take the slot the moment this body expands past the ordinary cap.
+        """Take the slot the moment this body is past the ordinary cap.
 
-        False means another oversized turn holds it; the reader raises
-        OversizeBusy, and the caller answers the retryable 503 without
-        expanding the rest of the body.
+        Past on the wire or on decode. False means another oversized turn
+        holds it; the reader raises OversizeBusy, and the caller answers the
+        retryable 503 without expanding the rest of the body. The declared
+        size and the decoded size both ask, so a turn that already holds the
+        slot keeps it.
         """
+        if self.oversize_held:
+            return True
         if not self.server.oversize_lock.acquire(blocking=False):
             return False
         self.oversize_held = True
