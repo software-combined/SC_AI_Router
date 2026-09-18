@@ -270,12 +270,14 @@ class RefusedHelperTurnTests(unittest.TestCase):
         self.assertEqual([call[0] for call in recorded], ['chatgpt.com'])
 
     def test_unpreparable_twin_keeps_the_refusal_and_its_retry_after(self):
-        # 'ultra' is offered for the subscription slug but not the twin row,
-        # so the twin prepare raises before any OpenRouter dispatch.
+        # The twin row rejects the carried effort, so prepare raises first.
         recorded = install_fake(self, self._refusal())
         server = self._server(openai_helper_fallback=True)
-        with self.assertLogs('codex_router', level='INFO') as logs:
-            response = self._turn(server, HEADERS, payload={'reasoning': {'effort': 'ultra'}})
+        with mock.patch.dict('ai_router.capabilities.REASONING_LEVELS',
+                             {'openai/gpt-5.6-luna': ['low']}):
+            with self.assertLogs('codex_router', level='INFO') as logs:
+                response = self._turn(server, HEADERS,
+                                      payload={'reasoning': {'effort': 'max'}})
         self.assertEqual(response.status, 503)
         self.assertEqual(response.getheader('Retry-After'), '2')
         response.read()

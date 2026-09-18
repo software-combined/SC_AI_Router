@@ -13,6 +13,22 @@ from pathlib import Path
 BEGIN = '# BEGIN local mixed model picker'
 END = '# END local mixed model picker'
 
+# Codex desktop preferences this installer owns, in the config's [desktop]
+# table the client writes itself through config/batchWrite: Max in, Ultra out.
+DESKTOP_TABLE = '[desktop]'
+QUEUE_KEY = 'followUpQueueMode'
+EFFORTS_KEY = 'enabled-reasoning-efforts'
+QUEUE_VALUE = 'steer'
+CLIENT_DEFAULT_EFFORTS = ('low', 'medium', 'high', 'xhigh', 'ultra', 'persistent')
+EFFORT_ORDER = ('none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max',
+                'ultra', 'persistent')
+
+# The model a fresh install starts on, install-once for the same reason.
+DEFAULT_MODEL = 'deepseek/deepseek-v4.1-flash'
+DEFAULT_MODEL_EFFORT = 'max'
+# Root keys Codex writes for the owner's pick, in the shape the client uses.
+PICK_KEYS = ('model', 'model_reasoning_effort')
+
 # Atomic text writer, injected by install.py via service.load() (Plan 123):
 # no spec_from_file_location copy lives here, so direct spec-loads of this
 # file (portability/receipt tests) only need it when replacing blocks.
@@ -45,6 +61,224 @@ def build_block(home, state, mode):
     return (BEGIN + '\n'
             f'openai_base_url = "{url}"\n'
             + catalog_line + END + '\n')
+
+
+def _read_text(path):
+    """Config text, or '' when the file is missing."""
+    path = Path(path)
+    return path.read_text() if path.exists() else ''
+
+
+def _insert_root_lines(block, extra):
+    """Block text with root keys placed before any table it declares."""
+    lines = block.splitlines()
+    at = next((index for index, line in enumerate(lines)
+               if line.strip().startswith('[')), len(lines) - 1)
+    lines[at:at] = extra
+    return '\n'.join(lines) + '\n'
+
+
+def managed_efforts(existing=None):
+    """Managed effort list: the client's own entries, Max in, Ultra out."""
+    entries = [lv for lv in (existing or CLIENT_DEFAULT_EFFORTS) if lv != 'ultra']
+    if 'max' not in entries:
+        entries.append('max')
+    return ([lv for lv in EFFORT_ORDER if lv in entries]
+            + [lv for lv in entries if lv not in EFFORT_ORDER])
+
+
+def _desktop_table(lines):
+    """(header index, end index, ambiguous) for the [desktop] table."""
+    heads = [index for index, line in enumerate(lines)
+             if line.split('#', 1)[0].strip().replace(' ', '') == DESKTOP_TABLE]
+    if len(heads) > 1:
+        return None, None, True
+    if not heads:
+        return None, None, False
+    rest = [index for index in range(heads[0] + 1, len(lines))
+            if lines[index].strip().startswith('[')]
+    return heads[0], (rest[0] if rest else len(lines)), False
+
+
+def _key_line(lines, start, end, key):
+    """Line index of one key inside a table; 'duplicate' when repeated."""
+    hits = [index for index in range(start + 1, end)
+            if lines[index].split('=', 1)[0].strip().strip('"\'') == key]
+    if len(hits) > 1:
+        return 'duplicate'
+    return hits[0] if hits else None
+
+
+def _read_value(line):
+    """One assignment's value: names, a quoted string, else None.
+
+    None means the line is not a single-line literal this module can
+    rewrite (a multi-line array, say), and every caller refuses on it.
+    """
+    raw = line.split('=', 1)[1].split('#', 1)[0].strip()
+    if raw.startswith('[') and raw.endswith(']'):
+        return [part.strip().strip('"\'') for part in raw[1:-1].split(',')
+                if part.strip()]
+    if len(raw) > 1 and raw[:1] in ('"', "'") and raw.endswith(raw[:1]):
+        return raw[1:-1]
+    return None
+
+
+def _render(key, value):
+    """One assignment line in the shape the client's own writer emits."""
+    if isinstance(value, (list, tuple)):
+        return key + ' = [' + ', '.join('"%s"' % item for item in value) + ']'
+    return key + ' = ' + json.dumps(value)
+
+
+def desktop_preferences(text, previous=None):
+    """(text, record) with the managed desktop preferences applied.
+
+    The record holds the values written and the values they replaced (None
+    when a key was absent; a `previous` record carried from an earlier
+    attach wins). A table or value this module cannot rewrite safely
+    refuses the edit with (text, {}): a second definition, or a value
+    misread out of a multi-line literal, would leave the config unreadable.
+    """
+    lines = text.splitlines()
+    header, end, ambiguous = _desktop_table(lines)
+    found = {} if header is None else {
+        key: _key_line(lines, header, end, key) for key in (QUEUE_KEY, EFFORTS_KEY)}
+    current = {key: _read_value(lines[index]) for key, index in found.items()
+               if isinstance(index, int)}
+    if ambiguous or 'duplicate' in found.values() or None in current.values():
+        return text, {}
+    written = {QUEUE_KEY: QUEUE_VALUE,
+               EFFORTS_KEY: managed_efforts(current.get(EFFORTS_KEY))}
+    record = {'written': written,
+              'previous': previous or {key: current.get(key) for key in written}}
+    if header is None:
+        lines.append(DESKTOP_TABLE)
+        end = len(lines)
+    for key, value in written.items():
+        index = found.get(key)
+        if index is None:
+            lines.insert(end, _render(key, value))
+            end += 1
+        else:
+            lines[index] = _render(key, value)
+    return '\n'.join(lines) + '\n', record
+
+
+def restore_desktop(text, record):
+    """Put back the values an attach replaced; later owner edits stay.
+
+    Only a value still equal to the managed one is restored, and a table
+    the attach created is dropped again once it holds nothing else.
+    """
+    written = (record or {}).get('written') or {}
+    previous = (record or {}).get('previous') or {}
+    if not written:
+        return text
+    lines = text.splitlines()
+    header, end, ambiguous = _desktop_table(lines)
+    if header is None or ambiguous:
+        return text
+    for key, value in written.items():
+        index = _key_line(lines, header, end, key)
+        if not isinstance(index, int):
+            continue
+        current = _read_value(lines[index])
+        if current is None:
+            continue
+        same = (list(current) == list(value) if isinstance(value, list)
+                else current == value)
+        if not same:
+            continue
+        if previous.get(key) is None:
+            del lines[index]
+            end -= 1
+        else:
+            lines[index] = _render(key, previous[key])
+    if not any('=' in line for line in lines[header + 1:end]):
+        del lines[header]
+    return '\n'.join(lines) + '\n' if text.endswith('\n') else '\n'.join(lines)
+
+
+def seed_picker_selection(config_path, previous_block, block):
+    """Seed the default model into a fresh managed block, install-once.
+
+    A config that already names a model keeps it: a second root-level
+    `model` key would make the whole file unreadable.
+    """
+    if _picks(block):
+        return block
+    text = _read_text(config_path)
+    if previous_block:
+        text = text.replace(previous_block, '', 1)
+    if any(line.split('=', 1)[0].strip().strip('"\'') in
+           ('model', 'model_reasoning_effort')
+           for line in text.splitlines() if '=' in line):
+        return block
+    return _insert_root_lines(block, [_render('model', DEFAULT_MODEL),
+                                      _render('model_reasoning_effort',
+                                              DEFAULT_MODEL_EFFORT)])
+
+
+def _without_picks(block):
+    """Block lines minus the owner's model pick, which Codex rewrites."""
+    return [line for line in block.splitlines()
+            if line.split('=', 1)[0].strip() not in ('model', 'model_reasoning_effort')]
+
+
+def _picks(text):
+    """The model lines in one region, one per key: {key: line}.
+
+    A repeated key keeps its last line, so a config that carries a stale
+    duplicate is rewritten with a single definition rather than refused.
+    """
+    picks = {}
+    for line in text.splitlines():
+        key = line.split('=', 1)[0].strip().strip('"\'')
+        if '=' not in line or key not in PICK_KEYS:
+            continue
+        picks[key] = line
+    return picks
+
+
+def live_block(text, recorded):
+    """The managed block as this config now holds it.
+
+    Codex rewrites the owner's model pick inside the block, so the copy in
+    the receipt goes stale; that live region is the one an update replaces
+    and a detach removes. Only that drift is accepted: any other change
+    keeps the recorded block, so the hand-edit refusal still stands.
+    """
+    if recorded and recorded in text:
+        return recorded
+    if text.count(BEGIN) != 1 or text.count(END) != 1:
+        return recorded
+    live = text[text.index(BEGIN):text.index(END) + len(END) + 1]
+    if _without_picks(live) != _without_picks(recorded or ''):
+        return recorded
+    return live
+
+
+def attach_config(config_path, block, previous=None):
+    """Insert the managed block and apply the managed desktop preferences.
+
+    `previous` is the codex attachment in the receipt; its desktop record
+    keeps the owner's original values across updates. Returns (block,
+    before, desktop) for the receipt.
+    """
+    recorded = (previous or {}).get('inserted_block')
+    previous_block = live_block(_read_text(config_path), recorded)
+    block = preserve_picker_selection(config_path, previous_block, block)
+    block = seed_picker_selection(config_path, previous_block, block)
+    before = replace_config_block(config_path, block, previous_block)
+    current = _read_text(config_path)
+    carried = ((previous or {}).get('desktop') or {}).get('previous')
+    updated, desktop = desktop_preferences(current, carried)
+    if desktop and updated != current:
+        _replace_text(config_path, updated)
+    elif not desktop:
+        print('Codex [desktop] preferences skipped: table ambiguous or repeated')
+    return block, before, desktop
 
 
 def default_mode(config_path=None):
@@ -80,18 +314,16 @@ def preserve_picker_selection(config_path, previous_block, block):
     if not previous_block:
         return block
     try:
-        before = Path(config_path).read_text() if Path(config_path).exists() else ''
+        before = _read_text(config_path)
     except OSError:
         return block
     if previous_block not in before:
         return block
-    keep = [line for line in previous_block.splitlines()
-            if line.startswith('model = ') or line.startswith('model_reasoning_effort = ')]
-    if not keep:
+    # Spacing- and indent-insensitive: Codex may rewrite the line's shape.
+    picks = _picks(previous_block)
+    if not picks:
         return block
-    lines = block.splitlines()
-    lines[-1:-1] = keep
-    return '\n'.join(lines) + '\n'
+    return _insert_root_lines(block, list(picks.values()))
 
 
 def replace_config_block(config_path, block, previous_block=None):
@@ -175,11 +407,16 @@ def write_client_receipt(home, client, entry):
         pass
 
 
-def write_receipt(home, config_path, block, rules_receipt, mode, before='', client='codex'):
+def write_receipt(home, config_path, block, rules_receipt, mode, before='',
+                  client='codex', desktop=None):
     """Record one client attachment; existing attachments are preserved."""
     entry = {'config_path': str(config_path), 'inserted_block': block,
              'openai_mode': mode,
              'previous_sha256': hashlib.sha256(before.encode()).hexdigest()}
+    if desktop:
+        # Managed Codex desktop preferences: the values written and the
+        # values they replaced, so tools/disable.py can put them back.
+        entry['desktop'] = desktop
     if rules_receipt:
         # Legacy installs recorded the managed global-instructions block;
         # install-once starters record nothing, so the key stays absent.

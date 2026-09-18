@@ -15,6 +15,7 @@ and billing. These pages go deeper.
 | [Linux upgrade](linux-upgrade.md) | Managed systemd user units and upgrade behaviour |
 | [Kiro compatibility](kiro-compatibility.md) | The Kiro surface and its limits |
 | [Context recovery](context-recovery.md) | What to do when a long turn or a compaction goes wrong |
+| [Jev compaction benchmark](jev-compaction-benchmark.md) | What the archived-thread measurements showed about the experimental compaction |
 | [Codex routing incident, 2026-09-13](codex-routing-incident-20260913.md) | One incident's evidence and what changed because of it |
 | [Provenance](PROVENANCE.md) | Where the code came from |
 | [Changelog archive](changelog-archive.md) | Every release before 0.6, unedited |

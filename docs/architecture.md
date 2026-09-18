@@ -25,6 +25,9 @@ catalogue / models / live_refresh / apply_catalogue (client projections)
   |
 agent_handoffs / compaction / tool_adapter / tool_aliases / discovered
 (request normalization)
+decisions (typed-decision wire client, imports only provider_defs)
+  |
+jev_compaction (opt-in evidence selection, consumes decisions/compaction)
   |
 providers (Responses adapters) + claude (Messages adapters)
   |
@@ -81,6 +84,9 @@ leaf beside `stream_errors.py`, never a dispatcher or a credential owner.
    with a different wire format is a new adapter class, never a branch in
    the request path. External headers start fresh every request;
    subscription headers never accompany an externally billed request.
+   `decisions.py` is the one client for a provider's typed-decision endpoint
+   (Jev today): it holds no policy and answers only what it can validate, so
+   every consumer fails closed on its refusals and nothing runs it by default.
 4. Installer orchestration (`packaging/install.py`, `bundle.py`,
    `service.py`, `updater.py`) calls one explicit platform backend;
    `bundle.py` owns the release lifecycle (verify, install, prune,
@@ -167,8 +173,9 @@ them while the child installer retains its own installation lock.
   instruction text and its capped delegation roster live in the
   `model_instructions.py` leaf (Plan 154).
 - Client activation lives in `packaging/codex_config.py`: the Codex block,
-  picker preservation, guidance, and receipts. `--client none` runs the
-  router lifecycle without touching client settings; absence of a client
+  picker preservation, the seeded startup model, the managed `[desktop]`
+  preferences, guidance, and receipts. `--client none` runs the router
+  lifecycle without touching client settings; absence of a client
   selection in legacy state means Codex. Subscription policy is per client:
   Responses follows `openai_mode`, Messages follows `anthropic_mode` when
   set, else the legacy `openai_mode` fallback.
@@ -178,3 +185,85 @@ them while the child installer retains its own installation lock.
 Source, packaged imports, native lifecycle, real-client tools, billing, and
 release acceptance are different gates. Record client and OS evidence by
 version; a global model tier never asserts every combination works.
+
+## Jev consumer: compaction evidence
+
+`jev_compaction.py` owns `state(home)` and
+`summary(model, key, items, defn, home=None, ask=None) -> str | None`.
+The two summary assignments in `ExternalResponsesProvider.compact` and
+`compact_trigger` use it before falling back to `self.summarize`. The
+external-only `compaction_call` gate is unchanged: subscription threads and
+ordinary turns never reach Jev. Dependencies flow providers -> consumer ->
+decisions/compaction -> leaves. Upstream facts remain in `provider_defs`.
+
+The case-sensitive `jev-compaction` home file is read per compaction, with
+`ROUTER_HOME` respected. `shadow` evaluates but returns `None`; `on` returns
+kept text. Other, absent, empty or unreadable values mean off. The original
+items are never modified. `remember(items, summary)` and the V1 summary and
+V2 `ocx1:` envelopes consume the returned string unchanged. There is no new
+capsule, replay module or request-path dispatch branch. Commands and the
+TypeSafe data-sharing and billing disclosure are in
+[operations](operations.md#experimental-compaction).
+
+The consumer matches complete calls/results by `call_id`, rejects orphans or
+ambiguous IDs, and selects at most 16 pairs by descending output size. It
+never questions the first item, anything from the latest user message onward,
+the newest six items, prior compactions, discovery outputs, agent messages
+or developer/system messages. Pinning either member pins the whole pair;
+unselected pairs stay verbatim.
+
+One batch carries `{task, retained, candidates}`. Evidence uses
+`compaction._item_text`, excluding opaque reasoning; candidate outputs carry
+only `ok|error, N chars (omitted)`. Each item's text is capped at 2000, then
+500, then 120 characters; if the body, including model and questions, still
+exceeds 32 KiB, the newest 64 retained entries are kept at 500, then the
+newest 32 at 120, then the newest 16 at 60, and the state records how many
+older entries it left out. A real compaction carries hundreds of items, and
+refusing those meant the feature never ran; thinning keeps the newest
+evidence. It is not one-way safe: less evidence lowers the coverage score
+(fewer pairs count as covered) and the "call still matters" score too, which
+can turn a truncation into a drop. Both instructions therefore name
+`retained_omitted` and forbid inferring coverage from absence. If even the
+smallest step cannot fit, no partial state is sent.
+Retained evidence never includes another candidate, so two candidates cannot
+justify deleting each other. Candidate IDs are `p1..pn`; every instruction
+names its backticked state path because Jev cannot see question IDs.
+
+Two `noul` propositions ask whether the pair's task-relevant facts are
+already covered by retained evidence, and whether knowing the call happened
+still matters. These are probabilities of propositions, not importance scores.
+The conservative experimental `THRESHOLD = 0.90` is applied directly to each
+returned value, and both propositions are read positively: a pair drops only
+when the facts count as covered *and* the call no longer matters; covered
+evidence whose call still matters keeps the call with a shortened output; an
+uncovered pair is kept verbatim. An earlier revision compared both values
+below the threshold, which deleted exactly the pairs the judge had called
+uncovered; the benchmark measured it and the polarity is now pinned by tests.
+The first 300 output characters and the removed character count are kept, and
+no re-run advice is added, since idempotency is not known here. Otherwise keep
+both verbatim, in original order. The threshold needs
+shadow calibration; the previous live trial's 0.69 on a plainly true fact
+shows why the scores are not assumed production-quality calibration.
+
+Any decision refusal, malformed/partial answer, invalid history, oversized
+request or rendered text over 40% of the model row's context window returns
+`None`. The byte ceiling uses `turn_budget.BYTES_PER_TOKEN`; an unknown window
+also declines. The existing summarizer then runs unchanged. Logs contain only
+mode, counts, byte sizes, elapsed time and a closed-set error code.
+
+This is a one-shot T0 judgment with untrusted input, owned by the router
+consumer; deterministic code validates the result before selecting text.
+The paid-call budget is zero when off and at most one per eligible compaction,
+using the decision client's five-second socket timeout. That timeout is not a
+whole-run wall-clock guarantee. There are no retries, fallback models, decision
+cache, model-selected tools or loops. Persistent writes, harmful-replay
+coordination and broad-autonomy controls are not applicable to this consumer:
+it returns text, without mutating history or executing tools. Reassess those
+controls if it gains writes, retries, tools or per-turn authority.
+
+`tests/test_jev_compaction.py` owns offline flag, selection, immutability,
+failure, byte-budget and V1/V2 contracts. `tests/test_decisions.py` retains
+wire validation, while packaging and import-graph tests enforce delivery and
+dependency direction. Source implementation and offline acceptance do not
+prove live calibration, deployment or release acceptance. No paid trial is
+part of this change.

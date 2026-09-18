@@ -28,7 +28,8 @@ def _notice():
 def _popup_text():
     """Every user-visible string both dialog producers can show."""
     notice = _notice()
-    text = [notice._message('0.6.25')]
+    text = [notice._message('0.6.25'),
+            notice._message('0.6.25', names=['Z.ai: GLM 5.3 Flash', '+2 more'])]
     for platform_name, tool_path in (('darwin', '/usr/bin/osascript'),
                                      ('linux', '/usr/bin/zenity'),
                                      ('win32', 'C:/powershell.exe')):
