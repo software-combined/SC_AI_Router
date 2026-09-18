@@ -33,7 +33,7 @@ def _doc():
 class RuntimeLockTests(unittest.TestCase):
     def test_shipped_lock_validates(self):
         doc = runtime_lock.validate(_doc())
-        self.assertEqual(len(doc['targets']), 4)
+        self.assertEqual(len(doc['targets']), 5)
 
     def test_missing_targets_fails_closed(self):
         doc = _doc()
@@ -50,7 +50,7 @@ class RuntimeLockTests(unittest.TestCase):
     def test_unsupported_target_fails_closed(self):
         doc = _doc()
         entry = copy.deepcopy(doc['targets'][0])
-        entry.update({'os': 'linux', 'cpu': 'arm64'})
+        entry.update({'os': 'linux', 'cpu': 'arm32'})
         doc['targets'].append(entry)
         with self.assertRaisesRegex(SystemExit, 'unsupported target'):
             runtime_lock.validate(doc)
@@ -86,6 +86,8 @@ class RuntimeLockTests(unittest.TestCase):
                                   'python/lib/python3.14/LICENSE.txt'),
             ('darwin', 'x86_64'): ('python/bin/python3.14',
                                    'python/lib/python3.14/LICENSE.txt'),
+            ('linux', 'arm64'): ('python/bin/python3.14',
+                                 'python/lib/python3.14/LICENSE.txt'),
             ('linux', 'x86_64'): ('python/bin/python3.14',
                                   'python/lib/python3.14/LICENSE.txt'),
             ('windows', 'x86_64'): ('python/python.exe',
@@ -102,11 +104,11 @@ class RuntimeLockTests(unittest.TestCase):
     def test_select_maps_each_target_once(self):
         doc = _doc()
         for os_name, cpu in (('darwin', 'arm64'), ('darwin', 'x86_64'),
-                             ('linux', 'x86_64'), ('windows', 'x86_64')):
+                             ('linux', 'arm64'), ('linux', 'x86_64'),
+                             ('windows', 'x86_64')):
             entry = runtime_lock.select(doc, os_name, cpu)
             self.assertIsNotNone(entry, (os_name, cpu))
             self.assertEqual((entry['os'], entry['cpu']), (os_name, cpu))
-        self.assertIsNone(runtime_lock.select(doc, 'linux', 'arm64'))
         self.assertIsNone(runtime_lock.select(doc, 'windows', 'arm32'))
 
     def test_wrapper_table_covers_every_target(self):
