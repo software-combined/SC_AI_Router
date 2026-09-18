@@ -22,6 +22,9 @@ class PageRenderTests(unittest.TestCase):
         self.assertIn('Model 0', page)
         self.assertIn('and 3 more', page)
         self.assertNotIn('Model 12', page)
+        # The picker label is the whole row; the raw id stays in the form.
+        self.assertNotIn('<span>', page)
+        self.assertNotIn('>vendor/model-0<', page)
         self.assertIn('value="vendor/model-14"', page)  # every row is acknowledged
         self.assertIn('Restart Codex', page)
         self.assertIn('Later', page)

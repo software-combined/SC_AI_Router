@@ -352,16 +352,15 @@ class DialogCommandTests(unittest.TestCase):
 
 
 class ReleaseBundleTests(unittest.TestCase):
-    def test_release_bundle_contains_notice_and_icon(self):
+    def test_release_bundle_contains_the_notice_modules_and_icon(self):
         root = _ROOT
         spec = importlib.util.spec_from_file_location(
             'router_release', root / 'packaging' / 'release.py')
         release_mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(release_mod)
-        self.assertIn('packaging/notice.py',
-                      release_mod.bundle_files(root))
-        self.assertIn('packaging/assets/router-icon.png',
-                      release_mod.bundle_files(root))
+        for member in ('packaging/notice.py', 'packaging/notice_text.py',
+                       'packaging/assets/router-icon.png'):
+            self.assertIn(member, release_mod.bundle_files(root))
         self.assertTrue(
             (root / 'packaging' / 'assets' / 'router-icon.png').is_file())
 
