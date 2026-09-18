@@ -66,6 +66,19 @@ window, and anything added later) follows one style:
 `tests/test_popup_style.py` pins the shared title, icon asset and vocabulary
 across the platforms, so a new dialog cannot drift from this style.
 
+## 4b. Local watchlist
+
+In the primary checkout, `TO MONITOR/TOMONITOR.md` is the local, gitignored
+watchlist of unusual events analysed but not yet actionable: one index plus one
+file per issue type, each entry carrying the symptom, the evidence, the
+conclusion and the trigger that reopens it. Read the matching type file before
+re-investigating a recurring symptom, and add or update an entry when an event
+is understood but not yet actionable. Keep entries in the primary checkout:
+this local artifact sits outside the worktree discipline in section 2, so a
+linked worktree has no folder to write to, and a fresh clone has neither the
+folder nor the exclusion. It never carries keys, request content or tool
+content.
+
 ## 5. Verification before commit
 
 Run `python3.14 -m unittest discover -s tests -t .`,
