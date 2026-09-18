@@ -50,7 +50,7 @@ class ShowPendingTests(unittest.TestCase):
         test.addCleanup(setattr, notice_mod, 'dialog_command', real)
         test.addCleanup(setattr, install_mod._svc.notice,
                         'dialog_command', install_mod._svc.notice.dialog_command)
-        fake = lambda version, platform_name=None, which=None, icon=None, clients='codex': ['fake-dialog', version]  # noqa: E731
+        fake = lambda version, **kwargs: ['fake-dialog', version]  # noqa: E731
         setattr(notice_mod, 'dialog_command', fake)
         setattr(install_mod._svc.notice, 'dialog_command', fake)
 
@@ -264,7 +264,7 @@ class ShowPendingTests(unittest.TestCase):
             self.addCleanup(setattr, notice_mod, 'dialog_command', real)
             self.addCleanup(setattr, install_mod._svc.notice, 'dialog_command',
                             install_mod._svc.notice.dialog_command)
-            fake = lambda version, platform_name=None, which=None, icon=None, clients='codex': None  # noqa: E731
+            fake = lambda version, **kwargs: None  # noqa: E731
             setattr(notice_mod, 'dialog_command', fake)
             setattr(install_mod._svc.notice, 'dialog_command', fake)
             seen = []

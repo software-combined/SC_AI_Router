@@ -46,8 +46,7 @@ _linux = _platforms._linux_mod().systemd
 _updater = _svc.load(
     'router_updater', Path(__file__).resolve().parent / 'updater.py')
 # One shared service module: tests patch install_mod._svc attrs and the
-# updater must see the same object. Bound once at load; _sync_seams keeps
-# the function seams fresh per call.
+# updater must see the same object. _sync_seams keeps seams fresh per call.
 _updater.bind(svc=_svc)
 PLATFORM = sys.platform
 # Re-exported for tests (installed bundles have no packaging/ package).
@@ -124,15 +123,16 @@ _bundle = _svc.load(
     'router_bundle', Path(__file__).resolve().parent / 'bundle.py')
 
 # Bundle seams (Plan 130): _patch_attrs mirrors swaps onto _svc; _sync_seams
-# pushes run/safe_extract/install_launcher/swap_current into the bundle module,
-# while self_test/write_catalogue/provider_keys travel as explicit wrapper
-# arguments. The aliases below keep every test patch point resolving.
+# pushes the callable seams into the bundle module, while the rest travel as
+# explicit wrapper arguments. The aliases below keep test patch points resolving.
 
 
 verify_sha256 = _bundle.verify_sha256
 newer = _bundle.newer
 check_manifest = _bundle.check_manifest
 check_identity = _bundle.check_identity
+
+_skills = _svc.load('router_agent_skills', Path(__file__).resolve().parent / 'agent_skills.py')
 
 
 def self_test(python, release_dir):
@@ -161,7 +161,6 @@ def write_catalogue(home, release_dir, python):
     return _bundle.write_catalogue(home, release_dir, python, run=run)
 
 
-_preserve_picker_selection = _codex_config.preserve_picker_selection
 replace_config_block = _codex_config.replace_config_block
 
 
@@ -362,9 +361,8 @@ def do_install(args, _fetch=fetch, _run=None):
         setup_url = (f"http://127.0.0.1:{state['port']}/{state['token']}"
                      f"/setup/{state['setup']['nonce']}")
     if env_named:
-        # The service environment carries only ROUTER_HOME, so a key that
-        # lives only in the shell never reaches it; the window collects it.
-        # The value itself is never printed.
+        # The service environment carries only ROUTER_HOME, so a shell-only key
+        # never reaches it; the window collects it and never prints the value.
         print('%s is set in this shell; the installer passes only ROUTER_HOME '
               'to the installed service, so the key window collects the key '
               'instead' % ', '.join(env_named))
@@ -453,11 +451,11 @@ def do_install(args, _fetch=fetch, _run=None):
         if not args.feed:
             (home / 'feed-serial').write_text(str(serial) + '\n')
         backend.start_updates(home)
+        print(f"agent skills: {_skills.sync(state, current_release_dir(home) / 'plugins', run=run)}")
         print(f"installed {latest['version']}; health ok; Claude Code attached")
         return 0
     config_path = Path.home() / '.codex' / 'config.toml'
     block = _codex_config.build_block(home, state, mode)
-    block = _preserve_picker_selection(config_path, previous_receipt.get('inserted_block'), block)
     # Global instructions are install-once via the setup window's starter
     # choice: this installer never writes, rewrites, or re-enforces them.
     rules_receipt = previous_receipt.get('global_instructions')
@@ -468,11 +466,12 @@ def do_install(args, _fetch=fetch, _run=None):
         os.chmod(home / f'config-before-{stamp}.toml', 0o600)
     except OSError:
         pass
-    before = replace_config_block(config_path, block, previous_receipt.get('inserted_block'))
-    _codex_config.write_receipt(home, config_path, block, rules_receipt, mode, before)
-    # launchd keeps the updater command it loaded until the job is reloaded,
-    # and a scheduled run defers that reload. Pruning the release that command
-    # names would leave the updater firing a missing file every 4 hours.
+    block, before, desktop = _codex_config.attach_config(
+        config_path, block, previous_receipt)
+    _codex_config.write_receipt(home, config_path, block, rules_receipt, mode, before,
+                                desktop=desktop)
+    # launchd keeps the updater command until the job is reloaded and a
+    # scheduled run defers that reload, so pruning its release breaks it.
     prune_releases(home, latest['version'], previous,
                    backend.pinned_release(home))
     if not args.feed:
@@ -480,6 +479,7 @@ def do_install(args, _fetch=fetch, _run=None):
         # serial, so recording it makes the real feed look stale for good.
         (home / 'feed-serial').write_text(str(serial) + '\n')
     backend.start_updates(home)
+    print(f"agent skills: {_skills.sync(state, current_release_dir(home) / 'plugins', run=run)}")
     print(f"installed {latest['version']}; health ok; restart Codex to load the router")
     return 0
 

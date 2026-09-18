@@ -1,5 +1,71 @@
 # Changelog
 
+## 0.6.95
+
+- Wide compactions now fit the request instead of refusing it. A real
+  window carries hundreds of items, and the state budget only shrank each
+  item, never the number of them, so 59 of 60 measured 600-item windows
+  declined before asking anything. After the per-item ladder the state now
+  keeps the newest 64 retained entries at 500 characters, then 32 at 120,
+  then 16 at 60, and records how many older entries it left out. A 20-window
+  replay at the same size: 17 of 20 now reach Jev, median request 7 KiB, and
+  the three that do not simply have no eligible pair. Thinning is not
+  one-way safe, so both questions name the omitted count and forbid
+  inferring coverage from absence.
+- Jev compaction now reads its own questions correctly. Both are positive
+  propositions ("the facts are already covered", "knowing the call still
+  matters"), but the rule compared each against the threshold backwards and
+  dropped precisely the pairs the judge had called *uncovered*; at the
+  shipped 0.90 with measured scores topping out at 0.83 that deleted every
+  judged pair. A pair is now dropped only when its facts count as covered
+  and the call no longer matters.
+- Jev compaction no longer declines the whole window because a tool output
+  has no call left to pair with. Pairing is local: only complete, ordered,
+  unpinned pairs become candidates, a duplicated call id protects every item
+  sharing it, and anything unpairable stays verbatim. Replaying 60 archived
+  threads showed the old global rule refused 40 of them for an unmatched
+  output, protecting nothing while leaving the feature inert; no window is
+  refused for closure now. `docs/jev-compaction-benchmark.md` records the
+  measurements, the score distribution and why the threshold stays
+  conservative.
+
+## 0.6.94
+
+- Experimental Jev compaction is opt-in through the `jev-compaction` home
+  file. Start with `shadow` to measure without changing today's summary;
+  `on` returns retained evidence inside the existing V1/V2 envelopes.
+  Both enabled modes send selected history text to TypeSafe and are billed.
+  Complete tool pairs and pinned history are protected, invalid decisions
+  and size overruns use the existing summarizer, and subscription threads
+  are unchanged.
+
+## 0.6.93
+
+- The restart dialog after an update names the models that update added,
+  using the same picker labels the desktop notification and the approval
+  page show. A dialog that cannot reach the running router keeps its
+  version-only sentence, nothing outside the machine's policy is announced,
+  and the approval page no longer repeats a raw model id beside each name.
+
+## 0.6.91
+
+- A fresh Codex install starts on DeepSeek V4.1 Flash at Max thinking. The
+  attachment seeds `model` and `model_reasoning_effort` inside the managed
+  block; Codex writes the owner's later pick into those same lines and an
+  update carries it forward, so the seed never resets a choice or adds a
+  second `model` key. Carried lines now stay root keys in `none` mode too,
+  instead of landing inside the provider table the block declares.
+- The attachment also manages two Codex desktop preferences in the config's
+  `[desktop]` table: follow-up messages steer the running turn instead of
+  queueing, and the effort list offers Max without Ultra. Both are re-applied
+  by an update and put back as they were on detach; a value the owner changed
+  after the install is left alone. A `[desktop]` table or value the installer
+  cannot rewrite safely skips the edit with one line of output rather than
+  risk a second definition or a mangled value.
+- Ultra is no longer served. It is Codex's automatic-delegation level, so
+  `gpt-6-astra`, `gpt-5.6-sol` and `gpt-5.6-terra` now advertise `low` to
+  `max`, and the next merge strips Ultra from a row an older release wrote.
+
 ## 0.6.90
 
 - A ChatGPT helper turn that carries tools is answered from its OpenRouter

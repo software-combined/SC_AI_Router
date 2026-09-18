@@ -99,8 +99,8 @@ class CatalogueFlagTests(unittest.TestCase):
     def test_subscription_stubs_carry_native_reasoning_levels(self):
         from ai_router.catalogue import SUBSCRIPTION_REASONING, subscription_stub
         self.assertNotIn('gpt-reserve', SUBSCRIPTION_REASONING)
-        want = {'gpt-6-astra': ('medium', 6), 'gpt-5.6-sol': ('low', 6),
-                'gpt-5.6-terra': ('medium', 6), 'gpt-5.6-luna': ('medium', 5),
+        want = {'gpt-6-astra': ('medium', 5), 'gpt-5.6-sol': ('low', 5),
+                'gpt-5.6-terra': ('medium', 5), 'gpt-5.6-luna': ('medium', 5),
                 'gpt-5.5': ('medium', 4), 'gpt-5.4-mini': ('medium', 4),
                 'gpt-5.3-codex-spark': ('high', 4), 'codex-auto-review': ('medium', 5)}
         self.assertEqual(set(SUBSCRIPTION_REASONING), set(want))
@@ -181,7 +181,7 @@ class CatalogueFlagTests(unittest.TestCase):
         by_slug = {m['slug']: m for m in merged['models']}
         self.assertEqual(by_slug['gpt-6-astra']['display_name'], 'Mine')
         self.assertEqual(by_slug['gpt-6-astra']['context_window'], 1000000)
-        self.assertEqual(len(by_slug['gpt-6-astra']['supported_reasoning_levels']), 6)
+        self.assertEqual(len(by_slug['gpt-6-astra']['supported_reasoning_levels']), 5)
         self.assertEqual(by_slug['gpt-5.6-sol']['supported_reasoning_levels'],
                          rich['supported_reasoning_levels'])
         self.assertEqual(by_slug['gpt-5.5']['supported_reasoning_levels'],

@@ -138,6 +138,66 @@ at an idle moment. Moving a host from `beta` back to `stable` needs
 `<home>/feed-serial` cleared first, or the lower stable serial is refused
 as stale.
 
+## Experimental compaction
+
+`jev-compaction` beside the router home's `channel` file controls the opt-in
+Jev consumer. `ROUTER_HOME` overrides `~/.codex/mixed-model-router`; use the
+home the service actually runs with. The router reads the file at every
+external V1 or V2 compaction, without a restart. Trimmed lowercase `shadow`
+and `on` are the only enabled values. Missing, empty, unreadable and all other
+values, including `ON` and `1`, mean off.
+
+Both enabled modes send selected history text to TypeSafe and bill the
+external provider key. Confirm that this data sharing is permitted before
+enabling either mode. Subscription threads and ordinary turns never call Jev.
+`shadow` is the recommended first step: it logs proposed counts but leaves
+the existing summary and input unchanged. `on` uses kept evidence as the
+summary text inside the existing V1/V2 envelopes. There is no new capsule or
+history store. Disabling the flag affects future compactions, not summaries
+already produced.
+
+Choose one mode command after selecting the home. macOS/Linux:
+
+```sh
+RH="${ROUTER_HOME:-$HOME/.codex/mixed-model-router}"
+printf 'shadow\n' > "$RH/jev-compaction"  # Measure only, recommended first
+printf 'on\n' > "$RH/jev-compaction"      # Replace the summary
+rm -f "$RH/jev-compaction"                # Disable
+```
+
+PowerShell:
+
+```powershell
+$rh = if ($env:ROUTER_HOME) { $env:ROUTER_HOME } else { Join-Path $HOME '.codex/mixed-model-router' }
+Set-Content "$rh/jev-compaction" shadow -Encoding ascii # Measure only
+Set-Content "$rh/jev-compaction" on -Encoding ascii     # Replace the summary
+Remove-Item "$rh/jev-compaction" -ErrorAction SilentlyContinue # Disable
+```
+
+One batch considers at most 16 complete pairs, largest outputs first. The
+first item, latest user message and everything after it, newest six items,
+prior compactions, discovery results, agent messages and system/developer
+messages stay pinned. The rest stay verbatim. A pair is dropped only when the
+judge says its facts are already covered (0.90 or above) *and* that knowing
+the call happened no longer matters (below 0.90); covered evidence whose call
+still matters keeps the call with a shortened output, and everything else
+stays whole. This conservative experimental threshold needs
+calibration from shadow data, not assumed safety: a previous trial scored a
+plainly true fact at 0.69, so the scores are not a calibrated guarantee.
+
+Wide windows keep their newest evidence and report how many older entries
+were left out as `retained_omitted`; both questions tell the judge not to
+infer coverage from that absence. When the facts
+count as covered but the call still matters, the output keeps
+its first 300 characters plus the number removed; the router never advises
+re-running a tool, because it cannot know whether that tool is idempotent.
+Ambiguous pairs, invalid or partial answers, decision failures,
+a state that cannot fit the 32 KiB request budget, or retained text over 40%
+of the selected model's context window all use the existing summarizer.
+There are no decision retries, fallback models, per-turn calls or decision
+cache. `compact_jev` logs only mode, counts, byte sizes, elapsed milliseconds
+and a closed-set error code; never content, tool names or keys.
+
 ## Update feed: public and automatic
 
 Every install polls the public feed at
@@ -229,9 +289,13 @@ new permission.
 When a scheduled update lands a version that adds models for the machine's
 policy scope, the updater asks the running router over loopback (the 3.9
 updater never imports the runtime) and offers a Codex restart: a desktop
-notification names up to three of the new models (macOS always; Linux when
-`notify-send` is installed; Windows logs the offer only) and the approval
-page opens in the browser on macOS and Linux. The page is reachable only
+notification and the native restart dialog each name up to three of the new
+models (macOS always; Linux when `notify-send` is installed; Windows logs
+the notification only) and the approval page opens in the browser on macOS
+and Linux. All three name a model the way the picker does
+(`<Vendor>: <Model>`, without the `· OpenRouter` route suffix), and a dialog
+that cannot reach the running router keeps its version-only sentence, so a
+stopped service never delays an update. The page is reachable only
 through its single-use link, which carries the per-install path token plus
 a 48 h nonce; both Restart Codex and Later acknowledge, and only the
 Restart click quits and reopens Codex, on macOS. The offer is skipped on
@@ -531,6 +595,21 @@ lifecycle without touching any client file; uninstall needs no receipt.
 Switching an active Codex install to `none` restores the exact owned block
 first, or refuses when the block was edited. The choice persists in router
 state and survives scheduled updates.
+
+The attachment also manages Codex settings beyond the connection lines. A
+fresh install seeds `model = "deepseek/deepseek-v4.1-flash"` and
+`model_reasoning_effort = "max"` inside the managed block; Codex writes the
+owner's later pick into those same lines, and an update carries it forward
+instead of resetting it. In the config's `[desktop]` table it sets
+`followUpQueueMode = "steer"`, so a message sent while a turn runs steers it
+instead of queueing, and `enabled-reasoning-efforts`, the client's own list
+with `max` added and `ultra` removed. Ultra is Codex's automatic-delegation
+level and the served catalogue never offers it, so the picker cannot show it
+even if a client default reintroduces it. Detach, `--client none` and
+uninstall put the desktop values back as the attach found them, and a value
+the owner changed afterwards is left alone. A `[desktop]` table or value the
+installer cannot rewrite safely skips that edit with one line of output
+rather than risk a second definition or a mangled value.
 
 Native service calls (`/alpha/*`, `/guardian*`) pass through to the
 ChatGPT backend with the client's own login in subscription mode and answer

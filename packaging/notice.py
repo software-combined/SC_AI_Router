@@ -30,6 +30,13 @@ _spec = _ilu.spec_from_file_location(
 _atomic_write = _ilu.module_from_spec(_spec)
 _spec.loader.exec_module(_atomic_write)
 
+_spec = _ilu.spec_from_file_location(
+    'router_notice_text', Path(__file__).resolve().parent / 'notice_text.py')
+_text = _ilu.module_from_spec(_spec)
+_spec.loader.exec_module(_text)
+# Kept as a module name: the wording is pinned here by callers and tests.
+_message = _text.message
+
 NOTICE_FILE = 'update-notice.json'
 CATALOGUE_FILE = 'mixed-models.json'
 PICKER_BASELINE_FILE = 'picker-baseline.json'
@@ -47,29 +54,6 @@ PROBE_TIMEOUT = 5
 PROBE_GRACE_S = 1.0
 ICON = Path(__file__).resolve().parent / 'assets' / 'router-icon.png'
 ICON_NAME = 'router-icon.png'
-
-# Which client(s) this install serves: the popup names them instead of
-# always talking about Codex. 'none' is a service-only install.
-CLIENTS = ('codex', 'claude', 'both', 'none')
-
-
-def _clients(value):
-    return value if value in CLIENTS else 'codex'
-
-
-def _message(version, clients='codex'):
-    """Restart instruction for the clients this install actually serves."""
-    if clients == 'claude':
-        action = 'Restart Claude Code'
-    elif clients == 'both':
-        action = 'Quit and reopen Codex and restart Claude Code'
-    elif clients == 'none':
-        action = 'Restart your AI client'
-    else:
-        action = 'Quit and reopen Codex'
-    return ('SCG Router was updated to %s. %s to use the new models.'
-            % (version, action))
-
 
 def _utcnow():
     return datetime.now(timezone.utc).isoformat(timespec='seconds')
@@ -229,7 +213,7 @@ def record(home, previous, version, clients=None):
             except (OSError, ValueError, AttributeError):
                 clients = None
         doc = {'version': version, 'at': _utcnow(),
-               'clients': _clients(clients) if clients
+               'clients': _text.clients(clients) if clients
                else (existing if isinstance(existing, dict) else {}).get('clients', 'codex')}
         pid = _dialog_pid(existing)
         if pid:
@@ -377,7 +361,7 @@ def _windows_script(message, icon=None, restart=True):
 
 
 def dialog_command(version, platform_name=None, which=None, icon=None,
-                   clients='codex'):
+                   clients='codex', names=()):
     """argv for a one-shot dismissible restart dialog, or None.
 
     None means the platform is unknown or its dialog tool is missing, so
@@ -386,6 +370,7 @@ def dialog_command(version, platform_name=None, which=None, icon=None,
     to the bundled logo and is dropped when that asset is not installed.
     `clients` names the attached client(s): only a Codex install gets the
     app restart button, because that button relaunches the Codex app.
+    `names` are the added models the dialog may list.
     """
     if platform_name is None:
         platform_name = sys.platform
@@ -393,9 +378,9 @@ def dialog_command(version, platform_name=None, which=None, icon=None,
         which = shutil.which
     if icon is None and ICON.is_file():
         icon = str(ICON)
-    clients = _clients(clients)
+    clients = _text.clients(clients)
     restart = clients in ('codex', 'both')
-    message = _message(version, clients)
+    message = _message(version, clients, names)
     if platform_name == 'darwin':
         if which('osascript') is None:
             return None
@@ -465,7 +450,8 @@ def show_pending(home, spawn=None, pid_alive=None):
         if not isinstance(version, str) or not version:
             return False
         cmd = dialog_command(version, icon=_home_icon(home) or '',
-                             clients=doc.get('clients', 'codex'))
+                             clients=doc.get('clients', 'codex'),
+                             names=_text.pending_names(home))
         if cmd is None:
             return False
         shown = {'version': version, 'shown': True, 'at': _utcnow()}
