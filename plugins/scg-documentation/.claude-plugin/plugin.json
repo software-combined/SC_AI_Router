@@ -1,0 +1,9 @@
+{
+  "name": "scg-documentation",
+  "version": "0.1.0",
+  "description": "Write and maintain documentation that stays readable for readers at any technical level.",
+  "author": {
+    "name": "Software Combined"
+  },
+  "license": "Apache-2.0"
+}
