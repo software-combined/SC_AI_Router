@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.96
+
+- Linux on arm64 is a first-class install target: the runtime lock now
+  pins the aarch64/glibc CPython build, so a Graviton host bootstraps
+  natively instead of being carried on x86_64. The bootstrap also verifies
+  archives with GNU `sha256sum` when a host has no `shasum`.
+
 ## 0.6.95
 
 - Wide compactions now fit the request instead of refusing it. A real
