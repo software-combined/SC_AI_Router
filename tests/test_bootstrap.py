@@ -76,7 +76,7 @@ _FAKE_LANDED = (
 
 @unix_only
 class BootstrapTests(unittest.TestCase):
-    def _env(self, tmp, mode, mirror='runtimes/x.tar.gz', serve=None):
+    def _env(self, tmp, mode, mirror='runtimes/x.tar.gz', serve=None, path=None):
         bin_dir = Path(tmp) / 'bin'
         bin_dir.mkdir(exist_ok=True)
         curl = bin_dir / 'curl'
@@ -87,7 +87,7 @@ class BootstrapTests(unittest.TestCase):
                 'x86_64': 'x86_64', 'amd64': 'x86_64'}[platform.machine().lower()]
         return {
             **os.environ,
-            'PATH': str(bin_dir) + os.pathsep + os.environ['PATH'],
+            'PATH': str(bin_dir) + os.pathsep + (path or os.environ['PATH']),
             'ROUTER_HOME': str(Path(tmp) / 'home'),
             'FEED_ORIGIN': 'https://feed.example',
             'CURL_MODE': mode,
@@ -98,6 +98,18 @@ class BootstrapTests(unittest.TestCase):
                                       'sha256': '00', 'exec': 'python/bin/python3.14'}}}),
         }
 
+    def _hash_tools_path(self, tmp):
+        """PATH with bootstrap.sh's tools, sha256sum only; tar execs gzip."""
+        bin_dir = Path(tmp) / 'tools-bin'
+        bin_dir.mkdir(exist_ok=True)
+        names = ('sh', 'env', 'uname', 'mkdir', 'chmod', 'cat', 'rm',
+                 'tar', 'gzip', 'python3', 'sha256sum')
+        for name in names:
+            found = shutil.which(name)
+            if found and not (bin_dir / name).exists():
+                (bin_dir / name).symlink_to(found)
+        return str(bin_dir)
+
     def _run(self, tmp, mode, mirror='runtimes/x.tar.gz', channel=None):
         home = Path(tmp) / 'home'
         env = self._env(tmp, mode, mirror=mirror)
@@ -107,7 +119,8 @@ class BootstrapTests(unittest.TestCase):
         proc = subprocess.run(argv, env=env, capture_output=True, text=True)
         return proc, home, Path(env['CURL_ARGV_LOG'])
 
-    def _full_run(self, tmp, channel, installer_exit=0, land=True):
+    def _full_run(self, tmp, channel, installer_exit=0, land=True, path=None,
+                  sha=None):
         """Serve every download so the bootstrap reaches install.py."""
         home = Path(tmp) / 'home'
         serve = Path(tmp) / 'serve'
@@ -133,13 +146,14 @@ class BootstrapTests(unittest.TestCase):
         (serve / 'runtimes.json').write_text(json.dumps({'targets': {
             f'{os_name}/{arch}': {
                 'mirror': 'runtimes/cpython-test.tar.gz',
-                'sha256': hashlib.sha256(
+                'sha256': sha or hashlib.sha256(
                     (serve / 'mirror.bin').read_bytes()).hexdigest(),
                 'exec': 'python/bin/python3.14'}}}))
         proc = subprocess.run(
             ['sh', str(_ROOT / 'packaging' / 'bootstrap.sh'),
              '--channel=' + channel],
-            env=self._env(tmp, 'full', serve=serve), capture_output=True, text=True)
+            env=self._env(tmp, 'full', serve=serve, path=path),
+            capture_output=True, text=True)
         return proc, home
 
     def test_failed_fetch_leaves_existing_files_alone(self):
@@ -242,6 +256,25 @@ class BootstrapTests(unittest.TestCase):
             proc, home = self._full_run(tmp, 'beta')
             self.assertEqual(proc.returncode, 0, proc.stderr)
             self.assertEqual((home / 'feed-serial').read_text(), '46\n')
+
+    @unittest.skipUnless(shutil.which('sha256sum'),
+                         'needs sha256sum for the fallback checksum')
+    def test_sha256sum_verifies_when_shasum_is_absent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            proc, home = self._full_run(
+                tmp, 'stable', path=self._hash_tools_path(tmp))
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertEqual((home / 'current').read_text(), '9.9.9')
+
+    @unittest.skipUnless(shutil.which('sha256sum'),
+                         'needs sha256sum for the fallback checksum')
+    def test_sha256sum_fallback_refuses_a_bad_digest(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            proc, home = self._full_run(
+                tmp, 'stable', path=self._hash_tools_path(tmp), sha='0' * 64)
+            self.assertNotEqual(proc.returncode, 0)
+            self.assertIn('FAILED', proc.stdout + proc.stderr)
+            self.assertFalse((home / 'current').exists())
 
     def test_unknown_channel_is_refused_before_any_fetch(self):
         with tempfile.TemporaryDirectory() as tmp:
