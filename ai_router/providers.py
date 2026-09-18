@@ -3,7 +3,7 @@ import http.client
 import json
 import time
 from . import (capabilities, compaction as comp, local_services, agent_handoffs,
-               provider_defs, transport, turn_budget)
+               provider_defs, transport, turn_budget, jev_compaction)
 from .standalone_outputs import materialize_outputs
 from . import subscription_history, context_recovery
 from .capabilities import CANONICAL_ORDER, check_effort, input_modalities
@@ -240,7 +240,7 @@ class ExternalResponsesProvider:
             users = comp.extract_user_messages(items)
             if not users:
                 raise ValueError('No user messages to compact')
-            summary = self.summarize(model, key, items)
+            summary = jev_compaction.summary(model, key, items, self.defn) or self.summarize(model, key, items)
             log_event('compact_summarized', model=model, summary_chars=len(summary))
             output = comp.build_compact_v1_output(users, summary)
             remember(items, summary)
@@ -257,7 +257,7 @@ class ExternalResponsesProvider:
             users = comp.extract_user_messages(items)
             if not users:
                 raise ValueError('No user messages to compact')
-            summary = self.summarize(model, key, items)
+            summary = jev_compaction.summary(model, key, items, self.defn) or self.summarize(model, key, items)
             log_event('compact_triggered', model=model, summary_chars=len(summary))
             remember(items, summary)
             return [comp.v2_compaction_item(summary)]

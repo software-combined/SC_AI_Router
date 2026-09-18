@@ -15,6 +15,7 @@ are never copied between machines.
 `ai_router/tool_adapter.py`, `ai_router/tool_aliases.py`,
 `ai_router/agent_handoffs.py`, `ai_router/sse.py`, `ai_router/stream_errors.py`,
 `ai_router/capabilities.py`, `ai_router/compaction.py`,
+`ai_router/jev_compaction.py`, `ai_router/decisions.py`,
 `ai_router/compaction_result.py`, `ai_router/history_portability.py`,
 `ai_router/standalone_outputs.py`, `ai_router/discovered.py`,
 `ai_router/errors.py`, `ai_router/redaction.py`, `ai_router/candidate.py`,

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.94
+
+- Experimental Jev compaction is opt-in through the `jev-compaction` home
+  file. Start with `shadow` to measure without changing today's summary;
+  `on` returns retained evidence inside the existing V1/V2 envelopes.
+  Both enabled modes send selected history text to TypeSafe and are billed.
+  Complete tool pairs and pinned history are protected, invalid decisions
+  and size overruns use the existing summarizer, and subscription threads
+  are unchanged.
+
 ## 0.6.93
 
 - The restart dialog after an update names the models that update added,

@@ -170,6 +170,42 @@ There is no local spend cap. Subscription usage follows the client's plan and
 OpenRouter usage is billed to the API key, so watch that spend in the
 OpenRouter dashboard.
 
+## Experimental compaction
+
+The `jev-compaction` file beside `channel` in the router home opts external
+model compactions into Jev judgments. This sends selected history text to
+TypeSafe through the external provider and is billed to its key. Use it only
+where that data sharing is permitted. Subscription threads are unaffected.
+
+Start with `shadow`: it measures proposed changes but keeps today's summary.
+`on` replaces that summary with retained text, preserving complete tool pairs
+or a 300-character output with an explicit truncation note. What the judge
+sees is the call text and a status or length label for each candidate, never
+the result body, so a failure that lives only inside a result's text is not
+visible to it; keep `on` experimental until shadow data has calibrated it.
+Errors and size limits fall back to today's summarizer. The switch is read at
+each compaction;
+no restart is needed. Only lowercase `shadow` and `on` enable it; missing,
+empty, unreadable or other values disable it. Surrounding whitespace is ignored.
+
+macOS/Linux (run the line for the mode you want):
+
+```sh
+RH="${ROUTER_HOME:-$HOME/.codex/mixed-model-router}"
+printf 'shadow\n' > "$RH/jev-compaction"  # Recommended first step
+printf 'on\n' > "$RH/jev-compaction"      # Enable replacement
+rm -f "$RH/jev-compaction"                # Disable
+```
+
+PowerShell:
+
+```powershell
+$rh = if ($env:ROUTER_HOME) { $env:ROUTER_HOME } else { Join-Path $HOME '.codex/mixed-model-router' }
+Set-Content "$rh/jev-compaction" shadow -Encoding ascii # Recommended first step
+Set-Content "$rh/jev-compaction" on -Encoding ascii     # Enable replacement
+Remove-Item "$rh/jev-compaction" -ErrorAction SilentlyContinue # Disable
+```
+
 ## Updates
 
 Installs check their release feed for the selected channel. `stable` is the
