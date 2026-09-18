@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.6.91
+
+- A fresh Codex install starts on DeepSeek V4.1 Flash at Max thinking. The
+  attachment seeds `model` and `model_reasoning_effort` inside the managed
+  block; Codex writes the owner's later pick into those same lines and an
+  update carries it forward, so the seed never resets a choice or adds a
+  second `model` key. Carried lines now stay root keys in `none` mode too,
+  instead of landing inside the provider table the block declares.
+- The attachment also manages two Codex desktop preferences in the config's
+  `[desktop]` table: follow-up messages steer the running turn instead of
+  queueing, and the effort list offers Max without Ultra. Both are re-applied
+  by an update and put back as they were on detach; a value the owner changed
+  after the install is left alone. A `[desktop]` table or value the installer
+  cannot rewrite safely skips the edit with one line of output rather than
+  risk a second definition or a mangled value.
+- Ultra is no longer served. It is Codex's automatic-delegation level, so
+  `gpt-6-astra`, `gpt-5.6-sol` and `gpt-5.6-terra` now advertise `low` to
+  `max`, and the next merge strips Ultra from a row an older release wrote.
+
 ## 0.6.90
 
 - A ChatGPT helper turn that carries tools is answered from its OpenRouter

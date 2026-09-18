@@ -532,6 +532,21 @@ Switching an active Codex install to `none` restores the exact owned block
 first, or refuses when the block was edited. The choice persists in router
 state and survives scheduled updates.
 
+The attachment also manages Codex settings beyond the connection lines. A
+fresh install seeds `model = "deepseek/deepseek-v4.1-flash"` and
+`model_reasoning_effort = "max"` inside the managed block; Codex writes the
+owner's later pick into those same lines, and an update carries it forward
+instead of resetting it. In the config's `[desktop]` table it sets
+`followUpQueueMode = "steer"`, so a message sent while a turn runs steers it
+instead of queueing, and `enabled-reasoning-efforts`, the client's own list
+with `max` added and `ultra` removed. Ultra is Codex's automatic-delegation
+level and the served catalogue never offers it, so the picker cannot show it
+even if a client default reintroduces it. Detach, `--client none` and
+uninstall put the desktop values back as the attach found them, and a value
+the owner changed afterwards is left alone. A `[desktop]` table or value the
+installer cannot rewrite safely skips that edit with one line of output
+rather than risk a second definition or a mangled value.
+
 Native service calls (`/alpha/*`, `/guardian*`) pass through to the
 ChatGPT backend with the client's own login in subscription mode and answer
 404 in `none` mode; the list is a prefix rule on the OpenAI definition, so a
