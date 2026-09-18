@@ -1,0 +1,524 @@
+{
+ "live": true,
+ "cases": 24,
+ "judged_pairs": 24,
+ "declined": 3,
+ "errors": [],
+ "decisions_model": "typesafe/jev-1.13-20260917",
+ "spend_usd": 0.000126,
+ "calibration": {
+  "0.4": {
+   "correct": 18,
+   "false_drops": 0,
+   "truncation_harm": 0,
+   "missed_drops": 6,
+   "declined": 3,
+   "total": 24
+  },
+  "0.45": {
+   "correct": 18,
+   "false_drops": 0,
+   "truncation_harm": 0,
+   "missed_drops": 6,
+   "declined": 3,
+   "total": 24
+  },
+  "0.5": {
+   "correct": 18,
+   "false_drops": 0,
+   "truncation_harm": 0,
+   "missed_drops": 6,
+   "declined": 3,
+   "total": 24
+  },
+  "0.55": {
+   "correct": 18,
+   "false_drops": 0,
+   "truncation_harm": 0,
+   "missed_drops": 6,
+   "declined": 3,
+   "total": 24
+  },
+  "0.6": {
+   "correct": 18,
+   "false_drops": 0,
+   "truncation_harm": 0,
+   "missed_drops": 6,
+   "declined": 3,
+   "total": 24
+  },
+  "0.65": {
+   "correct": 18,
+   "false_drops": 0,
+   "truncation_harm": 0,
+   "missed_drops": 6,
+   "declined": 3,
+   "total": 24
+  },
+  "0.7": {
+   "correct": 18,
+   "false_drops": 0,
+   "truncation_harm": 0,
+   "missed_drops": 6,
+   "declined": 3,
+   "total": 24
+  },
+  "0.75": {
+   "correct": 18,
+   "false_drops": 0,
+   "truncation_harm": 0,
+   "missed_drops": 6,
+   "declined": 3,
+   "total": 24
+  },
+  "0.8": {
+   "correct": 18,
+   "false_drops": 0,
+   "truncation_harm": 0,
+   "missed_drops": 6,
+   "declined": 3,
+   "total": 24
+  },
+  "0.85": {
+   "correct": 18,
+   "false_drops": 0,
+   "truncation_harm": 0,
+   "missed_drops": 6,
+   "declined": 3,
+   "total": 24
+  },
+  "0.9": {
+   "correct": 18,
+   "false_drops": 0,
+   "truncation_harm": 0,
+   "missed_drops": 6,
+   "declined": 3,
+   "total": 24
+  },
+  "0.95": {
+   "correct": 18,
+   "false_drops": 0,
+   "truncation_harm": 0,
+   "missed_drops": 6,
+   "declined": 3,
+   "total": 24
+  },
+  "0.99": {
+   "correct": 18,
+   "false_drops": 0,
+   "truncation_harm": 0,
+   "missed_drops": 6,
+   "declined": 3,
+   "total": 24
+  }
+ },
+ "bands": {
+  "drop.call": [
+   0.51,
+   0.65
+  ],
+  "drop.facts": [
+   0.23,
+   0.32
+  ],
+  "keep.call": [
+   0.48,
+   0.65
+  ],
+  "keep.facts": [
+   0.19,
+   0.23
+  ],
+  "keep_call.call": [
+   0.54,
+   0.55
+  ],
+  "keep_call.facts": [
+   0.18,
+   0.19
+  ]
+ },
+ "records": [
+  {
+   "case": "retained_duplicate_120",
+   "asked": true,
+   "error": null,
+   "pairs": [
+    {
+     "id": "a",
+     "expect": "drop",
+     "facts": 0.23,
+     "call": 0.51,
+     "chars": 133
+    }
+   ],
+   "declined": false,
+   "est_cost_usd": 6.08e-06
+  },
+  {
+   "case": "unique_fact_120",
+   "asked": true,
+   "error": null,
+   "pairs": [
+    {
+     "id": "a",
+     "expect": "keep",
+     "facts": 0.2,
+     "call": 0.65,
+     "chars": 152
+    }
+   ],
+   "declined": false,
+   "est_cost_usd": 4.64e-06
+  },
+  {
+   "case": "equal_length_contradiction_120",
+   "asked": true,
+   "error": null,
+   "pairs": [
+    {
+     "id": "b",
+     "expect": "keep",
+     "facts": 0.22,
+     "call": 0.48,
+     "chars": 137
+    },
+    {
+     "id": "a",
+     "expect": "keep",
+     "facts": 0.23,
+     "call": 0.53,
+     "chars": 135
+    }
+   ],
+   "declined": false,
+   "est_cost_usd": 5.95e-06
+  },
+  {
+   "case": "verdict_after_300_120",
+   "asked": true,
+   "error": null,
+   "pairs": [
+    {
+     "id": "a",
+     "expect": "keep",
+     "facts": 0.21,
+     "call": 0.62,
+     "chars": 110
+    }
+   ],
+   "declined": false,
+   "est_cost_usd": 4.61e-06
+  },
+  {
+   "case": "occurrence_matters_120",
+   "asked": true,
+   "error": null,
+   "pairs": [
+    {
+     "id": "a",
+     "expect": "keep_call",
+     "facts": 0.18,
+     "call": 0.54,
+     "chars": 134
+    }
+   ],
+   "declined": false,
+   "est_cost_usd": 4.6e-06
+  },
+  {
+   "case": "mutation_receipt_120",
+   "asked": true,
+   "error": null,
+   "pairs": [
+    {
+     "id": "a",
+     "expect": "keep",
+     "facts": 0.2,
+     "call": 0.63,
+     "chars": 151
+    }
+   ],
+   "declined": false,
+   "est_cost_usd": 4.66e-06
+  },
+  {
+   "case": "superseded_120",
+   "asked": true,
+   "error": null,
+   "pairs": [
+    {
+     "id": "a",
+     "expect": "drop",
+     "facts": 0.31,
+     "call": 0.64,
+     "chars": 133
+    }
+   ],
+   "declined": false,
+   "est_cost_usd": 6.35e-06
+  },
+  {
+   "case": "no_candidates_120",
+   "asked": false,
+   "error": null,
+   "pairs": [],
+   "declined": true,
+   "est_cost_usd": 0.0
+  },
+  {
+   "case": "retained_duplicate_290",
+   "asked": true,
+   "error": null,
+   "pairs": [
+    {
+     "id": "a",
+     "expect": "drop",
+     "facts": 0.23,
+     "call": 0.52,
+     "chars": 303
+    }
+   ],
+   "declined": false,
+   "est_cost_usd": 7.86e-06
+  },
+  {
+   "case": "unique_fact_290",
+   "asked": true,
+   "error": null,
+   "pairs": [
+    {
+     "id": "a",
+     "expect": "keep",
+     "facts": 0.2,
+     "call": 0.64,
+     "chars": 322
+    }
+   ],
+   "declined": false,
+   "est_cost_usd": 4.64e-06
+  },
+  {
+   "case": "equal_length_contradiction_290",
+   "asked": true,
+   "error": null,
+   "pairs": [
+    {
+     "id": "b",
+     "expect": "keep",
+     "facts": 0.2,
+     "call": 0.49,
+     "chars": 307
+    },
+    {
+     "id": "a",
+     "expect": "keep",
+     "facts": 0.23,
+     "call": 0.55,
+     "chars": 305
+    }
+   ],
+   "declined": false,
+   "est_cost_usd": 5.95e-06
+  },
+  {
+   "case": "verdict_after_300_290",
+   "asked": true,
+   "error": null,
+   "pairs": [
+    {
+     "id": "a",
+     "expect": "keep",
+     "facts": 0.2,
+     "call": 0.59,
+     "chars": 280
+    }
+   ],
+   "declined": false,
+   "est_cost_usd": 4.61e-06
+  },
+  {
+   "case": "occurrence_matters_290",
+   "asked": true,
+   "error": null,
+   "pairs": [
+    {
+     "id": "a",
+     "expect": "keep_call",
+     "facts": 0.19,
+     "call": 0.55,
+     "chars": 304
+    }
+   ],
+   "declined": false,
+   "est_cost_usd": 4.6e-06
+  },
+  {
+   "case": "mutation_receipt_290",
+   "asked": true,
+   "error": null,
+   "pairs": [
+    {
+     "id": "a",
+     "expect": "keep",
+     "facts": 0.19,
+     "call": 0.64,
+     "chars": 321
+    }
+   ],
+   "declined": false,
+   "est_cost_usd": 4.66e-06
+  },
+  {
+   "case": "superseded_290",
+   "asked": true,
+   "error": null,
+   "pairs": [
+    {
+     "id": "a",
+     "expect": "drop",
+     "facts": 0.32,
+     "call": 0.64,
+     "chars": 303
+    }
+   ],
+   "declined": false,
+   "est_cost_usd": 8.14e-06
+  },
+  {
+   "case": "no_candidates_290",
+   "asked": false,
+   "error": null,
+   "pairs": [],
+   "declined": true,
+   "est_cost_usd": 0.0
+  },
+  {
+   "case": "retained_duplicate_700",
+   "asked": true,
+   "error": null,
+   "pairs": [
+    {
+     "id": "a",
+     "expect": "drop",
+     "facts": 0.23,
+     "call": 0.54,
+     "chars": 713
+    }
+   ],
+   "declined": false,
+   "est_cost_usd": 1.217e-05
+  },
+  {
+   "case": "unique_fact_700",
+   "asked": true,
+   "error": null,
+   "pairs": [
+    {
+     "id": "a",
+     "expect": "keep",
+     "facts": 0.22,
+     "call": 0.64,
+     "chars": 732
+    }
+   ],
+   "declined": false,
+   "est_cost_usd": 4.64e-06
+  },
+  {
+   "case": "equal_length_contradiction_700",
+   "asked": true,
+   "error": null,
+   "pairs": [
+    {
+     "id": "b",
+     "expect": "keep",
+     "facts": 0.2,
+     "call": 0.5,
+     "chars": 717
+    },
+    {
+     "id": "a",
+     "expect": "keep",
+     "facts": 0.22,
+     "call": 0.54,
+     "chars": 715
+    }
+   ],
+   "declined": false,
+   "est_cost_usd": 5.95e-06
+  },
+  {
+   "case": "verdict_after_300_700",
+   "asked": true,
+   "error": null,
+   "pairs": [
+    {
+     "id": "a",
+     "expect": "keep",
+     "facts": 0.2,
+     "call": 0.61,
+     "chars": 690
+    }
+   ],
+   "declined": false,
+   "est_cost_usd": 4.61e-06
+  },
+  {
+   "case": "occurrence_matters_700",
+   "asked": true,
+   "error": null,
+   "pairs": [
+    {
+     "id": "a",
+     "expect": "keep_call",
+     "facts": 0.18,
+     "call": 0.55,
+     "chars": 714
+    }
+   ],
+   "declined": false,
+   "est_cost_usd": 4.6e-06
+  },
+  {
+   "case": "mutation_receipt_700",
+   "asked": true,
+   "error": null,
+   "pairs": [
+    {
+     "id": "a",
+     "expect": "keep",
+     "facts": 0.2,
+     "call": 0.63,
+     "chars": 731
+    }
+   ],
+   "declined": false,
+   "est_cost_usd": 4.66e-06
+  },
+  {
+   "case": "superseded_700",
+   "asked": true,
+   "error": null,
+   "pairs": [
+    {
+     "id": "a",
+     "expect": "drop",
+     "facts": 0.32,
+     "call": 0.65,
+     "chars": 713
+    }
+   ],
+   "declined": false,
+   "est_cost_usd": 1.244e-05
+  },
+  {
+   "case": "no_candidates_700",
+   "asked": false,
+   "error": null,
+   "pairs": [],
+   "declined": true,
+   "est_cost_usd": 0.0
+  }
+ ]
+}
