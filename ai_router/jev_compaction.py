@@ -11,7 +11,7 @@ from .state import default_home
 # assumed: the live trial gave a plainly true fact only 0.69.
 THRESHOLD = 0.90
 MAX_BODY = 32 * 1024
-ERROR_CODES = decisions.ERROR_CODES + ('orphaned_pair', 'bad_history',
+ERROR_CODES = decisions.ERROR_CODES + ('bad_history',
                                       'no_candidates', 'context_limit',
                                       'decision_error')
 
@@ -89,12 +89,20 @@ def _evidence(item):
 
 
 def _pairs(items):
-    """Validate closure globally, then select only wholly unpinned pairs."""
+    """Select wholly unpinned, complete pairs; every other item stays kept.
+
+    Closure is local on purpose. Real windows routinely carry a tool output
+    whose call scrolled out of the window (or whose call type this router
+    does not pair on), and refusing the whole compaction for that turned
+    two thirds of measured archives into no-ops while protecting nothing:
+    an item that cannot be paired is never a candidate, so it is kept
+    verbatim either way.
+    """
     if not isinstance(items, list) or not all(isinstance(i, dict) for i in items):
         _refuse('bad_history')
     last_user = max((i for i, item in enumerate(items)
                      if item.get('role') == 'user'), default=len(items))
-    calls, outputs, pinned = {}, {}, set()
+    calls, outputs, pinned, duplicated = {}, {}, set(), set()
     for i, item in enumerate(items):
         kind = item.get('type')
         if (i == 0 or i >= last_user or i >= len(items) - 6
@@ -107,22 +115,22 @@ def _pairs(items):
         if not (call or output):
             continue
         cid = item.get('call_id')
-        if kind == 'tool_search_output' and not cid:
-            continue  # Discovery can be app-injected, with no call to match.
+        if not isinstance(cid, str) or not cid:
+            continue  # No id to pair on: kept, never a candidate.
         target = calls if call else outputs
-        if not isinstance(cid, str) or not cid or cid in target:
-            _refuse('orphaned_pair')
-        if call and not compaction._call_complete(item):
-            _refuse('orphaned_pair')
+        if cid in target:  # Ambiguous id: the sweep below pins every member.
+            duplicated.add(cid)
+            continue
         target[cid] = i
-    if calls.keys() != outputs.keys():
-        _refuse('orphaned_pair')
+    for i, item in enumerate(items):
+        if item.get('call_id') in duplicated:
+            pinned.add(i)
     pairs = [(a, outputs[cid]) for cid, a in calls.items()
-             if a not in pinned and outputs[cid] not in pinned
+             if cid in outputs and a < outputs[cid]
+             and a not in pinned and outputs[cid] not in pinned
              and items[a].get('type') in compaction.CALL_TYPES
-             and items[outputs[cid]].get('type') in compaction.OUTPUT_TYPES]
-    if any(a >= b for a, b in ((a, outputs[cid]) for cid, a in calls.items())):
-        _refuse('orphaned_pair')
+             and items[outputs[cid]].get('type') in compaction.OUTPUT_TYPES
+             and compaction._call_complete(items[a])]
     pairs.sort(key=lambda pair: len(_output(items[pair[1]])), reverse=True)
     return pairs[:16], last_user
 
@@ -196,12 +204,17 @@ def summary(model, key, items, defn, home=None, ask=None) -> str | None:
                           questions)
         removed, shortened = set(), {}
         for n, (a, b) in enumerate(pairs, 1):
-            no_facts = answers[f'p{n}_facts'] < THRESHOLD
-            no_call = answers[f'p{n}_call'] < THRESHOLD
-            if no_facts and no_call:
+            # The questions are positive propositions: a high `facts` value
+            # means retained evidence already covers this pair, and a high
+            # `call` value means knowing the call happened still matters.
+            # Only covered evidence may go, and only when the call itself
+            # has stopped mattering; anything else stays verbatim.
+            covered = answers[f'p{n}_facts'] >= THRESHOLD
+            call_matters = answers[f'p{n}_call'] >= THRESHOLD
+            if covered and not call_matters:
                 removed.update((a, b))
                 stats['dropped_pairs'] += 1
-            elif no_facts:
+            elif covered:
                 text = _output(items[b])
                 if len(text) > 300:
                     shortened[b] = ('tool result:\n' + text[:300]
