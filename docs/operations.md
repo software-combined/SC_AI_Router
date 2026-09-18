@@ -138,6 +138,60 @@ at an idle moment. Moving a host from `beta` back to `stable` needs
 `<home>/feed-serial` cleared first, or the lower stable serial is refused
 as stale.
 
+## Experimental compaction
+
+`jev-compaction` beside the router home's `channel` file controls the opt-in
+Jev consumer. `ROUTER_HOME` overrides `~/.codex/mixed-model-router`; use the
+home the service actually runs with. The router reads the file at every
+external V1 or V2 compaction, without a restart. Trimmed lowercase `shadow`
+and `on` are the only enabled values. Missing, empty, unreadable and all other
+values, including `ON` and `1`, mean off.
+
+Both enabled modes send selected history text to TypeSafe and bill the
+external provider key. Confirm that this data sharing is permitted before
+enabling either mode. Subscription threads and ordinary turns never call Jev.
+`shadow` is the recommended first step: it logs proposed counts but leaves
+the existing summary and input unchanged. `on` uses kept evidence as the
+summary text inside the existing V1/V2 envelopes. There is no new capsule or
+history store. Disabling the flag affects future compactions, not summaries
+already produced.
+
+Choose one mode command after selecting the home. macOS/Linux:
+
+```sh
+RH="${ROUTER_HOME:-$HOME/.codex/mixed-model-router}"
+printf 'shadow\n' > "$RH/jev-compaction"  # Measure only, recommended first
+printf 'on\n' > "$RH/jev-compaction"      # Replace the summary
+rm -f "$RH/jev-compaction"                # Disable
+```
+
+PowerShell:
+
+```powershell
+$rh = if ($env:ROUTER_HOME) { $env:ROUTER_HOME } else { Join-Path $HOME '.codex/mixed-model-router' }
+Set-Content "$rh/jev-compaction" shadow -Encoding ascii # Measure only
+Set-Content "$rh/jev-compaction" on -Encoding ascii     # Replace the summary
+Remove-Item "$rh/jev-compaction" -ErrorAction SilentlyContinue # Disable
+```
+
+One batch considers at most 16 complete pairs, largest outputs first. The
+first item, latest user message and everything after it, newest six items,
+prior compactions, discovery results, agent messages and system/developer
+messages stay pinned. The rest stay verbatim. Both pair judgments must fall
+below 0.90 to drop the pair. This conservative experimental threshold needs
+calibration from shadow data, not assumed safety: a previous trial scored a
+plainly true fact at 0.69, so the scores are not a calibrated guarantee.
+
+When the call meets the threshold but the output does not, the output keeps
+its first 300 characters plus the number removed; the router never advises
+re-running a tool, because it cannot know whether that tool is idempotent.
+Ambiguous pairs, invalid or partial answers, decision failures,
+a state that cannot fit the 32 KiB request budget, or retained text over 40%
+of the selected model's context window all use the existing summarizer.
+There are no decision retries, fallback models, per-turn calls or decision
+cache. `compact_jev` logs only mode, counts, byte sizes, elapsed milliseconds
+and a closed-set error code; never content, tool names or keys.
+
 ## Update feed: public and automatic
 
 Every install polls the public feed at

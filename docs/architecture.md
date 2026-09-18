@@ -25,9 +25,11 @@ catalogue / models / live_refresh / apply_catalogue (client projections)
   |
 agent_handoffs / compaction / tool_adapter / tool_aliases / discovered
 (request normalization)
+decisions (typed-decision wire client, imports only provider_defs)
+  |
+jev_compaction (opt-in evidence selection, consumes decisions/compaction)
   |
 providers (Responses adapters) + claude (Messages adapters)
-decisions (one typed-decision side-call: no policy, off the request path)
   |
 protocols (explicit method/path dispatch table; imports the adapters because
 it selects one, and holds no policy of its own)
@@ -184,81 +186,72 @@ Source, packaged imports, native lifecycle, real-client tools, billing, and
 release acceptance are different gates. Record client and OS evidence by
 version; a global model tier never asserts every combination works.
 
-## Proposed Jev consumer: compaction evidence
+## Jev consumer: compaction evidence
 
-At `155b268`, 2026-09-18 AEST; design, not implementation. Jev supplies
-small semantic judgments, not a summary, planner or permission check. Choose
-(a), compaction, first: narrow exposure and unchanged model/effort. Routing
-(b) fits Jev's primitives too, but changes every turn's capabilities, billing
-and cache behavior. Defer its ingress at `router.Handler._owned_post` before
-`policy.select_provider`; `ai_router/policy.py` does not exist.
+`jev_compaction.py` owns `state(home)` and
+`summary(model, key, items, defn, home=None, ask=None) -> str | None`.
+The two summary assignments in `ExternalResponsesProvider.compact` and
+`compact_trigger` use it before falling back to `self.summarize`. The
+external-only `compaction_call` gate is unchanged: subscription threads and
+ordinary turns never reach Jev. Dependencies flow providers -> consumer ->
+decisions/compaction -> leaves. Upstream facts remain in `provider_defs`.
 
-**Boundary.** Keep `providers.compaction_call`'s external-only V1/V2 gate.
-Call proposed `compaction_decisions.prune_for_summary(items, *, defn, key,
-region, mode='off') -> list` immediately before `compaction.transcript_for_summary`
-inside `ExternalResponsesProvider.summarize`. Dependencies flow providers ->
-consumer -> decisions/compaction -> leaves. Keep policy out of the adapter,
-retain original items for user extraction and `remember`, and change neither
-summary validation nor envelopes. Extract orchestration if necessary; never
-grow a baselined file or add packaging machinery.
+The case-sensitive `jev-compaction` home file is read per compaction, with
+`ROUTER_HOME` respected. `shadow` evaluates but returns `None`; `on` returns
+kept text. Other, absent, empty or unreadable values mean off. The original
+items are never modified. `remember(items, summary)` and the V1 summary and
+V2 `ocx1:` envelopes consume the returned string unchanged. There is no new
+capsule, replay module or request-path dispatch branch. Commands and the
+TypeSafe data-sharing and billing disclosure are in
+[operations](operations.md#experimental-compaction).
 
-**Installed-host switch (proposed, not implemented).** Store `jev-compaction`
-beside `channel` in the active router home. Accept trimmed `off` or `shadow`;
-absent, unreadable, empty or invalid means off. `prune` is not accepted until
-evaluated. The composition layer reads the file before eligible compactions
-and passes `mode`; the wire adapter never reads host configuration. No restart.
-For the default home, set the shell variable below; substitute the actual
-service home for custom installations. These commands are inert until the
-consumer ships. Reading shows the configured value; only `shadow` enables.
+The consumer matches complete calls/results by `call_id`, rejects orphans or
+ambiguous IDs, and selects at most 16 pairs by descending output size. It
+never questions the first item, anything from the latest user message onward,
+the newest six items, prior compactions, discovery outputs, agent messages
+or developer/system messages. Pinning either member pins the whole pair;
+unselected pairs stay verbatim.
 
-| Shell | Select home | Enable shadow | Disable | Read setting |
-|---|---|---|---|---|
-| macOS/Linux | `RH="${ROUTER_HOME:-$HOME/.codex/mixed-model-router}"` | `printf 'shadow\n' > "$RH/jev-compaction"` | `printf 'off\n' > "$RH/jev-compaction"` | `cat "$RH/jev-compaction"` |
-| PowerShell | `$rh = if ($env:ROUTER_HOME) { $env:ROUTER_HOME } else { Join-Path $HOME '.codex/mixed-model-router' }` | `Set-Content "$rh/jev-compaction" shadow -Encoding ascii` | `Set-Content "$rh/jev-compaction" off -Encoding ascii` | `Get-Content "$rh/jev-compaction"` |
+One batch carries `{task, retained, candidates}`. Evidence uses
+`compaction._item_text`, excluding opaque reasoning; candidate outputs carry
+only `ok|error, N chars (omitted)`. Each item's text is capped at 2000, then
+500, then 120 characters until the entire serialized body, including model
+and questions, fits 32 KiB. If it cannot fit, no partial state is sent.
+Retained evidence never includes another candidate, so two candidates cannot
+justify deleting each other. Candidate IDs are `p1..pn`; every instruction
+names its backticked state path because Jev cannot see question IDs.
 
-Opt-in permits eligible text to TypeSafe only within existing data policy.
-Use the verified global definition and external key; regional/other routes
-skip. No subscription headers, normal-turn calls or global fallback.
+Two `noul` propositions ask whether the pair's task-relevant facts are
+already covered by retained evidence, and whether knowing the call happened
+still matters. These are probabilities of propositions, not importance scores.
+The conservative experimental `THRESHOLD = 0.90` is applied directly to
+each returned value. Drop both members only when both values are below it.
+If the call meets the threshold but the facts do not, keep the call and the
+first 300 output characters and the removed character count; no re-run advice
+is added, since idempotency is not known here. Otherwise keep both verbatim,
+in original order. The threshold needs
+shadow calibration; the previous live trial's 0.69 on a plainly true fact
+shows why the scores are not assumed production-quality calibration.
 
-**Efficient judgment.** Deterministic code matches complete pairs and protects
-instructions, mutations, errors, delegation, discovery, opaque items and the
-latest two tool runs. Unrecognized tool semantics or ambiguous IDs mean keep;
-do not parse arbitrary shell commands for safety. Evaluate at most eight
-read-only pairs from the actual summary window, largest first. Skip exact
-duplicates already decidable in code and pairs the summarizer would omit.
-Build `task`, `retained` and `candidates` as named text fields, capped at
-16 KiB including questions; no secrets or raw transcripts. Incomplete evidence
-means skip, never truncate.
-`retained` must be immutable evidence guaranteed to survive transcript
-budgeting, never another candidate: otherwise a batch can delete both copies.
+Any decision refusal, malformed/partial answer, invalid history, oversized
+request or rendered text over 40% of the model row's context window returns
+`None`. The byte ceiling uses `turn_budget.BYTES_PER_TOKEN`; an unknown window
+also declines. The existing summarizer then runs unchanged. Logs contain only
+mode, counts, byte sizes, elapsed time and a closed-set error code.
 
-One `ask(..., defn=defn, key=key, timeout=1.0)` batches independent
-`question('noul', instructions)` judgments. Each instruction explicitly names
-`candidates.p0.result` and asks whether its task-relevant facts are preserved
-in `retained`, considering its call. Question IDs are invisible to Jev.
-Do not equate probability with importance or multiply correlated judgments.
-Use `choice` only for genuinely exclusive alternatives, with an unknown option.
+This is a one-shot T0 judgment with untrusted input, owned by the router
+consumer; deterministic code validates the result before selecting text.
+The paid-call budget is zero when off and at most one per eligible compaction,
+using the decision client's five-second socket timeout. That timeout is not a
+whole-run wall-clock guarantee. There are no retries, fallback models, decision
+cache, model-selected tools or loops. Persistent writes, harmful-replay
+coordination and broad-autonomy controls are not applicable to this consumer:
+it returns text, without mutating history or executing tools. Reassess those
+controls if it gains writes, retries, tools or per-turn authority.
 
-**Acceptance/failure.** `0.99` is an evaluation candidate, not calibrated
-permission to delete; the live trial passed no pair at that threshold.
-Shadow submits at most one observation to a nonqueued daemon-worker slot and
-returns original input immediately; busy means skip. All results are telemetry
-only. A 520 (`upstream_error`) records a skipped observation, never a chat error,
-negative judgment, model switch, extra turn or retry. Hold the slot until exit;
-socket timeout does not guarantee total wall time. No fallback or transcript
-logs. Any future pruning mode must keep all items on error, retain uncertain
-pairs, bound foreground wait to two seconds and discard late results.
-
-**Economics and proof.** Four batched judgments cost US$0.000028434 versus
-US$0.00004578 for just two singles; savings are workload-dependent. Pin the
-verified snapshot; no decision cache initially. Prompt/state/model changes
-invalidate calibration; changed summaries can lose prefix-cache hits.
-Measure actual transcript bytes, not removed history bytes: the 24,000-character
-window may refill. Require offline V1/V2, pair-closure, retained-anchor,
-immutability, nonblocking shadow/520, home-file modes, timeout, fallback,
-regional and import/size tests. Compare Jev
-with unchanged and deterministic-only baselines on held-out synthetic tasks;
-automatic pruning needs zero critical losses, positive net benefit and
-downstream task parity. The eight-call/4-KiB-per-call/US$0.03 trial is complete
-(US$0.000224994), not calibration proof. No consumer, `score`, picker row or
-per-turn steering is enabled. Details and primary sources: `compatibility.md`.
+`tests/test_jev_compaction.py` owns offline flag, selection, immutability,
+failure, byte-budget and V1/V2 contracts. `tests/test_decisions.py` retains
+wire validation, while packaging and import-graph tests enforce delivery and
+dependency direction. Source implementation and offline acceptance do not
+prove live calibration, deployment or release acceptance. No paid trial is
+part of this change.
