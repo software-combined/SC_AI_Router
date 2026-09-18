@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.6.95
+
+- Jev compaction now reads its own questions correctly. Both are positive
+  propositions ("the facts are already covered", "knowing the call still
+  matters"), but the rule compared each against the threshold backwards and
+  dropped precisely the pairs the judge had called *uncovered*; at the
+  shipped 0.90 with measured scores topping out at 0.83 that deleted every
+  judged pair. A pair is now dropped only when its facts count as covered
+  and the call no longer matters.
+- Jev compaction no longer declines the whole window because a tool output
+  has no call left to pair with. Pairing is local: only complete, ordered,
+  unpinned pairs become candidates, a duplicated call id protects every item
+  sharing it, and anything unpairable stays verbatim. Replaying 60 archived
+  threads showed the old global rule refused 40 of them for an unmatched
+  output, protecting nothing while leaving the feature inert; no window is
+  refused for closure now. `docs/jev-compaction-benchmark.md` records the
+  measurements, the score distribution and why the threshold stays
+  conservative.
+
 ## 0.6.94
 
 - Experimental Jev compaction is opt-in through the `jev-compaction` home

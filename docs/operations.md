@@ -177,12 +177,15 @@ Remove-Item "$rh/jev-compaction" -ErrorAction SilentlyContinue # Disable
 One batch considers at most 16 complete pairs, largest outputs first. The
 first item, latest user message and everything after it, newest six items,
 prior compactions, discovery results, agent messages and system/developer
-messages stay pinned. The rest stay verbatim. Both pair judgments must fall
-below 0.90 to drop the pair. This conservative experimental threshold needs
+messages stay pinned. The rest stay verbatim. A pair is dropped only when the
+judge says its facts are already covered (0.90 or above) *and* that knowing
+the call happened no longer matters (below 0.90); covered evidence whose call
+still matters keeps the call with a shortened output, and everything else
+stays whole. This conservative experimental threshold needs
 calibration from shadow data, not assumed safety: a previous trial scored a
 plainly true fact at 0.69, so the scores are not a calibrated guarantee.
 
-When the call meets the threshold but the output does not, the output keeps
+When the facts count as covered but the call still matters, the output keeps
 its first 300 characters plus the number removed; the router never advises
 re-running a tool, because it cannot know whether that tool is idempotent.
 Ambiguous pairs, invalid or partial answers, decision failures,
