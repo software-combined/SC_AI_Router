@@ -17,7 +17,7 @@ Usage rules (rationale and evidence: docs/architecture.md, docs/compatibility.md
 - Pin a verified snapshot in provider_defs; an override needs its own evidence
   so an alias change cannot silently shift behavior.
 
-This module owns wire validation only and is off the request path. Every
+This module owns wire validation only; consumers own their opt-in gates. Every
 upstream fact comes from provider_defs. The caller supplies the inference key;
 it travels only in Authorization, never a URL, message or log.
 """
