@@ -33,7 +33,8 @@ def history(*pairs):
             + [message('current task', 'user')])
 
 
-def asker(facts=1, call=1):
+def asker(facts=0, call=1):
+    """Answers for one pair. Default is "not covered, the call matters": keep."""
     return mock.Mock(side_effect=lambda state, questions, **kw: {
         q: {'type': 'noul', 'value': facts if q.endswith('_facts') else call,
             'confidence': None, 'probabilities': None} for q in questions})
@@ -84,7 +85,7 @@ class JevCompactionTests(unittest.TestCase):
     def test_shadow_is_immutable_and_logs_only_metrics(self):
         before = copy.deepcopy(self.items)
         self.flag.write_text('shadow')
-        ask = asker(0, 0)
+        ask = asker(1, 0)
         self.assertIsNone(self.run_summary(ask))
         self.assertEqual(self.items, before)
         ask.assert_called_once()
@@ -111,10 +112,15 @@ class JevCompactionTests(unittest.TestCase):
         self.assertEqual(self.items, before)
 
     def test_drop_pair_truncate_only_output_or_keep_both(self):
-        for facts, call, dropped, truncated in ((0, 0, True, False),
-                (0, 1, False, True), (1, 0, False, False), (1, 1, False, False),
-                (.69, .69, True, False), (.90, 0, False, False),
-                (0, .90, False, True)):
+        # The questions are positive: a high `facts` means the pair's facts
+        # are already covered, a high `call` means the call still matters.
+        # Only covered evidence may go, and only when the call stopped
+        # mattering; otherwise it is kept, or kept with a shorter output.
+        for facts, call, dropped, truncated in ((1, 0, True, False),
+                (1, 1, False, True), (1, .69, True, False),
+                (1, .90, False, True), (.90, 0, True, False),
+                (0, 0, False, False), (0, 1, False, False),
+                (.89, 0, False, False)):
             with self.subTest(facts=facts, call=call):
                 result = self.run_summary(asker(facts, call))
                 self.assertEqual('tool_a' not in result, dropped)
@@ -166,12 +172,12 @@ class JevCompactionTests(unittest.TestCase):
         positions = [result.index(s) for s in ('RAW\n', 'apply_patch_call', 'a' * 800, 'b' * 800)]
         self.assertEqual(positions, sorted(positions))
         self.assertIn('+ exact', ask.call_args.args[0]['candidates']['p2']['call'])
-        self.assertNotIn('custom', self.run_summary(asker(0, 0), items))
+        self.assertNotIn('custom', self.run_summary(asker(1, 0), items))
 
     def test_largest_sixteen_pairs_and_state_question_paths(self):
         items = history(*(pair(str(n), 100 + n) for n in range(20)))
         items.insert(1, {'type': 'reasoning', 'encrypted_content': 'SECRET-BLOB'})
-        ask = asker(0, 0)
+        ask = asker(1, 0)
         result = self.run_summary(ask, items)
         sent, questions = ask.call_args.args
         self.assertEqual(len(sent['candidates']), 16)
@@ -218,14 +224,27 @@ class JevCompactionTests(unittest.TestCase):
             self.assertIn(self.log.call_args.kwargs['error'], jev.ERROR_CODES)
             self.assertNotIn('SECRET', str(self.log.call_args))
 
-    def test_orphan_duplicate_and_incomplete_pairs_never_ask(self):
+    def test_unpairable_items_are_kept_and_never_asked_about(self):
+        # None of these shapes leaves an eligible pair, so nothing is asked
+        # and no such item can ever be dropped: it is simply not a candidate.
         for items in (history([pair()[0]]), history([pair()[1]]),
                       history(pair(), pair()), history(list(reversed(pair()))),
                       history([pair()[0] | {'arguments': None}, pair()[1]])):
             ask = asker()
             self.assertIsNone(self.run_summary(ask, items))
             ask.assert_not_called()
-            self.assertEqual(self.log.call_args.kwargs['error'], 'orphaned_pair')
+            self.assertEqual(self.log.call_args.kwargs['error'], 'no_candidates')
+
+    def test_an_orphaned_output_no_longer_blocks_the_whole_compaction(self):
+        # The measured real-world case: a tool output whose call is out of
+        # window. The eligible pair is still judged, and the orphan is kept.
+        items = history(pair('a'))
+        items.insert(2, {'type': 'function_call_output', 'call_id': 'gone',
+                         'output': 'ORPHAN-MUST-SURVIVE'})
+        ask = asker(1, 0)
+        result = self.run_summary(ask, items)
+        ask.assert_called_once()
+        self.assertIn('ORPHAN-MUST-SURVIVE', result)
 
     def test_context_window_uses_encoded_bytes(self):
         self.items[2]['output'] = '\u00e9' * 2000
