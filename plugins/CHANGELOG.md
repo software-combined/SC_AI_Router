@@ -1,5 +1,19 @@
 # Changelog
 
+## scg-review 0.4.11 — 2026-09-18
+
+- Run the required verification commands once, in the main agent, on the
+  frozen staged tree after the simplification pass and before any reviewer is
+  spawned, so the run describes the tree the lanes actually review. Record the
+  commands, outcomes and reviewed tree id, and pass that record to every lane
+  as the shared evidence. A failed required command blocks before reviewer
+  calls.
+- Stop the review lanes repeating the required verification set. A lane may run
+  one narrowly targeted, non-destructive check to prove or disprove a specific
+  finding, and must report what it ran and what it showed.
+- After an accepted fix, re-run only the verification commands that fix
+  affects; re-run the full set when the affected scope is unclear.
+
 ## scg-review 0.4.10, scg-subagents 0.5.7, scg-prototypes 0.1.2, scg-finance 0.1.1 and scg-documentation 0.1.1 — 2026-09-18
 
 - Accept the pre-rename plugin runner `bd06fc55` in the shared updater's
