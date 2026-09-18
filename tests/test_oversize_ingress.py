@@ -5,9 +5,17 @@ results carried 67 MB of decoded history, past the four-times decode ceiling
 that exists so prepare can slim exactly that shape. These cases pin the two
 answers: a bigger, single-slot headroom, and a refusal line that names what
 the turn carried.
+
+The 2026-09-18 thread (01a0b155) died one gate earlier: ten attached images
+compressed to 17.6 MB, past the 16 MiB cap on the wire, so the declared-size
+check answered a framing error and the trim that could have served the turn
+never ran. A zstd body is read up to the decode ceiling and decided on the
+size it decodes to, which is what these cases now hold it to.
 """
 import http.client
 import json
+import random
+import string
 import unittest
 from unittest import mock
 from compression import zstd
@@ -48,6 +56,34 @@ def _repeated_search_payload(copies, schema_pad):
         'properties': {'q': {'type': 'string', 'description': 'p' * schema_pad}}}
     return {'model': MODEL,
             'input': [dict(item, call_id='s%d' % index) for index in range(copies)],
+            'tools': [{'type': 'tool_search', 'description': 'search',
+                       'parameters': {'type': 'object'}}]}
+
+
+def _noise(seed, size):
+    """Deterministic text with no repeats, so zstd barely shrinks it."""
+    alphabet = string.ascii_letters + string.digits
+    return ''.join(random.Random(seed).choices(alphabet, k=size))
+
+
+def _noisy_search_payload(copies, pad):
+    """The 2026-09-18 shape: every released copy carries its own schema text.
+
+    The padding is incompressible and unique per copy, so the body stays past
+    the ordinary cap on the wire while prepare still collapses every copy but
+    the newest.
+    """
+    def listing(index):
+        tool = {'type': 'function', 'name': 'echo', 'description': 'Echo',
+                'parameters': {'type': 'object',
+                               'properties': {'q': {'type': 'string',
+                                                    'description': _noise(index, pad)}}}}
+        return {'type': 'tool_search_output', 'call_id': 's%d' % index,
+                'tools': [{'type': 'namespace', 'name': 'probe',
+                           'description': 'probe tools', 'tools': [tool]}]}
+
+    return {'model': MODEL,
+            'input': [listing(index) for index in range(copies)],
             'tools': [{'type': 'tool_search', 'description': 'search',
                        'parameters': {'type': 'object'}}]}
 
@@ -163,3 +199,96 @@ class OversizeIngressTests(unittest.TestCase):
         finally:
             self.server.oversize_lock.release()
         self.assertEqual(len(recorded), 1)
+
+    def test_a_zstd_body_past_the_cap_on_the_wire_is_read_and_served(self):
+        # The 2026-09-18 refusal: 17.6 MB compressed against the 16 MiB cap.
+        # The declared size is past the cap and so is the decoded size, so the
+        # slot is taken on the way in and kept when the decode asks again.
+        payload = _noisy_search_payload(copies=12, pad=800)
+        wire = json.dumps(payload).encode()
+        packed = zstd.compress(wire)
+        recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
+        cap = 4000
+        with mock.patch.object(router_mod, 'MAX_BODY', cap):
+            self.assertGreater(len(packed), cap)
+            self.assertGreater(len(wire), cap)
+            self.assertLess(len(wire), cap * router_mod.MAX_DECODE_FACTOR)
+            response = self.raw_request(self.zstd_headers(packed), packed)
+            self.assertEqual(response.status, 200)
+            response.read()
+        self.assertEqual(len(recorded), 1)
+        self.assertLess(len(recorded[0][3]), cap)
+        # The pre-read acquire is released with the turn, not left held.
+        self.assertTrue(self.server.oversize_lock.acquire(blocking=False))
+        self.server.oversize_lock.release()
+
+    def test_a_zstd_body_decoding_past_the_ceiling_is_refused_as_too_large(self):
+        # Reading to the decode ceiling is not raising it: a body past the cap
+        # on the wire that decodes past the ceiling is refused on the size it
+        # decodes to, before any upstream call.
+        payload = {'model': MODEL,
+                   'input': [{'type': 'message', 'role': 'user',
+                              'content': 'x' * 20000 + _noise(13, 1000)}]}
+        wire = json.dumps(payload).encode()
+        packed = zstd.compress(wire)
+        recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
+        cap = 700
+        with mock.patch.object(router_mod, 'MAX_BODY', cap):
+            self.assertGreater(len(packed), cap)
+            self.assertGreater(len(wire), cap * router_mod.MAX_DECODE_FACTOR)
+            response = self.raw_request(self.zstd_headers(packed), packed)
+            self.assertEqual(response.status, 400)
+            self.assertEqual(json.loads(response.read())['error']['code'],
+                             'BODY_TOO_LARGE')
+            # Refused after the read, so the slot it took is free again.
+            self.assertTrue(self.server.oversize_lock.acquire(blocking=False))
+            self.server.oversize_lock.release()
+        self.assertEqual(recorded, [])
+
+    def test_a_zstd_body_past_the_cap_is_refused_as_too_large_not_malformed(self):
+        # Read and prepared before it is refused: the answer is the size the
+        # turn carries, not a framing error the client cannot act on.
+        payload = {'model': MODEL,
+                   'input': [{'type': 'message', 'role': 'user',
+                              'content': _noise(11, 4000)}]}
+        packed = zstd.compress(json.dumps(payload).encode())
+        recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
+        cap = 900
+        with mock.patch.object(router_mod, 'MAX_BODY', cap):
+            self.assertGreater(len(packed), cap)
+            response = self.raw_request(self.zstd_headers(packed), packed)
+            self.assertEqual(response.status, 400)
+            self.assertEqual(json.loads(response.read())['error']['code'],
+                             'BODY_TOO_LARGE')
+            # The wire-oversized ask is released by the same refusal path.
+            self.assertTrue(self.server.oversize_lock.acquire(blocking=False))
+            self.server.oversize_lock.release()
+        self.assertEqual(recorded, [])
+
+    def test_a_body_past_the_cap_on_the_wire_waits_for_the_slot(self):
+        # The read is the other half of the slot's job: a body this size is not
+        # read while another oversized turn holds it, so it answers the same
+        # retryable 503 rather than queueing the bytes in memory.
+        payload = _noisy_search_payload(copies=12, pad=800)
+        packed = zstd.compress(json.dumps(payload).encode())
+        headers = self.zstd_headers(packed)
+        recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
+        cap = 4000
+        with mock.patch.object(router_mod, 'MAX_BODY', cap):
+            self.assertGreater(len(packed), cap)
+            self.assertTrue(self.server.oversize_lock.acquire(blocking=False))
+            try:
+                response = self.raw_request(headers, packed)
+                self.assertEqual(response.status, 503)
+                self.assertEqual(response.getheader('Retry-After'), '2')
+                self.assertEqual(json.loads(response.read())['error']['code'],
+                                 'OVERSIZE_BUSY')
+                self.assertEqual(recorded, [])
+                # Headers alone prove the ask precedes the read: with the slot
+                # held, this is answered without the body ever being sent.
+                response = self.raw_request(headers)
+                self.assertEqual(response.status, 503)
+                self.assertEqual(json.loads(response.read())['error']['code'],
+                                 'OVERSIZE_BUSY')
+            finally:
+                self.server.oversize_lock.release()
