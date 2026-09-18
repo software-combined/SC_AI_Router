@@ -215,8 +215,16 @@ unselected pairs stay verbatim.
 One batch carries `{task, retained, candidates}`. Evidence uses
 `compaction._item_text`, excluding opaque reasoning; candidate outputs carry
 only `ok|error, N chars (omitted)`. Each item's text is capped at 2000, then
-500, then 120 characters until the entire serialized body, including model
-and questions, fits 32 KiB. If it cannot fit, no partial state is sent.
+500, then 120 characters; if the body, including model and questions, still
+exceeds 32 KiB, the newest 64 retained entries are kept at 500, then the
+newest 32 at 120, then the newest 16 at 60, and the state records how many
+older entries it left out. A real compaction carries hundreds of items, and
+refusing those meant the feature never ran; thinning keeps the newest
+evidence. It is not one-way safe: less evidence lowers the coverage score
+(fewer pairs count as covered) and the "call still matters" score too, which
+can turn a truncation into a drop. Both instructions therefore name
+`retained_omitted` and forbid inferring coverage from absence. If even the
+smallest step cannot fit, no partial state is sent.
 Retained evidence never includes another candidate, so two candidates cannot
 justify deleting each other. Candidate IDs are `p1..pn`; every instruction
 names its backticked state path because Jev cannot see question IDs.
