@@ -192,22 +192,38 @@ class JevCompactionTests(unittest.TestCase):
             self.assertRegex(candidate['output'], r'^ok, \d+ chars \(omitted\)$')
         self.assertEqual(ask.call_args.kwargs, {'defn': DEFN, 'key': 'test-key'})
 
-    def test_state_steps_down_without_omitting_items_and_refuses_oversize(self):
-        for count, cap in ((4, 2000), (20, 500), (80, 120), (400, None)):
+    def test_state_steps_down_and_then_thins_old_evidence(self):
+        for count, cap, thinned in ((4, 2000, False), (20, 500, False),
+                                    (80, 120, False), (400, 120, True)):
             items = history()
             items[3:3] = [message('x' * 4000) for _ in range(count)]
             ask = asker()
             result = self.run_summary(ask, items)
-            if cap is None:
-                self.assertIsNone(result)
-                ask.assert_not_called()
-                self.assertEqual(self.log.call_args.kwargs['error'], 'request_too_large')
+            self.assertIsNotNone(result)
+            sent, questions = ask.call_args.args
+            body = dict(model=DEFN.decisions_model, state=sent, questions=questions)
+            self.assertLessEqual(len(json.dumps(body).encode()), 32 * 1024)
+            if thinned:
+                # A wide window keeps the newest evidence and says how much
+                # older evidence it left out, instead of refusing outright.
+                self.assertLess(len(sent['retained']), len(items) - 2)
+                self.assertEqual(sent['retained_omitted'],
+                                 len(items) - 2 - len(sent['retained']))
+                self.assertIn('current task', sent['retained'][-1])
+                self.assertLessEqual(max(map(len, sent['retained'])), 500)
+                for question in questions.values():
+                    self.assertIn('retained_omitted', question['instructions'])
             else:
-                sent, questions = ask.call_args.args
                 self.assertEqual(len(sent['retained']), len(items) - 2)
                 self.assertEqual(max(map(len, sent['retained'])), cap)
-                body = dict(model=DEFN.decisions_model, state=sent, questions=questions)
-                self.assertLessEqual(len(json.dumps(body).encode()), 32 * 1024)
+                self.assertNotIn('retained_omitted', sent)
+
+    def test_a_budget_nothing_can_fit_is_still_refused(self):
+        ask = asker()
+        with mock.patch.object(jev, 'MAX_BODY', 200):
+            self.assertIsNone(self.run_summary(ask))
+        ask.assert_not_called()
+        self.assertEqual(self.log.call_args.kwargs['error'], 'request_too_large')
 
     def test_errors_partial_and_malformed_answers_fail_closed_once(self):
         for answer in (None, {}, {'extra': {}},
