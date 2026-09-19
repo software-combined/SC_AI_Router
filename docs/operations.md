@@ -496,13 +496,15 @@ Anthropic Messages path keeps its existing answers except at that shared
 size boundary, where it answers 400 like Responses.
 
 One oversized body is expanded at a time. A zstd turn takes the single
-oversized-read slot the moment it decodes past the 16 MiB request cap, before
-the rest of the body is expanded; a second such turn arriving while it is
-held answers 503 `OVERSIZE_BUSY` with `Retry-After: 2` and no upstream call.
-The decision is on decoded bytes, because the schema-heavy turns that need
-the headroom compress at ratios no declared-size check predicts. Turns inside
-the ordinary cap never touch the slot, and the slot covers reading and
-preparing only: the expanded buffers die before the stream starts.
+oversized-read slot the moment it is past the 16 MiB request cap, on the wire
+or on decode, before the rest of the body is expanded; a second such turn
+arriving while it is held answers 503 `OVERSIZE_BUSY` with `Retry-After: 2`
+and no upstream call. The decision is on decoded bytes, because the
+schema-heavy turns that need the headroom compress at ratios no declared-size
+check predicts, and a compressed body past the cap is read to the decode
+ceiling for that same reason. Turns inside the ordinary cap never touch the
+slot, and the slot covers reading and preparing only: the expanded buffers die
+before the stream starts.
 
 A routed turn that is still over the 16 MiB prepared budget is reduced with
 visible notes before it is refused: repeated released-tool listings collapse to
