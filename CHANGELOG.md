@@ -6,6 +6,19 @@
   pins the aarch64/glibc CPython build, so a Graviton host bootstraps
   natively instead of being carried on x86_64. The bootstrap also verifies
   archives with GNU `sha256sum` when a host has no `shasum`.
+- A compressed turn past the request cap is read and decided on its decoded
+  size instead of being refused as malformed. The 2026-09-18 thread
+  (01a0b155) carried ten attached images that compressed to 17.6 MB, and the
+  declared-size gate answered `INVALID_REQUEST_SIZE` before the body was
+  read: the person saw "Invalid request size" with no remedy, the trim that
+  could have served the turn never ran, and the log recorded a framing error
+  for a turn that was merely large. A zstd body is now read up to the decode
+  ceiling and takes the single oversized-read slot before that read, so one
+  oversized body is still the most in memory; the slot taker is idempotent
+  because the declared size and the decoded size both ask. A turn that still
+  does not fit answers `BODY_TOO_LARGE`, whose message and docs name the
+  remedy. Identity bodies keep today's answer: without zstd a declared size
+  past the ordinary cap is still a framing error.
 
 ## 0.6.95
 
