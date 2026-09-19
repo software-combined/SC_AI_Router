@@ -12,7 +12,7 @@ the injected object, never a fresh import.
 import http.client
 import json
 import time
-from . import errors, local_services, provider_defs, setup, stream_errors, stream_relay, subscription_fallback, transport, upstream
+from . import errors, local_services, provider_defs, setup, stream_errors, stream_relay, strip_retry, subscription_fallback, transport, upstream
 from .providers import is_native_service
 
 
@@ -70,9 +70,7 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
         if response.status >= 400:
             raw = transport.read_capped(response, transport.ERROR_BODY_LIMIT)
             transport.note_first_data(metrics, headers_done)
-            # Gate the terminal-frame path on the protocol as well: the
-            # Messages ingress shares the openrouter dialect but has no
-            # Responses failure frame to send.
+            # Context frames are Responses-only; Messages ingress has none.
             if (provider.defn.sends_context_error_frame()
                     and metrics.get('protocol') == provider_defs.RESPONSES
                     and upstream.is_context_error(raw)):
@@ -90,12 +88,14 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
             described = upstream.describe_failure(
                 None, {'status': response.status, 'body': raw},
                 {'model': metrics.get('model'), 'provider': prepared.provider,
-                 'protocol': metrics.get('protocol'),
-                 'dialect': provider.defn.dialect,
+                 'protocol': metrics.get('protocol'), 'dialect': provider.defn.dialect,
                  'elapsed_ms': round((time.monotonic() - started) * 1000, 1),
-                 'timeout_s': transport.UPSTREAM_TIMEOUT_S,
-                 'has_image': has_image, 'routed': routed})
-            if described is not None:
+                 'timeout_s': transport.UPSTREAM_TIMEOUT_S, 'has_image': has_image,
+                 'routed': routed})
+            retried = strip_retry.maybe_retry_unattributable(described, response, raw, metrics, provider, prepared, attempts)
+            if retried is not None:
+                response, headers_done, prepared = retried
+            elif described is not None:
                 status, message, code = described
                 if status == 400 and response.status == 402:
                     # Key funds: a final 400 naming the cause, never a
@@ -131,14 +131,15 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
                 if status == 409:
                     return handler.error(errors.retryable_preparation(message))
                 return handler.error(errors.upstream_described(message))
-            handler.send_response(response.status)
-            transport.relay_headers(response, handler.send_header, metrics.get('model'))
-            handler.send_header('Connection', 'close')
-            handler.end_headers()
-            handler.wfile.write(raw)
-            handler.wfile.flush()
-            handler.close_connection = True
-            return
+            else:
+                handler.send_response(response.status)
+                transport.relay_headers(response, handler.send_header, metrics.get('model'))
+                handler.send_header('Connection', 'close')
+                handler.end_headers()
+                handler.wfile.write(raw)
+                handler.wfile.flush()
+                handler.close_connection = True
+                return
         metrics['upstream_headers_ms'] = round((time.monotonic() - started) * 1000, 1)
         metrics['response_kind'], metrics['response_encoding'] = transport.describe_response(response)
         upstream.validate_response(response, prepared)

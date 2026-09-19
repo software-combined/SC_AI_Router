@@ -71,11 +71,11 @@ class FailureDescriptionTests(unittest.TestCase):
              'elapsed_ms': 1500.0, 'timeout_s': 120, 'has_image': False, 'routed': True})
         self.assertEqual(status, 400)
         self.assertIsNone(code)
-        self.assertIn('the request was rejected', message)
+        self.assertIn('without naming a cause', message)
         self.assertIn('Switch this thread back to the previous model, '
                       'or start a new thread for meta/muse-spark-1.3-contributor',
                       message)
-        self.assertIn('Do not retry it unchanged', message)
+        self.assertNotIn('Do not retry it unchanged', message)
         self.assertNotIn('code ', message)
         self.assertNotIn('Provider returned error', message)
 
