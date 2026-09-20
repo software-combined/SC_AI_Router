@@ -44,7 +44,7 @@ class StripRetryRelayTests(unittest.TestCase):
         upstream.clear_refusals()
         self.addCleanup(upstream.clear_refusals)
 
-    def _relay(self, resps, body):
+    def _relay(self, resps, body, key_rejected=False):
         """Drive relay.relay with FakeConn returning each (status, body) in turn."""
         from ai_router import relay
         from ai_router.transport import Prepared
@@ -59,6 +59,8 @@ class StripRetryRelayTests(unittest.TestCase):
                 index[0] += 1
 
             def read(self, *a):
+                if isinstance(self._body, Exception):
+                    raise self._body
                 return self._body
 
             def getheader(self, *a, **k):
@@ -98,8 +100,10 @@ class StripRetryRelayTests(unittest.TestCase):
         handler = SimpleNamespace(
             server=SimpleNamespace(lock=threading.RLock(), served_models={},
                                    credentials=SimpleNamespace(
-                                       key_rejected=lambda provider: False)),
+                                       home='synthetic',
+                                       key_rejected=lambda provider: key_rejected)),
             error=lambda err, **k: errors.append(err),
+            context_error=lambda stream: errors.append(SimpleNamespace(status='context')),
             send_response=lambda status: None,
             send_header=lambda k, v: None,
             end_headers=lambda: None,
@@ -110,9 +114,11 @@ class StripRetryRelayTests(unittest.TestCase):
                 [b'event: done\ndata: {"ok":true}\n\n']))
         prepared = Prepared('openrouter.ai', '/responses', {}, body, {}, 'openrouter')
         metrics = {'provider': 'openrouter', 'protocol': 'responses',
-                   'model': 'meta/muse-spark-1.3-contributor', 'path': '/responses'}
+                   'model': 'meta/muse-spark-1.3-contributor', 'path': '/responses',
+                   'stream': True}
         events = []
-        with mock.patch.object(relay.http.client, 'HTTPSConnection', FakeConn):
+        with mock.patch.object(relay.http.client, 'HTTPSConnection', FakeConn), \
+                mock.patch.object(relay.setup, 'open_key_window'):
             relay.relay(handler, provider, prepared, metrics, 0.0,
                         log_event=lambda event, **f: events.append((event, f)))
         return dispatches, events, wfile, errors
@@ -127,8 +133,10 @@ class StripRetryRelayTests(unittest.TestCase):
         self.assertIn(b'event: done', b''.join(wfile.parts))
         self.assertEqual([f['status'] for e, f in events if e == 'request_completed'], [200])
         self.assertEqual([e for e, _ in events if e == 'upstream_rejected'], [])
+        self.assertEqual([f['outcome'] for e, f in events if e == 'annotation_retry'],
+                         ['started', 'accepted'])
 
-    def test_retried_400_falls_back_to_the_original_failure_and_caches_once(self):
+    def test_retried_400_is_reported_and_cached_against_the_original_request(self):
         refused = json.dumps({'error': {'message': 'Provider returned error',
                                         'metadata': {'provider_name': 'Meta'}}}).encode()
         body = json.dumps({'model': 'meta/muse-spark-1.3-contributor', 'input': [],
@@ -142,10 +150,64 @@ class StripRetryRelayTests(unittest.TestCase):
                          ['upstream_rejected'])
         self.assertEqual([e for e, _ in events2 if e == 'upstream_rejected_cached'],
                          ['upstream_rejected_cached'])
+        self.assertEqual([f['status'] for e, f in events
+                          if e == 'annotation_retry' and f['outcome'] == 'rejected'], [400])
 
     def test_attributed_400_is_not_retried(self):
         raw = json.dumps({'error': {'message': '[invalid_client_tool_schema] t: root must be an object',
                                     'metadata': {'provider_name': 'xAI'}}}).encode()
         body = json.dumps({'model': 'm', 'input': [1], 'client_metadata': {'x': 1}}).encode()
-        dispatches, _, _, _ = self._relay([(400, raw)], body)
+        dispatches, events, _, _ = self._relay([(400, raw)], body)
         self.assertEqual(len(dispatches), 1)
+        self.assertEqual([f['outcome'] for e, f in events if e == 'annotation_retry'],
+                         ['ineligible'])
+
+    def test_final_retry_failure_uses_the_same_policy_as_a_direct_failure(self):
+        unknown = json.dumps({'error': {'message': 'Provider returned error',
+                              'metadata': {'provider_name': 'Meta'}}}).encode()
+        cases = [(401, {'message': 'Invalid API key'}),
+                 (403, {'message': 'Forbidden'}),
+                 (402, {'message': 'Insufficient credits'}),
+                 (429, {'code': 'insufficient_quota'}),
+                 (400, {'code': 'context_length_exceeded', 'message': 'context length exceeded'}),
+                 (400, {'message': 'The prompt is too long: 100, model maximum context length: 50',
+                        'metadata': {'provider_name': 'Meta'}}),
+                 (400, {'message': '[invalid_client_tool_schema] t: root must be an object',
+                        'metadata': {'provider_name': 'Meta'}})]
+        body = json.dumps({'model': 'meta/muse-spark-1.3-contributor', 'input': [],
+                           'client_metadata': {'private': 'never-log-this'}}).encode()
+        for status, error in cases:
+            with self.subTest(status=status, error=error):
+                raw = json.dumps({'error': error}).encode()
+                upstream.clear_refusals()
+                direct, _, _, direct_errors = self._relay([(status, raw)], body, True)
+                upstream.clear_refusals()
+                retried, events, _, retry_errors = self._relay(
+                    [(400, unknown), (status, raw)], body, True)
+                self.assertEqual(len(direct), 1)
+                self.assertEqual(len(retried), 2)
+                self.assertTrue(direct_errors)
+                self.assertEqual([vars(e) for e in retry_errors], [vars(e) for e in direct_errors])
+                self.assertNotIn('never-log-this', json.dumps(events))
+                self.assertEqual([f['status'] for e, f in events
+                                  if e == 'annotation_retry' and f['outcome'] == 'rejected'], [status])
+
+    def test_eligible_error_without_annotations_does_not_dispatch_again(self):
+        raw = json.dumps({'error': {'message': 'Provider returned error',
+                          'metadata': {'provider_name': 'Meta'}}}).encode()
+        dispatches, events, _, _ = self._relay([(400, raw)], b'{"model":"m","input":[]}')
+        self.assertEqual(len(dispatches), 1)
+        self.assertEqual([f['outcome'] for e, f in events if e == 'annotation_retry'],
+                         ['unchanged'])
+
+    def test_failed_retry_body_read_records_transport_outcome_without_content(self):
+        raw = json.dumps({'error': {'message': 'Provider returned error',
+                          'metadata': {'provider_name': 'Meta'}}}).encode()
+        body = b'{"model":"m","input":[],"store":false}'
+        dispatches, events, _, errors = self._relay(
+            [(400, raw), (400, OSError('private upstream detail'))], body)
+        self.assertEqual(len(dispatches), 2)
+        self.assertTrue(errors)
+        self.assertEqual([f['outcome'] for e, f in events if e == 'annotation_retry'],
+                         ['started', 'transport_error'])
+        self.assertNotIn('private upstream detail', json.dumps(events))

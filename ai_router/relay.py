@@ -32,22 +32,20 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
     response = None
     record = None
     attempts = [conn]
+    refusal_body = prepared.body
     try:
         # Phases land inside post_with_phases even on failure.
-        response, headers_done = transport.post_with_phases(
-            conn, prepared, metrics)
+        response, headers_done, prepared, drained = strip_retry.post_with_retry(
+            conn, prepared, metrics, attempts, provider, log_event)
         if (provider.defn.dialect == provider_defs.DIALECT_OPENAI
                 and is_native_service(metrics['path'])
                 and response.status in (401, 403)):
-            transport.read_capped(response, transport.ERROR_BODY_LIMIT)
             log_event('native_upstream_rejected', path=metrics['path'],
                       upstream_status=response.status)
             try:
                 local_services.answer(metrics['path'])
             except local_services.LocalAnswer as exc:
                 return handler.error(exc)
-        drained = (transport.read_capped(response, transport.ERROR_BODY_LIMIT)
-                   if response.status == 429 else None)
         retry_after = upstream.upstream_retry_after(
             response, prepared, metrics, body=drained)
         if retry_after is not None:
@@ -68,7 +66,7 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
                     'remaining credit; check the provider billing settings'))
             return subscription_fallback.refused(handler, prepared, retry_after, metrics, started)
         if response.status >= 400:
-            raw = transport.read_capped(response, transport.ERROR_BODY_LIMIT)
+            raw = drained
             transport.note_first_data(metrics, headers_done)
             # Context frames are Responses-only; Messages ingress has none.
             if (provider.defn.sends_context_error_frame()
@@ -92,10 +90,7 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
                  'elapsed_ms': round((time.monotonic() - started) * 1000, 1),
                  'timeout_s': transport.UPSTREAM_TIMEOUT_S, 'has_image': has_image,
                  'routed': routed})
-            retried = strip_retry.maybe_retry_unattributable(described, response, raw, metrics, provider, prepared, attempts)
-            if retried is not None:
-                response, headers_done, prepared = retried
-            elif described is not None:
+            if described is not None:
                 status, message, code = described
                 if status == 400 and response.status == 402:
                     # Key funds: a final 400 naming the cause, never a
@@ -118,7 +113,7 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
                 # A cached answer must be one the client treats as final.
                 if status == 400 and routed and response.status < 500:
                     upstream.remember_refusal(prepared.provider, metrics.get('model'),
-                                              prepared.body, message)
+                                              refusal_body, message)
                 log_event('upstream_rejected', status=response.status,
                           client_status=status, code=code,
                           tool=upstream.rejection_tool(raw, provider.defn.dialect),
