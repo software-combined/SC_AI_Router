@@ -12,6 +12,7 @@ and billing. These pages go deeper.
 | [Architecture](architecture.md) | Module ownership and the allowed dependency direction |
 | [Installed runtime files](runtime-files.md) | What the release bundle contains |
 | [Compatibility](compatibility.md) | Verified client and OS versions, per gate |
+| [Muse first-turn rejection](muse-first-turn.md) | The demonstrated request-field trigger and retry diagnostics |
 | [Linux upgrade](linux-upgrade.md) | Managed systemd user units and upgrade behaviour |
 | [Kiro compatibility](kiro-compatibility.md) | The Kiro surface and its limits |
 | [Context recovery](context-recovery.md) | What to do when a long turn or a compaction goes wrong |

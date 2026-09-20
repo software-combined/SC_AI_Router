@@ -168,6 +168,8 @@ class ExternalResponsesProvider:
         except ValueError as exc:
             raise PreparationError(str(exc))
         payload.pop('service_tier', None)
+        # ChatGPT access-program enrolment is not an external-provider option.
+        payload.pop('access_programs', None)
         if entry is None:
             # Defence in depth: select()/owns() already refuses a slug that is
             # not a matching registry row, so this only fires for a direct
