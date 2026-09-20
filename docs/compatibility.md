@@ -1,5 +1,48 @@
 # Compatibility
 
+## Muse fresh tasks, 20 September 2026 AEST
+
+Client: Codex desktop `26.915.31945` (9922), bundled runtime
+`0.155.0-alpha.9.2`; Claude Code `2.1.223`. Candidate `0.6.98.2` was
+installed on the owner Mac through the supported one-shot local-feed
+installer. It is a local candidate, not a published beta.
+
+The deployed `0.6.97.92` reproduced an unnamed Meta 400 on a fresh
+Contributor subagent. Both the original dispatch and its annotation-stripped
+retry failed. Controlled comparisons of the desktop request in memory
+isolated `access_programs`: essential fields with all 51 tools passed,
+`tool_choice` and `parallel_tool_calls` passed, and adding that field alone
+failed. See [the boundary fix and retry evidence](muse-first-turn.md).
+
+Candidate acceptance used the actual desktop and fresh subagents:
+
+| Model, requested effort | Three consecutive fresh-task completions | Tool continuation |
+| --- | --- | --- |
+| `meta/muse-spark-1.3-contributor`, low | Desktop time lookup; fresh child version read; synthetic review returning `REVIEW_PASS` | Passed in desktop and child |
+| `meta/muse-spark-1.3`, low | Fresh child version read; synthetic review returning `REVIEW_PASS`; greeting returning `HI_MUSE_OK` | Passed in child and runtime probe |
+
+The router reported each requested Muse identity and Meta as the serving
+endpoint. No model fallback counted toward acceptance. An earlier standard
+Muse clock-task prompt named an unavailable tool: the model completed with
+an honest inability report, which was not counted as semantic acceptance.
+
+`tools/probe_codex_runtime.py` also passed its exact synthetic dynamic-tool
+round trip on standard Muse and subscription `gpt-5.6-luna`, both at low
+effort with this installed runtime. Real Claude Code sessions returned the
+exact `CLAUDE_ROUTE_OK` marker through the external DeepSeek Flash route and
+the subscription route, with tools, hooks, MCP and persistence disabled.
+Requested subscription alias `sonnet` was reported as `claude-opus-4-6`;
+no exact Sonnet identity claim is made. External usage included
+`deepseek/deepseek-v4.1-flash`. These Claude checks establish routing, not
+a Claude tool round trip.
+
+Diagnostic and acceptance calls are capped separately from the required
+pre-commit reviews. The original 40-attempt allowance was consumed by
+diagnosis and candidate/client acceptance; further installed-release probes
+require the requested cap extension. Input and output limits remain three
+million and 160,000 tokens. Published-release and post-update acceptance
+are still pending at this source checkpoint.
+
 ## TypeSafe Jev decisions probe, 2026-09-18
 
 `typesafe/jev-1.13` answers with typed decisions rather than chat text: the

@@ -1,13 +1,24 @@
 # Changelog
 
+## 0.6.98
+
+- Muse Spark 1.3 and Contributor no longer receive Codex's ChatGPT-specific
+  `access_programs` field. A controlled comparison of a failing desktop request
+  isolated that field as the trigger for Meta's unnamed 400 response. The
+  OpenAI subscription route retains it; model, effort and tools are unchanged.
+- Annotation retries now report eligibility, dispatch and the actual outcome
+  through content-free events. A failed retry follows the normal authentication,
+  credit, context and validation error handling instead of hiding behind the
+  original rejection.
+
 ## 0.6.97
 
-- First turns on `meta/muse-spark-1.3-contributor` from the desktop app no
-  longer die on an unnamed upstream 400: when an OpenRouter Responses turn is
-  rejected without a named cause, the router retries once with annotation-only
+- When an OpenRouter Responses turn is rejected without a named cause, the
+  router retries once with annotation-only
   request fields (prompt cache options, client metadata, store, user and
   similar) removed before treating the turn as refused. A refusal the router
   cannot attribute is no longer described to the client as a model refusal.
+  This retry did not resolve every Muse first-turn rejection; see 0.6.98.
 
 ## 0.6.96
 
