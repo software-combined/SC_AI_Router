@@ -81,10 +81,12 @@ class DesktopMergeTests(unittest.TestCase):
                 desktop_config.attach(home, _state(), install_mod._codex_config, data_dir_override=data_dir)
             self.assertNotIn('127.0.0.1', (data_dir / 'configLibrary' / 'abc.json').read_text())
 
-    def test_missing_library_metadata_refuses(self):
+    def test_incomplete_library_metadata_refuses(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             home.mkdir()
+            (Path(tmp) / 'empty/configLibrary').mkdir(parents=True)
+            (Path(tmp) / 'empty/configLibrary/keep.json').write_text('{}')
             with self.assertRaisesRegex(SystemExit, 'library metadata'):
                 desktop_config.attach(home, _state(), install_mod._codex_config,
                                       data_dir_override=Path(tmp) / 'empty')

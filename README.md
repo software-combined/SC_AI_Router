@@ -8,7 +8,7 @@
 <h1 align="center">SC AI Router</h1>
 
 <p align="center">
-One local endpoint for Codex and Claude Code. All models from your ChatGPT, Claude and OpenRouter are side by side in the picker, subscription billing is kept separate.
+One local endpoint for Codex and Claude Code, with approved OpenRouter models in the picker and separate subscription billing.
 </p>
 
 <p align="center">
@@ -19,11 +19,11 @@ One local endpoint for Codex and Claude Code. All models from your ChatGPT, Clau
 </p>
 
 SC AI Router is a small service that runs on your own machine. It speaks the
-Codex and Claude Code wire protocols on a loopback port, so both clients see
-one model list: the models your existing ChatGPT or Claude sign-in already
-includes, plus approved models billed to an OpenRouter API key. You choose
-the model per turn from the client's normal picker and can switch
-mid-thread.
+Codex and Claude Code wire protocols on a loopback port. Codex and the
+Claude Code terminal client can use their subscription alongside approved
+models billed to an OpenRouter API key. Claude desktop uses a separate
+gateway profile with the approved OpenRouter models; its native subscription
+picker stays in the signed-in profile.
 
 The billing split is strict. Subscription models keep using the client's
 own sign-in, OpenRouter models use a key stored only on your machine, and
@@ -141,7 +141,12 @@ provider and adds its catalogue, so the models appear in the picker after a
 restart. `--clients both` attaches Codex and Claude Code; `--client none`
 installs the service only.
 
-Claude Code support is in preview. Point it at the router with the port and
+For the **Claude desktop app**, run `python3.14 packaging/install.py --desktop`,
+then quit and reopen Claude. Choose **Code**, a folder and a model. All gateway
+rows are billed to OpenRouter; existing signed-in sessions remain in the native
+profile. See [desktop setup and limits](docs/claude-code.md#claude-desktop-app).
+
+Claude Code terminal support is in preview. Point it at the router with the port and
 token from `mixed-router-state.json` in the router home:
 
 ```sh

@@ -1,5 +1,28 @@
 # Compatibility
 
+## Claude desktop picker, 21 September 2026 AEST
+
+Claude desktop `2.2553.1`; standalone Claude Code `2.1.223`.
+The installed router `0.6.98.93` advertised 18 OpenRouter models, but the
+desktop picker showed six. The app rejected IDs containing non-Anthropic
+vendor words even with a valid family tier. Candidate discovery IDs restored
+all 18 visible entries, with their real names and billing labels intact.
+
+Local candidate `0.6.99.1` was then installed through the one-shot local feed.
+The normal router connection returned all 18 entries, and the reopened app
+showed all 18 in its picker. **Check again** cleared a cached connection
+timeout after restart. Native desktop and terminal configuration fingerprints
+were unchanged. This candidate is installed locally, not published to the fleet.
+
+A synthetic local Code task selected DeepSeek V4.1 Flash, read `probe.txt`,
+and returned its exact `SCG_CLAUDE_APP_OK` contents. The bounded local probe
+allowed four Messages requests, at most 2,048 output tokens and 256 KiB of
+input per request, with no retries. All four allowed requests returned 200;
+stream metadata reported `deepseek/deepseek-v4.1-flash`. A startup Haiku
+connection check was refused by this deliberately single-model probe.
+The app exposes no effort selector for these gateway rows, so no specific
+effort is claimed. Picker visibility does not prove every model's tool support.
+
 ## Muse fresh tasks, 20 September 2026 AEST
 
 Client: Codex desktop `26.915.31945` (9922), bundled runtime

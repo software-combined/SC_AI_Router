@@ -310,7 +310,7 @@ def do_install(args, _fetch=fetch, _run=None):
     repair = bool(args.setup) and not newer(latest['version'], current)
     if not newer(latest['version'], current) and not repair:
         print(f'up to date {current}')
-        return 0
+        return _desktop_config.attach_current(args, _codex_config, _write_state) if args.desktop else 0
     if args.dry_run:
         print(f'would fetch {feed}; interpreter {python}')
         print('would verify, unpack, self-test, swap current, restart, write config')
