@@ -16,7 +16,7 @@ import hashlib
 import json
 import sys
 
-from . import provider_defs, transport
+from . import claude_compat, provider_defs, transport
 from .errors import ClaudeSubscriptionRequired, PreparationError, UnknownModel
 from . import registry
 from .clients import registry as client_table
@@ -155,11 +155,13 @@ class ExternalMessagesProvider:
         upstream = upstream_id_for(entry) if entry is not None else slug
         # resolve() only returns a different string for a known registry slug.
         # payload is the parsed form of this same body, so rewrite the alias
-        # there instead of decoding raw_body again. A row whose upstream id is
-        # its own slug leaves the body byte-identical, which is the ingress
-        # contract.
-        if isinstance(model, str) and upstream != model and isinstance(payload, dict):
+        # there instead of decoding raw_body again. The body leaves untouched
+        # unless the alias or the client's own billing block has to change.
+        rewritten = (isinstance(model, str) and upstream != model
+                     and isinstance(payload, dict))
+        if rewritten:
             payload['model'] = upstream
+        if claude_compat.strip_billing_header(payload) or rewritten:
             body = json.dumps(payload).encode()
         return transport.Prepared(
             self.host, self.defn.path_for(provider_defs.MESSAGES, path),
@@ -168,7 +170,10 @@ class ExternalMessagesProvider:
             body, set(), self.name)
 
     def adapt(self, response, tool_names, notes=None):
-        yield from transport.passthrough(response)
+        chunks = transport.passthrough(response)
+        if transport.describe_response(response)[0] == 'sse':
+            chunks = claude_compat.shape(chunks)
+        yield from chunks
 
 
 class ClaudeSubscriptionProvider:
