@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- `tools/probe_claude_code.py` accepts a row whose answer contains the
+  synthetic marker rather than only one that is exactly the marker. Some rows
+  narrate the file they read, and the strict comparison reported
+  `google/gemini-3.1-pro-preview` as a failure on a working turn. An empty or
+  refused turn still fails, and the acceptance rule now has an offline test.
+
 ## 0.6.103
 
 - Claude Code can finish a turn on every routed model it is offered. Two
