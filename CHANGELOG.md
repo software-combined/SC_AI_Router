@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 0.6.105
+
+- `--desktop` finds the Claude desktop app on every platform it ships for,
+  instead of only on macOS. The third-party profile was resolved as
+  `~/Library/Application Support/Claude-3p` unconditionally, so on Windows and
+  Linux the installer looked in a directory that does not exist there and
+  attaching the desktop app silently did nothing. The profile now resolves the
+  way the app's Electron build does: Application Support on macOS, the roaming
+  AppData directory on Windows, and `XDG_CONFIG_HOME` with a `~/.config`
+  fallback on Linux. `CLAUDE_USER_DATA_DIR` still overrides all three.
+- Switch Claude is still macOS-only. Its dialog, app restart and shortcut are
+  built against macOS, so the desktop app on Windows and Linux can be attached
+  but not switched from the shortcut yet.
+
 ## 0.6.104
 
 - The README beside the router home is now the one that belongs to the
