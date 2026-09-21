@@ -114,11 +114,28 @@ Quit and reopen Claude, choose **Code**, select your folder, then choose a
 model and type your task. No key copying or Developer-menu configuration is
 needed. Attachment also runs when there is no newer router release.
 
+On macOS, desktop setup also installs **Switch Claude** in your user's
+Applications folder. Open it from Spotlight or Finder to switch between your
+Claude subscription and OpenRouter. It names the destination and restarts
+Claude after you choose **Switch**. **Cancel** leaves the current selection
+alone. If Claude stays open or you cancel its quit prompt, nothing changes.
+Setup and updates preserve the selected mode. A standalone Claude Code
+terminal installation is not required for the desktop app.
+If the installed router predates the shortcut, setup keeps Claude connected
+and asks for a router update before adding **Switch Claude**.
+
 Every model labelled **OpenRouter** uses the OpenRouter key. The gateway
 profile has its own sessions; your signed-in Claude profile and its existing
 sessions remain separate. The desktop adapter's `detach` operation restores
 the original profile settings without removing the router. Full router
 uninstallation also detaches Codex and the terminal client.
+
+Switching keeps each profile's conversations and settings in place. It does
+not sign out, move conversations, detach the router or change Codex. The
+shortcut checks that Claude still uses this router's saved configuration;
+run setup again if that configuration has changed. An organization policy
+that prevents subscription sign-in also prevents the shortcut from switching.
+The shortcut currently supports macOS only.
 
 The desktop app (verified against 2.2553.1) keeps first-party and
 third-party mode in separate profiles (`.../Claude` and `.../Claude-3p`).

@@ -1,5 +1,24 @@
 # Compatibility
 
+## Claude desktop switching, 21 September 2026 AEST
+
+Claude desktop `2.2553.1`, local router candidate `0.6.100.1`. An update
+through the one-shot local feed installed **Switch Claude** automatically
+for the existing desktop attachment, without passing `--desktop`.
+
+The installed shortcut completed a gateway to subscription to gateway
+round trip. The subscription profile opened signed in with its existing
+projects and conversations. Back in the gateway profile, the previous
+synthetic task still contained `SCG_CLAUDE_APP_OK`, and the picker showed
+all 18 OpenRouter models.
+
+Current-version setup with `--desktop` was repeated while subscription
+mode was selected. The selection and original desktop attachment receipt
+were retained. Codex configuration, Claude Code CLI settings and the
+gateway entry matched their pre-update fingerprints. No additional model
+calls were needed; the preceding desktop tool proof remains applicable.
+This verifies macOS locally; the candidate has not been published to the fleet.
+
 ## Claude desktop picker, 21 September 2026 AEST
 
 Claude desktop `2.2553.1`; standalone Claude Code `2.1.223`.

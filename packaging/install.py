@@ -310,7 +310,7 @@ def do_install(args, _fetch=fetch, _run=None):
     repair = bool(args.setup) and not newer(latest['version'], current)
     if not newer(latest['version'], current) and not repair:
         print(f'up to date {current}')
-        return _desktop_config.attach_current(args, _codex_config, _write_state) if args.desktop else 0
+        return _desktop_config.attach_current(args, _codex_config, _write_state, python=python) if args.desktop else 0
     if args.dry_run:
         print(f'would fetch {feed}; interpreter {python}')
         print('would verify, unpack, self-test, swap current, restart, write config')
@@ -443,9 +443,9 @@ def do_install(args, _fetch=fetch, _run=None):
         raise SystemExit('claude_mode is none: re-run with --claude-mode subscription '
                          'to attach Claude Code, or select --clients codex')
     if clients in ('claude', 'both'): attach_claude(home, state, python=python)
-    if args.desktop: _desktop_config.attach(home, state, _codex_config)
-    # A selection without Claude never silently detaches it: only an
-    # explicit service-only install or uninstall drops attachments.
+    if args.desktop or _codex_config.read_receipt(home).get('clients', {}).get('claude-desktop'):
+        _desktop_config.attach(home, state, _codex_config, python=python)
+    # Only explicit service-only installation or uninstall drops attachments.
     if clients == 'claude':
         # Claude-only: the shared service is up; Codex settings untouched.
         if not args.feed:

@@ -1,0 +1,206 @@
+"""Offline Claude switching: user cancellation and profile preservation."""
+import importlib.util
+import json
+import plistlib
+import subprocess
+import tempfile
+import unittest
+from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
+
+from tests.test_claude_desktop_config import _profile, _state, desktop_config
+from tests.install_fixtures import install_mod
+
+ROOT = Path(__file__).resolve().parents[1]
+spec = importlib.util.spec_from_file_location(
+    'desktop_switch', ROOT / 'packaging' / 'claude_desktop_switch.py')
+switcher = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(switcher)
+
+
+def result(stdout='', returncode=0):
+    return SimpleNamespace(stdout=stdout, stderr='', returncode=returncode)
+
+
+class SwitchTests(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name).resolve()
+        self.home = self.root / 'router'
+        self.home.mkdir()
+        self.profile = _profile(self.root, {'keep': 'gateway setting'})
+        self.state = _state()
+        (self.home / 'mixed-router-state.json').write_text(json.dumps(self.state))
+        desktop_config.attach(self.home, self.state, install_mod._codex_config,
+                              data_dir_override=self.profile)
+        self.config = self.profile / 'claude_desktop_config.json'
+        self.config.write_text(json.dumps({'deploymentMode': '3p', 'keep': {'nested': True}}))
+        install_mod._codex_config.write_client_receipt(self.home, 'codex', {'keep': 'receipt'})
+        native = self.root / 'Claude'
+        native.mkdir()
+        (native / 'conversations').write_text('native session sentinel')
+        (self.profile / 'conversations').write_text('gateway session sentinel')
+        self.addCleanup(mock.patch.stopall)
+        mock.patch.object(switcher.sys, 'platform', 'darwin').start()
+        self.run = mock.Mock(side_effect=[result('button returned:Switch'),
+                                          result('stopped'), result()])
+        self.policy = mock.Mock(return_value=False)
+
+    def files(self):
+        return {p.relative_to(self.root): p.read_bytes()
+                for p in self.root.rglob('*') if p.is_file()}
+
+    def switch(self):
+        return switcher.switch(self.home, run=self.run, policy_check=self.policy)
+
+    def test_round_trip_changes_only_mode_and_preserves_receipts_and_sessions(self):
+        before = self.files()
+        for expected in ('1p', '3p'):
+            with self.subTest(expected=expected):
+                self.run.side_effect = [result('button returned:Switch'), result('stopped'), result()]
+                self.assertEqual(self.switch(), expected)
+                self.assertEqual(json.loads(self.config.read_text()),
+                                 {'deploymentMode': expected, 'keep': {'nested': True}})
+                after = self.files()
+                for path, data in before.items():
+                    if path != self.config.relative_to(self.root):
+                        self.assertEqual(after[path], data, str(path))
+                self.assertEqual(self.run.call_args.args[0],
+                                 ['/usr/bin/open', '-b', switcher.BUNDLE_ID])
+
+    def test_cancel_quit_failure_and_timeout_never_write_or_reopen(self):
+        cases = ([result(returncode=1)],
+                 [result('button returned:Switch'), result(returncode=1)],
+                 [result('button returned:Switch'), result('running')],
+                 [result('button returned:Switch'), subprocess.TimeoutExpired('osascript', 65)])
+        for answers in cases:
+            with self.subTest(answers=answers):
+                before = self.files()
+                self.run.reset_mock(side_effect=True)
+                self.run.side_effect = answers
+                if len(answers) == 1:
+                    self.assertIsNone(self.switch())
+                else:
+                    with self.assertRaises(switcher.SwitchError):
+                        self.switch()
+                self.assertEqual(self.files(), before)
+                self.assertFalse(any(c.args[0][0] == '/usr/bin/open' for c in self.run.call_args_list))
+
+    def test_unrelated_setting_written_during_quit_is_retained(self):
+        def run(argv, **kwargs):
+            if argv[0] == '/usr/bin/open':
+                return result()
+            if 'display dialog' in argv[-1]:
+                return result('button returned:Switch')
+            doc = json.loads(self.config.read_text())
+            doc['writtenOnExit'] = 42
+            self.config.write_text(json.dumps(doc))
+            return result('stopped')
+        self.run.side_effect = run
+        self.assertEqual(self.switch(), '1p')
+        self.assertEqual(json.loads(self.config.read_text())['writtenOnExit'], 42)
+
+    def test_changed_attachment_after_quit_is_not_overwritten(self):
+        def run(argv, **kwargs):
+            if 'display dialog' in argv[-1]:
+                return result('button returned:Switch')
+            self.config.write_text('{"deploymentMode":"1p","changed":true}')
+            return result('stopped')
+        self.run.side_effect = run
+        with self.assertRaisesRegex(switcher.SwitchError, 'settings changed'):
+            self.switch()
+        self.assertEqual(json.loads(self.config.read_text()),
+                         {'deploymentMode': '1p', 'changed': True})
+        self.assertEqual(self.run.call_count, 2)
+
+    def test_missing_or_changed_gateway_refuses_before_quit(self):
+        receipt = self.home / 'activation.json'
+        saved = receipt.read_bytes()
+        for damage in ('receipt', 'gateway'):
+            with self.subTest(damage=damage):
+                receipt.write_bytes(saved)
+                if damage == 'receipt':
+                    receipt.unlink()
+                else:
+                    entry = self.profile / 'configLibrary' / 'abc.json'
+                    entry.write_text('{"inferenceProvider":"another"}')
+                before = self.files()
+                with self.assertRaisesRegex(switcher.SwitchError, 'Run setup again'):
+                    self.switch()
+                self.run.assert_not_called()
+                self.assertEqual(self.files(), before)
+
+    def test_managed_chooser_restriction_prevents_changes(self):
+        self.policy.return_value = True
+        before = self.files()
+        with self.assertRaisesRegex(switcher.SwitchError, 'organization manages'):
+            self.switch()
+        self.run.assert_not_called()
+        self.assertEqual(self.files(), before)
+
+    def test_failed_reopen_keeps_chosen_mode_and_explains_next_action(self):
+        self.run.side_effect = [result('button returned:Switch'), result('stopped'),
+                               subprocess.CalledProcessError(1, 'open')]
+        with self.assertRaisesRegex(switcher.SwitchError, 'Open Claude to continue'):
+            self.switch()
+        self.assertEqual(json.loads(self.config.read_text())['deploymentMode'], '1p')
+
+    def test_prompt_names_destination_and_has_safe_action_and_product_icon(self):
+        for mode, label in switcher.DESTINATIONS.items():
+            with self.subTest(mode=mode):
+                self.config.write_text(json.dumps({'deploymentMode': '3p' if mode == '1p' else '1p'}))
+                self.run.side_effect = [result(returncode=1)]
+                self.switch()
+                script = self.run.call_args.args[0][-1]
+                self.assertIn(label, script)
+                self.assertIn('"SCG Router"', script)
+                self.assertIn('buttons {"Cancel", "Switch"}', script)
+                self.assertIn(str(switcher.ICON), script)
+                for word in ('nonce', 'loopback', 'catalogue', 'token', 'endpoint', 'process'):
+                    self.assertNotIn(word, script.lower())
+
+    def test_installed_launcher_uses_stable_entrypoint_and_owned_icon(self):
+        (self.home / 'current').write_text('new')
+        helper = self.home / 'releases/new/packaging/claude_desktop_switch.py'
+        helper.parent.mkdir(parents=True)
+        helper.write_text('# installed helper')
+        self.run.side_effect = None
+        self.run.return_value = result()
+        app = switcher.install_launcher(self.home, '/python path/python3',
+                                        applications=self.root / 'Applications', run=self.run)
+        info = plistlib.loads((app / 'Contents' / 'Info.plist').read_bytes())
+        self.assertEqual(info['CFBundleIdentifier'], switcher.LAUNCHER_ID)
+        self.assertEqual(info['CFBundleIconFile'], 'router.icns')
+        executable = app / 'Contents' / 'MacOS' / info['CFBundleExecutable']
+        self.assertIn("'/python path/python3'", executable.read_text())
+        self.assertIn('claude_switch_launch.py', executable.read_text())
+        self.assertNotIn('/releases/', executable.read_text())
+        self.assertTrue(executable.stat().st_mode & 0o100)
+        self.assertEqual((self.home / 'claude_switch_launch.py').read_bytes(),
+                         (ROOT / 'packaging' / 'claude_switch_launch.py').read_bytes())
+        self.assertEqual(self.run.call_args_list[0].args[0][4], str(switcher.ICON))
+
+    def test_launcher_follows_current_release_after_update(self):
+        spec = importlib.util.spec_from_file_location(
+            'switch_launch', ROOT / 'packaging' / 'claude_switch_launch.py')
+        launcher = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(launcher)
+        launch_path = self.home / 'claude_switch_launch.py'
+        for version in ('first', 'updated'):
+            with self.subTest(version=version):
+                (self.home / 'current').write_text(version)
+                helper = self.home / 'releases' / version / 'packaging' / 'claude_desktop_switch.py'
+                helper.parent.mkdir(parents=True)
+                helper.write_text('# synthetic helper')
+                with mock.patch.object(launcher, '__file__', str(launch_path)), \
+                     mock.patch.object(launcher.runpy, 'run_path') as run, \
+                     mock.patch.object(launcher.sys, 'argv', []):
+                    launcher.main()
+                    run.assert_called_once_with(str(helper), run_name='__main__')
+                    self.assertEqual(launcher.sys.argv, [str(helper), '--home', str(self.home)])
+
+
+if __name__ == '__main__':
+    unittest.main()
