@@ -1,5 +1,21 @@
 # Changelog
 
+## scg-subagents 0.5.8 — 2026-09-22
+
+- Move the Grok recommendation to `x-ai/grok-4.7`, the id the router roster
+  now pins. The entry, its prescribed effort and the catalogue row all moved
+  together, and the price was re-read from the live OpenRouter listing
+  (1.6 / 4.8 per million, 0.4 cache read).
+- Refresh the benchmark fields from a 4.7 source instead of carrying 4.6's
+  numbers across: the Artificial Analysis row is measured at the prescribed
+  `xhigh`, so Grok is now compared on the AA frontier instead of being
+  excluded from it, while its Arena WebDev row has no 4.7 measurement yet and
+  stays empty. The `grok-4.6 / high` row is kept in the catalogue as the
+  superseded version's measurement.
+- Record in `cybersecurity.md` that the repeatability and pooled-finding
+  numbers were measured on Grok 4.6 and are unmeasured for 4.7. No local paid
+  evaluation was run for this refresh.
+
 ## scg-review 0.4.11 — 2026-09-18
 
 - Run the required verification commands once, in the main agent, on the

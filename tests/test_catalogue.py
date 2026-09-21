@@ -28,7 +28,7 @@ class CatalogueFlagTests(unittest.TestCase):
         self.assertEqual(entry['web_search_tool_type'], 'text')
 
     def test_defaults_keep_current_catalogue_values(self):
-        entry = external_entry(by_slug('x-ai/grok-4.6'))
+        entry = external_entry(by_slug('x-ai/grok-4.7'))
         self.assertEqual(entry['default_reasoning_summary'], 'none')
         self.assertFalse(entry['supports_reasoning_summary_parameter'])
         self.assertIsNone(entry['apply_patch_tool_type'])
@@ -193,7 +193,7 @@ class CatalogueFlagTests(unittest.TestCase):
     def test_alias_display_name_keeps_own_prefix(self):
         # catalog_name is a pure provider-suffix strip; a synthetic alias row
         # keeps its tracking label until the row itself is re-qualified.
-        alias = replace(by_slug('x-ai/grok-4.6'),
+        alias = replace(by_slug('x-ai/grok-4.7'),
                           slug='~x-ai/grok-latest',
                           display_name='SpaceXAI: Grok Latest \xb7 OpenRouter')
         self.assertEqual(catalog_name(alias), 'SpaceXAI: Grok Latest')

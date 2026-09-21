@@ -165,10 +165,10 @@ class HandlerCharacterisationTests(unittest.TestCase):
                                                 [('Content-Type', 'application/json')]))
         server = self._server()
         response = _post(server.server_port, '/test-token/responses',
-                         {'model': 'x-ai/grok-4.6', 'input': []})
+                         {'model': 'x-ai/grok-4.7', 'input': []})
         self.assertEqual(response.status, 400)
         message = json.loads(response.read())['error']['message']
-        self.assertIn('x-ai/grok-4.6', message)
+        self.assertIn('x-ai/grok-4.7', message)
         self.assertIn('tool schema was rejected', message)
         self.assertNotIn('xAI', message)
         self.assertNotIn('ns_abc123def456_tool_update', message)
@@ -180,7 +180,7 @@ class HandlerCharacterisationTests(unittest.TestCase):
         server = self._server()
         before = server.inflight
         response = _post(server.server_port, '/test-token/responses',
-                         {'model': 'x-ai/grok-4.6', 'input': []})
+                         {'model': 'x-ai/grok-4.7', 'input': []})
         self.assertEqual(response.status, 400)
         self.assertEqual(response.read(), b'<html>bad gateway</html>')
         self.assertEqual(server.inflight, before)
@@ -204,10 +204,10 @@ class HandlerCharacterisationTests(unittest.TestCase):
         install_fake(self, stall)
         server = self._server()
         response = _post(server.server_port, '/test-token/responses',
-                         {'model': 'x-ai/grok-4.6', 'input': []})
+                         {'model': 'x-ai/grok-4.7', 'input': []})
         self.assertEqual(response.status, 502)
         message = json.loads(response.read())['error']['message']
-        self.assertIn('x-ai/grok-4.6', message)
+        self.assertIn('x-ai/grok-4.7', message)
         self.assertIn('Retry a shorter turn', message)
 
     def test_upstream_429_becomes_retryable_503(self):
@@ -225,18 +225,18 @@ class HandlerCharacterisationTests(unittest.TestCase):
         # Upstream names a different id, so both sides of the served map are
         # exercised rather than the request echoing itself.
         wire = (b'data: {"type": "response.completed", "response": '
-                b'{"model": "x-ai/grok-4.7", "output": []}}\n\n')
+                b'{"model": "x-ai/grok-4.7-20260916", "output": []}}\n\n')
         install_fake(self, lambda: FakeUpstream(200, wire, [('Content-Type', 'text/event-stream')]))
         server = self._server()
         response = _post(server.server_port, '/test-token/responses',
-            {'model': 'x-ai/grok-4.6', 'input': [],
+            {'model': 'x-ai/grok-4.7', 'input': [],
              'tools': [{'type': 'custom', 'name': 'exec'}]})
         self.assertEqual(response.status, 200)
         response.read()
         conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
         conn.request('GET', '/test-token/health')
         served = json.loads(conn.getresponse().read())['served_models']
-        self.assertEqual(served, {'x-ai/grok-4.6': 'x-ai/grok-4.7'})
+        self.assertEqual(served, {'x-ai/grok-4.7': 'x-ai/grok-4.7-20260916'})
 
     def test_streaming_tool_call_is_adapted_end_to_end(self):
         item = {'id': 'item1', 'type': 'function_call', 'call_id': 'call1',

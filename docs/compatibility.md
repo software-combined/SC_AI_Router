@@ -1,5 +1,34 @@
 # Compatibility
 
+## Grok 4.7 pinned row, 22 September 2026 AEST
+
+Upstream moved to Grok 4.7 while the roster pinned 4.6, so the pinned id
+moved with it and the superseded slug joined `RETIRED_SLUGS`; an upgrade
+drops `x-ai/grok-4.6` from the picker and from state-derived seeding. The
+new row keeps the family's adapter quirks (`json_text_root` schema mode, the
+350-tool ceiling and `drop_images`), all of which the retired row carried
+from the alias era.
+
+| model | tier | date | probes |
+|---|---|---|---|
+| x-ai/grok-4.7 | verified | 2026-09-22 | tool,stream,compact |
+
+`models add` could not author this row: the quirks must be in place before
+the probe runs, so the row was written as preview and proved with
+`python3.14 -m ai_router.candidate x-ai/grok-4.7 --probe --confirm` --
+isolated router, disposable Codex home, OpenRouter key via OpenCode auth,
+Codex CLI `0.155.0-alpha.9.2`. The round trip returned `userMessage`,
+`reasoning`, `agentMessage`, `dynamicToolCall`, `reasoning`, `agentMessage`,
+and the compaction leg passed.
+
+The media leg is not applicable to this row and is no longer implied:
+a `drop_images` row replaces every image with a note on purpose, so
+`legs_for` now skips the image leg for those rows instead of building a leg
+they can never pass. The quirk was re-tested rather than inherited. With
+`drop_images` cleared, the same image turn came back as `PROVIDER_REJECTED`
+("was rejected by the provider without naming a cause"), so 4.7 keeps the
+text-only behaviour 4.6 needed.
+
 ## Claude Code tool coverage, 21 September 2026 AEST
 
 Claude Code `2.1.223` (standalone CLI), installed router `0.6.102.95` and
@@ -823,7 +852,7 @@ Per-model quirks, generated from the registry:
 | openai/gpt-5.6-terra | text,image | native | None | - | verified |
 | openai/gpt-6-astra | text,image | native | None | - | verified |
 | qwen/qwen3.8-max-0902 | text,image | native | None | - | verified |
-| x-ai/grok-4.6 | text,image | json_text_root | 350 | - | verified |
+| x-ai/grok-4.7 | text,image | json_text_root | 350 | - | verified |
 | z-ai/glm-5.3-flash | text,image | native | 128 | - | verified |
 | z-ai/glm-5.3 | text | native | 128 | - | verified |
 
@@ -833,7 +862,7 @@ more declared tools degrade the way the Grok row does instead of failing
 upstream.
 
 Text-only rows (`deepseek/deepseek-v4-pro-0813`, `z-ai/glm-5.3`) and the
-`drop_images` row (`x-ai/grok-4.6`) replace images on the wire with
+`drop_images` row (`x-ai/grok-4.7`) replace images on the wire with
 `ERROR: Cannot read image (this model does not support image input). Inform the user.`
 instead of refusing the thread (router 0.6.67). The model is expected to
 say that in the conversation; the turn continues.

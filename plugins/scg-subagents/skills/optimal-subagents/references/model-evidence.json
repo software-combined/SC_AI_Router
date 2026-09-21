@@ -757,51 +757,39 @@
       "intelligence_estimated": false
     },
     {
-      "id": "x-ai/grok-4.6",
-      "effort": "high",
+      "id": "x-ai/grok-4.7",
+      "effort": "xhigh",
       "aa_identity": "matched model; harness transfer unverified",
-      "aa_source": "https://artificialanalysis.ai/models/grok-4-6",
+      "aa_source": "https://artificialanalysis.ai/models/grok-4-7",
       "aa_eligible": true,
       "scores": {
-        "intelligence": 44.4050073012592,
-        "terminal": 0.212121212121212,
-        "scicode": 0.564814814814815,
-        "lcr": 0.803333333333333,
-        "gdpval": 1642.96,
-        "pdf": 0.17,
-        "automation": 0.6667849638121398,
+        "intelligence": 46.4465506302286,
+        "terminal": 0.257575757575758,
+        "scicode": 0.574074074074074,
+        "lcr": 0.766666666666667,
+        "gdpval": 1695.21,
+        "pdf": 0.2,
+        "automation": 0.6555835148969458,
         "vision": null,
-        "omniscience": 30.4833333333333,
-        "briefcase": 1534.13
+        "omniscience": 32.03333333333333,
+        "briefcase": null
       },
-      "aa_task_usd": 1.8589423352127492,
-      "briefcase_ci95": {
-        "elo": 1534.13,
-        "lower95ci": 1527.89,
-        "upper95ci": 1540.96
-      },
+      "aa_task_usd": 3.738325952106939,
+      "briefcase_ci95": null,
       "prices_usd_per_million": {
-        "input": 2.0,
-        "output": 6.0,
-        "cache_read": 0.5
+        "input": 1.6,
+        "output": 4.8,
+        "cache_read": 0.4
       },
-      "webdev": {
-        "score": 1618,
-        "ci95_plus_minus": 10,
-        "votes": 4282,
-        "effort": "high",
-        "source": "https://arena.ai/leaderboard/code",
-        "published": "2026-09-11",
-        "preliminary": false
-      },
+      "webdev": null,
       "price_source": "https://openrouter.ai/api/v1/models",
       "context_tokens": 500000,
       "pricing_conditions": [
         {
           "min_prompt_tokens": 200000,
-          "prompt": "0.000004",
-          "completion": "0.000012",
-          "input_cache_read": "0.000001"
+          "prompt": "0.0000032",
+          "completion": "0.0000096",
+          "input_cache_read": "0.0000008"
         }
       ],
       "catalogue_origin": "OpenRouter",
@@ -1062,7 +1050,7 @@
     "openai/gpt-5.6-terra": "max",
     "openai/gpt-6-astra": "max",
     "qwen/qwen3.8-max-0902": "xhigh",
-    "x-ai/grok-4.6": "xhigh",
+    "x-ai/grok-4.7": "xhigh",
     "z-ai/glm-5.3-flash": "max",
     "z-ai/glm-5.3": "max",
     "gpt-5.5": "xhigh",
