@@ -59,6 +59,7 @@ class ChooserGateTests(unittest.TestCase):
             home = _home(tmp)
             _install(tmp, home, ['--clients', 'claude'])
             with mock.patch.object(sys.stdin, 'isatty', return_value=True), \
+                    mock.patch.object(dialog, 'tool', return_value='/dialog'), \
                     mock.patch.object(dialog, 'ask') as asked:
                 code, out, _, _ = _full_install(self, tmp, home, '1.0.1', [])
             self.assertEqual(code, 0)
@@ -109,9 +110,12 @@ class ChooserGateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'router'
             with mock.patch.object(sys.stdin, 'isatty', return_value=True), \
-                    mock.patch.object(dialog, 'ask', return_value=dialog.CANCELLED):
+                    mock.patch.object(dialog, 'tool', return_value='/dialog'), \
+                    mock.patch.object(dialog, 'ask',
+                                      return_value=dialog.CANCELLED) as asked:
                 code, out, fake_home, claude = _full_install(self, tmp, home, '1.0.0', [])
             self.assertEqual(code, 0)
+            asked.assert_called_once()
             self.assertIn('no client attached', out)
             self.assertFalse((fake_home / '.codex' / 'config.toml').exists())
             self.assertFalse((claude / 'settings.json').exists())
@@ -129,9 +133,12 @@ class ChooserGateTests(unittest.TestCase):
             paths = (config, settings, home / 'activation.json', state_path)
             before = tuple(path.read_bytes() for path in paths)
             with mock.patch.object(sys.stdin, 'isatty', return_value=True), \
-                    mock.patch.object(dialog, 'ask', return_value=dialog.CANCELLED):
+                    mock.patch.object(dialog, 'tool', return_value='/dialog'), \
+                    mock.patch.object(dialog, 'ask',
+                                      return_value=dialog.CANCELLED) as asked:
                 code, out, _, _, _ = _install(tmp, home, ['--choose-clients'])
             self.assertEqual(code, 0)
+            asked.assert_called_once()
             self.assertNotIn('connected', out)
             self.assertEqual(tuple(path.read_bytes() for path in paths), before)
 
@@ -141,9 +148,12 @@ class ChooserGateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             home = _home(tmp)
             with mock.patch.object(sys.stdin, 'isatty', return_value=False), \
-                    mock.patch.object(dialog, 'ask', return_value=('claude', 'terminal')):
+                    mock.patch.object(dialog, 'tool', return_value='/dialog'), \
+                    mock.patch.object(dialog, 'ask',
+                                      return_value=('claude', 'terminal')) as asked:
                 code, out, _, _, claude = _install(tmp, home, ['--choose-clients'])
             self.assertEqual(code, 0)
+            asked.assert_called_once()
             env = json.loads((claude / 'settings.json').read_text())['env']
             self.assertEqual(env['CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY'], 'true')
             self.assertIn('Claude Code connected', out)
@@ -175,9 +185,12 @@ class ChooserGateTests(unittest.TestCase):
             paths = (config, settings, home / 'activation.json')
             before = tuple(path.read_bytes() for path in paths)
             with mock.patch.object(sys.stdin, 'isatty', return_value=True), \
-                    mock.patch.object(dialog, 'ask', return_value=dialog.CANCELLED):
+                    mock.patch.object(dialog, 'tool', return_value='/dialog'), \
+                    mock.patch.object(dialog, 'ask',
+                                      return_value=dialog.CANCELLED) as asked:
                 code, out, _, _ = _full_install(self, tmp, home, '1.0.1',
                                                 ['--choose-clients'])
             self.assertEqual(code, 0)
+            asked.assert_called_once()
             self.assertIn('no client attached', out)
             self.assertEqual(tuple(path.read_bytes() for path in paths), before)
