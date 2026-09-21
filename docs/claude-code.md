@@ -177,12 +177,15 @@ hand-edited conflict instead of overwriting it.
 `claude` binary against a running router, one Read-tool round trip per
 advertised row, and reports the rows that failed. Each row gets a synthetic
 marker file named for that model, connector MCP servers are excluded so the
-request stays at the client's own tool set, and a row is never retried. The
-probe leaves the caller's Claude settings alone: it points a disposable
-settings file at the router and never prints the loopback URL. Pass
-`--models` to narrow it, `--max-rows` to raise the cap, or `--json` for a
-machine-readable report. Point it at an isolated candidate home to check a
-build before it is installed.
+request stays at the client's own tool set, and a row is never retried. A row
+passes when the marker comes back in the answer, not only when it is the whole
+answer: some rows narrate it, and that is a finished turn rather than a fault.
+An empty or refused turn still fails. The probe leaves the caller's Claude
+settings alone: it points a disposable settings file at the router and never
+prints the loopback URL. Pass `--models` to narrow it, `--max-rows` to raise
+the cap, or `--json` for a machine-readable report. Point it at an isolated
+candidate home to check a build before it is installed, and set `CLAUDE_BIN`
+to drive a different client binary.
 
 ## Claude desktop app
 

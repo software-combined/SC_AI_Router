@@ -41,6 +41,15 @@ loops, and it does not read served model identity. `deepseek/deepseek-v4-pro-081
 exceeded the probe's 180 s first-run budget and passed on retry; the shipped
 probe allows 300 s per row.
 
+A row passes when the marker comes back in the answer rather than only when it
+is the whole answer. The first shipped probe compared the two for equality and
+reported `google/gemini-3.1-pro-preview` as a failure on the `0.6.103.96` build
+with the answer `The contents of probe.txt are:\nSCGCC_68F0438A`, which is a
+finished turn that narrates the file rather than a fault; the same row echoed
+the marker exactly on the candidate sweep. That strict rule is the same
+confound this file already records for that row on 2026-09-15, and
+`tools/probe_claude_code.py` now uses containment, matching the other probes.
+
 ## Client chooser, 21 September 2026 AEST
 
 Router local candidate `0.6.101.1` built from tree

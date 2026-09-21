@@ -9,6 +9,9 @@ marker file, so a model that refuses the turn or returns no text fails loudly.
 The unit suite stays offline. This is invoked separately, makes one model call
 per row plus its tool round trip, and never retries a row.
 
+`CLAUDE_BIN` overrides the client binary; the acceptance test uses it to swap
+in a scripted fake.
+
 Usage:
     python3.14 tools/probe_claude_code.py --home ~/.codex/mixed-model-router
     python3.14 tools/probe_claude_code.py --models anthropic/claude-fable-5.1
@@ -29,6 +32,7 @@ from pathlib import Path
 DEFAULT_HOME = Path.home() / '.codex' / 'mixed-model-router'
 PROMPT = 'Read the file probe.txt and reply with exactly its contents, nothing else.'
 TIMEOUT_S = 300
+CLAUDE_BIN = os.environ.get('CLAUDE_BIN') or shutil.which('claude')
 
 
 def listing(home):
@@ -56,7 +60,7 @@ def probe(home, model):
         started = time.time()
         try:
             done = subprocess.run(
-                ['claude', '-p', PROMPT, '--model', model,
+                [CLAUDE_BIN, '-p', PROMPT, '--model', model,
                  '--strict-mcp-config', '--mcp-config', '{"mcpServers": {}}',
                  '--allowedTools', 'Read', '--settings', str(settings),
                  '--output-format', 'json'],
@@ -65,10 +69,14 @@ def probe(home, model):
             return {'model': model, 'pass': False, 'error': 'timeout',
                     'seconds': round(time.time() - started, 1)}
         report = _report(done.stdout)
-        return {'model': model, 'pass': report.get('result') == marker,
+        answer = report.get('result') or ''
+        # Containment, not an exact echo: a model that reads the file and then
+        # says "the contents are: <marker>" has done the job, and several rows
+        # narrate their answers. An empty or refused turn still fails here.
+        return {'model': model, 'pass': marker in answer,
                 'turns': report.get('num_turns'),
                 'error': report.get('subtype') if report.get('is_error') else None,
-                'answer': (report.get('result') or '')[:80],
+                'answer': answer[:80],
                 'seconds': round(time.time() - started, 1)}
     finally:
         shutil.rmtree(work, ignore_errors=True)
@@ -105,7 +113,7 @@ def main(argv=None):
     parser.add_argument('--json', action='store_true', help='machine-readable')
     args = parser.parse_args(argv)
 
-    if shutil.which('claude') is None:
+    if not CLAUDE_BIN:
         raise SystemExit('the claude binary is not on PATH')
     models = args.models or listing(args.home)
     if len(models) > args.max_rows:
