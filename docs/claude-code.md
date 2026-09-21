@@ -224,6 +224,14 @@ The shortcut currently supports macOS only.
 
 The desktop app (verified against 2.2553.1) keeps first-party and
 third-party mode in separate profiles (`.../Claude` and `.../Claude-3p`).
+The third-party profile sits wherever that platform's Electron build puts
+it: `~/Library/Application Support` on macOS, the roaming AppData directory
+on Windows, and `XDG_CONFIG_HOME` with a `~/.config` fallback on Linux.
+Set `CLAUDE_USER_DATA_DIR` to override all three. Attachment is verified on
+macOS. The Windows and Linux paths follow the app's documented Electron
+layout and are pinned by tests that run on the Linux CI runner; no session
+has been hand-driven on either platform, and the Windows path is not yet
+exercised by a Windows runner.
 Pointing the third-party profile at the loopback router lists every
 approved Messages-compatible registry row. The app filters non-Anthropic
 vendor words from IDs even when a valid `anthropic_family_tier` is present.
