@@ -4,8 +4,8 @@
 # runtime from runtimes.json, verifies every download by SHA-256, then runs
 # the verified bundle installer. The feed is public: no token is needed.
 # Usage:
-#   .\bootstrap.ps1 [-Channel beta]
-param([string]$Channel = 'stable')
+#   .\bootstrap.ps1 [-Channel beta] [-ChooseClients]
+param([string]$Channel = 'stable', [switch]$ChooseClients)
 $ErrorActionPreference = 'Stop'
 if ($env:CHANNEL) { $Channel = $env:CHANNEL }
 $Channel = $Channel.ToLowerInvariant()
@@ -43,7 +43,8 @@ if ($LASTEXITCODE -ne 0) { exit 1 }
 # its own feed from the router home, which may still name the old channel.
 # Persist the channel only once the install proves out, so an aborted
 # bootstrap cannot move a stable host onto pre-releases.
-& $py (Join-Path $homeDir 'bootstrap\packaging\install.py') --home $homeDir --feed "$feedOrigin/$Channel/latest.json"
+$choose = if ($ChooseClients) { @('--choose-clients') } else { @() }
+& $py (Join-Path $homeDir 'bootstrap\packaging\install.py') --home $homeDir --feed "$feedOrigin/$Channel/latest.json" @choose
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $current = if (Test-Path (Join-Path $homeDir 'current')) { ("" + (Get-Content -Raw (Join-Path $homeDir 'current'))).Trim() } else { '' }
 $landed = $false

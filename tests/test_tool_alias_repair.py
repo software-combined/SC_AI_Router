@@ -171,7 +171,7 @@ class AliasSchemeTests(unittest.TestCase):
         declared = {'type': 'namespace', 'name': 'delta', 'tools': [
             {'type': 'function', 'name': 'send_message', 'description': 'd',
              'parameters': {'type': 'object'}}]}
-        payload = {'model': 'x-ai/grok-4.6',
+        payload = {'model': 'x-ai/grok-4.7',
             'tools': [{'type': 'tool_search', 'description': 's',
                        'parameters': {'type': 'object', 'properties': {}}}, declared] + [
                 {'type': 'function', 'name': f'unrelated_{i}',
@@ -343,7 +343,7 @@ class UpstreamHintTests(unittest.TestCase):
                                      'metadata': {'raw': raw, 'provider_name': 'xAI'}}})
         status, message, _ = upstream.describe_failure(
             None, {'status': 400, 'body': body.encode()},
-            {'model': 'x-ai/grok-4.6', 'provider': 'openrouter', 'protocol': 'responses',
+            {'model': 'x-ai/grok-4.7', 'provider': 'openrouter', 'protocol': 'responses',
              'elapsed_ms': 1831.8, 'timeout_s': 120, 'has_image': False})
         self.assertEqual(status, 400)
         self.assertNotIn('probe__echo', message)

@@ -194,16 +194,25 @@ def do_get(handler):
 def read_body(handler, max_body, oversize_guard=None):
     # max_body arrives from the handler so the existing patch point on
     # ai_router.router.MAX_BODY still bounds this read (Plan 128).
-    # `oversize_guard` is asked once, on decoded bytes, before a body past the
-    # ordinary cap is expanded further: the schema-heavy turns that need the
-    # headroom compress at ratios no declared-size check can predict.
+    # `oversize_guard` is asked on the declared size and again on the decoded
+    # size, so a body past the ordinary cap is read or expanded only while the
+    # slot is free: the schema-heavy turns that need the headroom compress at
+    # ratios no declared-size check can predict.
     size = int(handler.headers.get('Content-Length', '-1'))
-    if size < 0 or size > max_body or handler.headers.get('Transfer-Encoding'):
-        raise InvalidSize('Invalid request size')
-    body = handler.rfile.read(size)
     encoding = handler.headers.get('Content-Encoding', '')
-    # zstd may expand past max_body so prepare can slim tool_search schemas.
+    # zstd may expand past max_body so prepare can slim tool_search schemas, and
+    # a compressed body past max_body is that same shape: the 2026-09-18 turn
+    # (17.6 MB on the wire) was refused here as a framing error before the trim
+    # that could have served it ever ran. Read it to the decode ceiling and let
+    # the decoded size decide, which is what the ceiling exists for.
     limit = max_body * MAX_DECODE_FACTOR if encoding == 'zstd' else max_body
+    if size < 0 or size > limit or handler.headers.get('Transfer-Encoding'):
+        raise InvalidSize('Invalid request size')
+    # One oversized body in memory at a time: the declared size asks before the
+    # read, the decoded size asks again before the expansion.
+    if size > max_body and oversize_guard is not None and not oversize_guard():
+        raise OversizeBusy()
+    body = handler.rfile.read(size)
     if encoding == 'zstd':
         with zstd.ZstdFile(io.BytesIO(body)) as stream:
             decoded = stream.read(max_body + 1)

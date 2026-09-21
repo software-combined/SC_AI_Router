@@ -15,8 +15,9 @@ MAX_BODY = 16 * 1024 * 1024
 # prepared upstream body is still refused above MAX_BODY. A search-heavy
 # Codex thread carries every schema it ever released (live 2026-09-16:
 # 2,690 results, 67 MB decoded, ~1 MB prepared), so the factor is what
-# decides whether the slim runs at all. A body that expands past MAX_BODY
-# takes the router's single oversized-read slot before the rest is expanded.
+# decides whether the slim runs at all. A body past MAX_BODY, on the wire or
+# on decode, takes the router's single oversized-read slot before the rest of
+# it is expanded.
 MAX_DECODE_FACTOR = 6
 TOKEN_MIN_LENGTH = 32
 TOKEN_ALPHABET = frozenset(string.ascii_letters + string.digits + '_-')

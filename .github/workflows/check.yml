@@ -88,12 +88,12 @@ jobs:
 
   test:
     name: Test
-    # The one required check. It waits for every scoped installer job and
-    # fails when one failed or was cancelled; only a deliberately unselected
-    # platform job (scope said no installer paths) may be skipped (Plan 156).
+    # The one required check. It waits for its dependency jobs and fails when
+    # one failed or was cancelled; only a deliberately unselected platform job
+    # (scope said no installer paths) may be skipped (Plan 156).
     # !cancelled(): a failed dependency still runs the guard below, while a
     # cancelled run stops this job instead of reporting a result.
-    needs: [changes, installer-macos, installer-windows, installer-python39]
+    needs: [changes, installer-macos, installer-windows, installer-python39, hook-adapter]
     if: ${{ !cancelled() }}
     # Single Ubuntu runner. Plan 134 revisited the cost decision after the
     # 2026-09-12 external review found a green check that never executed the
@@ -108,7 +108,7 @@ jobs:
         # required check, not disappear behind a green gate.
         if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
         run: |
-          echo "an installer job did not succeed: ${{ join(needs.*.result, ', ') }}"
+          echo "a required job did not succeed: ${{ join(needs.*.result, ', ') }}"
           exit 1
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -204,3 +204,35 @@ jobs:
         run: python -m unittest tests.test_scheduling_native -v
         env:
           SCG_TEST_NATIVE_SCHEDULER: '1'
+
+  hook-adapter:
+    name: Hook adapter portability
+    # The SCG hook adapter ships to every host and now claims native Windows
+    # scanner support. No other job runs its tests, so this is their only
+    # executor: without the matrix, the Windows claim would be asserted rather
+    # than exercised. Pull requests only, like the scheduler job above.
+    if: github.event_name == 'pull_request'
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Hook adapter tests
+        # The pre-existing end-to-end tests drive a /bin/sh scanner stub and
+        # override HOME, which Path.home() ignores on Windows, so the full
+        # directory runs on macOS/Linux and the portability module runs on
+        # both. Making the end-to-end harness Windows-capable is a separate
+        # change.
+        if: runner.os != 'Windows'
+        run: python -m unittest discover -s plugins/scg-review/support/git-hooks/tests -v
+      - name: Hook adapter portability tests
+        if: runner.os == 'Windows'
+        run: >-
+          python -m unittest discover
+          -s plugins/scg-review/support/git-hooks/tests
+          -p "test_gitleaks_pin_portability.py" -v

@@ -10,6 +10,7 @@ receipts, catalogues, backups and logs are never part of a release bundle and
 are never copied between machines.
 
 `ai_router/router.py`, `ai_router/providers.py`, `ai_router/claude.py`,
+`ai_router/claude_compat.py`,
 `ai_router/availability.py`, `ai_router/snapshot_store.py`,
 `ai_router/registry.py`, `ai_router/credentials.py`,
 `ai_router/tool_adapter.py`, `ai_router/tool_aliases.py`,
@@ -37,7 +38,7 @@ are never copied between machines.
 `ai_router/subscription_history.py`, `ai_router/context_recovery.py`,
 `ai_router/provider_defs.py`, `ai_router/upstream.py`, `ai_router/ingress.py`,
 `ai_router/relay.py`, `ai_router/tool_merge.py`, `ai_router/atomic_write.py`,
-`ai_router/stream_relay.py`,
+`ai_router/stream_relay.py`, `ai_router/strip_retry.py`,
 `ai_router/state.py`,
 `ai_router/events.py`,
 `ai_router/protocols/__init__.py`, `ai_router/protocols/responses.py`,
@@ -50,6 +51,7 @@ are never copied between machines.
 `tools/probe_context_recovery.py`, `tools/probe_handoff_recovery.py`,
 `tools/probe_history_switch.py`, `tools/probe_media.py`,
 `tools/probe_standalone_outputs.py`, `tools/probe_agent_handoffs.py`,
+`tools/probe_claude_code.py`,
 `tools/appserver_probe.py`, `tools/provision_key.py`,
 `tools/verify_runtime_pins.py`, `tools/check_installer_python39.py`,
 `tools/check_policy_scans.py`, `tools/check_source_limits.py`,

@@ -154,7 +154,7 @@ class ClaudeIngressTests(unittest.TestCase):
                              {'id', 'display_name', 'anthropic_family_tier'})
         listed = {row['id']: row['display_name'] for row in body['data']}
         self.assertEqual(
-            listed['claude/z-ai/glm-5.3-flash'], 'Z.ai: GLM 5.3 Flash \u00b7 OpenRouter')
+            listed[claude_mod.claude_alias('z-ai/glm-5.3-flash')], 'Z.ai: GLM 5.3 Flash \u00b7 OpenRouter')
         self.assertIn('anthropic/claude-sonnet-5', listed)
 
     def test_models_listing_drops_unlisted_rows_but_still_routes_them(self):
@@ -172,7 +172,7 @@ class ClaudeIngressTests(unittest.TestCase):
             response = _get(server.server_port, '/test-token/v1/models')
             self.assertEqual(response.status, 200)
             ids = [row['id'] for row in json.loads(response.read())['data']]
-            self.assertNotIn('claude/moonshotai/kimi-k3', ids)
+            self.assertNotIn(claude_mod.claude_alias('moonshotai/kimi-k3'), ids)
             recorded = install_fake(self, lambda: FakeUpstream(
                 200, b'{"id":"msg_9","type":"message","content":[]}', []))
             routed = _post(server.server_port, '/test-token/v1/messages',

@@ -130,23 +130,25 @@ class IsolatedRouter:
 def legs_for(slug, row=None):
     """Probe legs the registry row implies: tool and stream always run.
 
-    The image leg runs when the row's modalities include image; the
-    compaction leg runs when the row declares a context window. Unknown
-    slugs probe the base legs only. Pure: names what would run, bills
-    nothing. Pass `row` - the raw models.json dict - when the slug is not
-    yet in the import-time registry (the add path writes the row before
-    probing it); a non-dict falls back to the registry lookup.
+    The image leg runs when the row's modalities include image and the row
+    does not drop images; the compaction leg runs when the row declares a
+    context window. Unknown slugs probe the base legs only. Pure: names what
+    would run, bills nothing. Pass `row` - the raw models.json dict - when
+    the slug is not yet in the import-time registry (the add path writes the
+    row before probing it); a non-dict falls back to the registry lookup.
     """
     entry = row if row is not None else (
         by_slug(slug) if isinstance(slug, str) else None)
     legs = ['tool', 'stream']
     if entry is None:
         return legs
-    modalities = (entry.get('modalities') if isinstance(entry, dict)
-                  else entry.modalities) or ()
-    context_window = (entry.get('context_window') if isinstance(entry, dict)
-                      else entry.context_window) or 0
-    if 'image' in modalities:
+    field = (entry.get if isinstance(entry, dict)
+             else lambda name: getattr(entry, name))
+    modalities = field('modalities') or ()
+    context_window = field('context_window') or 0
+    # A drop_images row replaces every image with a note on purpose, so its
+    # media leg could never see the image it asserts: the row implies none.
+    if 'image' in modalities and not field('drop_images'):
         legs.append('image')
     if context_window > 0:
         legs.append('compact')

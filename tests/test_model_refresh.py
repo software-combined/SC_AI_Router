@@ -82,6 +82,7 @@ class ModelRefreshTests(unittest.TestCase):
             return _external_responses().summarize(model, 'key', [])
 
     def test_valid_payload_swaps_atomically_and_rebuilds_derived(self):
+        old_alias = claude.claude_alias('deepseek/deepseek-v4.1-flash')
         body = json.dumps([_row(), _row('qwen/qwen-1')]).encode()
         with tempfile.TemporaryDirectory() as tmp:
             models, etag = model_refresh.poll_once('https://m.invalid/models', tmp, None,
@@ -94,8 +95,8 @@ class ModelRefreshTests(unittest.TestCase):
             # Dynamic consumers see the swap: the listing gains the new slug
             # and drops removed ones, and summarize pins the new levels.
             ids = {row['id'] for row in claude.models_listing()['data']}
-            self.assertIn('claude/qwen/qwen-1', ids)
-            self.assertNotIn('claude/deepseek/deepseek-v4.1-flash', ids)
+            self.assertIn(claude.claude_alias('qwen/qwen-1'), ids)
+            self.assertNotIn(old_alias, ids)
             seen = {}
             self.assertEqual(self._summarize('qwen/qwen-1', seen), 's')
             self.assertEqual(seen.get('reasoning'), {'effort': 'low'})

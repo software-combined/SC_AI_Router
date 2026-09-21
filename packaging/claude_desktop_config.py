@@ -11,6 +11,8 @@ in the release bundle. No runtime/protocol import here.
 """
 import json
 import os
+import sys
+import uuid
 import importlib.util as _ilu
 from pathlib import Path
 
@@ -34,13 +36,35 @@ API_KEY_VALUE = 'router-path-token'
 CLIENT_KEY = 'claude-desktop'
 
 
-def user_data_dir(env=None):
+PROFILE_DIRNAME = 'Claude-3p'
+
+
+def profile_root(env=None, platform_name=None):
+    """Parent of the app's userData directory, the way Electron resolves it.
+
+    macOS uses Application Support, Windows uses the roaming AppData
+    directory and Linux uses XDG_CONFIG_HOME (falling back to ~/.config).
+    Getting this wrong pointed the installer at a macOS path that does not
+    exist on the other platforms, so `--desktop` silently did nothing there.
+    """
+    env = os.environ if env is None else env
+    platform_name = sys.platform if platform_name is None else platform_name
+    if platform_name == 'darwin':
+        return Path.home() / 'Library' / 'Application Support'
+    if platform_name == 'win32':
+        appdata = env.get('APPDATA')
+        return Path(appdata) if appdata else Path.home() / 'AppData' / 'Roaming'
+    xdg = env.get('XDG_CONFIG_HOME')
+    return Path(xdg) if xdg else Path.home() / '.config'
+
+
+def user_data_dir(env=None, platform_name=None):
     """Third-party profile dir, honoring CLAUDE_USER_DATA_DIR when set."""
     env = os.environ if env is None else env
     override = env.get('CLAUDE_USER_DATA_DIR')
     if override:
         return Path(override).expanduser()
-    return Path.home() / 'Library' / 'Application Support' / 'Claude-3p'
+    return profile_root(env, platform_name) / PROFILE_DIRNAME
 
 
 def desired_values(state):
@@ -136,11 +160,44 @@ def restore_entry(path, previous):
     write_json(path, doc)
 
 
-def attach(home, state, receipts, data_dir_override=None, env=None):
+def _owned_snapshot(home, data_dir, state, receipts):
+    """Only the same applied entry with matching router settings is owned."""
+    existing = receipts.read_receipt(home).get('clients', {}).get(CLIENT_KEY, {})
+    try:
+        path = applied_entry_path(data_dir)
+        if Path(existing['config_path']).resolve() != path.resolve():
+            return None
+        snapshot = receipts.parse_snapshot(existing['inserted_block'])
+        if not all(key in snapshot for key in OWNED_KEYS + ('deploymentMode',)):
+            return None
+        current = read_entry(path)
+        if any(current.get(key) != value for key, value in desired_values(state).items()):
+            return None
+        return snapshot
+    except (OSError, ValueError, TypeError, KeyError, SystemExit):
+        return None
+
+
+def _install_switch_launcher(home, python):
+    spec = _ilu.spec_from_file_location(
+        'router_desktop_switch', Path(__file__).with_name('claude_desktop_switch.py'))
+    switch = _ilu.module_from_spec(spec)
+    spec.loader.exec_module(switch)
+    try:
+        switch.install_launcher(home, python)
+    except switch.SwitchError as exc:
+        print('Claude connected; ' + str(exc))
+    except (OSError, switch.subprocess.SubprocessError):
+        # Attachment still works if the optional native launcher cannot be built.
+        print('Claude connected; Switch Claude could not be installed. Run setup again to retry.')
+
+
+def attach(home, state, receipts, data_dir_override=None, env=None, *, python=None):
     """Attach the desktop gateway without touching first-party state.
 
     Merges only the four owned entry values and sets the third-party
-    profile's deploymentMode to 3p; conflicting effective overrides refuse
+    profile's deploymentMode to 3p on first attachment. An owned profile keeps
+    its selected mode on later runs; conflicting effective overrides refuse
     with a redacted message. Records the attachment in the versioned
     receipt. Returns the applied entry path written.
     """
@@ -149,36 +206,61 @@ def attach(home, state, receipts, data_dir_override=None, env=None):
                          'to attach the Claude desktop gateway')
     data_dir = (Path(data_dir_override) if data_dir_override is not None
                 else user_data_dir(env))
-    entry_path = applied_entry_path(data_dir)
     # Refuse before writing anything: a mode conflict must leave both the
     # entry and the desktop config untouched.
     cfg, cfg_path = read_desktop_config(data_dir)
     previous_mode = cfg.get('deploymentMode')
-    if previous_mode is not None and previous_mode != '3p':
+    owned = _owned_snapshot(home, data_dir, state, receipts)
+    if previous_mode not in (None, '3p') and not (previous_mode == '1p' and owned is not None):
         raise SystemExit(
             'Claude desktop deploymentMode is managed outside this installer; '
             'remove or correct it by hand, then re-run.')
-    doc, changed, previous = merge_entry(state, entry_path)
+    library = data_dir / 'configLibrary'
+    if not library.exists() or not any(library.iterdir()):
+        entry_id = str(uuid.uuid4())
+        write_json(library / '_meta.json', {
+            'appliedId': entry_id,
+            'entries': [{'id': entry_id, 'name': 'SCG Router'}]})
+    entry_path = applied_entry_path(data_dir)
+    doc, _, previous = merge_entry(state, entry_path)
     write_json(entry_path, doc)
-    mode_changed = previous_mode != '3p'
-    if mode_changed:
+    if previous_mode is None:
         cfg['deploymentMode'] = '3p'
         write_json(cfg_path if cfg_path is not None
                    else data_dir / 'claude_desktop_config.json', cfg)
-    existing = receipts.read_receipt(home).get('clients', {}).get(CLIENT_KEY, {})
-    if (not changed and not mode_changed and isinstance(existing, dict)
-            and 'inserted_block' in existing):
-        # Re-attach with identical values: keep the original pre-attach
-        # snapshot so a later detach restores it instead of our own values.
-        previous = receipts.parse_snapshot(existing['inserted_block'])
-        previous_mode = previous.get('deploymentMode', previous_mode)
+    if owned is not None:
+        # Mode switching does not change attachment or the restore authority.
+        previous = owned
+        previous_mode = owned['deploymentMode']
     snapshot = dict(previous)
     snapshot['deploymentMode'] = previous_mode
     entry = {'config_path': str(entry_path),
              'inserted_block': json.dumps(snapshot, sort_keys=True),
              'claude_mode': state.get('claude_mode', 'subscription')}
     receipts.write_client_receipt(home, CLIENT_KEY, entry)
+    if python is not None:
+        _install_switch_launcher(home, python)
     return entry_path
+
+
+def attach_current(args, receipts, write_state, *, python=None):
+    """An explicit desktop attachment is independent of update availability."""
+    if args.client == 'none':
+        raise SystemExit('--desktop conflicts with --client none')
+    if args.dry_run:
+        print('would connect Claude desktop to the installed router')
+        return 0
+    home = Path(args.home).expanduser()
+    try:
+        state = json.loads((home / 'mixed-router-state.json').read_text())
+    except (OSError, ValueError):
+        raise SystemExit('Router settings are missing or invalid; run setup first')
+    if args.claude_mode is not None and args.claude_mode != state.get('claude_mode'):
+        state['claude_mode'] = args.claude_mode
+        write_state(home, state)
+    attach(home, state, receipts, python=python)
+    print('Claude desktop connected; quit and reopen Claude, then choose Code and a model.')
+    return 0
 
 
 def detach(home, receipts, data_dir_override=None, env=None):

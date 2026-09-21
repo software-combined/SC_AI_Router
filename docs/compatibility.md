@@ -1,5 +1,215 @@
 # Compatibility
 
+## Grok 4.7 pinned row, 22 September 2026 AEST
+
+Upstream moved to Grok 4.7 while the roster pinned 4.6, so the pinned id
+moved with it and the superseded slug joined `RETIRED_SLUGS`; an upgrade
+drops `x-ai/grok-4.6` from the picker and from state-derived seeding. The
+new row keeps the family's adapter quirks (`json_text_root` schema mode, the
+350-tool ceiling and `drop_images`), all of which the retired row carried
+from the alias era.
+
+| model | tier | date | probes |
+|---|---|---|---|
+| x-ai/grok-4.7 | verified | 2026-09-22 | tool,stream,compact |
+
+`models add` could not author this row: the quirks must be in place before
+the probe runs, so the row was written as preview and proved with
+`python3.14 -m ai_router.candidate x-ai/grok-4.7 --probe --confirm` --
+isolated router, disposable Codex home, OpenRouter key via OpenCode auth,
+Codex CLI `0.155.0-alpha.9.2`. The round trip returned `userMessage`,
+`reasoning`, `agentMessage`, `dynamicToolCall`, `reasoning`, `agentMessage`,
+and the compaction leg passed.
+
+The media leg is not applicable to this row and is no longer implied:
+a `drop_images` row replaces every image with a note on purpose, so
+`legs_for` now skips the image leg for those rows instead of building a leg
+they can never pass. The quirk was re-tested rather than inherited. With
+`drop_images` cleared, the same image turn came back as `PROVIDER_REJECTED`
+("was rejected by the provider without naming a cause"), so 4.7 keeps the
+text-only behaviour 4.6 needed.
+
+## Claude Code tool coverage, 21 September 2026 AEST
+
+Claude Code `2.1.223` (standalone CLI), installed router `0.6.102.95` and
+candidate `0.6.103` built from `cyril/claude-code-tool-fix-20260921`. Every
+advertised row was driven through the router with a synthetic marker file
+unique to that row, connector MCP servers excluded with `--strict-mcp-config`
+so the request stayed at the client's own 29-tool set. The sweep is one Read
+round trip per row and a row is never retried.
+
+Installed `0.6.102.95`: 16 of 18 rows completed the round trip. Two did not.
+
+- `anthropic/claude-fable-5.1` refused every turn. The cause is the first
+  `system` block Claude Code sends, whose text is the client's own
+  `x-anthropic-billing-header: cc_version=2.1.223.aeb; cc_entrypoint=sdk-cli;`
+  line. OpenRouter answers that text with HTTP 400 `invalid_request`, which
+  the router reports as `PROVIDER_REJECTED` after about 208 s. Bisected
+  against the live router: replacing the block's text, or removing `system`
+  altogether, returns 200, while removing `tools`, `thinking`,
+  `output_config`, `context_management`, `metadata` or `cache_control` does
+  not. 35 identical rejections, and a minimal Messages request to the same
+  slug returns 200, so neither the row nor the tool set is at fault. The
+  other Anthropic rows accept the same shape.
+- `google/gemini-3.8-flash` completed its tool call and returned no visible
+  text, twice. Captured through a loopback tee: the upstream did send the
+  marker, but opened the trailing signature-only `thinking` block before
+  closing the text block, and Claude Code discarded the answer. Replaying the
+  captured stream reproduced it, reordering the frames did not fix it, and
+  dropping that one block made the client render the text.
+
+Candidate `0.6.103` repairs both on the external Messages route, leaving the
+subscription route byte-identical. The same sweep completed 18 of 18 rows, and
+subscription `sonnet` passed. `tools/probe_claude_code.py` performs the sweep
+and was used against an isolated candidate home; no installed-client settings
+were changed.
+
+Scope: this is one tool (`Read`) and one round-trip shape per row. It does not
+exercise every Claude Code tool, connector MCP servers, or multi-turn tool
+loops, and it does not read served model identity. `deepseek/deepseek-v4-pro-0813`
+exceeded the probe's 180 s first-run budget and passed on retry; the shipped
+probe allows 300 s per row.
+
+A row passes when the marker comes back in the answer rather than only when it
+is the whole answer. The first shipped probe compared the two for equality and
+reported `google/gemini-3.1-pro-preview` as a failure on the `0.6.103.96` build
+with the answer `The contents of probe.txt are:\nSCGCC_68F0438A`, which is a
+finished turn that narrates the file rather than a fault; the same row echoed
+the marker exactly on the candidate sweep. That strict rule is the same
+confound this file already records for that row on 2026-09-15, and
+`tools/probe_claude_code.py` now uses containment, matching the other probes.
+
+## Client chooser, 21 September 2026 AEST
+
+Router local candidate `0.6.101.1` built from tree
+`e1fda43574c025f0c5465ee7d1783cf055b86bab` (local only; no feed or tag).
+Claude desktop `2.2553.1`. Live acceptance ran the real installer with the
+generated native dialogs: a Both to Both upgrade returned rc 0, preserved all
+four client config hashes and all three connections, served health at
+`0.6.101.1`, and matched all 216 installed manifest files; a same-version
+`--choose-clients` rerun returned rc 0 with settings, receipts and state
+unchanged apart from served-listing metadata; and an installed
+`--choose-clients` run with Cancel returned rc 0 with settings, receipts and
+state byte-identical. Only the dialog process was hosted in a small native
+applet, because the automation cannot target a bare `osascript` process; the
+generated dialog code and the installer were unchanged. An earlier live repro
+in this slice proved `--choose-clients` was unreachable on a current install,
+now fixed and covered by a do_install-level test.
+
+## Client choice on all four surfaces, 21 September 2026 AEST
+
+Router local candidate `0.6.100.1` (one-shot local feed, not published);
+Codex desktop `26.915.31945` with `codex-cli 0.153.1`; Claude Code `2.1.223`.
+
+The same-version attach landed: on an install already at the feed's version,
+`packaging/install.py --clients claude` used to print `up to date` and stop
+before the client stage, so an explicit attachment request silently did
+nothing. It now attaches through the same owned paths as a fresh install, and
+`--clients none --desktop` attaches the Claude desktop profile alone without
+detaching anything. After the attach, `--status` read back
+`clients: claude, claude-desktop, codex`, and the terminal client's settings
+file gained only the two owned env keys.
+
+Claude Code CLI was then driven through the router twice with a synthetic
+`probe.txt` marker (`SCG_CLI_OK`), connector MCP servers excluded with
+`--strict-mcp-config` so the request stayed at the client's own tool set.
+Both legs returned the exact marker in two turns: `deepseek/deepseek-v4.1-flash`
+on OpenRouter billing, and `claude-sonnet-4-6` on the subscription, which also
+closes Plan 115's open subscription-side leg. The router log recorded four
+streamed `/v1/messages` requests, all 200, two per provider, with no retries.
+
+Codex was checked on both routes with `tools/probe_codex_runtime.py` at low
+effort: `z-ai/glm-5.3-flash` through a scrubbed `--codex-home` and
+`gpt-5.6-luna` on the live home both passed the dynamic-tool round trip
+(`userMessage`, `dynamicToolCall`, `agentMessage`). The live home's catalogue
+served 25 rows to that probe, so the Codex desktop picker and the Codex CLI
+share one routed catalogue. The Claude desktop app's marker proof below
+(`SCG_CLAUDE_APP_OK`, 18 rows, app `2.2553.1`) stands for the fourth surface.
+## Claude desktop switching, 21 September 2026 AEST
+
+Claude desktop `2.2553.1`, local router candidate `0.6.100.1`. An update
+through the one-shot local feed installed **Switch Claude** automatically
+for the existing desktop attachment, without passing `--desktop`.
+
+The installed shortcut completed a gateway to subscription to gateway
+round trip. The subscription profile opened signed in with its existing
+projects and conversations. Back in the gateway profile, the previous
+synthetic task still contained `SCG_CLAUDE_APP_OK`, and the picker showed
+all 18 OpenRouter models.
+
+Current-version setup with `--desktop` was repeated while subscription
+mode was selected. The selection and original desktop attachment receipt
+were retained. Codex configuration, Claude Code CLI settings and the
+gateway entry matched their pre-update fingerprints. No additional model
+calls were needed; the preceding desktop tool proof remains applicable.
+This verifies macOS locally; the candidate has not been published to the fleet.
+
+## Claude desktop picker, 21 September 2026 AEST
+
+Claude desktop `2.2553.1`; standalone Claude Code `2.1.223`.
+The installed router `0.6.98.93` advertised 18 OpenRouter models, but the
+desktop picker showed six. The app rejected IDs containing non-Anthropic
+vendor words even with a valid family tier. Candidate discovery IDs restored
+all 18 visible entries, with their real names and billing labels intact.
+
+Local candidate `0.6.99.1` was then installed through the one-shot local feed.
+The normal router connection returned all 18 entries, and the reopened app
+showed all 18 in its picker. **Check again** cleared a cached connection
+timeout after restart. Native desktop and terminal configuration fingerprints
+were unchanged. This candidate is installed locally, not published to the fleet.
+
+A synthetic local Code task selected DeepSeek V4.1 Flash, read `probe.txt`,
+and returned its exact `SCG_CLAUDE_APP_OK` contents. The bounded local probe
+allowed four Messages requests, at most 2,048 output tokens and 256 KiB of
+input per request, with no retries. All four allowed requests returned 200;
+stream metadata reported `deepseek/deepseek-v4.1-flash`. A startup Haiku
+connection check was refused by this deliberately single-model probe.
+The app exposes no effort selector for these gateway rows, so no specific
+effort is claimed. Picker visibility does not prove every model's tool support.
+
+## Muse fresh tasks, 20 September 2026 AEST
+
+Client: Codex desktop `26.915.31945` (9922), bundled runtime
+`0.155.0-alpha.9.2`; Claude Code `2.1.223`. Candidate `0.6.98.2` was
+installed on the owner Mac through the supported one-shot local-feed
+installer. It is a local candidate, not a published beta.
+
+The deployed `0.6.97.92` reproduced an unnamed Meta 400 on a fresh
+Contributor subagent. Both the original dispatch and its annotation-stripped
+retry failed. Controlled comparisons of the desktop request in memory
+isolated `access_programs`: essential fields with all 51 tools passed,
+`tool_choice` and `parallel_tool_calls` passed, and adding that field alone
+failed. See [the boundary fix and retry evidence](muse-first-turn.md).
+
+Candidate acceptance used the actual desktop and fresh subagents:
+
+| Model, requested effort | Three consecutive fresh-task completions | Tool continuation |
+| --- | --- | --- |
+| `meta/muse-spark-1.3-contributor`, low | Desktop time lookup; fresh child version read; synthetic review returning `REVIEW_PASS` | Passed in desktop and child |
+| `meta/muse-spark-1.3`, low | Fresh child version read; synthetic review returning `REVIEW_PASS`; greeting returning `HI_MUSE_OK` | Passed in child and runtime probe |
+
+The router reported each requested Muse identity and Meta as the serving
+endpoint. No model fallback counted toward acceptance. An earlier standard
+Muse clock-task prompt named an unavailable tool: the model completed with
+an honest inability report, which was not counted as semantic acceptance.
+
+`tools/probe_codex_runtime.py` also passed its exact synthetic dynamic-tool
+round trip on standard Muse and subscription `gpt-5.6-luna`, both at low
+effort with this installed runtime. Real Claude Code sessions returned the
+exact `CLAUDE_ROUTE_OK` marker through the external DeepSeek Flash route and
+the subscription route, with tools, hooks, MCP and persistence disabled.
+Requested subscription alias `sonnet` was reported as `claude-opus-4-6`;
+no exact Sonnet identity claim is made. External usage included
+`deepseek/deepseek-v4.1-flash`. These Claude checks establish routing, not
+a Claude tool round trip.
+
+Diagnostic and acceptance calls are capped separately from the required
+pre-commit reviews. The original 40-attempt allowance was consumed by
+diagnosis and candidate/client acceptance; further installed-release probes
+require the requested cap extension. Input and output limits remain three
+million and 160,000 tokens. Published-release and post-update acceptance
+are still pending at this source checkpoint.
+
 ## TypeSafe Jev decisions probe, 2026-09-18
 
 `typesafe/jev-1.13` answers with typed decisions rather than chat text: the
@@ -642,7 +852,7 @@ Per-model quirks, generated from the registry:
 | openai/gpt-5.6-terra | text,image | native | None | - | verified |
 | openai/gpt-6-astra | text,image | native | None | - | verified |
 | qwen/qwen3.8-max-0902 | text,image | native | None | - | verified |
-| x-ai/grok-4.6 | text,image | json_text_root | 350 | - | verified |
+| x-ai/grok-4.7 | text,image | json_text_root | 350 | - | verified |
 | z-ai/glm-5.3-flash | text,image | native | 128 | - | verified |
 | z-ai/glm-5.3 | text | native | 128 | - | verified |
 
@@ -652,7 +862,7 @@ more declared tools degrade the way the Grok row does instead of failing
 upstream.
 
 Text-only rows (`deepseek/deepseek-v4-pro-0813`, `z-ai/glm-5.3`) and the
-`drop_images` row (`x-ai/grok-4.6`) replace images on the wire with
+`drop_images` row (`x-ai/grok-4.7`) replace images on the wire with
 `ERROR: Cannot read image (this model does not support image input). Inform the user.`
 instead of refusing the thread (router 0.6.67). The model is expected to
 say that in the conversation; the turn continues.

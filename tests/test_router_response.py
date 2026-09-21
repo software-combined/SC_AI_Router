@@ -74,14 +74,15 @@ class RouterResponseTests(unittest.TestCase):
         # Upstream names a different id; the router re-pins the header to
         # the requested model, so the pair must stay different.
         install_fake(self, lambda: FakeUpstream(200, b'{"output": []}', [
-            ('Content-Type', 'application/json'), ('openai-model', 'x-ai/grok-4.7')]))
+            ('Content-Type', 'application/json'),
+            ('openai-model', 'x-ai/grok-4.7-20260916')]))
         server = self._server()
         response = _post(server.server_port, '/test-token/responses',
-            {'model': 'x-ai/grok-4.6', 'input': [],
+            {'model': 'x-ai/grok-4.7', 'input': [],
              'tools': [{'type': 'custom', 'name': 'exec'}]})
         self.assertEqual(response.status, 200)
         response.read()
-        self.assertEqual(response.getheader('openai-model'), 'x-ai/grok-4.6')
+        self.assertEqual(response.getheader('openai-model'), 'x-ai/grok-4.7')
 
     def test_subscription_required_classification_is_type_based(self):
         # Plan 126: the raise sites and the mapper agree on the exception
