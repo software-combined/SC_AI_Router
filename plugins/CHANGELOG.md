@@ -16,6 +16,35 @@
   numbers were measured on Grok 4.6 and are unmeasured for 4.7. No local paid
   evaluation was run for this refresh.
 
+## scg-review 0.4.12 — 2026-09-22
+
+- Run the configured Gitleaks scanner on native Windows. `load_gitleaks_pin`
+  accepts a platform-native absolute binary path instead of requiring a leading
+  `/`, and the scan passes `os.devnull` rather than the literal `/dev/null`.
+  Verified against the official `gitleaks_8.30.1_windows_x64.zip` release asset
+  (ZIP SHA-256
+  `d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e`; extracted
+  `gitleaks.exe` SHA-256
+  `17157e2ee8b76fc8b1d8bee607a250e34b8a8023c8bc81822d4b5ee4d78fcb7c`;
+  `gitleaks version` reports `8.30.1`). On native Windows,
+  `--gitleaks-ignore-path nul` loaded no ignore entries, raised no null-device
+  error, and left findings controlling the exit code; the repository's own
+  `.gitleaksignore` is still refused, so the override stays load-bearing.
+- The hook adapter's tests now execute in CI on `windows-latest` as well as
+  Linux. They ran in no job before. The Windows leg runs the new portability
+  module, because the pre-existing end-to-end tests drive a `/bin/sh` scanner
+  stub and override `HOME`, which `Path.home()` ignores on Windows.
+- Refresh the installed hook adapter on macOS/Linux before the next review.
+  `setup.py check` compares the installed helper with the bundled bytes and
+  refuses a mismatch, so replace only
+  `~/.config/scg-agent-git-hooks/lib/scg_agent_git_hooks.py` with the bundled
+  `support/git-hooks/lib/scg_agent_git_hooks.py`, keep `config.json`, the hooks
+  and the review receipts as they are, then re-run `setup.py check` and confirm
+  it passes. See `references/setup.md`.
+- Scanner support only. `setup.py` provisioning, Git hook installation,
+  approval-receipt enforcement and the static `required_lanes` lane set remain
+  unimplemented on Windows, and `bin/scg-review-state` stays a Bash shim.
+
 ## scg-review 0.4.11 — 2026-09-18
 
 - Run the required verification commands once, in the main agent, on the
