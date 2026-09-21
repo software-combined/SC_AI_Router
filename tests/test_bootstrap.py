@@ -120,7 +120,7 @@ class BootstrapTests(unittest.TestCase):
         return proc, home, Path(env['CURL_ARGV_LOG'])
 
     def _full_run(self, tmp, channel, installer_exit=0, land=True, path=None,
-                  sha=None):
+                  sha=None, choose=False):
         """Serve every download so the bootstrap reaches install.py."""
         home = Path(tmp) / 'home'
         serve = Path(tmp) / 'serve'
@@ -149,11 +149,11 @@ class BootstrapTests(unittest.TestCase):
                 'sha256': sha or hashlib.sha256(
                     (serve / 'mirror.bin').read_bytes()).hexdigest(),
                 'exec': 'python/bin/python3.14'}}}))
-        proc = subprocess.run(
-            ['sh', str(_ROOT / 'packaging' / 'bootstrap.sh'),
-             '--channel=' + channel],
-            env=self._env(tmp, 'full', serve=serve, path=path),
-            capture_output=True, text=True)
+        argv = ['sh', str(_ROOT / 'packaging' / 'bootstrap.sh'), '--channel=' + channel]
+        if choose:
+            argv.append('--choose-clients')
+        proc = subprocess.run(argv, env=self._env(tmp, 'full', serve=serve, path=path),
+                              capture_output=True, text=True)
         return proc, home
 
     def test_failed_fetch_leaves_existing_files_alone(self):
@@ -292,6 +292,18 @@ class BootstrapTests(unittest.TestCase):
             log = argv_log.read_text()
             self.assertIn('cpython-3.14.7%2B20260814', log)
             self.assertNotIn('+20260814', log)
+
+    def test_choose_clients_reaches_both_bootstraps(self):
+        # Without the flag an existing beta host cannot reach the chooser.
+        script = (_ROOT / 'packaging' / 'bootstrap.ps1').read_text()
+        self.assertIn('[switch]$ChooseClients', script)
+        self.assertIn("'--choose-clients'", script)
+        for choose, expected in ((False, False), (True, True)):
+            with self.subTest(choose=choose), tempfile.TemporaryDirectory() as tmp:
+                proc, home = self._full_run(tmp, 'stable', choose=choose)
+                argv = json.loads((home / 'installer-argv.txt').read_text())
+                self.assertEqual(('--choose-clients' in argv, proc.returncode),
+                                 (expected, 0))
 
 
 if __name__ == '__main__':

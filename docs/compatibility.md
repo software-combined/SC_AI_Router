@@ -1,5 +1,51 @@
 # Compatibility
 
+## Client chooser, 21 September 2026 AEST
+
+Router local candidate `0.6.101.1` built from tree
+`e1fda43574c025f0c5465ee7d1783cf055b86bab` (local only; no feed or tag).
+Claude desktop `2.2553.1`. Live acceptance ran the real installer with the
+generated native dialogs: a Both to Both upgrade returned rc 0, preserved all
+four client config hashes and all three connections, served health at
+`0.6.101.1`, and matched all 216 installed manifest files; a same-version
+`--choose-clients` rerun returned rc 0 with settings, receipts and state
+unchanged apart from served-listing metadata; and an installed
+`--choose-clients` run with Cancel returned rc 0 with settings, receipts and
+state byte-identical. Only the dialog process was hosted in a small native
+applet, because the automation cannot target a bare `osascript` process; the
+generated dialog code and the installer were unchanged. An earlier live repro
+in this slice proved `--choose-clients` was unreachable on a current install,
+now fixed and covered by a do_install-level test.
+
+## Client choice on all four surfaces, 21 September 2026 AEST
+
+Router local candidate `0.6.100.1` (one-shot local feed, not published);
+Codex desktop `26.915.31945` with `codex-cli 0.153.1`; Claude Code `2.1.223`.
+
+The same-version attach landed: on an install already at the feed's version,
+`packaging/install.py --clients claude` used to print `up to date` and stop
+before the client stage, so an explicit attachment request silently did
+nothing. It now attaches through the same owned paths as a fresh install, and
+`--clients none --desktop` attaches the Claude desktop profile alone without
+detaching anything. After the attach, `--status` read back
+`clients: claude, claude-desktop, codex`, and the terminal client's settings
+file gained only the two owned env keys.
+
+Claude Code CLI was then driven through the router twice with a synthetic
+`probe.txt` marker (`SCG_CLI_OK`), connector MCP servers excluded with
+`--strict-mcp-config` so the request stayed at the client's own tool set.
+Both legs returned the exact marker in two turns: `deepseek/deepseek-v4.1-flash`
+on OpenRouter billing, and `claude-sonnet-4-6` on the subscription, which also
+closes Plan 115's open subscription-side leg. The router log recorded four
+streamed `/v1/messages` requests, all 200, two per provider, with no retries.
+
+Codex was checked on both routes with `tools/probe_codex_runtime.py` at low
+effort: `z-ai/glm-5.3-flash` through a scrubbed `--codex-home` and
+`gpt-5.6-luna` on the live home both passed the dynamic-tool round trip
+(`userMessage`, `dynamicToolCall`, `agentMessage`). The live home's catalogue
+served 25 rows to that probe, so the Codex desktop picker and the Codex CLI
+share one routed catalogue. The Claude desktop app's marker proof below
+(`SCG_CLAUDE_APP_OK`, 18 rows, app `2.2553.1`) stands for the fourth surface.
 ## Claude desktop switching, 21 September 2026 AEST
 
 Claude desktop `2.2553.1`, local router candidate `0.6.100.1`. An update
