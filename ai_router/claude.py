@@ -12,6 +12,7 @@ upstream with the client's own credentials, mirroring SubscriptionProvider:
 the router key never accompanies those requests and client credentials are
 never stored or logged.
 """
+import hashlib
 import json
 import sys
 
@@ -25,6 +26,7 @@ from .registry import by_slug, upstream_id_for
 # not silently become POST-routable.
 CLAUDE_POST_PATHS = frozenset({'/v1/messages', '/v1/messages/count_tokens'})
 CLAUDE_ALIAS_PREFIX = 'claude/'
+CLAUDE_ROUTE_PREFIX = 'claude/scg/'
 
 
 def claude_alias(slug):
@@ -36,13 +38,19 @@ def claude_alias(slug):
     bare = slug.removeprefix('~')
     if bare.startswith('anthropic/'):
         return bare  # already passes the client filter
-    return CLAUDE_ALIAS_PREFIX + bare
+    # Desktop 2.2553.1 rejects vendor words in IDs even with a family tier.
+    # Keep the actual vendor/model/billing name in display_name, not the ID.
+    return CLAUDE_ROUTE_PREFIX + hashlib.sha256(slug.encode()).hexdigest()
 
 
 def unalias(model):
     """Strip the discovery prefix back to the registry slug, tilde restored."""
     if not isinstance(model, str) or not model.startswith(CLAUDE_ALIAS_PREFIX):
         return model
+    if model.startswith(CLAUDE_ROUTE_PREFIX):
+        return next((entry.slug for entry in registry.MODELS
+                     if claude_alias(entry.slug) == model), model)
+    # Older discovery IDs remain valid for saved sessions and CLI commands.
     rest = model[len(CLAUDE_ALIAS_PREFIX):]
     for candidate in (rest, '~' + rest):
         if by_slug(candidate) is not None:
@@ -185,6 +193,8 @@ class ClaudeSubscriptionProvider:
 
 def select(model, path, openai_mode='subscription', anthropic_mode=None,
            region='global', allowed=None):
+    if isinstance(model, str) and model.startswith(CLAUDE_ROUTE_PREFIX) and resolve(model) == model:
+        raise UnknownModel(model, ())
     defn = row_def(model)
     if defn is not None and defn.kind == provider_defs.EXTERNAL:
         if not defn.serves(provider_defs.MESSAGES):
