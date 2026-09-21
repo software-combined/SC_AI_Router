@@ -138,6 +138,14 @@ The genuinely hard case is a client that speaks neither protocol: it needs a
 new adapter class behind the definition table, never a branch in the request
 path (`AGENTS.md` section 3).
 
+`packaging/claude_desktop_config.py` owns desktop attachment and its original
+restore snapshot. A matching owned attachment keeps the user's selected
+subscription or gateway mode on subsequent setup and update runs.
+`claude_desktop_switch.py` owns the macOS switch launcher and changes only
+that mode after Claude exits normally; it never changes attachment or
+credentials. Its stable `claude_switch_launch.py` entry point follows the
+installed release pointer so the app survives updates and release pruning.
+
 ## Distribution (outside the request path)
 
 `infra/` owns the update feed as code (repository-only templates, deployed from a checkout): the certificate stack, the private

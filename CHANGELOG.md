@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Claude desktop setup on macOS installs **Switch Claude**, a shortcut for
+  switching between your Claude subscription and OpenRouter without signing
+  out. Each profile keeps its conversations. Setup and router updates preserve
+  your selection and refresh the shortcut automatically.
+
+## 0.6.99
+
 - Claude desktop shows the full approved OpenRouter roster again. Stable
   router IDs avoid the app's model-name filter while the picker keeps each
   real vendor, model and billing label. Existing session IDs still route.
