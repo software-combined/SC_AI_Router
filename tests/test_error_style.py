@@ -52,7 +52,7 @@ def _dynamic_text():
              '[invalid_client_tool_schema] probe__echo: root must be an object type"}')
     rejected = json.dumps({'error': {'message': 'Provider returned error',
                                      'metadata': {'raw': inner, 'provider_name': 'xAI'}}}).encode()
-    info = {'model': 'x-ai/grok-4.6', 'provider': 'openrouter', 'protocol': 'responses',
+    info = {'model': 'x-ai/grok-4.7', 'provider': 'openrouter', 'protocol': 'responses',
             'elapsed_ms': 1831.8, 'timeout_s': 120, 'has_image': False}
     texts = [upstream.describe_failure(None, {'status': 502, 'body': b'{}'}, info)[1],
              upstream.describe_failure(None, {'status': 400, 'body': rejected}, info)[1],
@@ -147,10 +147,10 @@ class RefusalLogTests(unittest.TestCase):
         server = self._server()
         with mock.patch('ai_router.router.log_event') as log:
             response = _post(server.server_port, '/test-token/responses',
-                             {'model': 'x-ai/grok-4.6', 'input': []})
+                             {'model': 'x-ai/grok-4.7', 'input': []})
             message = json.loads(response.read())['error']['message']
         self.assertEqual(response.status, 400)
-        self.assertIn('x-ai/grok-4.6', message)
+        self.assertIn('x-ai/grok-4.7', message)
         for leaked in ('xAI', 'probe__echo', 'invalid_request'):
             self.assertNotIn(leaked, message)
         rejected = next(c.kwargs for c in log.call_args_list

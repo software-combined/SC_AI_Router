@@ -32,13 +32,19 @@ _429_AUTH_CODES = frozenset((
     'authentication_error'))
 
 
-def _429_codes(body):
-    """Structured 429 codes from the error envelope; never message prose."""
+def parse_payload(body):
+    """The parsed JSON object, or None for an unparseable or non-object body."""
     try:
         payload = json.loads(body.decode() if isinstance(body, bytes) else body)
-    except (ValueError, UnicodeDecodeError, AttributeError):
-        return ()
-    if not isinstance(payload, dict) or not isinstance(payload.get('error'), dict):
+    except (ValueError, TypeError, UnicodeDecodeError, AttributeError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _429_codes(body):
+    """Structured 429 codes from the error envelope; never message prose."""
+    payload = parse_payload(body)
+    if payload is None or not isinstance(payload.get('error'), dict):
         return ()
     error = payload['error']
     codes = [error.get('code'), error.get('type'), error.get('error_type')]
@@ -76,20 +82,16 @@ def upstream_retry_after(response, prepared, metrics, body):
 
 _CODE_SHAPE = re.compile(r'^[A-Za-z0-9_.-]{1,40}$')
 
-# Serving-endpoint slugs observed in `openrouter_metadata` (router-metadata
-# guide and the OpenAPI `OpenRouterMetadata`/`EndpointInfo`/`RouterAttempt`
-# schemas, read 2026-09-14):
-# `endpoints.available[]` entries carry `provider` with a `selected` flag,
-# and `attempts[]` entries carry `provider`. Slashes allow `vendor/slug`
-# shapes; the bound keeps prose out of the log.
+# Serving-endpoint slugs: `endpoints.available[]`/`attempts[]` carry
+# `provider`; `error.metadata.provider_name` too. Slashes allow
+# `vendor/slug`; the bound keeps prose out of the log.
 _ENDPOINT_SHAPE = re.compile(r'^[A-Za-z0-9_.\-/]{1,64}$')
 
 
 def _bounded_endpoint(value):
     if isinstance(value, bool) or not isinstance(value, str):
         return None
-    text = value.strip()
-    return text if _ENDPOINT_SHAPE.match(text) else None
+    return value.strip() if _ENDPOINT_SHAPE.match(value.strip()) else None
 
 
 _PARAM_SHAPE = re.compile(
@@ -101,11 +103,10 @@ _PARAM_SHAPE = re.compile(
 def rejection_parameter(body):
     """Only allowlisted schema paths, never arbitrary property names or prose."""
     for _ in range(2):  # Direct error or the provider's nested raw envelope.
-        try:
-            payload = json.loads(body)
-        except (ValueError, TypeError):
+        payload = parse_payload(body)
+        if payload is None:
             return None
-        error = payload.get('error') if isinstance(payload, dict) else None
+        error = payload.get('error')
         if not isinstance(error, dict):
             return None
         param = error.get('param')
@@ -124,6 +125,12 @@ def rejection_tool(body, dialect=None):
     """
     parsed = _provider_reason(body, dialect)
     return parsed[2] if parsed is not None else None
+
+
+def rejection_reason(body, dialect=None):
+    """The fixed category wording, or None when the body names no cause."""
+    parsed = _provider_reason(body, dialect)
+    return parsed[1] if parsed is not None else None
 
 
 def _error_code(error, inner_error):
@@ -148,21 +155,12 @@ def _error_code(error, inner_error):
 def serving_endpoint(body):
     """Bounded serving-endpoint slug from a response body, else None.
 
-    Reads, in order, the selected entry of
-    `openrouter_metadata.endpoints.available[]`, the `provider` of each
-    `openrouter_metadata.attempts[]` entry, then
-    `error.metadata.provider_name`. Only code-shaped slugs leave this
-    function; anything else yields None. Accepts a body, a parsed payload,
-    or a terminal event dict.
+    Reads the selected `endpoints.available[]` entry, then each
+    `attempts[]` provider, then `error.metadata.provider_name`. Only
+    code-shaped slugs leave this function; anything else yields None.
     """
-    if isinstance(body, dict):
-        payload = body
-    else:
-        try:
-            payload = json.loads(body.decode() if isinstance(body, bytes) else body)
-        except (ValueError, TypeError, UnicodeDecodeError, AttributeError):
-            return None
-    if not isinstance(payload, dict):
+    payload = body if isinstance(body, dict) else parse_payload(body)
+    if payload is None:
         return None
     value = metadata_endpoint(payload, _bounded_endpoint)
     if value:
@@ -189,11 +187,8 @@ def _provider_reason(body, dialect=None):
     OpenAI-compatible body carries `error.message` directly. Every other
     dialect keeps the metadata reader, so the built-in paths are unchanged.
     """
-    try:
-        payload = json.loads(body.decode() if isinstance(body, bytes) else body)
-    except (ValueError, UnicodeDecodeError, AttributeError):
-        return None
-    if not isinstance(payload, dict):
+    payload = parse_payload(body)
+    if payload is None:
         return None
     error = payload.get('error')
     if not isinstance(error, dict):
@@ -312,11 +307,8 @@ def describe_failure(exc, response, info):
 
     Pure: no reads, no logging, no clock. `response` is a snapshot
     {'status': int, 'body': bytes} or None when headers never arrived.
-    Unknown shapes return None so the caller keeps existing behavior. The
-    switch-back recovery joins the message only for a routed turn
-    (`info['routed']`), where a mid-thread model swap is the likely cause.
-    Provider detail - status, provider, code, tool, field, elapsed time -
-    never reaches this sentence; the caller's log line is where it lives.
+    Unknown shapes return None so the caller keeps existing behavior.
+    Provider detail never reaches this sentence; the log line owns it.
     """
     model = info.get('model', 'the model')
     dialect = info.get('dialect')
@@ -336,14 +328,21 @@ def describe_failure(exc, response, info):
         parsed = _provider_reason(response.get('body', b''), dialect)
         if parsed is None:
             return None
-        _, reason, _, code = parsed
-        message = f'{model} refused this request: {reason}. '
+        _, reason, tool, code = parsed
+        context = is_context_error(response.get('body', b''))
+        unnamed = (code is None and tool is None
+                   and reason == 'the request was rejected'
+                   and rejection_parameter(response.get('body', b'')) is None
+                   and info.get('protocol') == provider_defs.RESPONSES
+                   and not context)
+        message = (f'{model} was rejected by the provider without naming a cause. '
+                   if unnamed else f'{model} refused this request: {reason}. ')
         if info.get('routed'):
             message += ('Switch this thread back to the previous model, '
                         f'or start a new thread for {model}. ')
-        message += 'Do not retry it unchanged'
-        if (info.get('protocol') == provider_defs.RESPONSES
-                and not is_context_error(response.get('body', b''))):
+        if not unnamed:
+            message += 'Do not retry it unchanged'
+        if info.get('protocol') == provider_defs.RESPONSES and not context:
             return 400, message, code
         return 409, message, code
     if isinstance(exc, TimeoutError):

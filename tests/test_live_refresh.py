@@ -53,7 +53,7 @@ class LiveRefreshTests(unittest.TestCase):
         self.assertEqual(derived['reasoning'], ['low', 'high', 'max'])
 
     def test_alias_row_keeps_tracking_name_despite_snapshot_target(self):
-        live = _live(alias_target={'name': 'SpaceXAI: Grok 4.6', 'slug': 'x-ai/grok-4.6'})
+        live = _live(alias_target={'name': 'SpaceXAI: Grok 4.7', 'slug': 'x-ai/grok-4.7'})
         row = _row(slug='~x-ai/grok-latest',
                    display_name='SpaceXAI: Grok Latest \xb7 OpenRouter')
         self.assertEqual(derive(row, live)['display_name'],
@@ -89,8 +89,8 @@ class LiveRefreshTests(unittest.TestCase):
         row = _row(slug='~x-ai/grok-latest', provider='openrouter',
                    vendor='SpaceXAI', tier='verified', priority=101,
                    display_name='SpaceXAI: Grok Latest \xb7 OpenRouter')
-        live = _live(alias_target={'name': 'SpaceXAI: Grok 4.6',
-                                   'slug': 'x-ai/grok-4.6'})
+        live = _live(alias_target={'name': 'SpaceXAI: Grok 4.7',
+                                   'slug': 'x-ai/grok-4.7'})
         out = refresh([row], {'~x-ai/grok-latest': live})
         self.assertEqual(out[0]['slug'], '~x-ai/grok-latest')
         self.assertEqual(out[0]['provider'], 'openrouter')

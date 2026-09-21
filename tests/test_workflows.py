@@ -98,12 +98,23 @@ class InstallerCiGateTests(unittest.TestCase):
 
     def test_the_test_gate_waits_for_every_installer_job(self):
         self.assertIn(
-            'needs: [changes, installer-macos, installer-windows, installer-python39]',
+            'needs: [changes, installer-macos, installer-windows, installer-python39, hook-adapter]',
             self.CHECK)
         self.assertIn('if: ${{ !cancelled() }}', self.CHECK)
         self.assertIn(
             "contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')",
             self.CHECK)
+
+    def test_the_hook_adapter_tests_run_on_windows_and_posix(self):
+        # Plan 156's lesson: a green required check that never executes the
+        # tests is worse than no check. Pin the wiring, not just the file.
+        # Scope the assertions to this job: plugin-schedulers carries the same
+        # matrix string, so an unscoped assertIn would stay green even if this
+        # job's matrix were narrowed to one runner.
+        self.assertIn('hook-adapter:', self.CHECK)
+        job = self.CHECK.split('hook-adapter:', 1)[1]
+        self.assertIn('os: [ubuntu-latest, windows-latest]', job)
+        self.assertIn('support/git-hooks/tests', job)
 
     @unittest.skipUnless(os.name == 'posix' and shutil.which('bash'),
                          'runs the workflow step through a POSIX shell with a '

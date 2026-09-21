@@ -95,10 +95,12 @@ one replaces the subscription credential the router forwards.
 | 503 with `Retry-After` | Not served: the router is draining for an update (`SERVER_DRAINING`) or mapped an upstream 429 (`UPSTREAM_RATE_LIMITED`); retry after the delay. A refused subscription turn names the model and the subscription: retry shortly, or select a routed model |
 
 `BODY_TOO_LARGE` (`400`) means the turn itself outgrew the router: the
-expanded request passed 16 MiB. From 0.6.84 to 0.6.86 a long search-heavy
-thread is read, trimmed and served instead, and its carried size is reported
-on turns that carry tools - Codex's own turns always do - so it compacts at
-90% of the model's window. If it still happens, compact
+expanded request passed 16 MiB, or a compressed body past that cap was read to
+the decode ceiling and still did not fit (0.6.96: a body compressed past the
+cap used to answer `INVALID_REQUEST_SIZE` before it was read). From 0.6.84 to
+0.6.86 a long search-heavy thread is read, trimmed and served instead, and its
+carried size is reported on turns that carry tools - Codex's own turns always
+do - so it compacts at 90% of the model's window. If it still happens, compact
 the thread (`/compact` in the client) or start a new one against the same
 working tree; the work on disk is untouched. `logs/router.jsonl` names what the
 turn carried in one `turn_refused` line, and one `turn_trimmed` line says what

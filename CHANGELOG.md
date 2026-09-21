@@ -1,5 +1,153 @@
 # Changelog
 
+## Unreleased
+
+## 0.6.106
+
+- The picker pins Grok 4.7. Upstream moved while the roster pinned 4.6, and
+  the router does not follow upstream movement on its own, so the pinned id
+  was replaced and `x-ai/grok-4.6` joined `RETIRED_SLUGS`: an upgrade drops
+  the superseded pin instead of offering it beside the new one. The new row
+  keeps the family's adapter quirks (`json_text_root` tool schemas, the
+  350-tool ceiling, and text-only image turns) and was proved rather than
+  inherited, with an isolated-router round trip on tool, stream and
+  compaction. Image turns were re-tested with the quirk cleared and the
+  upstream still refuses them, so the text-only treatment stays.
+- A `drop_images` row no longer implies an image probe leg. The media leg
+  asserts the model saw the attached image, so a row that replaces images
+  with a note by design could never pass it, which left the documented probe
+  path unusable for that shape. The row's other legs are unchanged.
+
+## 0.6.105
+
+- `--desktop` finds the Claude desktop app on every platform it ships for,
+  instead of only on macOS. The third-party profile was resolved as
+  `~/Library/Application Support/Claude-3p` unconditionally, so on Windows and
+  Linux the installer looked in a directory that does not exist there and
+  attaching the desktop app silently did nothing. The profile now resolves the
+  way the app's Electron build does: Application Support on macOS, the roaming
+  AppData directory on Windows, and `XDG_CONFIG_HOME` with a `~/.config`
+  fallback on Linux. `CLAUDE_USER_DATA_DIR` still overrides all three.
+- Switch Claude is still macOS-only. Its dialog, app restart and shortcut are
+  built against macOS, so the desktop app on Windows and Linux can be attached
+  but not switched from the shortcut yet.
+
+## 0.6.104
+
+- The README beside the router home is now the one that belongs to the
+  installed release. A host that kept whatever page its first install wrote
+  went on describing a router it no longer ran: the copy on this machine still
+  said "only the six configured OpenRouter models" and never mentioned Claude
+  Code or the client chooser, so anyone reading their own install was pointed
+  at a product two months old. The home files step now refreshes it from the
+  release on every install, update and rollback, so the page tracks the release
+  being applied instead of whatever the first install wrote. A failed health
+  check restores the previous release and leaves the newer page in place until
+  the next successful install or update, and a release that predates the
+  bundled page leaves the existing copy alone: this page is documentation, and
+  it never fails an install or a rollback.
+
+- `tools/probe_claude_code.py` accepts a row whose answer contains the
+  synthetic marker rather than only one that is exactly the marker. Some rows
+  narrate the file they read, and the strict comparison reported
+  `google/gemini-3.1-pro-preview` as a failure on a working turn. An empty or
+  refused turn still fails, and the acceptance rule now has an offline test.
+
+## 0.6.103
+
+- Claude Code can finish a turn on every routed model it is offered. Two
+  shapes the client cannot survive are now repaired on the external Messages
+  route, and only there. The `system` block carrying the client's own
+  `x-anthropic-billing-header` line is dropped, because it made
+  `anthropic/claude-fable-5.1` refuse every turn with HTTP 400 before the
+  model was ever reached; the line only matters to Anthropic's billing, which
+  this route does not use. A thinking block that arrives with a signature but
+  no thinking is dropped from the stream, because
+  `google/gemini-3.8-flash` returns one after a tool result and Claude Code
+  discarded the whole reply as a result, showing an empty answer. A live sweep
+  of Claude Code `2.1.223` through the router now completes a Read-tool round
+  trip on 18 of 18 advertised rows, up from 16, and the subscription route is
+  untouched. `tools/probe_claude_code.py` reproduces the sweep on demand.
+
+## 0.6.102
+
+- `--setup` repairs a host whose activation receipt is unreadable again. The
+  chooser's "already attached" check read the receipt eagerly and crashed on
+  corrupt JSON before the repair path could run; that check now reads it
+  tolerantly, treating a receipt it cannot parse or open as attached, so the
+  repair runs and the chooser never prompts on top of state it cannot read.
+- The existing-beta instructions show `--channel=beta` for the bootstrap
+  chooser command, since the chooser ships on the beta channel.
+
+## 0.6.101
+
+- The installer asks which assistant and where it is used (ChatGPT, the Claude
+  desktop app, Claude Code in the terminal, or both Claude surfaces) and
+  attaches only that. `--choose-clients` asks again on a machine that is
+  already attached, `--clients none --desktop` is the desktop app alone, and
+  attaching never detaches a client the answer did not name. Cancelling either
+  question attaches nothing and detaches nothing, and the distributed
+  bootstrap forwards `--choose-clients` so an installed host can reach it.
+- An explicit `--clients claude`, `--clients both` or `--clients codex` now
+  attaches on a machine that is already on the current version. It used to
+  print `up to date` and stop before the client stage, so the request silently
+  did nothing until the next release.
+
+## 0.6.100
+
+- Claude desktop setup on macOS installs **Switch Claude**, a shortcut for
+  switching between your Claude subscription and OpenRouter without signing
+  out. Each profile keeps its conversations. Setup and router updates preserve
+  your selection and refresh the shortcut automatically.
+
+## 0.6.99
+
+- Claude desktop shows the full approved OpenRouter roster again. Stable
+  router IDs avoid the app's model-name filter while the picker keeps each
+  real vendor, model and billing label. Existing session IDs still route.
+- Desktop attachment now works when the router is already up to date and
+  creates its configuration on first use, without a manual Developer-menu setup.
+
+## 0.6.98
+
+- Muse Spark 1.3 and Contributor no longer receive Codex's ChatGPT-specific
+  `access_programs` field. A controlled comparison of a failing desktop request
+  isolated that field as the trigger for Meta's unnamed 400 response. The
+  OpenAI subscription route retains it; model, effort and tools are unchanged.
+- Annotation retries now report eligibility, dispatch and the actual outcome
+  through content-free events. A failed retry follows the normal authentication,
+  credit, context and validation error handling instead of hiding behind the
+  original rejection.
+
+## 0.6.97
+
+- When an OpenRouter Responses turn is rejected without a named cause, the
+  router retries once with annotation-only
+  request fields (prompt cache options, client metadata, store, user and
+  similar) removed before treating the turn as refused. A refusal the router
+  cannot attribute is no longer described to the client as a model refusal.
+  This retry did not resolve every Muse first-turn rejection; see 0.6.98.
+
+## 0.6.96
+
+- Linux on arm64 is a first-class install target: the runtime lock now
+  pins the aarch64/glibc CPython build, so a Graviton host bootstraps
+  natively instead of being carried on x86_64. The bootstrap also verifies
+  archives with GNU `sha256sum` when a host has no `shasum`.
+- A compressed turn past the request cap is read and decided on its decoded
+  size instead of being refused as malformed. The 2026-09-18 thread
+  (01a0b155) carried ten attached images that compressed to 17.6 MB, and the
+  declared-size gate answered `INVALID_REQUEST_SIZE` before the body was
+  read: the person saw "Invalid request size" with no remedy, the trim that
+  could have served the turn never ran, and the log recorded a framing error
+  for a turn that was merely large. A zstd body is now read up to the decode
+  ceiling and takes the single oversized-read slot before that read, so one
+  oversized body is still the most in memory; the slot taker is idempotent
+  because the declared size and the decoded size both ask. A turn that still
+  does not fit answers `BODY_TOO_LARGE`, whose message and docs name the
+  remedy. Identity bodies keep today's answer: without zstd a declared size
+  past the ordinary cap is still a framing error.
+
 ## 0.6.95
 
 - Wide compactions now fit the request instead of refusing it. A real

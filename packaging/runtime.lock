@@ -39,6 +39,18 @@
       "licences": ["python/lib/python3.14/LICENSE.txt"]
     },
     {
+      "os": "linux",
+      "cpu": "arm64",
+      "libc": "glibc",
+      "triple": "cpython-3.14.7+20260814-aarch64-unknown-linux-gnu-install_only.tar.gz",
+      "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260814/cpython-3.14.7+20260814-aarch64-unknown-linux-gnu-install_only.tar.gz",
+      "mirror": "runtimes/cpython-3.14.7+20260814-aarch64-unknown-linux-gnu-install_only.tar.gz",
+      "format": "tar.gz",
+      "sha256": "5bad659dc6d686b430f60104d53abfecb1cd93de37b8aaa112f10f0cea2cb655",
+      "exec": "python/bin/python3.14",
+      "licences": ["python/lib/python3.14/LICENSE.txt"]
+    },
+    {
       "os": "windows",
       "cpu": "x86_64",
       "triple": "cpython-3.14.7+20260814-x86_64-pc-windows-msvc-install_only.tar.gz",

@@ -15,7 +15,8 @@ from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
-SUPPORTED = ('darwin/arm64', 'darwin/x86_64', 'linux/x86_64', 'windows/x86_64')
+SUPPORTED = ('darwin/arm64', 'darwin/x86_64', 'linux/arm64', 'linux/x86_64',
+             'windows/x86_64')
 
 
 def _load():

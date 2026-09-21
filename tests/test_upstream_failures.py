@@ -10,16 +10,16 @@ class FailureDescriptionTests(unittest.TestCase):
     def test_stall_before_headers_names_model_and_retry(self):
         status, message, _ = upstream.describe_failure(
             TimeoutError('timed out'), None,
-            {'model': 'x-ai/grok-4.6', 'provider': 'openrouter',
+            {'model': 'x-ai/grok-4.7', 'provider': 'openrouter',
              'elapsed_ms': 120001.0, 'timeout_s': 120, 'has_image': False})
         self.assertEqual(status, 502)
-        self.assertIn('x-ai/grok-4.6', message)
+        self.assertIn('x-ai/grok-4.7', message)
         self.assertIn('Retry a shorter turn', message)
         self.assertNotIn('120', message)
 
     def test_grok_image_stall_suggests_dropping_the_image(self):
         # The hint matches the pinned id and any tilde alias of the vendor.
-        for model in ('x-ai/grok-4.6', '~x-ai/grok-latest'):
+        for model in ('x-ai/grok-4.7', '~x-ai/grok-latest'):
             with self.subTest(model=model):
                 status, message, _ = upstream.describe_failure(
                     TimeoutError('timed out'), None,
@@ -51,10 +51,10 @@ class FailureDescriptionTests(unittest.TestCase):
                                      'metadata': {'raw': raw, 'provider_name': 'xAI'}}})
         status, message, _ = upstream.describe_failure(
             None, {'status': 400, 'body': body.encode()},
-            {'model': 'x-ai/grok-4.6', 'provider': 'openrouter', 'protocol': 'responses',
+            {'model': 'x-ai/grok-4.7', 'provider': 'openrouter', 'protocol': 'responses',
              'elapsed_ms': 1831.8, 'timeout_s': 120, 'has_image': False})
         self.assertEqual(status, 400)
-        self.assertIn('x-ai/grok-4.6', message)
+        self.assertIn('x-ai/grok-4.7', message)
         self.assertIn('tool schema was rejected', message)
         self.assertNotIn('xAI', message)
         self.assertNotIn('ns_abc123def456_tool_update', message)
@@ -71,11 +71,11 @@ class FailureDescriptionTests(unittest.TestCase):
              'elapsed_ms': 1500.0, 'timeout_s': 120, 'has_image': False, 'routed': True})
         self.assertEqual(status, 400)
         self.assertIsNone(code)
-        self.assertIn('the request was rejected', message)
+        self.assertIn('without naming a cause', message)
         self.assertIn('Switch this thread back to the previous model, '
                       'or start a new thread for meta/muse-spark-1.3-contributor',
                       message)
-        self.assertIn('Do not retry it unchanged', message)
+        self.assertNotIn('Do not retry it unchanged', message)
         self.assertNotIn('code ', message)
         self.assertNotIn('Provider returned error', message)
 

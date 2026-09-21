@@ -47,9 +47,9 @@ class StreamingIdentityTests(unittest.TestCase):
     def test_first_yield_precedes_full_consumption(self):
         events = (b'event: response.completed\n'
                   b'data: {"type": "response.completed", '
-                  b'"response": {"model": "x-ai/grok-4.6"}}\n\n')
+                  b'"response": {"model": "x-ai/grok-4.7"}}\n\n')
         bodies = {
-            'json': (b'{"id": "resp_1", "model": "x-ai/grok-4.6", "output": []}', []),
+            'json': (b'{"id": "resp_1", "model": "x-ai/grok-4.7", "output": []}', []),
             'gzip': (gzip.compress(events),
                      [('Content-Type', 'text/event-stream'), ('Content-Encoding', 'gzip')]),
             'zstd': (zstd.compress(events),
@@ -88,7 +88,7 @@ class StreamingIdentityTests(unittest.TestCase):
         self.assertEqual(first + rest, first_piece + second_piece)
 
     def test_oversized_json_disables_observation_not_forwarding(self):
-        big = b'{"model": "x-ai/grok-4.6", "output": ["' + b'x' * 70000 + b'"]}'
+        big = b'{"model": "x-ai/grok-4.7", "output": ["' + b'x' * 70000 + b'"]}'
         upstream = CountingUpstream(200, big, [])
         notes = {}
         out = b''.join(snoop_response_identity(upstream, notes))

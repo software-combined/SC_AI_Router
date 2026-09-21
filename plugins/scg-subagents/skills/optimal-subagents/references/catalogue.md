@@ -6,6 +6,11 @@ The router registry and active mixed catalogue were read locally. No paid local
 model evaluation completed: research subagents failed before inference. These
 recommendations are public-evidence priors, not measured local success rates.
 
+The Grok row was refreshed on 22 September 2026 from the live OpenRouter
+listing and [Artificial Analysis](https://artificialanalysis.ai/models/grok-4-7)
+(`grok-4-7`, `xhigh`) when the router roster moved to 4.7; every other row keeps
+its 2026-09-12 retrieval.
+
 Selection covers **22 distinct models**, with one prescribed effort each.
 The 26 visible catalogue entries include runtime aliases of the same GPT models;
 those aliases do not create different cost or quality tiers. Select the model
@@ -40,7 +45,7 @@ comparable price. Contributor permits prompts/outputs to improve Meta products p
 | `openai/gpt-5.6-terra` | `max` | 2 / 12 | General worker when suitable; often loses value to Sol at this snapshot. |
 | `openai/gpt-6-astra` | `max` | 10 / 50 | Strongest measured terminal score and WebDev ceiling here; use focused high-consequence reasoning, mindful of API price. |
 | `qwen/qwen3.8-max-0902` | `xhigh` | 2 / 6 | Exact Arena UI evidence, preliminary and overlapping Kimi/Opus intervals. AA undated row is a proxy and excluded from AA frontiers. |
-| `x-ai/grok-4.6` | `xhigh` | 2 / 6 | Automation/document alternative; no blanket cost advantage. Search capability requires tool/route verification. |
+| `x-ai/grok-4.7` | `xhigh` | 1.6 / 4.8 | Automation/document alternative; no blanket cost advantage. Search capability requires tool/route verification. |
 | `z-ai/glm-5.3-flash` | `max` | 0.075 / 0.25 | Lowest token-price general starting point; discounted rate, so refresh. Local task qualification still needed. |
 | `z-ai/glm-5.3` | `max` | 1.4 / 4.4 | Stronger terminal capability than Flash with much higher cost; useful targeted escalation. |
 | `gpt-5.5` | `xhigh` | 5 / 30 | Legacy compatibility/reproduction; no automatic advantage over newer models. |
@@ -76,6 +81,7 @@ v4.3 suite result; its absent cost/task already excludes it from that frontier.
 | [gpt-6-astra / max](https://artificialanalysis.ai/models/gpt-6-astra) | 52.81 | 3.26 | 59.09 | 68.49 | 31.00 | 80.67 | 1562.01 |
 | [PROXY qwen3.8-max-0902 / not specified](https://artificialanalysis.ai/models/qwen3-8-max) | 40.30 | 2.67 | 18.69 | 49.23 | 20.20 | 78.33 | 1387.89 |
 | [grok-4.6 / high](https://artificialanalysis.ai/models/grok-4-6) | 44.41 | 1.86 | 21.21 | 66.68 | 17.00 | 80.33 | 1534.13 |
+| [grok-4.7 / xhigh](https://artificialanalysis.ai/models/grok-4-7) | 46.45 | 3.74 | 25.76 | 65.56 | 20.00 | 76.67 | — |
 | [glm-5.3-flash / max](https://artificialanalysis.ai/models/glm-5-3-flash) | 41.91 | 0.25 | 32.83 | 60.37 | 15.40 | 80.00 | 1449.23 |
 | [glm-5.3 / max](https://artificialanalysis.ai/models/glm-5-3) | 44.86 | 2.01 | 41.92 | 62.20 | 11.20 | 79.67 | 1512.51 |
 | [muse-spark-1.3 / xhigh](https://artificialanalysis.ai/models/muse-spark-1-3-xhigh) | 45.16 | 1.37 | 16.67 | 56.84 | 24.20 | 83.00 | 1483.22 |
@@ -90,10 +96,13 @@ setting. Gemini uses `high`; Qwen 0902, Grok and Contributor use `xhigh`.
 
 The benchmark table retains measurements at other or unspecified efforts for
 transparency. They do not certify the prescribed configuration: in particular,
-Grok's AA/WebDev result is `high`, Qwen's WebDev effort is unspecified, and the
-Gemini Pro AA effort is unspecified. These are supporting evidence, excluded
-from the calculator's prescribed-effort frontiers. Standard Muse `xhigh` stays
-in the evidence but only `max` is selected.
+Qwen's WebDev effort is unspecified and the Gemini Pro AA effort is
+unspecified, so both stay supporting evidence excluded from the calculator's
+prescribed-effort frontiers. Grok is the exception: the 4.7 AA row is measured
+at the prescribed `xhigh`, so it is compared on the AA frontier instead of
+being excluded from it, and its Arena WebDev row has no 4.7 measurement yet.
+The `grok-4.6 / high` row is kept as the superseded version's measurement.
+Standard Muse `xhigh` stays in the evidence but only `max` is selected.
 
 The JSON also preserves SciCode, Omniscience, MMMU-Pro, Briefcase confidence
 intervals, cache pricing and source identity. Do not infer support from missing

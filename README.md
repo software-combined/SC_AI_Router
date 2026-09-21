@@ -8,7 +8,7 @@
 <h1 align="center">SC AI Router</h1>
 
 <p align="center">
-One local endpoint for Codex and Claude Code. All models from your ChatGPT, Claude and OpenRouter are side by side in the picker, subscription billing is kept separate.
+One local endpoint for Codex and Claude Code, with approved OpenRouter models in the picker and separate subscription billing.
 </p>
 
 <p align="center">
@@ -19,11 +19,11 @@ One local endpoint for Codex and Claude Code. All models from your ChatGPT, Clau
 </p>
 
 SC AI Router is a small service that runs on your own machine. It speaks the
-Codex and Claude Code wire protocols on a loopback port, so both clients see
-one model list: the models your existing ChatGPT or Claude sign-in already
-includes, plus approved models billed to an OpenRouter API key. You choose
-the model per turn from the client's normal picker and can switch
-mid-thread.
+Codex and Claude Code wire protocols on a loopback port. Codex and the
+Claude Code terminal client can use their subscription alongside approved
+models billed to an OpenRouter API key. Claude desktop uses a separate
+gateway profile with the approved OpenRouter models; its native subscription
+picker stays in the signed-in profile.
 
 The billing split is strict. Subscription models keep using the client's
 own sign-in, OpenRouter models use a key stored only on your machine, and
@@ -63,7 +63,7 @@ subscription credentials never accompany a request billed to OpenRouter.
 | Platform | Service | Status |
 |---|---|---|
 | macOS | launchd user agent | Supported |
-| Linux with a systemd user manager | systemd user units | Supported |
+| Linux with a systemd user manager (x86_64 and arm64/glibc) | systemd user units | Supported |
 | Windows 11 x64 | per-user Scheduled Tasks | Install, update, rollback and uninstall verified; sign-out and sign-in relaunch still to be confirmed |
 
 Linux needs a running systemd user manager in the signed-in desktop session;
@@ -76,7 +76,8 @@ the client versions it was recorded against live in
 - Codex (desktop app or CLI) and/or Claude Code, installed and signed in.
 - Python 3.14 for a source install. The bootstrap supplies a pinned runtime,
   so no system Python 3.14 is needed; macOS and Linux still need any
-  `python3`, plus `curl`, `tar` and `shasum`. Windows needs no Python.
+  `python3`, plus `curl`, `tar` and either `shasum` or `sha256sum`.
+  Windows needs no Python.
 - An OpenRouter API key for any model billed to OpenRouter.
 
 The router home is `~/.codex/mixed-model-router`
@@ -135,21 +136,48 @@ anything, and `--dry-run` shows what an install would do.
 
 ## Clients
 
-Codex is attached by default: the installer registers the router as a model
-provider and adds its catalogue, so the models appear in the picker after a
-restart. `--clients both` attaches Codex and Claude Code; `--client none`
-installs the service only.
+The installer asks which assistant you use and where, then attaches only that:
+ChatGPT (its app and terminal share one attachment), the Claude desktop app,
+Claude Code in the terminal, both Claude surfaces, or both assistants. Cancel
+at either question attaches nothing and detaches nothing, so an existing setup
+is untouched; only a machine with no dialog available keeps the installer's
+default, which is Codex. A fresh install asks when it can show a dialog,
+`--choose-clients` asks again on a machine that is already attached, and
+`ROUTER_NO_CLIENT_CHOOSER=1` suppresses the question for unattended runs. The
+flags below stay authoritative whenever they are passed:
 
-Claude Code support is in preview. Point it at the router with the port and
-token from `mixed-router-state.json` in the router home:
+- ChatGPT app or terminal: `python3.14 packaging/install.py --clients codex`
+- Claude Code terminal: `python3.14 packaging/install.py --clients claude`
+- Claude desktop app: `python3.14 packaging/install.py --clients none --desktop`
+- both Claude surfaces: `python3.14 packaging/install.py --clients claude --desktop`
+- the service alone: `python3.14 packaging/install.py --client none`
+
+Each of those attaches on a machine that is already up to date, so the choice
+can change at any time without waiting for a release. Attaching is additive:
+the installer never detaches a client you did not ask it to remove.
+
+A machine installed from the bootstrap needs no checkout. Re-run the published
+bootstrap with the flag, or run the installer already in the router home with
+its pinned interpreter (Windows: `.\bootstrap.ps1 -Channel beta -ChooseClients`):
 
 ```sh
-export ANTHROPIC_BASE_URL="http://127.0.0.1:<port>/<token>/"
-export CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=true
+curl -fsSL https://dist.softwarecombined.com/bootstrap/bootstrap.sh -o bootstrap.sh
+sh bootstrap.sh --channel=beta --choose-clients
+"$HOME/.codex/mixed-model-router/runtime/python/bin/python3.14" "$HOME/.codex/mixed-model-router/releases/$(cat "$HOME/.codex/mixed-model-router/current")/packaging/install.py" --choose-clients
 ```
 
-Do not set `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN`; either would override
-the subscription sign-in. See [docs/claude-code.md](docs/claude-code.md).
+For the **Claude desktop app**, quit and reopen Claude after attaching, then
+choose **Code**, a folder and a model. All gateway rows are billed to
+OpenRouter; existing signed-in sessions remain in the native profile. See
+[desktop setup and limits](docs/claude-code.md#claude-desktop-app).
+
+**Claude Code in the terminal** (preview) is `--clients claude` from the list
+above, then restart Claude Code. It keeps your Claude subscription sign-in,
+and the router's OpenRouter models appear in its `/model` picker next to your
+subscription models. Never set `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN`:
+either one overrides the subscription sign-in. The full walkthrough, including
+the manual alternative and how to check it worked, is in
+[docs/claude-code.md](docs/claude-code.md#setup).
 
 ## Models and billing
 

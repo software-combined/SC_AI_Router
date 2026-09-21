@@ -38,6 +38,27 @@ def _entry(data_dir):
     return json.loads((data_dir / 'configLibrary' / 'abc.json').read_text())
 
 
+class ProfilePathTests(unittest.TestCase):
+    def test_the_default_profile_dir_follows_the_platform(self):
+        cases = (
+            ('darwin', {}, ('Library', 'Application Support', 'Claude-3p')),
+            ('win32', {'APPDATA': '/appdata'}, ('appdata', 'Claude-3p')),
+            # A service account can have no APPDATA, so Windows falls back.
+            ('win32', {}, ('AppData', 'Roaming', 'Claude-3p')),
+            ('linux', {'XDG_CONFIG_HOME': '/xdg'}, ('xdg', 'Claude-3p')),
+            ('linux', {}, ('.config', 'Claude-3p')),
+        )
+        for platform_name, env, tail in cases:
+            with self.subTest(platform=platform_name, env=env):
+                environ = {'XDG_CONFIG_HOME': '', 'APPDATA': '', **env}
+                got = desktop_config.user_data_dir(environ, platform_name)
+                self.assertEqual(tuple(got.parts[-len(tail):]), tail)
+        # CLAUDE_USER_DATA_DIR outranks every platform default.
+        override = {'CLAUDE_USER_DATA_DIR': '/tmp/profile'}
+        self.assertEqual(desktop_config.user_data_dir(override, 'win32'),
+                         Path('/tmp/profile'))
+
+
 class DesktopMergeTests(unittest.TestCase):
     def test_merge_adds_only_the_four_owned_keys(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -81,10 +102,12 @@ class DesktopMergeTests(unittest.TestCase):
                 desktop_config.attach(home, _state(), install_mod._codex_config, data_dir_override=data_dir)
             self.assertNotIn('127.0.0.1', (data_dir / 'configLibrary' / 'abc.json').read_text())
 
-    def test_missing_library_metadata_refuses(self):
+    def test_incomplete_library_metadata_refuses(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             home.mkdir()
+            (Path(tmp) / 'empty/configLibrary').mkdir(parents=True)
+            (Path(tmp) / 'empty/configLibrary/keep.json').write_text('{}')
             with self.assertRaisesRegex(SystemExit, 'library metadata'):
                 desktop_config.attach(home, _state(), install_mod._codex_config,
                                       data_dir_override=Path(tmp) / 'empty')
@@ -185,8 +208,6 @@ class DesktopMergeTests(unittest.TestCase):
             data_dir = _profile(tmp)
             env = {'CLAUDE_USER_DATA_DIR': str(data_dir)}
             self.assertEqual(desktop_config.user_data_dir(env), data_dir)
-            self.assertEqual(desktop_config.user_data_dir({}),
-                             Path.home() / 'Library' / 'Application Support' / 'Claude-3p')
 
     def test_default_path_resolves_through_env(self):
         # The real installer path passes no data_dir: resolution must go

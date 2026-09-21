@@ -3,7 +3,7 @@
 Reads packaging/runtime.lock and downloads each pinned archive with a
 capped read, asserting byte size, sha256, interpreter/licence members,
 and tar-member path safety. Network OSError is a hard failure, never a
-skip. --dry-run prints the four URLs without fetching.
+skip. --dry-run prints the pinned URLs without fetching.
 """
 import argparse
 import hashlib
@@ -25,6 +25,8 @@ EXPECTED = {
                            'python/lib/python3.14/LICENSE.txt'),
     ('linux', 'x86_64'): (123986414, 'python/bin/python3.14',
                           'python/lib/python3.14/LICENSE.txt'),
+    ('linux', 'arm64'): (95970257, 'python/bin/python3.14',
+                         'python/lib/python3.14/LICENSE.txt'),
     ('windows', 'x86_64'): (49587410, 'python/python.exe',
                             'python/LICENSE.txt'),
 }
