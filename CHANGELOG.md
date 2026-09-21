@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## 0.6.101
+
+- The installer asks which assistant and where it is used (ChatGPT, the Claude
+  desktop app, Claude Code in the terminal, or both Claude surfaces) and
+  attaches only that. `--choose-clients` asks again on a machine that is
+  already attached, `--clients none --desktop` is the desktop app alone, and
+  attaching never detaches a client the answer did not name. Cancelling either
+  question attaches nothing and detaches nothing, and the distributed
+  bootstrap forwards `--choose-clients` so an installed host can reach it.
+- An explicit `--clients claude`, `--clients both` or `--clients codex` now
+  attaches on a machine that is already on the current version. It used to
+  print `up to date` and stop before the client stage, so the request silently
+  did nothing until the next release.
+
+## 0.6.100
+
 - Claude desktop setup on macOS installs **Switch Claude**, a shortcut for
   switching between your Claude subscription and OpenRouter without signing
   out. Each profile keeps its conversations. Setup and router updates preserve
