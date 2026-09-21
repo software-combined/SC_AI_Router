@@ -11,6 +11,7 @@ in the release bundle. No runtime/protocol import here.
 """
 import json
 import os
+import sys
 import uuid
 import importlib.util as _ilu
 from pathlib import Path
@@ -35,13 +36,35 @@ API_KEY_VALUE = 'router-path-token'
 CLIENT_KEY = 'claude-desktop'
 
 
-def user_data_dir(env=None):
+PROFILE_DIRNAME = 'Claude-3p'
+
+
+def profile_root(env=None, platform_name=None):
+    """Parent of the app's userData directory, the way Electron resolves it.
+
+    macOS uses Application Support, Windows uses the roaming AppData
+    directory and Linux uses XDG_CONFIG_HOME (falling back to ~/.config).
+    Getting this wrong pointed the installer at a macOS path that does not
+    exist on the other platforms, so `--desktop` silently did nothing there.
+    """
+    env = os.environ if env is None else env
+    platform_name = sys.platform if platform_name is None else platform_name
+    if platform_name == 'darwin':
+        return Path.home() / 'Library' / 'Application Support'
+    if platform_name == 'win32':
+        appdata = env.get('APPDATA')
+        return Path(appdata) if appdata else Path.home() / 'AppData' / 'Roaming'
+    xdg = env.get('XDG_CONFIG_HOME')
+    return Path(xdg) if xdg else Path.home() / '.config'
+
+
+def user_data_dir(env=None, platform_name=None):
     """Third-party profile dir, honoring CLAUDE_USER_DATA_DIR when set."""
     env = os.environ if env is None else env
     override = env.get('CLAUDE_USER_DATA_DIR')
     if override:
         return Path(override).expanduser()
-    return Path.home() / 'Library' / 'Application Support' / 'Claude-3p'
+    return profile_root(env, platform_name) / PROFILE_DIRNAME
 
 
 def desired_values(state):
