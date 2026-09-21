@@ -94,11 +94,13 @@ class ClientContractTests(unittest.TestCase):
 
         self.assertEqual(choices(install_mod),
                          {'client': ('codex', 'none'),
-                          'clients': ('codex', 'claude', 'both')})
+                          # `none` selects no terminal client, so with
+                          # --desktop it is the Claude desktop profile alone.
+                          'clients': ('codex', 'claude', 'both', 'none')})
         with mock.patch.object(roster_mod, 'CLIENT_IDS',
                                roster_mod.CLIENT_IDS + ('cursor',)):
             self.assertEqual(choices(install_mod)['clients'],
-                             ('codex', 'claude', 'cursor', 'both'))
+                             ('codex', 'claude', 'cursor', 'both', 'none'))
 
 
 if __name__ == '__main__':
