@@ -26,6 +26,22 @@ _RESTART = {'Codex': 'quit and reopen Codex',
 maybe_ask = _dialog.maybe_ask
 
 
+def any_attached(home, receipts):
+    """True when any client is attached, or when the receipt is unreadable.
+
+    An unreadable receipt is not evidence of a fresh host, and the --setup
+    repair owns recovering it, so it reads as attached: this gate must never
+    attach on top of state it cannot read, and it must not crash on it. The
+    error contract matches claude_config.refresh_snapshot: a receipt the
+    process cannot even open reads as attached too. Later eager reads
+    elsewhere are unchanged.
+    """
+    try:
+        return bool(receipts.read_receipt(home).get('clients'))
+    except (OSError, ValueError):
+        return True
+
+
 def _connected(names):
     """One client-aware closing line; never names a client that is not served."""
     return '%s connected; %s to use the router.' % (

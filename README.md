@@ -158,10 +158,10 @@ the installer never detaches a client you did not ask it to remove.
 
 A machine installed from the bootstrap needs no checkout. Re-run the published
 bootstrap with the flag, or run the installer already in the router home with
-its pinned interpreter (Windows: `.\bootstrap.ps1 -ChooseClients`):
+its pinned interpreter (Windows: `.\bootstrap.ps1 -Channel beta -ChooseClients`):
 
 ```sh
-sh bootstrap.sh --choose-clients
+sh bootstrap.sh --channel=beta --choose-clients
 "$HOME/.codex/mixed-model-router/runtime/python/bin/python3.14" "$HOME/.codex/mixed-model-router/releases/$(cat "$HOME/.codex/mixed-model-router/current")/packaging/install.py" --choose-clients
 ```
 
