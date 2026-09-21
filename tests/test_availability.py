@@ -121,14 +121,14 @@ class AvailabilityUnitTests(unittest.TestCase):
                                   'models': frozenset({'z-ai/glm-5.3'}),
                                   'fetched_at': 0}
         ids = {row['id'] for row in _claude.models_listing()['data']}
-        self.assertIn('claude/z-ai/glm-5.3', ids)
-        self.assertNotIn('claude/moonshotai/kimi-k3', ids)
+        self.assertIn(_claude.claude_alias('z-ai/glm-5.3'), ids)
+        self.assertNotIn(_claude.claude_alias('moonshotai/kimi-k3'), ids)
 
     def test_claude_listing_without_snapshot_lists_all(self):
         from ai_router import claude as _claude
         availability._SNAPSHOT = None
         full = {row['id'] for row in _claude.models_listing()['data']}
-        self.assertIn('claude/moonshotai/kimi-k3', full)
+        self.assertIn(_claude.claude_alias('moonshotai/kimi-k3'), full)
 
     def test_restore_serves_same_key_and_region_only(self):
         with tempfile.TemporaryDirectory() as tmp:
