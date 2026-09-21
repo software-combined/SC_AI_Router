@@ -1,5 +1,46 @@
 # Compatibility
 
+## Claude Code tool coverage, 21 September 2026 AEST
+
+Claude Code `2.1.223` (standalone CLI), installed router `0.6.102.95` and
+candidate `0.6.103` built from `cyril/claude-code-tool-fix-20260921`. Every
+advertised row was driven through the router with a synthetic marker file
+unique to that row, connector MCP servers excluded with `--strict-mcp-config`
+so the request stayed at the client's own 29-tool set. The sweep is one Read
+round trip per row and a row is never retried.
+
+Installed `0.6.102.95`: 16 of 18 rows completed the round trip. Two did not.
+
+- `anthropic/claude-fable-5.1` refused every turn. The cause is the first
+  `system` block Claude Code sends, whose text is the client's own
+  `x-anthropic-billing-header: cc_version=2.1.223.aeb; cc_entrypoint=sdk-cli;`
+  line. OpenRouter answers that text with HTTP 400 `invalid_request`, which
+  the router reports as `PROVIDER_REJECTED` after about 208 s. Bisected
+  against the live router: replacing the block's text, or removing `system`
+  altogether, returns 200, while removing `tools`, `thinking`,
+  `output_config`, `context_management`, `metadata` or `cache_control` does
+  not. 35 identical rejections, and a minimal Messages request to the same
+  slug returns 200, so neither the row nor the tool set is at fault. The
+  other Anthropic rows accept the same shape.
+- `google/gemini-3.8-flash` completed its tool call and returned no visible
+  text, twice. Captured through a loopback tee: the upstream did send the
+  marker, but opened the trailing signature-only `thinking` block before
+  closing the text block, and Claude Code discarded the answer. Replaying the
+  captured stream reproduced it, reordering the frames did not fix it, and
+  dropping that one block made the client render the text.
+
+Candidate `0.6.103` repairs both on the external Messages route, leaving the
+subscription route byte-identical. The same sweep completed 18 of 18 rows, and
+subscription `sonnet` passed. `tools/probe_claude_code.py` performs the sweep
+and was used against an isolated candidate home; no installed-client settings
+were changed.
+
+Scope: this is one tool (`Read`) and one round-trip shape per row. It does not
+exercise every Claude Code tool, connector MCP servers, or multi-turn tool
+loops, and it does not read served model identity. `deepseek/deepseek-v4-pro-0813`
+exceeded the probe's 180 s first-run budget and passed on retry; the shipped
+probe allows 300 s per row.
+
 ## Client chooser, 21 September 2026 AEST
 
 Router local candidate `0.6.101.1` built from tree
