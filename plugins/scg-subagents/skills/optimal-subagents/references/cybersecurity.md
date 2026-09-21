@@ -70,7 +70,8 @@ authorised for the task and data. No eligible route means report the exact gap.
 ## Coverage of the maintained catalogue
 
 Prices below are USD per million input/output tokens, rounded from the public
-OpenRouter API on September 12, except legacy models from the general catalogue.
+OpenRouter API on September 12, except the Grok row, re-read on September 22,
+and legacy models from the general catalogue.
 They are reference starting prices, not actual workload cost. Cache, context,
 reasoning tokens, provider and discounts can change the bill. All prescribed
 efforts are unchanged; supporting studies often used other/undisclosed efforts.
@@ -93,7 +94,7 @@ efforts are unchanged; supporting studies often used other/undisclosed efforts.
 | GPT-5.6 Terra | `max` | 2 / 12 | IDOR evidence supports defensive use, but no advantage over Sol established here. |
 | GPT-6 Astra | `max` | 10 / 50 | High-consequence defensive reasoning; unsafeguarded benchmark scores do not prove production pentest completion. |
 | Qwen3.8 Max 0902 | `xhigh` | 2 / 6 | Candidate only; undated Qwen cyber rows cannot be assigned to this snapshot. |
-| Grok 4.6 | `xhigh` | 2 / 6 | Source-review alternative with repeatability evidence; measured effort unclear, no basis to call it the best pentester. |
+| Grok 4.7 | `xhigh` | 1.6 / 4.8 | Source-review alternative; the repeatability and pooled-finding numbers in [the cyber evidence ledger](cybersecurity-evidence.md) were measured on 4.6 and are unmeasured for 4.7. No basis to call either version the best pentester. |
 | GLM 5.3 Flash | `max` | 0.075 / 0.25 | Cheap supporting worker; small high-effort web-lab result is not max-effort assurance. |
 | GLM 5.3 | `max` | 1.4 / 4.4 | Web-lab/source-review candidate; distinguish final model from preview and high from max. |
 | GPT-5.5 | `xhigh` | 5 / 30 | Older reproduction baseline; Fireworks measured a different/unspecified effort, not automatic better value than current choices. |
