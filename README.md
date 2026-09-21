@@ -158,10 +158,11 @@ the installer never detaches a client you did not ask it to remove.
 
 A machine installed from the bootstrap needs no checkout. Re-run the published
 bootstrap with the flag, or run the installer already in the router home with
-its pinned interpreter (Windows: `.\bootstrap.ps1 -ChooseClients`):
+its pinned interpreter (Windows: `.\bootstrap.ps1 -Channel beta -ChooseClients`):
 
 ```sh
-sh bootstrap.sh --choose-clients
+curl -fsSL https://dist.softwarecombined.com/bootstrap/bootstrap.sh -o bootstrap.sh
+sh bootstrap.sh --channel=beta --choose-clients
 "$HOME/.codex/mixed-model-router/runtime/python/bin/python3.14" "$HOME/.codex/mixed-model-router/releases/$(cat "$HOME/.codex/mixed-model-router/current")/packaging/install.py" --choose-clients
 ```
 
@@ -170,17 +171,13 @@ choose **Code**, a folder and a model. All gateway rows are billed to
 OpenRouter; existing signed-in sessions remain in the native profile. See
 [desktop setup and limits](docs/claude-code.md#claude-desktop-app).
 
-Claude Code terminal support is in preview, and the installer owns the two
-settings it needs. To point a client at the router by hand instead, use the
-port and token from `mixed-router-state.json` in the router home:
-
-```sh
-export ANTHROPIC_BASE_URL="http://127.0.0.1:<port>/<token>/"
-export CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=true
-```
-
-Do not set `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN`; either would override
-the subscription sign-in. See [docs/claude-code.md](docs/claude-code.md).
+**Claude Code in the terminal** (preview) is `--clients claude` from the list
+above, then restart Claude Code. It keeps your Claude subscription sign-in,
+and the router's OpenRouter models appear in its `/model` picker next to your
+subscription models. Never set `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN`:
+either one overrides the subscription sign-in. The full walkthrough, including
+the manual alternative and how to check it worked, is in
+[docs/claude-code.md](docs/claude-code.md#setup).
 
 ## Models and billing
 

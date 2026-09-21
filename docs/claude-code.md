@@ -1,55 +1,95 @@
 # Claude Code via the local router (Preview)
 
-The router speaks the Anthropic Messages API alongside the Codex
-backend, with the same billing split: registry slugs owned by an external
-provider bill that provider's key, everything else passes through to the
-Claude subscription untouched. A provider definition
-(`ai_router/provider_defs.py`) says which external providers speak
-Messages; one without a `messages_path` is refused here with a clear 400
-and stays a Codex-only model.
+Claude Code can talk to the local router instead of Anthropic directly. It
+keeps your Claude subscription sign-in, and the router's approved OpenRouter
+models appear next to your subscription models in the model picker. A model
+that belongs to an external provider is billed to the OpenRouter key;
+everything else passes through to your Claude subscription untouched.
 
 ## Setup
 
-For the **Claude desktop app**, use the [desktop setup below](#claude-desktop-app).
-The terminal settings in this section do not configure the app's connection.
+The desktop app and the terminal client are separate connections and are set
+up separately. This section covers the terminal (`claude`); for the app, use
+[Claude desktop app](#claude-desktop-app) below.
 
-The installer asks both questions for you: which assistant you use (ChatGPT,
-Claude, or both), then whether you use the desktop app, the terminal, or both.
-It attaches only what you answer, on a fresh install or on one already up to
-date with `--choose-clients`. Cancelling attaches nothing and detaches
-nothing, so an existing setup stays as it is; only a machine with no dialog
-available keeps the installer's default, which is Codex. The same choices as
-literal commands, for unattended runs:
+### Set it up
+
+Run the installer. It asks which assistant you use and where, and attaches
+only what you answer:
 
 ```sh
-python3.14 packaging/install.py --clients claude              # terminal only
-python3.14 packaging/install.py --clients none --desktop      # desktop app only
-python3.14 packaging/install.py --clients claude --desktop    # both surfaces
+python3.14 packaging/install.py --choose-clients
 ```
 
-Attaching is additive: the installer never removes a client you did not ask it
-to remove, and the two settings it owns are restored exactly on detach.
+Choose **Claude**, then **Terminal** for the terminal alone or **Both** to
+connect the app as well. The same choice without the questions, and the other
+Claude options:
 
-Point Claude Code at the loopback router with the path token in the URL,
-mirroring the Codex base URL. With `port` and `token` from
-`mixed-router-state.json` (do not share that URL):
+```sh
+python3.14 packaging/install.py --clients claude            # terminal only
+python3.14 packaging/install.py --clients none --desktop    # Claude app only
+python3.14 packaging/install.py --clients claude --desktop  # terminal and app
+```
+
+Then quit and restart Claude Code. That is the whole setup: the installer
+writes the two settings it owns in `~/.claude/settings.json`, keeps your
+existing subscription sign-in, and records what it changed so the same
+installer can undo it. Attaching is additive, so nothing you did not ask for
+is removed, and cancelling a question changes nothing. The one thing it will
+not do is overwrite a setting you edited by hand: it refuses and tells you to
+fix that value first.
+
+On a machine installed from the bootstrap there is no checkout to run from, so
+download the current bootstrap first (an older download rejects the new flag),
+or run the installer already in the router home:
+
+```sh
+# beta hosts: download the current bootstrap, then ask it to attach a client
+curl -fsSL https://dist.softwarecombined.com/bootstrap/bootstrap.sh -o bootstrap.sh
+sh bootstrap.sh --channel=beta --choose-clients
+# a stable host omits --channel=beta
+
+# or run the installer already in the router home with its pinned interpreter
+# (use $ROUTER_HOME instead of $HOME if the router was installed elsewhere)
+"$HOME/.codex/mixed-model-router/runtime/python/bin/python3.14" "$HOME/.codex/mixed-model-router/releases/$(cat "$HOME/.codex/mixed-model-router/current")/packaging/install.py" --choose-clients
+```
+
+### Check it worked
+
+- `claude` starts normally, and `/status` still shows your Claude
+  subscription rather than an API key.
+- `/model` lists the router's rows alongside your subscription models. A row
+  named with its vendor and `· OpenRouter` is billed to the OpenRouter key;
+  the plain Claude models use your subscription.
+- `python3.14 packaging/install.py --doctor` reports the `claude` row as
+  `match` (`absent` when nothing is attached).
+
+Start a fresh session when you switch between a subscription model and a
+routed one.
+
+### Set it up by hand
+
+If you would rather not use the installer, point the client at the router
+yourself, using the `port` and `token` from `mixed-router-state.json` in the
+router home (do not share that URL):
 
 ```sh
 export ANTHROPIC_BASE_URL="http://127.0.0.1:<port>/<token>/"
-```
-
-Set only the base URL. Never set `ANTHROPIC_API_KEY` or
-`ANTHROPIC_AUTH_TOKEN`: either would override the subscription bearer
-and break subscription passthrough. Unset the variable to return to
-direct routing.
-
-To list the router models in the terminal client's `/model` picker, also set:
-
-```sh
 export CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=true
 ```
 
-Claude Code 2.1.x fetches `GET <base>/v1/models` on startup and caches
+Set only those two. Never set `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN`:
+either one overrides the subscription bearer and breaks subscription
+passthrough. Unset `ANTHROPIC_BASE_URL` to return to direct routing, and
+restart Claude Code after changing it.
+
+## Reference
+
+### How discovery works
+
+With `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=true` set, the client lists
+the router models in its `/model` picker. Claude Code 2.1.x fetches
+`GET <base>/v1/models` on startup and caches
 it at `~/.claude/cache/gateway-models.json`; entries whose `id`
 contains `claude` or `anthropic` appear as `From gateway` options.
 Restart Claude Code after changing the base URL so it refetches.
@@ -59,16 +99,17 @@ listing from its local registry without needing any credential.
 
 ## Choosing a model
 
-Set `ANTHROPIC_MODEL` to a listing id for OpenRouter billing, or leave
-the default Claude model for subscription billing. Listing ids mirror
-the Codex registry: stable `claude/scg/...` route IDs plus the bare
-`anthropic/...` Claude IDs. Copy the ID from discovery; the picker shows
-the real vendor, model and billing label. Older `claude/<vendor>/<name>`
-aliases still work in saved sessions and commands. The router resolves the
-ID back to the registry slug before routing, so billing follows the
-registry row. A registry slug also routes directly. Reasoning is
-governed by each call's `max_tokens` and `thinking` fields, which
-travel untouched. Start a fresh session when switching providers.
+Pick the model in `/model`, or set `ANTHROPIC_MODEL` to its listing id. What
+you see looks like `Z.ai: GLM 5.3 Flash · OpenRouter` for a routed model and
+`Claude Sonnet 5` for a subscription one: the vendor and the billing label are
+the row's real identity, and the id underneath mirrors the Codex registry
+(`claude/scg/...` route IDs and the bare `anthropic/...` Claude IDs). Copy the
+id from discovery rather than typing one; older `claude/<vendor>/<name>` aliases
+still work in saved sessions and commands. The router resolves the id back to
+the registry row before routing, so billing follows the row, and a registry
+slug routes directly too. Reasoning is governed by each call's `max_tokens`
+and `thinking` fields, which travel untouched. Start a fresh session when
+switching providers.
 
 ## Attachment contract
 
@@ -81,7 +122,7 @@ client's own login and the listing fetch would present the wrong credential.
 The attach records the listing ids, display names and tiers it was told
 about, and `--doctor` compares that snapshot with the live `GET /v1/models`;
 a change shows up as `drift` with the added and removed ids, and `unknown`
-when the router is not answering. The comparison is by listing id, so a
+when the receipt is unreadable or the router is not answering. The comparison is by listing id, so a
 display-name or tier edit alone does not report drift. Restart Claude Code
 after a listing change so the client refetches.
 
