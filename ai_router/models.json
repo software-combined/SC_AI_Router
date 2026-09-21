@@ -488,9 +488,9 @@
     "tier": "verified"
   },
   {
-    "slug": "x-ai/grok-4.6",
+    "slug": "x-ai/grok-4.7",
     "provider": "openrouter",
-    "display_name": "SpaceXAI: Grok 4.6 \u00b7 OpenRouter",
+    "display_name": "SpaceXAI: Grok 4.7 \u00b7 OpenRouter",
     "vendor": "SpaceXAI",
     "reasoning": [
       "low",

@@ -218,6 +218,15 @@ class LegsTests(unittest.TestCase):
         self.assertEqual(candidate.legs_for('nope/nothing'),
                          ['tool', 'stream'])
 
+    def test_drop_images_row_implies_no_image_leg(self):
+        # A row that drops images by design has no media leg to prove: the
+        # probe would assert the model saw an image the router replaced with
+        # a note, so the row fails a leg it can never pass.
+        row = {'modalities': ['text', 'image'], 'context_window': 500000,
+               'drop_images': True}
+        self.assertEqual(candidate.legs_for('x-ai/grok-4.7', row),
+                         ['tool', 'stream', 'compact'])
+
     def test_run_probe_passes_implied_flags(self):
         scope = SimpleNamespace(home=Path('/tmp/s'), catalog=Path('/tmp/c'))
         seen = []
