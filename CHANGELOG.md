@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## 0.6.103
+
+- Claude Code can finish a turn on every routed model it is offered. Two
+  shapes the client cannot survive are now repaired on the external Messages
+  route, and only there. The `system` block carrying the client's own
+  `x-anthropic-billing-header` line is dropped, because it made
+  `anthropic/claude-fable-5.1` refuse every turn with HTTP 400 before the
+  model was ever reached; the line only matters to Anthropic's billing, which
+  this route does not use. A thinking block that arrives with a signature but
+  no thinking is dropped from the stream, because
+  `google/gemini-3.8-flash` returns one after a tool result and Claude Code
+  discarded the whole reply as a result, showing an empty answer. A live sweep
+  of Claude Code `2.1.223` through the router now completes a Read-tool round
+  trip on 18 of 18 advertised rows, up from 16, and the subscription route is
+  untouched. `tools/probe_claude_code.py` reproduces the sweep on demand.
+
 ## 0.6.102
 
 - `--setup` repairs a host whose activation receipt is unreadable again. The

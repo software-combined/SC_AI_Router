@@ -136,17 +136,25 @@ hand-edited conflict instead of overwriting it.
 
 ## Behaviour and limits
 
-- OpenRouter-bound bodies are forwarded byte-identical to OpenRouter's
-  Anthropic-compatible endpoint, so thinking blocks, `tool_use` IDs and
-  `cache_control` keep full fidelity. `count_tokens` follows the same
-  split. `GET /v1/models` answers `{data: [{id, display_name, anthropic_family_tier}]}` from
+- OpenRouter-bound requests reach OpenRouter's Anthropic-compatible
+  endpoint unchanged, so thinking blocks, `tool_use` IDs and
+  `cache_control` keep full fidelity, and `count_tokens` follows the same
+  split. Two shapes Claude Code 2.1.223 cannot survive are repaired in
+  flight and every other byte is left alone. The `system` block carrying
+  the client's own `x-anthropic-billing-header` line is dropped, because
+  `anthropic/claude-fable-5.1` refuses any turn that carries it with HTTP
+  400 and the line only matters to Anthropic's billing, which this route
+  does not use. A thinking block that arrives with a signature but no
+  thinking is dropped from the stream, because Claude Code throws away the
+  whole answer when one follows it. The subscription route keeps both.
+  `GET /v1/models` answers `{data: [{id, display_name, anthropic_family_tier}]}` from
   the local registry without touching the network; unknown paths answer
   404.
 - Subscription requests forward the client's `Authorization` or
   `x-api-key` plus version and beta headers, minus hop headers. The
   router key never accompanies them. In `none` mode the passthrough is
   refused; OpenRouter models still serve.
-- The Claude path is pure passthrough, so `/health` `served_models`
+- The Claude path relays the upstream stream, so `/health` `served_models`
   does not track it and no compaction endpoint exists for it.
 - A routed row inherits whatever tools the client has loaded. Claude
   Code adds every claude.ai connector MCP tool to its request once the
@@ -155,10 +163,26 @@ hand-edited conflict instead of overwriting it.
   upstream refuses the turn with a context error. Exclude them for a
   routed session (`--strict-mcp-config --mcp-config '{"mcpServers": {}}'`)
   when the tool list does not fit the row.
-- Live verification, 2026-09-17: a real Claude Code session
-  (`2.1.223`) completed a Read-tool round trip through the router on
-  `anthropic/claude-haiku-4.5` with those connector servers excluded;
-  the version and the run are recorded in `docs/compatibility.md`.
+- Live verification, 2026-09-21: Claude Code `2.1.223` completed a
+  Read-tool round trip on all 18 advertised rows plus a subscription
+  model, with those connector servers excluded. Before the two repairs
+  above, `anthropic/claude-fable-5.1` refused every turn and
+  `google/gemini-3.8-flash` returned an empty answer after its tool
+  call. The versions, the failures and the run are recorded in
+  `docs/compatibility.md`.
+
+### Bounded Claude Code verification
+
+`tools/probe_claude_code.py --home <router-home>` drives the installed
+`claude` binary against a running router, one Read-tool round trip per
+advertised row, and reports the rows that failed. Each row gets a synthetic
+marker file named for that model, connector MCP servers are excluded so the
+request stays at the client's own tool set, and a row is never retried. The
+probe leaves the caller's Claude settings alone: it points a disposable
+settings file at the router and never prints the loopback URL. Pass
+`--models` to narrow it, `--max-rows` to raise the cap, or `--json` for a
+machine-readable report. Point it at an isolated candidate home to check a
+build before it is installed.
 
 ## Claude desktop app
 
