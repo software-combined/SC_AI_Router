@@ -155,8 +155,35 @@ def install_bundle(home, version, tarball, manifest_doc, python,
         shutil.rmtree(final)
     partial.rename(final)
     install_launcher(home, final)
+    install_home_readme(home, final)
     previous = swap_current(home, final)
     return previous
+
+
+def install_home_readme(home, release_dir):
+    """Keep the page beside the state directory the one this release ships.
+
+    A host that kept whatever its first install wrote went on describing a
+    router it no longer ran, and that page is the first thing a person reads
+    in their own install. The launchers beside it fail closed; this page must
+    not, so it is best-effort and a release that predates the bundled page
+    keeps the existing copy. The tmp is cleared first for the same reason
+    `service._install_home_file` clears its own: a planted symlink there would
+    otherwise aim the write at whatever it points to.
+    """
+    source = release_dir / 'README.md'
+    tmp = home / 'README.md.tmp'
+    try:
+        if not source.is_file():
+            return
+        if tmp.is_symlink() or tmp.is_file():
+            tmp.unlink()
+        elif tmp.exists():
+            shutil.rmtree(tmp)
+        shutil.copyfile(source, tmp)
+        os.replace(tmp, home / 'README.md')
+    except OSError:
+        return
 
 
 def write_catalogue(home, release_dir, python, run=None):
@@ -221,5 +248,8 @@ def do_rollback(args, *, platform_backend, restart_router, wait_version,
             print(f'rollback to {args.version} failed health check; no previous release')
         restart_router(home)
         raise SystemExit(1)
+    # After the health gate, so the page never describes a release that was
+    # rolled back away from.
+    install_home_readme(home, target)
     print(f'rolled back to {args.version}; health ok; restart Codex to load the router')
     return 0
