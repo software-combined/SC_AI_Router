@@ -25,17 +25,37 @@ def _notice():
     return module
 
 
+def _dialog():
+    """The client chooser, which is not importable as part of a package."""
+    spec = importlib.util.spec_from_file_location(
+        'router_client_dialog', _ROOT / 'packaging' / 'client_dialog.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _popup_text():
-    """Every user-visible string both dialog producers can show."""
+    """Every user-visible string the dialog producers can show."""
     notice = _notice()
+    dialog = _dialog()
     text = [notice._message('0.6.25'),
-            notice._message('0.6.25', names=['Z.ai: GLM 5.3 Flash', '+2 more'])]
+            notice._message('0.6.25', names=['Z.ai: GLM 5.3 Flash', '+2 more']),
+            dialog.ASSISTANT_QUESTION, dialog.SURFACE_QUESTION,
+            dialog.NO_TOOL_NOTE, dialog.NO_ANSWER_NOTE]
+    text += list(dialog.CONFIRM.values())
+    text += [label for _key, label in dialog.ASSISTANTS]
+    text += [label for _key, label in dialog.SURFACES]
     for platform_name, tool_path in (('darwin', '/usr/bin/osascript'),
                                      ('linux', '/usr/bin/zenity'),
                                      ('win32', 'C:/powershell.exe')):
         text.append(' '.join(key_dialog.argv(tool_path, platform_name)))
         text.append(' '.join(key_dialog.message_argv(tool_path, 'message',
                                                      platform_name)))
+        text.append(' '.join(dialog.argv(tool_path, platform_name,
+                                         dialog.ASSISTANT_QUESTION,
+                                         dialog.ASSISTANTS)))
+        text.append(' '.join(dialog.argv(tool_path, platform_name,
+                                         dialog.SURFACE_QUESTION, dialog.SURFACES)))
     return ' '.join(text).lower()
 
 
@@ -98,6 +118,60 @@ class PopupStyleTests(unittest.TestCase):
         script = key_dialog.argv('C:/powershell.exe', 'win32')[-1]
         self.assertIn("DropDownStyle = 'DropDownList'", script)
         self.assertNotIn('DropDownStyle = 3', script)
+
+    def test_the_chooser_shares_the_title_and_icon(self):
+        dialog = _dialog()
+        self.assertEqual(dialog.TITLE, key_dialog.TITLE, 'SCG Router')
+        self.assertEqual(dialog.ICON, key_dialog.ICON)
+        self.assertTrue(dialog.ICON.is_file())
+
+    def test_every_platform_chooser_question_carries_the_icon(self):
+        dialog = _dialog()
+        for platform_name, tool_path in (('darwin', '/usr/bin/osascript'),
+                                         ('linux', '/usr/bin/zenity'),
+                                         ('win32', 'C:/powershell.exe')):
+            for question, items in ((dialog.ASSISTANT_QUESTION, dialog.ASSISTANTS),
+                                    (dialog.SURFACE_QUESTION, dialog.SURFACES)):
+                with self.subTest(platform=platform_name, question=question):
+                    blob = ' '.join(dialog.argv(tool_path, platform_name,
+                                                question, items))
+                    self.assertIn(dialog.ICON.name, blob)
+                    self.assertIn(dialog.TITLE, blob)
+
+    def test_the_chooser_uses_selection_controls_and_two_actions(self):
+        dialog = _dialog()
+        for question, items in ((dialog.ASSISTANT_QUESTION, dialog.ASSISTANTS),
+                                (dialog.SURFACE_QUESTION, dialog.SURFACES)):
+            with self.subTest(question=question):
+                macos = dialog.argv('/usr/bin/osascript', 'darwin',
+                                    question, items)[-1]
+                self.assertIn('NSPopUpButton', macos)
+                self.assertEqual(macos.count('addButtonWithTitle('), 2)
+                self.assertIn('addButtonWithTitle("Continue")', macos)
+                self.assertIn('addButtonWithTitle("Cancel")', macos)
+                windows = dialog.argv('C:/powershell.exe', 'win32',
+                                      question, items)[-1]
+                self.assertIn('System.Windows.Forms.ListBox', windows)
+                self.assertEqual(windows.count('System.Windows.Forms.Button'), 2)
+                self.assertIn("'Continue'", windows)
+                self.assertIn("'Cancel'", windows)
+                self.assertIn('$f.CancelButton = $c', windows)
+                linux = dialog.argv('/usr/bin/zenity', 'linux', question, items)
+                self.assertIn('--radiolist', linux)
+                self.assertIn('--ok-label=Continue', linux)
+                self.assertIn('--cancel-label=Cancel', linux)
+
+    def test_windows_chooser_lays_every_control_out(self):
+        dialog = _dialog()
+        script = dialog.argv('C:/powershell.exe', 'win32', dialog.SURFACE_QUESTION,
+                             dialog.SURFACES)[-1]
+        self.assertEqual(script.count('$f.Controls.Add('), 1,
+                         'only the layout panel belongs to the form itself')
+        for control in ('$p.Controls.Add($l)', '$p.Controls.Add($b)',
+                        '$p.Controls.Add($r)', '$r.Controls.Add($ok)',
+                        '$r.Controls.Add($c)'):
+            with self.subTest(control):
+                self.assertIn(control, script)
 
 
 if __name__ == '__main__':

@@ -9,11 +9,16 @@ import io
 import json
 import os
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 from unittest import mock
 
 from tests.install_fixtures import install_mod
+
+# The module the installer actually delegates to, so patching it here is the
+# same object the install path reads.
+dialog = install_mod._client_choice._dialog
 
 
 def _home(tmp):

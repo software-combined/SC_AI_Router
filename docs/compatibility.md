@@ -1,5 +1,22 @@
 # Compatibility
 
+## Client chooser, 21 September 2026 AEST
+
+Router local candidate `0.6.101.1` built from tree
+`e1fda43574c025f0c5465ee7d1783cf055b86bab` (local only; no feed or tag).
+Claude desktop `2.2553.1`. Live acceptance ran the real installer with the
+generated native dialogs: a Both to Both upgrade returned rc 0, preserved all
+four client config hashes and all three connections, served health at
+`0.6.101.1`, and matched all 216 installed manifest files; a same-version
+`--choose-clients` rerun returned rc 0 with settings, receipts and state
+unchanged apart from served-listing metadata; and an installed
+`--choose-clients` run with Cancel returned rc 0 with settings, receipts and
+state byte-identical. Only the dialog process was hosted in a small native
+applet, because the automation cannot target a bare `osascript` process; the
+generated dialog code and the installer were unchanged. An earlier live repro
+in this slice proved `--choose-clients` was unreachable on a current install,
+now fixed and covered by a do_install-level test.
+
 ## Client choice on all four surfaces, 21 September 2026 AEST
 
 Router local candidate `0.6.100.1` (one-shot local feed, not published);

@@ -5,15 +5,17 @@
 # SHA-256, then runs the verified bundle installer. The feed is public: no
 # token is needed.
 # Usage:
-#   sh bootstrap.sh [--channel=beta]
+#   sh bootstrap.sh [--channel=beta] [--choose-clients]
 set -eu
 FEED_ORIGIN="${FEED_ORIGIN:-https://dist.softwarecombined.com}"
 CHANNEL="stable"
 HOME_DIR="${ROUTER_HOME:-$HOME/.codex/mixed-model-router}"
+CHOOSE=""
 for arg in "$@"; do
   case "$arg" in
     --channel=*) CHANNEL="${arg#--channel=}" ;;
-    *) echo "usage: sh bootstrap.sh [--channel=beta]" >&2; exit 2 ;;
+    --choose-clients) CHOOSE="--choose-clients" ;;
+    *) echo "usage: sh bootstrap.sh [--channel=beta] [--choose-clients]" >&2; exit 2 ;;
   esac
 done
 case "$CHANNEL" in
@@ -69,7 +71,7 @@ tar -xzf "$HOME_DIR/bundle.tar.gz" -C "$HOME_DIR/bootstrap"
 # bootstrap cannot move a stable host onto pre-releases. A host already
 # ahead of the requested channel is current, not deferred.
 if "$PY" "$HOME_DIR/bootstrap/packaging/install.py" --home "$HOME_DIR" \
-     --feed "$FEED_ORIGIN/$CHANNEL/latest.json"; then
+     --feed "$FEED_ORIGIN/$CHANNEL/latest.json" ${CHOOSE:+"$CHOOSE"}; then
   CURRENT="$(cat "$HOME_DIR/current" 2>/dev/null || true)"
 else
   exit $?
