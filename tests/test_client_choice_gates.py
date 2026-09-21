@@ -66,6 +66,34 @@ class ChooserGateTests(unittest.TestCase):
             asked.assert_not_called()
             self.assertNotIn('Which AI assistant', out)
 
+    def test_a_corrupt_receipt_counts_as_attached(self):
+        # An unreadable receipt must not crash the run or let the chooser
+        # attach on top of state nobody can read; --setup repairs it.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = _home(tmp)
+            (home / 'activation.json').write_text('{broken json')
+            state = json.loads((home / 'mixed-router-state.json').read_text())
+            args = self._args()
+            with mock.patch.object(sys.stdin, 'isatty', return_value=True), \
+                    mock.patch.object(dialog, 'tool', return_value='/dialog'), \
+                    mock.patch.object(dialog, 'ask') as asked:
+                install_mod._resolve_clients_and_modes(args, home, state)
+            asked.assert_not_called()
+            self.assertIsNone(args.clients)
+            self.assertTrue(install_mod._client_choice.any_attached(
+                home, install_mod._codex_config))
+
+    def test_a_receipt_that_cannot_be_opened_counts_as_attached(self):
+        # Same contract as claude_config.refresh_snapshot: an unreadable file
+        # must not crash the run or let anything attach on top of it.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = _home(tmp)
+            with mock.patch.object(
+                    install_mod._codex_config, 'read_receipt',
+                    side_effect=PermissionError('synthetic unreadable receipt')):
+                self.assertTrue(install_mod._client_choice.any_attached(
+                    home, install_mod._codex_config))
+
     def test_explicit_flags_bypass_the_chooser(self):
         for argv in (('--clients', 'codex'), ('--clients', 'claude'), ('--desktop',),
                      ('--client', 'none')):

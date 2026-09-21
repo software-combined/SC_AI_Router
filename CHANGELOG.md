@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.6.102
+
+- `--setup` repairs a host whose activation receipt is unreadable again. The
+  chooser's "already attached" check read the receipt eagerly and crashed on
+  corrupt JSON before the repair path could run; that check now reads it
+  tolerantly, treating a receipt it cannot parse or open as attached, so the
+  repair runs and the chooser never prompts on top of state it cannot read.
+- The existing-beta instructions show `--channel=beta` for the bootstrap
+  chooser command, since the chooser ships on the beta channel.
+
 ## 0.6.101
 
 - The installer asks which assistant and where it is used (ChatGPT, the Claude
