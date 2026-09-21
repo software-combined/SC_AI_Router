@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## 0.6.106
+
+- The picker pins Grok 4.7. Upstream moved while the roster pinned 4.6, and
+  the router does not follow upstream movement on its own, so the pinned id
+  was replaced and `x-ai/grok-4.6` joined `RETIRED_SLUGS`: an upgrade drops
+  the superseded pin instead of offering it beside the new one. The new row
+  keeps the family's adapter quirks (`json_text_root` tool schemas, the
+  350-tool ceiling, and text-only image turns) and was proved rather than
+  inherited, with an isolated-router round trip on tool, stream and
+  compaction. Image turns were re-tested with the quirk cleared and the
+  upstream still refuses them, so the text-only treatment stays.
+- A `drop_images` row no longer implies an image probe leg. The media leg
+  asserts the model saw the attached image, so a row that replaces images
+  with a note by design could never pass it, which left the documented probe
+  path unusable for that shape. The row's other legs are unchanged.
+
 ## 0.6.105
 
 - `--desktop` finds the Claude desktop app on every platform it ships for,

@@ -23,6 +23,11 @@ RETIRED_DEEPSEEK = ('deepseek/deepseek-v4-pro', 'deepseek/deepseek-v4-flash',
                     '~deepseek/deepseek-v4-flash-latest',
                     'deepseek/deepseek-v4-flash-vision-exp')
 
+# The pinned roster follows Grok by exact id: 4.7 replaces 4.6, and the
+# superseded pin retires the way a superseded alias does.
+PINNED_GROK = 'x-ai/grok-4.7'
+RETIRED_GROK = 'x-ai/grok-4.6'
+
 
 class ModelRosterTests(unittest.TestCase):
     def test_only_four_pinned_claude_rows_reach_picker_and_router_after_upgrade(self):
@@ -77,6 +82,20 @@ class ModelRosterTests(unittest.TestCase):
         for slug in RETIRED_DEEPSEEK:
             self.assertNotIn(slug, slugs)
         self.assertIn('deepseek/deepseek-v4.1-flash', slugs)
+
+    def test_superseded_pinned_grok_id_retires_on_upgrade(self):
+        # A machine whose catalogue still carries the superseded pin must
+        # drop it rather than keep offering a row the roster retired.
+        grok = by_slug(PINNED_GROK)
+        self.assertEqual(grok.tier, 'verified')
+        self.assertEqual(grok.schema_mode, 'json_text_root')
+        self.assertEqual(grok.max_tools, 350)
+        self.assertTrue(grok.drop_images)
+        self.assertIsNone(by_slug(RETIRED_GROK))
+        self.assertIn(RETIRED_GROK, RETIRED_SLUGS)
+        merged = {m['slug'] for m in merge({'models': [{'slug': RETIRED_GROK}]})['models']}
+        self.assertNotIn(RETIRED_GROK, merged)
+        self.assertIn(PINNED_GROK, merged)
 
     def test_claude_without_effort_control_survives_refresh_and_prepares_none(self):
         slug = 'anthropic/claude-haiku-4.5'

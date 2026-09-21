@@ -455,12 +455,12 @@ class SummarizerRetryTests(unittest.TestCase):
             'moonshotai/kimi-k3', '/responses', payload, b'raw', {}, _stub_credentials())
         kept = json.loads(prepared.body)['input'][0]['content']
         self.assertEqual(len(kept), 2)
-        grok_payload = {'model': 'x-ai/grok-4.6', 'input': [
+        grok_payload = {'model': 'x-ai/grok-4.7', 'input': [
             {'type': 'message', 'role': 'user', 'content': [
                 {'type': 'input_text', 'text': 'look'},
                 {'type': 'input_image', 'image_url': 'data:image/png;base64,AAA'}]}]}
         grok_prepared = _external_responses().prepare(
-            'x-ai/grok-4.6', '/responses', grok_payload, b'raw', {}, _stub_credentials())
+            'x-ai/grok-4.7', '/responses', grok_payload, b'raw', {}, _stub_credentials())
         self.assertEqual(json.loads(grok_prepared.body)['input'][0]['content'],
             [{'type': 'input_text', 'text': 'look'},
              {'type': 'input_text', 'text': IMAGE_NOTE}])
