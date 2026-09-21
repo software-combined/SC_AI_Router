@@ -289,7 +289,7 @@ def load_gitleaks_pin(config: dict[str, Any]) -> dict[str, Any]:
     binary = str(pin.get("binary", "")).strip()
     version = str(pin.get("version", "")).strip()
     sha256 = str(pin.get("sha256", "")).strip().lower()
-    if not binary.startswith("/") or not version or not re.fullmatch(r"[0-9a-f]{64}", sha256):
+    if not Path(binary).is_absolute() or not version or not re.fullmatch(r"[0-9a-f]{64}", sha256):
         fail("SCG gitleaks pin needs an absolute binary path, a version, and a 64-hex sha256.")
     return {
         "binary": Path(binary),
@@ -339,7 +339,7 @@ def scan(_: argparse.Namespace) -> None:
         fail("SCG secret scan blocked (zero reviewer calls; decision BLOCK):\n" + "\n".join(f"- {p}" for p in problems))
     cmd = [
         str(binary), "git", "--staged", "--verbose",
-        "--gitleaks-ignore-path", "/dev/null", "--ignore-gitleaks-allow",
+        "--gitleaks-ignore-path", os.devnull, "--ignore-gitleaks-allow",
         "--redact=100", "--no-banner", "--no-color",
         "--timeout", str(pin["timeout"]), ".",
     ]
