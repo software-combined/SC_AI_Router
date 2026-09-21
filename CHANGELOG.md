@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Claude desktop shows the full approved OpenRouter roster again. Stable
+  router IDs avoid the app's model-name filter while the picker keeps each
+  real vendor, model and billing label. Existing session IDs still route.
+- Desktop attachment now works when the router is already up to date and
+  creates its configuration on first use, without a manual Developer-menu setup.
+
 ## 0.6.98
 
 - Muse Spark 1.3 and Contributor no longer receive Codex's ChatGPT-specific

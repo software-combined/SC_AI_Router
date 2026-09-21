@@ -10,6 +10,9 @@ and stays a Codex-only model.
 
 ## Setup
 
+For the **Claude desktop app**, use the [desktop setup below](#claude-desktop-app).
+The terminal settings in this section do not configure the app's connection.
+
 Point Claude Code at the loopback router with the path token in the URL,
 mirroring the Codex base URL. With `port` and `token` from
 `mixed-router-state.json` (do not share that URL):
@@ -23,8 +26,7 @@ Set only the base URL. Never set `ANTHROPIC_API_KEY` or
 and break subscription passthrough. Unset the variable to return to
 direct routing.
 
-To list the router models in the picker (CLI `/model`, app model
-picker), also set:
+To list the router models in the terminal client's `/model` picker, also set:
 
 ```sh
 export CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=true
@@ -42,10 +44,11 @@ listing from its local registry without needing any credential.
 
 Set `ANTHROPIC_MODEL` to a listing id for OpenRouter billing, or leave
 the default Claude model for subscription billing. Listing ids mirror
-the Codex registry: `claude/<vendor>/<name>` aliases (for example
-`claude/z-ai/glm-5.3-flash`) plus the bare `anthropic/...` Claude
-aliases, which already pass the client filter. The router strips the
-alias back to the registry slug before routing, so billing follows the
+the Codex registry: stable `claude/scg/...` route IDs plus the bare
+`anthropic/...` Claude IDs. Copy the ID from discovery; the picker shows
+the real vendor, model and billing label. Older `claude/<vendor>/<name>`
+aliases still work in saved sessions and commands. The router resolves the
+ID back to the registry slug before routing, so billing follows the
 registry row. A registry slug also routes directly. Reasoning is
 governed by each call's `max_tokens` and `thinking` fields, which
 travel untouched. Start a fresh session when switching providers.
@@ -99,15 +102,34 @@ hand-edited conflict instead of overwriting it.
   `anthropic/claude-haiku-4.5` with those connector servers excluded;
   the version and the run are recorded in `docs/compatibility.md`.
 
-## Claude desktop third-party gateway (Preview)
+## Claude desktop app
 
-The desktop app (verified against 1.49585.0) keeps first-party and
+With the router already installed, run this once from the router checkout:
+
+```sh
+python3.14 packaging/install.py --desktop
+```
+
+Quit and reopen Claude, choose **Code**, select your folder, then choose a
+model and type your task. No key copying or Developer-menu configuration is
+needed. Attachment also runs when there is no newer router release.
+
+Every model labelled **OpenRouter** uses the OpenRouter key. The gateway
+profile has its own sessions; your signed-in Claude profile and its existing
+sessions remain separate. The desktop adapter's `detach` operation restores
+the original profile settings without removing the router. Full router
+uninstallation also detaches Codex and the terminal client.
+
+The desktop app (verified against 2.2553.1) keeps first-party and
 third-party mode in separate profiles (`.../Claude` and `.../Claude-3p`).
 Pointing the third-party profile at the loopback router lists every
-registry row: the app drops discovery rows whose id looks non-Anthropic
-unless the row declares a valid `anthropic_family_tier`, so the router
-projects one (`sonnet` for non-Anthropic rows, each Anthropic row's own
-tier word). No stored registry field is added. Attach with
+approved Messages-compatible registry row. The app filters non-Anthropic
+vendor words from IDs even when a valid `anthropic_family_tier` is present.
+The router therefore gives non-Anthropic entries stable route IDs derived
+from the registry slug, retaining the actual name in `display_name`.
+The projected tier remains `sonnet` for those rows, and each Anthropic row
+keeps its own tier. These are client discovery fields, not upstream model
+identities or capability claims. No stored registry field is added. Attach with
 `packaging/install.py --desktop` (refuses when `claude_mode` is `none`);
 service-only install and uninstall detach again. The first-party
 profile's credentials are never touched, so native sign-in survives, and
@@ -129,3 +151,14 @@ version. Any `thinking` the app sends still travels byte-identical
 through the router. Effort choice for gateway models stays a CLI
 (`ANTHROPIC_MODEL` plus per-call fields) and Codex picker affair until
 the client offers otherwise.
+
+### Bounded desktop verification
+
+`tools/probe_claude_desktop.py --execute --endpoint-file <private-file>` starts
+a temporary loopback connection for a synthetic Code task. It accepts only
+DeepSeek V4.1 Flash, with four requests, 2,048 output tokens and 256 KiB of input
+per request. It writes the connection URL to a new owner-only file and logs
+only counters, status and served model identity. It does not edit app settings.
+Temporarily select that connection in an isolated gateway profile, read a
+synthetic file once, and restore the normal router connection before stopping
+the probe. A startup check for another model is refused by this test guard.

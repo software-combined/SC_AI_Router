@@ -11,6 +11,7 @@ in the release bundle. No runtime/protocol import here.
 """
 import json
 import os
+import uuid
 import importlib.util as _ilu
 from pathlib import Path
 
@@ -149,7 +150,6 @@ def attach(home, state, receipts, data_dir_override=None, env=None):
                          'to attach the Claude desktop gateway')
     data_dir = (Path(data_dir_override) if data_dir_override is not None
                 else user_data_dir(env))
-    entry_path = applied_entry_path(data_dir)
     # Refuse before writing anything: a mode conflict must leave both the
     # entry and the desktop config untouched.
     cfg, cfg_path = read_desktop_config(data_dir)
@@ -158,6 +158,13 @@ def attach(home, state, receipts, data_dir_override=None, env=None):
         raise SystemExit(
             'Claude desktop deploymentMode is managed outside this installer; '
             'remove or correct it by hand, then re-run.')
+    library = data_dir / 'configLibrary'
+    if not library.exists() or not any(library.iterdir()):
+        entry_id = str(uuid.uuid4())
+        write_json(library / '_meta.json', {
+            'appliedId': entry_id,
+            'entries': [{'id': entry_id, 'name': 'SCG Router'}]})
+    entry_path = applied_entry_path(data_dir)
     doc, changed, previous = merge_entry(state, entry_path)
     write_json(entry_path, doc)
     mode_changed = previous_mode != '3p'
@@ -179,6 +186,26 @@ def attach(home, state, receipts, data_dir_override=None, env=None):
              'claude_mode': state.get('claude_mode', 'subscription')}
     receipts.write_client_receipt(home, CLIENT_KEY, entry)
     return entry_path
+
+
+def attach_current(args, receipts, write_state):
+    """An explicit desktop attachment is independent of update availability."""
+    if args.client == 'none':
+        raise SystemExit('--desktop conflicts with --client none')
+    if args.dry_run:
+        print('would connect Claude desktop to the installed router')
+        return 0
+    home = Path(args.home).expanduser()
+    try:
+        state = json.loads((home / 'mixed-router-state.json').read_text())
+    except (OSError, ValueError):
+        raise SystemExit('Router settings are missing or invalid; run setup first')
+    if args.claude_mode is not None and args.claude_mode != state.get('claude_mode'):
+        state['claude_mode'] = args.claude_mode
+        write_state(home, state)
+    attach(home, state, receipts)
+    print('Claude desktop connected; quit and reopen Claude, then choose Code and a model.')
+    return 0
 
 
 def detach(home, receipts, data_dir_override=None, env=None):
