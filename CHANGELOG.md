@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 0.6.104
+
+- The README beside the router home is now the one that belongs to the
+  installed release. A host that kept whatever page its first install wrote
+  went on describing a router it no longer ran: the copy on this machine still
+  said "only the six configured OpenRouter models" and never mentioned Claude
+  Code or the client chooser, so anyone reading their own install was pointed
+  at a product two months old. The home files step now refreshes it from the
+  release on every install, update and rollback, so the page tracks the release
+  being applied instead of whatever the first install wrote. A failed health
+  check restores the previous release and leaves the newer page in place until
+  the next successful install or update, and a release that predates the
+  bundled page leaves the existing copy alone: this page is documentation, and
+  it never fails an install or a rollback.
+
 - `tools/probe_claude_code.py` accepts a row whose answer contains the
   synthetic marker rather than only one that is exactly the marker. Some rows
   narrate the file they read, and the strict comparison reported
