@@ -212,7 +212,7 @@ def _sync_seams():
 def _resolve_clients_and_modes(args, home, state):
     # The chooser fills the flags in before they are read; it never overrides one.
     _client_choice.maybe_ask(
-        args, home, attached=bool(_codex_config.read_receipt(home).get('clients')))
+        args, home, attached=_client_choice.any_attached(home, _codex_config))
     # Absence in legacy state means Codex, not service-only.
     client = args.client or state.get('client', 'codex')
     if client not in (_client_roster.DEFAULT_CLIENT, 'none'):
