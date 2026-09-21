@@ -136,18 +136,43 @@ anything, and `--dry-run` shows what an install would do.
 
 ## Clients
 
-Codex is attached by default: the installer registers the router as a model
-provider and adds its catalogue, so the models appear in the picker after a
-restart. `--clients both` attaches Codex and Claude Code; `--client none`
-installs the service only.
+The installer asks which assistant you use and where, then attaches only that:
+ChatGPT (its app and terminal share one attachment), the Claude desktop app,
+Claude Code in the terminal, both Claude surfaces, or both assistants. Cancel
+at either question attaches nothing and detaches nothing, so an existing setup
+is untouched; only a machine with no dialog available keeps the installer's
+default, which is Codex. A fresh install asks when it can show a dialog,
+`--choose-clients` asks again on a machine that is already attached, and
+`ROUTER_NO_CLIENT_CHOOSER=1` suppresses the question for unattended runs. The
+flags below stay authoritative whenever they are passed:
 
-For the **Claude desktop app**, run `python3.14 packaging/install.py --desktop`,
-then quit and reopen Claude. Choose **Code**, a folder and a model. All gateway
-rows are billed to OpenRouter; existing signed-in sessions remain in the native
-profile. See [desktop setup and limits](docs/claude-code.md#claude-desktop-app).
+- ChatGPT app or terminal: `python3.14 packaging/install.py --clients codex`
+- Claude Code terminal: `python3.14 packaging/install.py --clients claude`
+- Claude desktop app: `python3.14 packaging/install.py --clients none --desktop`
+- both Claude surfaces: `python3.14 packaging/install.py --clients claude --desktop`
+- the service alone: `python3.14 packaging/install.py --client none`
 
-Claude Code terminal support is in preview. Point it at the router with the port and
-token from `mixed-router-state.json` in the router home:
+Each of those attaches on a machine that is already up to date, so the choice
+can change at any time without waiting for a release. Attaching is additive:
+the installer never detaches a client you did not ask it to remove.
+
+A machine installed from the bootstrap needs no checkout. Re-run the published
+bootstrap with the flag, or run the installer already in the router home with
+its pinned interpreter (Windows: `.\bootstrap.ps1 -ChooseClients`):
+
+```sh
+sh bootstrap.sh --choose-clients
+"$HOME/.codex/mixed-model-router/runtime/python/bin/python3.14" "$HOME/.codex/mixed-model-router/releases/$(cat "$HOME/.codex/mixed-model-router/current")/packaging/install.py" --choose-clients
+```
+
+For the **Claude desktop app**, quit and reopen Claude after attaching, then
+choose **Code**, a folder and a model. All gateway rows are billed to
+OpenRouter; existing signed-in sessions remain in the native profile. See
+[desktop setup and limits](docs/claude-code.md#claude-desktop-app).
+
+Claude Code terminal support is in preview, and the installer owns the two
+settings it needs. To point a client at the router by hand instead, use the
+port and token from `mixed-router-state.json` in the router home:
 
 ```sh
 export ANTHROPIC_BASE_URL="http://127.0.0.1:<port>/<token>/"

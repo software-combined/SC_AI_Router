@@ -13,6 +13,23 @@ and stays a Codex-only model.
 For the **Claude desktop app**, use the [desktop setup below](#claude-desktop-app).
 The terminal settings in this section do not configure the app's connection.
 
+The installer asks both questions for you: which assistant you use (ChatGPT,
+Claude, or both), then whether you use the desktop app, the terminal, or both.
+It attaches only what you answer, on a fresh install or on one already up to
+date with `--choose-clients`. Cancelling attaches nothing and detaches
+nothing, so an existing setup stays as it is; only a machine with no dialog
+available keeps the installer's default, which is Codex. The same choices as
+literal commands, for unattended runs:
+
+```sh
+python3.14 packaging/install.py --clients claude              # terminal only
+python3.14 packaging/install.py --clients none --desktop      # desktop app only
+python3.14 packaging/install.py --clients claude --desktop    # both surfaces
+```
+
+Attaching is additive: the installer never removes a client you did not ask it
+to remove, and the two settings it owns are restored exactly on detach.
+
 Point Claude Code at the loopback router with the path token in the URL,
 mirroring the Codex base URL. With `port` and `token` from
 `mixed-router-state.json` (do not share that URL):

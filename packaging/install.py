@@ -210,6 +210,9 @@ def _sync_seams():
 
 
 def _resolve_clients_and_modes(args, home, state):
+    # The chooser fills the flags in before they are read; it never overrides one.
+    _client_choice.maybe_ask(
+        args, home, attached=bool(_codex_config.read_receipt(home).get('clients')))
     # Absence in legacy state means Codex, not service-only.
     client = args.client or state.get('client', 'codex')
     if client not in (_client_roster.DEFAULT_CLIENT, 'none'):
@@ -242,7 +245,8 @@ def _resolve_clients_and_modes(args, home, state):
         raise SystemExit('openai_mode must be subscription or none')
     if state.get('openai_mode') != mode:
         state['openai_mode'] = mode; changed = True
-    if args.clients and state.get('clients') != clients:
+    if args.clients and not getattr(args, 'client_choice_cancelled', False) \
+            and state.get('clients') != clients:
         state['clients'] = clients; changed = True
     if changed: _write_state(home, state)
     return (client, clients, claude_mode, mode)
@@ -312,7 +316,7 @@ def do_install(args, _fetch=fetch, _run=None):
     repair = bool(args.setup) and not newer(latest['version'], current)
     if not newer(latest['version'], current) and not repair:
         print(f'up to date {current}')
-        if args.clients is None:
+        if args.clients is None and not args.choose_clients:
             return _desktop_config.attach_current(
                 args, _codex_config, _write_state, python=python) if args.desktop else 0
         return _client_choice.attach_current(
@@ -440,19 +444,19 @@ def do_install(args, _fetch=fetch, _run=None):
             # drop the flag instead of honouring it.
             _client_choice.attach_desktop_only(args, home, state, _codex_config, _desktop_config)
         else:
-            if previous_receipt.get('inserted_block'):
-                # Never silently detach an active Codex configuration: restore
-                # the exact owned settings first, or refuse when the block was
-                # edited.
-                _restore_owned_config(home)
-            detach_claude(home)
+            if not getattr(args, 'client_choice_cancelled', False):
+                if previous_receipt.get('inserted_block'):
+                    # Never silently detach an active Codex configuration:
+                    # restore the exact owned settings first, or refuse when
+                    # the block was edited.
+                    _restore_owned_config(home)
+                detach_claude(home)
         prune_releases(home, latest['version'], previous,
                        backend.pinned_release(home))
         if not args.feed:
             (home / 'feed-serial').write_text(str(serial) + '\n')
         backend.start_updates(home)
-        outcome = 'Claude desktop connected' if args.desktop else 'service-only, no client changes'
-        print(f"installed {latest['version']}; health ok; {outcome}")
+        print(f"installed {latest['version']}; health ok; {_client_choice.none_outcome(args)}")
         return 0
     if claude_mode == 'none' and clients in ('claude', 'both'):
         raise SystemExit('claude_mode is none: re-run with --claude-mode subscription '
@@ -605,8 +609,7 @@ def build_parser():
                         help='List installed releases; with --to, restore one.')
     parser.add_argument('--to', default=None, help='With --rollback: the release version to restore.')
     parser.add_argument('--doctor', action='store_true', help='Read-only health report with one Fix line per failing row.')
-    parser.add_argument('--support', action='store_true',
-                        help='Write a redacted support bundle and print its path.')
+    parser.add_argument('--support', action='store_true', help='Write a redacted support bundle and print its path.')
     parser.add_argument('--uninstall', action='store_true')
     parser.add_argument('--preflight', action='store_true',
                         help='Report missing install prerequisites and exit.')
@@ -617,6 +620,7 @@ def build_parser():
     parser.add_argument('--static-catalogue', action='store_true', help='No-op: the catalogue is always configured.')
     parser.add_argument('--setup', action='store_true',
                         help='First-run key window: mint a setup link and open it even when a key exists.')
+    parser.add_argument('--choose-clients', action='store_true', help='Ask which assistant and surface this computer uses.')
     parser.add_argument('--openai-mode', default=None)
     parser.add_argument('--anthropic-mode', default=None,
                         choices=('subscription', 'none'),
