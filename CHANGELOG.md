@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## 0.6.107
+
+- A pinned row survives a model cache written by an older release. The
+  hourly model refresh keeps a cache of the last roster it fetched, and the
+  boot path applied that cache whole: after the roster moved to Grok 4.7,
+  a cache from the 4.6 era put the retired id back and hid the new one, so
+  the picker offered Grok 4.6 while the router only served 4.7 and every
+  request was refused as unavailable. Both the boot cache and the hourly
+  payload now overlay the bundled roster instead of replacing it: they may
+  update the rows the bundle knows and add rows the bundle has never seen,
+  but neither restores a retired slug nor drops a pinned one.
+- The new-model prompt can name a row the cache was hiding. The dialog asks
+  the running router which picker rows are new; while the stale cache
+  supplied the roster, that answer was empty and the sentence fell back to
+  its version-only shape. With the bundle authoritative the answer names
+  the added rows again, so an update that adds a model says which one.
 ## 0.6.106
 
 - The picker pins Grok 4.7. Upstream moved while the roster pinned 4.6, and
