@@ -194,6 +194,11 @@ class DialogCommandTests(unittest.TestCase):
         self.assertIn('if answer is "Quit and reopen" then', script)
         self.assertIn(
             'tell application id "com.openai.codex" to quit', script)
+        self.assertIn('repeat 25 times', script)
+        self.assertIn(
+            'if application id "com.openai.codex" is not running then exit repeat',
+            script)
+        self.assertNotIn('repeat until', script)
         self.assertIn('do shell script "open -b com.openai.codex"', script)
 
     @unittest.skipUnless(sys.platform == 'darwin',
