@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.6.111
+
+- Both Xiaomi MiMo rows offer the effort list Xiaomi documents (`none`,
+  `minimal`, `low`, `medium`, `high`, `xhigh`), default `none`. OpenRouter
+  advertises no names, so the picker had been showing a single Medium
+  control with nothing to choose.
+
 ## 0.6.110
 
 - The update notice lists new models as bullets, one picker label per line,

@@ -523,7 +523,12 @@
     "display_name": "Xiaomi: MiMo V2.6 Flash \u00b7 OpenRouter",
     "vendor": "Xiaomi",
     "reasoning": [
-      "none"
+      "none",
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
     ],
     "default_reasoning": "none",
     "modalities": [
@@ -551,7 +556,12 @@
     "display_name": "Xiaomi: MiMo V2.6 Pro \u00b7 OpenRouter",
     "vendor": "Xiaomi",
     "reasoning": [
-      "none"
+      "none",
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
     ],
     "default_reasoning": "none",
     "modalities": [
