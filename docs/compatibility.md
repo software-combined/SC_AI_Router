@@ -70,7 +70,9 @@ it was not hand-driven in this run.
 `xiaomi/mimo-v2.6-pro` and `xiaomi/mimo-v2.6-flash` joined the registry from
 their live OpenRouter metadata: no advertised effort (`none`), text, image
 and audio input, a 1048576-token context, 131072 output tokens and no search
-pricing. Both are served only by the first-party Xiaomi endpoint, so they
+pricing. Picker labels are `Xiaomi: MiMo V2.6 Flash` and
+`Xiaomi: MiMo V2.6 Pro`. `none` is the only effort, so the picker has no
+effort menu to open. Both are served only by the first-party Xiaomi endpoint, so they
 stayed unavailable until the account added that provider to its org-level
 Allowed Providers list; the same change added Alibaba Cloud Int. for
 `qwen/qwen3.8-max-0902`, which the key had also been hiding.
