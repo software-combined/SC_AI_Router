@@ -21,6 +21,24 @@ from ai_router import provider_defs
 
 FABLE = 'anthropic/claude-fable-5.1'
 BILLING = 'x-anthropic-billing-header: cc_version=2.1.223.aeb; cc_entrypoint=sdk-cli;'
+# Captured live from Claude Code 2.1.223 with ENABLE_TOOL_SEARCH=true: the
+# deferred catalogue arrives as a placeholder, a released definition keeps its
+# defer_loading flag, and the search result is a bare tool_reference block.
+PLACEHOLDER = {'name': 'DeferredToolPlaceholder',
+               'description': 'Reserved placeholder that keeps deferred tool '
+                              'loading active; never call this tool.',
+               'input_schema': {'type': 'object', 'properties': {}},
+               'defer_loading': True}
+SEARCH_TOOL = {'name': 'ToolSearch', 'description': 'Search deferred tools.',
+               'input_schema': {'type': 'object',
+                                'properties': {'query': {'type': 'string'}}}}
+RELEASED = {'name': 'mcp__stubtools__tool_000', 'description': 'Stub tool.',
+            'input_schema': {'type': 'object',
+                             'properties': {'value': {'type': 'string'}}},
+            'defer_loading': True}
+REFERENCE = {'type': 'tool_result', 'tool_use_id': 'toolu_capture',
+             'content': [{'type': 'tool_reference',
+                          'tool_name': 'mcp__stubtools__tool_000'}]}
 
 
 def _frame(kind, payload):
@@ -108,6 +126,53 @@ class ThinkingShapeTests(unittest.TestCase):
         self.assertEqual(self._shaped(frames), b''.join(frames))
 
 
+class DeferredToolTests(unittest.TestCase):
+    def test_placeholder_and_flag_go_and_the_released_definition_stays(self):
+        payload = {'tools': [SEARCH_TOOL, dict(PLACEHOLDER), dict(RELEASED)]}
+        self.assertTrue(compat.flatten_deferred_tools(payload))
+        self.assertEqual([tool['name'] for tool in payload['tools']],
+                         ['ToolSearch', 'mcp__stubtools__tool_000'])
+        self.assertTrue(all('defer_loading' not in tool for tool in payload['tools']))
+
+    def test_a_reference_becomes_the_name_it_stood_for(self):
+        kept = {'type': 'text', 'text': 'the search ran'}
+        payload = {'messages': [{'role': 'user',
+                                 'content': [dict(REFERENCE, content=[
+                                     dict(kept),
+                                     {'type': 'tool_reference',
+                                      'tool_name': 'mcp__stubtools__tool_000'}])]}]}
+        self.assertTrue(compat.flatten_deferred_tools(payload))
+        block = payload['messages'][0]['content'][0]
+        self.assertEqual(block['tool_use_id'], 'toolu_capture')
+        self.assertEqual([item['type'] for item in block['content']],
+                         ['text', 'text'])
+        self.assertIn('mcp__stubtools__tool_000', block['content'][1]['text'])
+        self.assertNotIn('tool_reference', json.dumps(payload))
+
+    def test_a_lone_reference_leaves_one_text_block(self):
+        payload = {'messages': [{'role': 'user', 'content': [dict(REFERENCE)]}]}
+        self.assertTrue(compat.flatten_deferred_tools(payload))
+        block = payload['messages'][0]['content'][0]
+        self.assertEqual(len(block['content']), 1)
+        self.assertEqual(block['content'][0]['type'], 'text')
+
+    def test_a_server_side_search_tool_is_dropped(self):
+        payload = {'tools': [{'type': 'tool_search_tool_regex_20251119',
+                              'name': 'tool_search'}, SEARCH_TOOL]}
+        self.assertTrue(compat.flatten_deferred_tools(payload))
+        self.assertEqual([tool['name'] for tool in payload['tools']], ['ToolSearch'])
+
+    def test_ordinary_requests_report_no_change(self):
+        text_result = {'type': 'tool_result', 'tool_use_id': 'toolu_1',
+                       'content': [{'type': 'text', 'text': 'ok'}]}
+        for payload in (None, 'text', {},
+                        {'tools': [SEARCH_TOOL]},
+                        {'messages': [{'role': 'user', 'content': [text_result]}]},
+                        {'messages': [{'role': 'user', 'content': 'plain'}]}):
+            with self.subTest(payload=payload):
+                self.assertFalse(compat.flatten_deferred_tools(payload))
+
+
 class ProviderSurfaceTests(unittest.TestCase):
     def _provider(self):
         return claude_mod.ExternalMessagesProvider(provider_defs.get('openrouter'))
@@ -185,3 +250,36 @@ class IngressContractTests(unittest.TestCase):
         host, _, _, body, _ = recorded[0]
         self.assertEqual(host, 'api.anthropic.com')
         self.assertEqual(body.decode(), raw)
+
+    def _deferred_payload(self):
+        return {'model': FABLE, 'max_tokens': 8,
+                'tools': [dict(SEARCH_TOOL), dict(PLACEHOLDER), dict(RELEASED)],
+                'messages': [
+                    {'role': 'user',
+                     'content': [{'type': 'text', 'text': 'go'}]},
+                    {'role': 'assistant',
+                     'content': [{'type': 'tool_use', 'id': 'toolu_capture',
+                                  'name': 'ToolSearch',
+                                  'input': {'query': 'select:stub'}}]},
+                    {'role': 'user', 'content': [dict(REFERENCE)]}]}
+
+    def test_the_deferred_shapes_never_reach_openrouter(self):
+        recorded, status = self._send(self._deferred_payload())
+        self.assertEqual(status, 200)
+        sent = json.loads(recorded[0][3])
+        self.assertEqual([tool['name'] for tool in sent['tools']],
+                         ['ToolSearch', 'mcp__stubtools__tool_000'])
+        self.assertNotIn('defer_loading', recorded[0][3].decode())
+        result = sent['messages'][-1]['content'][0]
+        self.assertEqual(result['tool_use_id'], 'toolu_capture')
+        self.assertEqual([item['type'] for item in result['content']], ['text'])
+
+    def test_subscription_route_keeps_the_deferred_shapes(self):
+        payload = self._deferred_payload()
+        payload['model'] = 'claude-sonnet-5'
+        raw = json.dumps(payload)
+        recorded, status = self._send(
+            payload, {'Authorization': 'Bearer subscription-secret'})
+        self.assertEqual(status, 200)
+        self.assertEqual(recorded[0][0], 'api.anthropic.com')
+        self.assertEqual(recorded[0][3].decode(), raw)
