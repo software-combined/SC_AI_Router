@@ -3,11 +3,14 @@
 ## How to ship
 
 Work lands on `develop` via `fix/*`/`feat/*` branches, then `develop`
-merges to `main` via PR. Tag the merge `v$(cat packaging/VERSION)` (or
-`v*-beta` for pre-releases): the release workflow runs on `v*` tags
-only, runs the suite, builds the bundle, publishes the release to the
-public feed, and then creates the GitHub Release with `latest.json` as a
-public mirror for humans.
+merges to `main` via PR. Tag the merge with a short `vX.XX` label derived
+from the last number in `packaging/VERSION`: `0.6.113` becomes `v1.13`.
+Add `-beta` for a pre-release, `-express` for an urgent stable release, or
+`-beta-express` for an urgent beta. The release workflow runs on `v*` tags
+only, validates the short form, runs the suite, builds the bundle, publishes
+the release to the public feed, and then creates the GitHub Release with
+`latest.json` as a public mirror for humans. The semantic version remains in
+the bundle and feed for updater ordering; it is not the public tag.
 Every router on the stable channel installs it within about four hours.
 Never push to `main` directly for a release; a direct push runs
 checks but publishes nothing.
@@ -311,7 +314,7 @@ out-of-policy row is never announced.
 
 ## How to test first
 
-Tag `v*-beta` from `develop`. The workflow publishes a pre-release to the
+Tag `vX.XX-beta` from `develop`. The workflow publishes a pre-release to the
 public beta document (`beta/latest.json`). Cyril's machine follows the
 `beta` channel (`beta`
 in the `channel` file beside the state directory), so it updates first;

@@ -22,6 +22,16 @@ release_mod = _release_mod()
 
 
 class ReleaseTests(unittest.TestCase):
+    def test_release_tag_uses_the_short_v_x_xx_form(self):
+        base = '0.6.112'
+        for suffix, expected in (('', ('stable', False)), ('-beta', ('beta', False)),
+                                  ('-express', ('stable', True)), ('-beta-express', ('beta', True))):
+            self.assertEqual(release_mod.release_tag('v1.12' + suffix, base), expected)
+        for tag in ('V1.12', 'v1.2', 'v1.120', 'v1.2.12', 'v1.13', 'v01.12',
+                    'v1.12-express-beta', 'v1x12'):
+            with self.subTest(tag=tag), self.assertRaises(SystemExit):
+                release_mod.release_tag(tag, base)
+
     def test_bundle_contains_manifest_with_matching_hashes(self):
         out = _ROOT / 'dist-test-tmp'
         self.addCleanup(shutil.rmtree, str(out), True)
