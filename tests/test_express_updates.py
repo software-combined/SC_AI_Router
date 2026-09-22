@@ -201,9 +201,10 @@ class ExpressLauncher(unittest.TestCase):
 
 class ExpressTag(unittest.TestCase):
     def test_only_exact_version_and_supported_suffix_order_are_accepted(self):
+        base = '0.6.123'
         for suffix, expected in (('', ('stable', False)), ('-beta', ('beta', False)),
                                   ('-express', ('stable', True)), ('-beta-express', ('beta', True))):
-            self.assertEqual(release_mod.release_tag('v1.2.3' + suffix, '1.2.3'), expected)
-        for tag in ('Express', 'v1.2.4-express', 'v1.2.3-express-beta', 'v1x2x3-express'):
+            self.assertEqual(release_mod.release_tag('v1.23' + suffix, base), expected)
+        for tag in ('Express', 'v1.24-express', 'v1.23-express-beta', 'v1x23-express'):
             with self.assertRaises(SystemExit):
-                release_mod.release_tag(tag, '1.2.3')
+                release_mod.release_tag(tag, base)

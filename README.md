@@ -269,10 +269,11 @@ forces one; the prompts each platform shows are described in
 
 ### Express updates
 
-Maintainers can publish an urgent stable release with `v<VERSION>-express`,
-or an urgent beta with `v<VERSION>-beta-express`. The version must match
-`packaging/VERSION`; use a new tag for each release. These tags use the
-same tests, publisher permissions and integrity checks as ordinary releases.
+Maintainers can publish an urgent stable release with `vX.XX-express`, or an
+urgent beta with `vX.XX-beta-express`. The short tag comes from the last
+number in `packaging/VERSION`: `0.6.113` is `v1.13`. Use a new tag for each
+release. These tags use the same tests, publisher permissions and integrity
+checks as ordinary releases.
 
 After installing an Express-capable version, macOS, Windows and Linux run
 a separate lightweight Express check about every minute. Online machines
@@ -406,7 +407,9 @@ python3.14 tools/check_policy_scans.py
 The runtime is Python 3.14 with the standard library only; installer scripts
 stay Python 3.9-compatible. Branches start from `develop`, pull requests
 target `develop`, and user-visible changes update `CHANGELOG.md` and
-`packaging/VERSION`. Releases are cut by tagging the version as `v<VERSION>`.
+`packaging/VERSION`. Release tags use the short `vX.XX` form, derived from
+the last number in `packaging/VERSION`; for example, `0.6.113` is tagged
+`v1.13`.
 
 ## Agent plugins
 

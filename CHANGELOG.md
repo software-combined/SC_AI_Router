@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.6.113
+
+- Release tags now use the short `vX.XX` form, derived from the release
+  counter in `packaging/VERSION`: `0.6.113` is tagged `v1.13`. Beta and
+  Express suffixes still identify the channel and urgency, while the semantic
+  build version remains unchanged for updater ordering.
+
 ## 0.6.112
 
 - A router update keeps the release's effort list. An older feed can no
