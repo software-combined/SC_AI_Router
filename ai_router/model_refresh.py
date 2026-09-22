@@ -60,6 +60,42 @@ def cached_models(home):
         return None
 
 
+# The import-time roster. apply() swaps registry.MODELS, so an overlay must
+# be measured against the bundle rather than against whatever a previous
+# apply left there, or one stale roster could hide the rows this release
+# pinned from every later one.
+BUNDLED = registry.MODELS
+
+
+def overlay(bundled, cached):
+    """Bundled rows first: the cache updates and extends, never rewrites.
+
+    A cache written by an older release still names the id that release
+    pinned and knows nothing about a row pinned since, so applying it whole
+    resurrects a retired slug and hides the current one: the picker then
+    offers a row the router refuses. The bundle stays authoritative for its
+    own rows, the cache carries live data forward and may add rows the
+    bundle has never seen, and a slug the bundle retired stays retired.
+    """
+    retired = catalogue.RETIRED_SLUGS
+    bundled_slugs = {row.slug for row in bundled}
+    merged = [row for row in cached
+              if row.slug in bundled_slugs or row.slug not in retired]
+    known = {row.slug for row in merged}
+    merged.extend(row for row in bundled if row.slug not in known)
+    return tuple(merged)
+
+
+def apply_fetched(models):
+    """Apply one cached or fetched roster through the bundle-first overlay.
+
+    Both paths land here: the boot cache and the hourly payload can each be
+    written by a different release than the bundle being served, so neither
+    may retire a pinned row or restore a retired one on its own.
+    """
+    apply(overlay(BUNDLED, models))
+
+
 def fetch(url, etag, _urlopen=urllib.request.urlopen):
     """GET with ETag revalidation. Returns (status, body, etag)."""
     req = urllib.request.Request(url, headers={'If-None-Match': etag} if etag else {})
@@ -131,7 +167,7 @@ def start(models_url, home, _urlopen=urllib.request.urlopen):
         return None
     cached = cached_models(home)
     if cached is not None:
-        apply(cached)
+        apply_fetched(cached)
         check_pending(home)
     etag_path = Path(home) / 'models-etag'
     try:
@@ -146,7 +182,7 @@ def start(models_url, home, _urlopen=urllib.request.urlopen):
             time.sleep(REFRESH_INTERVAL_S + random.uniform(0, REFRESH_JITTER_S))
             models, etag = poll_once(models_url, home, etag, _urlopen)
             if models is not None:
-                apply(models)
+                apply_fetched(models)
                 check_pending(home)
             if etag:
                 try:
