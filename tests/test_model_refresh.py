@@ -193,6 +193,21 @@ class ModelRefreshTests(unittest.TestCase):
         self.assertIsNotNone(registry.by_slug(pinned))
         self.assertIsNotNone(registry.by_slug('z-ai/glm-5.3'))
 
+    def test_older_feed_cannot_shrink_or_widen_bundled_reasoning(self):
+        # The beta feed kept publishing ["none"] after the release pinned six
+        # levels. A restart then refused xhigh with "use one of none".
+        slug = 'xiaomi/mimo-v2.6-pro'
+        levels = ('none', 'minimal', 'low', 'medium', 'high', 'xhigh')
+        bundled = model_refresh.validate(json.dumps([
+            _row(slug) | {'reasoning': list(levels), 'default_reasoning': 'none'}]))
+        cached = model_refresh.validate(json.dumps([
+            _row(slug) | {'reasoning': ['none', 'ultra'],
+                          'default_reasoning': 'none'}]))
+        merged = {row.slug: row for row in model_refresh.overlay(bundled, cached)}
+        self.assertEqual(merged[slug].reasoning, levels)
+        self.assertEqual(merged[slug].default_reasoning, 'none')
+        self.assertNotIn('ultra', merged[slug].reasoning)
+
 
 if __name__ == '__main__':
     unittest.main()

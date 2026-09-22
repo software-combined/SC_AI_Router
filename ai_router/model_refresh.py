@@ -18,6 +18,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from dataclasses import replace
 from pathlib import Path
 from .atomic_write import replace_text
 
@@ -67,6 +68,21 @@ def cached_models(home):
 BUNDLED = registry.MODELS
 
 
+def _pin_reasoning(row, bundled_by_slug):
+    """Keep the release's effort list when a feed row names the same slug.
+
+    The feed may add a row the bundle has never seen. It must not shrink or
+    widen the effort list this release pinned, or a restart loads the older
+    gate and refuses an effort the picker just offered.
+    """
+    pinned = bundled_by_slug.get(row.slug)
+    if pinned is None or (row.reasoning == pinned.reasoning
+                          and row.default_reasoning == pinned.default_reasoning):
+        return row
+    return replace(row, reasoning=pinned.reasoning,
+                   default_reasoning=pinned.default_reasoning)
+
+
 def overlay(bundled, cached):
     """Bundled rows first: the cache updates and extends, never rewrites.
 
@@ -76,11 +92,12 @@ def overlay(bundled, cached):
     offers a row the router refuses. The bundle stays authoritative for its
     own rows, the cache carries live data forward and may add rows the
     bundle has never seen, and a slug the bundle retired stays retired.
+    A feed row for a bundled slug keeps that release's reasoning list.
     """
     retired = catalogue.RETIRED_SLUGS
-    bundled_slugs = {row.slug for row in bundled}
-    merged = [row for row in cached
-              if row.slug in bundled_slugs or row.slug not in retired]
+    bundled_by_slug = {row.slug: row for row in bundled}
+    merged = [_pin_reasoning(row, bundled_by_slug) for row in cached
+              if row.slug in bundled_by_slug or row.slug not in retired]
     known = {row.slug for row in merged}
     merged.extend(row for row in bundled if row.slug not in known)
     return tuple(merged)
