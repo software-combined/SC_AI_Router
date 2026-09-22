@@ -464,19 +464,19 @@ def install_task_launcher(home, release_dir):
 def _write_state(home, state):
     _atomic_write.replace_json(_state.path(home), state)
 
-
 def ensure_state(home):
     path = _state.path(home)
     if path.exists():
         state = _state.read_strict(path)
-        if not isinstance(state.get('openai_models'), list):
+        models = state.get('openai_models')
+        # Empty hides every ChatGPT row; no installer writer produces it.
+        if not (isinstance(models, list) and any(
+                isinstance(s, str) and s for s in models)):
             state['openai_models'] = list(DEFAULT_OPENAI_MODELS)
             _atomic_write.replace_json(path, state)
-        elif any(slug in state['openai_models'] for slug in RETIRED_SUBSCRIPTION_SLUGS):
-            # Retired slugs: prune so routing stops authorizing them on update.
-            # Type-check first: a corrupt non-string element must not be hashed.
+        elif any(slug in models for slug in RETIRED_SUBSCRIPTION_SLUGS):
             state['openai_models'] = [
-                s for s in state['openai_models']
+                s for s in models
                 if not (isinstance(s, str) and s in RETIRED_SUBSCRIPTION_SLUGS)]
             _atomic_write.replace_json(path, state)
         return state

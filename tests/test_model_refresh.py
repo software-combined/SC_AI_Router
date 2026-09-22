@@ -164,6 +164,50 @@ class ModelRefreshTests(unittest.TestCase):
             (Path(tmp) / 'models-cache.json').write_text('garbage')
             self.assertIsNone(model_refresh.cached_models(tmp))
 
+    def test_stale_cache_cannot_resurrect_a_retired_row_or_hide_a_pinned_one(self):
+        # A cache written by the release before a pinned-id move still names
+        # the superseded id and knows nothing about the new one. Applying it
+        # whole put the retired row back in the picker and hid the row the
+        # router actually serves, so every Grok request was refused.
+        superseded, pinned = 'x-ai/grok-4.6', 'x-ai/grok-4.7'
+        self.assertIn(superseded, catalogue.RETIRED_SLUGS)
+        self.assertIsNotNone(registry.by_slug(pinned))
+        bundled = registry.MODELS
+        cached = model_refresh.validate(json.dumps([_row(superseded),
+                                                    _row('qwen/cached-1')]))
+        merged = model_refresh.overlay(bundled, cached)
+        slugs = {row.slug for row in merged}
+        self.assertNotIn(superseded, slugs)
+        self.assertIn(pinned, slugs)
+        self.assertIn('qwen/cached-1', slugs)
+        self.assertEqual(len(merged), len(bundled) + 1)
+
+    def test_fetched_roster_goes_through_the_same_overlay(self):
+        # The hourly fetch lands through apply_fetched, so a feed that lags
+        # the release cannot hide a pinned row or bring a retired one back
+        # either; both paths must agree with the bundled roster.
+        superseded, pinned = 'x-ai/grok-4.6', 'x-ai/grok-4.7'
+        fetched = model_refresh.validate(json.dumps([_row(superseded)]))
+        model_refresh.apply_fetched(fetched)
+        self.assertIsNone(registry.by_slug(superseded))
+        self.assertIsNotNone(registry.by_slug(pinned))
+        self.assertIsNotNone(registry.by_slug('z-ai/glm-5.3'))
+
+    def test_older_feed_cannot_shrink_or_widen_bundled_reasoning(self):
+        # The beta feed kept publishing ["none"] after the release pinned six
+        # levels. A restart then refused xhigh with "use one of none".
+        slug = 'xiaomi/mimo-v2.6-pro'
+        levels = ('none', 'minimal', 'low', 'medium', 'high', 'xhigh')
+        bundled = model_refresh.validate(json.dumps([
+            _row(slug) | {'reasoning': list(levels), 'default_reasoning': 'none'}]))
+        cached = model_refresh.validate(json.dumps([
+            _row(slug) | {'reasoning': ['none', 'ultra'],
+                          'default_reasoning': 'none'}]))
+        merged = {row.slug: row for row in model_refresh.overlay(bundled, cached)}
+        self.assertEqual(merged[slug].reasoning, levels)
+        self.assertEqual(merged[slug].default_reasoning, 'none')
+        self.assertNotIn('ultra', merged[slug].reasoning)
+
 
 if __name__ == '__main__':
     unittest.main()

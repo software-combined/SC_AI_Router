@@ -74,6 +74,13 @@ class DeriveTests(unittest.TestCase):
             'deepseek/deepseek-v4.1-flash',
             {'name': 'DeepSeek: DeepSeek V4.1 Flash'})
         self.assertEqual((vendor, label), ('DeepSeek', 'DeepSeek: V4.1 Flash'))
+        vendor, label = qualify_name(
+            'xiaomi/mimo-v2.6-flash',
+            {'name': 'Xiaomi: MiMo-V2.6-Flash'})
+        self.assertEqual((vendor, label), ('Xiaomi', 'Xiaomi: MiMo V2.6 Flash'))
+        vendor, label = qualify_name(
+            'openai/gpt-5.6-luna', {'name': 'OpenAI: GPT-5.6 Luna'})
+        self.assertEqual((vendor, label), ('OpenAI', 'OpenAI: GPT-5.6 Luna'))
 
     def test_empty_reasoning_refused(self):
         live = dict(LIVE['plain/model'], reasoning={'supported_efforts': []})

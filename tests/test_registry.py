@@ -216,6 +216,10 @@ class RegistryTests(unittest.TestCase):
         self.assertEqual(catalog_name(deepseek), 'DeepSeek: V4 Pro 0813')
         muse = by_slug('meta/muse-spark-1.3')
         self.assertEqual(catalog_name(muse), 'Meta: Muse Spark 1.3')
+        self.assertEqual(catalog_name(by_slug('xiaomi/mimo-v2.6-flash')),
+                         'Xiaomi: MiMo V2.6 Flash')
+        self.assertEqual(catalog_name(by_slug('xiaomi/mimo-v2.6-pro')),
+                         'Xiaomi: MiMo V2.6 Pro')
 
     def test_display_names_follow_qualified_naming_convention(self):
         # Picker labels must read '<Vendor>: <Model> <Version?>'; the vendor

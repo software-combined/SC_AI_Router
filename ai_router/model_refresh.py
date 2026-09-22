@@ -18,6 +18,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from dataclasses import replace
 from pathlib import Path
 from .atomic_write import replace_text
 
@@ -58,6 +59,58 @@ def cached_models(home):
         return validate(text)
     except SystemExit:
         return None
+
+
+# The import-time roster. apply() swaps registry.MODELS, so an overlay must
+# be measured against the bundle rather than against whatever a previous
+# apply left there, or one stale roster could hide the rows this release
+# pinned from every later one.
+BUNDLED = registry.MODELS
+
+
+def _pin_reasoning(row, bundled_by_slug):
+    """Keep the release's effort list when a feed row names the same slug.
+
+    The feed may add a row the bundle has never seen. It must not shrink or
+    widen the effort list this release pinned, or a restart loads the older
+    gate and refuses an effort the picker just offered.
+    """
+    pinned = bundled_by_slug.get(row.slug)
+    if pinned is None or (row.reasoning == pinned.reasoning
+                          and row.default_reasoning == pinned.default_reasoning):
+        return row
+    return replace(row, reasoning=pinned.reasoning,
+                   default_reasoning=pinned.default_reasoning)
+
+
+def overlay(bundled, cached):
+    """Bundled rows first: the cache updates and extends, never rewrites.
+
+    A cache written by an older release still names the id that release
+    pinned and knows nothing about a row pinned since, so applying it whole
+    resurrects a retired slug and hides the current one: the picker then
+    offers a row the router refuses. The bundle stays authoritative for its
+    own rows, the cache carries live data forward and may add rows the
+    bundle has never seen, and a slug the bundle retired stays retired.
+    A feed row for a bundled slug keeps that release's reasoning list.
+    """
+    retired = catalogue.RETIRED_SLUGS
+    bundled_by_slug = {row.slug: row for row in bundled}
+    merged = [_pin_reasoning(row, bundled_by_slug) for row in cached
+              if row.slug in bundled_by_slug or row.slug not in retired]
+    known = {row.slug for row in merged}
+    merged.extend(row for row in bundled if row.slug not in known)
+    return tuple(merged)
+
+
+def apply_fetched(models):
+    """Apply one cached or fetched roster through the bundle-first overlay.
+
+    Both paths land here: the boot cache and the hourly payload can each be
+    written by a different release than the bundle being served, so neither
+    may retire a pinned row or restore a retired one on its own.
+    """
+    apply(overlay(BUNDLED, models))
 
 
 def fetch(url, etag, _urlopen=urllib.request.urlopen):
@@ -131,7 +184,7 @@ def start(models_url, home, _urlopen=urllib.request.urlopen):
         return None
     cached = cached_models(home)
     if cached is not None:
-        apply(cached)
+        apply_fetched(cached)
         check_pending(home)
     etag_path = Path(home) / 'models-etag'
     try:
@@ -146,7 +199,7 @@ def start(models_url, home, _urlopen=urllib.request.urlopen):
             time.sleep(REFRESH_INTERVAL_S + random.uniform(0, REFRESH_JITTER_S))
             models, etag = poll_once(models_url, home, etag, _urlopen)
             if models is not None:
-                apply(models)
+                apply_fetched(models)
                 check_pending(home)
             if etag:
                 try:

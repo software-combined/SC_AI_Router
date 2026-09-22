@@ -2,6 +2,94 @@
 
 ## Unreleased
 
+## 0.6.112
+
+- A router update keeps the release's effort list. An older feed can no
+  longer shrink or widen it on restart, which is what made MiMo refuse
+  `xhigh` with "use one of none" after the picker already offered it.
+- An update restores the ChatGPT picker when the saved roster is empty.
+  A non-empty custom list is left alone.
+
+## 0.6.111
+
+- Both Xiaomi MiMo rows offer the effort list Xiaomi documents (`none`,
+  `minimal`, `low`, `medium`, `high`, `xhigh`), default `none`. OpenRouter
+  advertises no names, so the picker had been showing a single Medium
+  control with nothing to choose.
+
+## 0.6.110
+
+- The update notice lists new models as bullets, one picker label per line,
+  instead of joining them into one sentence.
+- Quit and reopen on macOS waits until Codex has quit, for up to five
+  seconds, before opening it again. The button relaunches the app instead
+  of only quitting it, and a quit that never finishes still opens it.
+- The Xiaomi picker labels read `Xiaomi: MiMo V2.6 Flash` and
+  `Xiaomi: MiMo V2.6 Pro`, matching the other rows. A live refresh keeps
+  that spacing instead of putting the upstream hyphens back. Both still
+  offer only `none`, so there is no effort menu to open.
+
+## 0.6.109
+
+- Claude Code attached to the router defers MCP tool definitions instead of
+  sending every schema on every turn. Claude Code turns deferred loading off
+  for a base URL that is not Anthropic's own host, so the installer owns two
+  more `env` settings, `ENABLE_TOOL_SEARCH=true` and
+  `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1`, restores them on detach, and
+  refuses to attach while `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS` is set
+  anywhere in reach: that switch forces the feature off and no value
+  overrides it. Measured on Claude Code `2.1.223` with 700 synthetic MCP
+  tools, the first request of a session carries 727 tool definitions and
+  271 KB without deferral, and 11 definitions and 100 KB with it.
+- The external Messages route rewrites that shape, because OpenRouter
+  implements none of Anthropic's deferred-tool protocol: the
+  `DeferredToolPlaceholder` and a server-side search tool entry go, the
+  `defer_loading` flag goes (the released definition already rides in the
+  same request's tool list, so the model keeps the tool), and a
+  `tool_reference` content block becomes the text naming the tool it stood
+  for, which keeps every `tool_use` and `tool_result` paired. The
+  subscription route stays byte-identical. A live probe on
+  `z-ai/glm-5.3-flash` completed the deferred round trip in three turns with
+  a 700-tool catalogue, and the control against the installed release passed
+  too: OpenRouter currently tolerates the raw shape, so this is hardening
+  rather than a repair of a live failure, and no routed turn depends on that
+  tolerance any more.
+- `tools/capture_claude_shapes.py` captures what Claude Code actually sends
+  against a local sink: no model call, no billing and no credential read,
+  across the deferral flag, the first-party assumption and the hard switch.
+  `tools/probe_claude_code.py` gained `--deferred` (a synthetic 700-tool MCP
+  server, one search round trip) and `--candidate` (an isolated router from
+  the working tree), and `--doctor` now fails the Claude row, naming the
+  file, when the hard switch is set.
+
+## 0.6.108
+
+- Two Xiaomi MiMo 2.6 rows join the picker: `xiaomi/mimo-v2.6-pro` and
+  `xiaomi/mimo-v2.6-flash`, verified by hand because the probe harness bills
+  its round trip at `low` and these rows accept only `none`. Both were
+  served solely by the first-party Xiaomi endpoint, which the account's
+  org-level Allowed Providers list did not include, so no key could reach
+  them and the picker had nothing to offer. Allowing that provider also
+  restored `qwen/qwen3.8-max-0902`, hidden for the same single-endpoint
+  reason.
+
+## 0.6.107
+
+- A pinned row survives a model cache written by an older release. The
+  hourly model refresh keeps a cache of the last roster it fetched, and the
+  boot path applied that cache whole: after the roster moved to Grok 4.7,
+  a cache from the 4.6 era put the retired id back and hid the new one, so
+  the picker offered Grok 4.6 while the router only served 4.7 and every
+  request was refused as unavailable. Both the boot cache and the hourly
+  payload now overlay the bundled roster instead of replacing it: they may
+  update the rows the bundle knows and add rows the bundle has never seen,
+  but neither restores a retired slug nor drops a pinned one.
+- The new-model prompt can name a row the cache was hiding. The dialog asks
+  the running router which picker rows are new; while the stale cache
+  supplied the roster, that answer was empty and the sentence fell back to
+  its version-only shape. With the bundle authoritative the answer names
+  the added rows again, so an update that adds a model says which one.
+
 ## 0.6.106
 
 - The picker pins Grok 4.7. Upstream moved while the roster pinned 4.6, and

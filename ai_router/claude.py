@@ -156,12 +156,15 @@ class ExternalMessagesProvider:
         # resolve() only returns a different string for a known registry slug.
         # payload is the parsed form of this same body, so rewrite the alias
         # there instead of decoding raw_body again. The body leaves untouched
-        # unless the alias or the client's own billing block has to change.
+        # unless the alias, the client's own billing block or its deferred-tool
+        # protocol has to change; both repairs always run.
         rewritten = (isinstance(model, str) and upstream != model
                      and isinstance(payload, dict))
         if rewritten:
             payload['model'] = upstream
-        if claude_compat.strip_billing_header(payload) or rewritten:
+        changed = claude_compat.strip_billing_header(payload)
+        changed |= claude_compat.flatten_deferred_tools(payload)
+        if changed or rewritten:
             body = json.dumps(payload).encode()
         return transport.Prepared(
             self.host, self.defn.path_for(provider_defs.MESSAGES, path),

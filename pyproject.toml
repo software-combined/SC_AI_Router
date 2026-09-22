@@ -1,6 +1,6 @@
 [project]
 name = "ai-router"
-version = "0.6.106"
+version = "0.6.112"
 requires-python = ">=3.14"
 dependencies = []
 description = "Local model router for Codex and Claude Code: subscription models and OpenRouter models side by side from one loopback endpoint."
