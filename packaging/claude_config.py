@@ -1,9 +1,10 @@
 """Claude Code activation adapter (Plan 112). Python 3.9-safe helper.
 
-Owns the two owned `env` settings merged into the user's settings.json,
-conflict refusal on hand-edited owned values, and activation receipt
-handling. Loaded through the installer's explicit file-import pattern
-and shipped in the release bundle. No runtime/protocol import here.
+Owns the four `env` settings merged into the user's settings.json, conflict
+refusal on hand-edited owned values and on the tool-search hard switch, and
+activation receipt handling. Loaded through the installer's explicit
+file-import pattern and shipped in the release bundle. No runtime/protocol
+import here.
 """
 import json
 import os
@@ -20,7 +21,17 @@ _spec.loader.exec_module(atomic_write)
 
 BASE_URL_KEY = 'ANTHROPIC_BASE_URL'
 DISCOVERY_KEY = 'CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY'
-OWNED_KEYS = (BASE_URL_KEY, DISCOVERY_KEY)
+# Claude Code 2.1.223 turns deferred MCP tool loading off for a base URL that
+# is not Anthropic's own host unless ENABLE_TOOL_SEARCH says otherwise, and it
+# reads `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL` to decide whether the host
+# may carry the client's first-party betas and shapes at all. The router is the
+# only reason either is set, so it owns both and restores them on detach.
+TOOL_SEARCH_KEY = 'ENABLE_TOOL_SEARCH'
+FIRST_PARTY_KEY = '_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL'
+# Not owned: this one is a hard off switch for the whole feature and no value
+# can override it, so an attach refuses while it is set anywhere in reach.
+DISABLE_KEY = 'CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS'
+OWNED_KEYS = (BASE_URL_KEY, DISCOVERY_KEY, TOOL_SEARCH_KEY, FIRST_PARTY_KEY)
 
 
 def settings_path(env=None):
@@ -34,7 +45,44 @@ def settings_path(env=None):
 
 def desired_env(home, state):
     return {BASE_URL_KEY: 'http://127.0.0.1:%s/%s' % (state['port'], state['token']),
-            DISCOVERY_KEY: 'true'}
+            DISCOVERY_KEY: 'true',
+            TOOL_SEARCH_KEY: 'true',
+            FIRST_PARTY_KEY: '1'}
+
+
+def _truthy(value):
+    """Claude Code reads the switch as a string; empty and 0 mean unset."""
+    return (isinstance(value, str)
+            and value.strip().lower() not in ('', '0', 'false', 'no'))
+
+
+def switch_sources(doc, env=None):
+    """Where the tool-search hard switch is set, or an empty list.
+
+    Claude Code forces tool search off whenever `CLAUDE_CODE_DISABLE_
+    EXPERIMENTAL_BETAS` is truthy, and `ENABLE_TOOL_SEARCH` cannot override
+    it, so a client attached while it is set would silently send every MCP
+    tool on every turn.
+    """
+    sources = []
+    block = doc.get('env') if isinstance(doc, dict) else None
+    if isinstance(block, dict) and _truthy(block.get(DISABLE_KEY)):
+        sources.append('the settings env block')
+    env = os.environ if env is None else env
+    if _truthy(env.get(DISABLE_KEY)):
+        sources.append('the environment')
+    return sources
+
+
+def switch_sources_at(path, env=None):
+    """switch_sources for one settings file; nothing readable reads as none."""
+    try:
+        doc = read_settings(path)
+    except (OSError, ValueError, SystemExit, TypeError):
+        # A receipt without a config_path reaches Path(None): the doctor must
+        # report a row, never a traceback.
+        return []
+    return switch_sources(doc, env)
 
 
 def read_settings(path):
@@ -51,18 +99,26 @@ def read_settings(path):
 
 
 def merge_env(home, state, path=None, env=None):
-    """Merge the two owned env keys; refuse conflicting hand-edited values.
+    """Merge the four owned env keys; refuse conflicting hand-edited values.
 
     Returns (doc, changed, previous_owned) where previous_owned maps each
     owned key to its prior value (or None when absent) for the receipt.
     Conflicting effective overrides block activation with a redacted
-    explanation: only values this installer wrote before may be replaced.
+    explanation: only values this installer wrote before may be replaced. A
+    set tool-search hard switch blocks for the same reason and names its
+    source.
     """
     path = Path(path) if path is not None else settings_path(env)
     doc = read_settings(path)
     owned = doc.get('env', {})
     if not isinstance(owned, dict):
         raise SystemExit('Claude settings env is not an object: %s' % path)
+    blocked = switch_sources(doc, env)
+    if blocked:
+        raise SystemExit(
+            'Claude setting %s is set by %s; it forces deferred tool loading '
+            'off and no value overrides it. Remove it, then re-run.'
+            % (DISABLE_KEY, ' and '.join(blocked)))
     doc['env'] = owned
     want = desired_env(home, state)
     previous = {key: owned.get(key) for key in OWNED_KEYS}
@@ -156,7 +212,7 @@ def attach(home, state, receipts, settings_path_override=None, env=None,
            listing=None):
     """Attach Claude Code without touching Codex settings or native login.
 
-    Merges only the two owned env keys; conflicting effective overrides
+    Merges only the four owned env keys; conflicting effective overrides
     refuse with a redacted message. Records the claude attachment in the
     versioned receipt. Returns the settings path written.
     """

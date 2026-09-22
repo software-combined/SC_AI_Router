@@ -1,5 +1,70 @@
 # Compatibility
 
+## Claude Code deferred tool loading, 22 September 2026 AEST
+
+Client: Claude Code `2.1.223` (standalone CLI); router candidate `0.6.107`
+built from `cyril/claude-tool-search-20260922`, with installed release
+`0.6.106.99` as the control. Model `z-ai/glm-5.3-flash`. Every leg is
+synthetic: one marker value handed to a stub tool and echoed back, one row,
+and no retry of a row inside a run.
+
+Shape capture, offline and unbilled (`tools/capture_claude_shapes.py`): the
+client was driven against a loopback sink scripted to walk one deferred-tool
+turn, with a synthetic MCP server advertising three tools.
+
+| env for the session | tools sent | deferred entries | search entries | tool_reference |
+|---|---|---|---|---|
+| baseline | 30 | none | none | none |
+| `ENABLE_TOOL_SEARCH=true` | 11 | `DeferredToolPlaceholder` | `ToolSearch`, placeholder | yes, from the follow-up |
+| that plus `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` | 30 | none | none | none |
+| `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1` | 11 | `DeferredToolPlaceholder` | `ToolSearch`, placeholder | yes |
+| both of the above | 11 | `DeferredToolPlaceholder` | `ToolSearch`, placeholder | yes |
+
+The same capture recorded three further facts. `ENABLE_TOOL_SEARCH=true` adds
+`advanced-tool-use-2025-11-20` to the request's beta list and the first-party
+assumption adds `cache-diagnosis-2026-04-07`; the hard switch removes the
+tool-search beta and the deferral together. The deferred definitions are not
+sent at all: a released tool arrives in the *next* request marked
+`defer_loading: true`, in the same request that carries the `tool_reference`
+block naming it, and `ToolSearch` is an ordinary client tool the client
+executes itself. Request size with 700 synthetic MCP tools: 727 definitions
+and 271,389 bytes on the first request without deferral, 11 definitions and
+99,969 bytes with it.
+
+Live, candidate build: `PROBE_AUTH_TOKEN` set,
+`tools/probe_claude_code.py --models z-ai/glm-5.3-flash --deferred
+--candidate z-ai/glm-5.3-flash`, which boots an isolated router from the
+working tree on its own home, port and token.
+
+| leg | result | turns | seconds |
+|---|---|---|---|
+| read | pass, marker returned | 2 | 57.1 |
+| deferred, 700 stub tools | pass, marker returned | 3 | 33.3 |
+
+Three turns are the search, the released tool call and the answer, so the
+round trip went through the search rather than around it. The synthetic
+bearer is there because this host's client login is not readable by a
+non-interactive probe; a routed row bills the deployment's own key either way.
+
+Control, installed release `0.6.106.99`, which has no rewrite on the external
+route: the first attempt ran read pass and deferred fail with `API Error: 503
+The model is rate limited right now and the turn was not served.`
+(`upstream_rate_limited` -> `UPSTREAM_RATE_LIMITED`), which says nothing about
+the shape. The same two legs re-run four minutes later both passed: read 66.9
+s / 3 turns, deferred 31.4 s / 3 turns. OpenRouter therefore tolerates the raw
+deferred shape today, and the rewrite ships as hardening rather than as a
+repair: the routed request now carries only what an Anthropic-compatible
+converter can be expected to serve, with no placeholder tool, no
+`defer_loading` field and no `tool_reference` block, and the released
+definition already present in the tool list.
+
+Scope: one routed row, one tool and one round trip per leg, with a synthetic
+catalogue. A subscription leg was not run, because this host's client login is
+not readable outside its own terminal and the probe does not borrow one. The
+desktop app's gateway shape is documented by the app bundle, which says an app
+bundling Claude Code 2.1.247 or later sends the tool-search shape itself, and
+it was not hand-driven in this run.
+
 ## Grok 4.7 pinned row, 22 September 2026 AEST
 
 Upstream moved to Grok 4.7 while the roster pinned 4.6, so the pinned id

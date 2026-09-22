@@ -85,6 +85,13 @@ one replaces the subscription credential the router forwards.
 - Detach everything: `packaging/install.py --home <home> --uninstall`.
 - Desktop third-party profile: add `--desktop` when attaching.
 
+If Claude Code routes but loads every MCP tool on every turn, deferred tool
+loading is off. `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS`, set anywhere in
+reach, forces it off and no value overrides it: the attach refuses while it is
+set and `python3.14 packaging/install.py --doctor` names the file carrying it.
+Remove the variable, restart Claude Code, and check that `ENABLE_TOOL_SEARCH`
+is `true` in the client's `env` block. See `docs/claude-code.md`.
+
 ## A request fails
 
 | Code | Meaning |
