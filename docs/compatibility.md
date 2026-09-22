@@ -65,6 +65,31 @@ desktop app's gateway shape is documented by the app bundle, which says an app
 bundling Claude Code 2.1.247 or later sends the tool-search shape itself, and
 it was not hand-driven in this run.
 
+## Xiaomi MiMo 2.6 rows, 22 September 2026 AEST
+
+`xiaomi/mimo-v2.6-pro` and `xiaomi/mimo-v2.6-flash` joined the registry from
+their live OpenRouter metadata: no advertised effort (`none`), text, image
+and audio input, a 1048576-token context, 131072 output tokens and no search
+pricing. Both are served only by the first-party Xiaomi endpoint, so they
+stayed unavailable until the account added that provider to its org-level
+Allowed Providers list; the same change added Alibaba Cloud Int. for
+`qwen/qwen3.8-max-0902`, which the key had also been hiding.
+
+| model | tier | date | probes |
+|---|---|---|---|
+| xiaomi/mimo-v2.6-flash | verified | 2026-09-22 | tool,stream,image,compact at `--effort none` |
+| xiaomi/mimo-v2.6-pro | verified | 2026-09-22 | tool,stream,image,compact at `--effort none` |
+
+`models add --probe` cannot verify these rows: the harness bills its round
+trip at the default `low`, and the router's effort gate refuses `low` for a
+row whose only effort is `none`. Both were proved by hand, the way
+`docs/adding-a-model.md` describes: the preview row in place, an isolated
+router, then `tools/probe_codex_runtime.py <slug> --router-state
+<home>/mixed-router-state.json --catalog <home>/candidate-catalogue.json
+--effort none --image --compact` (Codex CLI `0.155.0-alpha.9.2`). Each run
+returned `userMessage`, `dynamicToolCall`, `agentMessage`, then
+`media_color_seen: true` on the image turn and a completed compaction.
+
 ## Grok 4.7 pinned row, 22 September 2026 AEST
 
 Upstream moved to Grok 4.7 while the roster pinned 4.6, so the pinned id
@@ -918,6 +943,8 @@ Per-model quirks, generated from the registry:
 | openai/gpt-6-astra | text,image | native | None | - | verified |
 | qwen/qwen3.8-max-0902 | text,image | native | None | - | verified |
 | x-ai/grok-4.7 | text,image | json_text_root | 350 | - | verified |
+| xiaomi/mimo-v2.6-flash | text,image,audio | native | None | - | verified |
+| xiaomi/mimo-v2.6-pro | text,image,audio | native | None | - | verified |
 | z-ai/glm-5.3-flash | text,image | native | 128 | - | verified |
 | z-ai/glm-5.3 | text | native | 128 | - | verified |
 

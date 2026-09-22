@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## 0.6.108
+## 0.6.109
 
 - Claude Code attached to the router defers MCP tool definitions instead of
   sending every schema on every turn. Claude Code turns deferred loading off
@@ -34,6 +34,17 @@
   server, one search round trip) and `--candidate` (an isolated router from
   the working tree), and `--doctor` now fails the Claude row, naming the
   file, when the hard switch is set.
+
+## 0.6.108
+
+- Two Xiaomi MiMo 2.6 rows join the picker: `xiaomi/mimo-v2.6-pro` and
+  `xiaomi/mimo-v2.6-flash`, verified by hand because the probe harness bills
+  its round trip at `low` and these rows accept only `none`. Both were
+  served solely by the first-party Xiaomi endpoint, which the account's
+  org-level Allowed Providers list did not include, so no key could reach
+  them and the picker had nothing to offer. Allowing that provider also
+  restored `qwen/qwen3.8-max-0902`, hidden for the same single-endpoint
+  reason.
 
 ## 0.6.107
 
