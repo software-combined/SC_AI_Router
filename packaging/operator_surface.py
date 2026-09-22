@@ -170,25 +170,28 @@ def _catalogue_row(home, interpreter):
 
 
 def _claude_drift(home, state):
-    """('absent'|'nosnapshot'|'unknown'|'match'|'drift', detail) for the doctor.
+    """('absent'|'nosnapshot'|'unknown'|'match'|'drift'|'switch', detail).
 
-    The snapshot is the served listing recorded at attach; the live answer
-    comes from the running router, so a registry or client change shows up
-    as added or removed ids instead of a silent surprise in the picker.
+    The snapshot is the listing recorded at attach and the live answer comes
+    from the running router, so drift shows as added or removed ids. A set
+    tool-search hard switch fails the row rather than degrading quietly.
     """
     try:
         receipt = _diag._codex_config.read_receipt(home)
     except (OSError, ValueError):
         receipt = {}
     if not receipt and _diag._codex_config.receipt_path_for(home).exists():
-        # read_receipt also degrades a shape-invalid document (a list, an
-        # unknown version, a non-object clients value) to {}, so screen the
-        # file's existence outside the except branch to cover both.
+        # read_receipt also degrades a shape-invalid document to {}, so the
+        # file's existence is screened here to cover both cases.
         return 'unknown', 'the activation receipt is unreadable'
     entry = (receipt.get('clients', {}).get('claude')
              if isinstance(receipt, dict) else None)
     if not isinstance(entry, dict):
         return 'absent', 'Claude Code is not attached'
+    switch = _diag._claude_config.switch_sources_at(entry.get('config_path'))
+    if switch:
+        return 'switch', 'tool search is off: %s sets %s' % (' and '.join(switch),
+                                                             _diag._claude_config.DISABLE_KEY)
     snapshot = entry.get('listing')
     rows = snapshot.get('models') if isinstance(snapshot, dict) else None
     if not isinstance(rows, list):
@@ -254,14 +257,12 @@ def _doctor_rows(args, home, state):
         rows.append(_row('key:' + provider_id, row_status, detail, fix))
     rows.append(_catalogue_row(home, interpreter))
     claude_state, claude_detail = _claude_drift(home, state)
-    if claude_state in ('match', 'absent'):
-        claude_fix = None
-    elif claude_state == 'nosnapshot':
-        claude_fix = 'run the installer with --setup to record the snapshot'
-    else:
+    claude_fix = {'nosnapshot': 'run the installer with --setup to record the snapshot',
+                  'switch': 'remove the variable, then restart Claude Code'}.get(claude_state)
+    if claude_fix is None and claude_state not in ('match', 'absent'):
         claude_fix = 'check --status; restart Claude Code after a listing change'
-    rows.append(_row('claude', OK if claude_fix is None else WARN,
-                     claude_detail, claude_fix))
+    rows.append(_row('claude', FAIL if claude_state == 'switch'
+                     else WARN if claude_fix else OK, claude_detail, claude_fix))
     sched_status, sched_detail = _scheduler_state(home)
     # A missing or unreadable carrier means automatic updates are not proven
     # to run, so the doctor fails rather than warns.

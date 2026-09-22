@@ -50,11 +50,11 @@ class ClaudeCodeProbeTests(unittest.TestCase):
         self.binary.write_text(FAKE_BIN)
         os.chmod(self.binary, 0o755)
 
-    def _run(self, mode):
+    def _run(self, mode, *extra):
         env = dict(os.environ, CLAUDE_BIN=str(self.binary), FAKE_CLAUDE_MODE=mode)
         return subprocess.run(
             [sys.executable, str(PROBE), '--home', str(self.home),
-             '--models', MODEL, '--json'],
+             '--models', MODEL, '--json', *extra],
             cwd=str(ROOT), env=env, capture_output=True, text=True, timeout=120)
 
     def _row(self, mode):
@@ -91,3 +91,14 @@ class ClaudeCodeProbeTests(unittest.TestCase):
         done, _ = self._row('exact')
         self.assertNotIn('test-token', done.stdout)
         self.assertNotIn('127.0.0.1', done.stdout)
+
+    def test_the_deferred_leg_runs_with_the_installed_client_settings(self):
+        # The fake echoes probe.txt, so the marker proves the harness reached
+        # the same acceptance rule with the deferred leg's own prompt, tool
+        # list and env; the record names the leg it ran.
+        done = self._run('exact', '--deferred')
+        report = json.loads(done.stdout)
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertEqual([row['leg'] for row in report['results']],
+                         ['read', 'deferred'])
+        self.assertTrue(all(row['pass'] for row in report['results']))

@@ -34,6 +34,8 @@ _codex_config = _svc.load(
 # future write path must not hit the un-injected guard (Plan 094).
 _codex_config._atomic_write = _svc.load(
     'router_atomic_write', Path(__file__).resolve().parent / 'atomic_write.py')
+_claude_config = _svc.load(
+    'router_claude_config', Path(__file__).resolve().parent / 'claude_config.py')
 _state = _svc.load(
     'router_state', Path(__file__).resolve().parents[1] / 'ai_router' / 'state.py')
 
