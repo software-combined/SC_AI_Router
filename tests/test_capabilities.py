@@ -23,6 +23,9 @@ class CapabilityTests(unittest.TestCase):
                          ['low', 'high', 'max'])
         self.assertEqual(reasoning_levels('deepseek/deepseek-v4.1-flash'),
                          ['low', 'high', 'max'])
+        for slug in ('xiaomi/mimo-v2.6-flash', 'xiaomi/mimo-v2.6-pro'):
+            self.assertEqual(reasoning_levels(slug),
+                             ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'])
 
     def test_trial_values_proven_for_subagents_and_switching(self):
         patch = catalogue_patch('z-ai/glm-5.3')

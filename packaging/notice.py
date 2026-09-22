@@ -251,8 +251,11 @@ def _darwin_script(message, icon, restart=True):
         'if answer is "%s" then' % REOPEN,
         '  try',
         '    tell application id "%s" to quit' % CODEX_BUNDLE_ID,
+        '    repeat 25 times',
+        '      if application id "%s" is not running then exit repeat' % CODEX_BUNDLE_ID,
+        '      delay 0.2',
+        '    end repeat',
         '  end try',
-        '  delay 2',
         '  do shell script "open -b %s"' % CODEX_BUNDLE_ID,
         'end if',
     ])

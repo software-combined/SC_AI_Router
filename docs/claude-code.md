@@ -32,12 +32,38 @@ python3.14 packaging/install.py --clients claude --desktop  # terminal and app
 ```
 
 Then quit and restart Claude Code. That is the whole setup: the installer
-writes the two settings it owns in `~/.claude/settings.json`, keeps your
+writes the four settings it owns in `~/.claude/settings.json`, keeps your
 existing subscription sign-in, and records what it changed so the same
 installer can undo it. Attaching is additive, so nothing you did not ask for
 is removed, and cancelling a question changes nothing. The one thing it will
 not do is overwrite a setting you edited by hand: it refuses and tells you to
 fix that value first.
+
+### Deferred tool loading
+
+Claude Code can hold MCP tool definitions back and load them only when they
+are needed: the client keeps the catalogue, searches it locally through its
+own `ToolSearch` tool, and sends the model only the tools a search released.
+That is what keeps a session attached to a dozen connector servers inside a
+model's context window instead of sending every schema on every turn.
+
+It is off for any base URL that is not Anthropic's own host unless asked for,
+so the installer sets `ENABLE_TOOL_SEARCH=true` and
+`_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1` alongside the base URL and the
+listing flag. Measured on Claude Code `2.1.223` with 700 synthetic MCP tools,
+the first request of a session carries 727 tool definitions and 271 KB
+without it, and 11 definitions and 100 KB with it; the deferred tools arrive
+as the model asks for them.
+
+Two things defeat it, and neither is something the installer can fix quietly:
+
+- `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS`, set to anything truthy, turns the
+  feature off and no value overrides it. The attach refuses while it is set in
+  the settings `env` block or in the environment, and `--doctor` reports it
+  with the file that carries it.
+- A client that cannot search at all still loads every MCP tool. Exclude the
+  connector servers for that session with
+  `--strict-mcp-config --mcp-config '{"mcpServers": {}}'`.
 
 On a machine installed from the bootstrap there is no checkout to run from, so
 download the current bootstrap first (an older download rejects the new flag),
@@ -113,9 +139,14 @@ switching providers.
 
 ## Attachment contract
 
-The installer owns exactly two `env` keys in `~/.claude/settings.json`
-(`ANTHROPIC_BASE_URL` and `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY`) and
-restores the previous values on detach. `ANTHROPIC_AUTH_TOKEN` and
+The installer owns exactly four `env` keys in `~/.claude/settings.json`
+(`ANTHROPIC_BASE_URL`, `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY`,
+`ENABLE_TOOL_SEARCH` and `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL`) and
+restores the previous values on detach. A hand-edited value for any of the
+four refuses the attach rather than being overwritten, and so does
+`CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS`, which is refused rather than owned:
+it forces deferred tool loading off and no value overrides it.
+`ANTHROPIC_AUTH_TOKEN` and
 `ANTHROPIC_API_KEY` must stay unset: either one overrides the subscription
 bearer, so subscription requests would stop reaching Anthropic with the
 client's own login and the listing fetch would present the wrong credential.
@@ -156,13 +187,19 @@ hand-edited conflict instead of overwriting it.
   refused; OpenRouter models still serve.
 - The Claude path relays the upstream stream, so `/health` `served_models`
   does not track it and no compaction endpoint exists for it.
-- A routed row inherits whatever tools the client has loaded. Claude
-  Code adds every claude.ai connector MCP tool to its request once the
-  first turn has loaded them; on a machine with hundreds of connector
-  tools that tool list alone can exceed the model's context window, and
-  upstream refuses the turn with a context error. Exclude them for a
-  routed session (`--strict-mcp-config --mcp-config '{"mcpServers": {}}'`)
-  when the tool list does not fit the row.
+- A routed row inherits whatever tools the client has loaded, but with
+  deferred loading on it inherits only the names until a search releases one.
+  OpenRouter implements no part of Anthropic's deferred-tool protocol, so the
+  external route rewrites that one shape before forwarding it rather than
+  relying on it being tolerated: the
+  `DeferredToolPlaceholder` and the server-side search tool entry go, the
+  `defer_loading` flag goes (the released definition is already in the same
+  request's tool list, so the model keeps the tool), and a `tool_reference`
+  content block becomes the plain text naming the tool it stood for, which
+  keeps every `tool_use` and `tool_result` paired. The subscription route is
+  left byte-identical. Without deferred loading a long connector list can
+  still exceed a row's context window, and the session workaround is
+  `--strict-mcp-config --mcp-config '{"mcpServers": {}}'`.
 - Live verification, 2026-09-21: Claude Code `2.1.223` completed a
   Read-tool round trip on all 18 advertised rows plus a subscription
   model, with those connector servers excluded. Before the two repairs
@@ -170,6 +207,16 @@ hand-edited conflict instead of overwriting it.
   `google/gemini-3.8-flash` returned an empty answer after its tool
   call. The versions, the failures and the run are recorded in
   `docs/compatibility.md`.
+- Deferred-tool verification, 2026-09-22: a synthetic 700-tool MCP server,
+  `z-ai/glm-5.3-flash`, Claude Code `2.1.223` and a router built from the
+  working tree. Both legs passed; the deferred leg took three turns, meaning
+  the search ran, the client released the tool and the model called it. The
+  same two legs then passed against the installed release, unchanged, which
+  is why the rewrite above is described as hardening: OpenRouter tolerates
+  the raw shape today, and the routed path no longer depends on that. The
+  shape the client sends is captured offline by
+  `tools/capture_claude_shapes.py`, and `docs/compatibility.md` carries the
+  run record, including the first, rate-limited control attempt.
 
 ### Bounded Claude Code verification
 
@@ -182,10 +229,15 @@ passes when the marker comes back in the answer, not only when it is the whole
 answer: some rows narrate it, and that is a finished turn rather than a fault.
 An empty or refused turn still fails. The probe leaves the caller's Claude
 settings alone: it points a disposable settings file at the router and never
-prints the loopback URL. Pass `--models` to narrow it, `--max-rows` to raise
-the cap, or `--json` for a machine-readable report. Point it at an isolated
-candidate home to check a build before it is installed, and set `CLAUDE_BIN`
-to drive a different client binary.
+prints the loopback URL. `--deferred` adds the leg an attached client
+actually runs: a synthetic MCP server advertising 700 stub tools, tool search
+on, and one round trip that must come back through the search. `--candidate
+<slug>` boots an isolated router from this working tree for that row and tears
+it down afterwards, so a build can be checked before it is installed, and
+`PROBE_AUTH_TOKEN` supplies a synthetic bearer for a routed row on a host
+whose client login a non-interactive probe cannot read. Pass `--models` to
+narrow it, `--max-rows` to raise the cap, or `--json` for a machine-readable
+report, and set `CLAUDE_BIN` to drive a different client binary.
 
 ## Claude desktop app
 
@@ -261,6 +313,18 @@ version. Any `thinking` the app sends still travels byte-identical
 through the router. Effort choice for gateway models stays a CLI
 (`ANTHROPIC_MODEL` plus per-call fields) and Codex picker affair until
 the client offers otherwise.
+
+Deferred tool loading: the app's own gateway mode already asks for it. From
+an app that bundles Claude Code `2.1.247` or later, the request carries the
+`tool-search-tool-2025-10-19` beta value, the deferred tool loading and the
+`tool_reference` blocks, while the app suppresses Claude Code's other
+experimental betas for that provider. The external-route rewrite above is
+what makes that shape work through OpenRouter; the desktop attachment does
+not write any env key of its own for it, and the app's suppression stays as
+it is. An operator who wants the app to defer even where its own policy says
+otherwise can set `ENABLE_TOOL_SEARCH` to `force` in OS-level Claude Code
+managed settings with `parentSettingsBehavior: "merge"`; the installer never
+writes that policy file.
 
 ### Bounded desktop verification
 

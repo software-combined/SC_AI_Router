@@ -5,6 +5,8 @@ names. Consumed by models.py (new rows) and live_refresh.py (derived
 fields). Must never import models, live_refresh, catalogue, providers,
 installer, or clients.
 """
+import re
+
 from . import provider_defs
 
 # Codex input vocabulary: change this one line if Codex widens InputModality.
@@ -36,7 +38,11 @@ def qualify_name(slug, live):
     first, _, rest = short.strip().partition(' ')
     if rest and first.rstrip('s').lower() == vendor.rstrip('s').lower().split()[-1]:
         short = rest
-    return vendor, f'{vendor}: {short.strip()}'
+    # Upstream joins a model to its version with hyphens (MiMo-V2.6-Flash).
+    # The picker reads <Model> <Version>, so a hyphen before a new word
+    # becomes a space. A hyphen inside one token (GPT-5.6, V2.6) stays.
+    short = re.sub(r'(?<=[A-Za-z0-9])-(?=[A-Z])', ' ', short.strip())
+    return vendor, f'{vendor}: {short}'
 
 
 def project_modalities(live_modalities):

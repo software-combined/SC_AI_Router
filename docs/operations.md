@@ -328,6 +328,14 @@ health check. Scheduled updates keep running after a rollback, so the
 channel offers the newer release again at the next pass; stop the scheduled
 update job if the rollback has to persist until a fix ships.
 
+A rollback does not rewrite the picker catalogue. Rows the newer release
+added stay listed in the picker even though the restored release cannot
+route them, and selecting one ends the turn with "That model is not
+available on this machine". Re-run the installer, or refresh the picker
+with `python3.14 -m ai_router.catalogue --merge <home>/mixed-models.json`
+from the restored release, after rolling back across a release that added
+or renamed a row.
+
 A release before 0.6.9 recorded a `--feed` install's own build number in
 `<home>/feed-serial`, so a local build could leave a number the published
 feed has not reached. Every scheduled check then refuses the real feed with
