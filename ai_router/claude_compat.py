@@ -2,16 +2,19 @@
 
 The subscription route stays byte-identical: it is the client's own protocol
 against the client's own upstream. The external route runs through
-OpenRouter's Anthropic-compatible converter, and two shapes that converter
-produces make Claude Code 2.1.223 lose the user's answer. Both repairs are
-narrow, apply only where the shape is what breaks the client, and leave every
-other byte alone.
+OpenRouter's Anthropic-compatible converter, which implements neither
+Anthropic's billing block, its empty-thinking shape, nor its deferred-tool
+protocol. Every repair below is narrow, applies only where the shape is what
+breaks the route, and leaves every other byte alone.
 """
 import json
 
 from . import sse
 
 BILLING_HEADER = 'x-anthropic-billing-header:'
+DEFERRED_PLACEHOLDER = 'DeferredToolPlaceholder'
+REFERENCE_TYPE = 'tool_reference'
+SERVER_TOOL_PREFIX = 'tool_search_tool'
 
 
 def strip_billing_header(payload):
@@ -38,6 +41,73 @@ def strip_billing_header(payload):
         payload['system'] = keep
     else:
         payload.pop('system', None)
+    return True
+
+
+def flatten_deferred_tools(payload):
+    """Serve Claude Code's deferred tool search to an upstream without it.
+
+    With tool search on, Claude Code 2.1.223 withholds the deferred
+    definitions and sends a `DeferredToolPlaceholder` instead; the client
+    searches its own catalogue, answers the search with `tool_reference`
+    blocks, and from then on includes each released definition marked
+    `defer_loading`, which Anthropic's own API expands. OpenRouter expands
+    nothing, so the placeholder and the server-side tool entry go, the flag
+    goes (the released definition is already in the same request's tool
+    list, so the model keeps every tool it discovered), and a reference
+    block becomes the plain text naming the tool it stood for. The tool_use
+    and tool_result pairing is never broken. True when anything changed.
+    """
+    if not isinstance(payload, dict):
+        return False
+    changed = _flatten_tools(payload)
+    for message in payload.get('messages') or []:
+        content = message.get('content') if isinstance(message, dict) else None
+        for block in content if isinstance(content, list) else []:
+            changed |= _plain_reference(block)
+    return changed
+
+
+def _flatten_tools(payload):
+    """Drop the placeholder and the flag; True when the list changed."""
+    tools = payload.get('tools')
+    if not isinstance(tools, list):
+        return False
+    kept, changed = [], False
+    for tool in tools:
+        if not isinstance(tool, dict):
+            kept.append(tool)
+            continue
+        if (tool.get('name') == DEFERRED_PLACEHOLDER
+                or str(tool.get('type') or '').startswith(SERVER_TOOL_PREFIX)):
+            changed = True
+            continue
+        if 'defer_loading' in tool:
+            tool.pop('defer_loading')
+            changed = True
+        kept.append(tool)
+    if changed:
+        payload['tools'] = kept
+    return changed
+
+
+def _plain_reference(block):
+    """Name the tools one reference block stood for; True when it changed."""
+    if not isinstance(block, dict) or block.get('type') != 'tool_result':
+        return False
+    inner = block.get('content')
+    if not isinstance(inner, list):
+        return False
+    names = [item.get('tool_name') for item in inner
+             if isinstance(item, dict) and item.get('type') == REFERENCE_TYPE]
+    if not names:
+        return False
+    block['content'] = [item for item in inner
+                        if not (isinstance(item, dict)
+                                and item.get('type') == REFERENCE_TYPE)]
+    block['content'].append({'type': 'text',
+                             'text': 'The search released: %s.'
+                                     % ', '.join(str(name) for name in names)})
     return True
 
 

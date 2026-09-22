@@ -2,6 +2,39 @@
 
 ## Unreleased
 
+## 0.6.109
+
+- Claude Code attached to the router defers MCP tool definitions instead of
+  sending every schema on every turn. Claude Code turns deferred loading off
+  for a base URL that is not Anthropic's own host, so the installer owns two
+  more `env` settings, `ENABLE_TOOL_SEARCH=true` and
+  `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1`, restores them on detach, and
+  refuses to attach while `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS` is set
+  anywhere in reach: that switch forces the feature off and no value
+  overrides it. Measured on Claude Code `2.1.223` with 700 synthetic MCP
+  tools, the first request of a session carries 727 tool definitions and
+  271 KB without deferral, and 11 definitions and 100 KB with it.
+- The external Messages route rewrites that shape, because OpenRouter
+  implements none of Anthropic's deferred-tool protocol: the
+  `DeferredToolPlaceholder` and a server-side search tool entry go, the
+  `defer_loading` flag goes (the released definition already rides in the
+  same request's tool list, so the model keeps the tool), and a
+  `tool_reference` content block becomes the text naming the tool it stood
+  for, which keeps every `tool_use` and `tool_result` paired. The
+  subscription route stays byte-identical. A live probe on
+  `z-ai/glm-5.3-flash` completed the deferred round trip in three turns with
+  a 700-tool catalogue, and the control against the installed release passed
+  too: OpenRouter currently tolerates the raw shape, so this is hardening
+  rather than a repair of a live failure, and no routed turn depends on that
+  tolerance any more.
+- `tools/capture_claude_shapes.py` captures what Claude Code actually sends
+  against a local sink: no model call, no billing and no credential read,
+  across the deferral flag, the first-party assumption and the hard switch.
+  `tools/probe_claude_code.py` gained `--deferred` (a synthetic 700-tool MCP
+  server, one search round trip) and `--candidate` (an isolated router from
+  the working tree), and `--doctor` now fails the Claude row, naming the
+  file, when the hard switch is set.
+
 ## 0.6.108
 
 - Two Xiaomi MiMo 2.6 rows join the picker: `xiaomi/mimo-v2.6-pro` and
@@ -29,6 +62,7 @@
   supplied the roster, that answer was empty and the sentence fell back to
   its version-only shape. With the bundle authoritative the answer names
   the added rows again, so an update that adds a model says which one.
+
 ## 0.6.106
 
 - The picker pins Grok 4.7. Upstream moved while the roster pinned 4.6, and

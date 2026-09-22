@@ -73,6 +73,10 @@ WARN or FAIL and the fix. The common staff cases and their first check:
   failed attempt's output is there on macOS or in the update service's journal
   on Linux.
 - Claude Code stopped routing: `ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_API_KEY`
-  must stay unset; only `ANTHROPIC_BASE_URL` belongs in the client settings.
+  must stay unset. The installer owns four settings in the client's `env`
+  block (`ANTHROPIC_BASE_URL`, `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY`,
+  `ENABLE_TOOL_SEARCH` and `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL`); the
+  first must point at the loopback URL, and the other three must keep the
+  installer's values or the attach refuses.
 
 Send IT `--status --json` output only; it carries no tokens, keys or URLs.
