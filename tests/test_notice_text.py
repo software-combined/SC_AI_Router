@@ -43,11 +43,14 @@ class _Reply:
 
 
 class MessageTests(unittest.TestCase):
-    def test_names_the_added_models_the_way_the_picker_does(self):
+    def test_names_the_added_models_as_a_bullet_list(self):
         self.assertEqual(
-            text_mod.message('1.0.1', 'codex', ['Z.ai: GLM 5.3 Flash']),
-            'SCG Router was updated to 1.0.1. New models: '
-            'Z.ai: GLM 5.3 Flash. Quit and reopen Codex to use them.')
+            text_mod.message('1.0.1', 'codex',
+                             ['Z.ai: GLM 5.3 Flash', 'Xiaomi: MiMo V2.6 Flash']),
+            'SCG Router was updated to 1.0.1.\nNew models:\n'
+            '- Z.ai: GLM 5.3 Flash\n'
+            '- Xiaomi: MiMo V2.6 Flash\n'
+            'Quit and reopen Codex to use them.')
 
     def test_without_names_keeps_the_version_sentence(self):
         self.assertEqual(
@@ -71,7 +74,7 @@ class MessageTests(unittest.TestCase):
             which=lambda name: '/usr/bin/' + name,
             names=['Z.ai: GLM 5.3 Flash', '+2 more'])
         script = cmd[cmd.index('-e') + 1]
-        self.assertIn('New models: Z.ai: GLM 5.3 Flash, +2 more.', script)
+        self.assertIn('New models:\\n- Z.ai: GLM 5.3 Flash\\n- +2 more', script)
 
 
 class PendingNamesTests(unittest.TestCase):

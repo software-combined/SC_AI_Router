@@ -88,7 +88,8 @@ which removes failover.
 
 Picker labels follow the naming convention in `AGENTS.md` section 8
 (`<Vendor>: <Model> <Version?>`); `models add` and `live_refresh` produce
-conforming rows automatically.
+conforming rows automatically. A hyphenated upstream version
+(`MiMo-V2.6-Flash`) is stored with spaces (`MiMo V2.6 Flash`).
 
 Two ids, one model
 
