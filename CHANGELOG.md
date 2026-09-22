@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.6.110
+
+- The update notice lists new models as bullets, one picker label per line,
+  instead of joining them into one sentence.
+- Quit and reopen on macOS waits until Codex has quit, for up to five
+  seconds, before opening it again. The button relaunches the app instead
+  of only quitting it, and a quit that never finishes still opens it.
+- The Xiaomi picker labels read `Xiaomi: MiMo V2.6 Flash` and
+  `Xiaomi: MiMo V2.6 Pro`, matching the other rows. A live refresh keeps
+  that spacing instead of putting the upstream hyphens back. Both still
+  offer only `none`, so there is no effort menu to open.
+
 ## 0.6.109
 
 - Claude Code attached to the router defers MCP tool definitions instead of

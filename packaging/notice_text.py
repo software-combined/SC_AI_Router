@@ -43,8 +43,9 @@ def message(version, clients='codex', names=()):
     else:
         action = 'Quit and reopen Codex'
     if names:
-        return ('SCG Router was updated to %s. New models: %s. %s to use them.'
-                % (version, ', '.join(names), action))
+        listed = '\n'.join('- %s' % name for name in names)
+        return ('SCG Router was updated to %s.\nNew models:\n%s\n%s to use them.'
+                % (version, listed, action))
     return ('SCG Router was updated to %s. %s to use the new models.'
             % (version, action))
 

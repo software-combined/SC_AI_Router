@@ -520,7 +520,7 @@
   {
     "slug": "xiaomi/mimo-v2.6-flash",
     "provider": "openrouter",
-    "display_name": "Xiaomi: MiMo-V2.6-Flash \u00b7 OpenRouter",
+    "display_name": "Xiaomi: MiMo V2.6 Flash \u00b7 OpenRouter",
     "vendor": "Xiaomi",
     "reasoning": [
       "none"
@@ -548,7 +548,7 @@
   {
     "slug": "xiaomi/mimo-v2.6-pro",
     "provider": "openrouter",
-    "display_name": "Xiaomi: MiMo-V2.6-Pro \u00b7 OpenRouter",
+    "display_name": "Xiaomi: MiMo V2.6 Pro \u00b7 OpenRouter",
     "vendor": "Xiaomi",
     "reasoning": [
       "none"
