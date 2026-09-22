@@ -68,14 +68,18 @@ it was not hand-driven in this run.
 ## Xiaomi MiMo 2.6 rows, 22 September 2026 AEST
 
 `xiaomi/mimo-v2.6-pro` and `xiaomi/mimo-v2.6-flash` joined the registry from
-their live OpenRouter metadata: no advertised effort (`none`), text, image
+their live OpenRouter metadata: text, image
 and audio input, a 1048576-token context, 131072 output tokens and no search
 pricing. Picker labels are `Xiaomi: MiMo V2.6 Flash` and
-`Xiaomi: MiMo V2.6 Pro`. `none` is the only effort, so the picker has no
-effort menu to open. Both are served only by the first-party Xiaomi endpoint, so they
-stayed unavailable until the account added that provider to its org-level
-Allowed Providers list; the same change added Alibaba Cloud Int. for
-`qwen/qwen3.8-max-0902`, which the key had also been hiding.
+`Xiaomi: MiMo V2.6 Pro`. OpenRouter advertises no effort names, so the
+first release offered only `none` and Codex showed that as Medium with no
+menu. Xiaomi's own API accepts `none`, `minimal`, `low`, `medium`, `high`
+and `xhigh` (its docs say every level above `none` behaves the same), and
+the picker now offers that list, default `none`. Both are served only by
+the first-party Xiaomi endpoint, so they stayed unavailable until the
+account added that provider to its org-level Allowed Providers list. The
+same change added Alibaba Cloud Int. for `qwen/qwen3.8-max-0902`, which the
+key had also been hiding.
 
 | model | tier | date | probes |
 |---|---|---|---|
@@ -83,8 +87,8 @@ Allowed Providers list; the same change added Alibaba Cloud Int. for
 | xiaomi/mimo-v2.6-pro | verified | 2026-09-22 | tool,stream,image,compact at `--effort none` |
 
 `models add --probe` cannot verify these rows: the harness bills its round
-trip at the default `low`, and the router's effort gate refuses `low` for a
-row whose only effort is `none`. Both were proved by hand, the way
+trip at the default `low`, and the first release refused that effort. Both
+were proved by hand, the way
 `docs/adding-a-model.md` describes: the preview row in place, an isolated
 router, then `tools/probe_codex_runtime.py <slug> --router-state
 <home>/mixed-router-state.json --catalog <home>/candidate-catalogue.json
