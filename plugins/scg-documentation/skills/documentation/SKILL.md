@@ -5,6 +5,11 @@ description: Technical writing, README guidelines, punctuation rules, and clarit
 
 # Documentation & README Writing Guidelines
 
+Follow the user's requested audience, format, length, tone and punctuation.
+The article patterns and examples below are optional tools, not a required
+outline for every document or reply. Preserve relevant repository conventions
+and include the evidence and limits the task requires.
+
 ## Writing For Readers At Any Technical Level
 
 Documentation is read by people who did not write the code and may not share your context. Write for the least experienced reader who legitimately needs the document, not the most experienced one. Experts skim past detail they don't need; a beginner cannot recover context that was never written down.
@@ -21,7 +26,10 @@ Write for the junior reader and the expert loses a few seconds skimming. Write f
 
 ## Technical Article Structure
 
-When writing technical articles that explain a concept or pattern, use this structure:
+For a technical article explaining a concept or pattern, choose only the
+elements below that help its reader. A concise explanation may need none of
+them; do not add a TL;DR, named concept, comparison, analogy or closing rule
+unless it serves the requested document.
 
 ### 1. TL;DR First
 
@@ -103,7 +111,9 @@ Don't just show one example. Show 2-3 different scenarios where the same princip
 
 ## Voice Matching Priority
 
-When the user provides a voice transcript, tone guidance, or example text to match, that takes priority over the other rules in this file. Match their voice exactly:
+The user's format, length, punctuation, tone guidance and supplied examples
+take priority over this file's defaults. Match their voice without inventing
+personal experiences:
 
 - If they start with "In Epicenter, we use X", start with that. Don't add a story preamble.
 - If their example is 5 sentences, aim for similar brevity. Don't expand to 5 paragraphs.
@@ -312,9 +322,12 @@ The pattern " - " (space-hyphen-space) is a common AI writing artifact that shou
    - Before: `**Bold text** - This explains what it means`
    - After: `**Bold text**: This explains what it means`
 
-3. **Em dash**: Use for dramatic pauses or parenthetical statements where semicolon and colon don't work
+3. **Period or parentheses**: Separate a thought or add a brief aside when a semicolon or colon does not fit
    - Before: `The app is fast - really fast`
-   - After: `The app is fast—really fast`
+   - After: `The app is fast. Requests finish in under a second.`
+
+Follow an explicit punctuation preference. An em dash is not required to fix
+a spaced hyphen; use plain sentences when the user wants no em dashes.
 
 #### Common Patterns
 
@@ -322,8 +335,8 @@ The pattern " - " (space-hyphen-space) is a common AI writing artifact that shou
   - `**Feature name**: Description of the feature`
 - **Examples/Lists**: Use colon
   - `**Examples**: item1, item2, item3`
-- **Dramatic emphasis**: Use em dash
-  - `It's more than fast—it's instant`
+- **Emphasis**: Prefer a precise statement
+  - `Requests finish in under a second`
 - **Related statements**: Use semicolon
   - `The API is simple; the documentation is clear`
 
@@ -331,9 +344,12 @@ The pattern " - " (space-hyphen-space) is a common AI writing artifact that shou
 
 ## Prompting Document-Writer Agents
 
-When delegating article writing to a `document-writer` subagent, structure your prompt for best results:
+When article-writing delegation is already appropriate and authorized, give
+the writer the context needed for the requested document. Scale the following
+examples to the task; this section does not require delegation, a fixed topic
+count or an article of a particular length.
 
-### Required Elements
+### Useful Brief Elements
 
 1. **Target audience**: Who is reading? What do they already know?
 
@@ -341,7 +357,7 @@ When delegating article writing to a `document-writer` subagent, structure your 
    "Developers intermediate in TypeScript but new to API design trade-offs"
    ```
 
-2. **Numbered themes**: List 5-8 specific topics to cover
+2. **Themes**: List the specific topics the requested document needs
 
    ```
    1. What is introspection?
@@ -365,7 +381,7 @@ When delegating article writing to a `document-writer` subagent, structure your 
    }
    ```
 
-4. **Style constraints**: Word count, TL;DR requirement, analogy suggestions
+4. **Style constraints**: Pass on the user's requested length, format and tone
 
    ```
    "~1500-2000 words, include TL;DR at top, use restaurant menu analogy"

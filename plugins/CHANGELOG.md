@@ -1,5 +1,16 @@
 # Changelog
 
+## scg-review 0.4.13, scg-subagents 0.5.9 and scg-documentation 0.1.2 - 2026-09-23
+
+- Resolve the finance role's required analyst skill through the current
+  `scg-finance` capability instead of its retired NetSuite-specific name.
+- Keep Ponytail's minimal implementation guidance while removing its fixed
+  code-first, three-line response rule. Preserve requested scope, review
+  evidence, safety boundaries and acceptance gates.
+- Treat article outlines and writer-brief examples as optional documentation
+  aids. Follow the user's format, length, tone and punctuation preferences;
+  do not prescribe em dashes or an article structure for every task.
+
 ## scg-subagents 0.5.8 — 2026-09-22
 
 - Move the Grok recommendation to `x-ai/grok-4.7`, the id the router roster
