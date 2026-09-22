@@ -518,6 +518,62 @@
     "tier": "verified"
   },
   {
+    "slug": "xiaomi/mimo-v2.6-flash",
+    "provider": "openrouter",
+    "display_name": "Xiaomi: MiMo-V2.6-Flash \u00b7 OpenRouter",
+    "vendor": "Xiaomi",
+    "reasoning": [
+      "none"
+    ],
+    "default_reasoning": "none",
+    "modalities": [
+      "text",
+      "image",
+      "audio"
+    ],
+    "excluded_efforts": [],
+    "schema_mode": "native",
+    "history_mode": "native",
+    "max_tools": null,
+    "drop_images": false,
+    "context_window": 1048576,
+    "priority": 117,
+    "max_output_tokens": 131072,
+    "reasoning_summary": "none",
+    "apply_patch": "none",
+    "experimental_tools": [],
+    "web_search": false,
+    "tier": "verified"
+  },
+  {
+    "slug": "xiaomi/mimo-v2.6-pro",
+    "provider": "openrouter",
+    "display_name": "Xiaomi: MiMo-V2.6-Pro \u00b7 OpenRouter",
+    "vendor": "Xiaomi",
+    "reasoning": [
+      "none"
+    ],
+    "default_reasoning": "none",
+    "modalities": [
+      "text",
+      "image",
+      "audio"
+    ],
+    "excluded_efforts": [],
+    "schema_mode": "native",
+    "history_mode": "native",
+    "max_tools": null,
+    "drop_images": false,
+    "context_window": 1048576,
+    "priority": 118,
+    "max_output_tokens": 131072,
+    "reasoning_summary": "none",
+    "apply_patch": "none",
+    "experimental_tools": [],
+    "web_search": false,
+    "tier": "verified"
+  },
+  {
     "slug": "z-ai/glm-5.3-flash",
     "provider": "openrouter",
     "display_name": "Z.ai: GLM 5.3 Flash \u00b7 OpenRouter",
@@ -538,7 +594,7 @@
     "max_tools": 128,
     "drop_images": false,
     "context_window": 1310720,
-    "priority": 117,
+    "priority": 119,
     "max_output_tokens": 131072,
     "reasoning_summary": "none",
     "apply_patch": "freeform",
@@ -566,7 +622,7 @@
     "max_tools": 128,
     "drop_images": false,
     "context_window": 1310720,
-    "priority": 118,
+    "priority": 120,
     "max_output_tokens": 943718,
     "reasoning_summary": "none",
     "apply_patch": "freeform",
