@@ -16,8 +16,8 @@ Record worktree ownership (path, branch, owning task, integration target) and
 reuse the same worktree for follow-ups. Clean up after verified integration.
 
 Base every branch on `develop` and target every PR at `develop`,
-except release PRs from `develop` to `main`. Never work off or push
-to `main`.
+except release PRs from `develop` to `main` and the scoped plugin release
+procedure in section 9. Never push directly to `main`.
 
 ## 2a. Architecture
 
@@ -164,3 +164,12 @@ track branch `main`.
 - Release a plugin by bumping both manifests' version and adding a
   `plugins/CHANGELOG.md` entry; validate with the plugin-creator validator
   and the plugin test modules.
+- Integrate plugin fixes through `develop` first. If `develop` contains
+  unrelated unreleased router changes, reuse the owned worktree for a release
+  branch based on current `main` and cherry-pick only the reviewed plugin
+  commits. The release PR targets `main`; its diff may contain only `plugins/`
+  and directly related plugin-release instructions in this file. Verify the
+  complete diff against current `main`, run all required checks and reviews
+  on that exact candidate, and use the normal PR gates. Do not include router
+  code, `packaging/VERSION`, router tags, or release-workflow changes. Reconcile
+  the release into `develop` afterwards without discarding either side.
