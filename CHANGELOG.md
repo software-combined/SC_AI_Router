@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.6.112
+
+- A router update keeps the release's effort list. An older feed can no
+  longer shrink or widen it on restart, which is what made MiMo refuse
+  `xhigh` with "use one of none" after the picker already offered it.
+- An update restores the ChatGPT picker when the saved roster is empty.
+  A non-empty custom list is left alone.
+
 ## 0.6.111
 
 - Both Xiaomi MiMo rows offer the effort list Xiaomi documents (`none`,

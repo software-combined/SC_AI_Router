@@ -50,6 +50,15 @@ class InstallStateTests(unittest.TestCase):
         self.assertEqual(state['openai_models'], ['x'])
         self.assertEqual((home / 'mixed-router-state.json').read_text(), before)
 
+    def test_empty_roster_is_reseeded(self):
+        # An empty list hides every ChatGPT row and survives an update.
+        # Reseed it; a non-empty custom list stays put.
+        home = self._home()
+        (home / 'mixed-router-state.json').write_text(
+            json.dumps({'port': 1, 'token': 't' * 32, 'openai_models': []}) + '\n')
+        state = install_mod.ensure_state(home)
+        self.assertEqual(state['openai_models'], install_mod.DEFAULT_OPENAI_MODELS)
+
     def test_subscription_roster_is_single_sourced(self):
         # Plan 123: the roster leaf, the service seed list, and the catalogue
         # tables cover the same eight slugs; the service order matches the
