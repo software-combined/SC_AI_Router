@@ -145,11 +145,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          VERSION=$(python -c "import json;print(json.load(open('dist/latest.json'))['version'])")
           if [ "$CHANNEL" = stable ]; then
             cp dist/release-latest.json dist/latest.json
-            gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/latest.json dist/feed-latest.json.sig --verify-tag --title "v$VERSION" --generate-notes --latest
+            gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/latest.json dist/feed-latest.json.sig --verify-tag --title "$GITHUB_REF_NAME" --generate-notes --latest
           else
             cp dist/release-latest.json dist/latest-beta.json
-            gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/latest-beta.json dist/feed-latest.json.sig --verify-tag --title "v$VERSION-beta" --prerelease --generate-notes
+            gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/latest-beta.json dist/feed-latest.json.sig --verify-tag --title "$GITHUB_REF_NAME" --prerelease --generate-notes
           fi
