@@ -26,67 +26,19 @@ env:
   FEED_SIGNING_SEED_ARN: ${{ vars.FEED_SIGNING_SEED_ARN }}
 
 jobs:
-  installer-macos:
-    name: Installer (macOS)
-    # A release ships the installer half to macOS and Windows hosts, so the
-    # native checks run before anything is published (Plan 156).
-    runs-on: macos-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup
-      - name: Native installer tests
-        shell: bash
-        run: python -m unittest $(python tools/ci_scope.py --installer-tests)
-
-  installer-windows:
-    name: Installer (Windows)
-    runs-on: windows-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup
-      - name: Native installer tests
-        shell: bash
-        run: python -m unittest $(python tools/ci_scope.py --installer-tests)
-
-  installer-python39:
-    name: Installer (Python 3.9)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup
-        with:
-          python-version: "3.9"
-      - name: Installer surface imports on 3.9
-        run: python tools/check_installer_python39.py
-
   release:
     name: Build and publish
-    needs: [installer-macos, installer-windows, installer-python39]
     # Check both identities: reruns use the original actor's privileges.
-    # !cancelled() keeps this job visible when an installer check failed, so
-    # the required step below fails it; a cancelled run stops the job instead
-    # of letting a publish finish.
-    if: ${{ !cancelled() && contains(fromJSON('["SC-Cyril", "BrentJMaxwell"]'), github.actor) && contains(fromJSON('["SC-Cyril", "BrentJMaxwell"]'), github.triggering_actor) }}
+    # Main acceptance owns the long checks. Both channels publish only an
+    # exact commit with a successful Check run, without repeating that suite.
+    if: ${{ contains(fromJSON('["SC-Cyril", "BrentJMaxwell"]'), github.actor) && contains(fromJSON('["SC-Cyril", "BrentJMaxwell"]'), github.triggering_actor) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
+      actions: read
       contents: write
       id-token: write
     steps:
-      - name: Required installer checks
-        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
-        run: |
-          echo "an installer check did not succeed: ${{ join(needs.*.result, ', ') }}"
-          exit 1
       - name: Require the feed variables
         # A fork or a misconfigured repository must fail here, before it tries
         # to assume a role it cannot assume (Plan 160).
@@ -98,9 +50,21 @@ jobs:
           done
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
+          fetch-depth: 0
           persist-credentials: false
+      - name: Require accepted main commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || {
+            echo "release commit must be merged into main before publication"; exit 1;
+          }
+          ACCEPTANCE=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/check.yml/runs?head_sha=$GITHUB_SHA&per_page=100" \
+            --jq '[.workflow_runs[] | select(.head_sha == env.GITHUB_SHA and .event == "push" and .head_branch == "main" and .status == "completed" and .conclusion == "success")] | length')
+          if [ "$ACCEPTANCE" -lt 1 ]; then
+            echo "no successful Check workflow run found for $GITHUB_SHA on main"; exit 1
+          fi
       - uses: ./.github/actions/setup
-      - run: python -m unittest discover -s tests -t .
       - name: Verify runtime pins
         run: python tools/verify_runtime_pins.py
       - name: Build bundle
