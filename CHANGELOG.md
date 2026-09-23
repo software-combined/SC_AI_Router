@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Update and new-model notices now show only the native restart dialog. The
+  updater no longer opens an approval page in the browser or sends a second
+  desktop notification; an unavailable dialog stays pending for a later run.
+
 - Fix combined Codex model discovery rejecting valid OpenAI visibility and
   upgrade metadata. Subscription models still come from the server and appear
   alongside approved third-party models; no static catalogue override is needed.

@@ -10,7 +10,7 @@ is installed; on macOS and Windows the button is harmless without it, and
 the dialog always carries "Later". Only one dialog is ever on screen: the
 pid of the dialog we spawned is remembered, and a later notice is folded
 into that dialog instead of stacking a second one. A dialog that dies at
-once -- a service context with no display or session bus -- leaves the
+once -- a service context with no display -- leaves the
 notice pending instead of marking it shown, so a later run that can draw
 one still shows it. Every failure is swallowed: the notice must never
 block on the user or fail an update.
@@ -49,7 +49,7 @@ WINDOWS_PACKAGE = 'OpenAI.Codex'
 LINUX_APP = 'chatgpt'
 PROBE_TIMEOUT = 5
 # A dialog that cannot render exits within this grace (zenity without a
-# display, notify-send without a session bus, osascript without a GUI).
+# display, osascript without a GUI).
 # Long enough to catch that, short enough not to hold the updater.
 PROBE_GRACE_S = 1.0
 ICON = Path(__file__).resolve().parent / 'assets' / 'router-icon.png'
@@ -158,7 +158,7 @@ def _remember_picker(home, slugs):
         pass
 
 
-def record(home, previous, version, clients=None):
+def record(home, previous, version, clients=None, names=None):
     """Stage a restart notice when an update adds a picker row.
 
     The prompt is about the picker, not the version: a release that adds no
@@ -177,6 +177,8 @@ def record(home, previous, version, clients=None):
     recorded, so a failed write is retried by the next install. The pid of
     a dialog an earlier version left open is carried over so the next
     show_pending() folds into it instead of stacking a second dialog.
+    `names` stages the same dialog when models are added without a version
+    change; the recorded names keep a later unchanged check quiet.
     `clients` is the install run's attachment set when it knows one;
     without it the previous notice's set is kept, and a legacy install
     reads as Codex-only. A notice never affects installs.
@@ -190,18 +192,27 @@ def record(home, previous, version, clients=None):
         picker = _picker_slugs(_read_blob(Path(home) / CATALOGUE_FILE))
         baseline = _picker_baseline(home)
         added = None if picker is None or baseline is None else picker - baseline
-        if not previous or previous == version:
+        named = names is not None
+        if named:
+            names = [name for name in names if isinstance(name, str) and name]
+            if not names:
+                return False
+        if not previous or (previous == version and not named):
             # Fresh installs and reinstalls prompt nothing; record what they
             # leave behind so the next version compares against it.
             if not added:
                 _remember_picker(home, picker)
             return False
         if isinstance(existing, dict) and existing.get('version') == version \
-                and existing.get('shown'):
+                and existing.get('shown') \
+                and (not named or existing.get('names') == names):
             _remember_picker(home, picker)
             return False
         pending = isinstance(existing, dict) and not existing.get('shown')
-        if not pending and added is not None and not added:
+        if pending and existing.get('version') == version \
+                and named and existing.get('names') == names:
+            return False
+        if not pending and not named and added is not None and not added:
             _remember_picker(home, picker)
             return False
         if not clients:
@@ -218,6 +229,8 @@ def record(home, previous, version, clients=None):
         pid = _dialog_pid(existing)
         if pid:
             doc['pid'] = pid
+        if named:
+            doc['names'] = names
         _atomic_write.replace_json(path, doc)
         # Only a staged notice marks rows as announced; a write that failed
         # leaves the baseline alone so the next install retries.
@@ -392,8 +405,6 @@ def dialog_command(version, platform_name=None, which=None, icon=None,
         if which('zenity') is not None:
             app = LINUX_APP if restart and which(LINUX_APP) is not None else None
             return _linux_command(message, icon, app, restart)
-        if which('notify-send') is not None:
-            return ['notify-send', TITLE, message]
         return None
     if platform_name == 'win32':
         powershell = which('powershell') or which('powershell.exe')
@@ -427,7 +438,7 @@ def _dialog_up(pid, pid_alive):
     return pid_alive(pid)
 
 
-def show_pending(home, spawn=None, pid_alive=None):
+def show_pending(home, spawn=None, pid_alive=None, names=None):
     """Show the pending restart notice; True once it is shown.
 
     A missing dialog tool leaves the notice pending so a later GUI run
@@ -436,7 +447,8 @@ def show_pending(home, spawn=None, pid_alive=None):
     still open, this notice is marked shown rather than stacked on top of
     it. Any failure returns False and never surfaces to the installer.
     `ROUTER_NO_NOTICE=1` silences the dialog for unattended installs and for
-    tests that run the real CLI.
+    tests that run the real CLI. `names` are the added models to list; without
+    them the stored names are used, then the running router is asked.
     """
     if os.environ.get('ROUTER_NO_NOTICE') == '1':
         return False
@@ -452,31 +464,21 @@ def show_pending(home, spawn=None, pid_alive=None):
         version = doc.get('version')
         if not isinstance(version, str) or not version:
             return False
+        if names is None:
+            names = doc.get('names')
+        if not isinstance(names, list):
+            names = _text.pending_names(home)
+        names = [name for name in names if isinstance(name, str) and name]
         cmd = dialog_command(version, icon=_home_icon(home) or '',
-                             clients=doc.get('clients', 'codex'),
-                             names=_text.pending_names(home))
+                             clients=doc.get('clients', 'codex'), names=names)
         if cmd is None:
             return False
-        shown = {'version': version, 'shown': True, 'at': _utcnow()}
-        if cmd[0] == 'notify-send':
-            # It exits once the notification daemon accepts or refuses the
-            # notification, so the exit status is the delivery signal and
-            # pid liveness says nothing.
-            try:
-                sent = subprocess.run(cmd, stdin=subprocess.DEVNULL,
-                                      stdout=subprocess.DEVNULL,
-                                      stderr=subprocess.DEVNULL,
-                                      timeout=PROBE_TIMEOUT)
-            except (OSError, subprocess.SubprocessError):
-                return False
-            if sent.returncode:
-                return False
-            _atomic_write.replace_json(path, shown)
-            return True
+        shown = {'version': version, 'shown': True, 'at': _utcnow(),
+                 'names': names}
         pid = _dialog_pid(doc)
         if pid and pid_alive(pid):
-            _atomic_write.replace_json(path, {'version': version, 'shown': True,
-                                              'pid': pid, 'at': _utcnow()})
+            shown['pid'] = pid
+            _atomic_write.replace_json(path, shown)
             return False
         pid = _dialog_pid({'pid': spawn(cmd)})
         if pid:
