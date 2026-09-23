@@ -1,5 +1,31 @@
 # Changelog
 
+## scg-subagents 0.5.11 - 2026-09-23
+
+- Stop a router worker when its runner is interrupted. The worker runs in a
+  session of its own, so Ctrl-C, or SIGTERM or SIGHUP sent to the runner,
+  reached only the runner. It exited at once and left the worker and its
+  shell commands running with their pre-approved tools and no deadline; after
+  Ctrl-C it had also deleted the worker's temporary configuration. The runner
+  now catches those signals while the worker runs and stops it the way it
+  already did at a timeout: SIGTERM, ten seconds, then a kill of its process
+  group. It still saves the transcript and prints its JSON result, with
+  `error` naming the signal. After Ctrl-C it then ends by SIGINT, so a shell
+  loop of workers stops instead of starting the next worker; SIGTERM and
+  SIGHUP exit 1. A signal the caller already ignores, such as SIGHUP under
+  `nohup`, stays ignored, and SIGKILL still cannot be caught.
+- Reproduced and verified on macOS with Claude Code 2.1.280, router
+  0.6.119.113 and DeepSeek V4.1 Flash (`max`), on a synthetic brief that ran
+  `sleep 295` in a scratch folder outside the home folder, one model turn per
+  run. Before the fix, SIGINT and SIGTERM each left the worker and its `sleep`
+  running after the runner exited without a result. After it, SIGINT, SIGTERM
+  and SIGHUP each left nothing running, and the runner reported
+  `interrupted by <signal>` with the served model. Stopping the runner's
+  background task in Claude Code already ended the whole process tree; the
+  task's output now also carries the JSON result. A new offline test sends the
+  three signals to the runner with a fake worker and fails without the fix.
+  Linux runs only that offline test, in CI, and Windows is not yet verified.
+
 ## scg-subagents 0.5.10 - 2026-09-23
 
 - Add `router-workers`, which runs a bounded task on a router model as an
