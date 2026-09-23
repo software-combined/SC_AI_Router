@@ -19,12 +19,20 @@ def _external_responses():
 
 
 MARKER = 'SYNTH-OPAQUE-066-4b1d'
+OPAQUE_MARKER = 'SYNTH-OPAQUE-REPLY-a82f'
 
 
 def _opaque_item(marker=MARKER):
     return {'type': 'agent_message', 'author': '/root',
             'content': [{'type': 'input_text', 'text': 'audit the network domain'},
                         {'type': 'encrypted_content', 'text': marker}]}
+
+
+def _inbound_mixed():
+    return {'type': 'agent_message', 'author': '/root/router_adversarial',
+            'recipient': '/root',
+            'content': [{'type': 'input_text', 'text': 'SYNTH-READABLE-REPLY'},
+                        {'type': 'encrypted_content', 'encrypted_content': OPAQUE_MARKER}]}
 
 
 def _prepare(items):
@@ -76,6 +84,29 @@ class AgentContainmentTests(unittest.TestCase):
         except ValueError as exc:
             self.assertNotIn(MARKER, str(exc))
             self.assertNotIn('network domain', str(exc))
+
+    def test_inbound_mixed_reply_recovers_without_ciphertext(self):
+        prepared = _prepare([_inbound_mixed()])
+        body = json.dumps(json.loads(prepared.body))
+        self.assertIn('SYNTH-READABLE-REPLY', body)
+        self.assertIn('Encrypted content was withheld', body)
+        self.assertNotIn(OPAQUE_MARKER, body)
+        self.assertNotIn('encrypted_content', body)
+
+    def test_self_peer_outbound_and_empty_inbound_stay_fail_closed(self):
+        inbound = _inbound_mixed()
+        shapes = [
+            {**inbound, 'author': '/root'},
+            {**inbound, 'author': '/root/sibling', 'recipient': '/root/other'},
+            {**inbound, 'recipient': '/root/router_adversarial'},
+            {**inbound, 'content': [inbound['content'][1]]},
+            {**inbound, 'content': [inbound['content'][0],
+                                    {'type': 'input_image', 'image_url': 'synthetic'}]},
+        ]
+        for item in shapes:
+            with self.subTest(author=item.get('author'), recipient=item.get('recipient')):
+                with self.assertRaises(ValueError):
+                    _prepare([item])
 
 
 class AgentSummaryTests(unittest.TestCase):
