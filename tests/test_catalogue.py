@@ -271,7 +271,7 @@ class CatalogueFlagTests(unittest.TestCase):
         self.assertFalse(claude_slugs & {'anthropic/claude-sonnet-5',
                                          'anthropic/claude-fable-5.1',
                                          'anthropic/claude-haiku-4.5',
-                                         'anthropic/claude-opus-5'})
+                                         'anthropic/claude-opus-5.5'})
         self.assertIn('openai/gpt-6-astra', claude_slugs)
         self.assertIn('anthropic/claude-sonnet-5', codex_slugs)
         with tempfile.TemporaryDirectory() as tmp:

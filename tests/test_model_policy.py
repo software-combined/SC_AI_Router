@@ -45,7 +45,7 @@ class ModelPolicyTests(unittest.TestCase):
         from ai_router.errors import UnknownModel
         from ai_router.registry import Model
         with self.assertRaises(UnknownModel) as caught:
-            providers.select('anthropic/claude-opus-5', '/responses', (),
+            providers.select('anthropic/claude-opus-5.5', '/responses', (),
                              'subscription', allowed=ALLOWED)
         self.assertEqual(caught.exception.candidates, ())
         self.assertIn('not in the configured catalog',
