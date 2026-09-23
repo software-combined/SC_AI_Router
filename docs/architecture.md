@@ -50,11 +50,15 @@ Rules:
 
 `agent_handoffs.py` owns collaboration alias schemas and native-name restoration;
 `sse.py` owns shared event framing without provider-specific argument rewriting.
-`standalone_outputs.py` projects readable peer messages and standalone outputs
-into matched tool results for external requests. A child-to-parent reply with
-readable text plus an encrypted sidecar is projected with the readable text and
-an incompleteness warning; the sidecar is withheld. Other opaque messages fail
-closed, and client history stays unchanged.
+`standalone_outputs.py` owns app-injected output projection. External requests
+project readable peer messages and standalone outputs into matched tool results.
+A child-to-parent reply with readable text plus an encrypted sidecar is
+projected with the readable text and an incompleteness warning; the sidecar is
+withheld. Other opaque messages fail closed. Subscription replay changes only a
+thread that switched model: it applies the switch boundary, then projects fully
+readable agent messages, the shape external peers send. The backend reads
+native encrypted replies and app-delivered outputs itself, so those stay
+unchanged. Client history is never edited.
 `subscription_history.py` owns the pure outgoing reasoning projection for
 subscription Responses requests; it never edits persisted client history.
 `context_recovery.py` adds fixed recovery guidance for client-declared context
