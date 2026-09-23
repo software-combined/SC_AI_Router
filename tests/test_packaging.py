@@ -151,7 +151,7 @@ class PackagingTests(unittest.TestCase):
 
     def test_version_is_semver(self):
         version = (Path(__file__).resolve().parents[1] / 'packaging' / 'VERSION').read_text().strip()
-        self.assertRegex(version, r'^\d+\.\d+\.\d+$')
+        self.assertRegex(version, r'^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$')
 
     def test_pyproject_version_matches_packaging_version(self):
         # Plan 104: pyproject's version is a checked duplicate of the release
@@ -201,8 +201,7 @@ class PackagingTests(unittest.TestCase):
     def test_build_composes_full_version_and_manifest(self):
         root = Path(__file__).resolve().parents[1]
         base = (root / 'packaging' / 'VERSION').read_text().strip()
-        release = int(base.split('.')[2])
-        short = f'v{release // 100}.{release % 100:02d}'
+        tag = f'v{base}'
         release_mod = _release_module()
         out = root / 'dist-test-build'
         self.addCleanup(shutil.rmtree, str(out), True)
@@ -220,21 +219,20 @@ class PackagingTests(unittest.TestCase):
             self.assertEqual(marker, f'{base}.57\n')
         latest = json.loads((out / 'latest.json').read_text())
         self.assertTrue(
-            latest['url'].endswith(f'/{short}-beta/ai-router-{base}.57.tar.gz'),
+            latest['url'].endswith(f'/{tag}-beta/ai-router-{base}.57.tar.gz'),
             latest['url'])
 
     def test_default_channel_builds_stable_url(self):
         root = Path(__file__).resolve().parents[1]
         base = (root / 'packaging' / 'VERSION').read_text().strip()
-        release = int(base.split('.')[2])
-        short = f'v{release // 100}.{release % 100:02d}'
+        tag = f'v{base}'
         release_mod = _release_module()
         out = root / 'dist-test-stable'
         self.addCleanup(shutil.rmtree, str(out), True)
         release_mod.main(['--out', str(out)])
         latest = json.loads((out / 'latest.json').read_text())
         self.assertTrue(
-            latest['url'].endswith(f'/{short}/ai-router-{base}.0.tar.gz'),
+            latest['url'].endswith(f'/{tag}/ai-router-{base}.0.tar.gz'),
             latest['url'])
 
 if __name__ == '__main__':

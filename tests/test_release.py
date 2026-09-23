@@ -22,13 +22,18 @@ release_mod = _release_mod()
 
 
 class ReleaseTests(unittest.TestCase):
-    def test_release_tag_uses_the_short_v_x_xx_form(self):
+    def test_invalid_version_is_rejected_before_a_tag_is_required(self):
+        for version in ('0.6', '0.6.112.1', 'v0.6.112', '00.6.112'):
+            with self.subTest(version=version), self.assertRaises(SystemExit):
+                release_mod.semantic_version(version)
+
+    def test_release_tag_uses_the_full_semver_form(self):
         base = '0.6.112'
         for suffix, expected in (('', ('stable', False)), ('-beta', ('beta', False)),
                                   ('-express', ('stable', True)), ('-beta-express', ('beta', True))):
-            self.assertEqual(release_mod.release_tag('v1.12' + suffix, base), expected)
-        for tag in ('V1.12', 'v1.2', 'v1.120', 'v1.2.12', 'v1.13', 'v01.12',
-                    'v1.12-express-beta', 'v1x12'):
+            self.assertEqual(release_mod.release_tag('v0.6.112' + suffix, base), expected)
+        for tag in ('V0.6.112', 'v0.6.112.1', 'v0.6.113', 'v00.6.112',
+                    'v0.6.112-express-beta', 'v0x6x112'):
             with self.subTest(tag=tag), self.assertRaises(SystemExit):
                 release_mod.release_tag(tag, base)
 
