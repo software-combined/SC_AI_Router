@@ -100,12 +100,23 @@ def plugin_files(root):
     return wanted
 
 
+def short_tag(base_version):
+    """Map the three-digit release counter to the public `vX.XX` label."""
+    parts = base_version.split('.')
+    if len(parts) != 3 or not all(part.isdigit() for part in parts):
+        raise SystemExit(f'packaging/VERSION {base_version} is not semantic versioning')
+    release = int(parts[2])
+    return f'v{release // 100}.{release % 100:02d}'
+
+
 def release_tag(tag, base_version):
     """Express is urgency on the existing channel, never a version suffix."""
-    match = re.fullmatch(r'v' + re.escape(base_version) + r'(-beta)?(-express)?', tag)
-    if not match:
-        raise SystemExit(f'tag {tag} does not match packaging/VERSION {base_version}')
-    return ('beta' if match[1] else 'stable'), bool(match[2])
+    match = re.fullmatch(r'v(\d+)\.(\d{2})(-beta)?(-express)?', tag)
+    if (not match or match[1] != str(int(match[1]))
+            or f'v{match[1]}.{match[2]}' != short_tag(base_version)):
+        raise SystemExit(
+            f'tag {tag} does not match the short release tag for packaging/VERSION {base_version}')
+    return ('beta' if match[3] else 'stable'), bool(match[4])
 
 
 def main(argv=None):
@@ -172,7 +183,7 @@ def main(argv=None):
     tarball = gzip.compress(tar_buffer.getvalue(), mtime=0)
     tarball_name = f'ai-router-{version}.tar.gz'
     (out_dir / tarball_name).write_bytes(tarball)
-    tag = args.tag or (f'v{version}' if args.channel == 'stable' else f'v{version}-beta')
+    tag = args.tag or short_tag(base_version) + ('-beta' if args.channel == 'beta' else '')
     base = args.url_base or f'https://github.com/{REPO}/releases/download/{tag}'
     latest = {'version': version, 'url': f'{base}/{tarball_name}',
               'sha256': hashlib.sha256(tarball).hexdigest(), 'min_python': MIN_PYTHON,

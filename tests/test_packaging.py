@@ -201,6 +201,8 @@ class PackagingTests(unittest.TestCase):
     def test_build_composes_full_version_and_manifest(self):
         root = Path(__file__).resolve().parents[1]
         base = (root / 'packaging' / 'VERSION').read_text().strip()
+        release = int(base.split('.')[2])
+        short = f'v{release // 100}.{release % 100:02d}'
         release_mod = _release_module()
         out = root / 'dist-test-build'
         self.addCleanup(shutil.rmtree, str(out), True)
@@ -218,19 +220,21 @@ class PackagingTests(unittest.TestCase):
             self.assertEqual(marker, f'{base}.57\n')
         latest = json.loads((out / 'latest.json').read_text())
         self.assertTrue(
-            latest['url'].endswith(f'/v{base}.57-beta/ai-router-{base}.57.tar.gz'),
+            latest['url'].endswith(f'/{short}-beta/ai-router-{base}.57.tar.gz'),
             latest['url'])
 
     def test_default_channel_builds_stable_url(self):
         root = Path(__file__).resolve().parents[1]
         base = (root / 'packaging' / 'VERSION').read_text().strip()
+        release = int(base.split('.')[2])
+        short = f'v{release // 100}.{release % 100:02d}'
         release_mod = _release_module()
         out = root / 'dist-test-stable'
         self.addCleanup(shutil.rmtree, str(out), True)
         release_mod.main(['--out', str(out)])
         latest = json.loads((out / 'latest.json').read_text())
         self.assertTrue(
-            latest['url'].endswith(f'/v{base}.0/ai-router-{base}.0.tar.gz'),
+            latest['url'].endswith(f'/{short}/ai-router-{base}.0.tar.gz'),
             latest['url'])
 
 if __name__ == '__main__':
