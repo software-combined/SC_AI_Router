@@ -100,23 +100,20 @@ def plugin_files(root):
     return wanted
 
 
-def short_tag(base_version):
-    """Map the three-digit release counter to the public `vX.XX` label."""
-    parts = base_version.split('.')
-    if len(parts) != 3 or not all(part.isdigit() for part in parts):
+def semantic_version(base_version):
+    if not re.fullmatch(r'(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)', base_version):
         raise SystemExit(f'packaging/VERSION {base_version} is not semantic versioning')
-    release = int(parts[2])
-    return f'v{release // 100}.{release % 100:02d}'
+    return base_version
 
 
 def release_tag(tag, base_version):
     """Express is urgency on the existing channel, never a version suffix."""
-    match = re.fullmatch(r'v(\d+)\.(\d{2})(-beta)?(-express)?', tag)
-    if (not match or match[1] != str(int(match[1]))
-            or f'v{match[1]}.{match[2]}' != short_tag(base_version)):
+    semantic_version(base_version)
+    match = re.fullmatch(rf'v{re.escape(base_version)}(-beta)?(-express)?', tag)
+    if not match:
         raise SystemExit(
-            f'tag {tag} does not match the short release tag for packaging/VERSION {base_version}')
-    return ('beta' if match[3] else 'stable'), bool(match[4])
+            f'tag {tag} does not match the release version for packaging/VERSION {base_version}')
+    return ('beta' if match[1] else 'stable'), bool(match[2])
 
 
 def main(argv=None):
@@ -152,7 +149,8 @@ def main(argv=None):
     _lock_mod.validate(_lock_mod.load())
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
-    base_version = (root / 'packaging' / 'VERSION').read_text().strip()
+    base_version = semantic_version(
+        (root / 'packaging' / 'VERSION').read_text().strip())
     channel, express = release_tag(args.tag, base_version) if args.tag else (args.channel or 'stable', False)
     if args.channel and args.channel != channel:
         raise SystemExit('--channel does not match release tag')
@@ -183,7 +181,7 @@ def main(argv=None):
     tarball = gzip.compress(tar_buffer.getvalue(), mtime=0)
     tarball_name = f'ai-router-{version}.tar.gz'
     (out_dir / tarball_name).write_bytes(tarball)
-    tag = args.tag or short_tag(base_version) + ('-beta' if args.channel == 'beta' else '')
+    tag = args.tag or f'v{base_version}' + ('-beta' if args.channel == 'beta' else '')
     base = args.url_base or f'https://github.com/{REPO}/releases/download/{tag}'
     latest = {'version': version, 'url': f'{base}/{tarball_name}',
               'sha256': hashlib.sha256(tarball).hexdigest(), 'min_python': MIN_PYTHON,

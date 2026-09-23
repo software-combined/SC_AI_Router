@@ -111,8 +111,8 @@ compatibility checks.
 ## 6. Release rule
 
 Every user-visible router change updates `CHANGELOG.md` and
-`packaging/VERSION` (semver). Releases are cut with the short `vX.XX` tag
-derived from the last number in `packaging/VERSION`, then run the release
+`packaging/VERSION` (semver). Releases are cut with the full `v<VERSION>` tag
+matching `packaging/VERSION`, then run the release
 workflow. Plugin-only changes ride the plugin release train instead
 (section 9); they never bump `packaging/VERSION` or trigger router tags.
 New entries go under `## Unreleased` and move under the version heading when
