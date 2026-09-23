@@ -1,5 +1,45 @@
 # Compatibility
 
+## Replayed compaction summary blob, 23 September 2026 AEST
+
+Installed release `0.6.114.108` (`v1.14-express`) refused every
+`codex-auto-review` approval turn with HTTP 400 `invalid_encrypted_content`.
+The diagnostics merged as #279 explain the refusal in one line:
+
+```
+annotation_retry  eligible=True attempted=False outcome=unchanged
+  repair=reasoning_blobs  encoding=zstd  decoded=True  parsed=True
+  input_is_list=True  items=6  reasoning_items=0  encrypted_fields=1  removed=0
+```
+
+The body decodes and parses, so the blocker is structural: the replayed
+history holds no `type: reasoning` item, and the single `encrypted_content`
+field sits on a `type: compaction` item whose value is the router's own
+`ocx1:` summary (one item-level key, `id` prefix `cmp_`, 4-7 kB). A structural
+scan of this host's Codex rollouts finds item-level blobs on exactly two item
+types, `compaction` and `reasoning`, and none in a nested content block.
+
+The client stores the V2 compaction item the router produced and replays it.
+The ChatGPT backend cannot read that blob, and #274's repair only ever removed
+the item-level key from a `reasoning` item, so the bounded retry never fired
+and the turn was refused.
+
+The repair is retry-only and keeps the #274 gate unchanged (subscription
+OpenAI dialect, HTTP 400, `invalid_encrypted_content`). The compaction item
+becomes the same readable user message `compaction.rewrite_input` already
+produces for external models, built from `compaction_text`: the decoded
+summary, or the fixed opaque note when the blob is not the router's own. A
+payload carrying an encrypted field outside those two sites is left unchanged,
+so an unknown shape is never retried against a request the repair cannot fix.
+The classification is the one-level structural count: an item-level
+`encrypted_content` key, or the same key on a block of a one-level `content`
+list. Content nested deeper, or shaped differently, is not classified and is
+neither stripped nor rewritten. Nothing is stripped globally, and the healthy
+path still forwards the blob that `subscription_history.normalize` preserves.
+
+Evidence: `tests/test_subscription_compaction_repair.py` and the updated table
+in `tests/test_strip_retry_encrypted_blob.py`.
+
 ## Encrypted child replies to external models, 23 September 2026 AEST
 
 Task `01a0bca7-91f5-7002-a2cb-ef6409c71ea3` failed at 10:28:15 AEST while
