@@ -8,12 +8,15 @@ forwarded that refusal instead of repairing the one named condition.
 Run from the copy root:
   <python> -m unittest discover -s tests -t . -v
 """
+import inspect
 import json
 import types
 import unittest
+from unittest import mock
 from compression import zstd
 
-from ai_router import provider_defs, strip_retry, subscription_history, transport
+from ai_router import (provider_defs, providers, strip_retry,
+                       subscription_history, transport)
 
 
 OPENROUTER = types.SimpleNamespace(defn=provider_defs.get(provider_defs.DEFAULT_EXTERNAL))
@@ -64,8 +67,6 @@ class RetryRepairTests(unittest.TestCase):
     def setUp(self):
         self.metrics = {'protocol': provider_defs.RESPONSES, 'model': 'codex-auto-review'}
         self.log = Recorder()
-        # Fail loudly if the repair runs where it must not.
-        self._real_strip = strip_retry.strip_reasoning_blobs
 
     def drive(self, status, described, provider=SUBSCRIPTION, raw=ERROR_RAW,
               body_bytes=GUARDIAN_BODY):
@@ -75,28 +76,26 @@ class RetryRepairTests(unittest.TestCase):
 
     def test_01_healthy_request_is_untouched_and_never_stripped(self):
         called = []
-        strip_retry.strip_reasoning_blobs = lambda b: called.append(b)
-        try:
+        # Fail loudly if the repair runs where it must not: this stand-in takes
+        # one argument, so a two-argument call raises TypeError.
+        with mock.patch.object(strip_retry, 'strip_reasoning_blobs',
+                               lambda b: called.append(b)):
             self.assertIsNone(self.drive(200, None))
-        finally:
-            strip_retry.strip_reasoning_blobs = self._real_strip
         self.assertEqual(called, [], 'healthy turn must not reach any strip')
         self.assertEqual(self.log.outcomes(), ['ineligible'])
 
     def test_02_non_400_never_triggers_the_repair(self):
         called = []
-        strip_retry.strip_reasoning_blobs = lambda b: called.append(b)
-        try:
+        with mock.patch.object(strip_retry, 'strip_reasoning_blobs',
+                               lambda b: called.append(b)):
             for status in (500, 429, 503):
                 self.assertIsNone(self.drive(status, ENCRYPTED_DESCRIBED))
-        finally:
-            strip_retry.strip_reasoning_blobs = self._real_strip
         self.assertEqual(called, [], 'only a 400 may trigger the repair')
 
     def test_03_the_gate_safely_distinguishes_other_rejections(self):
-        real_post = transport.post_with_phases
-        transport.post_with_phases = lambda conn, prep, metrics: (Response(200), True)
-        try:
+        with mock.patch.object(
+                transport, 'post_with_phases',
+                lambda conn, prep, metrics: (Response(200), True)):
             # Named but unrelated provider code on the subscription route.
             self.assertIsNone(self.drive(
                 400, (400, 'x refused this request: the request was rejected. ',
@@ -106,8 +105,6 @@ class RetryRepairTests(unittest.TestCase):
             # Positive control: the named condition on the subscription route is
             # eligible and is repaired by stripping the blobs.
             self.assertIsNotNone(self.drive(400, ENCRYPTED_DESCRIBED))
-        finally:
-            transport.post_with_phases = real_post
         self.assertEqual(self.log.outcomes(),
                          ['ineligible', 'ineligible', 'started', 'accepted'])
         repairs = [f.get('repair') for e, f in self.log.events if e == 'annotation_retry']
@@ -136,9 +133,9 @@ class RetryRepairTests(unittest.TestCase):
             dispatches.append(prep.body)
             return Response(400 if len(dispatches) == 1 else 200), True
 
-        real_post, real_read = transport.post_with_phases, transport.read_capped
-        transport.post_with_phases, transport.read_capped = post_with_phases, lambda r, n: ERROR_RAW
-        try:
+        with mock.patch.object(transport, 'post_with_phases', post_with_phases), \
+                mock.patch.object(transport, 'read_capped',
+                                  lambda r, n: ERROR_RAW):
             result = strip_retry.post_with_retry(object(), prepared(GUARDIAN_BODY),
                                                  self.metrics, [], SUBSCRIPTION, self.log)
             self.assertEqual(len(dispatches), 2, 'initial dispatch plus exactly one retry')
@@ -149,16 +146,13 @@ class RetryRepairTests(unittest.TestCase):
             strip_retry.post_with_retry(object(), prepared(GUARDIAN_BODY), self.metrics,
                                         [], OPENROUTER, self.log)
             self.assertEqual(len(dispatches), 1)
-        finally:
-            transport.post_with_phases, transport.read_capped = real_post, real_read
 
     def test_06_guardian_approval_semantics_are_unchanged(self):
-        source = (__import__('pathlib').Path(strip_retry.__file__).parent / 'providers.py').read_text()
-        subscription_prepare = source.split('class SubscriptionProvider')[1].split(
-            'class ExternalResponsesProvider')[0]
-        self.assertNotIn('strip_reasoning_blobs', subscription_prepare,
+        self.assertNotIn('strip_reasoning_blobs',
+                         inspect.getsource(providers.SubscriptionProvider),
                          'the healthy subscription path must not strip blobs')
-        self.assertIn('strip_reasoning_blobs', source.split('class ExternalResponsesProvider')[1])
+        self.assertIn('strip_reasoning_blobs',
+                      inspect.getsource(providers.ExternalResponsesProvider))
 
 
 class DiagnosticFactsTests(unittest.TestCase):

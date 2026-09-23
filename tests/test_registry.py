@@ -255,12 +255,11 @@ class RegistryTests(unittest.TestCase):
                          {m.slug for m in MODELS if m.provider == 'openrouter'})
 
     def test_visibility_hides_only_the_claude_same_billing_rows(self):
-        self.assertEqual({m.slug for m in MODELS if m.provider == 'openrouter'
-                          and not visible_for(m, 'codex')}, set())
-        self.assertEqual({m.slug for m in MODELS if m.provider == 'openrouter'
-                          and not visible_for(m, 'claude')},
-                         {'anthropic/claude-sonnet-5', 'anthropic/claude-fable-5.1',
-                          'anthropic/claude-haiku-4.5', 'anthropic/claude-opus-5'})
+        unlisted = {m.slug for m in MODELS if m.provider == 'openrouter' and not m.listed}
+        self.assertEqual({m.slug for m in MODELS if m.provider == 'openrouter' and
+                          not visible_for(m, 'codex')}, unlisted)
+        self.assertEqual({m.slug for m in MODELS if m.provider == 'openrouter' and
+                          not visible_for(m, 'claude')}, unlisted | {'anthropic/claude-sonnet-5', 'anthropic/claude-fable-5.1', 'anthropic/claude-haiku-4.5', 'anthropic/claude-opus-5'})
 
     def test_visibility_keeps_subscription_and_other_vendor_rows(self):
         openai_sub = Model(slug='gpt-6-astra', provider='openai', display_name='G',
@@ -317,8 +316,8 @@ class RegistryTests(unittest.TestCase):
     def test_codex_picker_lists_openai_twins_without_include_twins(self):
         twins = {m.slug for m in models_for(MODELS, 'codex')
                  if m.slug.startswith('openai/')}
-        self.assertEqual(twins, {'openai/gpt-6-astra', 'openai/gpt-5.6-sol',
-                                 'openai/gpt-5.6-terra', 'openai/gpt-5.6-luna'})
+        self.assertEqual(twins, {'openai/gpt-6-astra', 'openai/gpt-6-sol',
+                                 'openai/gpt-5.6-terra', 'openai/gpt-6-luna'})
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,9 +1,4 @@
-"""Generate external-provider catalogue entries from the registry.
-
-Every non-model-specific field lives in ROW_TEMPLATE, per-model values come
-from ai_router/registry.py rows, and the served instructions come from the
-model_instructions leaf. Pure: no network, no state.
-"""
+"""Generate merged client catalogues from registry and subscription rows."""
 import json
 import sys
 from pathlib import Path
@@ -18,7 +13,8 @@ from .model_instructions import (SUBAGENT_MODEL_PLACEHOLDER,
                                  is_routed_text)
 from .registry import MODELS, picker_key
 from .retired_slugs import SUBSCRIPTION as RETIRED_SUBSCRIPTION_SLUGS
-from .subscription_roster import SUBSCRIPTION_SLUGS
+from .subscription_roster import SUBSCRIPTION_SLUGS, replace_successors
+from .subscription_catalogue import managed_entry
 
 ROW_TEMPLATE = {
     'shell_type': 'unified_exec',
@@ -70,22 +66,19 @@ ROW_TEMPLATE = {
 RETIRED_SLUGS = {'~anthropic/claude-sonnet-latest', '~anthropic/claude-fable-latest',
                  '~anthropic/claude-haiku-latest', '~anthropic/claude-opus-latest',
                  '~google/gemini-flash-latest', '~google/gemini-pro-latest',
-                 '~x-ai/grok-latest', 'x-ai/grok-4.6',
+                 '~x-ai/grok-latest', 'x-ai/grok-4.6', 'openai/gpt-5.6-sol',
+                 'openai/gpt-5.6-luna',
                  'deepseek/deepseek-v4-pro', 'deepseek/deepseek-v4-flash',
                  'deepseek/deepseek-v4-flash-0731',
                  '~deepseek/deepseek-v4-flash-latest',
                  'deepseek/deepseek-v4-flash-vision-exp'}
 
-# Retired subscription slugs live in retired_slugs.py, shared with the prune.
-
-# Native reasoning levels per subscription slug; fresh installs seed these.
-# Ultra is never served: it is Codex's automatic-delegation level, so Max
-# is the top effort the picker offers (merge() strips it from stale rows).
+# Native reasoning levels per subscription slug; Max is the top served effort.
 _M = ('low', 'medium', 'high', 'xhigh', 'max')
 _X = ('low', 'medium', 'high', 'xhigh')
 SUBSCRIPTION_REASONING = {
-    'gpt-6-astra': ('medium', _M), 'gpt-5.6-sol': ('low', _M),
-    'gpt-5.6-terra': ('medium', _M), 'gpt-5.6-luna': ('medium', _M),
+    'gpt-6-astra': ('medium', _M), 'gpt-6-sol': ('medium', _M),
+    'gpt-5.6-terra': ('medium', _M), 'gpt-6-luna': ('medium', _M),
     'gpt-5.5': ('medium', _X), 'gpt-5.4-mini': ('medium', _X),
     'gpt-5.3-codex-spark': ('high', _X), 'codex-auto-review': ('medium', _M),
 }
@@ -94,9 +87,9 @@ SUBSCRIPTION_REASONING = {
 # Picker labels for the subscription side, matching the live Codex picker.
 SUBSCRIPTION_DISPLAY_NAMES = {
     'gpt-6-astra': 'GPT-6-Astra',
-    'gpt-5.6-sol': 'GPT-5.6-Sol',
+    'gpt-6-sol': 'GPT-6-Sol',
     'gpt-5.6-terra': 'GPT-5.6-Terra',
-    'gpt-5.6-luna': 'GPT-5.6-Luna',
+    'gpt-6-luna': 'GPT-6-Luna',
     'gpt-5.5': 'GPT-5.5',
     'gpt-5.4-mini': 'GPT-5.4-Mini',
     'gpt-5.3-codex-spark': 'GPT-5.3-Codex-Spark',
@@ -208,13 +201,15 @@ def drop_ultra(row):
 
 
 def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False,
-          available=None):
+          available=None, subscription_rows=()):
     """Merge registry OpenRouter entries into one client catalogue.
 
     Emits models_for(client) rows only; see _visible_rows for the
     allowlist and key filters. Roster stubs repair fresh files; routing
     never consults this filter.
     """
+    roster = replace_successors(roster)
+    native = {row['slug']: row for row in subscription_rows}
     visible, hidden_rows = _visible_rows(client, allowed, include_twins,
                                          available=available)
     instructions = instructions_for(visible, client)
@@ -226,10 +221,13 @@ def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False,
     models = [m for m in catalog.get('models', [])
               if (m['slug'] not in RETIRED_SLUGS or m['slug'] in active)
               and m['slug'] not in hidden]
-    entries = {m['slug']: {**subscription_stub(m['slug'], instructions), **m}
-               for m in models}
+    entries = {}
+    for model in models:
+        stub = subscription_stub(model['slug'], instructions)
+        entries[model['slug']] = (managed_entry(native[model['slug']], model, stub)
+                                  if model['slug'] in native else {**stub, **model})
     for slug, row in entries.items():
-        if slug in SUBSCRIPTION_SLUGS:
+        if slug in SUBSCRIPTION_SLUGS or slug in native:
             # A row an older merge wrote with the routed text is upgraded to
             # the subscription wording; a hand-tuned row is left alone.
             template = (row.get('model_messages') or {}).get('instructions_template')
@@ -248,14 +246,15 @@ def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False,
             row['supported_reasoning_levels'] = fresh['supported_reasoning_levels']
     for model in visible:
         entries[model.slug] = external_entry(model, instructions)
-    # Retired subscription rows never come back: naming one loses it here.
     for slug in RETIRED_SUBSCRIPTION_SLUGS:
         entries.pop(slug, None)
     for slug in roster:
         # A roster stub repairs a fresh file only, never a hidden row.
         if (slug not in entries and slug not in RETIRED_SUBSCRIPTION_SLUGS
                 and slug not in hidden):
-            entries[slug] = subscription_stub(slug, sub_instructions)
+            stub = subscription_stub(slug, sub_instructions)
+            entries[slug] = (managed_entry(native[slug], None, stub)
+                             if slug in native else stub)
     for row in entries.values():  # Ultra never reaches the picker, at any age
         drop_ultra(row)
     if include_twins:
@@ -264,6 +263,7 @@ def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False,
         subs = [s for s in dict.fromkeys(roster) if s in entries]
         subs += [m['slug'] for m in models if m['slug'] in entries
                  and m['slug'] not in shown and m['slug'] not in subs]
+    for index, slug in enumerate(subs, 1): entries[slug]['priority'] = index
     def rank(slug):
         model = next(m for m in visible if m.slug == slug)
         return picker_key(model.vendor, model.tier, model.display_name, model.slug)
@@ -279,7 +279,7 @@ def _state_doc(catalog_path):
 def read_roster(catalog_path):
     """Subscription roster from the state file beside the catalogue; () when absent."""
     roster = _state_doc(catalog_path).get('openai_models')
-    return tuple(roster) if isinstance(roster, list) else ()
+    return tuple(replace_successors(roster)) if isinstance(roster, list) else ()
 
 
 def read_openai_mode(catalog_path):

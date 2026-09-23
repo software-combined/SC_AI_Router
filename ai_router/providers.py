@@ -5,7 +5,7 @@ import time
 from . import (capabilities, compaction as comp, local_services, agent_handoffs,
                provider_defs, transport, turn_budget, jev_compaction)
 from .standalone_outputs import materialize_outputs
-from . import subscription_history, context_recovery
+from . import subscription_history, context_recovery, subscription_roster
 from .capabilities import CANONICAL_ORDER, check_effort, input_modalities
 from .image_items import note_images
 from .errors import PreparationError, SubscriptionRequired, UnknownModel
@@ -69,7 +69,7 @@ class SubscriptionProvider:
         entry = by_slug(model) if isinstance(model, str) else None
         if entry is not None:
             return entry.provider == provider_defs.OPENAI.id
-        return isinstance(model, str) and model in openai_models
+        return isinstance(model, str) and (model in openai_models or model in subscription_roster.HELPER_SLUGS)
 
     def prepare(self, model, path, payload, raw_body, headers, credentials, decoded_len=None):
         del decoded_len  # Subscription rows keep the provider's own usage.

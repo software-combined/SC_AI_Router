@@ -79,7 +79,7 @@ class LiteHandoffTests(unittest.TestCase):
             self.assertNotIn('Content-Encoding', prepared.headers)
             self.assertEqual(prepared.headers['Accept-Encoding'], 'identity')
             native = alias_call(namespace='collaboration', name='spawn_agent',
-                arguments=json.dumps({'model': 'gpt-5.6-sol', 'message': 'opaque-control'}))
+                arguments=json.dumps({'model': 'gpt-6-sol', 'message': 'opaque-control'}))
             external = {**native, 'arguments': json.dumps({
                 'model': 'deepseek/deepseek-v4.1-flash', 'message': 'opaque-control'})}
             output = {'output': [alias_call(), native, external]}

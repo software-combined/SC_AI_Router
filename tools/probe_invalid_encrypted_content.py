@@ -124,9 +124,9 @@ def repair_sequence(events, model, request_bytes):
     if len(starts) != 1:
         return False, ['ambiguous_request_started'] if starts else [], bool(starts)
     started = starts[0]
-    rejected = (None if started is None else find(
-        started + 1, 'upstream_rejected', request_bytes=request_bytes,
-        status=400, code='invalid_encrypted_content'))
+    rejected = find(started + 1, 'upstream_rejected',
+                    request_bytes=request_bytes, status=400,
+                    code='invalid_encrypted_content')
     retry_started = (None if rejected is None else find(
         rejected + 1, 'annotation_retry', request_bytes=request_bytes,
         repair='reasoning_blobs',

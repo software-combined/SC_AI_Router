@@ -79,7 +79,7 @@ class DeriveTests(unittest.TestCase):
             {'name': 'Xiaomi: MiMo-V2.6-Flash'})
         self.assertEqual((vendor, label), ('Xiaomi', 'Xiaomi: MiMo V2.6 Flash'))
         vendor, label = qualify_name(
-            'openai/gpt-5.6-luna', {'name': 'OpenAI: GPT-5.6 Luna'})
+            'openai/gpt-6-luna', {'name': 'OpenAI: GPT-5.6 Luna'})
         self.assertEqual((vendor, label), ('OpenAI', 'OpenAI: GPT-5.6 Luna'))
 
     def test_empty_reasoning_refused(self):

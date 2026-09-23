@@ -12,12 +12,30 @@
 
 ## 0.6.115
 
+- ChatGPT subscription models are now discovered from Codex's native
+  `/models` catalogue and appear without a repository roster edit. Codex
+  drives refreshes; `--static-catalogue` remains the rollback path.
+- A successful live refresh is authoritative for subscription availability:
+  new server models appear, omitted models disappear and saved choices keep
+  their relative order. Native metadata is validated before caching, and the
+  stale fallback is scoped to the same account, workspace and client version.
+  Request routing uses that same identity scope, and an authentication
+  rejection never serves stale model data.
+- The ChatGPT picker now offers `GPT-6-Sol` and `GPT-6-Luna` in place of
+  their 5.6 versions. An update replaces the old ids inside existing custom
+  rosters without adding or reordering unrelated choices.
+- Codex helper-title turns still using `gpt-5.6-luna` route through the new
+  Luna 6 OpenRouter twin when the helper fallback is enabled.
+- Both OpenRouter twins are enabled. Sol 6 passed its tool, stream and
+  compaction legs; its image-quality assertion is deferred by owner approval
+  after it returned `Teal` for the red test image.
 - A child-to-parent `agent_message` carrying readable text and an encrypted
   sidecar is now delivered to an external model as a `delivered_message` tool
   result. The router forwards the readable text, withholds the encrypted block
   and marks the result incomplete so the recipient can request a plain-text
-  resend. Opaque assignments, self/peer messages, malformed messages and
-  messages without readable text remain fail-closed.
+  resend. Recovery requires non-empty readable text and a non-empty sidecar;
+  opaque assignments, self/peer messages and malformed messages remain
+  fail-closed.
 
 ## 0.6.114
 

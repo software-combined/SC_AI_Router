@@ -9,7 +9,7 @@ from unittest import mock
 from ai_router import catalogue
 from ai_router.runtime import load_state
 from ai_router.retired_slugs import SUBSCRIPTION as LEAF_RETIRED_SLUGS
-from ai_router.subscription_roster import SUBSCRIPTION_SLUGS
+from ai_router.subscription_roster import SUBSCRIPTION_SLUGS, replace_successors
 from tests.install_fixtures import install_mod
 
 
@@ -130,9 +130,15 @@ class InstallStateTests(unittest.TestCase):
                         'openai_models': ['gpt-6-astra', 'gpt-reserve',
                                           'gpt-5.6-luna']}) + '\n')
         state = install_mod.ensure_state(home)
-        self.assertEqual(state['openai_models'], ['gpt-6-astra', 'gpt-5.6-luna'])
+        self.assertEqual(state['openai_models'], ['gpt-6-astra', 'gpt-6-luna'])
         self.assertEqual(self._load(home / 'mixed-router-state.json')['openai_models'],
-                         ['gpt-6-astra', 'gpt-5.6-luna'])
+                         ['gpt-6-astra', 'gpt-6-luna'])
+
+    def test_successor_migration_preserves_order_and_deduplicates(self):
+        self.assertEqual(
+            replace_successors(['gpt-5.6-sol', 'custom', 'gpt-6-luna',
+                                'gpt-5.6-luna', {'x': 1}]),
+            ['gpt-6-sol', 'custom', 'gpt-6-luna', {'x': 1}])
 
 
 if __name__ == '__main__':

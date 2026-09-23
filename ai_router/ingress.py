@@ -15,7 +15,7 @@ import io
 import json
 import secrets
 from compression import zstd
-from . import errors, model_prompt_page, protocols, setup, sse
+from . import errors, model_prompt_page, protocols, setup, sse, subscription_discovery
 from .errors import InvalidSize, OversizeBusy
 from .runtime import MAX_DECODE_FACTOR, VERSION
 
@@ -152,7 +152,9 @@ def do_get(handler):
     path, _ = handler.authorized_path()
     if path is None:
         return handler.error(errors.forbidden())
-    path = path.split('?', 1)[0]
+    path, _, query = path.partition('?')
+    if path == '/models':
+        return subscription_discovery.serve(handler, query)
     if path.startswith('/setup/'):
         return setup.serve(handler, path[len('/setup/'):], False)
     if path == '/model-prompt':
