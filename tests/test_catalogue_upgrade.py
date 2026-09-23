@@ -11,10 +11,17 @@ from tests import test_catalogue
 
 
 class CatalogueUpgradeTests(unittest.TestCase):
+    def test_merge_replaces_retired_rows_in_a_stale_roster(self):
+        stale = {'models': [{'slug': 'gpt-5.6-sol'}, {'slug': 'gpt-5.6-luna'}]}
+        merged = merge(stale, roster=('custom', 'gpt-5.6-sol', 'gpt-5.6-luna'))
+        rows = {m['slug'] for m in merged['models']}
+        self.assertTrue({'gpt-6-sol', 'gpt-6-luna'} <= rows)
+        self.assertFalse({'gpt-5.6-sol', 'gpt-5.6-luna'} & rows)
+
     def test_cli_repairs_existing_stubs_and_preserves_metadata(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
-            roster = ['gpt-6-astra', 'gpt-5.6-luna']
+            roster = ['gpt-6-astra', 'gpt-6-luna']
             (home / 'mixed-router-state.json').write_text(
                 json.dumps({'openai_models': roster}))
             path = home / 'mixed-models.json'

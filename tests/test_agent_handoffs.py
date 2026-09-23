@@ -134,11 +134,11 @@ class PlaintextSteerTests(unittest.TestCase):
     def test_spawn_history_maps_every_spawned_child_to_its_model(self):
         items = [spawn_history('plain', 'meta/muse-spark-1.3-contributor',
                                encrypted_function_args=[]),
-                 spawn_history('native', 'gpt-5.6-sol'),
+                 spawn_history('native', 'gpt-6-sol'),
                  {'type': 'message', 'role': 'user', 'content': 'synthetic'}]
         self.assertEqual(handoffs.spawn_models(items),
                          {'plain': 'meta/muse-spark-1.3-contributor',
-                          'native': 'gpt-5.6-sol'})
+                          'native': 'gpt-6-sol'})
         self.assertEqual(handoffs.spawn_models('not-a-list'), {})
         bad = [spawn_history('bad', 'm', arguments='{broken')]
         self.assertEqual(handoffs.spawn_models(bad), {})
@@ -157,7 +157,7 @@ class PlaintextSteerTests(unittest.TestCase):
         names = handoffs.AliasTools({'followup_task'},
             spawn_models={'plain': 'meta/muse-spark-1.3-contributor'})
         native_spawn = encrypted_call(name='spawn_agent',
-            arguments='{"task_name":"n","model":"gpt-5.6-sol"}')
+            arguments='{"task_name":"n","model":"gpt-6-sol"}')
         self.assertIs(handoffs.steer_plaintext(native_spawn, names), native_spawn)
         strange = encrypted_call(arguments='{"target":"other","message":"synthetic"}')
         self.assertIs(handoffs.steer_plaintext(strange, names), strange)
@@ -187,7 +187,7 @@ class PlaintextSteerTests(unittest.TestCase):
         ambiguous = handoffs.AliasTools(
             {'followup_task'},
             spawn_models={'a/synth_agent': 'meta/muse-spark-1.3-contributor',
-                          'b/synth_agent': 'gpt-5.6-sol'})
+                          'b/synth_agent': 'gpt-6-sol'})
         # Suffix matches two tasks: no steer, downstream guards stay backstop.
         vaguer = encrypted_call(arguments='{"target":"/root/synth_agent","message":"x"}')
         self.assertIs(handoffs.steer_plaintext(vaguer, ambiguous), vaguer)

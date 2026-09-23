@@ -188,6 +188,9 @@ reasoning level is rejected with the levels the model accepts.
 
 - Rows labelled `· OpenRouter` are billed to the OpenRouter API key. The
   remaining rows use the ChatGPT or Claude subscription.
+- ChatGPT subscription models are discovered automatically from Codex's
+  native model catalogue, so a new subscription model does not need a router
+  release to appear.
 - The GPT twins appear on both routes, so a subscription row and its
   OpenRouter twin are selectable side by side.
 - Rows labelled Preview are usable but not yet verified; report anything odd.
@@ -271,7 +274,7 @@ forces one; the prompts each platform shows are described in
 
 Maintainers can publish an urgent stable release with `v<VERSION>-express`,
 or an urgent beta with `v<VERSION>-beta-express`. The tag includes the exact
-semantic version from `packaging/VERSION`: `0.6.116` is `v0.6.116`. Use a new
+semantic version from `packaging/VERSION`: `0.6.117` is `v0.6.117`. Use a new
 tag for each release. These tags use the same tests, publisher permissions
 and integrity checks as ordinary releases.
 
@@ -408,7 +411,7 @@ The runtime is Python 3.14 with the standard library only; installer scripts
 stay Python 3.9-compatible. Branches start from `develop`, pull requests
 target `develop`, and user-visible changes update `CHANGELOG.md` and
 `packaging/VERSION`. Release tags use the full `v<VERSION>` form matching
-`packaging/VERSION`; for example, `0.6.116` is tagged `v0.6.116`.
+`packaging/VERSION`; for example, `0.6.117` is tagged `v0.6.117`.
 
 ## Agent plugins
 

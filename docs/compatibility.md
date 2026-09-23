@@ -2056,3 +2056,53 @@ so the transport is fine; no model chose to call the search tool when asked
 for a date. That closes plan 175's open question 3 as not reproduced, and it
 is a model-behaviour observation rather than a roster defect - no row edit
 follows. The leg keeps its own `passed`/`failed` contract for future runs.
+
+## Sol 6 and Luna 6 onboarding, 2026-09-23
+
+`models add --probe` ran once per external row through the isolated candidate
+router and a disposable Codex home with `codex-cli 0.153.1`. Both runs
+attempted the tool, stream, image and compaction legs at `low`; that harness
+does not retain per-run call counts or served identity, so those fields remain
+unverified rather than inferred.
+
+| requested model | tier | result | picker |
+|---|---|---|---|
+| `openai/gpt-6-sol` | verified by owner exception | tool, stream and compaction passed; image colour returned `Teal` | listed |
+| `openai/gpt-6-luna` | verified | passed tool, stream, image and compaction | listed |
+
+Reading: Luna 6 passed the full gate. Sol 6 is enabled under explicit owner
+approval because the image-quality assertion is not yet representative. Its
+tool, stream and compaction behaviour passed; the image leg returned `Teal`
+for the red test image and remains a documented follow-up.
+
+The bare ChatGPT rows were checked separately through a disposable router
+using the real subscription route. Each made one synthetic tool round trip at
+`low` and served the requested id:
+
+| requested model | result | served identity | calls |
+|---|---|---|---|
+| `gpt-6-sol` | passed | `gpt-6-sol` | 1 |
+| `gpt-6-luna` | passed | `gpt-6-luna` | 1 |
+
+## Native subscription discovery, 2026-09-23
+
+Codex `0.155.0-alpha.16` requests
+`GET /backend-api/codex/models?client_version=<version>` with its own ChatGPT
+authentication. A disposable router with a local roster containing only
+`gpt-6-astra` returned 27 native and external rows, including `gpt-6-sol`,
+`gpt-6-luna`, `openai/gpt-6-sol`, and `openai/gpt-6-luna`. This was a
+metadata-only acceptance; no inference request was made. Desktop picker
+repaint timing remains unverified, so a visible stale list still needs a
+Codex restart as the operational fallback.
+
+The live response is authoritative for membership. Saved ids provide ordering
+preferences only among currently advertised models; a successful response can
+add or remove rows without a repository roster edit. Request routing resolves
+the same per-account, per-workspace and per-client-version roster, so one
+context cannot overwrite another's live membership. Native metadata is
+validated before it is cached, and the 24-hour fallback uses that identity
+scope. Authentication rejection returns a sign-in error and clears only the
+rejected identity's fallback instead of serving another account's stale list.
+POST routing uses the stable account/workspace identity, even when the request
+omits the bearer or query version. An unknown subscription id never creates an
+OpenRouter twin.

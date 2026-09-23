@@ -20,7 +20,7 @@ def _external_responses():
 class SelectTests(unittest.TestCase):
     def test_select_prefers_native_paths_regardless_of_model(self):
         provider = providers.select('z-ai/glm-5.3', '/alpha/search', [])
-        self.assertIsInstance(provider, providers.SubscriptionProvider)
+        self.assertIsInstance(provider, providers.SubscriptionProvider); self.assertEqual(providers.select('gpt-5.6-luna', '/responses', []).name, 'openai')
 
     def test_none_mode_names_subscription_for_openai_models(self):
         with self.assertRaisesRegex(ValueError, 'without a ChatGPT subscription'):

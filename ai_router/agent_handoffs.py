@@ -305,11 +305,11 @@ def steer_event(event, names):
 def _readable_block(block):
     """A plaintext input_text block with no encrypted sidecar."""
     return (isinstance(block, dict) and block.get('type') == 'input_text'
-            and 'encrypted_content' not in block and isinstance(block.get('text'), str))
+            and 'encrypted_content' not in block and isinstance(block.get('text'), str)
+            and bool(block['text'].strip()))
 
 def _encrypted_block(block):
-    return isinstance(block, dict) and ('encrypted_content' in block
-                                        or block.get('type') == 'encrypted_content')
+    payload = block.get('encrypted_content') if isinstance(block, dict) else None; return bool(payload) and isinstance(payload, (str, dict))
 
 
 def inbound_agent_message(item):

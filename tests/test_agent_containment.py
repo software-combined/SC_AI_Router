@@ -102,6 +102,12 @@ class AgentContainmentTests(unittest.TestCase):
             {**inbound, 'content': [inbound['content'][1]]},
             {**inbound, 'content': [inbound['content'][0],
                                     {'type': 'input_image', 'image_url': 'synthetic'}]},
+            {**inbound, 'content': [{'type': 'input_text', 'text': '  '},
+                                    inbound['content'][1]]},
+            {**inbound, 'content': [inbound['content'][0],
+                                    {'type': 'encrypted_content'}]},
+            {**inbound, 'content': [inbound['content'][0],
+                                    {'type': 'encrypted_content', 'text': 'only-label'}]},
         ]
         for item in shapes:
             with self.subTest(author=item.get('author'), recipient=item.get('recipient')):
@@ -122,6 +128,13 @@ class AgentSummaryTests(unittest.TestCase):
         summary = comp.transcript_for_summary([_opaque_item()])
         self.assertNotIn(MARKER, summary)
         self.assertNotIn('network domain', summary)
+
+    def test_recoverable_reply_keeps_readable_text_out_of_the_sidecar(self):
+        from ai_router import compaction as comp
+        summary = comp.transcript_for_summary([_inbound_mixed()])
+        self.assertIn('SYNTH-READABLE-REPLY', summary)
+        self.assertIn('result may be incomplete', summary)
+        self.assertNotIn(OPAQUE_MARKER, summary)
 
 
 if __name__ == '__main__':

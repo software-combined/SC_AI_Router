@@ -116,6 +116,20 @@ class CompactTriggerHandlerTests(unittest.TestCase):
         self.assertEqual(decode_summary(item['encrypted_content']), 'handoff done')
         self.assertEqual(recorded, [])
 
+    def test_opaque_agent_item_is_rejected_before_compaction(self):
+        _isolated_home(self)
+        server = self._server()
+        response = _post(server.server_port, '/test-token/responses', {
+            'model': 'z-ai/glm-5.3-flash',
+            'input': [{'type': 'agent_message', 'author': '/root',
+                       'content': [{'type': 'input_text', 'text': 'hidden'},
+                                   {'type': 'encrypted_content',
+                                    'encrypted_content': 'CIPHER'}]},
+                      {'type': 'compaction_trigger'}]})
+        self.assertEqual(response.status, 400)
+        self.assertEqual(json.loads(response.read())['error']['code'],
+                         'PROVIDER_REJECTED')
+
     def test_streamed_trigger_returns_completed_sse_events(self):
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{"output": []}', []))
         server = self._server()

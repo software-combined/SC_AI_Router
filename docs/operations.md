@@ -4,7 +4,7 @@
 
 Work lands on `develop` via `fix/*`/`feat/*` branches, then `develop`
 merges to `main` via PR. Tag the merge with the full `v<VERSION>` label
-matching `packaging/VERSION`: `0.6.116` becomes `v0.6.116`.
+matching `packaging/VERSION`: `0.6.117` becomes `v0.6.117`.
 Add `-beta` for a pre-release, `-express` for an urgent stable release, or
 `-beta-express` for an urgent beta. The release workflow runs on `v*` tags
 only, validates the exact version, runs the suite, builds the bundle, publishes
@@ -33,25 +33,28 @@ CERT="$(aws cloudformation describe-stacks --stack-name scg-router-feed-cert \
 aws cloudformation deploy --stack-name scg-router-feed --region ap-southeast-2 \
   --template-file infra/feed.yaml --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides CertificateArn="$CERT" \
-    BucketName="$FEED_BUCKET" SigningSeedArn="$FEED_SIGNING_SEED_ARN" \
-    NotificationEmail="$EMAIL"
+    BucketName="$FEED_BUCKET" SigningSeedArn="$FEED_SIGNING_SEED_ARN"
 ```
 
-The subscription needs one click: SNS emails `NotificationEmail` and waits.
-Confirm it, then re-check with
-`aws sns list-subscriptions-by-topic --topic-arn <topic>` that it no longer
-reads `PendingConfirmation`; until it does, the publish email never arrives
-and the second-write signal is silently missing.
+No subscription confirmation step is left for the reader route. The per-write
+email is retired; the reader now sits on the central SCG AWS notification
+service, which watches the same `bundles/` prefix with its own EventBridge
+rule and reports each write as a branded publication. That route belongs to
+`SC_Infrastructure`, so its subscription list and source-stack alarms are the
+delivery checks.
 
-Each `bundles/` write then mails one short message - subject, object, size,
-S3 version id, time and the PutObject actor - instead of the raw S3 event. The
-small `FeedAlertFunction` owns that wording. It exists rather than an
-EventBridge `InputTemplate` because a template substitutes raw: an object key
-carrying a double quote would break the template and stop delivery, letting
-the writer this alert watches silence their own alarm. The function also sets
-the mail subject. `tests/test_feed_infra.py` compiles the inlined function,
-drives it with a hostile key and pins the grants (the rule may invoke only
-this function; the function may publish only to this topic).
+The local formatter, topic, queue and narrow failure alarm stay as the rollback
+path. They monitor only that local formatter rule, not central delivery.
+`tests/test_feed_infra.py` compiles the inline function, drives it with a
+hostile key and pins the grants.
+
+To restore the direct route, deploy the pre-retirement `infra/feed.yaml` that
+contains `FeedPublishSubscription`, passing `NotificationEmail="$EMAIL"` with
+the deploy. The recipient must confirm the new SNS subscription, and the
+rollback is incomplete until
+`aws sns list-subscriptions-by-topic --topic-arn <topic>` no longer reports
+`PendingConfirmation`. Do that same readback after an automatic stack rollback
+that re-creates the subscription.
 
 ### Where the feed identifiers live (Plan 160)
 
@@ -89,30 +92,34 @@ that tool uploads with the operator's own credentials.
 
 The publisher's bundle upload is create-only (`--if-none-match '*'`), so a
 second write of a published key is refused by S3 itself. A role holder that
-skips the flag can still replace a key: the publish email reports it (one
-message per `bundles/*` write, so a second message for an existing key is
-the signal), and bucket versioning recovers the replaced bytes afterwards.
-When that second message arrives, recover deliberately: the email names the
-object and the version it wrote, so list that key's versions (`aws s3api
+skips the flag can still replace a key: the central publication notification
+reports it (one message per `bundles/*` write, so a second message for an
+existing key is the signal), and bucket versioning recovers the replaced bytes
+afterwards. When that second message arrives, recover deliberately: the
+notification names the object and the version it wrote, so list that key's
+versions (`aws s3api
 list-object-versions --bucket "$FEED_BUCKET" --prefix bundles/<name>`),
-match the emailed `VersionId`, compare each version's `Metadata.sha256`
+match the notified `VersionId`, compare each version's `Metadata.sha256`
 against the feed document that names the bundle, copy the matching version
 back over the key with `aws s3api copy-object --copy-source
 <bucket>/<key>?versionId=...`, then find out what held the publisher role.
 The feed and its bundles are public: readers need no credential.
 
-### When the alert itself fails
+### When publication reporting fails
 
-A publish email that never arrives is reported too: the rule's target carries
-a dead-letter queue (`<stack>-alert-dlq`, 14-day retention) and an alarm on
-`FailedInvocations` - one failure in a five-minute period sends an email to
-the same topic. So a mail whose body is an alarm, not a bundle, means the
-formatter could not deliver the bundle mail; the event it could not format is
-in the queue. Read it with `aws sqs receive-message --queue-url <queue url>`
-plus `--attribute-names All`, and the failure itself in
-`/aws/lambda/<function name>` in CloudWatch Logs. CloudWatch tells the topic
-about a state change only, so a long outage sends one alarm mail rather than
-one per attempt while the queue keeps every failed event for its 14 days.
+The central SCG AWS notification service owns replacement delivery and
+reports both stages through its independent plain-text fallback.
+`PublicationRuleFailures` alarms when EventBridge cannot send a bundle event
+to the publication topic. `PublicationDeliveryFailures` alarms when that topic
+cannot reach the shared notification intake. Both alarms sit in the
+`AwsNotificationSources-*` source stack and must be checked before assuming a
+publication was lost. The daily digest or notification state then confirms
+whether the event was processed.
+
+This stack's `FeedAlertFailureAlarm` is narrower: it covers only the retained
+local formatter rule used by rollback. Its queue and function logs explain a
+local invocation failure, but it does not establish that the central route
+failed or that a reader missed a publication.
 
 Verify the feed before trusting a release. Before the first publish the
 channel documents do not exist; run the positive check after the first
