@@ -45,6 +45,59 @@ class SubscriptionHistoryTests(unittest.TestCase):
         self.assertEqual(normalized['input'], [{k: v for k, v in item.items() if k != 'content'}])
         self.assertIn('content', item)
 
+    def test_model_switch_replay_drops_foreign_reasoning_and_projects_agent_messages(self):
+        marker = {'type': 'message', 'role': 'developer', 'content': [
+            {'type': 'input_text', 'text': '<model_switch> hop'}]}
+        foreign = reasoning(encrypted_content='FOREIGN')
+        native = reasoning(id='rs_native', encrypted_content='NATIVE',
+                           summary=[{'type': 'summary_text', 'text': 'current'}])
+        agent = {'type': 'agent_message', 'author': '/root/child',
+                 'recipient': '/root',
+                 'content': [{'type': 'input_text', 'text': 'done'}]}
+        trigger = {'type': 'compaction_trigger'}
+        payload = {'model': 'gpt-6-astra',
+                   'input': [foreign, marker, native, agent, trigger]}
+        prepared = providers.SubscriptionProvider().prepare(
+            'gpt-6-astra', '/responses', payload,
+            json.dumps(payload).encode(), {}, None)
+        sent = json.loads(prepared.body)['input']
+        self.assertEqual([item['type'] for item in sent],
+                         ['message', 'reasoning', 'function_call',
+                          'function_call_output', 'compaction_trigger'])
+        self.assertEqual(sent[1]['encrypted_content'], 'NATIVE')
+        self.assertNotIn('content', sent[1])
+        self.assertEqual(sent[2]['call_id'], sent[3]['call_id'])
+        self.assertIn('done', sent[3]['output'])
+        self.assertNotIn('FOREIGN', json.dumps(sent))
+
+    def test_native_child_replies_and_app_deliveries_replay_untouched(self):
+        # Even after a switch the subscription backend reads both native shapes
+        # itself; projecting them would withhold the encrypted reply or recast
+        # an assignment.
+        marker = {'type': 'message', 'role': 'developer', 'content': [
+            {'type': 'input_text', 'text': '<model_switch> hop'}]}
+        reply = {'type': 'agent_message', 'author': '/root/child', 'recipient': '/root',
+                 'content': [{'type': 'input_text', 'text': 'done'},
+                             {'type': 'encrypted_content', 'encrypted_content': 'NATIVE'}]}
+        delivery = {'type': 'function_call_output', 'name': 'create_thread',
+                    'output': 'Review the staged diff.'}
+        payload = {'model': 'gpt-6-astra', 'input': [marker, reply, delivery]}
+        prepared = providers.SubscriptionProvider().prepare(
+            'gpt-6-astra', '/responses', payload,
+            json.dumps(payload).encode(), {}, None)
+        self.assertEqual(json.loads(prepared.body)['input'], [marker, reply, delivery])
+
+    def test_unswitched_turn_replays_exactly_as_sent(self):
+        # Without a model switch the subscription route forwards the client's
+        # body as it did before, including an external child's readable reply.
+        reply = {'type': 'agent_message', 'author': '/root/child', 'recipient': '/root',
+                 'content': [{'type': 'input_text', 'text': 'done'}]}
+        payload = {'model': 'gpt-6-astra', 'input': [reply, {'type': 'compaction_trigger'}]}
+        raw = json.dumps(payload).encode()
+        prepared = providers.SubscriptionProvider().prepare(
+            'gpt-6-astra', '/responses', payload, raw, {}, None)
+        self.assertEqual(prepared.body, raw)
+
     def test_noop_shapes_keep_identity(self):
         for items in (None, 'prompt', [], [None], [reasoning(content=[])],
                       [reasoning(content='invalid')], [{'type': 'reasoning', 'summary': []}]):

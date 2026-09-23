@@ -16,7 +16,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from ai_router import catalogue, provider_defs, subscription_history, upstream
+from ai_router import catalogue, provider_defs, providers, upstream
 from ai_router.registry import by_slug
 from tools.probe_context_budget import Client, Reply, MODEL, message
 
@@ -121,7 +121,8 @@ def run(binary, scenario, home):
         fake = Upstream(scenario)
         upstream.clear_refusals()
         with (mock.patch.object(http.client, 'HTTPSConnection', fake.connection),
-              mock.patch.object(subscription_history, 'normalize', wraps=subscription_history.normalize) as normalize):
+              mock.patch.object(providers, 'portable_replay',
+                                wraps=providers.portable_replay) as replay):
             server = Router({'port': 0, 'token': 'probe-token', 'openai_models': [NATIVE]},
                             credentials=SimpleNamespace(key_for=lambda _pid=None: 'synthetic-test-key'))
             threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -146,7 +147,7 @@ def run(binary, scenario, home):
                     turn(client, thread, model, scenario)
                 if scenario == 'switch':
                     assert any(i.get('type') == 'reasoning' and i.get('content')
-                               for call in normalize.call_args_list for i in call.args[0]['input']), \
+                               for call in replay.call_args_list for i in call.args[0]['input']), \
                         'probe did not exercise replay of foreign reasoning'
                 expected = {'switch': 3, 'invalid': 1, 'transient': 2}[scenario]
                 assert fake.calls == expected, f'expected {expected} attempts, got {fake.calls}'
