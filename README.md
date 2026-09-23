@@ -274,7 +274,7 @@ forces one; the prompts each platform shows are described in
 
 Maintainers can publish an urgent stable release with `v<VERSION>-express`,
 or an urgent beta with `v<VERSION>-beta-express`. The tag includes the exact
-semantic version from `packaging/VERSION`: `0.6.116` is `v0.6.116`. Use a new
+semantic version from `packaging/VERSION`: `0.6.117` is `v0.6.117`. Use a new
 tag for each release. These tags use the same tests, publisher permissions
 and integrity checks as ordinary releases.
 
@@ -411,7 +411,7 @@ The runtime is Python 3.14 with the standard library only; installer scripts
 stay Python 3.9-compatible. Branches start from `develop`, pull requests
 target `develop`, and user-visible changes update `CHANGELOG.md` and
 `packaging/VERSION`. Release tags use the full `v<VERSION>` form matching
-`packaging/VERSION`; for example, `0.6.116` is tagged `v0.6.116`.
+`packaging/VERSION`; for example, `0.6.117` is tagged `v0.6.117`.
 
 ## Agent plugins
 

@@ -23,8 +23,8 @@ class LiveRefreshTests(unittest.TestCase):
     def test_refresh_follows_the_upstream_id(self):
         # The live list is keyed by the id the provider serves, which is not
         # always the id clients send (Plan 153).
-        row = _row(slug='acme/claude-opus-5', upstream_id='claude-opus-5')
-        out = refresh([row], {'claude-opus-5': _live()}, 'openrouter')
+        row = _row(slug='acme/claude-opus-5.5', upstream_id='claude-opus-5.5')
+        out = refresh([row], {'claude-opus-5.5': _live()}, 'openrouter')
         self.assertEqual(out[0]['context_window'], 100)
 
     def test_modalities_keep_codex_vocabulary_only(self):
