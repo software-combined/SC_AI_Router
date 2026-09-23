@@ -263,6 +263,7 @@ def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False,
         subs = [s for s in dict.fromkeys(roster) if s in entries]
         subs += [m['slug'] for m in models if m['slug'] in entries
                  and m['slug'] not in shown and m['slug'] not in subs]
+    for index, slug in enumerate(subs, 1): entries[slug]['priority'] = index
     def rank(slug):
         model = next(m for m in visible if m.slug == slug)
         return picker_key(model.vendor, model.tier, model.display_name, model.slug)

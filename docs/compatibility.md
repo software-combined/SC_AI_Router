@@ -1,5 +1,25 @@
 # Compatibility
 
+## Encrypted child replies to external models, 23 September 2026 AEST
+
+Task `01a0bca7-91f5-7002-a2cb-ef6409c71ea3` failed at 10:28:15 AEST while
+running `deepseek/deepseek-v4.1-flash`. The preceding `collaboration.wait`
+delivered a child `agent_message` from `/root/router_adversarial` to `/root`
+with one readable `input_text` block and one `encrypted_content` block. The
+router's containment guard rejected the whole request before dispatch with
+`PROVIDER_REJECTED: unsupported encrypted agent instructions`, so the parent
+turn ended without recovering the reply.
+
+The 0.6.115 projection accepts only that strict child-to-parent shape with a
+complete readable/encrypted block partition. It emits a `delivered_message`
+call/output pair containing the sender, recipient, readable text and the fixed
+warning that encrypted content was withheld and the result may be incomplete.
+The ciphertext is never forwarded or logged. Parent-to-child assignments,
+self/peer messages, malformed shapes and messages without readable text remain
+fail-closed before credential lookup. Offline regression and the bounded
+standalone probe cover the projection; the one-call DeepSeek probe is the
+runtime acceptance gate.
+
 ## Claude Code deferred tool loading, 22 September 2026 AEST
 
 Client: Claude Code `2.1.223` (standalone CLI); router candidate `0.6.107`
@@ -2074,3 +2094,15 @@ authentication. A disposable router with a local roster containing only
 metadata-only acceptance; no inference request was made. Desktop picker
 repaint timing remains unverified, so a visible stale list still needs a
 Codex restart as the operational fallback.
+
+The live response is authoritative for membership. Saved ids provide ordering
+preferences only among currently advertised models; a successful response can
+add or remove rows without a repository roster edit. Request routing resolves
+the same per-account, per-workspace and per-client-version roster, so one
+context cannot overwrite another's live membership. Native metadata is
+validated before it is cached, and the 24-hour fallback uses that identity
+scope. Authentication rejection returns a sign-in error and clears only the
+rejected identity's fallback instead of serving another account's stale list.
+POST routing uses the stable account/workspace identity, even when the request
+omits the bearer or query version. An unknown subscription id never creates an
+OpenRouter twin.

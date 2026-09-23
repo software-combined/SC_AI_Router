@@ -14,9 +14,11 @@ class _Policy:
     name = provider_defs.RESPONSES
     listing = None
 
-    def select_provider(self, model, path, state, mode):
+    def select_provider(self, model, path, state, mode, openai_models=None):
+        if openai_models is None:
+            openai_models = state.get('openai_models', [])
         return providers.select(
-            model, path, state.get('openai_models', []), mode,
+            model, path, openai_models, mode,
             region=state.get('openrouter_region', 'global'),
             allowed=state.get('allowed_models'))
 

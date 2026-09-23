@@ -13,6 +13,7 @@ import json
 import types
 import unittest
 from unittest import mock
+from compression import zstd
 
 from ai_router import (provider_defs, providers, strip_retry,
                        subscription_history, transport)
@@ -152,6 +153,107 @@ class RetryRepairTests(unittest.TestCase):
                          'the healthy subscription path must not strip blobs')
         self.assertIn('strip_reasoning_blobs',
                       inspect.getsource(providers.ExternalResponsesProvider))
+
+
+class DiagnosticFactsTests(unittest.TestCase):
+    """One `annotation_retry` line must explain an `outcome=unchanged`."""
+
+    def setUp(self):
+        self.metrics = {'protocol': provider_defs.RESPONSES, 'model': 'codex-auto-review'}
+        self.log = Recorder()
+        self._real_post = transport.post_with_phases
+        transport.post_with_phases = lambda conn, prep, metrics: (Response(200), True)
+
+    def tearDown(self):
+        transport.post_with_phases = self._real_post
+
+    def drive(self, body_bytes, content_encoding=None):
+        headers = {} if content_encoding is None else {'Content-Encoding': content_encoding}
+        request = transport.Prepared('api.openai.com', '/responses', headers,
+                                     body_bytes, set(), 'openai')
+        strip_retry.maybe_retry_unattributable(
+            ENCRYPTED_DESCRIBED, Response(400), ERROR_RAW, self.metrics, SUBSCRIPTION,
+            request, [], self.log)
+        # The first event is the repair decision; a successful repair adds a
+        # second one for the retry's own outcome.
+        return [f for e, f in self.log.events if e == 'annotation_retry'][0]
+
+    def test_each_sub_case_is_distinguishable_from_one_log_line(self):
+        cases = [
+            ('compressed and repairable', zstd.compress(GUARDIAN_BODY), 'zstd',
+             {'encoding': 'zstd', 'decoded': True, 'parsed': True, 'input_is_list': True,
+              'items': 3, 'reasoning_items': 2, 'encrypted_fields': 2, 'removed': 2},
+             'started'),
+            ('undecodable compressed body', b'not-zstd-at-all', 'zstd',
+             {'encoding': 'zstd', 'decoded': False, 'parsed': False, 'items': 0,
+              'encrypted_fields': 0, 'removed': 0}, 'unchanged'),
+            ('unsupported encoding', GUARDIAN_BODY, 'gzip',
+             {'encoding': 'gzip', 'decoded': False, 'parsed': False, 'items': 0,
+              'removed': 0}, 'unchanged'),
+            ('unparseable body', b'{not json', None,
+             {'encoding': '', 'decoded': True, 'parsed': False, 'items': 0,
+              'removed': 0}, 'unchanged'),
+            ('input absent', b'{"model": "codex-auto-review"}', None,
+             {'parsed': True, 'input_is_list': False, 'items': 0, 'reasoning_items': 0,
+              'encrypted_fields': 0, 'removed': 0}, 'unchanged'),
+            ('input not a list', b'{"input": "nope"}', None,
+             {'parsed': True, 'input_is_list': False, 'items': 0, 'removed': 0},
+             'unchanged'),
+            ('no reasoning items', body([MESSAGE]), None,
+             {'input_is_list': True, 'items': 1, 'reasoning_items': 0,
+              'encrypted_fields': 0, 'removed': 0}, 'unchanged'),
+            ('reasoning without a blob',
+             body([MESSAGE, {'type': 'reasoning', 'id': 'rs_3',
+                             'summary': [{'type': 'summary_text', 'text': 'trace'}]}]),
+             None,
+             {'items': 2, 'reasoning_items': 1, 'encrypted_fields': 0, 'removed': 0},
+             'unchanged'),
+            ('blob only outside reasoning',
+             body([{'type': 'message', 'role': 'user',
+                    'content': [{'type': 'encrypted_content',
+                                 'encrypted_content': 'BLOB-THREE'}]}]), None,
+             {'items': 1, 'reasoning_items': 0, 'encrypted_fields': 1, 'removed': 0},
+             'unchanged'),
+            # `compaction.strip_reasoning_blobs` removes the item-level key only,
+            # so a nested block blob is counted but never removed.
+            ('nested block blob on a reasoning item',
+             body([{'type': 'reasoning', 'id': 'rs_4',
+                    'encrypted_content': 'BLOB-FOUR',
+                    'content': [{'type': 'encrypted_content',
+                                 'encrypted_content': 'BLOB-FIVE'}]}]), None,
+             {'items': 1, 'reasoning_items': 1, 'encrypted_fields': 2, 'removed': 1},
+             'started'),
+        ]
+        for name, payload, encoding, expected, outcome in cases:
+            with self.subTest(case=name):
+                self.log.events.clear()
+                emitted = self.drive(payload, encoding)
+                for key, value in expected.items():
+                    self.assertEqual(emitted.get(key), value, name + ': ' + key)
+                self.assertEqual(emitted.get('outcome'), outcome, name)
+
+    def test_no_request_content_reaches_the_event_fields(self):
+        items = [MESSAGE, BLOB_ONLY, BLOB_WITH_TEXT,
+                 {'type': 'message', 'role': 'user',
+                  'content': [{'type': 'encrypted_content',
+                               'encrypted_content': 'BLOB-THREE'}]}]
+        for name, payload, encoding in (('identity', body(items), None),
+                                        ('compressed', zstd.compress(body(items)), 'zstd'),
+                                        ('undecodable', b'not-zstd-at-all', 'zstd')):
+            with self.subTest(case=name):
+                self.log.events.clear()
+                emitted = self.drive(payload, encoding)
+                rendered = json.dumps(emitted)
+                for secret in ('BLOB-ONE', 'BLOB-TWO', 'BLOB-THREE', 'judge this action'):
+                    self.assertNotIn(secret, rendered, name)
+                diagnostics = {'encoding', 'decoded', 'parsed', 'input_is_list',
+                               'items', 'reasoning_items', 'encrypted_fields',
+                               'removed'}
+                self.assertTrue(diagnostics <= set(emitted), name)
+                allowed = diagnostics | {'provider', 'model', 'repair', 'request_bytes',
+                                         'eligible', 'attempted', 'outcome', 'status',
+                                         'reason', 'parameter', 'serving_endpoint'}
+                self.assertTrue(set(emitted) <= allowed, set(emitted) - allowed)
 
 
 if __name__ == '__main__':

@@ -47,7 +47,15 @@ def install_mod_factory():
     # This existing rig exercises launchd on every host. Linux lifecycle
     # tests explicitly select linux and use the same installer seams.
     module.PLATFORM = 'darwin'
+    # Installer tests must never open the real client chooser. Tests that
+    # exercise the chooser replace these seams with their own fake dialog.
+    module._client_choice._dialog.tool = lambda *args, **kwargs: None
+    module._client_choice._dialog.ask = _unexpected_dialog
     return module
+
+
+def _unexpected_dialog(*args, **kwargs):
+    raise AssertionError('real client chooser reached a test')
 
 
 install_mod = install_mod_factory()

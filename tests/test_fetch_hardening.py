@@ -13,11 +13,28 @@ from unittest import mock
 import urllib.error
 import urllib.request
 
-from ai_router import key_store, setup
+from ai_router import key_store, setup, subscription_discovery
 from tests.install_fixtures import install_mod
 
 svc = install_mod._svc
 ORIGIN = 'https://dist.softwarecombined.com'
+
+
+class DiscoveryFetchTests(unittest.TestCase):
+    def test_subscription_catalogue_uses_the_no_redirect_transport(self):
+        seen = []
+        response = mock.MagicMock()
+        response.__enter__.return_value = response
+        response.read.return_value = b'{\"models\": []}'
+
+        def no_redirect(request, timeout):
+            seen.append(request.full_url)
+            return response
+
+        with mock.patch.object(subscription_discovery, '_open_without_redirects',
+                               no_redirect):
+            subscription_discovery.fetch_native({'Authorization': 'Bearer client'})
+        self.assertEqual(len(seen), 1)
 
 
 class ChecksumRefusalTests(unittest.TestCase):
