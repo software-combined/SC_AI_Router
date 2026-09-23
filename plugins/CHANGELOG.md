@@ -1,5 +1,28 @@
 # Changelog
 
+## scg-subagents 0.5.10 - 2026-09-23
+
+- Add `router-workers`, which runs a bounded task on a router model as an
+  isolated headless Claude Code worker. It serves clients whose own subagents
+  cannot reach the SCG Router, such as the Claude desktop app, which talks to
+  Anthropic directly. The runner resolves the model against the router's live
+  list, gives the worker shell and file tools in its folder but none of the
+  caller's settings, connectors, tokens or `~/.claude` instructions, stops it
+  and its shell commands at a deadline and prints one JSON result with the
+  served model. optimal-subagents still chooses the model and effort, and now
+  points to the skill.
+- Verified on macOS with Claude Code 2.1.280 and router 0.6.114.107 on a
+  synthetic failing-test fix, four workers in parallel: DeepSeek V4.1 Flash
+  (`max`), GLM 5.3 Flash (`max`), MiMo V2.6 Flash (`xhigh`) and Muse Spark
+  1.3 Contributor (`xhigh`) each ran the tests in the shell, fixed the bug,
+  left the tests unchanged and were served by the requested model, in 10 to
+  44 seconds and about 26,000 input tokens each. Live checks also confirmed
+  that a timed-out worker leaves no shell command running, that the caller's
+  `~/.claude/CLAUDE.md` stays out of a worker whose folder is under the home
+  folder, and that the folder's own `CLAUDE.md` still loads. Claude Code's
+  `--bare` mode was rejected because it dropped the worker's Grep and Glob
+  tools. Linux and Windows are not yet verified.
+
 ## scg-review 0.4.13, scg-subagents 0.5.9 and scg-documentation 0.1.2 - 2026-09-23
 
 - Resolve the finance role's required analyst skill through the current
