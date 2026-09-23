@@ -67,6 +67,12 @@ requests it immediately and on its own refresh cadence. Desktop picker repaint
 timing is not yet proven, so quit and reopen Codex when a known addition is
 not visible.
 
+If only the built-in models appear while router health is good, check discovery
+with `python3.14 tools/probe_model_discovery.py --codex <client-executable> --installed`.
+This reads the model list through that client without making an inference call.
+Release 0.6.117 rejected valid native visibility and upgrade metadata, causing
+this fallback; update to the corrected release instead of disabling discovery.
+
 - `--static-catalogue` uses `mixed-models.json` instead and requires a Codex
   restart after an install or catalogue change.
 - A model outside this machine's policy is not listed; `--status` shows the

@@ -43,9 +43,9 @@ def validate(document):
         if 'hidden' in item:
             if not isinstance(item['hidden'], bool):
                 raise ValueError('subscription model hidden flag must be boolean')
-            item['visibility'] = 'hidden' if item['hidden'] else item.get('visibility', 'list')
+            item['visibility'] = 'hide' if item['hidden'] else item.get('visibility', 'list')
             del item['hidden']
-        if item.get('visibility', 'list') not in ('list', 'hidden'):
+        if item.get('visibility', 'list') not in ('list', 'hide', 'none'):
             raise ValueError('subscription model has invalid visibility')
         levels = item.get('supported_reasoning_levels')
         if levels is not None and not _valid_levels(levels):
@@ -78,8 +78,12 @@ def validate(document):
         if isinstance(messages, dict) and 'instructions_template' in messages \
                 and not isinstance(messages['instructions_template'], str):
             raise ValueError('subscription model has invalid instructions')
-        if item.get('upgrade') is not None and not isinstance(item['upgrade'], str):
-            raise ValueError('subscription model has invalid upgrade id')
+        upgrade = item.get('upgrade')
+        if upgrade is not None and (
+                not isinstance(upgrade, dict)
+                or not isinstance(upgrade.get('model'), str) or not upgrade['model']
+                or not isinstance(upgrade.get('migration_markdown'), str)):
+            raise ValueError('subscription model has invalid upgrade metadata')
         seen.add(slug)
         valid.append(item)
     return tuple(valid)
