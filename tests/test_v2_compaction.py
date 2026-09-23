@@ -177,19 +177,27 @@ class CompactTriggerHandlerTests(unittest.TestCase):
         handler.end_headers.assert_called_once_with()
         self.assertTrue(handler.close_connection)
 
-    def test_subscription_trigger_forwards_untouched(self):
+    def test_subscription_trigger_forwards_after_replay_normalization(self):
         recorded = install_fake(
             self, lambda: FakeUpstream(200, b'{"output": []}', []))
         server = self._server(openai_models=['gpt-6-astra'])
         response = _post(server.server_port, '/test-token/responses', {
             'model': 'gpt-6-astra',
-            'input': [{'type': 'message', 'role': 'user', 'content': 'do it'},
+            'input': [{'type': 'message', 'role': 'developer', 'content': [
+                          {'type': 'input_text', 'text': '<model_switch> hop'}]},
+                      {'type': 'agent_message', 'author': '/root/child',
+                       'recipient': '/root',
+                       'content': [{'type': 'input_text', 'text': 'done'}]},
                       {'type': 'compaction_trigger'}]},
             {'Authorization': 'Bearer subscription-secret'})
         self.assertEqual(response.status, 200)
         self.assertEqual(len(recorded), 1)
         sent = json.loads(recorded[0][3])
+        kinds = [item.get('type') for item in sent['input']]
         self.assertIn({'type': 'compaction_trigger'}, sent['input'])
+        self.assertNotIn('agent_message', kinds)
+        self.assertIn('function_call', kinds)
+        self.assertIn('function_call_output', kinds)
 
 
 if __name__ == '__main__':
