@@ -24,8 +24,8 @@ from tests.harness import start_server
 
 ACME_KEY = 'ACME_API_KEY'
 ACME_FILE = 'acme.key'
-OPUS_SLUG = 'anthropic/claude-opus-5'
-OPUS_UPSTREAM = 'claude-opus-5'
+OPUS_SLUG = 'anthropic/claude-opus-5.5'
+OPUS_UPSTREAM = 'claude-opus-5.5'
 ACME_ROW = {
     'slug': 'acme/one', 'provider': 'acme', 'display_name': 'Acme: One \u00b7 Acme',
     'vendor': 'Acme', 'reasoning': ['low'], 'default_reasoning': 'low',
@@ -167,9 +167,9 @@ class ProviderSwapTests(unittest.TestCase):
         return json.loads(Path(registry.__file__).with_name('models.json').read_text())
 
     def _with_twin(self, **overrides):
-        twin = {**ACME_ROW, 'slug': 'acme/claude-opus-5',
+        twin = {**ACME_ROW, 'slug': 'acme/claude-opus-5.5',
                 'upstream_id': OPUS_UPSTREAM,
-                'display_name': 'Anthropic: Opus 5 \u00b7 Acme', **overrides}
+                'display_name': 'Anthropic: Opus 5.5 \u00b7 Acme', **overrides}
         rows = registry.load(json.dumps(self._rows() + [twin]))
         registry.MODELS, registry.BY_SLUG = rows, {m.slug: m for m in rows}
         catalogue.MODELS = rows
@@ -182,15 +182,15 @@ class ProviderSwapTests(unittest.TestCase):
         self._key_file(ACME_FILE, 'sk-acme\n')
         self._key_file('openrouter.key', 'sk-or\n')
         creds = self._credentials()
-        self.assertEqual(registry.by_slug('acme/claude-opus-5').upstream_id,
+        self.assertEqual(registry.by_slug('acme/claude-opus-5.5').upstream_id,
                          OPUS_UPSTREAM)
         self.assertEqual(registry.upstream_id_for(registry.by_slug(OPUS_SLUG)),
                          OPUS_SLUG)
-        acme = providers.select('acme/claude-opus-5', '/responses', [])
+        acme = providers.select('acme/claude-opus-5.5', '/responses', [])
         router_row = providers.select(OPUS_SLUG, '/responses', [])
         self.assertEqual((acme.name, router_row.name), ('acme', 'openrouter'))
-        direct = acme.prepare('acme/claude-opus-5', '/responses',
-                              {'model': 'acme/claude-opus-5', 'input': []},
+        direct = acme.prepare('acme/claude-opus-5.5', '/responses',
+                              {'model': 'acme/claude-opus-5.5', 'input': []},
                               b'raw', {}, creds)
         routed = router_row.prepare(OPUS_SLUG, '/responses',
                                     {'model': OPUS_SLUG, 'input': []},
@@ -202,14 +202,14 @@ class ProviderSwapTests(unittest.TestCase):
         self.assertEqual(routed.headers['Authorization'], 'Bearer sk-or')
         self.assertNotIn('sk-or', json.dumps(direct.headers))
         self.assertNotIn('sk-acme', json.dumps(routed.headers))
-        messages = claude.select('acme/claude-opus-5', '/v1/messages')
-        prepared = messages.prepare('acme/claude-opus-5', '/v1/messages',
-                                    {'model': 'acme/claude-opus-5'},
-                                    b'{"model":"acme/claude-opus-5"}', {}, creds)
+        messages = claude.select('acme/claude-opus-5.5', '/v1/messages')
+        prepared = messages.prepare('acme/claude-opus-5.5', '/v1/messages',
+                                    {'model': 'acme/claude-opus-5.5'},
+                                    b'{"model":"acme/claude-opus-5.5"}', {}, creds)
         self.assertEqual(json.loads(prepared.body)['model'], OPUS_UPSTREAM)
         merged = catalogue.merge({'models': []}, roster=(), client='codex')
         rows = [row for row in merged['models'] if row['slug'] in
-                (OPUS_SLUG, 'acme/claude-opus-5')]
+                (OPUS_SLUG, 'acme/claude-opus-5.5')]
         self.assertEqual(len(rows), 2)
         self.assertEqual(len({row['display_name'] for row in rows}), 2)
 
@@ -219,9 +219,9 @@ class ProviderSwapTests(unittest.TestCase):
         # first row carrying that upstream id.
         twin = {**ACME_ROW, 'slug': 'acme/opus-one',
                  'upstream_id': OPUS_UPSTREAM,
-                 'display_name': 'Anthropic: Opus 5 \u00b7 Acme'}
+                 'display_name': 'Anthropic: Opus 5.5 \u00b7 Acme'}
         clash = {**twin, 'slug': 'acme/opus-two', 'priority': 211,
-                 'display_name': 'Anthropic: Opus 5 (two) \u00b7 Acme'}
+                 'display_name': 'Anthropic: Opus 5.5 (two) \u00b7 Acme'}
         third = {**clash, 'slug': 'acme/opus-three', 'priority': 212}
         with self.assertRaises(SystemExit) as ctx:
             registry.load(json.dumps(self._rows() + [twin, clash, third]))
@@ -232,9 +232,9 @@ class ProviderSwapTests(unittest.TestCase):
         path = self.home / 'models.json'
         path.write_text(json.dumps(self._rows() + [
             {**twin, 'slug': 'acme/opus-one',
-             'display_name': 'Anthropic: Opus 5 \u00b7 Acme'},
+             'display_name': 'Anthropic: Opus 5.5 \u00b7 Acme'},
             {**twin, 'slug': 'acme/opus-two', 'priority': 211,
-             'display_name': 'Anthropic: Opus 5 (two) \u00b7 Acme'}]))
+             'display_name': 'Anthropic: Opus 5.5 (two) \u00b7 Acme'}]))
         stream = io.StringIO()
         with contextlib.redirect_stdout(stream):
             code = models.cmd_check(str(path), None)

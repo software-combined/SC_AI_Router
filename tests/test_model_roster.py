@@ -9,7 +9,7 @@ from ai_router.providers import ExternalResponsesProvider, PreparationError, sel
 from ai_router.registry import MODELS, by_slug
 
 PINNED_CLAUDE = ('anthropic/claude-fable-5.1', 'anthropic/claude-haiku-4.5',
-                 'anthropic/claude-opus-5', 'anthropic/claude-sonnet-5')
+                 'anthropic/claude-opus-5.5', 'anthropic/claude-sonnet-5')
 RETIRED_LATEST = ('~anthropic/claude-sonnet-latest', '~anthropic/claude-fable-latest',
                   '~anthropic/claude-haiku-latest', '~anthropic/claude-opus-latest',
                   '~google/gemini-flash-latest', '~google/gemini-pro-latest',

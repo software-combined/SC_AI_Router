@@ -2106,3 +2106,7 @@ rejected identity's fallback instead of serving another account's stale list.
 POST routing uses the stable account/workspace identity, even when the request
 omits the bearer or query version. An unknown subscription id never creates an
 OpenRouter twin.
+
+| model | status | date | legs |
+|---|---|---|---|
+| anthropic/claude-opus-5.5 | verified | 2026-09-23 | tool,stream,image,compact,apply_patch |
