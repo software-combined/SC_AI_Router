@@ -368,7 +368,7 @@ class UpdateBackoffTests(unittest.TestCase):
                                    wraps=honest) as shown, \
                     mock.patch.dict(os.environ, {'ROUTER_NO_NOTICE': '1'}):
                 rc, out = self._check(home, blob, latest, [], run=run,
-                                      _announce=lambda _state: None)
+                                      _announce=lambda _home, _state: None)
             self.assertEqual(rc, 1, 'the failure must stay visible')
             self.assertEqual(shown.call_count, 1, 'the notice module is asked')
             self.assertEqual(install_mod._update_failures(home), {},
@@ -406,7 +406,7 @@ class UpdateBackoffTests(unittest.TestCase):
                 (home / 'current').write_text('9.9.9')
                 return SimpleNamespace(returncode=0, stdout='', stderr='')
 
-            def fake_announce(state):
+            def fake_announce(_home, state):
                 seen['log'] = (home / 'logs' / 'update.log').read_text()
                 seen['state'] = state
 
