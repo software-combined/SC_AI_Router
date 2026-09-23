@@ -52,6 +52,19 @@ class PublicFeedTemplateTests(unittest.TestCase):
         self.assertIn('ViewerProtocolPolicy: redirect-to-https', text)
         self.assertIn('OriginAccessControlId: !GetAtt FeedOriginAccessControl.Id', text)
 
+    def test_no_direct_email_route_remains(self):
+        """The per-write reader moved to the central notification service.
+
+        The feed topic keeps the formatter and its narrow failure alarm for rollback.
+        A direct email subscriber here would mail a second, unbranded copy of
+        every write, which is the duplicate route this retirement removed.
+        """
+        text = _template()
+        for needle in ('NotificationEmail', 'FeedPublishSubscription', 'Protocol: email',
+                       'feed-publish-email'):
+            with self.subTest(needle=needle):
+                self.assertNotIn(needle, text)
+
 
 class PublishWorkflowTests(unittest.TestCase):
     def test_release_assets_use_the_release_document(self):
@@ -148,6 +161,7 @@ class TemplateGuardTests(unittest.TestCase):
     def test_rule_invokes_the_formatter_not_the_topic(self):
         """The rule drives the function; the old SNS target is gone (Plan 167)."""
         text = _template()
+        self.assertIn('Id: feed-alert-function', text)
         self.assertIn('!GetAtt FeedAlertFunction.Arn', text)
         self.assertNotIn('InputTransformer', text)
         self.assertNotIn('FeedPublishTopicPolicy', text)
@@ -163,8 +177,8 @@ class TemplateGuardTests(unittest.TestCase):
     def test_a_failed_alert_is_kept_and_alarmed(self):
         """EventBridge retries a failed invoke, then drops it (Plan 167).
 
-        Without the queue the event is gone; without the alarm nobody learns
-        that the mail did not go out.
+        Without the queue the event is gone; without the alarm nobody learns that
+        the retained local formatter was not invoked.
         """
         text = _template()
         self.assertIn('DeadLetterConfig:', text)
