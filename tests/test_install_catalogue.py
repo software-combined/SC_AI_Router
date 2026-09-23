@@ -85,16 +85,16 @@ def _install(test, tmp, home, fake_fetch, fake_run, *extra_args):
 
 @unix_only
 class InstallCatalogueTests(unittest.TestCase):
-    def test_default_install_writes_static_catalog_line(self):
-        # The router serves no /models, so the file pointer is the default.
+    def test_default_install_uses_native_model_discovery(self):
+        # Native `/models` owns subscription additions; the file is fallback.
         with tempfile.TemporaryDirectory() as tmp:
             home, _, fake_fetch = _setup(self, tmp)[:3]
             config = _install(self, tmp, home, fake_fetch, _recording_run([]))
             block = config.read_text()
             self.assertIn('# BEGIN local mixed model picker', block)
-            self.assertIn(f'model_catalog_json = "{home}/mixed-models.json"', block)
+            self.assertNotIn('model_catalog_json', block)
 
-    def test_static_catalogue_flag_kept_as_noop(self):
+    def test_static_catalogue_flag_writes_the_file_pointer(self):
         with tempfile.TemporaryDirectory() as tmp:
             home, _, fake_fetch = _setup(self, tmp)[:3]
             config = _install(self, tmp, home, fake_fetch,
@@ -115,10 +115,9 @@ class InstallCatalogueTests(unittest.TestCase):
             # A subscription install lists the subscription rows and the
             # OpenRouter twins beside them, so an exhausted row still has a
             # paid route the user picks deliberately.
-            for slug in ('openai/gpt-6-astra', 'openai/gpt-6-luna',
-                         'openai/gpt-5.6-terra'):
+            for slug in ('openai/gpt-6-astra', 'openai/gpt-6-sol',
+                         'openai/gpt-6-luna', 'openai/gpt-5.6-terra'):
                 self.assertIn(slug, slugs)
-            self.assertNotIn('openai/gpt-6-sol', slugs)
             self.assertTrue(check(str(home / 'mixed-models.json')))
 
     def test_install_catalogue_contains_subscription_roster(self):
@@ -137,8 +136,8 @@ class InstallCatalogueTests(unittest.TestCase):
                      '--openai-mode', 'none')
             catalog = json.loads((home / 'mixed-models.json').read_text())
             slugs = {m['slug'] for m in catalog['models']}
-            for twin in ('openai/gpt-6-astra', 'openai/gpt-5.6-terra',
-                         'openai/gpt-6-luna'):
+            for twin in ('openai/gpt-6-astra', 'openai/gpt-6-sol',
+                         'openai/gpt-5.6-terra', 'openai/gpt-6-luna'):
                 self.assertIn(twin, slugs)
             self.assertNotIn('gpt-6-astra', slugs)
             state = json.loads((home / 'mixed-router-state.json').read_text())

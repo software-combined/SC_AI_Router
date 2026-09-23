@@ -1,9 +1,4 @@
-"""Generate external-provider catalogue entries from the registry.
-
-Every non-model-specific field lives in ROW_TEMPLATE, per-model values come
-from ai_router/registry.py rows, and the served instructions come from the
-model_instructions leaf. Pure: no network, no state.
-"""
+"""Generate merged client catalogues from registry and subscription rows."""
 import json
 import sys
 from pathlib import Path
@@ -19,6 +14,7 @@ from .model_instructions import (SUBAGENT_MODEL_PLACEHOLDER,
 from .registry import MODELS, picker_key
 from .retired_slugs import SUBSCRIPTION as RETIRED_SUBSCRIPTION_SLUGS
 from .subscription_roster import SUBSCRIPTION_SLUGS, replace_successors
+from .subscription_catalogue import managed_entry
 
 ROW_TEMPLATE = {
     'shell_type': 'unified_exec',
@@ -77,9 +73,7 @@ RETIRED_SLUGS = {'~anthropic/claude-sonnet-latest', '~anthropic/claude-fable-lat
                  '~deepseek/deepseek-v4-flash-latest',
                  'deepseek/deepseek-v4-flash-vision-exp'}
 
-# Native reasoning levels per subscription slug; fresh installs seed these.
-# Ultra is never served: it is Codex's automatic-delegation level, so Max
-# is the top effort the picker offers (merge() strips it from stale rows).
+# Native reasoning levels per subscription slug; Max is the top served effort.
 _M = ('low', 'medium', 'high', 'xhigh', 'max')
 _X = ('low', 'medium', 'high', 'xhigh')
 SUBSCRIPTION_REASONING = {
@@ -207,7 +201,7 @@ def drop_ultra(row):
 
 
 def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False,
-          available=None):
+          available=None, subscription_rows=()):
     """Merge registry OpenRouter entries into one client catalogue.
 
     Emits models_for(client) rows only; see _visible_rows for the
@@ -215,6 +209,7 @@ def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False,
     never consults this filter.
     """
     roster = replace_successors(roster)
+    native = {row['slug']: row for row in subscription_rows}
     visible, hidden_rows = _visible_rows(client, allowed, include_twins,
                                          available=available)
     instructions = instructions_for(visible, client)
@@ -226,10 +221,13 @@ def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False,
     models = [m for m in catalog.get('models', [])
               if (m['slug'] not in RETIRED_SLUGS or m['slug'] in active)
               and m['slug'] not in hidden]
-    entries = {m['slug']: {**subscription_stub(m['slug'], instructions), **m}
-               for m in models}
+    entries = {}
+    for model in models:
+        stub = subscription_stub(model['slug'], instructions)
+        entries[model['slug']] = (managed_entry(native[model['slug']], model, stub)
+                                  if model['slug'] in native else {**stub, **model})
     for slug, row in entries.items():
-        if slug in SUBSCRIPTION_SLUGS:
+        if slug in SUBSCRIPTION_SLUGS or slug in native:
             # A row an older merge wrote with the routed text is upgraded to
             # the subscription wording; a hand-tuned row is left alone.
             template = (row.get('model_messages') or {}).get('instructions_template')
@@ -248,14 +246,15 @@ def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False,
             row['supported_reasoning_levels'] = fresh['supported_reasoning_levels']
     for model in visible:
         entries[model.slug] = external_entry(model, instructions)
-    # Retired subscription rows never come back: naming one loses it here.
     for slug in RETIRED_SUBSCRIPTION_SLUGS:
         entries.pop(slug, None)
     for slug in roster:
         # A roster stub repairs a fresh file only, never a hidden row.
         if (slug not in entries and slug not in RETIRED_SUBSCRIPTION_SLUGS
                 and slug not in hidden):
-            entries[slug] = subscription_stub(slug, sub_instructions)
+            stub = subscription_stub(slug, sub_instructions)
+            entries[slug] = (managed_entry(native[slug], None, stub)
+                             if slug in native else stub)
     for row in entries.values():  # Ultra never reaches the picker, at any age
         drop_ultra(row)
     if include_twins:

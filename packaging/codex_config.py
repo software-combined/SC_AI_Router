@@ -42,7 +42,7 @@ def _replace_text(path, text):
     _atomic_write.replace_text(path, text)
 
 
-def build_block(home, state, mode):
+def build_block(home, state, mode, static_catalogue=False):
     """Managed Codex config block for this install and subscription mode."""
     # Forward slashes: a TOML basic string treats backslashes as escapes, so
     # a native Windows path would make the whole config unreadable to Codex.
@@ -60,7 +60,7 @@ def build_block(home, state, mode):
                 + END + '\n')
     return (BEGIN + '\n'
             f'openai_base_url = "{url}"\n'
-            + catalog_line + END + '\n')
+            + (catalog_line if static_catalogue else '') + END + '\n')
 
 
 def _read_text(path):

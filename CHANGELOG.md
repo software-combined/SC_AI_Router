@@ -2,15 +2,25 @@
 
 ## Unreleased
 
-## 0.6.114
+## 0.6.115
 
+- ChatGPT subscription models are now discovered from Codex's native
+  `/models` catalogue and appear without a repository roster edit. Codex
+  drives refreshes; `--static-catalogue` remains the rollback path.
 - The ChatGPT picker now offers `GPT-6-Sol` and `GPT-6-Luna` in place of
   their 5.6 versions. An update replaces the old ids inside existing custom
   rosters without adding or reordering unrelated choices.
 - Codex helper-title turns still using `gpt-5.6-luna` route through the new
   Luna 6 OpenRouter twin when the helper fallback is enabled.
-- The Luna 6 OpenRouter twin passed its isolated qualification. The Sol 6
-  twin remains preview and unlisted until its qualification passes.
+- Both OpenRouter twins are enabled. Sol 6 passed its tool, stream and
+  compaction legs; its image-quality assertion is deferred by owner approval
+  after it returned `Teal` for the red test image.
+
+## 0.6.114
+
+- A subscription Responses request rejected with `invalid_encrypted_content`
+  now gets one bounded retry after the router removes OpenAI-owned reasoning
+  blobs from `input`. Healthy requests and approval decisions are unchanged.
 
 ## 0.6.113
 

@@ -458,8 +458,8 @@
     "apply_patch": "none",
     "experimental_tools": [],
     "web_search": true,
-    "tier": "preview",
-    "listed": false,
+    "tier": "verified",
+    "listed": true,
     "priority": 116
   },
   {

@@ -76,13 +76,13 @@ def _install(test, tmp, home, version, *extra_args, feed='file:///latest.json',
 
 @unix_only
 class InstallConfigTests(unittest.TestCase):
-    def test_default_install_writes_subscription_block_with_catalog(self):
+    def test_default_install_uses_native_model_discovery(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             config, _, _, _ = _install(self, tmp, home, '1.0.0')
             block = config.read_text()
             self.assertIn('openai_base_url = ', block)
-            self.assertIn(f'model_catalog_json = "{home}/mixed-models.json"', block)
+            self.assertNotIn('model_catalog_json', block)
             self.assertNotIn('model_provider', block)
             state = json.loads((home / 'mixed-router-state.json').read_text())
             self.assertEqual(state.get('openai_mode'), 'subscription')

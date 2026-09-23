@@ -35,7 +35,7 @@ class ProtocolContractTests(unittest.TestCase):
             protocols.owned_paths(),
             frozenset(providers_mod.NATIVE_SERVICE_PATHS)
             | claude_mod.CLAUDE_POST_PATHS
-            | {'/responses', '/responses/compact', '/v1/models'})
+            | {'/responses', '/responses/compact', '/models', '/v1/models'})
 
     def test_policy_names_are_the_definition_constants(self):
         # Plan 155 (F10): the table exports the protocol names, so a policy

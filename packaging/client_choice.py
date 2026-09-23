@@ -48,7 +48,8 @@ def _connected(names):
         ', '.join(names), ' and '.join(_RESTART[name] for name in names))
 
 
-def attach_codex(home, state, mode, codex_config, previous=None):
+def attach_codex(home, state, mode, codex_config, previous=None,
+                 static_catalogue=False):
     """Write the Codex provider block and receipt; returns the config path.
 
     Shared with the full install path so a current install and a fresh one
@@ -57,7 +58,7 @@ def attach_codex(home, state, mode, codex_config, previous=None):
     if previous is None:
         previous = codex_config.codex_attachment(home)
     config_path = Path.home() / '.codex' / 'config.toml'
-    block = codex_config.build_block(home, state, mode)
+    block = codex_config.build_block(home, state, mode, static_catalogue)
     # Global instructions are install-once via the setup window's starter
     # choice: this installer never writes, rewrites, or re-enforces them.
     rules_receipt = previous.get('global_instructions')
@@ -123,7 +124,8 @@ def attach_current(args, home, *, codex, desktop, claude, write_state, resolve,
                          'to attach Claude Code, or select --clients codex')
     names = []
     if clients in ('codex', 'both'):
-        attach_codex(home, state, mode, codex)
+        attach_codex(home, state, mode, codex,
+                     static_catalogue=args.static_catalogue)
         names.append('Codex')
     if clients in ('claude', 'both'):
         claude(home, state, python=python)
