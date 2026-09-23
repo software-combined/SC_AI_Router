@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.6.114
+
+- The ChatGPT picker now offers `GPT-6-Sol` and `GPT-6-Luna` in place of
+  their 5.6 versions. An update replaces the old ids inside existing custom
+  rosters without adding or reordering unrelated choices.
+- Codex helper-title turns still using `gpt-5.6-luna` route through the new
+  Luna 6 OpenRouter twin when the helper fallback is enabled.
+- The Luna 6 OpenRouter twin passed its isolated qualification. The Sol 6
+  twin remains preview and unlisted until its qualification passes.
+
 ## 0.6.113
 
 - Release tags now use the short `vX.XX` form, derived from the release

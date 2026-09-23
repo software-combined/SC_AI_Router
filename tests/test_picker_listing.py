@@ -12,10 +12,10 @@ from pathlib import Path
 from ai_router.catalogue import check, merge_file
 
 
-def _home(tmp, mode='subscription'):
+def _home(tmp, mode='subscription', roster=('gpt-6-luna',)):
     home = Path(tmp)
     (home / 'mixed-router-state.json').write_text(json.dumps(
-        {'port': 1, 'token': 't', 'openai_models': ['gpt-5.6-luna'],
+        {'port': 1, 'token': 't', 'openai_models': list(roster),
          'openai_mode': mode}) + '\n')
     return home
 
@@ -26,8 +26,8 @@ class PickerListingTests(unittest.TestCase):
             home = _home(tmp)
             merged = merge_file(home / 'mixed-models.json')
             slugs = [m['slug'] for m in merged['models']]
-            self.assertIn('gpt-5.6-luna', slugs)
-            self.assertIn('openai/gpt-5.6-luna', slugs)
+            self.assertIn('gpt-6-luna', slugs)
+            self.assertIn('openai/gpt-6-luna', slugs)
             self.assertTrue(check(str(home / 'mixed-models.json')))
 
     def test_none_mode_lists_the_twin_without_the_subscription_row(self):
@@ -35,20 +35,30 @@ class PickerListingTests(unittest.TestCase):
             home = _home(tmp, mode='none')
             merged = merge_file(home / 'mixed-models.json')
             slugs = [m['slug'] for m in merged['models']]
-            self.assertNotIn('gpt-5.6-luna', slugs)
-            self.assertIn('openai/gpt-5.6-luna', slugs)
+            self.assertNotIn('gpt-6-luna', slugs)
+            self.assertIn('openai/gpt-6-luna', slugs)
             self.assertTrue(check(str(home / 'mixed-models.json'), include_twins=True))
 
     def test_a_leftover_gate_document_changes_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = _home(tmp)
             (home / 'subscription-gate.json').write_text(json.dumps(
-                {'gpt-5.6-luna': {'source': 'headers', 'until': 2 ** 31 - 1,
+                {'gpt-6-luna': {'source': 'headers', 'until': 2 ** 31 - 1,
                                   'probed': 0, 'since': 0}}) + '\n')
             merged = merge_file(home / 'mixed-models.json')
             slugs = [m['slug'] for m in merged['models']]
-            self.assertIn('gpt-5.6-luna', slugs)
-            self.assertIn('openai/gpt-5.6-luna', slugs)
+            self.assertIn('gpt-6-luna', slugs)
+            self.assertIn('openai/gpt-6-luna', slugs)
+
+    def test_legacy_luna_is_migrated_but_not_listed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = _home(tmp, roster=('gpt-5.6-luna',))
+            merged = merge_file(home / 'mixed-models.json')
+            slugs = [m['slug'] for m in merged['models']]
+            self.assertIn('gpt-6-luna', slugs)
+            self.assertIn('openai/gpt-6-luna', slugs)
+            self.assertNotIn('gpt-5.6-luna', slugs)
+            self.assertNotIn('openai/gpt-5.6-luna', slugs)
 
 
 if __name__ == '__main__':

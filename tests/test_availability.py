@@ -218,7 +218,8 @@ class VisibilityIntegrationTests(unittest.TestCase):
             before = {m['slug'] for m in json.loads(
                 path.read_text())['models']}
             self.assertIn(target, before)
-            kept = external_slugs() - {target}
+            kept = {m.slug for m in MODELS
+                    if m.provider == 'openrouter' and m.listed} - {target}
             availability.refresh('openrouter.ai', 'k', tmp, 'global',
                                  _ok(*kept))
             after = {m['slug'] for m in json.loads(path.read_text())['models']}

@@ -27,9 +27,9 @@ class ContextRecoveryTests(unittest.TestCase):
                   'make reasonable assumptions about anything missing from the summary.')
         messages = {'instructions_template': 'Custom prefix\n\n' + legacy + '\n\nCustom suffix',
                     'token_budget': {'enabled': False}}
-        row = {**catalogue.subscription_stub('gpt-5.6-luna'), 'model_messages': messages}
+        row = {**catalogue.subscription_stub('gpt-6-luna'), 'model_messages': messages}
         original = copy.deepcopy(row)
-        merged = catalogue.merge({'models': [row]}, roster=('gpt-5.6-luna',))
+        merged = catalogue.merge({'models': [row]}, roster=('gpt-6-luna',))
         updated = merged['models'][0]['model_messages']
         self.assertIn('Before requesting a new window, save the assignment',
                       updated['instructions_template'])
@@ -38,7 +38,7 @@ class ContextRecoveryTests(unittest.TestCase):
         self.assertTrue(updated['instructions_template'].endswith('\n\nCustom suffix'))
         self.assertEqual(updated['token_budget'], {'enabled': False})
         self.assertEqual(row, original)
-        self.assertEqual(catalogue.merge(merged, roster=('gpt-5.6-luna',)), merged)
+        self.assertEqual(catalogue.merge(merged, roster=('gpt-6-luna',)), merged)
 
     def prepare(self, model, items, path='/responses', compressed=False):
         payload = {'model': model, 'input': items}
@@ -47,13 +47,13 @@ class ContextRecoveryTests(unittest.TestCase):
         if compressed:
             raw = zstd.compress(raw)
             headers['Content-Encoding'] = 'zstd'
-        prepared = providers.select(model, path, ['gpt-5.6-luna']).prepare(
+        prepared = providers.select(model, path, ['gpt-6-luna']).prepare(
             model, path, payload, raw, headers,
             SimpleNamespace(key_for=lambda _: 'synthetic-external'))
         return prepared, raw
 
     def test_reset_with_only_setup_keeps_history_recovery_visible_on_both_routes(self):
-        for model in ('gpt-5.6-luna', 'deepseek/deepseek-v4.1-flash'):
+        for model in ('gpt-6-luna', 'deepseek/deepseek-v4.1-flash'):
             with self.subTest(model=model):
                 items = [window(), {'type': 'message', 'role': 'user',
                                     'content': 'Repository setup only. No assignment here.'}]
@@ -77,13 +77,13 @@ class ContextRecoveryTests(unittest.TestCase):
                       [window(role='assistant')], [], [{'type': 'function_call_output',
                        'output': window()['content'][0]['text']} ]):
             with self.subTest(items=items):
-                prepared, raw = self.prepare('gpt-5.6-luna', items, compressed=True)
+                prepared, raw = self.prepare('gpt-6-luna', items, compressed=True)
                 self.assertIs(prepared.body, raw)
                 self.assertEqual(prepared.headers['Content-Encoding'], 'zstd')
 
     def test_native_compaction_and_service_requests_are_not_recovery_turns(self):
         for path in ('/responses/compact', '/guardian'):
-            prepared, raw = self.prepare('gpt-5.6-luna', [window()], path, True)
+            prepared, raw = self.prepare('gpt-6-luna', [window()], path, True)
             self.assertIs(prepared.body, raw)
 
     def test_guidance_names_the_tool_loading_step(self):

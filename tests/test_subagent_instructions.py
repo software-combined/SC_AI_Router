@@ -46,7 +46,7 @@ class SubagentInstructionTests(unittest.TestCase):
         self.assertIn('`delivered_message` or `delivered_app_message` are', served)
 
     def test_no_row_serves_the_raw_placeholder(self):
-        catalog = merge({'models': []}, ('gpt-6-astra', 'gpt-5.6-luna'))
+        catalog = merge({'models': []}, ('gpt-6-astra', 'gpt-6-luna'))
         for row in catalog['models']:
             template = row['model_messages']['instructions_template']
             self.assertNotIn('{{', template, row['slug'])

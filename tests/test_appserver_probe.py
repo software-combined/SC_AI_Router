@@ -229,7 +229,7 @@ class SpawnListCaptureTests(unittest.TestCase):
     DESCRIPTION = (
         "\n        Available model overrides (optional; inherited parent model "
         "is preferred):\n- `gpt-6-astra`: Our most capable model.\n"
-        "- `gpt-5.6-sol`: Reliable agentic workhorse.\n"
+        "- `gpt-6-sol`: Reliable agentic workhorse.\n"
         "        Spawns an agent to work on the specified task. If your current "
         "task is `/root/task1` and you spawn_agent with task_name \"task_3\" the "
         "agent will have canonical task name `/root/task1/task_3`.\n")
@@ -238,7 +238,7 @@ class SpawnListCaptureTests(unittest.TestCase):
         # The trailing prose names more ids; counting them would misreport a
         # five-row list as ten rows.
         self.assertEqual(spawn_override_models(self.DESCRIPTION),
-                         ['gpt-6-astra', 'gpt-5.6-sol'])
+                         ['gpt-6-astra', 'gpt-6-sol'])
 
     def test_missing_override_block_is_empty(self):
         self.assertEqual(spawn_override_models('Spawns an agent.'), [])
