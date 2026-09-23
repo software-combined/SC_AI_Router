@@ -26,8 +26,6 @@ def run_block(name, text=None):
 class ReleaseShellTests(unittest.TestCase):
     def test_release_uses_existing_tag_and_matching_download_url(self):
         base = (ROOT / 'packaging/VERSION').read_text().strip()
-        release = int(base.split('.')[2])
-        short = f'v{release // 100}.{release % 100:02d}'
         for channel, suffix in [('stable', ''), ('beta', '-beta'),
                                 ('stable', '-express'), ('beta', '-beta-express')]:
             with self.subTest(channel=channel), tempfile.TemporaryDirectory() as tmp:
@@ -41,7 +39,7 @@ class ReleaseShellTests(unittest.TestCase):
                 gh.write_text(f'#!{sys.executable}\nimport json,sys\n'
                               'open("gh-args.json", "w").write(json.dumps(sys.argv[1:]))\n')
                 gh.chmod(0o700)
-                tag = f'{short}{suffix}'
+                tag = f'v{base}{suffix}'
                 env = {**os.environ, 'PATH': f'{bin_dir}{os.pathsep}{os.environ["PATH"]}',
                        'GITHUB_REF_NAME': tag, 'GITHUB_RUN_NUMBER': '42',
                        'GITHUB_SHA': 'a' * 40, 'GITHUB_ENV': str(work / 'env'),
@@ -74,7 +72,7 @@ class ReleaseShellTests(unittest.TestCase):
             with self.subTest(remote=remote), tempfile.TemporaryDirectory() as tmp:
                 env = {**os.environ, 'GITHUB_SHA': sha, 'TAG_RESPONSE': remote,
                        'TAG_STATUS': status, 'GITHUB_REPOSITORY': 'example/router',
-                       'GITHUB_REF_NAME': 'v1.23-beta'}
+                       'GITHUB_REF_NAME': 'v0.6.123-beta'}
                 stubs = '''
                     gh() {
                       printf '%s\\n' "$*" > api-args
@@ -90,7 +88,7 @@ class ReleaseShellTests(unittest.TestCase):
                     cwd=tmp, env=env, capture_output=True)
                 self.assertEqual(result.returncode == 0, publishes)
                 self.assertEqual((Path(tmp) / 'published').exists(), publishes)
-                self.assertIn('commits/refs%2Ftags%2Fv1.23-beta',
+                self.assertIn('commits/refs%2Ftags%2Fv0.6.123-beta',
                               (Path(tmp) / 'api-args').read_text())
 
 
