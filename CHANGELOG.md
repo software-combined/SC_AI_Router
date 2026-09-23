@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.6.114
+
+- A subscription Responses request rejected with `invalid_encrypted_content`
+  now gets one bounded retry after the router removes OpenAI-owned reasoning
+  blobs from `input`. Healthy requests and approval decisions are unchanged.
+
 ## 0.6.113
 
 - Release tags now use the short `vX.XX` form, derived from the release
