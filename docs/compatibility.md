@@ -2036,3 +2036,29 @@ so the transport is fine; no model chose to call the search tool when asked
 for a date. That closes plan 175's open question 3 as not reproduced, and it
 is a model-behaviour observation rather than a roster defect - no row edit
 follows. The leg keeps its own `passed`/`failed` contract for future runs.
+
+## Sol 6 and Luna 6 onboarding, 2026-09-23
+
+`models add --probe` ran once per external row through the isolated candidate
+router and a disposable Codex home with `codex-cli 0.153.1`. Both runs
+attempted the tool, stream, image and compaction legs at `low`; that harness
+does not retain per-run call counts or served identity, so those fields remain
+unverified rather than inferred.
+
+| requested model | tier | result | picker |
+|---|---|---|---|
+| `openai/gpt-6-sol` | preview | failed the four-leg gate | unlisted |
+| `openai/gpt-6-luna` | verified | passed tool, stream, image and compaction | listed |
+
+Reading: Luna 6 is accepted for the external picker. Sol 6 remains routable
+for its own qualification only and must stay out of both pickers until a
+passing run promotes it.
+
+The bare ChatGPT rows were checked separately through a disposable router
+using the real subscription route. Each made one synthetic tool round trip at
+`low` and served the requested id:
+
+| requested model | result | served identity | calls |
+|---|---|---|---|
+| `gpt-6-sol` | passed | `gpt-6-sol` | 1 |
+| `gpt-6-luna` | passed | `gpt-6-luna` | 1 |

@@ -115,9 +115,10 @@ class InstallCatalogueTests(unittest.TestCase):
             # A subscription install lists the subscription rows and the
             # OpenRouter twins beside them, so an exhausted row still has a
             # paid route the user picks deliberately.
-            for slug in ('openai/gpt-6-astra', 'openai/gpt-5.6-sol',
-                         'openai/gpt-5.6-luna', 'openai/gpt-5.6-terra'):
+            for slug in ('openai/gpt-6-astra', 'openai/gpt-6-luna',
+                         'openai/gpt-5.6-terra'):
                 self.assertIn(slug, slugs)
+            self.assertNotIn('openai/gpt-6-sol', slugs)
             self.assertTrue(check(str(home / 'mixed-models.json')))
 
     def test_install_catalogue_contains_subscription_roster(self):
@@ -136,8 +137,8 @@ class InstallCatalogueTests(unittest.TestCase):
                      '--openai-mode', 'none')
             catalog = json.loads((home / 'mixed-models.json').read_text())
             slugs = {m['slug'] for m in catalog['models']}
-            for twin in ('openai/gpt-6-astra', 'openai/gpt-5.6-sol',
-                         'openai/gpt-5.6-terra', 'openai/gpt-5.6-luna'):
+            for twin in ('openai/gpt-6-astra', 'openai/gpt-5.6-terra',
+                         'openai/gpt-6-luna'):
                 self.assertIn(twin, slugs)
             self.assertNotIn('gpt-6-astra', slugs)
             state = json.loads((home / 'mixed-router-state.json').read_text())
@@ -168,8 +169,8 @@ class InstallCatalogueTests(unittest.TestCase):
             self.assertIn('model_provider = "scg_router"', config.read_text())
             catalog = json.loads((home / 'mixed-models.json').read_text())
             slugs = {m['slug'] for m in catalog['models']}
-            self.assertNotIn('gpt-5.6-luna', slugs)
-            self.assertIn('openai/gpt-5.6-luna', slugs)
+            self.assertNotIn('gpt-6-luna', slugs)
+            self.assertIn('openai/gpt-6-luna', slugs)
 
 
 class DefaultModeTests(unittest.TestCase):

@@ -147,7 +147,7 @@ class ClaudeIngressTests(unittest.TestCase):
         ids = [row['id'] for row in body['data']]
         self.assertEqual(len(ids), len(set(ids)))
         want = {claude_mod.claude_alias(m.slug) for m in MODELS
-                if m.provider == 'openrouter'}
+                if m.provider == 'openrouter' and m.listed}
         self.assertEqual(set(ids), want)
         for row in body['data']:
             self.assertEqual(set(row),

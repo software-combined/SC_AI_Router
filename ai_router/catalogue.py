@@ -18,7 +18,7 @@ from .model_instructions import (SUBAGENT_MODEL_PLACEHOLDER,
                                  is_routed_text)
 from .registry import MODELS, picker_key
 from .retired_slugs import SUBSCRIPTION as RETIRED_SUBSCRIPTION_SLUGS
-from .subscription_roster import SUBSCRIPTION_SLUGS
+from .subscription_roster import SUBSCRIPTION_SLUGS, replace_successors
 
 ROW_TEMPLATE = {
     'shell_type': 'unified_exec',
@@ -70,13 +70,12 @@ ROW_TEMPLATE = {
 RETIRED_SLUGS = {'~anthropic/claude-sonnet-latest', '~anthropic/claude-fable-latest',
                  '~anthropic/claude-haiku-latest', '~anthropic/claude-opus-latest',
                  '~google/gemini-flash-latest', '~google/gemini-pro-latest',
-                 '~x-ai/grok-latest', 'x-ai/grok-4.6',
+                 '~x-ai/grok-latest', 'x-ai/grok-4.6', 'openai/gpt-5.6-sol',
+                 'openai/gpt-5.6-luna',
                  'deepseek/deepseek-v4-pro', 'deepseek/deepseek-v4-flash',
                  'deepseek/deepseek-v4-flash-0731',
                  '~deepseek/deepseek-v4-flash-latest',
                  'deepseek/deepseek-v4-flash-vision-exp'}
-
-# Retired subscription slugs live in retired_slugs.py, shared with the prune.
 
 # Native reasoning levels per subscription slug; fresh installs seed these.
 # Ultra is never served: it is Codex's automatic-delegation level, so Max
@@ -84,8 +83,8 @@ RETIRED_SLUGS = {'~anthropic/claude-sonnet-latest', '~anthropic/claude-fable-lat
 _M = ('low', 'medium', 'high', 'xhigh', 'max')
 _X = ('low', 'medium', 'high', 'xhigh')
 SUBSCRIPTION_REASONING = {
-    'gpt-6-astra': ('medium', _M), 'gpt-5.6-sol': ('low', _M),
-    'gpt-5.6-terra': ('medium', _M), 'gpt-5.6-luna': ('medium', _M),
+    'gpt-6-astra': ('medium', _M), 'gpt-6-sol': ('medium', _M),
+    'gpt-5.6-terra': ('medium', _M), 'gpt-6-luna': ('medium', _M),
     'gpt-5.5': ('medium', _X), 'gpt-5.4-mini': ('medium', _X),
     'gpt-5.3-codex-spark': ('high', _X), 'codex-auto-review': ('medium', _M),
 }
@@ -94,9 +93,9 @@ SUBSCRIPTION_REASONING = {
 # Picker labels for the subscription side, matching the live Codex picker.
 SUBSCRIPTION_DISPLAY_NAMES = {
     'gpt-6-astra': 'GPT-6-Astra',
-    'gpt-5.6-sol': 'GPT-5.6-Sol',
+    'gpt-6-sol': 'GPT-6-Sol',
     'gpt-5.6-terra': 'GPT-5.6-Terra',
-    'gpt-5.6-luna': 'GPT-5.6-Luna',
+    'gpt-6-luna': 'GPT-6-Luna',
     'gpt-5.5': 'GPT-5.5',
     'gpt-5.4-mini': 'GPT-5.4-Mini',
     'gpt-5.3-codex-spark': 'GPT-5.3-Codex-Spark',
@@ -215,6 +214,7 @@ def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False,
     allowlist and key filters. Roster stubs repair fresh files; routing
     never consults this filter.
     """
+    roster = replace_successors(roster)
     visible, hidden_rows = _visible_rows(client, allowed, include_twins,
                                          available=available)
     instructions = instructions_for(visible, client)
@@ -279,7 +279,7 @@ def _state_doc(catalog_path):
 def read_roster(catalog_path):
     """Subscription roster from the state file beside the catalogue; () when absent."""
     roster = _state_doc(catalog_path).get('openai_models')
-    return tuple(roster) if isinstance(roster, list) else ()
+    return tuple(replace_successors(roster)) if isinstance(roster, list) else ()
 
 
 def read_openai_mode(catalog_path):

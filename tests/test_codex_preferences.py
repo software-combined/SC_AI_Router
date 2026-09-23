@@ -49,7 +49,7 @@ class CatalogueUltraTests(unittest.TestCase):
                          for effort in ('low', 'medium', 'high', 'xhigh',
                                         'max', 'ultra')])
         merged = merge({'models': [stale]},
-                       roster=('gpt-6-astra', 'gpt-5.6-luna'))
+                       roster=('gpt-6-astra', 'gpt-6-luna'))
         for row in merged['models']:
             with self.subTest(slug=row['slug']):
                 efforts = [e['effort'] for e in row['supported_reasoning_levels']]

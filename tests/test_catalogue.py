@@ -99,8 +99,8 @@ class CatalogueFlagTests(unittest.TestCase):
     def test_subscription_stubs_carry_native_reasoning_levels(self):
         from ai_router.catalogue import SUBSCRIPTION_REASONING, subscription_stub
         self.assertNotIn('gpt-reserve', SUBSCRIPTION_REASONING)
-        want = {'gpt-6-astra': ('medium', 5), 'gpt-5.6-sol': ('low', 5),
-                'gpt-5.6-terra': ('medium', 5), 'gpt-5.6-luna': ('medium', 5),
+        want = {'gpt-6-astra': ('medium', 5), 'gpt-6-sol': ('medium', 5),
+                'gpt-5.6-terra': ('medium', 5), 'gpt-6-luna': ('medium', 5),
                 'gpt-5.5': ('medium', 4), 'gpt-5.4-mini': ('medium', 4),
                 'gpt-5.3-codex-spark': ('high', 4), 'codex-auto-review': ('medium', 5)}
         self.assertEqual(set(SUBSCRIPTION_REASONING), set(want))
@@ -118,14 +118,13 @@ class CatalogueFlagTests(unittest.TestCase):
         stale = dict(subscription_stub('gpt-6-astra'), slug='gpt-reserve',
                      display_name='GPT-Reserve')
         merged = merge({'models': [stale]},
-                       roster=('gpt-6-astra', 'gpt-reserve', 'gpt-5.6-luna'))
+                       roster=('gpt-6-astra', 'gpt-reserve', 'gpt-6-luna'))
         slugs = [m['slug'] for m in merged['models']]
-        self.assertNotIn('gpt-reserve', slugs)
-        self.assertEqual(slugs[:2], ['gpt-6-astra', 'gpt-5.6-luna'])
+        self.assertNotIn('gpt-reserve', slugs); self.assertEqual(slugs[:2], ['gpt-6-astra', 'gpt-6-luna'])
 
     def test_merge_dedupes_a_doubled_roster(self):
         merged = merge({'models': []},
-                       roster=('gpt-6-astra', 'gpt-6-astra', 'gpt-5.6-luna'))
+                       roster=('gpt-6-astra', 'gpt-6-astra', 'gpt-6-luna'))
         slugs = [m['slug'] for m in merged['models']]
         self.assertEqual(slugs.count('gpt-6-astra'), 1)
 
@@ -150,7 +149,7 @@ class CatalogueFlagTests(unittest.TestCase):
                 self.assertEqual(row['supported_reasoning_levels'],
                                  fresh['supported_reasoning_levels'])
         by_slug = {m['slug']: m for m in merged['models']}
-        self.assertEqual(by_slug['gpt-5.6-sol']['default_reasoning_level'], 'low')
+        self.assertEqual(by_slug['gpt-6-sol']['default_reasoning_level'], 'medium')
         self.assertEqual(by_slug['gpt-5.3-codex-spark']['default_reasoning_level'], 'high')
 
     def test_merge_repair_ignores_non_subscription_slugs(self):
@@ -169,7 +168,7 @@ class CatalogueFlagTests(unittest.TestCase):
                       default_reasoning_level='medium',
                       supported_reasoning_levels=[
                           {'effort': 'medium', 'description': 'Balanced.'}])
-        rich = dict(subscription_stub('gpt-5.6-sol'),
+        rich = dict(subscription_stub('gpt-6-sol'),
                     default_reasoning_level='low',
                     supported_reasoning_levels=[
                         {'effort': e, 'description': e} for e in ('low', 'high')])
@@ -177,17 +176,17 @@ class CatalogueFlagTests(unittest.TestCase):
                              supported_reasoning_levels=[
                                  {'effort': 'medium', 'description': 'Mine only'}])
         merged = merge({'models': [legacy, rich, custom_single]},
-                       roster=('gpt-6-astra', 'gpt-5.6-sol', 'gpt-5.5'))
+                       roster=('gpt-6-astra', 'gpt-6-sol', 'gpt-5.5'))
         by_slug = {m['slug']: m for m in merged['models']}
         self.assertEqual(by_slug['gpt-6-astra']['display_name'], 'Mine')
         self.assertEqual(by_slug['gpt-6-astra']['context_window'], 1000000)
         self.assertEqual(len(by_slug['gpt-6-astra']['supported_reasoning_levels']), 5)
-        self.assertEqual(by_slug['gpt-5.6-sol']['supported_reasoning_levels'],
+        self.assertEqual(by_slug['gpt-6-sol']['supported_reasoning_levels'],
                          rich['supported_reasoning_levels'])
         self.assertEqual(by_slug['gpt-5.5']['supported_reasoning_levels'],
                          custom_single['supported_reasoning_levels'])
         again = merge({'models': merged['models']},
-                      roster=('gpt-6-astra', 'gpt-5.6-sol', 'gpt-5.5'))
+                      roster=('gpt-6-astra', 'gpt-6-sol', 'gpt-5.5'))
         self.assertEqual(again, merged)  # idempotent
 
     def test_alias_display_name_keeps_own_prefix(self):
@@ -204,10 +203,10 @@ class CatalogueFlagTests(unittest.TestCase):
     def test_merge_preserves_openai_entries_and_refreshes_stale_rows(self):
         slug = next(m.slug for m in models_for(MODELS, 'codex') if m.provider == 'openrouter')
         stale = dict(external_entry(by_slug(slug)), description='stale')
-        base = {'models': [{'slug': 'gpt-6-astra'}, {'slug': 'gpt-5.6-luna'}, stale]}
+        base = {'models': [{'slug': 'gpt-6-astra'}, {'slug': 'gpt-6-luna'}, stale]}
         merged = merge(base)
         slugs = [m['slug'] for m in merged['models']]
-        self.assertEqual(slugs[:2], ['gpt-6-astra', 'gpt-5.6-luna'])
+        self.assertEqual(slugs[:2], ['gpt-6-astra', 'gpt-6-luna'])
         self.assertEqual(len(slugs), len(set(slugs)))
         self.assertNotEqual(merged['models'][2]['description'], 'stale')
         for model in models_for(MODELS, 'codex'):
@@ -267,8 +266,8 @@ class CatalogueFlagTests(unittest.TestCase):
         for model in models_for(MODELS, 'claude'):
             if model.provider == 'openrouter':
                 self.assertIn(model.slug, claude_slugs)
-        self.assertTrue({'openai/gpt-6-astra', 'openai/gpt-5.6-sol',
-                         'openai/gpt-5.6-luna', 'openai/gpt-5.6-terra'} <= codex_slugs)
+        self.assertTrue({'openai/gpt-6-astra', 'openai/gpt-6-luna',
+                         'openai/gpt-5.6-terra'} <= codex_slugs)
         self.assertFalse(claude_slugs & {'anthropic/claude-sonnet-5',
                                          'anthropic/claude-fable-5.1',
                                          'anthropic/claude-haiku-4.5',
@@ -301,8 +300,8 @@ class CatalogueFlagTests(unittest.TestCase):
 
 
 class CatalogueTwinsTests(unittest.TestCase):
-    TWINS = ('openai/gpt-6-astra', 'openai/gpt-5.6-sol',
-             'openai/gpt-5.6-terra', 'openai/gpt-5.6-luna')
+    TWINS = ('openai/gpt-6-astra', 'openai/gpt-5.6-terra',
+             'openai/gpt-6-luna')
 
     def test_none_mode_merge_lists_twins_without_subscription_stubs(self):
         merged = merge({'models': []}, roster=('gpt-6-astra',),
@@ -310,6 +309,7 @@ class CatalogueTwinsTests(unittest.TestCase):
         slugs = {m['slug'] for m in merged['models']}
         for twin in self.TWINS:
             self.assertIn(twin, slugs)
+        self.assertNotIn('openai/gpt-6-sol', slugs)
         self.assertNotIn('gpt-6-astra', slugs)
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'catalogue.json'
@@ -404,15 +404,15 @@ class CatalogueSchemaCompatTests(unittest.TestCase):
 
     def test_roster_stub_display_names_match_the_live_picker(self):
         merged = merge({'models': []},
-                       roster=('gpt-6-astra', 'gpt-5.6-sol',
-                               'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5',
+                       roster=('gpt-6-astra', 'gpt-6-sol',
+                               'gpt-5.6-terra', 'gpt-6-luna', 'gpt-5.5',
                                'gpt-5.4-mini', 'gpt-5.3-codex-spark',
                                'codex-auto-review'))
         names = {m['slug']: m['display_name'] for m in merged['models']}
         self.assertEqual(names['gpt-6-astra'], 'GPT-6-Astra')
-        self.assertEqual(names['gpt-5.6-sol'], 'GPT-5.6-Sol')
+        self.assertEqual(names['gpt-6-sol'], 'GPT-6-Sol')
         self.assertEqual(names['gpt-5.6-terra'], 'GPT-5.6-Terra')
-        self.assertEqual(names['gpt-5.6-luna'], 'GPT-5.6-Luna')
+        self.assertEqual(names['gpt-6-luna'], 'GPT-6-Luna')
         self.assertEqual(names['gpt-5.5'], 'GPT-5.5')
         self.assertEqual(names['gpt-5.4-mini'], 'GPT-5.4-Mini')
         self.assertEqual(names['gpt-5.3-codex-spark'], 'GPT-5.3-Codex-Spark')
@@ -440,12 +440,12 @@ class CatalogueSchemaCompatTests(unittest.TestCase):
 
 class CatalogueRosterTests(unittest.TestCase):
     def test_merge_seeds_missing_roster_slugs_as_stubs(self):
-        merged = merge({'models': []}, roster=('gpt-6-astra', 'gpt-5.6-luna'))
+        merged = merge({'models': []}, roster=('gpt-6-astra', 'gpt-6-luna'))
         by_slug = {m['slug']: m for m in merged['models']}
         self.assertEqual(by_slug['gpt-6-astra']['slug'], 'gpt-6-astra')
-        self.assertEqual(by_slug['gpt-5.6-luna']['slug'], 'gpt-5.6-luna')
+        self.assertEqual(by_slug['gpt-6-luna']['slug'], 'gpt-6-luna')
         self.assertEqual(by_slug['gpt-6-astra']['display_name'], 'GPT-6-Astra')
-        self.assertEqual(by_slug['gpt-5.6-luna']['display_name'], 'GPT-5.6-Luna')
+        self.assertEqual(by_slug['gpt-6-luna']['display_name'], 'GPT-6-Luna')
         for model in models_for(MODELS, 'codex'):
             if model.provider == 'openrouter':
                 self.assertIn(model.slug, by_slug)
@@ -453,10 +453,10 @@ class CatalogueRosterTests(unittest.TestCase):
     def test_merge_never_rewrites_existing_roster_entries(self):
         rich = {**subscription_stub('gpt-6-astra'), 'display_name': 'Custom label',
                 'context_window': 1000000, 'model_messages': {'instructions_template': 'Native'}}
-        merged = merge({'models': [dict(rich)]}, roster=('gpt-6-astra', 'gpt-5.6-luna'))
+        merged = merge({'models': [dict(rich)]}, roster=('gpt-6-astra', 'gpt-6-luna'))
         by_slug = {m['slug']: m for m in merged['models']}
         self.assertEqual(by_slug['gpt-6-astra'], rich)
-        self.assertIn('gpt-5.6-luna', by_slug)
+        self.assertIn('gpt-6-luna', by_slug)
         slugs = [m['slug'] for m in merged['models']]
         self.assertEqual(len(slugs), len(set(slugs)))
 

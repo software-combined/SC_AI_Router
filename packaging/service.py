@@ -463,7 +463,6 @@ def install_task_launcher(home, release_dir):
 
 def _write_state(home, state):
     _atomic_write.replace_json(_state.path(home), state)
-
 def ensure_state(home):
     path = _state.path(home)
     if path.exists():
@@ -474,11 +473,12 @@ def ensure_state(home):
                 isinstance(s, str) and s for s in models)):
             state['openai_models'] = list(DEFAULT_OPENAI_MODELS)
             _atomic_write.replace_json(path, state)
-        elif any(slug in models for slug in RETIRED_SUBSCRIPTION_SLUGS):
-            state['openai_models'] = [
-                s for s in models
-                if not (isinstance(s, str) and s in RETIRED_SUBSCRIPTION_SLUGS)]
-            _atomic_write.replace_json(path, state)
+        else:
+            pruned = [s for s in _roster.replace_successors(models)
+                      if not (isinstance(s, str) and s in RETIRED_SUBSCRIPTION_SLUGS)]
+            if pruned != models:
+                state['openai_models'] = pruned
+                _atomic_write.replace_json(path, state)
         return state
     port = 18749
     probe = socket.socket()

@@ -2,7 +2,7 @@
 
 Codex desktop generates thread titles, descriptions, summaries and title
 reconsiderations in their own helper threads pinned to the subscription
-slug (today `gpt-5.6-luna`). Those turns carry
+slug (currently the legacy `gpt-5.6-luna` id). Those turns carry
 `x-codex-turn-metadata: {"thread_source": "thread_title", ...}`; ordinary
 user turns carry no such source. When the ChatGPT allowance is exhausted,
 upstream answers 429 for every helper turn and the client stores a slice
@@ -52,7 +52,10 @@ def helper_turn(headers):
 
 def twin_slug(model):
     """Registry slug of the external twin for a subscription slug, else None."""
-    entry = by_slug(TWIN_PREFIX + model) if isinstance(model, str) else None
+    if not isinstance(model, str):
+        return None
+    successor = subscription_roster.SUCCESSORS.get(model, model)
+    entry = by_slug(TWIN_PREFIX + successor)
     if entry is None or not provider_defs.is_external(entry.provider):
         return None
     defn = provider_defs.get(entry.provider)
