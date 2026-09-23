@@ -270,7 +270,7 @@ class SteerWiringTests(unittest.TestCase):
                      'model': 'meta/muse-spark-1.3-contributor'}),
                  'encrypted_function_args': []}
         credentials = Mock()
-        payload = {'model': 'gpt-5.6-luna', 'tools': native_tools('followup_task'),
+        payload = {'model': 'gpt-6-luna', 'tools': native_tools('followup_task'),
                    'input': [spawn]}
         prepared = providers.SubscriptionProvider().prepare(
             payload['model'], '/responses', payload, b'', {}, credentials)
@@ -293,7 +293,7 @@ class SteerWiringTests(unittest.TestCase):
 
     def test_subscription_leaves_native_followup_alone(self):
         credentials = Mock()
-        payload = {'model': 'gpt-5.6-luna', 'tools': native_tools('followup_task'),
+        payload = {'model': 'gpt-6-luna', 'tools': native_tools('followup_task'),
                    'input': []}
         prepared = providers.SubscriptionProvider().prepare(
             payload['model'], '/responses', payload, b'', {}, credentials)

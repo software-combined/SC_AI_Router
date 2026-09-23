@@ -17,7 +17,8 @@ class _Policy:
         """The discovery payload this family serves for a GET."""
         return claude.models_listing(allowed)
 
-    def select_provider(self, model, path, state, mode):
+    def select_provider(self, model, path, state, mode, openai_models=None):
+        del openai_models
         return claude.select(model, path, mode,
                              anthropic_mode=state.get('anthropic_mode'),
                              region=state.get('openrouter_region', 'global'),

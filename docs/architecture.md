@@ -21,7 +21,8 @@ transport (Prepared, hop-header rules, raw stream, header relay) + upstream
 for relay.py): wire and failure policy, consumed by the adapters below
   ^
   |
-catalogue / models / live_refresh / apply_catalogue (client projections)
+subscription_discovery / subscription_catalogue + catalogue / models /
+live_refresh / apply_catalogue (client projections and native discovery)
   |
 agent_handoffs / compaction / tool_adapter / tool_aliases / discovered
 (request normalization)
@@ -178,7 +179,10 @@ them while the child installer retains its own installation lock.
 - `ai_router/providers.py` holds the Responses adapters and dispatch;
   failure policy lives in `upstream.py`, page markup in `setup_page.py`,
   shared transport in `transport.py`, and dispatch in `protocols/`.
-- `ai_router/catalogue.py` + `models.py` + `live_refresh.py` share client
+- `ai_router/subscription_discovery.py` fetches Codex's native subscription
+  catalogue; `subscription_catalogue.py` validates it and composes the
+  effective roster without turning local configuration into entitlement data.
+  `ai_router/catalogue.py` + `models.py` + `live_refresh.py` share client
   projection duties through `model_metadata.py` (pure normalization) and
   `clients/` (capability projection, picker visibility); the served
   instruction text and its capped delegation roster live in the

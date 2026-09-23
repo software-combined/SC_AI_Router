@@ -13,7 +13,7 @@ COMPACT_PROMPT = ('You are performing a CONTEXT CHECKPOINT COMPACTION. Create a 
     'tool results verbatim so the next model can repeat them exactly. Be concise and structured.')
 import base64
 import secrets
-from .agent_handoffs import plaintext_agent_message
+from .agent_handoffs import plaintext_agent_message, recoverable_agent_message
 from .compaction_result import IncompleteSummary as IncompleteSummary, extract_summary as extract_summary
 from .history_portability import CALL_TYPES as CALL_TYPES, OUTPUT_TYPES as OUTPUT_TYPES, _block_text as _block_text, user_message_item as user_message_item
 PREFIX = 'ocx1:'
@@ -31,7 +31,7 @@ def decode_summary(blob):
         return None
     try:
         return base64.b64decode(blob[len(PREFIX):]).decode()
-    except ValueError:  # UnicodeDecodeError and binascii.Error subclass it
+    except ValueError:
         return None
 
 def compaction_text(item):
@@ -111,7 +111,6 @@ def rewrite_input(items):
         else:
             rewritten.append(item)
     return rewritten
-
 # Calls the endpoint accepts, and outputs keyed by call. A fragment missing
 # these fields (interrupted call, orphan output) 400s the whole turn, so the
 # scrub drops fragments before anything is forwarded. A partial call never
@@ -218,12 +217,12 @@ def _item_text(item):
         # Plaintext agent text survives compaction so follow-up scope is
         # retained. Anything encrypted stays out: the preparation guard owns
         # that rejection, and summaries must never launder opaque blocks.
-        if has_opaque_agent_item([item]):
-            return ''
-        author = item.get('author', 'agent')
-        if item.get('recipient'):
-            author += f' to {item["recipient"]}'
-        return f'{author}: {_block_text(item.get("content", ""))}'.strip()
+        readable = recoverable_agent_message(item)
+        if readable: item = {**item, 'content': readable}
+        elif has_opaque_agent_item([item]): return ''
+        author = item.get('author', 'agent') + (f' to {item["recipient"]}' if item.get('recipient') else '')
+        text = _block_text(item.get('content', '')).strip() + ('\nEncrypted content was withheld from this external model. The result may be incomplete; request a plain-text resend if needed.' if readable else '')
+        return f'{author}: {text}'.strip()
     return ''
 
 TRUNCATED_NOTE = '[truncated] '

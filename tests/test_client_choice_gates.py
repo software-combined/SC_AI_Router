@@ -18,6 +18,12 @@ from tests.test_client_choice import _full_install, _home, _install, dialog
 
 
 class ChooserGateTests(unittest.TestCase):
+    def setUp(self):
+        self._no_chooser = os.environ.pop('ROUTER_NO_CLIENT_CHOOSER', None)
+        if self._no_chooser is not None:
+            self.addCleanup(os.environ.__setitem__,
+                            'ROUTER_NO_CLIENT_CHOOSER', self._no_chooser)
+
     def _args(self, *argv):
         return install_mod.build_parser().parse_args(['--home', '/tmp/router', *argv])
 
