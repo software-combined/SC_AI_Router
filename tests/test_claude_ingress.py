@@ -192,7 +192,7 @@ class ClaudeIngressTests(unittest.TestCase):
         self.assertTrue(tiers)
         self.assertTrue(all(t in claude_mod.FAMILY_TIERS for t in tiers.values()))
         self.assertEqual(tiers['anthropic/claude-sonnet-5'], 'sonnet')
-        self.assertEqual(tiers['anthropic/claude-opus-5'], 'opus')
+        self.assertEqual(tiers['anthropic/claude-opus-5.5'], 'opus')
         self.assertEqual(tiers['anthropic/claude-haiku-4.5'], 'haiku')
         self.assertEqual(tiers['anthropic/claude-fable-5.1'], 'fable')
         for row_id, tier in tiers.items():
