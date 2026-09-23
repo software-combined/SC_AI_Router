@@ -17,9 +17,9 @@ concurrency:
 jobs:
   changes:
     name: Change scope
-    # Native installer jobs are a main-PR cost. Develop PRs and every push
-    # skip them the same way (Plan 156, narrowed 2026-09-15).
-    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    # Native installer jobs are part of main acceptance. Develop runs skip
+    # them (Plan 156, narrowed 2026-09-15).
+    if: (github.event_name == 'pull_request' && github.base_ref == 'main') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -38,7 +38,11 @@ jobs:
         # changed" and silently skipping the native checks.
         run: |
           set -o pipefail
-          git diff --name-only "origin/${{ github.base_ref }}...HEAD" | python3 tools/ci_scope.py --installer >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            git diff --name-only "origin/${{ github.base_ref }}...HEAD"
+          else
+            git diff --name-only "${{ github.event.before }}...${{ github.sha }}"
+          fi | python3 tools/ci_scope.py --installer >> "$GITHUB_OUTPUT"
 
   installer-macos:
     name: Installer (macOS)
@@ -88,24 +92,21 @@ jobs:
 
   test:
     name: Test
-    # The one required check. It waits for its dependency jobs and fails when
-    # one failed or was cancelled; only a deliberately unselected platform job
-    # (scope said no installer paths) may be skipped (Plan 156).
-    # !cancelled(): a failed dependency still runs the guard below, while a
-    # cancelled run stops this job instead of reporting a result.
-    needs: [changes, installer-macos, installer-windows, installer-python39, hook-adapter]
+    # The required gate fails when a prerequisite fails or is cancelled.
+    # Installer jobs may be skipped when scope finds no installer paths;
+    # release-only prerequisites are skipped on develop runs.
+    # !cancelled() lets the failure guard run after a failed prerequisite.
+    needs: [changes, installer-macos, installer-windows, installer-python39, plugin-schedulers, hook-adapter]
     if: ${{ !cancelled() }}
-    # Single Ubuntu runner. Plan 134 revisited the cost decision after the
-    # 2026-09-12 external review found a green check that never executed the
-    # tests: the offline unit suite now runs on every pull request. Installs
-    # and native lifecycle stay proven on local hardware, recorded per client
-    # and OS version in docs/compatibility.md.
+    # Develop PRs and branch pushes keep the fast static checks. The full
+    # offline suite is the release acceptance gate on PRs targeting main and
+    # pushes to main; local tests and review remain required before every commit.
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Required installer jobs
-        # Scoped installer jobs that failed or were cancelled must fail this
-        # required check, not disappear behind a green gate.
+      - name: Required jobs
+        # Failed or cancelled prerequisites must fail this required check,
+        # not disappear behind a green gate.
         if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
         run: |
           echo "a required job did not succeed: ${{ join(needs.*.result, ', ') }}"
@@ -115,10 +116,7 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
       - name: Unit suite (offline)
-        # Pull requests only: the suite is the required local gate for every
-        # commit, and the release workflow runs it again at tag time. Push
-        # runs keep the static checks so a merge to develop stays cheap.
-        if: github.event_name == 'pull_request'
+        if: (github.event_name == 'pull_request' && github.base_ref == 'main') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
         run: python -m unittest discover -s tests -t .
       - name: Shell syntax
         shell: bash
@@ -181,8 +179,8 @@ jobs:
     name: Plugin schedulers
     # Native scheduler coverage for the agent-plugin updater: real systemd
     # user timers on Linux and Task Scheduler on Windows, using a fake local
-    # Codex CLI. Pull requests only; push runs stay cheap.
-    if: github.event_name == 'pull_request'
+    # Codex CLI. Run for main acceptance; develop stays lightweight.
+    if: (github.event_name == 'pull_request' && github.base_ref == 'main') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
@@ -210,8 +208,8 @@ jobs:
     # The SCG hook adapter ships to every host and now claims native Windows
     # scanner support. No other job runs its tests, so this is their only
     # executor: without the matrix, the Windows claim would be asserted rather
-    # than exercised. Pull requests only, like the scheduler job above.
-    if: github.event_name == 'pull_request'
+    # than exercised. Main acceptance only, like the scheduler job above.
+    if: (github.event_name == 'pull_request' && github.base_ref == 'main') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
