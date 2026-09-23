@@ -13,6 +13,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -48,6 +49,12 @@ class AgentSkillsTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
+        self.home = Path(self.tmp.name) / 'home'
+        self.enterContext(patch.object(Path, 'home', return_value=self.home))
+        self.plist = (self.home / 'Library' / 'LaunchAgents' /
+                      (skills.GIT_UPDATER_LABEL + '.plist'))
+        self.plist.parent.mkdir(parents=True)
+        self.plist.write_text('stale schedule')
         self.base = Path(self.tmp.name) / 'scg-agent-plugins'
         self.plugins = Path(self.tmp.name) / 'release-plugins'
         for name in ('scg-review', 'scg-finance'):
@@ -140,6 +147,9 @@ class AgentSkillsTest(unittest.TestCase):
                                          which=_which({'launchctl'}))
         self.assertFalse(runner.exists())
         self.assertEqual((self.base / 'updater.py.migrated.0').read_text(), 'stale runner')
+        self.assertFalse(self.plist.exists())
+        self.assertEqual(
+            self.plist.with_name(self.plist.name + '.migrated.0').read_text(), 'stale schedule')
         self.assertIn('retired', line)
 
     def test_an_unrecognised_runner_is_left_in_place(self):
@@ -148,6 +158,7 @@ class AgentSkillsTest(unittest.TestCase):
         runner.write_text('not ours')
         line = skills.retire_git_updater(base=self.base, run=_Run(), which=_which(set()))
         self.assertTrue(runner.exists())
+        self.assertEqual(self.plist.read_text(), 'stale schedule')
         self.assertIn('unrecognised', line)
 
     def test_a_missing_plugin_tree_is_a_no_op(self):
@@ -194,6 +205,7 @@ class AgentSkillsTest(unittest.TestCase):
         line = skills.sync({'clients': 'codex'}, self.plugins, base=self.base,
                            run=_Run(returncode=1), which=_which({'codex'}))
         self.assertTrue(runner.exists())
+        self.assertEqual(self.plist.read_text(), 'stale schedule')
         self.assertIn('kept', line)
 
     def test_the_git_fallback_is_retired_once_a_client_accepts(self):
@@ -207,6 +219,9 @@ class AgentSkillsTest(unittest.TestCase):
         line = skills.sync({'clients': 'codex'}, self.plugins, base=self.base,
                            run=_Run(), which=_which({'codex', 'launchctl'}))
         self.assertFalse(runner.exists())
+        self.assertFalse(self.plist.exists())
+        self.assertEqual(
+            self.plist.with_name(self.plist.name + '.migrated.0').read_text(), 'stale schedule')
         self.assertIn('retired', line)
 
 
