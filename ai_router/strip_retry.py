@@ -4,17 +4,18 @@ The relay retries once when a provider 400 can be repaired without changing
 what the turn means. Two conditions qualify: an OpenRouter Responses 400 that
 names no cause (no code, tool or parameter) is retried with annotation-only
 top-level fields removed, and a subscription Responses 400 reporting
-`invalid_encrypted_content` is retried with the OpenAI-owned reasoning blobs
-removed from `input`. The strip lists and the retry gates live here with the
-retry policy; the source-limit ceiling on `ai_router/upstream.py` keeps the pure
-helpers here rather than beside the other wire-body helpers.
+`invalid_encrypted_content` is retried with the unreadable blobs removed from
+`input`: the OpenAI-owned reasoning blob and the router's own compaction
+summary. The strip lists and the retry gates live here with the retry policy;
+the source-limit ceiling on `ai_router/upstream.py` keeps the pure helpers here
+rather than beside the other wire-body helpers.
 """
 import http.client
 import io
 import json
 from compression import zstd
 
-from . import compaction as comp, provider_defs, transport, upstream
+from . import provider_defs, subscription_history, transport, upstream
 
 _ANNOTATION_ONLY_FIELDS = frozenset((
     'client_metadata', 'prompt_cache_options', 'prompt_cache_key', 'metadata',
@@ -34,16 +35,6 @@ def strip_annotations(body):
     if len(cut) == len(payload):
         return None
     return json.dumps(cut, separators=(',', ':')).encode('utf-8')
-
-
-def _encrypted_field_count(item):
-    """How many `encrypted_content` fields one item carries, one level deep."""
-    count = 1 if 'encrypted_content' in item else 0
-    blocks = item.get('content')
-    if isinstance(blocks, list):
-        count += sum(1 for block in blocks
-                     if isinstance(block, dict) and 'encrypted_content' in block)
-    return count
 
 
 def _scan(body, content_encoding=None):
@@ -86,24 +77,22 @@ def _scan(body, content_encoding=None):
     for item in items:
         if not isinstance(item, dict):
             continue
-        facts['encrypted_fields'] += _encrypted_field_count(item)
+        facts['encrypted_fields'] += subscription_history.encrypted_field_count(item)
         if item.get('type') == 'reasoning':
             facts['reasoning_items'] += 1
-            # `compaction.strip_reasoning_blobs` removes the item-level key only,
-            # so nested content-block blobs are counted above but never removed.
-            facts['removed'] += 1 if 'encrypted_content' in item else 0
+        # `removed` counts the fields this repair takes out; a nested block or
+        # an unowned item type is counted above and never removed.
+        if subscription_history.removable_encrypted(item):
+            facts['removed'] += 1
     return payload, facts
 
 
 def _strip_reasoning_payload(payload):
-    """Strip the reasoning blobs from one parsed payload; None when unchanged."""
-    items = payload.get('input')
-    if not isinstance(items, list):
+    """The repaired payload for the retry; None when nothing may change."""
+    repaired = subscription_history.repair_input(payload.get('input'))
+    if repaired is None:
         return None
-    stripped = comp.strip_reasoning_blobs(items)
-    if stripped == items:
-        return None
-    return json.dumps({**payload, 'input': stripped},
+    return json.dumps({**payload, 'input': repaired},
                       separators=(',', ':')).encode('utf-8')
 
 
@@ -114,6 +103,9 @@ def strip_reasoning_blobs(body, content_encoding=None):
     and an item left without readable reasoning text goes with it. Only the
     bounded retry reaches this, so a healthy subscription turn keeps the blob
     that `subscription_history.normalize` deliberately preserves.
+
+    A compaction item's unreadable summary blob becomes readable text instead,
+    because the client replays that item and the backend cannot read it.
     """
     payload, _facts = _scan(body, content_encoding)
     return None if payload is None else _strip_reasoning_payload(payload)
@@ -172,9 +164,11 @@ def maybe_retry_unattributable(described, response, raw, metrics, provider,
         # One scan serves both the diagnostics and the repair, and only a
         # rejected turn reaches it, so a healthy or unrelated turn is unchanged.
         payload, facts = _scan(prepared.body, content_encoding)
-        fields.update(facts)
         stripped = (None if payload is None
                     else _strip_reasoning_payload(payload))
+        if stripped is None:
+            facts['removed'] = 0  # nothing was removed, so the line must say so
+        fields.update(facts)
     else:
         stripped = strip_annotations(prepared.body)
     if stripped is None:

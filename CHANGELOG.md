@@ -5,6 +5,11 @@
 - Fix combined Codex model discovery rejecting valid OpenAI visibility and
   upgrade metadata. Subscription models still come from the server and appear
   alongside approved third-party models; no static catalogue override is needed.
+- A subscription Responses request rejected with `invalid_encrypted_content`
+  whose history replays the router's own compaction summary item now gets one
+  bounded retry after that item is rewritten as readable text. The replayed
+  reasoning-blob repair is unchanged, and a payload carrying an encrypted
+  field outside those two shapes is left alone rather than retried.
 
 ## 0.6.118
 
