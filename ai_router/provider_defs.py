@@ -183,9 +183,9 @@ def valid_region(region):
 
 OPENAI = ProviderDef(
     id='openai', label='OpenAI', kind=SUBSCRIPTION, host='chatgpt.com',
-    responses_path='/backend-api/codex', dialect=DIALECT_OPENAI,
-    key_info_shape='none',
-    subscription_label='ChatGPT subscription',
+    responses_path='/backend-api/codex', catalogue_url='https://chatgpt.com/backend-api/codex/models',
+    catalogue_shape='codex', dialect=DIALECT_OPENAI,
+    key_info_shape='none', subscription_label='ChatGPT subscription',
     native_prefixes=('/alpha/', '/guardian'))
 
 ANTHROPIC = ProviderDef(

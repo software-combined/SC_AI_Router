@@ -473,7 +473,7 @@ def do_install(args, _fetch=fetch, _run=None):
         print(f"agent skills: {_skills.sync(state, current_release_dir(home) / 'plugins', run=run)}")
         print(f"installed {latest['version']}; health ok; Claude Code attached")
         return 0
-    _client_choice.attach_codex(home, state, mode, _codex_config, previous_receipt)
+    _client_choice.attach_codex(home, state, mode, _codex_config, previous_receipt, static_catalogue=args.static_catalogue)
     # launchd keeps the updater command until the job is reloaded and a
     # scheduled run defers that reload, so pruning its release breaks it.
     prune_releases(home, latest['version'], previous,
@@ -617,7 +617,7 @@ def build_parser():
                         help='Print installed version, service, client, and key status.')
     parser.add_argument('--json', action='store_true',
                         help='With --status, --check-update or --doctor: machine-readable JSON.')
-    parser.add_argument('--static-catalogue', action='store_true', help='No-op: the catalogue is always configured.')
+    parser.add_argument('--static-catalogue', action='store_true', help='Use the static catalogue fallback.')
     parser.add_argument('--setup', action='store_true',
                         help='First-run key window: mint a setup link and open it even when a key exists.')
     parser.add_argument('--choose-clients', action='store_true', help='Ask which assistant and surface this computer uses.')

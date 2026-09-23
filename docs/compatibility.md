@@ -2047,12 +2047,13 @@ unverified rather than inferred.
 
 | requested model | tier | result | picker |
 |---|---|---|---|
-| `openai/gpt-6-sol` | preview | failed the four-leg gate | unlisted |
+| `openai/gpt-6-sol` | verified by owner exception | tool, stream and compaction passed; image colour returned `Teal` | listed |
 | `openai/gpt-6-luna` | verified | passed tool, stream, image and compaction | listed |
 
-Reading: Luna 6 is accepted for the external picker. Sol 6 remains routable
-for its own qualification only and must stay out of both pickers until a
-passing run promotes it.
+Reading: Luna 6 passed the full gate. Sol 6 is enabled under explicit owner
+approval because the image-quality assertion is not yet representative. Its
+tool, stream and compaction behaviour passed; the image leg returned `Teal`
+for the red test image and remains a documented follow-up.
 
 The bare ChatGPT rows were checked separately through a disposable router
 using the real subscription route. Each made one synthetic tool round trip at
@@ -2062,3 +2063,14 @@ using the real subscription route. Each made one synthetic tool round trip at
 |---|---|---|---|
 | `gpt-6-sol` | passed | `gpt-6-sol` | 1 |
 | `gpt-6-luna` | passed | `gpt-6-luna` | 1 |
+
+## Native subscription discovery, 2026-09-23
+
+Codex `0.155.0-alpha.16` requests
+`GET /backend-api/codex/models?client_version=<version>` with its own ChatGPT
+authentication. A disposable router with a local roster containing only
+`gpt-6-astra` returned 27 native and external rows, including `gpt-6-sol`,
+`gpt-6-luna`, `openai/gpt-6-sol`, and `openai/gpt-6-luna`. This was a
+metadata-only acceptance; no inference request was made. Desktop picker
+repaint timing remains unverified, so a visible stale list still needs a
+Codex restart as the operational fallback.

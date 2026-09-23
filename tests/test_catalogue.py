@@ -266,8 +266,8 @@ class CatalogueFlagTests(unittest.TestCase):
         for model in models_for(MODELS, 'claude'):
             if model.provider == 'openrouter':
                 self.assertIn(model.slug, claude_slugs)
-        self.assertTrue({'openai/gpt-6-astra', 'openai/gpt-6-luna',
-                         'openai/gpt-5.6-terra'} <= codex_slugs)
+        self.assertTrue({'openai/gpt-6-astra', 'openai/gpt-6-sol',
+                         'openai/gpt-6-luna', 'openai/gpt-5.6-terra'} <= codex_slugs)
         self.assertFalse(claude_slugs & {'anthropic/claude-sonnet-5',
                                          'anthropic/claude-fable-5.1',
                                          'anthropic/claude-haiku-4.5',
@@ -300,8 +300,8 @@ class CatalogueFlagTests(unittest.TestCase):
 
 
 class CatalogueTwinsTests(unittest.TestCase):
-    TWINS = ('openai/gpt-6-astra', 'openai/gpt-5.6-terra',
-             'openai/gpt-6-luna')
+    TWINS = ('openai/gpt-6-astra', 'openai/gpt-6-sol',
+             'openai/gpt-5.6-terra', 'openai/gpt-6-luna')
 
     def test_none_mode_merge_lists_twins_without_subscription_stubs(self):
         merged = merge({'models': []}, roster=('gpt-6-astra',),
@@ -309,7 +309,6 @@ class CatalogueTwinsTests(unittest.TestCase):
         slugs = {m['slug'] for m in merged['models']}
         for twin in self.TWINS:
             self.assertIn(twin, slugs)
-        self.assertNotIn('openai/gpt-6-sol', slugs)
         self.assertNotIn('gpt-6-astra', slugs)
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'catalogue.json'

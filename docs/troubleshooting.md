@@ -59,14 +59,16 @@ schtasks /Query /TN CodexMixedModelRouter /V /FO LIST
   after its last write, at each router start and scheduled update, apart from
   the three the running router writes, which keep their size caps.
 
-## Codex does not show the OpenRouter models
+## Codex does not show a model
 
-Codex reads its catalogue once, at startup (verified 2026-09-12 against
-codex-cli 0.153.4: rewriting `model_catalog_json` while the client runs does
-not change the model list). After an install, an update or a catalogue change,
-quit and reopen Codex.
+Subscription installs use the router's `/models` response, which combines the
+ChatGPT subscription catalogue with the approved OpenRouter registry. Codex
+requests it immediately and on its own refresh cadence. Desktop picker repaint
+timing is not yet proven, so quit and reopen Codex when a known addition is
+not visible.
 
-- The catalogue Codex reads is `mixed-models.json` in the router home.
+- `--static-catalogue` uses `mixed-models.json` instead and requires a Codex
+  restart after an install or catalogue change.
 - A model outside this machine's policy is not listed; `--status` shows the
   router state, and the request log records a refusal rather than serving it.
 - A ChatGPT subscription row is always listed, exhausted or not, and its

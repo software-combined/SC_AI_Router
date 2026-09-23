@@ -188,6 +188,9 @@ reasoning level is rejected with the levels the model accepts.
 
 - Rows labelled `· OpenRouter` are billed to the OpenRouter API key. The
   remaining rows use the ChatGPT or Claude subscription.
+- ChatGPT subscription models are discovered automatically from Codex's
+  native model catalogue, so a new subscription model does not need a router
+  release to appear.
 - The GPT twins appear on both routes, so a subscription row and its
   OpenRouter twin are selectable side by side.
 - Rows labelled Preview are usable but not yet verified; report anything odd.
