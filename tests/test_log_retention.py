@@ -102,7 +102,8 @@ class RetentionTriggerTests(unittest.TestCase):
                 rc = install_mod.do_update(
                     args, _fetch=lambda url: b'',
                     _read_feed=lambda feed, etag: (304, b'', 'etag'),
-                    _sleep=lambda seconds: None, _announce=lambda state: None)
+                    _sleep=lambda seconds: None,
+                    _announce=lambda _home, _state: None)
             self.assertEqual(rc, 0)
             self.assertFalse(stale.exists(), 'a scheduled pass ages logs out')
 

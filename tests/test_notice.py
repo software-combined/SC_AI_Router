@@ -292,13 +292,12 @@ class DialogCommandTests(unittest.TestCase):
         # The dialog argv must stay separate list items, never re-parsed.
         self.assertIn('--text=' + MSG, dialog)
 
-    def test_linux_falls_back_to_notify_send(self):
+    def test_linux_without_zenity_keeps_the_notice_pending(self):
         cmd = notice_mod.dialog_command(
             '1.0.1', platform_name='linux',
             which=lambda name: '/usr/bin/' + name
             if name == 'notify-send' else None)
-        self.assertEqual(cmd[:2], ['notify-send', 'SCG Router'])
-        self.assertIn(MSG, cmd)
+        self.assertIsNone(cmd)
 
     def test_linux_without_tools_is_none(self):
         self.assertIsNone(notice_mod.dialog_command(
