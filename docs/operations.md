@@ -4,7 +4,7 @@
 
 Work lands on `develop` via `fix/*`/`feat/*` branches, then `develop`
 merges to `main` via PR. Tag the merge with the full `v<VERSION>` label
-matching `packaging/VERSION`: `0.6.116` becomes `v0.6.116`.
+matching `packaging/VERSION`: `0.6.117` becomes `v0.6.117`.
 Add `-beta` for a pre-release, `-express` for an urgent stable release, or
 `-beta-express` for an urgent beta. The release workflow runs on `v*` tags
 only, validates the exact version, runs the suite, builds the bundle, publishes

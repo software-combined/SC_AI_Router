@@ -2,15 +2,7 @@
 
 ## Unreleased
 
-## 0.6.116
-
-- An `invalid_encrypted_content` retry that finds no removable reasoning blob
-  now logs structural repair diagnostics, making `outcome=unchanged`
-  distinguishable without recording request content or encrypted values.
-- Release tags now use the full semantic form `v<VERSION>`, matching
-  `packaging/VERSION` exactly. Optional `-beta` and `-express` suffixes remain.
-
-## 0.6.115
+## 0.6.117
 
 - ChatGPT subscription models are now discovered from Codex's native
   `/models` catalogue and appear without a repository roster edit. Codex
@@ -29,6 +21,17 @@
 - Both OpenRouter twins are enabled. Sol 6 passed its tool, stream and
   compaction legs; its image-quality assertion is deferred by owner approval
   after it returned `Teal` for the red test image.
+
+## 0.6.116
+
+- An `invalid_encrypted_content` retry that finds no removable reasoning blob
+  now logs structural repair diagnostics, making `outcome=unchanged`
+  distinguishable without recording request content or encrypted values.
+- Release tags now use the full semantic form `v<VERSION>`, matching
+  `packaging/VERSION` exactly. Optional `-beta` and `-express` suffixes remain.
+
+## 0.6.115
+
 - A child-to-parent `agent_message` carrying readable text and an encrypted
   sidecar is now delivered to an external model as a `delivered_message` tool
   result. The router forwards the readable text, withholds the encrypted block

@@ -40,7 +40,7 @@ real router home.
   `refactor`, `test`, `chore` or `docs`.
 - Every user-visible change updates `CHANGELOG.md` and `packaging/VERSION`
   (semver). Maintainers cut releases with the full `v<VERSION>` tag matching
-  `packaging/VERSION`, so `0.6.116` is tagged `v0.6.116`. Add `-beta`,
+  `packaging/VERSION`, so `0.6.117` is tagged `v0.6.117`. Add `-beta`,
   `-express`, or `-beta-express` when the release needs that channel or
   urgency marker.
 - Keep the source limits: modules 250 lines soft and 400 hard, entrypoints
