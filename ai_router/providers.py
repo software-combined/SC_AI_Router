@@ -44,7 +44,7 @@ def _passthrough(response):
 
 def reject_opaque_agent_items(items):
     """Fail closed on unreadable encrypted briefs before any dispatch."""
-    if comp.has_opaque_agent_item(items):
+    if isinstance(items, list) and any(comp.has_opaque_agent_item([item]) and not agent_handoffs.recoverable_agent_message(item) for item in items):
         raise PreparationError(
             'unsupported encrypted agent instructions; '
             'resend the assignment as plain text')

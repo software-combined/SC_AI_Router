@@ -19,12 +19,20 @@ def _external_responses():
 
 
 MARKER = 'SYNTH-OPAQUE-066-4b1d'
+OPAQUE_MARKER = 'SYNTH-OPAQUE-REPLY-a82f'
 
 
 def _opaque_item(marker=MARKER):
     return {'type': 'agent_message', 'author': '/root',
             'content': [{'type': 'input_text', 'text': 'audit the network domain'},
                         {'type': 'encrypted_content', 'text': marker}]}
+
+
+def _inbound_mixed():
+    return {'type': 'agent_message', 'author': '/root/router_adversarial',
+            'recipient': '/root',
+            'content': [{'type': 'input_text', 'text': 'SYNTH-READABLE-REPLY'},
+                        {'type': 'encrypted_content', 'encrypted_content': OPAQUE_MARKER}]}
 
 
 def _prepare(items):
@@ -77,6 +85,35 @@ class AgentContainmentTests(unittest.TestCase):
             self.assertNotIn(MARKER, str(exc))
             self.assertNotIn('network domain', str(exc))
 
+    def test_inbound_mixed_reply_recovers_without_ciphertext(self):
+        prepared = _prepare([_inbound_mixed()])
+        body = json.dumps(json.loads(prepared.body))
+        self.assertIn('SYNTH-READABLE-REPLY', body)
+        self.assertIn('Encrypted content was withheld', body)
+        self.assertNotIn(OPAQUE_MARKER, body)
+        self.assertNotIn('encrypted_content', body)
+
+    def test_self_peer_outbound_and_empty_inbound_stay_fail_closed(self):
+        inbound = _inbound_mixed()
+        shapes = [
+            {**inbound, 'author': '/root'},
+            {**inbound, 'author': '/root/sibling', 'recipient': '/root/other'},
+            {**inbound, 'recipient': '/root/router_adversarial'},
+            {**inbound, 'content': [inbound['content'][1]]},
+            {**inbound, 'content': [inbound['content'][0],
+                                    {'type': 'input_image', 'image_url': 'synthetic'}]},
+            {**inbound, 'content': [{'type': 'input_text', 'text': '  '},
+                                    inbound['content'][1]]},
+            {**inbound, 'content': [inbound['content'][0],
+                                    {'type': 'encrypted_content'}]},
+            {**inbound, 'content': [inbound['content'][0],
+                                    {'type': 'encrypted_content', 'text': 'only-label'}]},
+        ]
+        for item in shapes:
+            with self.subTest(author=item.get('author'), recipient=item.get('recipient')):
+                with self.assertRaises(ValueError):
+                    _prepare([item])
+
 
 class AgentSummaryTests(unittest.TestCase):
     def test_plaintext_agent_label_survives_summary_input(self):
@@ -91,6 +128,13 @@ class AgentSummaryTests(unittest.TestCase):
         summary = comp.transcript_for_summary([_opaque_item()])
         self.assertNotIn(MARKER, summary)
         self.assertNotIn('network domain', summary)
+
+    def test_recoverable_reply_keeps_readable_text_out_of_the_sidecar(self):
+        from ai_router import compaction as comp
+        summary = comp.transcript_for_summary([_inbound_mixed()])
+        self.assertIn('SYNTH-READABLE-REPLY', summary)
+        self.assertIn('result may be incomplete', summary)
+        self.assertNotIn(OPAQUE_MARKER, summary)
 
 
 if __name__ == '__main__':
