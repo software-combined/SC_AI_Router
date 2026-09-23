@@ -166,9 +166,10 @@ track branch `main`.
 - Integrate plugin fixes through `develop` first. If `develop` contains
   unrelated unreleased router changes, reuse the owned worktree for a release
   branch based on current `main` and cherry-pick only the reviewed plugin
-  commits. The release PR targets `main`; its diff may contain only `plugins/`
-  and directly related plugin-release instructions in this file. Verify the
-  complete diff against current `main`, run all required checks and reviews
-  on that exact candidate, and use the normal PR gates. Do not include router
-  code, `packaging/VERSION`, router tags, or release-workflow changes. Reconcile
+  commits. The release PR targets `main`; its diff may contain only `plugins/`,
+  directly related plugin verification tests, and directly related
+  plugin-release instructions in this file. Verify the complete diff against
+  current `main`, run all required checks and reviews on that exact candidate,
+  and use the normal PR gates. Do not include router code, `packaging/VERSION`,
+  router tags, or release-workflow changes. Reconcile
   the release into `develop` afterwards without discarding either side.
