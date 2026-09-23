@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fix combined Codex model discovery rejecting valid OpenAI visibility and
+  upgrade metadata. Subscription models still come from the server and appear
+  alongside approved third-party models; no static catalogue override is needed.
+
 ## 0.6.118
 
 - The Anthropic picker now uses `anthropic/claude-opus-5.5` in place of

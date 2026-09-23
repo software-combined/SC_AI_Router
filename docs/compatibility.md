@@ -2084,6 +2084,37 @@ using the real subscription route. Each made one synthetic tool round trip at
 | `gpt-6-sol` | passed | `gpt-6-sol` | 1 |
 | `gpt-6-luna` | passed | `gpt-6-luna` | 1 |
 
+## Combined discovery regression, 2026-09-23
+
+The desktop-bundled `codex-cli 0.155.0-alpha.16` returned
+26 selectable models through the isolated corrected router: 5 subscription
+models from the live OpenAI catalogue and 21 third-party rows. These included
+`gpt-6-sol`, `gpt-6-luna` and `deepseek/deepseek-v4.1-flash`. The uncorrected
+router returned only the client's 5 built-in models after discovery failed.
+The validator had rejected native `hide` visibility and object-valued upgrade
+metadata. The correction preserves those fields and the live discovery path.
+
+Reproduce with `python3.14 tools/probe_model_discovery.py --codex <desktop-codex>
+--expect gpt-6-sol --expect gpt-6-luna --expect deepseek/deepseek-v4.1-flash`.
+The probe starts an isolated candidate and checks the client's `model/list`;
+`--installed` checks the configured service. It makes no inference calls.
+This proves the desktop binary accepts the combined list; an existing desktop
+window's repaint remains a separate observation.
+
+Live tool continuation also passed on desktop `26.917.51856` (build `10492`,
+bundled CLI above): `deepseek/deepseek-v4.1-flash` through OpenRouter and
+`gpt-6-luna` through ChatGPT, both at `low`, each using two upstream requests
+and reporting the requested served identity. Claude Code `2.1.223` passed
+the synthetic file-read round trip on DeepSeek in two upstream requests;
+`low` was requested, but served identity and effort were not exposed.
+After sign-in, Claude's subscription `sonnet` alias also passed the file-read
+round trip in two upstream requests. Served identity and effort were not
+exposed. The isolated harness capped each leg at four upstream requests and
+128 KiB input per request, raised to 512 KiB for Claude's subscription tool
+definitions, with 2,048 output tokens for external and Anthropic calls.
+The external Claude leg used the probe's documented synthetic bearer;
+the subscription leg retained the client's own subscription sign-in.
+
 ## Native subscription discovery, 2026-09-23
 
 Codex `0.155.0-alpha.16` requests
