@@ -135,7 +135,7 @@ Picker labels read `<Vendor>: <Model> <Version?>` (e.g. `Z.ai: GLM 5.3 Flash`).
 `provider_defs.label_for`); the
 prefix always equals the row's `vendor` field, with one redundant leading vendor
 word dropped (`DeepSeek: DeepSeek V4 ...` becomes `DeepSeek: V4 ...`). The
-roster pins exact upstream ids (`anthropic/claude-opus-5`,
+roster pins exact upstream ids (`anthropic/claude-opus-5.5`,
 `google/gemini-3.8-flash`), so a new version is a registry edit: add the new
 pinned row and retire the superseded slug via `RETIRED_SLUGS`. Pinned rows keep
 any version/snapshot token verbatim. A tilde alias row is only added when the

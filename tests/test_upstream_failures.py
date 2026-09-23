@@ -451,7 +451,7 @@ class RefusalCacheTests(unittest.TestCase):
         body = json.dumps({'model': 'm', 'messages': [{'role': 'user', 'content': 'hi'}]}).encode()
         prepared = Prepared('openrouter.ai', '/v1/messages', {}, body, {}, 'openrouter')
         metrics = {'provider': 'openrouter', 'protocol': 'messages',
-                   'model': 'anthropic/claude-opus-5', 'path': '/v1/messages'}
+                   'model': 'anthropic/claude-opus-5.5', 'path': '/v1/messages'}
         with mock.patch.object(relay.http.client, 'HTTPSConnection', FakeConn):
             for _ in range(2):
                 relay.relay(handler, provider, prepared, metrics, 0.0,
