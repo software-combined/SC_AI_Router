@@ -33,6 +33,18 @@ EFFORTS = ('low', 'medium', 'high', 'xhigh', 'max')
 # nothing that carries a login or token.
 PASS_THROUGH = ('PATH', 'SHELL', 'USER', 'LOGNAME', 'LANG',
                 'SYSTEMROOT', 'USERPROFILE', 'COMSPEC', 'PATHEXT')
+# The worker runs in its own session, so Ctrl-C, or a parent's SIGTERM or
+# SIGHUP, reaches only the runner, which must stop the worker before it exits.
+STOP_SIGNALS = [getattr(signal, name) for name in ('SIGINT', 'SIGTERM', 'SIGHUP')
+                if hasattr(signal, name)]  # Windows has no SIGHUP
+
+
+class Interrupted(Exception):
+    """The runner was told to stop while its worker ran."""
+
+
+def interrupted(signum, _frame):
+    raise Interrupted('interrupted by ' + signal.Signals(signum).name)
 
 
 def router():
@@ -88,16 +100,24 @@ def worker_env(base, model, scratch):
 
 
 def run_worker(cmd, brief, cwd, env, timeout):
-    """Run to completion, or stop the worker and its shells at the deadline."""
+    """Run to completion, or stop the worker and its shells at the deadline or
+    when the runner is interrupted, returning why it stopped (None if it finished)."""
     posix = os.name == 'posix'
     proc = subprocess.Popen(cmd, cwd=cwd, env=env, start_new_session=posix,
                             encoding='utf-8', errors='replace',
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE)
+    previous = {sig: signal.getsignal(sig) for sig in STOP_SIGNALS}
     try:
+        for sig, handler in previous.items():
+            if handler is not signal.SIG_IGN:  # nohup and background jobs keep ignoring it
+                signal.signal(sig, interrupted)
         out, err = proc.communicate(brief, timeout=timeout)
-        return out, err, False
-    except subprocess.TimeoutExpired:
+        return out, err, None
+    except (subprocess.TimeoutExpired, Interrupted) as exc:
+        for sig in STOP_SIGNALS:  # a second signal must not cut the stop short
+            signal.signal(sig, signal.SIG_IGN)
+        stopped = str(exc) if isinstance(exc, Interrupted) else 'timed out after %ss' % timeout
         # Claude Code runs each shell command in its own process group, so a
         # group kill misses them; SIGTERM lets the client stop them first.
         # ponytail: on Windows terminate() is a hard stop and shells can outlive it.
@@ -110,7 +130,10 @@ def run_worker(cmd, brief, cwd, env, timeout):
             else:
                 proc.kill()
             out, err = proc.communicate()
-        return out, err, True
+        return out, err, stopped
+    finally:
+        for sig, handler in previous.items():
+            signal.signal(sig, handler)
 
 
 def summarise(stream):
@@ -202,8 +225,8 @@ def main(argv=None):
                '--mcp-config', str(scratch / 'mcp.json'), '--setting-sources', 'project',
                '--settings', json.dumps(excludes),
                '--no-session-persistence', '--output-format', 'stream-json', '--verbose']
-        out, err, timed_out = run_worker(cmd, text, args.cwd,
-                                         worker_env(base, model, scratch), args.timeout)
+        out, err, stopped = run_worker(cmd, text, args.cwd,
+                                       worker_env(base, model, scratch), args.timeout)
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
     out, err = out.replace(token, '<router-token>'), err.replace(token, '<router-token>')
@@ -213,19 +236,25 @@ def main(argv=None):
     transcript.write_text(out, encoding='utf-8')
     transcript.chmod(0o600)
     result = summarise(out)
-    ok = result.pop('finished') and not timed_out
-    if timed_out:
-        result['error'] = 'timed out after %ss' % args.timeout
+    ok = result.pop('finished') and not stopped
+    if stopped:
+        result['error'] = stopped
     elif not ok and not result['error']:
         result['error'] = err.strip()[-500:] or 'the worker returned no result'
     # Claude Code prices unknown models as Claude, so its cost field is omitted.
-    return report({'ok': ok, 'model': args.model, 'effort': args.effort, **result,
+    code = report({'ok': ok, 'model': args.model, 'effort': args.effort, **result,
                    'seconds': round(time.time() - started, 1),
                    'transcript': str(transcript)})
+    if stopped == 'interrupted by SIGINT' and os.name == 'posix':
+        # End by SIGINT, as an unhandled Ctrl-C does, or a shell loop of
+        # workers would read exit 1 as a failure and start the next one.
+        signal.signal(signal.SIGINT, signal.SIG_DFL)
+        signal.raise_signal(signal.SIGINT)
+    return code
 
 
 def report(payload):
-    print(json.dumps(payload, indent=2))
+    print(json.dumps(payload, indent=2), flush=True)  # before any exit by signal
     return 0 if payload['ok'] else 1
 
 
