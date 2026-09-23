@@ -39,10 +39,10 @@ real router home.
 - Commit subjects use `<type>: <short summary>` with type `feat`, `fix`,
   `refactor`, `test`, `chore` or `docs`.
 - Every user-visible change updates `CHANGELOG.md` and `packaging/VERSION`
-  (semver). Maintainers cut releases with a short `vX.XX` tag. The short tag
-  splits the last number in `packaging/VERSION` after its hundreds digit, so
-  `0.6.113` is tagged `v1.13`. Add `-beta`, `-express`, or `-beta-express`
-  when the release needs that channel or urgency marker.
+  (semver). Maintainers cut releases with the full `v<VERSION>` tag matching
+  `packaging/VERSION`, so `0.6.116` is tagged `v0.6.116`. Add `-beta`,
+  `-express`, or `-beta-express` when the release needs that channel or
+  urgency marker.
 - Keep the source limits: modules 250 lines soft and 400 hard, entrypoints
   and tools 400/700, tests 300/500. `tools/check_source_limits.py` reports
   the numbers.
