@@ -1,10 +1,11 @@
 """Standalone app-injected tool outputs become matched tool pairs."""
+import json
 import unittest
 from ai_router import tool_aliases
 from ai_router.errors import PreparationError
 from ai_router.standalone_outputs import (
     DELIVERED_APP_MESSAGE, DELIVERED_MESSAGE, DELIVERED_NAMES,
-    materialize_outputs)
+    OPAQUE_REPLY_NOTE, materialize_outputs)
 
 ENVELOPE = ('<codex_delegation>\n'
             '  <source_thread_id>01a08e3a-0e63-7382-9cf7-bc034d96c726</source_thread_id>\n'
@@ -15,6 +16,15 @@ ENVELOPE = ('<codex_delegation>\n'
 def delegation(**extra):
     item = {'type': 'function_call_output', 'name': 'create_thread',
             'namespace': 'codex_app', 'output': ENVELOPE}
+    item.update(extra)
+    return item
+
+
+def inbound_mixed(**extra):
+    item = {'type': 'agent_message', 'author': '/root/router_adversarial',
+            'recipient': '/root',
+            'content': [{'type': 'input_text', 'text': 'visible result'},
+                        {'type': 'encrypted_content', 'encrypted_content': 'CIPHERTEXT'}]}
     item.update(extra)
     return item
 
@@ -121,6 +131,19 @@ class MaterializeTests(unittest.TestCase):
         self.assertIs(twice, once)
         self.assertEqual(len(twice), 2)
         self.assertEqual(twice[0]['call_id'], twice[1]['call_id'])
+
+    def test_inbound_mixed_reply_becomes_incomplete_delivered_message(self):
+        out = materialize_outputs([inbound_mixed(id='agent_reply')])
+        self.assertEqual([item['type'] for item in out],
+                         ['function_call', 'function_call_output'])
+        self.assertEqual(out[0]['name'], DELIVERED_MESSAGE)
+        self.assertEqual(out[0]['call_id'], 'call_agent_reply')
+        self.assertIn('/root/router_adversarial to /root', pair_text(out))
+        self.assertIn('visible result', pair_text(out))
+        self.assertIn(OPAQUE_REPLY_NOTE, pair_text(out))
+        self.assertNotIn('CIPHERTEXT', json.dumps(out))
+        self.assertNotIn('encrypted_content', json.dumps(out))
+        self.assertIs(materialize_outputs(out), out)
 
     def test_text_fields_and_content_blocks_read_verbatim(self):
         for field in ('result', 'content', 'text', 'data'):

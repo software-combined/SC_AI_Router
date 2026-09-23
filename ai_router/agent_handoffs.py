@@ -38,13 +38,7 @@ def _arguments(item):
 
 
 def _spawn_model(spawns, target):
-    """Resolve a followup/send target to its spawn model, or None.
-
-    Targets are child paths (e.g. '/root/synth_agent') while spawns record
-    bare task names ('synth_agent'). Match exact names first, then a unique
-    path suffix; ambiguous suffixes resolve to None so native handoffs keep
-    current behavior and the downstream guards stay the backstop. Pure.
-    """
+    """Resolve a child path to one spawn model; ambiguous targets return None."""
     if not isinstance(target, str) or not target:
         return None
     if target in spawns:
@@ -57,15 +51,7 @@ def _spawn_model(spawns, target):
 
 
 def spawn_models(items):
-    """Map this thread's spawn task names to their requested models.
-
-    Read from the request's own input history; keeps no state. Both alias
-    and native spawns are recorded: what matters for steering is where the
-    child runs, not which namespace created it. An encrypted handoff to a
-    child whose spawn names an external-provider model cannot arrive
-    readably, no
-    matter which tool created the child. Pure.
-    """
+    """Map spawn task names in request history to their requested models."""
     models = {}
     if not isinstance(items, list):
         return models
@@ -259,18 +245,9 @@ def restore_response(response, names):
 
 
 def steer_plaintext(item, names):
-    """Reject an unreadable handoff through Codex's native validation path.
-
-    Fires only when the emitted native call cannot reach its child readably:
-    an encrypted spawn_agent naming an external-provider model, or an encrypted
-    followup_task/send_message targeting a child this thread spawned onto an
-    external model. Everything else returns untouched, so native encrypted
-    handoffs and unknown targets keep current behavior and the downstream
-    guards remain the backstop. A JSON string cannot deserialize as any of the
-    three native argument objects: Codex returns a real tool error and requests
-    another inference. A response-only tool output silently ends its turn.
-    The diagnostic contains no assignment, ciphertext or target. Pure.
-    """
+    """Steer only unreadable external handoffs through native validation.
+    Native encrypted handoffs and unknown targets remain untouched. The
+    diagnostic contains no assignment, ciphertext or target."""
     if item.get('type') != 'function_call':
         return item
     if item.get('namespace') != NATIVE_NAMESPACE or item.get('name') not in HANDOFF_TOOLS:
@@ -329,6 +306,29 @@ def _readable_block(block):
     """A plaintext input_text block with no encrypted sidecar."""
     return (isinstance(block, dict) and block.get('type') == 'input_text'
             and 'encrypted_content' not in block and isinstance(block.get('text'), str))
+
+def _encrypted_block(block):
+    return isinstance(block, dict) and ('encrypted_content' in block
+                                        or block.get('type') == 'encrypted_content')
+
+
+def inbound_agent_message(item):
+    """True only for a strict child-to-parent message path."""
+    author, recipient = item.get('author'), item.get('recipient')
+    if not isinstance(author, str) or not isinstance(recipient, str): return False
+    child = [part for part in author.split('/') if part]
+    parent = [part for part in recipient.split('/') if part]
+    return bool(parent) and len(child) > len(parent) and child[:len(parent)] == parent
+
+
+def recoverable_agent_message(item):
+    """Readable blocks of an inbound reply with an encrypted sidecar, else None."""
+    if not inbound_agent_message(item) or 'encrypted_content' in item: return None
+    content = item.get('content')
+    if not isinstance(content, list) or not content: return None
+    readable = [block for block in content if _readable_block(block)]
+    encrypted = [block for block in content if _encrypted_block(block)]
+    return readable if readable and encrypted and len(readable) + len(encrypted) == len(content) else None
 
 
 def plaintext_agent_message(item):
