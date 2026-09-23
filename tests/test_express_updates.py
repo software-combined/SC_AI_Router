@@ -204,7 +204,7 @@ class ExpressTag(unittest.TestCase):
         base = '0.6.123'
         for suffix, expected in (('', ('stable', False)), ('-beta', ('beta', False)),
                                   ('-express', ('stable', True)), ('-beta-express', ('beta', True))):
-            self.assertEqual(release_mod.release_tag('v1.23' + suffix, base), expected)
-        for tag in ('Express', 'v1.24-express', 'v1.23-express-beta', 'v1x23-express'):
+            self.assertEqual(release_mod.release_tag('v0.6.123' + suffix, base), expected)
+        for tag in ('Express', 'v0.6.124-express', 'v0.6.123-express-beta', 'v0x6x123-express'):
             with self.assertRaises(SystemExit):
                 release_mod.release_tag(tag, base)

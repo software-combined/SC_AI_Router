@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.6.116
+
+- An `invalid_encrypted_content` retry that finds no removable reasoning blob
+  now logs structural repair diagnostics, making `outcome=unchanged`
+  distinguishable without recording request content or encrypted values.
+- Release tags now use the full semantic form `v<VERSION>`, matching
+  `packaging/VERSION` exactly. Optional `-beta` and `-express` suffixes remain.
+
 ## 0.6.115
 
 - A child-to-parent `agent_message` carrying readable text and an encrypted
