@@ -299,25 +299,21 @@ new permission.
 
 When a scheduled update lands a version that adds models for the machine's
 policy scope, the updater asks the running router over loopback (the 3.9
-updater never imports the runtime) and offers a Codex restart: a desktop
-notification and the native restart dialog each name up to three of the new
-models (macOS always; Linux when `notify-send` is installed; Windows logs
-the notification only) and the approval page opens in the browser on macOS
-and Linux. All three name a model the way the picker does
-(`<Vendor>: <Model>`, without the `· OpenRouter` route suffix), and a dialog
-that cannot reach the running router keeps its version-only sentence, so a
-stopped service never delays an update. The page is reachable only
-through its single-use link, which carries the per-install path token plus
-a 48 h nonce; both Restart Codex and Later acknowledge, and only the
-Restart click quits and reopens Codex, on macOS. The offer is skipped on
-installs whose state records no Codex attachment (`--clients claude`,
-`--client none`; a `clients` value recorded by an earlier run can lag the
-current attachment) and whenever `ROUTER_NO_NOTICE=1` silences the update
-notice. The first run
-seeds the snapshot without announcing the catalogue, so the first landing
-after this feature ships only seeds it and later landings announce;
-removals and version-only updates stay silent, and an unverified or
-out-of-policy row is never announced.
+updater never imports the runtime) and shows one native restart dialog. The
+dialog names up to three new models the way the picker does
+(`<Vendor>: <Model>`, without the `· OpenRouter` route suffix). No browser
+page or separate desktop notification opens. A dialog that cannot reach the
+running router keeps its version-only sentence, so a stopped service never
+delays an update. `Later` leaves the client running; `Quit and reopen` quits
+and reopens Codex on macOS. The offer is skipped on installs whose state
+records no Codex attachment (`--clients claude`, `--client none`; a `clients`
+value recorded by an earlier run can lag the current attachment) and whenever
+`ROUTER_NO_NOTICE=1` silences the update notice. If no native dialog tool is
+available, the notice stays pending for a later GUI run. The first run seeds
+the snapshot without announcing the catalogue, so the first landing after
+this feature ships only seeds it and later landings announce; removals and
+version-only updates stay silent, and an unverified or out-of-policy row is
+never announced.
 
 ## How to test first
 

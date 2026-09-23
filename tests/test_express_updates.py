@@ -67,7 +67,8 @@ class ExpressUpdates(unittest.TestCase):
             with contextlib.redirect_stdout(io.StringIO()):
                 return install_mod.do_update(args, _read_feed=read, _fetch=fetch,
                                              _sleep=self.sleeps.append,
-                                             _announce=announce or (lambda s: None))
+                                             _announce=announce or
+                                             (lambda _home, _state: None))
         finally:
             updater_mod._FEED_VERIFY_KEY = old_key
 
@@ -76,11 +77,15 @@ class ExpressUpdates(unittest.TestCase):
         # version change, so the offer rides an ordinary check. Express stays
         # quiet: it runs every minute and would repeat the notification.
         offered = []
+
+        def announce(_home, state):
+            offered.append(state)
+
         self.assertEqual(self.run_update(express=False, status=304,
-                                         announce=offered.append), 0)
+                                         announce=announce), 0)
         self.assertEqual([state['port'] for state in offered], [1])
         self.assertEqual(self.run_update(express=True, status=304,
-                                         announce=offered.append), 0)
+                                         announce=announce), 0)
         self.assertEqual(len(offered), 1)
 
     def test_ordinary_metadata_does_not_consume_the_regular_update(self):

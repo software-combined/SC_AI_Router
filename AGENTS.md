@@ -60,8 +60,9 @@ window, and anything added later) follows one style:
   reopen Codex, and never offer a restart the machine cannot perform;
 - at most two actions, and the safe one is always available ("Later" or
   "Cancel" never disappears);
-- best-effort: a missing dialog tool falls back to the loopback page and no
-  popup ever blocks or fails an install.
+- dialog-only: a missing dialog tool leaves the notice pending and never
+  opens a browser or sends a separate notification; no popup ever blocks or
+  fails an install.
 
 `tests/test_popup_style.py` pins the shared title, icon asset and vocabulary
 across the platforms, so a new dialog cannot drift from this style.
