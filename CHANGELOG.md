@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.6.115
+
+- A child-to-parent `agent_message` carrying readable text and an encrypted
+  sidecar is now delivered to an external model as a `delivered_message` tool
+  result. The router forwards the readable text, withholds the encrypted block
+  and marks the result incomplete so the recipient can request a plain-text
+  resend. Opaque assignments, self/peer messages, malformed messages and
+  messages without readable text remain fail-closed.
+
 ## 0.6.114
 
 - A subscription Responses request rejected with `invalid_encrypted_content`

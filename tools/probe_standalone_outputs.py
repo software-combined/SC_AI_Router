@@ -20,6 +20,8 @@ from ai_router import providers
 
 MODEL = 'deepseek/deepseek-v4.1-flash'
 MARKER = 'SYNTH_STANDALONE_MARKER_719'
+OPAQUE_MARKER = 'SYNTH_OPAQUE_REPLY_MARKER_719'
+CIPHER_MARKER = 'SYNTH_WITHHELD_CIPHER_719'
 STATE_PATH = Path.home() / '.codex/mixed-model-router/mixed-router-state.json'
 
 
@@ -27,6 +29,12 @@ def captured_item():
     return {'type': 'function_call_output', 'name': 'create_thread',
             'namespace': 'codex_app',
             'output': '<codex_delegation>' + MARKER + '</codex_delegation>'}
+
+
+def captured_agent_message():
+    return {'type': 'agent_message', 'author': '/root/probe_child', 'recipient': '/root',
+            'content': [{'type': 'input_text', 'text': OPAQUE_MARKER},
+                        {'type': 'encrypted_content', 'encrypted_content': CIPHER_MARKER}]}
 
 
 class _OfflineKey:
@@ -38,15 +46,19 @@ def prepare_offline():
     provider = providers.select(MODEL, '/responses', [])
     assert type(provider).__name__ == 'ExternalResponsesProvider', 'wrong provider'
     prepared = provider.prepare(
-        MODEL, '/responses', {'model': MODEL, 'input': [captured_item()]},
+        MODEL, '/responses',
+        {'model': MODEL, 'input': [captured_item(), captured_agent_message()]},
         b'raw', {}, _OfflineKey())
     data = json.loads(prepared.body)['input']
-    assert len(data) == 2, 'standalone item dropped'
-    call, result = data
-    assert call.get('type') == 'function_call', 'no synthesized call'
-    assert result.get('type') == 'function_call_output', 'no output'
-    assert call.get('call_id') == result.get('call_id'), 'unmatched pair'
-    assert MARKER in result.get('output', ''), 'marker missing'
+    assert len(data) == 4, 'standalone item dropped'
+    for call, result in (data[:2], data[2:]):
+        assert call.get('type') == 'function_call', 'no synthesized call'
+        assert result.get('type') == 'function_call_output', 'no output'
+        assert call.get('call_id') == result.get('call_id'), 'unmatched pair'
+    assert MARKER in data[1].get('output', ''), 'delegation marker missing'
+    recovered = data[3].get('output', '')
+    assert OPAQUE_MARKER in recovered, 'readable reply marker missing'
+    assert CIPHER_MARKER not in json.dumps(data), 'ciphertext leaked'
 
 
 def run_live():
@@ -55,7 +67,7 @@ def run_live():
            + '/backend-api/codex/responses')
     body = {'model': MODEL, 'input': [
         {'type': 'message', 'role': 'user', 'content': 'Reply exactly ' + MARKER},
-        captured_item()]}
+        captured_item(), captured_agent_message()]}
     request = urllib.request.Request(
         url, data=json.dumps(body).encode(),
         headers={'Content-Type': 'application/json'}, method='POST')
