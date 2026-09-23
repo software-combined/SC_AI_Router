@@ -12,6 +12,8 @@ import io
 import json
 import os
 import re
+import signal
+import subprocess
 import sys
 import tempfile
 import threading
@@ -41,6 +43,37 @@ print(json.dumps({'type': 'assistant', 'message': {'model': model, 'content': [
 print(json.dumps({'type': 'result', 'result': 'env said ' + seen + ' settings ' + settings,
                   'num_turns': 2, 'is_error': False,
                   'usage': {'input_tokens': 3, 'output_tokens': 4}}))
+'''
+
+# A worker still busy when its runner is interrupted. Its SIGTERM handler
+# leaves a marker, so the test can tell a stopped worker from an orphaned one.
+SLOW_CLAUDE = '''#!%s
+import json, signal, sys, time
+def stop(*_):
+    open('stopped', 'w').close()
+    sys.exit()
+signal.signal(signal.SIGTERM, stop)
+sys.stdin.read()  # the brief has arrived, so the runner's handlers are in place
+model = sys.argv[sys.argv.index('--model') + 1]
+print(json.dumps({'type': 'assistant', 'message': {'model': model, 'content': []}}), flush=True)
+open('ready', 'w').close()
+time.sleep(30)  # an orphan ends on its own
+'''
+
+# The runner as a process of its own, on a fake router, so a signal sent to it
+# can never reach the test process.
+DRIVER = '''
+import importlib.util, signal, sys
+from pathlib import Path
+for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+    signal.signal(sig, signal.SIG_DFL)  # as a terminal job, even if the suite runs under nohup
+spec = importlib.util.spec_from_file_location('router_worker', sys.argv[1])
+worker = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(worker)
+worker.RUNS = Path(sys.argv[2])
+worker.router = lambda: ('http://127.0.0.1:9/fake-token/', 'fake-token')
+worker.offered = lambda base: [{'id': 'z-ai/glm-5.3-flash'}]
+sys.exit(worker.main(sys.argv[3:]))
 '''
 
 
@@ -131,16 +164,50 @@ class RouterWorkersSkillTest(unittest.TestCase):
     def test_brief_and_output_round_trip_as_utf8_on_every_platform(self):
         brief = 'Fix → ❌ \U0001f4dd “quotes” 中文'
         echo = 'import sys; sys.stdout.buffer.write(sys.stdin.buffer.read())'
-        out, _, timed_out = worker.run_worker(
+        out, _, stopped = worker.run_worker(
             [sys.executable, '-c', echo], brief, ROOT, dict(os.environ), 30)
-        self.assertEqual((out, timed_out), (brief, False))
+        self.assertEqual((out, stopped), (brief, None))
 
     def test_timeout_stops_the_worker_instead_of_waiting(self):
         started = time.monotonic()
-        _, _, timed_out = worker.run_worker(
+        handler = signal.getsignal(signal.SIGINT)
+        _, _, stopped = worker.run_worker(
             [sys.executable, '-c', 'import time; time.sleep(30)'], '', ROOT, dict(os.environ), 1)
-        self.assertTrue(timed_out)
+        self.assertEqual(stopped, 'timed out after 1s')
         self.assertLess(time.monotonic() - started, 15)
+        self.assertIs(signal.getsignal(signal.SIGINT), handler)  # Ctrl-C works again
+
+    @unittest.skipIf(os.name == 'nt', 'the fake client is a shebang script')
+    def test_interrupted_runner_stops_its_worker_and_still_reports(self):
+        # The worker has its own session, so Ctrl-C or a parent's SIGTERM or
+        # SIGHUP reaches only the runner, which must not exit and orphan it.
+        for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+            with self.subTest(signal=sig.name), tempfile.TemporaryDirectory() as temporary:
+                folder = Path(temporary)
+                claude = folder / 'claude'
+                claude.write_text(SLOW_CLAUDE % sys.executable)
+                claude.chmod(0o755)
+                runner = subprocess.Popen(
+                    [sys.executable, '-c', DRIVER, str(SKILL / 'scripts/router_worker.py'),
+                     temporary, '--model', 'z-ai/glm-5.3-flash', '--effort', 'max',
+                     '--task', 'brief', '--cwd', temporary],
+                    env=dict(os.environ, CLAUDE_CODE_EXECPATH=str(claude)),
+                    stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+                self.addCleanup(runner.kill)
+                deadline = time.monotonic() + 20
+                while not (folder / 'ready').exists() and time.monotonic() < deadline:
+                    time.sleep(0.05)
+                runner.send_signal(sig)
+                out, _ = runner.communicate(timeout=30)
+                self.assertTrue((folder / 'stopped').exists(), 'the worker outlived the runner')
+                result = json.loads(out)
+                # After Ctrl-C the runner ends by SIGINT, so a shell loop stops too.
+                code = -signal.SIGINT if sig == signal.SIGINT else 1
+                self.assertEqual((runner.returncode, result['ok'], result['error']),
+                                 (code, False, 'interrupted by ' + sig.name))
+                # What the worker did before the stop is kept.
+                self.assertEqual(result['served'], ['z-ai/glm-5.3-flash'])
+                self.assertTrue(Path(result['transcript']).is_file())
 
     @unittest.skipIf(os.name == 'nt', 'the fake client is a shebang script')
     def test_run_resolves_the_model_and_never_prints_the_router_token(self):
