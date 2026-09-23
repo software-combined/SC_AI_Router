@@ -36,29 +36,67 @@ def strip_annotations(body):
     return json.dumps(cut, separators=(',', ':')).encode('utf-8')
 
 
-def strip_reasoning_blobs(body, content_encoding=None):
-    """Remove OpenAI-owned reasoning blobs from `input`; None when unchanged.
+def _encrypted_field_count(item):
+    """How many `encrypted_content` fields one item carries, one level deep."""
+    count = 1 if 'encrypted_content' in item else 0
+    blocks = item.get('content')
+    if isinstance(blocks, list):
+        count += sum(1 for block in blocks
+                     if isinstance(block, dict) and 'encrypted_content' in block)
+    return count
 
-    `compaction.strip_reasoning_blobs` owns the field semantics: the blob goes,
-    and an item left without readable reasoning text goes with it. Only the
-    bounded retry reaches this, so a healthy subscription turn keeps the blob
-    that `subscription_history.normalize` deliberately preserves.
+
+def _scan(body, content_encoding=None):
+    """(payload, facts) for one wire body.
+
+    `facts` is structure and state only: the observed `Content-Encoding` value,
+    whether decoding and JSON parsing succeeded, whether `input` is a list, and
+    counts of items, reasoning items and `encrypted_content` fields. It never
+    carries item text, field values, blob bytes or any other content, so one
+    `annotation_retry` line can explain an `outcome=unchanged` without logging
+    the request.
     """
-    raw = body
     encoding = (content_encoding or '').strip().lower()
+    facts = {'encoding': encoding, 'decoded': False, 'parsed': False,
+             'input_is_list': False, 'items': 0, 'reasoning_items': 0,
+             'encrypted_fields': 0, 'removed': 0}
+    raw = body
     if encoding == 'zstd':
         try:
             with zstd.ZstdFile(io.BytesIO(body)) as stream:
                 raw = stream.read(ZSTD_DECODE_LIMIT + 1)
         except (OSError, EOFError, ValueError, zstd.ZstdError):
-            return None
+            return None, facts
         if len(raw) > ZSTD_DECODE_LIMIT:
-            return None
+            return None, facts
+        facts['decoded'] = True
     elif encoding not in ('', 'identity'):
-        return None
+        return None, facts
+    else:
+        facts['decoded'] = True
     payload = upstream.parse_payload(raw)
     if payload is None:
-        return None
+        return None, facts
+    facts['parsed'] = True
+    items = payload.get('input')
+    if not isinstance(items, list):
+        return payload, facts
+    facts['input_is_list'] = True
+    facts['items'] = len(items)
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        facts['encrypted_fields'] += _encrypted_field_count(item)
+        if item.get('type') == 'reasoning':
+            facts['reasoning_items'] += 1
+            # `compaction.strip_reasoning_blobs` removes the item-level key only,
+            # so nested content-block blobs are counted above but never removed.
+            facts['removed'] += 1 if 'encrypted_content' in item else 0
+    return payload, facts
+
+
+def _strip_reasoning_payload(payload):
+    """Strip the reasoning blobs from one parsed payload; None when unchanged."""
     items = payload.get('input')
     if not isinstance(items, list):
         return None
@@ -67,6 +105,18 @@ def strip_reasoning_blobs(body, content_encoding=None):
         return None
     return json.dumps({**payload, 'input': stripped},
                       separators=(',', ':')).encode('utf-8')
+
+
+def strip_reasoning_blobs(body, content_encoding=None):
+    """Remove OpenAI-owned reasoning blobs from `input`; None when unchanged.
+
+    `compaction.strip_reasoning_blobs` owns the field semantics: the blob goes,
+    and an item left without readable reasoning text goes with it. Only the
+    bounded retry reaches this, so a healthy subscription turn keeps the blob
+    that `subscription_history.normalize` deliberately preserves.
+    """
+    payload, _facts = _scan(body, content_encoding)
+    return None if payload is None else _strip_reasoning_payload(payload)
 
 
 def _copy_prepared(prepared, body):
@@ -118,8 +168,15 @@ def maybe_retry_unattributable(described, response, raw, metrics, provider,
     content_encoding = next(
         (value for key, value in prepared.headers.items()
          if key.lower() == 'content-encoding'), '')
-    stripped = (strip_reasoning_blobs(prepared.body, content_encoding)
-                if encrypted_blob else strip_annotations(prepared.body))
+    if encrypted_blob:
+        # One scan serves both the diagnostics and the repair, and only a
+        # rejected turn reaches it, so a healthy or unrelated turn is unchanged.
+        payload, facts = _scan(prepared.body, content_encoding)
+        fields.update(facts)
+        stripped = (None if payload is None
+                    else _strip_reasoning_payload(payload))
+    else:
+        stripped = strip_annotations(prepared.body)
     if stripped is None:
         log_event('annotation_retry', eligible=True, attempted=False,
                   outcome='unchanged', **fields)
