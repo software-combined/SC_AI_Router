@@ -58,14 +58,15 @@ Run anything longer than a quick lookup in the background, and start
 independent workers in parallel, a handful at most. `--tools` narrows the
 default `Bash,Read,Edit,Write,Grep,Glob`, for example to `Read,Grep,Glob` for
 a review. `--timeout` stops the worker after 900 seconds by default, giving it
-ten seconds to end its own shell commands first. On Windows the stop is
-immediate, so a shell command can outlive it.
+ten seconds to end its own shell commands first, and stopping the runner
+(Ctrl-C, or stopping its background task in Claude Code) does the same. On
+Windows the stop is immediate, so a shell command can outlive it.
 
 ## Read the result
 
 The runner prints one JSON object and exits non-zero when `ok` is false:
 
-- `ok`: the worker finished without an error or a timeout.
+- `ok`: the worker finished without an error, a timeout or an interruption.
 - `answer`: its final reply.
 - `served`: the model names the upstream reported. Record them beside the
   requested model; a mismatch invalidates the result.
@@ -96,6 +97,19 @@ because Claude Code would read `~/.claude/settings.json` as that folder's
 project settings and bring the caller's hooks and environment with it. Claude
 Code also runs each shell command in its own process group, which is why a
 timeout asks it to stop before forcing it.
+
+The worker runs in a session of its own, so Ctrl-C in a terminal, or SIGTERM
+or SIGHUP sent to the runner, never reaches it. The runner therefore catches
+those signals while the worker runs and stops it the same way as at a timeout.
+Only then does it remove the worker's temporary configuration and print the
+result, with `error` naming the signal. After Ctrl-C it then ends by SIGINT,
+as an unhandled Ctrl-C would, so a shell loop of workers stops instead of
+starting the next one. A signal the caller already ignores,
+such as SIGHUP under `nohup`, stays ignored. A forced kill (SIGKILL) cannot be
+caught, so a worker whose runner is killed that way keeps running with no
+deadline. On Windows, which is not yet verified, the worker shares the
+runner's console, so Ctrl-C reaches both of them. Windows has no SIGHUP, and a
+runner ended from outside cannot stop its worker there.
 
 The router lists Anthropic models by their bare slug and every other model as
 `claude/scg/` plus the slug's SHA-256, so an id is the same on every machine.
