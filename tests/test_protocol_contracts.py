@@ -35,7 +35,7 @@ class ProtocolContractTests(unittest.TestCase):
             protocols.owned_paths(),
             frozenset(providers_mod.NATIVE_SERVICE_PATHS)
             | claude_mod.CLAUDE_POST_PATHS
-            | {'/responses', '/responses/compact', '/v1/models'})
+            | {'/responses', '/responses/compact', '/models', '/v1/models'})
 
     def test_policy_names_are_the_definition_constants(self):
         # Plan 155 (F10): the table exports the protocol names, so a policy
@@ -128,12 +128,22 @@ class ProtocolContractTests(unittest.TestCase):
                          _messages(), {'Authorization': 'Bearer subscription-secret'})
         self.assertEqual(response.status, 503)
         self.assertEqual(response.getheader('Retry-After'), '7')
-        # An external route's transient 429 keeps the neutral wording.
         body = json.loads(response.read())
         self.assertEqual(body['error']['code'], 'UPSTREAM_RATE_LIMITED')
         self.assertEqual(body['error']['message'],
                          'The model is rate limited right now and the turn was '
                          'not served. Retry shortly.')
+
+    def test_native_subscription_history_keeps_encrypted_content(self):
+        recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
+        server = self._server(openai_models=['gpt-6-astra'])
+        response = _post(server.server_port, '/test-token/responses',
+                         {'model': 'gpt-6-astra',
+                          'input': [{'type': 'agent_message', 'author': '/root',
+                                     'encrypted_content': 'NATIVE-BLOB'}]},
+                         {'Authorization': 'Bearer subscription-secret'})
+        self.assertEqual(response.status, 200)
+        self.assertIn(b'NATIVE-BLOB', recorded[0][3])
 
     def test_messages_subscription_429_names_the_claude_subscription(self):
         # The subscription row's refusal names the model and the

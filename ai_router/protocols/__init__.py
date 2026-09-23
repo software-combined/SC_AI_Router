@@ -30,6 +30,8 @@ TABLE = (
     # second branch (Plan 155, F10).
     {'methods': (GET,), 'paths': frozenset({'/v1/models'}),
      'policy': messages.POLICY},
+    {'methods': (GET,), 'paths': frozenset({'/models'}),
+     'policy': responses.POLICY},
 )
 
 

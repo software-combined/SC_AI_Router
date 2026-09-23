@@ -30,7 +30,7 @@ class CodexBlockPathTests(unittest.TestCase):
         # path would leave Codex unable to parse its own config.
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'mixed-model-router'
-            block = codex_config.build_block(home, {'port': 1, 'token': 't'}, 'subscription')
+            block = codex_config.build_block(home, {'port': 1, 'token': 't'}, 'subscription', True)
             line = next(l for l in block.splitlines() if l.startswith('model_catalog_json'))
             self.assertNotIn('\\', line)
             self.assertIn(home.as_posix() + '/mixed-models.json', line)

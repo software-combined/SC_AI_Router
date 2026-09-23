@@ -24,8 +24,7 @@ from tests.harness import (
     test_state as _test_state,
 )
 
-HELPER = 'gpt-5.6-luna'
-HEADERS = {'x-codex-turn-metadata': json.dumps({'thread_source': 'thread_title'})}
+HELPER = 'gpt-5.6-luna'; HEADERS = {'x-codex-turn-metadata': json.dumps({'thread_source': 'thread_title'})}
 
 
 def _sequence(*responses):
@@ -61,9 +60,10 @@ class HelperTurnTests(unittest.TestCase):
                 self.assertFalse(subscription_fallback.helper_turn(headers))
 
     def test_twin_is_the_openrouter_row_only(self):
-        self.assertEqual(by_slug('openai/gpt-5.6-luna').provider, 'openrouter')
-        self.assertEqual(subscription_fallback.twin_slug(HELPER), 'openai/gpt-5.6-luna')
-        for absent in ('gpt-5.5', 'gpt-5.3-codex-spark', 'openai/gpt-5.6-luna', None):
+        self.assertEqual(by_slug('openai/gpt-6-luna').provider, 'openrouter')
+        self.assertEqual(subscription_fallback.twin_slug(HELPER), 'openai/gpt-6-luna')
+        self.assertEqual(subscription_fallback.twin_slug('gpt-6-luna'), 'openai/gpt-6-luna')
+        for absent in ('gpt-5.5', 'gpt-5.3-codex-spark', 'openai/gpt-6-luna', None):
             with self.subTest(model=absent):
                 self.assertIsNone(subscription_fallback.twin_slug(absent))
 
@@ -85,7 +85,7 @@ class HelperTurnTests(unittest.TestCase):
                         ('payload', {'model': 'gpt-5.5'}))
         # Plan 068: a provisioned portco list gates the redispatch too.
         allowed_twin = {'openai_helper_fallback': True,
-                        'allowed_models': ['openai/gpt-5.6-luna']}
+                        'allowed_models': ['openai/gpt-6-luna']}
         self.assertIsNotNone(subscription_fallback.plan(**dict(base, state=allowed_twin)))
         for policy in ({'openai_helper_fallback': True, 'allowed_models': []},
                        {'openai_helper_fallback': True, 'allowed_models': ['z-ai/glm-5.3']}):
@@ -103,7 +103,7 @@ class RefusedHelperTurnTests(unittest.TestCase):
     def _server(self, **overrides):
         credentials = overrides.pop('credentials', None)
         state = _test_state(_auth_file(self))
-        state['openai_models'] = [HELPER, 'gpt-5.5']
+        state['openai_models'] = ['gpt-6-luna', 'gpt-5.5']
         state.update(overrides)
         server = _start_server(state, credentials=credentials)
         self.addCleanup(server.shutdown)
@@ -116,7 +116,7 @@ class RefusedHelperTurnTests(unittest.TestCase):
 
     def _refusal(self):
         return _sequence((429, b'{}', []),
-                         (200, b'{"output": [], "model": "openai/gpt-5.6-luna"}',
+                         (200, b'{"output": [], "model": "openai/gpt-6-luna"}',
                           [('Content-Type', 'application/json')]))
 
     def _snapshot(self, models):
@@ -162,12 +162,12 @@ class RefusedHelperTurnTests(unittest.TestCase):
                 server = self._server(openai_helper_fallback=True)
                 response = self._turn(server, HEADERS, payload)
                 self.assertEqual(response.status, 200)
-                self.assertEqual(json.loads(response.read())['model'], 'openai/gpt-5.6-luna')
+                self.assertEqual(json.loads(response.read())['model'], 'openai/gpt-6-luna')
                 self.assertEqual([call[0] for call in recorded], ['chatgpt.com', 'openrouter.ai'])
                 _host, method, path, body, headers = recorded[1]
                 self.assertEqual((method, path), ('POST', '/api/v1/responses'))
                 sent = json.loads(body)
-                self.assertEqual(sent['model'], 'openai/gpt-5.6-luna')
+                self.assertEqual(sent['model'], 'openai/gpt-6-luna')
                 self.assertEqual([t['name'] for t in sent.get('tools', [])], tools)
                 self.assertEqual(headers['Authorization'], 'Bearer test-key')
                 self.assertEqual(server.inflight, 0)
@@ -219,7 +219,7 @@ class RefusedHelperTurnTests(unittest.TestCase):
         twin = [c for c in calls if c.get('helper_fallback')]
         self.assertEqual(len(twin), 1, calls)
         self.assertEqual(twin[0].get('protocol'), 'responses')
-        self.assertEqual(twin[0].get('model'), 'openai/gpt-5.6-luna')
+        self.assertEqual(twin[0].get('model'), 'openai/gpt-6-luna')
 
     def test_policy_excluded_twin_keeps_the_refusal(self):
         # Plan 068: the provisioned portco list gates the redispatch, so an
@@ -245,7 +245,7 @@ class RefusedHelperTurnTests(unittest.TestCase):
         self.assertEqual([call[0] for call in recorded], ['chatgpt.com'])
 
     def test_snapshot_included_twin_answers_the_helper_turn(self):
-        self._snapshot({'openai/gpt-5.6-luna'})
+        self._snapshot({'openai/gpt-6-luna'})
         recorded = install_fake(self, self._refusal())
         server = self._server(openai_helper_fallback=True)
         response = self._turn(server, HEADERS)
@@ -274,7 +274,7 @@ class RefusedHelperTurnTests(unittest.TestCase):
         recorded = install_fake(self, self._refusal())
         server = self._server(openai_helper_fallback=True)
         with mock.patch.dict('ai_router.capabilities.REASONING_LEVELS',
-                             {'openai/gpt-5.6-luna': ['low']}):
+                             {'openai/gpt-6-luna': ['low']}):
             with self.assertLogs('codex_router', level='INFO') as logs:
                 response = self._turn(server, HEADERS,
                                       payload={'reasoning': {'effort': 'max'}})

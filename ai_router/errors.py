@@ -92,17 +92,17 @@ def missing_model():
 
 def invalid_size(message):
     if message == 'Decoded request is too large':
-        return _error(400, 'BODY_TOO_LARGE', "This turn is larger than the router's "
-                      '16 MiB request limit; start a new thread, or trim large tool '
-                      'outputs and images before continuing.')
+        return _error(400, 'BODY_TOO_LARGE', "This turn is larger than the router's 16 MiB request limit; start a new thread, or trim large tool outputs and images before continuing.")
     return _error(400, 'INVALID_REQUEST_SIZE', 'Invalid request size')
 
 
 # Auth and catalog membership.
 def bearer_for_no_subscription_only():
-    return _error(401, 'BEARER_NO_SUBSCRIPTION_ONLY',
-                  'This app is signed in a way this router does not accept. '
-                  'Re-run the router installer to attach it again.')
+    return _error(401, 'BEARER_NO_SUBSCRIPTION_ONLY', 'This app is signed in a way this router does not accept. Re-run the router installer to attach it again.')
+
+
+def subscription_auth_rejected():
+    return _error(401, 'SUBSCRIPTION_AUTH_REJECTED', 'ChatGPT could not authorise the model list. Sign in again and retry.')
 
 
 class _UnknownModelError(RouterError):

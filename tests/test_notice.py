@@ -64,8 +64,8 @@ class RecordTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             home.mkdir()
-            self._catalogue(home, ['z-ai/glm-5.3', 'gpt-5.6-luna'])
-            self._baseline(home, ['gpt-5.6-luna', 'z-ai/glm-5.3'])
+            self._catalogue(home, ['z-ai/glm-5.3', 'gpt-6-luna'])
+            self._baseline(home, ['gpt-6-luna', 'z-ai/glm-5.3'])
             self.assertFalse(notice_mod.record(home, '1.0.0', '1.0.1'))
             self.assertFalse((home / 'update-notice.json').exists())
 
@@ -73,12 +73,12 @@ class RecordTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             home.mkdir()
-            self._baseline(home, ['gpt-5.6-luna'])
-            self._catalogue(home, ['gpt-5.6-luna', 'z-ai/glm-5.3'])
+            self._baseline(home, ['gpt-6-luna'])
+            self._catalogue(home, ['gpt-6-luna', 'z-ai/glm-5.3'])
             self.assertTrue(notice_mod.record(home, '1.0.0', '1.0.1'))
             self.assertEqual(json.loads(
                 (home / 'picker-baseline.json').read_text()),
-                ['gpt-5.6-luna', 'z-ai/glm-5.3'])
+                ['gpt-6-luna', 'z-ai/glm-5.3'])
 
     def test_a_failed_notice_write_leaves_the_addition_pending(self):
         # Rows are announced only once the notice is on disk: a write that
@@ -86,12 +86,12 @@ class RecordTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             home.mkdir()
-            self._baseline(home, ['gpt-5.6-luna'])
-            self._catalogue(home, ['gpt-5.6-luna', 'z-ai/glm-5.3'])
+            self._baseline(home, ['gpt-6-luna'])
+            self._catalogue(home, ['gpt-6-luna', 'z-ai/glm-5.3'])
             (home / 'update-notice.json').mkdir()
             self.assertFalse(notice_mod.record(home, '1.0.0', '1.0.1'))
             self.assertEqual(json.loads(
-                (home / 'picker-baseline.json').read_text()), ['gpt-5.6-luna'])
+                (home / 'picker-baseline.json').read_text()), ['gpt-6-luna'])
 
     def test_a_pending_notice_is_refreshed_even_without_a_new_row(self):
         # An unshown notice from an earlier release is still the reason to
@@ -99,8 +99,8 @@ class RecordTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             home.mkdir()
-            self._catalogue(home, ['gpt-5.6-luna'])
-            self._baseline(home, ['gpt-5.6-luna'])
+            self._catalogue(home, ['gpt-6-luna'])
+            self._baseline(home, ['gpt-6-luna'])
             (home / 'update-notice.json').write_text(
                 json.dumps({'version': '1.0.0', 'clients': 'codex'}))
             self.assertTrue(notice_mod.record(home, '1.0.0', '1.0.1'))
@@ -115,10 +115,10 @@ class RecordTests(unittest.TestCase):
             home = Path(tmp) / 'home'
             home.mkdir()
             (home / 'mixed-models.json').write_text('not json')
-            self._baseline(home, ['gpt-5.6-luna'])
+            self._baseline(home, ['gpt-6-luna'])
             self.assertTrue(notice_mod.record(home, '1.0.0', '1.0.1'))
             self.assertEqual(json.loads(
-                (home / 'picker-baseline.json').read_text()), ['gpt-5.6-luna'])
+                (home / 'picker-baseline.json').read_text()), ['gpt-6-luna'])
 
     def test_shown_version_is_not_restaged(self):
         with tempfile.TemporaryDirectory() as tmp:

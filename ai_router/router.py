@@ -7,13 +7,13 @@ import time
 from compression import zstd
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from . import (errors, ingress, local_services, model_prompt_page,
-               provider_defs, relay, setup, subscription_fallback, transport,
-               turn_budget)
+               provider_defs, relay, setup, subscription_discovery,
+               subscription_fallback, transport, turn_budget)
 from .credentials import Credentials
 from .protocols import select as select_protocol
 from .errors import InvalidSize, PreparationError
 from .image_items import has_images
-from .providers import is_native_service
+from .providers import is_native_service, reject_opaque_agent_items
 from .runtime import MAX_BODY, MAX_DECODE_FACTOR, ROUTER_HOME, log_event
 
 MAX_INFLIGHT = 32
@@ -139,7 +139,7 @@ class Handler(BaseHTTPRequestHandler):
         path, via_path = self.authorized_path()
         if path is None:
             return self.error(errors.forbidden())
-        path = path.split('?', 1)[0]
+        path, _, query = path.partition('?')
         if self.server.draining:
             return self.drain_reject()
         if path == '/shutdown':
@@ -212,7 +212,11 @@ class Handler(BaseHTTPRequestHandler):
             policy = select_protocol(self.command, path)
             if policy is None:
                 return self.error(errors.unsupported_route())
-            provider = policy.select_provider(model, path, self.server.state, mode)
+            provider = policy.select_provider(
+                model, path, self.server.state, mode,
+                openai_models=subscription_discovery.request_models(
+                    self.server, dict(self.headers), self.path.partition('?')[2]))
+            if provider.kind == provider_defs.EXTERNAL: reject_opaque_agent_items(payload.get('input'))
             if provider.kind == provider_defs.SUBSCRIPTION and not via_path:
                 return self.error(errors.bearer_for_no_subscription_only())
             compact_call = policy.compaction_call(provider, model, path, payload)

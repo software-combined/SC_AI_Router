@@ -9,6 +9,25 @@ from ai_router import provider_defs, strip_retry, transport
 from tools import probe_invalid_encrypted_content as probe
 
 
+def retry_events(body):
+    """The five log events one repaired request must produce, in order."""
+    return [
+        {'event': 'request_started', 'model': 'codex-auto-review',
+         'request_bytes': len(body)},
+        {'event': 'upstream_rejected', 'model': 'codex-auto-review',
+         'request_bytes': len(body), 'status': 400,
+         'code': 'invalid_encrypted_content'},
+        {'event': 'annotation_retry', 'model': 'codex-auto-review',
+         'request_bytes': len(body), 'repair': 'reasoning_blobs',
+         'outcome': 'started'},
+        {'event': 'annotation_retry', 'model': 'codex-auto-review',
+         'request_bytes': len(body), 'repair': 'reasoning_blobs',
+         'outcome': 'accepted', 'status': 200},
+        {'event': 'request_completed', 'model': 'codex-auto-review',
+         'request_bytes': len(body), 'status': 200},
+    ]
+
+
 class ProbeShapeTests(unittest.TestCase):
     def test_payload_is_small_and_bounded(self):
         payload = probe.synthetic_payload()
@@ -23,21 +42,7 @@ class ProbeShapeTests(unittest.TestCase):
         body = probe.request_body()
         self.assertEqual(json.loads(zstd.decompress(body))['metadata'],
                          {'probe_id': 'offline'})
-        events = [
-            {'event': 'request_started', 'model': 'codex-auto-review',
-             'request_bytes': len(body)},
-            {'event': 'upstream_rejected', 'model': 'codex-auto-review',
-             'request_bytes': len(body), 'status': 400,
-             'code': 'invalid_encrypted_content'},
-            {'event': 'annotation_retry', 'model': 'codex-auto-review',
-             'request_bytes': len(body), 'repair': 'reasoning_blobs',
-             'outcome': 'started'},
-            {'event': 'annotation_retry', 'model': 'codex-auto-review',
-             'request_bytes': len(body), 'repair': 'reasoning_blobs',
-             'outcome': 'accepted', 'status': 200},
-            {'event': 'request_completed', 'model': 'codex-auto-review',
-             'request_bytes': len(body), 'status': 200},
-        ]
+        events = retry_events(body)
         passed, labels, ambiguous = probe.repair_sequence(
             events, 'codex-auto-review', len(body))
         self.assertTrue(passed)
@@ -59,21 +64,7 @@ class ProbeShapeTests(unittest.TestCase):
 
     def test_sequence_polls_for_a_late_completion_event(self):
         body = probe.request_body()
-        events = [
-            {'event': 'request_started', 'model': 'codex-auto-review',
-             'request_bytes': len(body)},
-            {'event': 'upstream_rejected', 'model': 'codex-auto-review',
-             'request_bytes': len(body), 'status': 400,
-             'code': 'invalid_encrypted_content'},
-            {'event': 'annotation_retry', 'model': 'codex-auto-review',
-             'request_bytes': len(body), 'repair': 'reasoning_blobs',
-             'outcome': 'started'},
-            {'event': 'annotation_retry', 'model': 'codex-auto-review',
-             'request_bytes': len(body), 'repair': 'reasoning_blobs',
-             'outcome': 'accepted', 'status': 200},
-            {'event': 'request_completed', 'model': 'codex-auto-review',
-             'request_bytes': len(body), 'status': 200},
-        ]
+        events = retry_events(body)
         with mock.patch.object(probe, 'read_new_events',
                                side_effect=[events[:-1], events]), \
                 mock.patch.object(probe.time, 'sleep') as sleep:
