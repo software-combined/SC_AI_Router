@@ -15,10 +15,13 @@ same projection: a terminal assistant message is also rejected as prefill by
 Sonnet. Readable peer text stays tool-level data, never a user instruction.
 """
 from .compaction import OUTPUT_TYPES
-from .agent_handoffs import plaintext_agent_message
+from .agent_handoffs import plaintext_agent_message, recoverable_agent_message
 from .errors import PreparationError
 
 TEXT_KEYS = ('output', 'result', 'content', 'text', 'data')
+OPAQUE_REPLY_NOTE = ('Encrypted content was withheld from this external model. '
+                     'The readable text may be incomplete; request a plain-text '
+                     'resend before acting on it.')
 
 DELIVERED_MESSAGE = 'delivered_message'
 DELIVERED_APP_MESSAGE = 'delivered_app_message'
@@ -59,9 +62,15 @@ def _call_id(item, index):
 
 def _materialize(item, index):
     if item.get('type') == 'agent_message':
-        message = plaintext_agent_message(item)
-        item = {'id': item.get('id'), 'name': DELIVERED_MESSAGE,
-                'output': ''.join(block['text'] for block in message['content'])}
+        readable = recoverable_agent_message(item)
+        # Both paths render through the plaintext projection; a recovered
+        # reply drops its encrypted sidecar first.
+        message = plaintext_agent_message(
+            {**item, 'content': readable} if readable else item)
+        text = ''.join(block['text'] for block in message['content'])
+        if readable:
+            text += '\n' + OPAQUE_REPLY_NOTE
+        item = {'id': item.get('id'), 'name': DELIVERED_MESSAGE, 'output': text}
     text = _readable_text(item)
     if not text:
         raise PreparationError(
