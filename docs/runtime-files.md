@@ -48,7 +48,7 @@ are never copied between machines.
 `ai_router/subscription_base_instructions.txt`, `ai_router/agents.py`,
 `ai_router/model_instructions.py`,
 `ai_router/agents_general.txt`, `ai_router/agents_dev.txt`,
-`tools/probe_codex_runtime.py`, `tools/probe_context_budget.py`,
+`tools/probe_codex_runtime.py`, `tools/probe_model_discovery.py`, `tools/probe_context_budget.py`,
 `tools/probe_context_recovery.py`, `tools/probe_handoff_recovery.py`,
 `tools/probe_history_switch.py`, `tools/probe_media.py`,
 `tools/probe_standalone_outputs.py`, `tools/probe_agent_handoffs.py`,
