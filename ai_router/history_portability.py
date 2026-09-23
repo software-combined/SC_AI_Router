@@ -6,6 +6,9 @@ marker were produced under another model and get the portable treatment
 after it are the current model's and replay natively. A `portable` row
 rewrites the whole history. Never splits a tool run across the boundary.
 """
+import json
+
+
 def _block_text(content):
     if isinstance(content, str):
         return content
@@ -37,6 +40,41 @@ OUTPUT_TYPES = frozenset({'function_call_output', 'custom_tool_call_output',
 # pair keeps its names here because the portable pass may run on either side
 # of the adapter rewrite that turns it into a plain function call.
 TOOL_RUN_TYPES = CALL_TYPES | OUTPUT_TYPES | {'tool_search_call', 'tool_search_output'}
+
+
+def rewrite_custom_pairs(items, exposed_keys, wire_names):
+    """Keep custom call/output pairs symmetric on the external wire.
+
+    A pair whose tool this turn exposes converts to matched function-call
+    items; an undeclared pair stays matched custom items. One converted side
+    alone is the mixed shape strict providers refuse.
+    """
+    calls = {item.get('call_id'): (item.get('namespace'), item.get('name'))
+             for item in items
+             if isinstance(item, dict) and item.get('type') == 'custom_tool_call'
+             and isinstance(item.get('call_id'), str)}
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        kind = item.get('type')
+        if kind == 'custom_tool_call':
+            key = (item.get('namespace'), item.get('name'))
+            if key not in exposed_keys:
+                continue
+            item['type'] = 'function_call'
+            item['arguments'] = json.dumps({'input': item.pop('input')})
+        elif kind == 'custom_tool_call_output':
+            key = calls.get(item.get('call_id'),
+                            (item.get('namespace'), item.get('name')))
+            if key not in exposed_keys:
+                continue
+            item['type'] = 'function_call_output'
+        else:
+            continue
+        wire = wire_names.get(key)
+        if wire:
+            item.pop('namespace', None)
+            item['name'] = wire
 
 
 def _summary_text(item):

@@ -17,6 +17,7 @@ Sonnet. Readable peer text stays tool-level data, never a user instruction.
 from .compaction import OUTPUT_TYPES
 from .agent_handoffs import plaintext_agent_message, recoverable_agent_message
 from .errors import PreparationError
+from .history_portability import portable_history
 
 TEXT_KEYS = ('output', 'result', 'content', 'text', 'data')
 OPAQUE_REPLY_NOTE = ('Encrypted content was withheld from this external model. '
@@ -98,3 +99,41 @@ def materialize_outputs(items):
         else:
             out.append(item)
     return out
+
+
+def _subscription_standalone(item):
+    """An agent message that is not a native reply with an encrypted sidecar.
+
+    `_materialize` projects it only when it is fully readable, the shape an
+    external peer sends; any other shape raises and replays untouched. The
+    subscription backend reads native encrypted replies and app-delivered
+    outputs itself.
+    """
+    return (isinstance(item, dict) and item.get('type') == 'agent_message'
+            and recoverable_agent_message(item) is None)
+
+
+def portable_replay(payload, search_name):
+    """Apply the model-switch boundary, then project fully readable agent messages.
+
+    Only a thread that switched model changes: without the client's
+    `<model_switch>` marker the same payload returns, so the caller keeps the
+    client's encoded body. Unlike `materialize_outputs`, an item that cannot
+    be projected replays untouched rather than failing the turn.
+    """
+    items = payload.get('input')
+    if not isinstance(items, list):
+        return payload
+    replay = portable_history(items, search_name, 'native')
+    if replay is items:
+        return payload
+    projected = []
+    for index, item in enumerate(replay):
+        if _subscription_standalone(item):
+            try:
+                projected.extend(_materialize(item, index))
+                continue
+            except ValueError:
+                pass  # unprojectable: replay it untouched
+        projected.append(item)
+    return {**payload, 'input': projected}

@@ -7,7 +7,7 @@ import json
 import re
 from copy import deepcopy
 from .capabilities import has_recursive_refs
-from .history_portability import portable_history
+from .history_portability import portable_history, rewrite_custom_pairs
 from .discovered import recall
 from .registry import by_slug
 from . import agent_handoffs, sse, tool_aliases, tool_merge, transport, turn_budget
@@ -171,6 +171,10 @@ def prepare_tools(payload):
                     names.dropped.add(entry['name'])
         payload['tools'] = kept
     items = payload.get('input', []) if isinstance(payload.get('input'), list) else []
+    exposed_keys = {tool_merge.key_of(tool, namespace)
+                    for tool, namespace in tool_entries(payload.get('tools', []))}
+    exposed_keys.update(key for key, wire in wire_names.items() if (None, wire) in names)
+    rewrite_custom_pairs(items, exposed_keys, wire_names)
     # Newest listing per tool key wins; an earlier repeat gets the note below.
     latest_search, listings = tool_merge.newest_listings(items, wire_names)
     for item in items:
@@ -186,20 +190,6 @@ def prepare_tools(payload):
             if item is latest_search and entries:
                 found['how_to_use'] = SEARCH_NEXT
             item.update(type='function_call_output', output=json.dumps(found))
-        elif item.get('type') == 'custom_tool_call' and (
-                tool_key(item) in names or tool_key(item) in wire_names):
-            key = tool_key(item)
-            item['type'] = 'function_call'
-            item['arguments'] = json.dumps({'input': item.pop('input')})
-            if key in wire_names:
-                item.pop('namespace', None)
-                item['name'] = wire_names[key]
-        elif item.get('type') == 'custom_tool_call_output':
-            item['type'] = 'function_call_output'
-            wire = wire_names.get(tool_key(item))
-            if wire:
-                item.pop('namespace', None)
-                item['name'] = wire
         elif item.get('type') == 'function_call':
             wire = wire_names.get(tool_key(item))
             if wire:
