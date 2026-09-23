@@ -33,11 +33,6 @@ Parameters:
     Description: >-
       Repository IDs GitHub emits in an immutable OIDC subject (owner@id/repo@id),
       kept beside the classic form so either claim can assume the role.
-  NotificationEmail:
-    Type: String
-    Description: >-
-      Address that receives one email per bundle write, including a second
-      write of an existing key. No default (Plan 167): the deploy passes it.
   SigningSeedArn:
     Type: String
     Description: >-
@@ -190,9 +185,9 @@ Resources:
                   - s3:PutLifecycleConfiguration
                   - s3:PutBucketVersioning
                   - s3:PutObjectAcl
-                  # The publish email depends on the bucket's notification
+                  # Publication reporting depends on the bucket's notification
                   # configuration, so a later widening must not be able to
-                  # drop it or re-encrypt the bucket either.
+                  # drop it or re-encrypt the bucket.
                   - s3:PutBucketNotification
                   - s3:PutEncryptionConfiguration
                 Resource:
@@ -212,19 +207,16 @@ Resources:
               - Effect: Allow
                 Action: secretsmanager:GetSecretValue
                 Resource: !Ref SigningSeedArn
-  # One email per bundle write. A second email for a key that already existed
-  # is the signal this plan exists to give: the supported publisher refuses
-  # the write, so a second write came from something that skipped it (167).
+  # The per-write email route is retired: every bundles/ write now reaches its
+  # reader through the central SCG AWS notification service, which watches the
+  # same prefix and reports each write - including a second write of a key the
+  # supported publisher refuses (167) - as a branded publication. This topic
+  # remains the narrow signal for the retained local formatter used by rollback;
+  # the alarm below covers that formatter rule, not central delivery.
   FeedPublishTopic:
     Type: AWS::SNS::Topic
     Properties:
       DisplayName: SCG router feed bundle published
-  FeedPublishSubscription:
-    Type: AWS::SNS::Subscription
-    Properties:
-      TopicArn: !Ref FeedPublishTopic
-      Protocol: email
-      Endpoint: !Ref NotificationEmail
   FeedPublishRule:
     Type: AWS::Events::Rule
     Properties:
@@ -238,10 +230,10 @@ Resources:
             key:
               - prefix: bundles/
       Targets:
-        - Id: feed-publish-email
+        - Id: feed-alert-function
           Arn: !GetAtt FeedAlertFunction.Arn
           # EventBridge retries a failed invoke, then drops it. The queue keeps
-          # the event, and the alarm below says the mail did not go out (167).
+          # the event, and the alarm below says the local formatter was not invoked (167).
           DeadLetterConfig:
             Arn: !GetAtt FeedAlertDlq.Arn
   FeedAlertDlq:
@@ -269,8 +261,9 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmDescription: >-
-        The feed publish alert could not be delivered; the events are in the
-        dead-letter queue. Check the function's log group.
+        The retained local feed formatter rule could not invoke its formatter; the
+        events are in the dead-letter queue. Central publication delivery is
+        monitored separately by SC_Infrastructure.
       Namespace: AWS/Events
       MetricName: FailedInvocations
       Dimensions:
@@ -307,7 +300,7 @@ Resources:
   FeedAlertFunction:
     Type: AWS::Lambda::Function
     Properties:
-      Description: Formats one feed-publish event into the short alert email.
+      Description: Formats one feed-publish event for the retained local fallback topic.
       Runtime: python3.13
       Architectures: [arm64]
       Handler: index.handler
@@ -318,13 +311,13 @@ Resources:
           TOPIC_ARN: !Ref FeedPublishTopic
       Code:
         ZipFile: |
-          """One S3 Object Created event -> the feed alert email (Plan 167)."""
+          """One S3 Object Created event -> the retained local feed alert (Plan 167)."""
           import os
 
           import boto3
 
           TOPIC_ARN = os.environ['TOPIC_ARN']
-          TAIL = ('One email per bundle write is expected. A second email for a '
+          TAIL = ('One local message per bundle write is expected. A second message for a '
                   'bundle that already existed means something wrote to the feed '
                   'without going through the publisher.')
 
