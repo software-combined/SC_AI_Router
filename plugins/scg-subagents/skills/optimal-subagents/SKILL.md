@@ -102,6 +102,11 @@ Codex route, external recipients require the exposed `collaboration_plaintext`
 handoff tools and fresh `fork_turns="none"` children. Saved native tool names
 do not change that requirement for later messages.
 
+When the active client cannot spawn the selected router model as a native
+child, as in the Claude desktop app, run it with
+[router workers](../router-workers/SKILL.md). Model choice, briefs and
+verification stay as described here.
+
 Give each child: one deliverable, relevant context/paths, write authority,
 acceptance checks, cost/retry limits where useful, and a stop condition. One
 writer owns each worktree/delivery stream; parallel agents must not edit the same
