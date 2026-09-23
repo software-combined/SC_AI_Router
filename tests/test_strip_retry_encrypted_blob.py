@@ -15,7 +15,7 @@ import unittest
 from unittest import mock
 from compression import zstd
 
-from ai_router import (provider_defs, providers, strip_retry,
+from ai_router import (compaction, provider_defs, providers, strip_retry,
                        subscription_history, transport)
 
 
@@ -34,6 +34,12 @@ BLOB_ONLY = {'type': 'reasoning', 'id': 'rs_1', 'encrypted_content': 'BLOB-ONE'}
 BLOB_WITH_TEXT = {'type': 'reasoning', 'id': 'rs_2', 'encrypted_content': 'BLOB-TWO',
                   'summary': [{'type': 'summary_text', 'text': 'readable trace'}]}
 GUARDIAN_BODY = body([MESSAGE, BLOB_ONLY, BLOB_WITH_TEXT])
+
+SUMMARY = 'the summary the router wrote for this thread'
+# The replayed V2 compaction item: the router's own `ocx1:` summary, replayed
+# by the client on a turn that holds no `reasoning` item at all.
+COMPACTION = {'type': 'compaction', 'id': 'cmp_1',
+              'encrypted_content': compaction.encode_summary(SUMMARY)}
 
 ERROR_RAW = json.dumps({'error': {'message': 'the request was rejected',
                                   'code': 'invalid_encrypted_content'}}).encode()
@@ -214,15 +220,18 @@ class DiagnosticFactsTests(unittest.TestCase):
                                  'encrypted_content': 'BLOB-THREE'}]}]), None,
              {'items': 1, 'reasoning_items': 0, 'encrypted_fields': 1, 'removed': 0},
              'unchanged'),
-            # `compaction.strip_reasoning_blobs` removes the item-level key only,
-            # so a nested block blob is counted but never removed.
+            ('replayed compaction summary blob', body([COMPACTION]), None,
+             {'items': 1, 'reasoning_items': 0, 'encrypted_fields': 1, 'removed': 1},
+             'started'),
+            # A nested block is not a shape this repair owns, so the payload
+            # fails closed: nothing is removed and the turn is not retried.
             ('nested block blob on a reasoning item',
              body([{'type': 'reasoning', 'id': 'rs_4',
                     'encrypted_content': 'BLOB-FOUR',
                     'content': [{'type': 'encrypted_content',
                                  'encrypted_content': 'BLOB-FIVE'}]}]), None,
-             {'items': 1, 'reasoning_items': 1, 'encrypted_fields': 2, 'removed': 1},
-             'started'),
+             {'items': 1, 'reasoning_items': 1, 'encrypted_fields': 2, 'removed': 0},
+             'unchanged'),
         ]
         for name, payload, encoding, expected, outcome in cases:
             with self.subTest(case=name):
@@ -233,18 +242,20 @@ class DiagnosticFactsTests(unittest.TestCase):
                 self.assertEqual(emitted.get('outcome'), outcome, name)
 
     def test_no_request_content_reaches_the_event_fields(self):
-        items = [MESSAGE, BLOB_ONLY, BLOB_WITH_TEXT,
-                 {'type': 'message', 'role': 'user',
-                  'content': [{'type': 'encrypted_content',
-                               'encrypted_content': 'BLOB-THREE'}]}]
+        items = [MESSAGE, BLOB_ONLY, BLOB_WITH_TEXT, COMPACTION]
+        unowned = {'type': 'message', 'role': 'user',
+                   'content': [{'type': 'encrypted_content',
+                                'encrypted_content': 'BLOB-THREE'}]}
         for name, payload, encoding in (('identity', body(items), None),
                                         ('compressed', zstd.compress(body(items)), 'zstd'),
-                                        ('undecodable', b'not-zstd-at-all', 'zstd')):
+                                        ('undecodable', b'not-zstd-at-all', 'zstd'),
+                                        ('unowned shape', body(items + [unowned]), None)):
             with self.subTest(case=name):
                 self.log.events.clear()
                 emitted = self.drive(payload, encoding)
                 rendered = json.dumps(emitted)
-                for secret in ('BLOB-ONE', 'BLOB-TWO', 'BLOB-THREE', 'judge this action'):
+                for secret in ('BLOB-ONE', 'BLOB-TWO', 'BLOB-THREE', 'judge this action',
+                               SUMMARY):
                     self.assertNotIn(secret, rendered, name)
                 diagnostics = {'encoding', 'decoded', 'parsed', 'input_is_list',
                                'items', 'reasoning_items', 'encrypted_fields',
