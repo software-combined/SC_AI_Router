@@ -2,13 +2,35 @@
 
 ## Unreleased
 
+- Model-switch and context-reset markers are found even if the client moves
+  them to another text block or the system role.
+- Responses requests the router prepares are now checked against the
+  upstream rules learnt from earlier refusals, and a broken rule leaves one
+  `wire_contract` log line of rule names and counts. The check only observes:
+  it never changes or blocks a request. Provider refusal lines carry the same
+  rule counts and whether the thread switched model, a compressed
+  subscription request now gets its refusal shape logged too, an item type
+  that is not a plain name is logged as `unknown` so free text cannot reach
+  the log, and an item with a role but no type counts as a `message`.
+- MiMo V2.6 Pro threads now compact at about 400,000 tokens, before Xiaomi's
+  endpoint starts failing long requests. With Jev compaction on, a row's
+  compaction limit also caps the retained history, so a Jev result does not
+  trigger a second compaction straight away.
+
+## 0.6.123
+
 - The update dialog now lists each new model once. Models a dialog has shown
   are marked seen, so later updates no longer repeat them, and an update or
   check with no new model stays silent instead of showing a restart dialog.
+
+## 0.6.122
+
 - A subscription turn whose history replays the router's own compaction
   summary now sends it as readable text on the first attempt, instead of
   failing once and retrying. A turn that also carried a native encrypted child
   reply no longer fails.
+- External compaction summaries now keep native `apply_patch` file edits
+  instead of dropping them.
 - Provider refusal log lines now also record the request's top-level field
   names, reasoning item shapes and any broken tool call/output pairing, as
   names and counts only, never content.

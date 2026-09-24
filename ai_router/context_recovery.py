@@ -5,6 +5,8 @@ keeps no conversation cache and never invents or elevates an assignment.
 """
 import re
 
+from .history_portability import marker_texts
+
 _UUID = r'[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}'
 _PREVIOUS = re.compile(r'^Previous context window id: ' + _UUID + r'$', re.M)
 _LEGACY_PARAGRAPH = (
@@ -50,14 +52,9 @@ def refresh_model_messages(messages, instructions):
 
 
 def _reset_marker(item):
-    if (not isinstance(item, dict) or item.get('type') != 'message'
-            or item.get('role') != 'developer'):
-        return False
-    content = item.get('content')
-    first = content[0] if isinstance(content, list) and content else None
-    text = first.get('text') if isinstance(first, dict) else content
-    return (isinstance(text, str) and text.startswith('<context_window>\n')
-            and text.endswith('</context_window>') and bool(_PREVIOUS.search(text)))
+    return (isinstance(item, dict) and item.get('type') == 'message'
+            and any(text.endswith('</context_window>') and _PREVIOUS.search(text)
+                    for text in marker_texts(item, '<context_window>\n')))
 
 
 def normalize(payload):

@@ -83,7 +83,6 @@ SUBSCRIPTION_REASONING = {
     'gpt-5.3-codex-spark': ('high', _X), 'codex-auto-review': ('medium', _M),
 }
 
-
 # Picker labels for the subscription side, matching the live Codex picker.
 SUBSCRIPTION_DISPLAY_NAMES = {
     'gpt-6-astra': 'GPT-6-Astra',
@@ -157,6 +156,7 @@ def external_entry(model, instructions=None):
             'priority': model.priority,
             'context_window': model.context_window,
             'max_context_window': model.context_window,
+            'auto_compact_token_limit': model.auto_compact_token_limit,
             'model_messages': {'instructions_template': instructions},
             **catalogue_patch(model.slug),
             'input_modalities': projected['input_modalities'],

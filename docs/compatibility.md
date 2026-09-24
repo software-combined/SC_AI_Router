@@ -1,5 +1,243 @@
 # Compatibility
 
+## Acceptance matrix ledger, 24 September 2026 AEST
+
+Plan 185's acceptance matrix now has a machine-readable record, so a script
+can tell which cells still hold for the current clients.
+`docs/acceptance-ledger.json` holds one object per cell run: `cell`,
+`date_aest`, `router_version`, `codex_version` (the Codex desktop version),
+`claude_code_version`, `rows`, `requested_effort`, `served` (in `rows` order,
+`null` where the run exposed no identity), `calls`, `result` and `notes`. Only
+a `pass` result counts as a pass.
+
+| cell | transition | rows | calls |
+|---|---|---|---|
+| C1 | external compaction, then switch to subscription | `deepseek/deepseek-v4.1-flash` to `gpt-6-luna` | 4 |
+| C2 | direct OpenRouter acceptance of an undeclared custom pair and an `apply_patch_call` pair | `xiaomi/mimo-v2.6-flash`, `meta/muse-spark-1.3` | 4 |
+| C3 | external parent with a readable external child reply, parent switched to subscription | `z-ai/glm-5.3-flash` to `gpt-6-luna`, child `deepseek/deepseek-v4.1-flash` | 4 |
+| C4 | switch between two subscription models with native reasoning | `gpt-6-luna` to `gpt-6-sol` | 2 |
+| C5 | external parent, subscription child whose reply carries an encrypted block, parent compaction, parent switched to subscription | `deepseek/deepseek-v4.1-flash`, child `gpt-6-luna` | 6 |
+
+`python3.14 tools/check_acceptance_ledger.py` compares each cell's latest pass
+with the newest clients this page names in the backticked forms Codex desktop
+`X` and Claude Code `X`, the way every gate records them; an unbackticked
+mention, such as a later release an app bundle refers to, does not count. A
+cell is stale when its latest pass ran on an older version of either client,
+because section 7 of `AGENTS.md` treats either upgrade as the trigger for new
+evidence. The check exits 1 while any P1 cell (C1 to C4) is stale or missing,
+and reports C5 without failing on it.
+
+The ledger starts with C1 alone, from the 0.6.122 beta gate below: router
+`0.6.122.118`, Codex desktop `26.917.62051`, Claude Code `2.1.223` (installed,
+not exercised) and 4 calls. That gate's installed-router pair legs sit in C1's
+notes rather than counting as C2, because C2 goes direct to OpenRouter on
+different rows. C2 to C5 have not run, so the check exits 1 until they do.
+
+`tools/probe_parent_switch.py --cell C3` or `--cell C5` drives the two
+parent-switch cells. The first parent spawns the child and calls `wait_agent`
+in the same step. This client (`codex-cli 0.155.0-alpha.16.3`) moves a child's
+reply into the parent's history only when the parent waits; without the wait,
+the switched turn carried no reply at all. Issuing both calls in one step also
+keeps C3 at 4 calls; a parent model that waits in a separate step needs a
+fifth. C5 compacts the parent before the switch. The recorded reply shape is
+the one in the last parent request, so a compaction that drops the encrypted
+reply records `shape not produced` rather than a pass that never tested it.
+
+Offline, against the real client and a scripted loopback upstream: C3 passed
+in 4 calls, a C3 sequence that switched back to GLM passed in 5, and C5
+completed its 5 calls, compaction included, and recorded `shape not
+produced`. That is the expected offline result: a scripted child cannot make
+Codex attach an encrypted block, and offline compaction uses the client's
+local summary, which drops the reply.
+
+Live mode needs `--max-live-calls` and `--max-live-tokens`, as section 5 of
+`AGENTS.md` requires caps on both calls and spend. It runs the client on the
+ambient Codex home, so the client keeps its own sign-in and no credential is
+copied, points it at the probe with command-line overrides, and forwards each
+call to the installed router. Both caps are hard stops for every call that
+reaches the probe. Tokens are the `usage` totals of the relayed responses, so
+the call that crosses the budget still completes: the overshoot is at most one
+call, because these sequences never have two calls in flight. The router's own
+compaction summary reports no usage and adds nothing to the count. Offline,
+each request the client sent was about 6,000 tokens by body size. After the
+first refused or failed call, including a stream that ends without
+`response.completed`, or once the budget is spent, the probe refuses
+everything locally. Codex retries a 409, but no retry reaches the router.
+
+`tools/probe_codex_runtime.py` refuses to combine the live home with a
+base-URL override, so that it never touches the live Codex home. This probe
+needs exactly that combination, and Plan 185 step 3's live-home check (the
+"Candidate subscription legs on the live Codex home" entry) settled what it
+takes. The client honours the `openai_base_url` override there, so its calls
+come to the probe. The home does not stay read-only, and the owner accepted
+the writes that remain: the client's own logs, state databases and temporary
+files (`logs_2.sqlite`, the `*.sqlite-wal` files, `tmp/arg0`), which every
+Codex session and the `--live-home` legs also write, never configuration or
+credentials.
+
+Live mode therefore turns off what writes or reaches beyond the probe:
+`notify`, and the `shell_snapshot`, `hooks`, `in_app_local_automation`,
+`in_app_updates` and `remote_plugin` features. A shell snapshot would copy the
+shell environment, API key variables included, into the home. The probe
+answers the client's websocket attempt with 426, as the router does, because
+a 404 fails the turn, and it ends the client by closing its input. MCP servers
+configured in the live home still start despite `mcp_servers={}`, so the
+client runs under a `sandbox-exec` profile that allows network only to the
+probe's own loopback port. The probe forwards to the installed router from
+outside that sandbox, and live mode refuses to start if the sandbox cannot be
+applied. A call that still went elsewhere would be outside both caps, and the
+probe would stop after the first turn with `client bypassed the probe`.
+
+Limits: no live cell ran here. C2 waits for `tools/probe_wire_shapes.py`
+(Plan 185 step 1).
+
+## MiMo V2.6 Pro compaction limit, 24 September 2026 AEST
+
+A Codex thread on `xiaomi/mimo-v2.6-pro` (xhigh, served by Xiaomi through
+OpenRouter) failed with "stream disconnected before completion: Input should
+be a valid string". The content-free router log holds 34 `request_failed`
+events on that model, all `UPSTREAM_STREAM_FAILED` with upstream
+`server_error` and `unprocessable` on `response.failed`, each about 45 seconds
+into the stream. 33 were on request bodies of 3.5 MB or more: at that size 59
+requests completed and 33 failed, about a third, while below it more than
+6,000 completed and one failed. The same body sometimes succeeds (the stuck
+thread had one success after four failures at the same size), so this is a
+provider-side long-context failure, not a malformed request.
+
+The Codex session shows how threads get there. Failures began once the thread
+sent about 495,000 input tokens. Codex sizes the row's window at 943,718
+tokens (the catalogue's 1,048,576 at 90 per cent) and, with no
+`auto_compact_token_limit`, compacted only after about 942,000 tokens, while
+the client retried each failure with the full body.
+
+Router 0.6.124 gives the MiMo Pro row an `auto_compact_token_limit` of 400,000.
+That leaves a margin below about 460,000 tokens, because one turn can add tens
+of thousands of tokens of tool output before the next compaction check. It is
+a row field rather than a lower `context_window`, which the model refresh
+rewrites from OpenRouter's `context_length`. MiMo V2.6 Flash is unchanged,
+with no failures recorded. No live call was made. Offline, the installed
+`codex-cli 0.153.1` and `0.155.0-alpha.16.3` binaries list the field among a
+model row's own fields, and the client drops it from its model cache when it
+is empty; no client has yet been served a row with the value set.
+
+## Router 0.6.123 beta check, 24 September 2026 AEST
+
+Installed beta `0.6.123.119` (`v0.6.123-beta-express`, `develop` `c86e59e`) on
+the clients of the 0.6.122 gate below (Codex desktop `26.917.62051` with
+bundled `codex-cli 0.155.0-alpha.16.3`; Claude Code `2.1.223`). The release
+changes only the update notice, so the router's request paths and the 0.6.122
+live evidence carry over unchanged, and no billed probe was run.
+
+This Mac was the live check of the notice fix. Its update notice still
+recorded the 0.6.122 dialog that listed Claude Opus 5.5, GPT-6 Luna and GPT-6
+Sol, none of which the router had marked seen, so every earlier update had
+listed them again. The scheduled update applied `0.6.123.119` at 14:22 AEST
+without showing a dialog: the new installer marked those three models seen
+(the router's seen list grew from 22 to 25 models) and left the notice file
+untouched, and the updater then found nothing new to announce.
+
+## Candidate subscription legs on the live Codex home, 24 September 2026 AEST
+
+Plan 185 step 3 asked whether a subscription leg could reach a candidate
+router by launching the client on the live Codex home, which holds the
+ChatGPT sign-in, with a command-line override of `openai_base_url`, while the
+live home stays read-only. The override works on the live home, but the home
+does not stay read-only.
+
+The client bundled with Codex desktop `26.917.62051`
+(`codex-cli 0.155.0-alpha.16.3`) writes to its home on every launch, even for
+`--version` or `--help`: it creates a `tmp/arg0/codex-arg0` directory with a
+random suffix, holding a `.lock` file and links named `apply_patch`,
+`applypatch` and `codex-execve-wrapper`. A clean exit removes it; in scratch
+homes, the next launch also removed one left behind. Given a scratch home it
+could not write to, `codex --version` warned and carried on.
+
+One owner-authorised run at 16:56 AEST started `codex app-server` on the live
+home, with the override pointing at a loopback stand-in that answered every
+request itself with a canned reply, so nothing was forwarded or billed. A
+`sandbox-exec` profile let the client reach only the stand-in's port, never
+the installed router or any other host, and reported every write under
+`~/.codex`. The stand-in kept only each request's method, path and item
+types, never a header or body. On an ephemeral thread with one synthetic
+prompt to `z-ai/glm-5.3-flash`, both requests reached the stand-in: a
+websocket attempt on `/v1/responses`, refused with 426 as the router does,
+then `POST /v1/responses` with five message items. The turn completed with
+the canned reply and the client exited cleanly.
+
+Nothing in the home was added or removed. The run changed the `tmp/arg0`
+directory, whose new entry was gone again after exit, and the client's own
+SQLite databases: `logs_2.sqlite` and the write-ahead files of its `state`,
+`logs`, `goals`, `memories` and `queue` databases, which the desktop app also
+writes all the time. Three other changes in the same window had no write from
+the run and also changed during an idle window just before it: the installed
+router's log, one open desktop session and `thread_history_1.sqlite-wal`.
+From the live home the probe read only names, sizes and times; the list of
+writes comes from the sandbox's reports.
+
+A live mode that launches the client this way needs what this run used:
+
+- a 426 answer to the websocket attempt, because a 404 fails the turn with
+  `responseStreamDisconnected`;
+- `features.shell_snapshot=false`, because a snapshot copies the shell
+  environment into the home (in scratch it held an API key variable and was
+  still there as a temporary file afterwards);
+- `hooks`, `in_app_local_automation`, `in_app_updates` and `remote_plugin`
+  turned off, and a clean exit by closing the client's input;
+- a sandbox that allows only the probe's port: MCP servers configured in the
+  live home still tried to start with `mcp_servers={}` (nine startup events,
+  none on a scratch home), and the sandbox refused the client's seven attempts
+  to look up a host name.
+
+## Router 0.6.122 beta gate, 24 September 2026 AEST
+
+Installed beta `0.6.122.118` (`v0.6.122-beta-express`, `develop` `2e14a13`,
+the first beta cut from `develop`) on Codex desktop `26.917.62051` (build
+`10789`) with bundled `codex-cli 0.155.0-alpha.16.3`; Claude Code `2.1.223`
+was not exercised. Neither client had changed since the 0.6.121 gate, so the
+section 7 legs were not rerun. Probes ran from a `git archive` copy of the tag
+against the installed router with synthetic data: 8 upstream model calls
+against a cap of 20, all HTTP 200 with no stream retry and no leg retried.
+
+| surface | requested model | effort | served | calls | result |
+|---|---|---|---|---|---|
+| Codex, history switch canary (fake upstream) | `deepseek/deepseek-v4.1-flash` and `gpt-6-astra` | `low` | not applicable | 0 | passed |
+| Codex, external compaction then subscription switch | `deepseek/deepseek-v4.1-flash`, compact, then `gpt-6-luna` | `low` | `deepseek/deepseek-v4.1-flash`; Luna not logged | 4 | passed |
+| OpenRouter, undeclared custom pair | `xiaomi/mimo-v2.6-pro` | none sent | `xiaomi/mimo-v2.6-pro` | 1 | passed |
+| OpenRouter, native `apply_patch` pair | `xiaomi/mimo-v2.6-pro` | none sent | `xiaomi/mimo-v2.6-pro` | 1 | passed |
+| OpenRouter, undeclared custom pair | `meta/muse-spark-1.3-contributor` | none sent | `meta/muse-spark-1.3-contributor` | 1 | HTTP 200, marker missing |
+| OpenRouter, native `apply_patch` pair | `meta/muse-spark-1.3-contributor` | none sent | `meta/muse-spark-1.3-contributor` | 1 | passed |
+
+The compaction leg is the first live proof of the compaction summary entry
+below. The DeepSeek thread compacted through the V2 trigger: the router logged
+`compact_triggered` (one summary attempt, 1,247 characters) at 12:58:27, and
+the switched `gpt-6-luna` turn finished HTTP 200 in 1.95 s at 12:58:29 with no
+`upstream_rejected` or `annotation_retry` line. Under 0.6.121 that turn logged
+a 400 `invalid_encrypted_content` and a retry. The canary found the client's
+`<model_switch>` marker with switch 3, invalid 1 and transient 2 attempts.
+
+The pair legs gather evidence for audit finding U3. An offline prepare from
+the tag shows both pairs leave the router unconverted, with their original
+item types, a shared `call_id` and an empty `tools` list. Both rows accepted
+both shapes, so the refusal U3 predicts did not occur for them. Muse Spark
+answered the custom pair with HTTP 200 in 7.9 s but without the marker;
+metadata cannot say whether the model omitted it or the tool output never
+reached it, so the leg was not retried and U3 stays open for that case.
+
+From the install to 13:00:58 AEST the router log shows 44 requests started and
+41 completed, all HTTP 200 (40 OpenRouter, 1 OpenAI subscription, no
+Anthropic), with 3 other sessions' turns still streaming at read time. There
+were no `request_failed`, `upstream_rejected`, `upstream_unavailable` or
+`annotation_retry` lines; the only rejections were two local 426 websocket
+refusals, which switch Codex to HTTP streaming.
+
+Limits: success lines carry no item fingerprint, so the log cannot show
+directly that the router's summary reached Luna as readable text, and it does
+not record Luna's served model. No leg carried a native encrypted child reply,
+so that half of the fix still rests on offline tests. The new refusal fields
+(`top_level_keys`, `reasoning_shapes`, `pair_problems`) never fired because
+nothing was refused, and native `apply_patch` edits in external compaction
+summaries had no live leg.
+
 ## Router compaction summary on the subscription route, 24 September 2026 AEST
 
 Router candidate `0.6.122` sends the router's own compaction summary as
@@ -21,7 +259,8 @@ the healthy-path behaviour in the 23 September entry below.
 Evidence is offline only: `tests/test_subscription_router_compaction.py`,
 including handler tests that carry a native encrypted child reply in identity
 and zstd bodies, and the updated `test_07` in
-`tests/test_subscription_compaction_repair.py`. No live client session was run.
+`tests/test_subscription_compaction_repair.py`. No live client session was run
+here; the 0.6.122 beta gate above later proved the first-attempt path live.
 
 ## Router 0.6.121 beta gate, 24 September 2026 AEST
 

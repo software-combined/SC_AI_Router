@@ -9,11 +9,12 @@ transitional owners name the plan that will move them.
 ```
 provider_defs (one definition per upstream, imports nothing) + errors,
 redaction, sse, tool_merge, image_items, turn_budget, atomic_write, state,
-wire_shape, events (leaves: no module-level local imports; events' one
-call-time state lookup is the only exception)
+events (leaves: no module-level local imports; events' one call-time state
+lookup is the only exception)
   ^
   |
-registry / capabilities (model facts; stdlib plus the provider table only)
+registry / capabilities (model facts) + wire_shape (the learnt wire
+contract): stdlib plus the provider table only
   ^
   |
 transport (Prepared, hop-header rules, raw stream, header relay) + upstream
@@ -59,11 +60,18 @@ thread that switched model: it applies the switch boundary, then projects fully
 readable agent messages, the shape external peers send. The backend reads
 native encrypted replies and app-delivered outputs itself, so those stay
 unchanged. Client history is never edited.
+`history_portability.py` owns the model-switch boundary: a `developer` or
+`system` message whose string content, or any of its text blocks, starts with
+`<model_switch>` after leading whitespace marks a switch, and items before the
+last marker were produced under another model. The marker names no model, so a
+switch between two subscription models gets the same treatment as a switch off
+OpenRouter.
 `subscription_history.py` owns the pure outgoing projection of replayed
 reasoning and the router's own compaction summary (sent as readable text) for
 subscription Responses requests; it never edits persisted client history.
 `context_recovery.py` adds fixed recovery guidance for client-declared context
-resets on either Responses route. Codex owns saved history and executes its
+resets on either Responses route, finding the `<context_window>` message by the
+same rule. Codex owns saved history and executes its
 retrieval tools; the router stores no assignment or transcript cache.
 It also owns the exact legacy paragraph migration used by catalogue upgrades.
 `stream_errors.py` owns shared HTTP/SSE context-error classification and applies
@@ -74,9 +82,14 @@ client's answer rather than plumbing, the bounded hold that lets a retry replace
 plumbing instead of appending a second copy, the retry verdict, and opening
 the retry itself. It is a
 leaf beside `stream_errors.py`, never a dispatcher or a credential owner.
-`wire_shape.py` reduces a prepared Responses body to the names and counts a
-refusal log line carries and owns the tool call/output pairing rules the test
-fake also enforces; it observes and never changes a request.
+`wire_shape.py` owns the learnt upstream acceptance rules as data plus checks:
+the tool call/output pairing rules the test fake also enforces, and every
+other rule an incident taught, each with the route it binds, its level and its
+evidence. It observes and never changes a request. Each body prepared for a
+Responses turn is checked (not the helper-turn fallback twin, which is off
+by default), a broken rule becomes one `wire_contract` log line, and a
+refusal line carries the same facts beside the body's names and counts.
+Enforcing a rule is a separate, evidence-backed change.
 
 1. `provider_defs.py` owns every upstream fact (host, endpoint prefixes, key
    location, model catalogue, key-info endpoint, failure dialect) and imports
