@@ -1,6 +1,6 @@
 """Portable history for model-switched threads (Plan 168 split).
 
-Leaf for the `<model_switch>` boundary rule: items before the client's last
+Owns the `<model_switch>` boundary rule: items before the client's last
 marker were produced under another model and get the portable treatment
 (discovery pair collapses to a note, reasoning never rides along); items
 after it are the current model's and replay natively. A `portable` row
@@ -8,38 +8,17 @@ rewrites the whole history. Never splits a tool run across the boundary.
 """
 import json
 
+from . import history_items
+from .history_items import (CALL_TYPES, OUTPUT_TYPES, TOOL_RUN_TYPES,
+                            summary_text as _summary_text, user_message_item)
 
-def _block_text(content):
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        return ' '.join(b.get('text', '') for b in content
-            if isinstance(b, dict) and isinstance(b.get('text'), str))
-    return str(content) if content else ''
-
-
-def user_message_item(text):
-    return {'type': 'message', 'role': 'user',
-            'content': [{'type': 'input_text', 'text': text}]}
-
-
-
+# Plan 183 phase 1 moved the shared vocabulary to history_items; the imports
+# above and this alias keep the old names importable until phase 2.
+_block_text = history_items.block_text
 
 PORTABLE_SEARCH_NOTE = ('[tool search result replayed as declared tools; '
                         'the search call itself is omitted on this model]')
 PORTABLE_REASONING_NOTE = '[reasoning summary from the previous model] '
-CALL_TYPES = frozenset({'function_call', 'custom_tool_call', 'apply_patch_call',
-                        'web_search_call', 'file_search_call', 'image_generation_call',
-                        'code_interpreter_call', 'computer_call'})
-OUTPUT_TYPES = frozenset({'function_call_output', 'custom_tool_call_output',
-                          'apply_patch_call_output'})
-# A tool run is the call/output block of one assistant step. Nothing may be
-# inserted inside it: a note between a parallel call and its output makes a
-# strict upstream refuse the whole turn ("incomplete parallel tool-call
-# group", measured on deepseek/deepseek-v4.1-flash 2026-09-13). The discovery
-# pair keeps its names here because the portable pass may run on either side
-# of the adapter rewrite that turns it into a plain function call.
-TOOL_RUN_TYPES = CALL_TYPES | OUTPUT_TYPES | {'tool_search_call', 'tool_search_output'}
 
 
 def rewrite_custom_pairs(items, exposed_keys, wire_names):
@@ -75,14 +54,6 @@ def rewrite_custom_pairs(items, exposed_keys, wire_names):
         if wire:
             item.pop('namespace', None)
             item['name'] = wire
-
-
-def _summary_text(item):
-    """Readable summary text only; a provider blob value is never read."""
-    blocks = item.get('summary')
-    if not isinstance(blocks, (str, list)):
-        return ''
-    return _block_text(blocks).strip()
 
 
 def marker_texts(item, tag):
