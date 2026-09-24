@@ -1,0 +1,129 @@
+{
+ "contract": {
+  "unknown_top_level": [],
+  "violations": {},
+  "warnings": {}
+ },
+ "wire": {
+  "include": [
+   "reasoning.encrypted_content"
+  ],
+  "input": [
+   {
+    "content": [
+     {
+      "text": "<permissions instructions>\nSynthetic sandbox: read-only; approvals are never requested.\n</permissions instructions>",
+      "type": "input_text"
+     }
+    ],
+    "role": "developer",
+    "type": "message"
+   },
+   {
+    "content": [
+     {
+      "text": "Delegate the synthetic review.",
+      "type": "input_text"
+     }
+    ],
+    "role": "user",
+    "type": "message"
+   },
+   {
+    "arguments": "{}",
+    "call_id": "call_standalone_2",
+    "name": "delivered_message",
+    "type": "function_call"
+   },
+   {
+    "call_id": "call_standalone_2",
+    "output": "Agent message from /root/reviewer to /root:\nSynthetic review done.\nEncrypted content was withheld from this external model. The readable text may be incomplete; request a plain-text resend before acting on it.",
+    "type": "function_call_output"
+   },
+   {
+    "arguments": "{}",
+    "call_id": "call_standalone_3",
+    "name": "create_thread",
+    "type": "function_call"
+   },
+   {
+    "call_id": "call_standalone_3",
+    "output": "<codex_delegation>\n  <source_thread_id>00000000-0000-4000-8000-000000000001</source_thread_id>\n  <input>Synthetic follow-up task.</input>\n</codex_delegation>",
+    "type": "function_call_output"
+   },
+   {
+    "arguments": "{}",
+    "call_id": "call_standalone_4",
+    "name": "delivered_message",
+    "type": "function_call"
+   },
+   {
+    "call_id": "call_standalone_4",
+    "output": "Agent message from /root/tester to /root:\nSynthetic tests pass.",
+    "type": "function_call_output"
+   },
+   {
+    "content": [
+     {
+      "text": "Summarise the results.",
+      "type": "input_text"
+     }
+    ],
+    "role": "user",
+    "type": "message"
+   }
+  ],
+  "instructions": "You are the synthetic coding agent for the replay goldens.",
+  "max_output_tokens": 32000,
+  "model": "deepseek/deepseek-v4.1-flash",
+  "parallel_tool_calls": true,
+  "prompt_cache_key": "replay-s07",
+  "reasoning": {
+   "effort": "low",
+   "summary": "auto"
+  },
+  "store": false,
+  "stream": true,
+  "tool_choice": "auto",
+  "tools": [
+   {
+    "description": "Run a shell command in the synthetic workspace.",
+    "name": "exec_command",
+    "parameters": {
+     "additionalProperties": false,
+     "properties": {
+      "cmd": {
+       "description": "The command to run.",
+       "type": "string"
+      }
+     },
+     "required": [
+      "cmd"
+     ],
+     "type": "object"
+    },
+    "strict": false,
+    "type": "function"
+   },
+   {
+    "description": "Edit files with a synthetic patch.",
+    "name": "apply_patch",
+    "parameters": {
+     "additionalProperties": false,
+     "properties": {
+      "input": {
+       "description": "The complete raw tool input.",
+       "type": "string"
+      }
+     },
+     "required": [
+      "input"
+     ],
+     "type": "object"
+    },
+    "strict": true,
+    "type": "function"
+   }
+  ]
+ }
+}

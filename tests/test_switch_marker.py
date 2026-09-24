@@ -1,11 +1,12 @@
 """A client may move its model-switch or context-reset marker (Plan 184 step 1).
 
-ponytail: the canary that loads a captured client marker needs Plan 182's
-capture fixture; until it lands, `tools/probe_history_switch.py` and
-`tools/probe_context_recovery.py` check the installed client offline.
+The canary at the end reads the switched turn each captured client version
+really sent (`tools/capture_codex_shapes.py`, Plan 182), so a client that
+reshapes its marker fails here before any user turn does.
 """
 import json
 import unittest
+from pathlib import Path
 
 from ai_router import context_recovery, providers
 from ai_router.history_portability import portable_history
@@ -20,6 +21,7 @@ FOREIGN = {'type': 'reasoning', 'id': 'rs_foreign', 'summary': [], 'encrypted_co
            'content': [{'type': 'reasoning_text', 'text': 'earlier model thinking'}]}
 NOTE = {'type': 'message', 'role': 'developer', 'content': [
     {'type': 'input_text', 'text': context_recovery.RECOVERY_GUIDANCE}]}
+CAPTURED = Path(__file__).resolve().parent / 'fixtures' / 'replay' / 'captured'
 
 
 def variants(text):
@@ -81,3 +83,13 @@ class SwitchMarkerTests(unittest.TestCase):
                 self.assertEqual(replay(marker), (
                     [marker if item == client else item for item in history],
                     [marker if item == client else item for item in sent]))
+
+    def test_every_captured_client_switch_finds_the_boundary(self):
+        captures = sorted(CAPTURED.glob('*/switch.json'))
+        self.assertTrue(captures, 'no captured client switch to check')
+        for path in captures:
+            with self.subTest(codex=path.parent.name):
+                requests = json.loads(path.read_text(encoding='utf-8'))['requests']
+                inputs = [request['payload']['input'] for request in requests]
+                self.assertTrue(any(portable_history(items, SEARCH_NAME, 'native') is not items
+                                    for items in inputs))

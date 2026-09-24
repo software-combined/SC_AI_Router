@@ -1,0 +1,94 @@
+{
+ "contract": {
+  "unknown_top_level": [],
+  "violations": {},
+  "warnings": {}
+ },
+ "wire": {
+  "include": [
+   "reasoning.encrypted_content"
+  ],
+  "input": [
+   {
+    "content": [
+     {
+      "text": "<permissions instructions>\nSynthetic sandbox: read-only; approvals are never requested.\n</permissions instructions>",
+      "type": "input_text"
+     }
+    ],
+    "role": "developer",
+    "type": "message"
+   },
+   {
+    "author": "/root",
+    "content": [
+     {
+      "text": "Synthetic assignment follows.",
+      "type": "input_text"
+     },
+     {
+      "encrypted_content": "gAAAAA-synthetic-assignment",
+      "type": "encrypted_content"
+     }
+    ],
+    "recipient": "/root/worker",
+    "type": "agent_message"
+   },
+   {
+    "content": [
+     {
+      "text": "Start the assignment.",
+      "type": "input_text"
+     }
+    ],
+    "role": "user",
+    "type": "message"
+   }
+  ],
+  "instructions": "You are the synthetic coding agent for the replay goldens.",
+  "model": "gpt-6-astra",
+  "parallel_tool_calls": true,
+  "prompt_cache_key": "replay-s07b",
+  "reasoning": {
+   "effort": "low",
+   "summary": "auto"
+  },
+  "store": false,
+  "stream": true,
+  "tool_choice": "auto",
+  "tools": [
+   {
+    "description": "Run a shell command in the synthetic workspace.",
+    "name": "exec_command",
+    "parameters": {
+     "additionalProperties": false,
+     "properties": {
+      "cmd": {
+       "description": "The command to run.",
+       "type": "string"
+      }
+     },
+     "required": [
+      "cmd"
+     ],
+     "type": "object"
+    },
+    "strict": false,
+    "type": "function"
+   },
+   {
+    "description": "Edit files with a synthetic patch.",
+    "format": {
+     "definition": "start: /(.|\\n)+/",
+     "syntax": "lark",
+     "type": "grammar"
+    },
+    "name": "apply_patch",
+    "type": "custom"
+   },
+   {
+    "type": "web_search"
+   }
+  ]
+ }
+}
