@@ -5,8 +5,7 @@ decides how an upstream refusal is described to the client.
 
 Pure policy: no dispatch, no model data, no credentials. It may read a
 response object but never a request body except the error snapshot the
-caller already bounded, plus the prepared body `rejection_fingerprint`
-reduces to structural counts.
+caller already bounded.
 """
 import hashlib
 import json
@@ -221,33 +220,6 @@ def _provider_reason(body, dialect=None):
     else:
         reason = 'the request was rejected'
     return provider, reason, tool, _error_code(error, inner_error)
-
-
-def rejection_fingerprint(prepared_body):
-    """Structural counts from a prepared wire body; never content.
-
-    Returns {'items', 'item_kinds', 'tools'} with counts only: no item text,
-    tool descriptions, schema text, arguments, ids, or names. Undecodable
-    bodies return {}.
-    """
-    try:
-        payload = json.loads(prepared_body.decode() if isinstance(prepared_body, bytes)
-                             else prepared_body)
-    except (ValueError, UnicodeDecodeError, AttributeError):
-        return {}
-    if not isinstance(payload, dict):
-        return {}
-    items = payload.get('input')
-    if not isinstance(items, list):
-        return {}
-    kinds = {}
-    for item in items:
-        kind = item.get('type') if isinstance(item, dict) else None
-        kind = kind if isinstance(kind, str) else 'unknown'
-        kinds[kind] = kinds.get(kind, 0) + 1
-    tools = payload.get('tools', [])
-    return {'items': len(items), 'item_kinds': kinds,
-            'tools': len(tools) if isinstance(tools, list) else 0}
 
 
 _REFUSALS = {}
