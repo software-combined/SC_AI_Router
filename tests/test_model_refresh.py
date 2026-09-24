@@ -208,6 +208,20 @@ class ModelRefreshTests(unittest.TestCase):
         self.assertEqual(merged[slug].default_reasoning, 'none')
         self.assertNotIn('ultra', merged[slug].reasoning)
 
+    def test_older_feed_cannot_drop_the_bundled_compaction_limit(self):
+        # A cache written before the 0.6.124 update has no limit for MiMo
+        # Pro. Taken as is, it would let threads grow toward 942,000 tokens
+        # again until the next hourly fetch. Live data such as the window
+        # still comes from the feed.
+        slug = 'xiaomi/mimo-v2.6-pro'
+        bundled = model_refresh.validate(json.dumps([
+            _row(slug) | {'auto_compact_token_limit': 400000}]))
+        cached = model_refresh.validate(json.dumps([
+            _row(slug) | {'context_window': 2097152}]))
+        merged = {row.slug: row for row in model_refresh.overlay(bundled, cached)}
+        self.assertEqual(merged[slug].auto_compact_token_limit, 400000)
+        self.assertEqual(merged[slug].context_window, 2097152)
+
 
 if __name__ == '__main__':
     unittest.main()

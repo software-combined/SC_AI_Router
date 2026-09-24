@@ -21,7 +21,8 @@ FIELDS = ('slug', 'provider', 'display_name', 'vendor', 'reasoning',
           'web_search', 'tier')
 # Fields a row may carry or omit. `upstream_id` empty (or absent) means the
 # slug is the id the provider expects, which every current row relies on.
-OPTIONAL_FIELDS = ('listed', 'provider_prefs', 'upstream_id')
+OPTIONAL_FIELDS = ('listed', 'provider_prefs', 'upstream_id',
+                   'auto_compact_token_limit')
 
 
 @dataclass(frozen=True)
@@ -51,6 +52,8 @@ class Model:
     provider_prefs: dict | None = None  # OpenRouter `provider` routing object
                                         # (plan 175 evidence only; no row sets it)
     upstream_id: str = ''            # id the provider expects; '' means the slug
+    auto_compact_token_limit: int | None = None  # Codex compacts at this many
+                                                 # tokens; None keeps its default
 
 
 # Documented OpenRouter `provider` object keys (router-metadata guide,
@@ -149,6 +152,10 @@ def load(text):
         prefs = row.get('provider_prefs')
         if prefs is not None and not _valid_prefs(prefs):
             raise SystemExit(f'models.json {row["slug"]}: bad provider_prefs')
+        limit = row.get('auto_compact_token_limit')
+        if limit is not None and (not isinstance(limit, int)
+                                  or isinstance(limit, bool) or limit <= 0):
+            raise SystemExit(f'models.json {row["slug"]}: bad auto_compact_token_limit')
         if row.get('listed', False) and row['tier'] != 'verified':
             raise SystemExit(f'models.json {row["slug"]}: preview row must not be listed')
         # One upstream model may appear on several providers, but the picker
@@ -174,7 +181,7 @@ def load(text):
             web_search=row['web_search'], tier=row['tier'],
             listed=row.get('listed', True),
             provider_prefs=dict(prefs) if prefs is not None else None,
-            upstream_id=upstream_id))
+            upstream_id=upstream_id, auto_compact_token_limit=limit))
     return tuple(models)
 
 

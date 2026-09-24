@@ -106,8 +106,8 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
                               client_status=status, code=code,
                               parameter=upstream.rejection_parameter(raw),
                               serving_endpoint=upstream.serving_endpoint(raw),
-                              category='UPSTREAM_UNAVAILABLE',
-                              **metrics, **wire_shape.fingerprint(prepared.body))
+                              category='UPSTREAM_UNAVAILABLE', **metrics,
+                              **wire_shape.fingerprint(prepared.body, provider.defn.dialect))
                     return handler.error(errors.upstream_unavailable(message),
                                          retry_after='2')
                 # A cached answer must be one the client treats as final.
@@ -119,8 +119,8 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
                           tool=upstream.rejection_tool(raw, provider.defn.dialect),
                           parameter=upstream.rejection_parameter(raw),
                           serving_endpoint=upstream.serving_endpoint(raw),
-                          category='PROVIDER_REJECTED',
-                          **metrics, **wire_shape.fingerprint(prepared.body))
+                          category='PROVIDER_REJECTED', **metrics,
+                          **wire_shape.fingerprint(prepared.body, provider.defn.dialect))
                 if status == 400:
                     return handler.error(errors.upstream_invalid_request(message))
                 if status == 409:

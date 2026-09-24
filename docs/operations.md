@@ -219,7 +219,8 @@ its first 300 characters plus the number removed; the router never advises
 re-running a tool, because it cannot know whether that tool is idempotent.
 Ambiguous pairs, invalid or partial answers, decision failures,
 a state that cannot fit the 32 KiB request budget, or retained text over 40%
-of the selected model's context window all use the existing summarizer.
+of the selected model's compaction limit (its context window when the row sets
+no limit) all use the existing summarizer.
 There are no decision retries, fallback models, per-turn calls or decision
 cache. `compact_jev` logs only mode, counts, byte sizes, elapsed milliseconds
 and a closed-set error code; never content, tool names or keys.
@@ -461,10 +462,33 @@ The code may live anywhere; only this directory matters at runtime.
 
 ## Verification after a Codex upgrade
 
-Run the suite, then the base probe against the installed router and
+Capture what the new client sends before anything else:
+
+```sh
+python3.14 tools/capture_codex_shapes.py
+```
+
+It drives the installed app-server through a dynamic-tool turn, a model
+switch and a V2 compaction against an in-process router and a fake
+upstream, so it is free, makes no network call and reads no credential.
+The sanitised request bodies land in
+`tests/fixtures/replay/captured/<codex version>/`, and the drift report
+lists the item types, top-level request fields and developer-message
+openings added or removed since the newest earlier capture. Read that
+report first and check the new files for personal paths or text (the
+report compares only names), then commit the new directory;
+`tests/test_switch_marker.py`
+checks that the router still finds the switch marker in every capture.
+
+Next, run the suite, then the base probe against the installed router and
 confirm discovery, one exact callback, and the marker in the final
 answer. If the app-server protocol changed, probes fail before any
 user task does; do not ship model changes until the base probe passes.
+
+`tests/test_replay_golden.py` pins the exact body each route sends for a
+set of synthetic histories. Regenerating those goldens with
+`REPLAY_GOLDEN_UPDATE=1` changes behaviour on purpose: explain the golden
+diff in the PR, and in `CHANGELOG.md` when users see the change.
 
 ## Latency phase fields (aggregate-only comparison recipe)
 
@@ -580,6 +604,7 @@ tool names a person no longer reads stay searchable in the log.
 | `turn_refused` | a turn refused before any upstream call for its size (`BODY_TOO_LARGE`, `INVALID_REQUEST_SIZE`), with compressed, decoded, limit and prepared bytes plus counts and byte weight per carried class and images; no content |
 | `turn_trimmed` | an oversized routed turn was reduced with visible notes; names the bytes dropped and how many images and tool outputs were replaced |
 | `usage_reported` | a routed Codex turn carrying tools had its reported input tokens raised to what the thread carries (never lowered); names the provider's figure and the reported one |
+| `wire_contract` | observe only: a prepared Responses body broke a rule learnt from an earlier upstream refusal (the check never changes or blocks the request); names each rule under `violations` or `warnings` with a count, plus up to eight unknown top-level field names (`error_type` instead when the check itself failed); refusal lines carry the same rules, pairing under `pair_problems` and the rest as `contract_violations` and `contract_warnings`; no content |
 
 ## Stream identity observation (last-observed, not proof)
 

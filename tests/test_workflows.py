@@ -13,9 +13,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / '.github/workflows'
 RELEASE = (WORKFLOWS / 'release.yml').read_text()
-MAIN_ACCEPTANCE = ("if: (github.event_name == 'pull_request' && "
-                   "github.base_ref == 'main') || (github.event_name == 'push' && "
-                   "github.ref == 'refs/heads/main')")
+MAIN_ACCEPTANCE = ("(github.event_name == 'pull_request' && github.base_ref == 'main') || "
+                   "(github.event_name == 'push' && github.ref == 'refs/heads/main')")
+NOT_A_TEXT_EDIT = "(github.event.action != 'edited' || github.event.changes.base)"
 
 
 def run_block(name, text=None):
@@ -104,7 +104,7 @@ class InstallerCiGateTests(unittest.TestCase):
         self.assertIn(
             'needs: [changes, installer-macos, installer-windows, installer-python39, plugin-schedulers, hook-adapter]',
             self.CHECK)
-        self.assertIn('if: ${{ !cancelled() }}', self.CHECK)
+        self.assertIn('if: ${{ !cancelled() && ' + NOT_A_TEXT_EDIT + ' }}', self.CHECK)
         self.assertIn(
             "contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')",
             self.CHECK)
@@ -205,9 +205,9 @@ class InstallerCiGateTests(unittest.TestCase):
     def test_release_acceptance_runs_for_main_pull_requests_and_pushes(self):
         for name in ('changes', 'plugin-schedulers', 'hook-adapter'):
             job = re.split(r'\n  \S', self.CHECK.split(f'  {name}:\n', 1)[1], maxsplit=1)[0]
-            self.assertIn(MAIN_ACCEPTANCE, job)
+            self.assertIn(f'if: {NOT_A_TEXT_EDIT} && ({MAIN_ACCEPTANCE})', job)
         step = self.CHECK.split('      - name: Unit suite (offline)\n', 1)[1]
-        self.assertIn(MAIN_ACCEPTANCE, step.split('      - name:', 1)[0])
+        self.assertIn(f'if: {MAIN_ACCEPTANCE}', step.split('      - name:', 1)[0])
 
     @unittest.skipUnless(shutil.which('git') and shutil.which('bash'), 'requires git and bash')
     def test_release_requires_an_accepted_commit_for_its_channel(self):
@@ -293,7 +293,10 @@ class WorkflowBoundaryTests(unittest.TestCase):
         self.assertIn('types: [opened, synchronize, reopened, edited]', check)
         self.assertIn('permissions:\n  contents: read', check)
         self.assertIn('persist-credentials: false', check)
-        self.assertIn('name: Test\n', check)
+        # A title or body edit must not cancel running checks, and a skipped
+        # gate must not carry the required name Test (skipped reads as passed).
+        self.assertIn("!github.event.changes.base && format('-text-edit-{0}', github.run_id) || '' }}", check)
+        self.assertIn("name: ${{ " + NOT_A_TEXT_EDIT + " && 'Test' || 'Skipped for a title or body edit' }}\n", check)
         self.assertNotIn('pull_request_target:', check)
 
 if __name__ == '__main__':

@@ -207,7 +207,7 @@ def summary(model, key, items, defn, home=None, ask=None) -> str | None:
         if not pairs:
             _refuse('no_candidates')
         row = registry.by_slug(model)
-        window = getattr(row, 'context_window', 0)
+        window = getattr(row, 'auto_compact_token_limit', None) or getattr(row, 'context_window', 0)
         if not isinstance(window, int) or isinstance(window, bool) or window <= 0:
             _refuse('context_limit')
         payload, questions, stats['request_bytes'] = _request(items, pairs, last_user, defn)
