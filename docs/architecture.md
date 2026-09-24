@@ -59,7 +59,8 @@ thread that switched model: it applies the switch boundary, then projects fully
 readable agent messages, the shape external peers send. The backend reads
 native encrypted replies and app-delivered outputs itself, so those stay
 unchanged. Client history is never edited.
-`subscription_history.py` owns the pure outgoing reasoning projection for
+`subscription_history.py` owns the pure outgoing projection of replayed
+reasoning and the router's own compaction summary (sent as readable text) for
 subscription Responses requests; it never edits persisted client history.
 `context_recovery.py` adds fixed recovery guidance for client-declared context
 resets on either Responses route. Codex owns saved history and executes its
