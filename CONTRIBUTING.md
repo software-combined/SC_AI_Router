@@ -29,9 +29,10 @@ real router home.
 ## Branches and pull requests
 
 - Fork the repository, branch from `develop`, and target `develop` for normal
-  contributions. Pull requests opened against `main` are welcome and run the
-  same checks; a maintainer retargets them to `develop` before merging.
-  `main` receives release merges from `develop`.
+  contributions. Develop pull requests run fast static checks, so run the suite
+  locally first. Pull requests opened against `main` are welcome and run the
+  full release acceptance; a maintainer retargets them to `develop` before
+  merging. `main` receives release merges from `develop`.
 - Cyril (`SC-Cyril`) and Brent (`BrentJMaxwell`) are the release maintainers.
   Only they merge pull requests, create tags, and run or rerun releases.
   Other contributors can open issues and pull requests; repository triage

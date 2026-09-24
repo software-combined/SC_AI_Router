@@ -189,7 +189,7 @@ class InstallerCiGateTests(unittest.TestCase):
         self.assertIn('python-version: "3.9"', self.CHECK)
         self.assertIn('tools/check_installer_python39.py', self.CHECK)
 
-    def test_releases_require_main_acceptance_before_publishing(self):
+    def test_releases_require_acceptance_before_publishing(self):
         self.assertNotIn('tools/ci_scope.py --installer-tests', RELEASE)
         self.assertNotIn('unittest discover', RELEASE)
         self.assertIn('fetch-depth: 0', RELEASE)
@@ -197,9 +197,9 @@ class InstallerCiGateTests(unittest.TestCase):
         self.assertIn('actions/workflows/check.yml/runs?head_sha=$GITHUB_SHA', RELEASE)
         self.assertIn('.event == "push"', RELEASE)
         self.assertIn('.head_branch == "main"', RELEASE)
-        self.assertLess(RELEASE.index('name: Require accepted main commit'),
+        self.assertLess(RELEASE.index('name: Require an accepted commit'),
                         RELEASE.index('uses: ./.github/actions/setup'))
-        self.assertLess(RELEASE.index('name: Require accepted main commit'),
+        self.assertLess(RELEASE.index('name: Require an accepted commit'),
                         RELEASE.index('name: Build bundle'))
 
     def test_release_acceptance_runs_for_main_pull_requests_and_pushes(self):
@@ -210,11 +210,15 @@ class InstallerCiGateTests(unittest.TestCase):
         self.assertIn(MAIN_ACCEPTANCE, step.split('      - name:', 1)[0])
 
     @unittest.skipUnless(shutil.which('git') and shutil.which('bash'), 'requires git and bash')
-    def test_release_requires_an_accepted_main_commit(self):
+    def test_release_requires_an_accepted_commit_for_its_channel(self):
         with tempfile.TemporaryDirectory() as tmp:
             bin_dir = Path(tmp, 'bin'); bin_dir.mkdir()
             gh = bin_dir / 'gh'
-            gh.write_text('#!/bin/sh\nprintf "%s\\n" "$ACCEPTANCE_COUNT"\n'); gh.chmod(0o700)
+            # Every call leaves a marker. 'error' prints an accepting count but
+            # fails, and a non-number count must also stop the job.
+            gh.write_text('#!/bin/sh\ntouch gh-called\n'
+                          '[ "$ACCEPTANCE_COUNT" = error ] && { echo 1; exit 1; }\n'
+                          'printf "%s\\n" "$ACCEPTANCE_COUNT"\n'); gh.chmod(0o700)
             env = {**os.environ, 'PATH': f'{bin_dir}{os.pathsep}{os.environ["PATH"]}',
                    'GITHUB_REPOSITORY': 'example/router', 'GIT_AUTHOR_NAME': 'Probe',
                    'GIT_COMMITTER_NAME': 'Probe',
@@ -225,17 +229,34 @@ class InstallerCiGateTests(unittest.TestCase):
                                       text=True, capture_output=True, check=True).stdout.strip()
             git('init', '--quiet')
             tree = git('mktree', stdin='')
-            merged = git('commit-tree', tree, '-m', 'merged')
-            unmerged = git('commit-tree', tree, '-p', merged, '-m', 'unmerged')
-            git('update-ref', 'refs/remotes/origin/main', merged)
-            for sha, count, allowed in ((merged, 1, True), (merged, 0, False),
-                                        (unmerged, 1, False), ('0' * 40, 1, False)):
-                with self.subTest(sha=sha, count=count):
+            base = git('commit-tree', tree, '-m', 'base')
+            main_only = git('commit-tree', tree, '-p', base, '-m', 'main only')
+            develop_only = git('commit-tree', tree, '-p', base, '-m', 'develop only')
+            feature = git('commit-tree', tree, '-p', base, '-m', 'merged feature commit')
+            develop_tip = git('commit-tree', tree, '-p', develop_only, '-p', feature, '-m', 'merge')
+            unmerged = git('commit-tree', tree, '-p', develop_only, '-m', 'unmerged')
+            git('update-ref', 'refs/remotes/origin/main', main_only)
+            git('update-ref', 'refs/remotes/origin/develop', develop_tip)
+            beta, stable = 'v0.6.123-beta', 'v0.6.123'
+            # (tag, commit, successful main Check runs, publishes, asks gh)
+            for tag, sha, count, allowed, asks_gh in (
+                    (beta, develop_only, 0, True, False), (beta, develop_tip, 0, True, False),
+                    (beta + '-express', develop_only, 0, True, False), (beta, main_only, 0, True, False),
+                    (beta, unmerged, 1, False, False), (beta, '0' * 40, 1, False, False),
+                    (beta, feature, 0, False, False),
+                    (stable, develop_only, 1, False, False),
+                    (stable + '-express', develop_only, 1, False, False),
+                    (stable, '0' * 40, 1, False, False), (stable, main_only, 0, False, True),
+                    (stable, main_only, 'error', False, True), (stable, main_only, 'noise', False, True),
+                    (stable, main_only, 1, True, True)):
+                with self.subTest(tag=tag, sha=sha, count=count):
+                    Path(tmp, 'gh-called').unlink(missing_ok=True)
                     result = subprocess.run(
-                        ['bash', '-e', '-c', run_block('Require accepted main commit')],
-                        cwd=tmp, env={**env, 'GITHUB_SHA': sha,
+                        ['bash', '-e', '-c', run_block('Require an accepted commit')],
+                        cwd=tmp, env={**env, 'GITHUB_REF_NAME': tag, 'GITHUB_SHA': sha,
                                      'ACCEPTANCE_COUNT': str(count)}, capture_output=True)
                     self.assertEqual(result.returncode == 0, allowed)
+                    self.assertEqual(Path(tmp, 'gh-called').exists(), asks_gh)
 
     @unittest.skipUnless(shutil.which('jq'), 'requires jq to evaluate the gh filter')
     def test_acceptance_query_only_counts_successful_main_runs(self):
