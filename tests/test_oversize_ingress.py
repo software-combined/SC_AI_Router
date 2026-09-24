@@ -245,8 +245,9 @@ class OversizeIngressTests(unittest.TestCase):
             self.assertEqual(response.status, 400)
             self.assertEqual(json.loads(response.read())['error']['code'],
                              'BODY_TOO_LARGE')
-            # Refused after the read, so the slot it took is free again.
-            self.assertTrue(self.server.oversize_lock.acquire(blocking=False))
+            # Refused after the read, so the slot it took is free again; the
+            # handler frees it just after answering, so allow it a moment.
+            self.assertTrue(self.server.oversize_lock.acquire(timeout=5))
             self.server.oversize_lock.release()
         self.assertEqual(recorded, [])
 
@@ -266,7 +267,7 @@ class OversizeIngressTests(unittest.TestCase):
             self.assertEqual(json.loads(response.read())['error']['code'],
                              'BODY_TOO_LARGE')
             # The wire-oversized ask is released by the same refusal path.
-            self.assertTrue(self.server.oversize_lock.acquire(blocking=False))
+            self.assertTrue(self.server.oversize_lock.acquire(timeout=5))
             self.server.oversize_lock.release()
         self.assertEqual(recorded, [])
 
