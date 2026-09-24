@@ -85,21 +85,33 @@ def _summary_text(item):
     return _block_text(blocks).strip()
 
 
+def marker_texts(item, tag):
+    """Texts of a client `developer` or `system` message that open with `tag`.
+
+    String content or any text block counts once leading whitespace is
+    dropped, so a marker the client moves still reads as one; the tag later
+    in a text is quoted data. `context_recovery` shares this rule.
+    """
+    if not isinstance(item, dict) or item.get('role') not in ('developer', 'system'):
+        return []
+    content = item.get('content')
+    blocks = content if isinstance(content, list) else [{'text': content}]
+    texts = [block['text'].lstrip() for block in blocks
+             if isinstance(block, dict) and isinstance(block.get('text'), str)]
+    return [text for text in texts if text.startswith(tag)]
+
+
 def _switch_boundary(items):
     """Index of the client's last `<model_switch>` marker, else None.
 
-    The marker is the developer message Codex records when the thread
-    changes model; it stays in history and sits in chronological order, so
-    everything before the last one was produced under another model.
+    The marker is the message Codex records when the thread changes model
+    (Codex 0.155: a developer message with one text block); it stays in
+    history and sits in chronological order, so everything before the last
+    one was produced under another model. It names no model.
     """
     boundary = None
     for index, item in enumerate(items):
-        if not isinstance(item, dict) or item.get('role') != 'developer':
-            continue
-        content = item.get('content')
-        first = content[0] if isinstance(content, list) and content else None
-        text = first.get('text') if isinstance(first, dict) else None
-        if isinstance(text, str) and text.strip().startswith('<model_switch>'):
+        if marker_texts(item, '<model_switch>'):
             boundary = index
     return boundary
 
