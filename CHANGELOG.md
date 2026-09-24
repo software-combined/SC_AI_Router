@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- A subscription turn whose history replays the router's own compaction
+  summary now sends it as readable text on the first attempt, instead of
+  failing once and retrying. A turn that also carried a native encrypted child
+  reply no longer fails.
+
 ## 0.6.121
 
 - Keep custom-tool history paired when a thread changes model. Declared custom

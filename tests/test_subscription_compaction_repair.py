@@ -139,9 +139,16 @@ class CompactionRepairTests(unittest.TestCase):
         self.assertEqual(len(self.dispatches), 2, 'initial dispatch plus one retry')
         self.assertNotIn(b'encrypted_content', self.dispatches[1])
 
-    def test_07_the_healthy_path_keeps_the_summary_blob(self):
+    def test_07_the_healthy_path_projects_the_router_summary(self):
         payload = json.loads(body([MESSAGE, COMPACTION]))
-        self.assertIs(subscription_history.normalize(payload), payload)
+        result = subscription_history.normalize(payload)
+        self.assertIsNot(result, payload)
+        self.assertEqual(result['input'][1], {
+            'type': 'message', 'role': 'user',
+            'content': [{'type': 'input_text',
+                         'text': compaction.SUMMARY_PREFIX + '\n\n' + SUMMARY}]})
+        self.assertNotIn(compaction.encode_summary(SUMMARY), json.dumps(result))
+        # The client's own history still holds the item it stored.
         self.assertEqual(payload['input'][1]['encrypted_content'],
                          compaction.encode_summary(SUMMARY))
 
