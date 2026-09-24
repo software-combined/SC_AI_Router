@@ -12,7 +12,7 @@ the injected object, never a fresh import.
 import http.client
 import json
 import time
-from . import errors, local_services, provider_defs, setup, stream_errors, stream_relay, strip_retry, subscription_fallback, transport, upstream
+from . import errors, local_services, provider_defs, setup, stream_errors, stream_relay, strip_retry, subscription_fallback, transport, upstream, wire_shape
 from .providers import is_native_service
 
 
@@ -107,7 +107,7 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
                               parameter=upstream.rejection_parameter(raw),
                               serving_endpoint=upstream.serving_endpoint(raw),
                               category='UPSTREAM_UNAVAILABLE',
-                              **metrics, **upstream.rejection_fingerprint(prepared.body))
+                              **metrics, **wire_shape.fingerprint(prepared.body))
                     return handler.error(errors.upstream_unavailable(message),
                                          retry_after='2')
                 # A cached answer must be one the client treats as final.
@@ -120,7 +120,7 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
                           parameter=upstream.rejection_parameter(raw),
                           serving_endpoint=upstream.serving_endpoint(raw),
                           category='PROVIDER_REJECTED',
-                          **metrics, **upstream.rejection_fingerprint(prepared.body))
+                          **metrics, **wire_shape.fingerprint(prepared.body))
                 if status == 400:
                     return handler.error(errors.upstream_invalid_request(message))
                 if status == 409:

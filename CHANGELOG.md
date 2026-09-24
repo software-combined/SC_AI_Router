@@ -6,6 +6,9 @@
   summary now sends it as readable text on the first attempt, instead of
   failing once and retrying. A turn that also carried a native encrypted child
   reply no longer fails.
+- Provider refusal log lines now also record the request's top-level field
+  names, reasoning item shapes and any broken tool call/output pairing, as
+  names and counts only, never content.
 
 ## 0.6.121
 
