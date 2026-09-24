@@ -79,11 +79,15 @@ class LiveRefreshTests(unittest.TestCase):
         self.assertEqual(derived['display_name'], 'Grok Latest \xb7 OpenRouter')
 
     def test_pinned_identity_fields_untouched(self):
-        row = _row(slug='m/x', excluded_efforts=['max'])
+        row = _row(slug='m/x', excluded_efforts=['max'],
+                   auto_compact_token_limit=400000)
         out = refresh([row], {'m/x': _live()})
         self.assertEqual(out[0]['slug'], 'm/x')
         self.assertEqual(out[0]['excluded_efforts'], ['max'])
         self.assertEqual(out[0]['default_reasoning'], 'low')
+        # The window follows the provider; the compaction limit stays pinned.
+        self.assertEqual(out[0]['context_window'], 100)
+        self.assertEqual(out[0]['auto_compact_token_limit'], 400000)
 
     def test_alias_refresh_preserves_wire_slug_and_identity(self):
         row = _row(slug='~x-ai/grok-latest', provider='openrouter',
