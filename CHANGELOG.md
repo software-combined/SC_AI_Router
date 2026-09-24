@@ -13,7 +13,9 @@
   that is not a plain name is logged as `unknown` so free text cannot reach
   the log, and an item with a role but no type counts as a `message`.
 - MiMo V2.6 Pro threads now compact at about 400,000 tokens, before Xiaomi's
-  endpoint starts failing long requests.
+  endpoint starts failing long requests. With Jev compaction on, a row's
+  compaction limit also caps the retained history, so a Jev result does not
+  trigger a second compaction straight away.
 
 ## 0.6.123
 
