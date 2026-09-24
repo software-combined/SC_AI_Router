@@ -10,7 +10,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from ai_router import errors, upstream
+from ai_router import errors, upstream, wire_shape
 from ai_router.runtime import LOG
 
 MARKER = 'SYNTH-CANARY-060-9f2c'
@@ -80,20 +80,22 @@ class SafeDiagnosticsTests(unittest.TestCase):
             'tools': [{'type': 'function', 'name': 'exec',
                        'description': f'does {MARKER}',
                        'parameters': {'type': 'object'}}]}).encode()
-        fingerprint = upstream.rejection_fingerprint(body)
+        fingerprint = wire_shape.fingerprint(body)
         self.assertEqual(fingerprint,
                          {'items': 2,
                           'item_kinds': {'message': 1, 'function_call': 1},
-                          'tools': 1})
+                          'tools': 1,
+                          'top_level_keys': ['input', 'model', 'tools'],
+                          'pair_problems': {'orphan_call': 1}})
         blob = json.dumps(fingerprint)
         self.assertNotIn(MARKER, blob)
         for banned in ('text', 'arguments', 'description', 'name'):
             self.assertNotIn(f"'{banned}'", blob.replace('"', "'"))
-        self.assertEqual(upstream.rejection_fingerprint(b'not json'), {})
-        self.assertEqual(upstream.rejection_fingerprint(
+        self.assertEqual(wire_shape.fingerprint(b'not json'), {})
+        self.assertEqual(wire_shape.fingerprint(
             json.dumps({'input': 'a string, not a list'}).encode()), {})
         # The Messages wire has no `input`; its counts would be misleading.
-        self.assertEqual(upstream.rejection_fingerprint(
+        self.assertEqual(wire_shape.fingerprint(
             json.dumps({'messages': [{'role': 'user', 'content': 'hi'}],
                         'tools': [{'name': 'exec'}]}).encode()), {})
 

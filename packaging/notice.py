@@ -36,6 +36,7 @@ _text = _ilu.module_from_spec(_spec)
 _spec.loader.exec_module(_text)
 # Kept as a module name: the wording is pinned here by callers and tests.
 _message = _text.message
+dialog_names = _text.dialog_names  # the updater lists models the same way
 
 NOTICE_FILE = 'update-notice.json'
 CATALOGUE_FILE = 'mixed-models.json'
@@ -448,7 +449,8 @@ def show_pending(home, spawn=None, pid_alive=None, names=None):
     it. Any failure returns False and never surfaces to the installer.
     `ROUTER_NO_NOTICE=1` silences the dialog for unattended installs and for
     tests that run the real CLI. `names` are the added models to list; without
-    them the stored names are used, then the running router is asked.
+    them the stored names are used, then the running router is asked; with
+    none the update stays silent, and whatever a dialog lists is marked seen.
     """
     if os.environ.get('ROUTER_NO_NOTICE') == '1':
         return False
@@ -459,7 +461,11 @@ def show_pending(home, spawn=None, pid_alive=None, names=None):
     try:
         path = Path(home) / NOTICE_FILE
         doc = json.loads(path.read_text())
-        if not isinstance(doc, dict) or doc.get('shown'):
+        if not isinstance(doc, dict):
+            return False
+        if doc.get('shown'):
+            if doc.get('names'):  # listed before, perhaps never marked seen
+                _text.acknowledge(home, doc['names'])
             return False
         version = doc.get('version')
         if not isinstance(version, str) or not version:
@@ -469,23 +475,26 @@ def show_pending(home, spawn=None, pid_alive=None, names=None):
         if not isinstance(names, list):
             names = _text.pending_names(home)
         names = [name for name in names if isinstance(name, str) and name]
+        if not names:
+            return False
         cmd = dialog_command(version, icon=_home_icon(home) or '',
                              clients=doc.get('clients', 'codex'), names=names)
         if cmd is None:
             return False
-        shown = {'version': version, 'shown': True, 'at': _utcnow(),
-                 'names': names}
+        shown = {'version': version, 'shown': True, 'at': _utcnow()}
         pid = _dialog_pid(doc)
         if pid and pid_alive(pid):
             shown['pid'] = pid
             _atomic_write.replace_json(path, shown)
             return False
+        shown['names'] = names  # a folded notice leaves its models unlisted
         pid = _dialog_pid({'pid': spawn(cmd)})
         if pid:
             if not _dialog_up(pid, pid_alive):
                 return False
             shown['pid'] = pid
         _atomic_write.replace_json(path, shown)
+        _text.acknowledge(home, names)
         return True
     except (OSError, ValueError):
         return False

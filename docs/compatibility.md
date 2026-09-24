@@ -1,5 +1,69 @@
 # Compatibility
 
+## Router compaction summary on the subscription route, 24 September 2026 AEST
+
+Router candidate `0.6.122` sends the router's own compaction summary as
+readable text on the first subscription attempt. When a thread compacts on an
+OpenRouter model, Codex stores the router's `ocx1:` compaction item and
+replays it on later ChatGPT subscription and `codex-auto-review` turns, and
+the ChatGPT backend cannot read it. Since 0.6.120 each such turn failed once
+with HTTP 400 `invalid_encrypted_content` and then retried with the item
+rewritten. A turn that also carried a native encrypted child reply failed
+outright, because the retry refuses a request with an encrypted field it does
+not own.
+
+`subscription_history.normalize` now makes that rewrite before the first
+dispatch, using the same `compaction_text` message as the retry. A native
+compaction blob still goes out unchanged, the client's saved history is never
+edited, and the retry stays as the fallback for native blobs. This replaces
+the healthy-path behaviour in the 23 September entry below.
+
+Evidence is offline only: `tests/test_subscription_router_compaction.py`,
+including handler tests that carry a native encrypted child reply in identity
+and zstd bodies, and the updated `test_07` in
+`tests/test_subscription_compaction_repair.py`. No live client session was run.
+
+## Router 0.6.121 beta gate, 24 September 2026 AEST
+
+Installed beta `0.6.121.116` (`v0.6.121-beta-express`, `main` `c930797`) on
+Codex desktop `26.917.62051` (build `10789`) with bundled
+`codex-cli 0.155.0-alpha.16.3`; Claude Code `2.1.223` was not exercised. Every
+leg ran `tools/probe_codex_runtime.py --live-home` from an unmodified
+`origin/main` copy against the installed router, with synthetic data: 16
+upstream model calls against a cap of 20, all HTTP 200 with no stream retry;
+each leg began with the expected local 426 websocket refusal. The stable tag
+`v0.6.121-express` followed this gate. Served models come from the router
+log, which recorded them for the short switched turns but not for the Astra
+turns in the compaction legs.
+
+| surface | requested model | effort | served | calls | result |
+|---|---|---|---|---|---|
+| Codex, subscription | `gpt-6-luna` | `low` | `gpt-6-luna` | 2 | passed |
+| Codex, subscription switch | `gpt-6-luna` to `gpt-6-astra` to `gpt-6-luna` | `low` | as requested | 6 (both runs) | passed on rerun |
+| Codex, external switch and compaction | `z-ai/glm-5.3-flash` to `gpt-6-astra`, then compact | `low` | `z-ai/glm-5.3-flash`; Astra not logged | 4 | passed |
+| Codex, external switch with reasoning and compaction | `deepseek/deepseek-v4.1-flash` to `gpt-6-astra`, then compact | `high`, then `low` | `deepseek/deepseek-v4.1-flash`; Astra not logged | 4 | passed |
+
+The first subscription switch run stopped before the switch because Luna
+wrapped the marker in double quotes, which the probe's exact-match check
+rejects; the unchanged rerun returned the marker on both switched turns. GLM
+streamed no reasoning at `low`, so the DeepSeek leg repeated the path at
+`high`: its first turn streamed 3,415 reasoning bytes and the client recorded
+a reasoning item before the switch, and Astra then accepted both the switched
+turn and the compaction. Both compactions were streamed `/responses` requests
+(10.6 s and 9.9 s) with no `/responses/compact` call, so the client used the
+inline path rather than V1. The router logs no item types for subscription
+requests, so whether the foreign reasoning was dropped or replayed as a
+`[reasoning summary from the previous model]` note is not visible in
+metadata.
+
+Limits: no probe tool can drive a switched subscription thread that carries
+a readable agent message, so projecting that message rests on offline
+regression. The log also cannot show whether the compaction requests carried
+a `compaction_trigger` item, so these legs do not prove the V2 trigger live.
+The `0.6.121.116` beta install drained the old router for 112.6 s behind a
+150.8 s user stream, within the 120 s forced-exit limit; the `0.6.120.115`
+install drained in 0.64 s.
+
 ## Codex desktop 26.917 client check, 24 September 2026 AEST
 
 Codex desktop `26.917.62051` (build `10789`) with bundled

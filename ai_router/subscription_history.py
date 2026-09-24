@@ -1,20 +1,27 @@
-"""Normalize replayed reasoning for the subscription Responses wire.
+"""Normalize replayed history for the subscription Responses wire.
 
 Foreign plaintext reasoning is not a portable saved item: keeping its id
 without its content asks upstream to retrieve an item it never stored.
-Only the outbound projection changes; the client's history stays intact.
+The router's own compaction summary is not portable either: the router hands
+the client an `ocx1:`-prefixed summary item, the client replays it, and the
+ChatGPT backend cannot read it, refusing the turn with
+`invalid_encrypted_content`. That item goes out as readable text; a native
+compaction blob belongs to the backend and goes out unchanged. Only the
+outbound projection changes; the client's history is never edited.
 
-The retry projection below also covers the compaction summary blob: the
-router hands the client an `ocx1:`-prefixed summary item, the client replays
-it, and the ChatGPT backend refuses the turn with
-`invalid_encrypted_content` because it cannot read that blob either.
+The retry repair below stays as the fallback for any blob the backend still
+rejects.
 """
 from . import compaction as comp
 from .history_portability import user_message_item
 
 
 def normalize(payload):
-    """Return the original payload on a no-op, otherwise a shallow copy."""
+    """Project reasoning and the router's own compaction summary for the wire.
+
+    Returns the original payload on a no-op, otherwise a shallow copy; the
+    client's items are never edited.
+    """
     items = payload.get('input')
     if not isinstance(items, list):
         return payload
@@ -26,6 +33,10 @@ def normalize(payload):
             changed = True
             if item.get('encrypted_content'):
                 result.append({key: value for key, value in item.items() if key != 'content'})
+        elif (comp.is_compaction_item(item)
+                and comp.decode_summary(item.get('encrypted_content')) is not None):
+            changed = True
+            result.append(user_message_item(comp.compaction_text(item)))
         else:
             result.append(item)
     return {**payload, 'input': result} if changed else payload

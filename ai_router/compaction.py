@@ -13,7 +13,7 @@ COMPACT_PROMPT = ('You are performing a CONTEXT CHECKPOINT COMPACTION. Create a 
     'tool results verbatim so the next model can repeat them exactly. Be concise and structured.')
 import base64
 import secrets
-from .agent_handoffs import plaintext_agent_message, recoverable_agent_message
+from .agent_handoffs import recoverable_agent_message
 from .compaction_result import IncompleteSummary as IncompleteSummary, extract_summary as extract_summary
 from .history_portability import CALL_TYPES as CALL_TYPES, OUTPUT_TYPES as OUTPUT_TYPES, _block_text as _block_text, user_message_item as user_message_item
 PREFIX = 'ocx1:'
@@ -106,8 +106,6 @@ def rewrite_input(items):
     for item in items:
         if is_compaction_item(item):
             rewritten.append(user_message_item(compaction_text(item)))
-        elif isinstance(item, dict) and item.get('type') == 'agent_message':
-            rewritten.append(plaintext_agent_message(item))
         else:
             rewritten.append(item)
     return rewritten
@@ -194,12 +192,12 @@ def _item_text(item):
     if kind == 'message':
         role = item.get('role', 'user')
         return f'{role}: {_block_text(item.get("content", ""))}'.strip()
-    if kind in ('function_call', 'custom_tool_call'):
-        label = item.get('name', '')
+    if kind in ('function_call', 'custom_tool_call', 'apply_patch_call'):
+        label = item.get('name', 'apply_patch' if kind == 'apply_patch_call' else '')
         if item.get('namespace'):
             label = f"{item['namespace']}.{label}"
-        return f'assistant tool call {label}: ' + str(item.get('arguments', item.get('input', '')))[:2000]
-    if kind in ('function_call_output', 'custom_tool_call_output'):
+        return f'assistant tool call {label}: ' + str(item.get('arguments', item.get('input', item.get('operation', ''))))[:2000]
+    if kind in ('function_call_output', 'custom_tool_call_output', 'apply_patch_call_output'):
         label = f" {item['name']}" if item.get('name') else ''
         for key in ('output', 'result', 'content', 'text', 'data'):
             if item.get(key):

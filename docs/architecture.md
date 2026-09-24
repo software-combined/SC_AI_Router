@@ -9,8 +9,8 @@ transitional owners name the plan that will move them.
 ```
 provider_defs (one definition per upstream, imports nothing) + errors,
 redaction, sse, tool_merge, image_items, turn_budget, atomic_write, state,
-events (leaves: no module-level local imports; events' one call-time state
-lookup is the only exception)
+wire_shape, events (leaves: no module-level local imports; events' one
+call-time state lookup is the only exception)
   ^
   |
 registry / capabilities (model facts; stdlib plus the provider table only)
@@ -59,7 +59,8 @@ thread that switched model: it applies the switch boundary, then projects fully
 readable agent messages, the shape external peers send. The backend reads
 native encrypted replies and app-delivered outputs itself, so those stay
 unchanged. Client history is never edited.
-`subscription_history.py` owns the pure outgoing reasoning projection for
+`subscription_history.py` owns the pure outgoing projection of replayed
+reasoning and the router's own compaction summary (sent as readable text) for
 subscription Responses requests; it never edits persisted client history.
 `context_recovery.py` adds fixed recovery guidance for client-declared context
 resets on either Responses route. Codex owns saved history and executes its
@@ -73,6 +74,9 @@ client's answer rather than plumbing, the bounded hold that lets a retry replace
 plumbing instead of appending a second copy, the retry verdict, and opening
 the retry itself. It is a
 leaf beside `stream_errors.py`, never a dispatcher or a credential owner.
+`wire_shape.py` reduces a prepared Responses body to the names and counts a
+refusal log line carries and owns the tool call/output pairing rules the test
+fake also enforces; it observes and never changes a request.
 
 1. `provider_defs.py` owns every upstream fact (host, endpoint prefixes, key
    location, model catalogue, key-info endpoint, failure dialect) and imports
