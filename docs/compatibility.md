@@ -1,5 +1,28 @@
 # Compatibility
 
+## Router compaction summary on the subscription route, 24 September 2026 AEST
+
+Router candidate `0.6.122` sends the router's own compaction summary as
+readable text on the first subscription attempt. When a thread compacts on an
+OpenRouter model, Codex stores the router's `ocx1:` compaction item and
+replays it on later ChatGPT subscription and `codex-auto-review` turns, and
+the ChatGPT backend cannot read it. Since 0.6.120 each such turn failed once
+with HTTP 400 `invalid_encrypted_content` and then retried with the item
+rewritten. A turn that also carried a native encrypted child reply failed
+outright, because the retry refuses a request with an encrypted field it does
+not own.
+
+`subscription_history.normalize` now makes that rewrite before the first
+dispatch, using the same `compaction_text` message as the retry. A native
+compaction blob still goes out unchanged, the client's saved history is never
+edited, and the retry stays as the fallback for native blobs. This replaces
+the healthy-path behaviour in the 23 September entry below.
+
+Evidence is offline only: `tests/test_subscription_router_compaction.py`,
+including handler tests that carry a native encrypted child reply in identity
+and zstd bodies, and the updated `test_07` in
+`tests/test_subscription_compaction_repair.py`. No live client session was run.
+
 ## Router 0.6.121 beta gate, 24 September 2026 AEST
 
 Installed beta `0.6.121.116` (`v0.6.121-beta-express`, `main` `c930797`) on
