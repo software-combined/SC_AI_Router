@@ -13,6 +13,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / '.github/workflows'
 RELEASE = (WORKFLOWS / 'release.yml').read_text()
+MAIN_ACCEPTANCE = ("if: (github.event_name == 'pull_request' && "
+                   "github.base_ref == 'main') || (github.event_name == 'push' && "
+                   "github.ref == 'refs/heads/main')")
 
 
 def run_block(name, text=None):
@@ -97,9 +100,9 @@ class InstallerCiGateTests(unittest.TestCase):
     CHECK = (WORKFLOWS / 'check.yml').read_text()
     SETUP = (ROOT / '.github/actions/setup/action.yml').read_text()
 
-    def test_the_test_gate_waits_for_every_installer_job(self):
+    def test_required_gate_waits_for_all_scoped_jobs(self):
         self.assertIn(
-            'needs: [changes, installer-macos, installer-windows, installer-python39, hook-adapter]',
+            'needs: [changes, installer-macos, installer-windows, installer-python39, plugin-schedulers, hook-adapter]',
             self.CHECK)
         self.assertIn('if: ${{ !cancelled() }}', self.CHECK)
         self.assertIn(
@@ -124,8 +127,10 @@ class InstallerCiGateTests(unittest.TestCase):
         # The exact workflow step: a failed diff must fail it (pipefail), not
         # read as "no installer files changed" and silently skip the native
         # checks while the required gate stays green.
-        block = run_block('Installer scope', self.CHECK).replace(
-            '${{ github.base_ref }}', 'develop')
+        block = (run_block('Installer scope', self.CHECK)
+                 .replace('${{ github.base_ref }}', 'develop')
+                 .replace('${{ github.event.before }}', 'before')
+                 .replace('${{ github.sha }}', 'after'))
         with tempfile.TemporaryDirectory() as tmp:
             bin_dir = Path(tmp) / 'bin'
             bin_dir.mkdir()
@@ -133,29 +138,29 @@ class InstallerCiGateTests(unittest.TestCase):
             stub.write_text('#!/bin/sh\nprintf "%s\\n" "$GIT_STUB_OUTPUT"\n'
                             'exit "$GIT_STUB_STATUS"\n')
             stub.chmod(0o700)
-            out = Path(tmp) / 'out'
-            env = {**os.environ, 'PATH': f'{bin_dir}{os.pathsep}{os.environ["PATH"]}',
-                   'GIT_STUB_OUTPUT': 'packaging/install.py',
-                   'GIT_STUB_STATUS': '0', 'GITHUB_OUTPUT': str(out)}
-            subprocess.run(['bash', '-e', '-c', block], cwd=ROOT, env=env,
-                           check=True, capture_output=True)
-            self.assertIn('installer=true', out.read_text())
-            env['GIT_STUB_STATUS'] = '128'
-            failed = subprocess.run(['bash', '-e', '-c', block], cwd=ROOT, env=env,
-                                    capture_output=True)
-            self.assertNotEqual(failed.returncode, 0)
+            for event in ('pull_request', 'push'):
+                out = Path(tmp) / f'{event}.out'
+                env = {**os.environ, 'PATH': f'{bin_dir}{os.pathsep}{os.environ["PATH"]}',
+                       'GITHUB_EVENT_NAME': event, 'GIT_STUB_OUTPUT': 'packaging/install.py',
+                       'GIT_STUB_STATUS': '0', 'GITHUB_OUTPUT': str(out)}
+                subprocess.run(['bash', '-e', '-c', block], cwd=ROOT, env=env,
+                               check=True, capture_output=True)
+                self.assertIn('installer=true', out.read_text())
+                env['GIT_STUB_STATUS'] = '128'
+                failed = subprocess.run(['bash', '-e', '-c', block], cwd=ROOT, env=env,
+                                        capture_output=True)
+                self.assertNotEqual(failed.returncode, 0)
 
-    def test_installer_jobs_are_scope_selected_for_pull_requests(self):
+    def test_installer_jobs_are_scope_selected_for_main_acceptance(self):
         for job in ('installer-macos', 'installer-windows', 'installer-python39'):
             self.assertIn(f'{job}:', self.CHECK)
         # The producer wiring too: without the step id and the job output no
         # installer job is ever selected, however correct the consumer is.
         self.assertIn('id: scope', self.CHECK)
         self.assertIn('installer: ${{ steps.scope.outputs.installer }}', self.CHECK)
-        self.assertIn(
-            "if: github.event_name == 'pull_request' && github.base_ref == 'main'",
-            self.CHECK)
+        self.assertIn(MAIN_ACCEPTANCE, self.CHECK)
         self.assertIn("if: needs.changes.outputs.installer == 'true'", self.CHECK)
+        self.assertIn('github.event.before', self.CHECK)
         self.assertIn('tools/ci_scope.py --installer', self.CHECK)
         self.assertIn('tools/ci_scope.py --installer-tests', self.CHECK)
         self.assertIn('runs-on: macos-latest', self.CHECK)
@@ -184,13 +189,74 @@ class InstallerCiGateTests(unittest.TestCase):
         self.assertIn('python-version: "3.9"', self.CHECK)
         self.assertIn('tools/check_installer_python39.py', self.CHECK)
 
-    def test_releases_run_the_installer_checks_before_publishing(self):
-        self.assertIn(
-            'needs: [installer-macos, installer-windows, installer-python39]', RELEASE)
-        self.assertIn('!cancelled() &&', RELEASE)
-        self.assertIn("contains(needs.*.result, 'failure')", RELEASE)
-        self.assertIn('tools/ci_scope.py --installer-tests', RELEASE)
-        self.assertIn('tools/check_installer_python39.py', RELEASE)
+    def test_releases_require_main_acceptance_before_publishing(self):
+        self.assertNotIn('tools/ci_scope.py --installer-tests', RELEASE)
+        self.assertNotIn('unittest discover', RELEASE)
+        self.assertIn('fetch-depth: 0', RELEASE)
+        self.assertIn('actions: read', RELEASE)
+        self.assertIn('actions/workflows/check.yml/runs?head_sha=$GITHUB_SHA', RELEASE)
+        self.assertIn('.event == "push"', RELEASE)
+        self.assertIn('.head_branch == "main"', RELEASE)
+        self.assertLess(RELEASE.index('name: Require accepted main commit'),
+                        RELEASE.index('uses: ./.github/actions/setup'))
+        self.assertLess(RELEASE.index('name: Require accepted main commit'),
+                        RELEASE.index('name: Build bundle'))
+
+    def test_release_acceptance_runs_for_main_pull_requests_and_pushes(self):
+        for name in ('changes', 'plugin-schedulers', 'hook-adapter'):
+            job = re.split(r'\n  \S', self.CHECK.split(f'  {name}:\n', 1)[1], maxsplit=1)[0]
+            self.assertIn(MAIN_ACCEPTANCE, job)
+        step = self.CHECK.split('      - name: Unit suite (offline)\n', 1)[1]
+        self.assertIn(MAIN_ACCEPTANCE, step.split('      - name:', 1)[0])
+
+    @unittest.skipUnless(shutil.which('git') and shutil.which('bash'), 'requires git and bash')
+    def test_release_requires_an_accepted_main_commit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bin_dir = Path(tmp, 'bin'); bin_dir.mkdir()
+            gh = bin_dir / 'gh'
+            gh.write_text('#!/bin/sh\nprintf "%s\\n" "$ACCEPTANCE_COUNT"\n'); gh.chmod(0o700)
+            env = {**os.environ, 'PATH': f'{bin_dir}{os.pathsep}{os.environ["PATH"]}',
+                   'GITHUB_REPOSITORY': 'example/router', 'GIT_AUTHOR_NAME': 'Probe',
+                   'GIT_COMMITTER_NAME': 'Probe',
+                   'GIT_AUTHOR_EMAIL': 'probe@example.invalid',
+                   'GIT_COMMITTER_EMAIL': 'probe@example.invalid'}
+            def git(*args, stdin=None):
+                return subprocess.run(['git', *args], cwd=tmp, env=env, input=stdin,
+                                      text=True, capture_output=True, check=True).stdout.strip()
+            git('init', '--quiet')
+            tree = git('mktree', stdin='')
+            merged = git('commit-tree', tree, '-m', 'merged')
+            unmerged = git('commit-tree', tree, '-p', merged, '-m', 'unmerged')
+            git('update-ref', 'refs/remotes/origin/main', merged)
+            for sha, count, allowed in ((merged, 1, True), (merged, 0, False),
+                                        (unmerged, 1, False), ('0' * 40, 1, False)):
+                with self.subTest(sha=sha, count=count):
+                    result = subprocess.run(
+                        ['bash', '-e', '-c', run_block('Require accepted main commit')],
+                        cwd=tmp, env={**env, 'GITHUB_SHA': sha,
+                                     'ACCEPTANCE_COUNT': str(count)}, capture_output=True)
+                    self.assertEqual(result.returncode == 0, allowed)
+
+    @unittest.skipUnless(shutil.which('jq'), 'requires jq to evaluate the gh filter')
+    def test_acceptance_query_only_counts_successful_main_runs(self):
+        expression = re.search(r"--jq '([^']+)'", RELEASE).group(1)
+        sha = 'a' * 40
+        accepted = {'head_sha': sha, 'event': 'push', 'head_branch': 'main',
+                    'status': 'completed', 'conclusion': 'success'}
+        cases = [
+            ([accepted], 1),
+            ([{**accepted, 'conclusion': 'failure'}], 0),
+            ([{**accepted, 'status': 'in_progress', 'conclusion': None}], 0),
+            ([{**accepted, 'head_branch': 'develop'}], 0),
+            ([{**accepted, 'head_sha': 'b' * 40}], 0),
+        ]
+        env = {**os.environ, 'GITHUB_SHA': sha}
+        for runs, expected in cases:
+            with self.subTest(runs=runs):
+                result = subprocess.run(
+                    ['jq', '-c', expression], input=json.dumps({'workflow_runs': runs}),
+                    env=env, text=True, capture_output=True, check=True)
+                self.assertEqual(result.stdout.strip(), str(expected))
 
 
 class WorkflowBoundaryTests(unittest.TestCase):

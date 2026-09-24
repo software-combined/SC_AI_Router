@@ -12,7 +12,7 @@ import urllib.request
 from pathlib import Path
 
 STATE_FILE = 'mixed-router-state.json'
-# The desktop notification names three models, so the dialog matches it.
+# Keep the dialog short enough to scan.
 DIALOG_NAMES = 3
 # The installer waits on this path: a short read, and a short deadline.
 PENDING_TIMEOUT_S = 1.0

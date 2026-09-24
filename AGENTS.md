@@ -60,8 +60,9 @@ window, and anything added later) follows one style:
   reopen Codex, and never offer a restart the machine cannot perform;
 - at most two actions, and the safe one is always available ("Later" or
   "Cancel" never disappears);
-- best-effort: a missing dialog tool falls back to the loopback page and no
-  popup ever blocks or fails an install.
+- dialog-only: a missing dialog tool leaves the notice pending and never
+  opens a browser or sends a separate notification; no popup ever blocks or
+  fails an install.
 
 `tests/test_popup_style.py` pins the shared title, icon asset and vocabulary
 across the platforms, so a new dialog cannot drift from this style.
@@ -88,7 +89,11 @@ Run `python3.14 -m unittest discover -s tests -t .`,
 `pre-commit-review` skill. Commit subjects use `<type>: <short summary>`
 with type `feat`, `fix`, `refactor`, `test`, `chore` or `docs`.
 Discover runs the fast core suite; installer tests are opt-in via
-`SCG_RUN_INSTALLER_TESTS=1` (native CI runners cover them on scope).
+`SCG_RUN_INSTALLER_TESTS=1` (native CI runners cover them on scope for release
+PRs into `main` and pushes to `main`). Develop CI runs fast static checks; full
+remote regression runs for main acceptance. Tags publish only an exact main
+commit with a successful `Check` run and do not repeat those acceptance checks.
+Local pre-commit requirements above still apply.
 
 ### Bounded live regression probes
 

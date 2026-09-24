@@ -7,13 +7,24 @@ merges to `main` via PR. Tag the merge with the full `v<VERSION>` label
 matching `packaging/VERSION`: `0.6.117` becomes `v0.6.117`.
 Add `-beta` for a pre-release, `-express` for an urgent stable release, or
 `-beta-express` for an urgent beta. The release workflow runs on `v*` tags
-only, validates the exact version, runs the suite, builds the bundle, publishes
-the release to the public feed, and then creates the GitHub Release with
+only, requires a commit already merged into `main` with a successful `Check`
+run for that exact commit, validates the exact version, builds the bundle,
+publishes the release to the public feed, and then creates the GitHub Release with
 `latest.json` as a public mirror for humans. The semantic version remains in
 the public tag, bundle and feed, where the updater uses it for ordering.
 Every router on the stable channel installs it within about four hours.
 Never push to `main` directly for a release; a direct push runs
 checks but publishes nothing.
+
+Develop PRs and branch pushes run fast static checks. The full offline suite,
+scoped native installer checks, plugin scheduler checks and hook-adapter
+portability checks run for main PRs and pushes to `main`. Beta and stable tags
+reuse that exact-commit acceptance and perform packaging, runtime-pin
+verification, signing and publication. Local tests and review still run before
+every commit. A tag runs the copy of the release workflow saved in the tagged
+commit, so a tag on a commit made before this acceptance check existed can
+still publish without it. Stopping those older copies from publishing is a
+separate step.
 
 ## Feed infrastructure and publishing
 
@@ -299,34 +310,32 @@ new permission.
 
 When a scheduled update lands a version that adds models for the machine's
 policy scope, the updater asks the running router over loopback (the 3.9
-updater never imports the runtime) and offers a Codex restart: a desktop
-notification and the native restart dialog each name up to three of the new
-models (macOS always; Linux when `notify-send` is installed; Windows logs
-the notification only) and the approval page opens in the browser on macOS
-and Linux. All three name a model the way the picker does
-(`<Vendor>: <Model>`, without the `· OpenRouter` route suffix), and a dialog
-that cannot reach the running router keeps its version-only sentence, so a
-stopped service never delays an update. The page is reachable only
-through its single-use link, which carries the per-install path token plus
-a 48 h nonce; both Restart Codex and Later acknowledge, and only the
-Restart click quits and reopens Codex, on macOS. The offer is skipped on
-installs whose state records no Codex attachment (`--clients claude`,
-`--client none`; a `clients` value recorded by an earlier run can lag the
-current attachment) and whenever `ROUTER_NO_NOTICE=1` silences the update
-notice. The first run
-seeds the snapshot without announcing the catalogue, so the first landing
-after this feature ships only seeds it and later landings announce;
-removals and version-only updates stay silent, and an unverified or
-out-of-policy row is never announced.
+updater never imports the runtime) and shows one native restart dialog. The
+dialog names up to three new models the way the picker does
+(`<Vendor>: <Model>`, without the `· OpenRouter` route suffix). No browser
+page or separate desktop notification opens. A dialog that cannot reach the
+running router keeps its version-only sentence, so a stopped service never
+delays an update. `Later` leaves the client running; `Quit and reopen` quits
+and reopens Codex on macOS. The offer is skipped on installs whose state
+records no Codex attachment (`--clients claude`, `--client none`; a `clients`
+value recorded by an earlier run can lag the current attachment) and whenever
+`ROUTER_NO_NOTICE=1` silences the update notice. If no native dialog tool is
+available, the notice stays pending for a later GUI run. The first run seeds
+the snapshot without announcing the catalogue, so the first landing after
+this feature ships only seeds it and later landings announce; removals and
+version-only updates stay silent, and an unverified or out-of-policy row is
+never announced.
 
 ## How to test first
 
-Tag `v<VERSION>-beta` from `develop`. The workflow publishes a pre-release to the
-public beta document (`beta/latest.json`). Cyril's machine follows the
+Promote the release candidate from `develop` to `main` through its PR, wait for
+`Check` to pass on the merge commit, then tag `v<VERSION>-beta` from that main
+commit. The workflow publishes a pre-release to the public beta document
+(`beta/latest.json`). Cyril's machine follows the
 `beta` channel (`beta`
 in the `channel` file beside the state directory), so it updates first;
-watch its `/health` version and `logs/update.log` before merging
-`develop` to `main` and tagging stable.
+watch its `/health` version and `logs/update.log` before tagging the same main
+commit stable.
 
 ## How to roll back
 

@@ -1,6 +1,30 @@
 # Changelog
 
-## Unreleased
+## 0.6.121
+
+- Keep custom-tool history paired when a thread changes model. Declared custom
+  and function tools now convert to matched function-call items, while an
+  undeclared custom pair stays as matched custom items instead of producing a
+  mixed call/output shape that strict providers reject.
+- Normalize subscription replay for threads that switched model. Reasoning
+  from before the switch is dropped, or replays as a visible note when it has
+  a readable summary; fully readable agent messages from external peers become
+  matched tool results; and V2 compaction triggers continue to the
+  subscription provider. Turns without a model switch, native encrypted
+  replies and app-delivered outputs are forwarded unchanged.
+
+## 0.6.120
+
+- Update and new-model notices now show only the native restart dialog. The
+  updater no longer opens an approval page in the browser or sends a second
+  desktop notification; an unavailable dialog stays pending for a later run.
+- A subscription Responses request rejected with `invalid_encrypted_content`
+  whose history replays the router's own compaction summary item now gets one
+  bounded retry after that item is rewritten as readable text. The replayed
+  reasoning-blob repair is unchanged, and a payload carrying an encrypted
+  field outside those two shapes is left alone rather than retried.
+
+## 0.6.119
 
 - Fix combined Codex model discovery rejecting valid OpenAI visibility and
   upgrade metadata. Subscription models still come from the server and appear

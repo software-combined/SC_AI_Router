@@ -9,7 +9,6 @@ import hashlib
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -32,7 +31,6 @@ MAX_VERSION_FAILURES = 3
 ANNOUNCE_TIMEOUT_S = 5
 NOTIFY_NAMES = 3
 REPLY_LIMIT = 1 << 20
-_NONCE_SHAPE = re.compile(r'[A-Za-z0-9_\-]{16,}')
 
 _SHA256_SHAPE = re.compile(r'^[0-9a-f]{64}$')
 
@@ -112,10 +110,7 @@ def _noop_sync():
 
 
 def _pending_reply(state, _urlopen=None):
-    """{'pending': [...], 'url': ...} from the running router, or {}.
-
-    The URL carries the path token and the single-use nonce: caller only.
-    """
+    """The running router's pending-model reply, or {}."""
     port, token = state.get('port'), state.get('token')
     if not isinstance(port, int) or not 0 < port < 65536:
         return {}
@@ -130,43 +125,6 @@ def _pending_reply(state, _urlopen=None):
         return json.loads(response.read(REPLY_LIMIT).decode())
 
 
-def _notify_command(names, platform):
-    """One platform notification command, or None where none exists."""
-    text = 'New models: %s. Restart Codex to use them.' % ', '.join(names)
-    if platform == 'darwin':
-        escaped = text.replace('\\', '\\\\').replace('"', '\\"')
-        return ['osascript', '-e',
-                'display notification "%s" with title "Router update"' % escaped]
-    if platform == 'linux':
-        return ['notify-send', 'Router update', text]
-    return None
-
-
-def _open_command(url, platform):
-    """One platform opener for the approval page, or None."""
-    if not url:
-        return None
-    if platform == 'darwin':
-        return ['open', url]
-    if platform == 'linux':
-        return ['xdg-open', url]
-    return None
-
-
-def _page_url(reply, state):
-    """The reply's page URL, accepted only when it is this install's own.
-
-    The router builds it from the token and port; anything else is ignored.
-    """
-    url = reply.get('url')
-    port, token = state.get('port'), state.get('token')
-    if not isinstance(url, str) or not isinstance(port, int) or not token:
-        return None
-    prefix = 'http://127.0.0.1:%d/%s/model-prompt/' % (port, token)
-    suffix = url[len(prefix):] if url.startswith(prefix) else ''
-    return url if _NONCE_SHAPE.fullmatch(suffix) else None
-
-
 def _codex_attached(state):
     """True when this install serves Codex, so the offer is not a dead end.
 
@@ -179,14 +137,8 @@ def _codex_attached(state):
     return state.get('client', 'codex') != 'none'
 
 
-def _announce_new_models(state, _run=None, _urlopen=None, _which=None,
-                         platform=None):
-    """Offer a Codex restart when the router reports new models.
-
-    Best-effort by contract: it runs after the update log is written, and no
-    notification, opener or loopback failure may change the update result or
-    the exit code. The page URL is opened but never printed.
-    """
+def _announce_new_models(home, state, _urlopen=None):
+    """Show one native dialog when the router reports new models."""
     try:
         if os.environ.get('ROUTER_NO_NOTICE') == '1':
             return
@@ -199,19 +151,12 @@ def _announce_new_models(state, _run=None, _urlopen=None, _which=None,
         names = [row.get('name') or row.get('slug') for row in rows[:NOTIFY_NAMES]]
         if len(rows) > NOTIFY_NAMES:
             names.append('+%d more' % (len(rows) - NOTIFY_NAMES))
-        platform = platform or sys.platform
-        which = _which or shutil.which
-        runner = _run or _svc.run
-        command = _notify_command(names, platform)
-        if command is None:
-            print('new models pending: %s; restart Codex to use them' % ', '.join(names))
-        elif command[0] != 'notify-send' or which('notify-send'):
-            runner(command, capture_output=True, text=True, timeout=10)
-        opener = _open_command(_page_url(reply, state), platform)
-        if opener is not None and (opener[0] != 'xdg-open' or which('xdg-open')):
-            runner(opener, capture_output=True, text=True, timeout=10)
+        version = _svc.current_version(home)
+        _svc.notice.record(home, version, version, state.get('clients'),
+                           names=names)
+        _svc.notice.show_pending(home, names=names)
     except Exception:
-        pass  # a desktop or loopback failure must not disturb the update
+        pass  # a dialog or loopback failure must not disturb the update
 
 
 # Installer-owned seams; rebound via bind() after file-based load.
@@ -372,7 +317,7 @@ def _up_to_date(home, announce, etag_path=None, etag=None):
     print(f"up to date {_svc.current_version(home)}")
     try:
         state = json.loads((home / 'mixed-router-state.json').read_text())
-        (announce or _announce_new_models)(state)
+        (announce or _announce_new_models)(home, state)
     except Exception:
         pass
 
@@ -503,7 +448,7 @@ def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
                                  'source': _svc.feed_source(feed)}) + '\n')
     if etag:
         etag_path.write_text(etag + '\n')
-    (_announce or _announce_new_models)(state)
+    (_announce or _announce_new_models)(home, state)
     if failure:
         print(f'installed {latest["version"]}; the installer exited {failure} after the swap')
         _record_pass(home, error='installer_failed', applied=latest['version'])

@@ -3,7 +3,14 @@
 Foreign plaintext reasoning is not a portable saved item: keeping its id
 without its content asks upstream to retrieve an item it never stored.
 Only the outbound projection changes; the client's history stays intact.
+
+The retry projection below also covers the compaction summary blob: the
+router hands the client an `ocx1:`-prefixed summary item, the client replays
+it, and the ChatGPT backend refuses the turn with
+`invalid_encrypted_content` because it cannot read that blob either.
 """
+from . import compaction as comp
+from .history_portability import user_message_item
 
 
 def normalize(payload):
@@ -22,3 +29,48 @@ def normalize(payload):
         else:
             result.append(item)
     return {**payload, 'input': result} if changed else payload
+
+
+def encrypted_field_count(item):
+    """How many `encrypted_content` fields one item carries, one level deep."""
+    count = 1 if 'encrypted_content' in item else 0
+    blocks = item.get('content')
+    if isinstance(blocks, list):
+        count += sum(1 for block in blocks
+                     if isinstance(block, dict) and 'encrypted_content' in block)
+    return count
+
+
+def removable_encrypted(item):
+    """True when the retry repair owns every encrypted field on this item.
+
+    Owned: the item-level `encrypted_content` key on a `reasoning` item,
+    which goes, and on a compaction item, which becomes readable text. A
+    nested content block, or the key on any other item type, is not a shape
+    this repair owns, so the caller fails closed on the whole payload.
+    """
+    kind = item.get('type')
+    return (encrypted_field_count(item) == 1
+            and 'encrypted_content' in item
+            and (kind == 'reasoning' or comp.is_compaction_item(item)))
+
+
+def repair_input(items):
+    """The retried `input` with every unreadable blob repaired, else None.
+
+    None means nothing may change: a payload carrying an encrypted field
+    this repair does not own is left alone, so the turn is not retried
+    against a request the repair cannot fix.
+    """
+    if not isinstance(items, list):
+        return None
+    if any(isinstance(item, dict) and encrypted_field_count(item)
+           and not removable_encrypted(item) for item in items):
+        return None
+    repaired = []
+    for item in comp.strip_reasoning_blobs(items):
+        if (isinstance(item, dict) and comp.is_compaction_item(item)
+                and 'encrypted_content' in item):
+            item = user_message_item(comp.compaction_text(item))
+        repaired.append(item)
+    return None if repaired == items else repaired

@@ -306,7 +306,7 @@ class OperatorSurfaceTests(unittest.TestCase):
             rc = install_mod.do_update(
                 args, _fetch=lambda url: blob,
                 _read_feed=lambda feed, etag: (200, json.dumps(latest).encode(), 'etag-2'),
-                _sleep=lambda s: None, _announce=lambda state: None)
+                _sleep=lambda s: None, _announce=lambda _home, _state: None)
         self.assertEqual(rc, 0, buf.getvalue())
         state = json.loads((home / 'mixed-router-state.json').read_text())
         self.assertEqual(state['last_applied_version'], '9.9.9')
