@@ -57,6 +57,7 @@
   "tests/test_upstream_failures.py": 481,
   "tests/test_windows_acl.py": 366,
   "tests/test_windows_backend.py": 449,
+  "tests/test_workflows.py": 303,
   "tools/probe_agent_handoffs.py": 515,
   "tools/probe_codex_runtime.py": 501
 }
