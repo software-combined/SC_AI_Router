@@ -59,11 +59,18 @@ thread that switched model: it applies the switch boundary, then projects fully
 readable agent messages, the shape external peers send. The backend reads
 native encrypted replies and app-delivered outputs itself, so those stay
 unchanged. Client history is never edited.
+`history_portability.py` owns the model-switch boundary: a `developer` or
+`system` message whose string content, or any of its text blocks, starts with
+`<model_switch>` after leading whitespace marks a switch, and items before the
+last marker were produced under another model. The marker names no model, so a
+switch between two subscription models gets the same treatment as a switch off
+OpenRouter.
 `subscription_history.py` owns the pure outgoing projection of replayed
 reasoning and the router's own compaction summary (sent as readable text) for
 subscription Responses requests; it never edits persisted client history.
 `context_recovery.py` adds fixed recovery guidance for client-declared context
-resets on either Responses route. Codex owns saved history and executes its
+resets on either Responses route, finding the `<context_window>` message by the
+same rule. Codex owns saved history and executes its
 retrieval tools; the router stores no assignment or transcript cache.
 It also owns the exact legacy paragraph migration used by catalogue upgrades.
 `stream_errors.py` owns shared HTTP/SSE context-error classification and applies

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Model-switch and context-reset markers are found even if the client moves
+  them to another text block or the system role.
+
 ## 0.6.123
 
 - The update dialog now lists each new model once. Models a dialog has shown
