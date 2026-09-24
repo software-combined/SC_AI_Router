@@ -64,6 +64,16 @@ RULES = {
                                  'claude', 'setup', 'activation'),
     'ai_router/capabilities.py': ('router', 'providers', 'claude', 'setup'),
     'ai_router/compaction.py': ('router', 'providers'),
+    # Plan 183: the shared history vocabulary is a leaf and the pairing model
+    # sits on it alone, so neither may reach a stage that consumes them.
+    'ai_router/history_items.py': ('router', 'providers', 'claude', 'compaction',
+                                   'agent_handoffs', 'history_portability',
+                                   'standalone_outputs', 'subscription_history',
+                                   'tool_adapter', 'tool_runs'),
+    'ai_router/tool_runs.py': ('router', 'providers', 'claude', 'compaction',
+                               'agent_handoffs', 'history_portability',
+                               'standalone_outputs', 'subscription_history',
+                               'tool_adapter', 'jev_compaction'),
     'ai_router/tool_adapter.py': ('router', 'providers'),
     'ai_router/providers.py': ('router', 'claude'),
     'ai_router/claude.py': ('router', 'providers'),

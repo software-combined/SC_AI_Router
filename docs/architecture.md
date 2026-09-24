@@ -9,8 +9,8 @@ transitional owners name the plan that will move them.
 ```
 provider_defs (one definition per upstream, imports nothing) + errors,
 redaction, sse, tool_merge, image_items, turn_budget, atomic_write, state,
-events (leaves: no module-level local imports; events' one call-time state
-lookup is the only exception)
+events, history_items (leaves: no module-level local imports; events' one
+call-time state lookup is the only exception)
   ^
   |
 registry / capabilities (model facts) + wire_shape (the learnt wire
@@ -25,8 +25,8 @@ for relay.py): wire and failure policy, consumed by the adapters below
 subscription_discovery / subscription_catalogue + catalogue / models /
 live_refresh / apply_catalogue (client projections and native discovery)
   |
-agent_handoffs / compaction / tool_adapter / tool_aliases / discovered
-(request normalization)
+tool_runs (the pairing model, on history_items alone) + agent_handoffs /
+compaction / tool_adapter / tool_aliases / discovered (request normalization)
 decisions (typed-decision wire client, imports only provider_defs)
   |
 jev_compaction (opt-in evidence selection, consumes decisions/compaction)
@@ -66,6 +66,20 @@ unchanged. Client history is never edited.
 last marker were produced under another model. The marker names no model, so a
 switch between two subscription models gets the same treatment as a switch off
 OpenRouter.
+`history_items.py` owns the history vocabulary more than one outbound stage
+reads: the tool call and output families, the readable-text readers, the two
+encrypted predicates and the readable agent-message predicates. The two
+predicates disagree on an empty marker: `has_encryption_marked_agent_item`
+counts an `encrypted_content` marker whatever its value, while
+`holds_encrypted_payload` needs a non-empty payload, and each call site keeps
+its own. `tool_runs.py` owns the pairing model (`pairs`, `open_calls`) and the
+fragment scrub, on `history_items` alone. Plan 183 phase 1 moved these out of
+`history_portability.py`, `compaction.py` and `agent_handoffs.py`, which keep
+the old names importable until its phase 2 re-points their importers. The
+switch boundary's run check, the custom-pair call map and Jev's candidate
+pairing keep their own id rules (any truthy id and any later output; the last
+custom call; ambiguous ids pinned), so moving them onto `pairs` would be a
+behaviour change with its own review, not part of the move.
 `subscription_history.py` owns the pure outgoing projection of replayed
 reasoning and the router's own compaction summary (sent as readable text) for
 subscription Responses requests; it never edits persisted client history.
@@ -89,7 +103,11 @@ evidence. It observes and never changes a request. Each body prepared for a
 Responses turn is checked (not the helper-turn fallback twin, which is off
 by default), a broken rule becomes one `wire_contract` log line, and a
 refusal line carries the same facts beside the body's names and counts.
-Enforcing a rule is a separate, evidence-backed change.
+Enforcing a rule is a separate, evidence-backed change. Its call and output
+families stay local rather than coming from `history_items`: they map only
+the client-run calls that expect an output, including `computer_call_output`,
+while the vocabulary's call set also holds server-side calls that never get
+one, and the import would widen this layer.
 
 1. `provider_defs.py` owns every upstream fact (host, endpoint prefixes, key
    location, model catalogue, key-info endpoint, failure dialect) and imports

@@ -3,7 +3,7 @@ from copy import deepcopy
 import json
 import uuid
 
-from . import provider_defs, sse, transport
+from . import history_items, provider_defs, sse, transport
 from .registry import by_slug
 
 NATIVE_NAMESPACE = 'collaboration'
@@ -302,47 +302,13 @@ def steer_event(event, names):
     return mapped
 
 
-def _readable_block(block):
-    """A plaintext input_text block with no encrypted sidecar."""
-    return (isinstance(block, dict) and block.get('type') == 'input_text'
-            and 'encrypted_content' not in block and isinstance(block.get('text'), str)
-            and bool(block['text'].strip()))
-
-def _encrypted_block(block):
-    payload = block.get('encrypted_content') if isinstance(block, dict) else None; return bool(payload) and isinstance(payload, (str, dict))
-
-
-def inbound_agent_message(item):
-    """True only for a strict child-to-parent message path."""
-    author, recipient = item.get('author'), item.get('recipient')
-    if not isinstance(author, str) or not isinstance(recipient, str): return False
-    child = [part for part in author.split('/') if part]
-    parent = [part for part in recipient.split('/') if part]
-    return bool(parent) and len(child) > len(parent) and child[:len(parent)] == parent
-
-
-def recoverable_agent_message(item):
-    """Readable blocks of an inbound reply with an encrypted sidecar, else None."""
-    if not inbound_agent_message(item) or 'encrypted_content' in item: return None
-    content = item.get('content')
-    if not isinstance(content, list) or not content: return None
-    readable = [block for block in content if _readable_block(block)]
-    encrypted = [block for block in content if _encrypted_block(block)]
-    return readable if readable and encrypted and len(readable) + len(encrypted) == len(content) else None
-
-
-def plaintext_agent_message(item):
-    """Represent a readable peer message without elevating its authority."""
-    author, recipient = item.get('author'), item.get('recipient')
-    content = item.get('content')
-    if (not isinstance(author, str) or not author or not isinstance(recipient, str)
-            or not recipient or not isinstance(content, list) or not content):
-        raise ValueError('unsupported plaintext agent message shape')
-    if 'encrypted_content' in item or not all(_readable_block(block) for block in content):
-        raise ValueError('unsupported agent message content; use a fresh plaintext handoff')
-    return {'type': 'message', 'role': 'assistant', 'content': [
-        {'type': 'output_text', 'text': f'Agent message from {author} to {recipient}:\n'},
-        *({'type': 'output_text', 'text': block['text']} for block in content)]}
+# Plan 183 phase 1 moved the readable agent-message predicates to
+# history_items; these names stay importable until phase 2 re-points callers.
+_readable_block = history_items._readable_block
+_encrypted_block = history_items.holds_encrypted_payload
+inbound_agent_message = history_items.inbound_agent_message
+recoverable_agent_message = history_items.recoverable_agent_message
+plaintext_agent_message = history_items.plaintext_agent_message
 
 
 def adapt_response(response, names, notes=None):
