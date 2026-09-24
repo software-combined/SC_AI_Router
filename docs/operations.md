@@ -219,7 +219,8 @@ its first 300 characters plus the number removed; the router never advises
 re-running a tool, because it cannot know whether that tool is idempotent.
 Ambiguous pairs, invalid or partial answers, decision failures,
 a state that cannot fit the 32 KiB request budget, or retained text over 40%
-of the selected model's context window all use the existing summarizer.
+of the selected model's compaction limit (its context window when the row sets
+no limit) all use the existing summarizer.
 There are no decision retries, fallback models, per-turn calls or decision
 cache. `compact_jev` logs only mode, counts, byte sizes, elapsed milliseconds
 and a closed-set error code; never content, tool names or keys.
