@@ -91,8 +91,10 @@ with type `feat`, `fix`, `refactor`, `test`, `chore` or `docs`.
 Discover runs the fast core suite; installer tests are opt-in via
 `SCG_RUN_INSTALLER_TESTS=1` (native CI runners cover them on scope for release
 PRs into `main` and pushes to `main`). Develop CI runs fast static checks; full
-remote regression runs for main acceptance. Tags publish only an exact main
-commit with a successful `Check` run and do not repeat those acceptance checks.
+remote regression runs for main acceptance. Stable tags publish only an exact
+main commit with a successful `Check` run; beta tags publish a commit that
+`develop` or `main` moved to (their first-parent line). Neither repeats those
+acceptance checks.
 Local pre-commit requirements above still apply.
 
 ### Bounded live regression probes
