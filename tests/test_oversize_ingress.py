@@ -44,6 +44,11 @@ def _search_payload(description):
                        'parameters': {'type': 'object'}}]}
 
 
+def _paired(outputs):
+    call = {'type': 'tool_search_call', 'execution': 'client', 'arguments': {'query': 'echo'}}
+    return [part for out in outputs for part in (dict(call, call_id=out['call_id']), out)]
+
+
 def _repeated_search_payload(copies, schema_pad):
     """The 2026-09-16 shape: the same released tool, searched again and again.
 
@@ -55,7 +60,7 @@ def _repeated_search_payload(copies, schema_pad):
         'type': 'object',
         'properties': {'q': {'type': 'string', 'description': 'p' * schema_pad}}}
     return {'model': MODEL,
-            'input': [dict(item, call_id='s%d' % index) for index in range(copies)],
+            'input': _paired(dict(item, call_id='s%d' % index) for index in range(copies)),
             'tools': [{'type': 'tool_search', 'description': 'search',
                        'parameters': {'type': 'object'}}]}
 
@@ -83,7 +88,7 @@ def _noisy_search_payload(copies, pad):
                            'description': 'probe tools', 'tools': [tool]}]}
 
     return {'model': MODEL,
-            'input': [listing(index) for index in range(copies)],
+            'input': _paired(listing(index) for index in range(copies)),
             'tools': [{'type': 'tool_search', 'description': 'search',
                        'parameters': {'type': 'object'}}]}
 
@@ -164,7 +169,7 @@ class OversizeIngressTests(unittest.TestCase):
         packed = zstd.compress(json.dumps(payload).encode())
         headers = self.zstd_headers(packed)
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
-        cap = 3000
+        cap = 3500
         with mock.patch.object(router_mod, 'MAX_BODY', cap):
             self.assertGreater(len(json.dumps(payload).encode()), cap)
             self.assertTrue(self.server.oversize_lock.acquire(blocking=False))
@@ -208,7 +213,7 @@ class OversizeIngressTests(unittest.TestCase):
         wire = json.dumps(payload).encode()
         packed = zstd.compress(wire)
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
-        cap = 4000
+        cap = 5000
         with mock.patch.object(router_mod, 'MAX_BODY', cap):
             self.assertGreater(len(packed), cap)
             self.assertGreater(len(wire), cap)

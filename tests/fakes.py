@@ -156,14 +156,21 @@ class FakeUpstream:
 
 
 def install_fake(test, responder):
-    """Patch HTTPSConnection; record (host, method, path, body, headers)."""
+    """Patch HTTPSConnection; record (host, method, path, body, headers).
+
+    A body sent to any host but the ChatGPT subscription must keep its tool
+    calls and outputs paired, as strict providers require: cleanup fails the
+    test naming the broken `wire_shape.pair_problems` rules, never content.
+    """
     # A fake upstream answers from stubs, so process-local refusal verdicts
     # cached against the real upstream no longer apply; drop them with the
     # patch (and on cleanup) so stubbed responses are actually dispatched.
-    from ai_router import upstream as _upstream
+    from ai_router import provider_defs, upstream as _upstream, wire_shape
     _upstream.clear_refusals()
     test.addCleanup(_upstream.clear_refusals)
-    recorded = []
+    recorded, broken = [], []
+    test.addCleanup(lambda: test.assertEqual(
+        broken, [], 'a body sent upstream broke tool call/output pairing'))
 
     class FakeConn:
         def __init__(self, host, *args, **kwargs):
@@ -177,6 +184,10 @@ def install_fake(test, responder):
 
         def request(self, method, path, body=None, headers=None):
             recorded.append((self._host, method, path, body, headers))
+            if self._host != provider_defs.OPENAI.host:
+                problems = wire_shape.fingerprint(body).get('pair_problems')
+                if problems:
+                    broken.append(problems)
 
         def getresponse(self):
             return responder()
