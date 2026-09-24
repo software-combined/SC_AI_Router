@@ -3,6 +3,9 @@ name: Check
 on:
   pull_request:
     branches: [main, develop]
+    # edited reruns the checks when a pull request changes its base branch,
+    # which decides whether main acceptance runs. GitHub sends the same event
+    # for a title or body edit (a text edit), and every job below skips that.
     types: [opened, synchronize, reopened, edited]
   push:
     branches: [main, develop]
@@ -11,15 +14,18 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  # A text edit gets a group of its own: in the shared group it would cancel
+  # the running checks as soon as it queued, before any job `if` could skip
+  # it. A base change stays shared and replaces the run for the old base.
+  group: ci-${{ github.workflow }}-${{ github.ref }}${{ github.event.action == 'edited' && !github.event.changes.base && format('-text-edit-{0}', github.run_id) || '' }}
   cancel-in-progress: true
 
 jobs:
   changes:
     name: Change scope
     # Native installer jobs are part of main acceptance. Develop runs skip
-    # them (Plan 156, narrowed 2026-09-15).
-    if: (github.event_name == 'pull_request' && github.base_ref == 'main') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    # them (Plan 156, narrowed 2026-09-15), and so does a text edit.
+    if: (github.event.action != 'edited' || github.event.changes.base) && ((github.event_name == 'pull_request' && github.base_ref == 'main') || (github.event_name == 'push' && github.ref == 'refs/heads/main'))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -91,13 +97,18 @@ jobs:
         run: python tools/check_installer_python39.py
 
   test:
-    name: Test
+    # The rulesets require a check named Test. A skipped job reports success
+    # and the newest check of a name is the one that counts, so a skipped
+    # Test from a text edit would clear a failed one. Only a run that checks
+    # the code carries the name. GitHub currently shows a skipped job's name
+    # as this raw expression, which is not Test either.
+    name: ${{ (github.event.action != 'edited' || github.event.changes.base) && 'Test' || 'Skipped for a title or body edit' }}
     # The required gate fails when a prerequisite fails or is cancelled.
     # Installer jobs may be skipped when scope finds no installer paths;
     # release-only prerequisites are skipped on develop runs.
     # !cancelled() lets the failure guard run after a failed prerequisite.
     needs: [changes, installer-macos, installer-windows, installer-python39, plugin-schedulers, hook-adapter]
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && (github.event.action != 'edited' || github.event.changes.base) }}
     # Develop PRs and branch pushes keep the fast static checks. The full
     # offline suite is the release acceptance gate on PRs targeting main and
     # pushes to main; local tests and review remain required before every commit.
@@ -180,7 +191,7 @@ jobs:
     # Native scheduler coverage for the agent-plugin updater: real systemd
     # user timers on Linux and Task Scheduler on Windows, using a fake local
     # Codex CLI. Run for main acceptance; develop stays lightweight.
-    if: (github.event_name == 'pull_request' && github.base_ref == 'main') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: (github.event.action != 'edited' || github.event.changes.base) && ((github.event_name == 'pull_request' && github.base_ref == 'main') || (github.event_name == 'push' && github.ref == 'refs/heads/main'))
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
@@ -209,7 +220,7 @@ jobs:
     # scanner support. No other job runs its tests, so this is their only
     # executor: without the matrix, the Windows claim would be asserted rather
     # than exercised. Main acceptance only, like the scheduler job above.
-    if: (github.event_name == 'pull_request' && github.base_ref == 'main') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: (github.event.action != 'edited' || github.event.changes.base) && ((github.event_name == 'pull_request' && github.base_ref == 'main') || (github.event_name == 'push' && github.ref == 'refs/heads/main'))
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
