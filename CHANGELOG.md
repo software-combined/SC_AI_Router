@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- The update dialog now lists each new model once. Models a dialog has shown
+  are marked seen, so later updates no longer repeat them, and an update or
+  check with no new model stays silent instead of showing a restart dialog.
 - A subscription turn whose history replays the router's own compaction
   summary now sends it as readable text on the first attempt, instead of
   failing once and retrying. A turn that also carried a native encrypted child
