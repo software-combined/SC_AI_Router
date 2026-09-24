@@ -583,6 +583,7 @@
     "max_tools": null,
     "drop_images": false,
     "context_window": 1048576,
+    "auto_compact_token_limit": 400000,
     "priority": 119,
     "max_output_tokens": 131072,
     "reasoning_summary": "none",

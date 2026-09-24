@@ -1,5 +1,34 @@
 # Compatibility
 
+## MiMo V2.6 Pro compaction limit, 24 September 2026 AEST
+
+A Codex thread on `xiaomi/mimo-v2.6-pro` (xhigh, served by Xiaomi through
+OpenRouter) failed with "stream disconnected before completion: Input should
+be a valid string". The content-free router log holds 34 `request_failed`
+events on that model, all `UPSTREAM_STREAM_FAILED` with upstream
+`server_error` and `unprocessable` on `response.failed`, each about 45 seconds
+into the stream. 33 were on request bodies of 3.5 MB or more: at that size 59
+requests completed and 33 failed, about a third, while below it more than
+6,000 completed and one failed. The same body sometimes succeeds (the stuck
+thread had one success after four failures at the same size), so this is a
+provider-side long-context failure, not a malformed request.
+
+The Codex session shows how threads get there. Failures began once the thread
+sent about 495,000 input tokens. Codex sizes the row's window at 943,718
+tokens (the catalogue's 1,048,576 at 90 per cent) and, with no
+`auto_compact_token_limit`, compacted only after about 942,000 tokens, while
+the client retried each failure with the full body.
+
+Router 0.6.124 gives the MiMo Pro row an `auto_compact_token_limit` of 400,000.
+That leaves a margin below about 460,000 tokens, because one turn can add tens
+of thousands of tokens of tool output before the next compaction check. It is
+a row field rather than a lower `context_window`, which the model refresh
+rewrites from OpenRouter's `context_length`. MiMo V2.6 Flash is unchanged,
+with no failures recorded. No live call was made. Offline, the installed
+`codex-cli 0.153.1` and `0.155.0-alpha.16.3` binaries list the field among a
+model row's own fields, and the client drops it from its model cache when it
+is empty; no client has yet been served a row with the value set.
+
 ## Router 0.6.123 beta check, 24 September 2026 AEST
 
 Installed beta `0.6.123.119` (`v0.6.123-beta-express`, `develop` `c86e59e`) on
