@@ -1,5 +1,96 @@
 # Compatibility
 
+## Acceptance matrix ledger, 24 September 2026 AEST
+
+Plan 185's acceptance matrix now has a machine-readable record, so a script
+can tell which cells still hold for the current clients.
+`docs/acceptance-ledger.json` holds one object per cell run: `cell`,
+`date_aest`, `router_version`, `codex_version` (the Codex desktop version),
+`claude_code_version`, `rows`, `requested_effort`, `served` (in `rows` order,
+`null` where the run exposed no identity), `calls`, `result` and `notes`. Only
+a `pass` result counts as a pass.
+
+| cell | transition | rows | calls |
+|---|---|---|---|
+| C1 | external compaction, then switch to subscription | `deepseek/deepseek-v4.1-flash` to `gpt-6-luna` | 4 |
+| C2 | direct OpenRouter acceptance of an undeclared custom pair and an `apply_patch_call` pair | `xiaomi/mimo-v2.6-flash`, `meta/muse-spark-1.3` | 4 |
+| C3 | external parent with a readable external child reply, parent switched to subscription | `z-ai/glm-5.3-flash` to `gpt-6-luna`, child `deepseek/deepseek-v4.1-flash` | 4 |
+| C4 | switch between two subscription models with native reasoning | `gpt-6-luna` to `gpt-6-sol` | 2 |
+| C5 | external parent, subscription child whose reply carries an encrypted block, parent compaction, parent switched to subscription | `deepseek/deepseek-v4.1-flash`, child `gpt-6-luna` | 6 |
+
+`python3.14 tools/check_acceptance_ledger.py` compares each cell's latest pass
+with the newest clients this page names in the backticked forms Codex desktop
+`X` and Claude Code `X`, the way every gate records them; an unbackticked
+mention, such as a later release an app bundle refers to, does not count. A
+cell is stale when its latest pass ran on an older version of either client,
+because section 7 of `AGENTS.md` treats either upgrade as the trigger for new
+evidence. The check exits 1 while any P1 cell (C1 to C4) is stale or missing,
+and reports C5 without failing on it.
+
+The ledger starts with C1 alone, from the 0.6.122 beta gate below: router
+`0.6.122.118`, Codex desktop `26.917.62051`, Claude Code `2.1.223` (installed,
+not exercised) and 4 calls. That gate's installed-router pair legs sit in C1's
+notes rather than counting as C2, because C2 goes direct to OpenRouter on
+different rows. C2 to C5 have not run, so the check exits 1 until they do.
+
+`tools/probe_parent_switch.py --cell C3` or `--cell C5` drives the two
+parent-switch cells. The first parent spawns the child and calls `wait_agent`
+in the same step. This client (`codex-cli 0.155.0-alpha.16.3`) moves a child's
+reply into the parent's history only when the parent waits; without the wait,
+the switched turn carried no reply at all. Issuing both calls in one step also
+keeps C3 at 4 calls; a parent model that waits in a separate step needs a
+fifth. C5 compacts the parent before the switch. The recorded reply shape is
+the one in the last parent request, so a compaction that drops the encrypted
+reply records `shape not produced` rather than a pass that never tested it.
+
+Offline, against the real client and a scripted loopback upstream: C3 passed
+in 4 calls, a C3 sequence that switched back to GLM passed in 5, and C5
+completed its 5 calls, compaction included, and recorded `shape not
+produced`. That is the expected offline result: a scripted child cannot make
+Codex attach an encrypted block, and offline compaction uses the client's
+local summary, which drops the reply.
+
+Live mode needs `--max-live-calls` and `--max-live-tokens`, as section 5 of
+`AGENTS.md` requires caps on both calls and spend. It runs the client on the
+ambient Codex home, so the client keeps its own sign-in and no credential is
+copied, points it at the probe with command-line overrides, and forwards each
+call to the installed router. Both caps are hard stops for every call that
+reaches the probe. Tokens are the `usage` totals of the relayed responses, so
+the call that crosses the budget still completes: the overshoot is at most one
+call, because these sequences never have two calls in flight. The router's own
+compaction summary reports no usage and adds nothing to the count. Offline,
+each request the client sent was about 6,000 tokens by body size. After the
+first refused or failed call, including a stream that ends without
+`response.completed`, or once the budget is spent, the probe refuses
+everything locally. Codex retries a 409, but no retry reaches the router.
+
+`tools/probe_codex_runtime.py` refuses to combine the live home with a
+base-URL override, so that it never touches the live Codex home. This probe
+needs exactly that combination, and Plan 185 step 3's live-home check (the
+"Candidate subscription legs on the live Codex home" entry) settled what it
+takes. The client honours the `openai_base_url` override there, so its calls
+come to the probe. The home does not stay read-only, and the owner accepted
+the writes that remain: the client's own logs, state databases and temporary
+files (`logs_2.sqlite`, the `*.sqlite-wal` files, `tmp/arg0`), which every
+Codex session and the `--live-home` legs also write, never configuration or
+credentials.
+
+Live mode therefore turns off what writes or reaches beyond the probe:
+`notify`, and the `shell_snapshot`, `hooks`, `in_app_local_automation`,
+`in_app_updates` and `remote_plugin` features. A shell snapshot would copy the
+shell environment, API key variables included, into the home. The probe
+answers the client's websocket attempt with 426, as the router does, because
+a 404 fails the turn, and it ends the client by closing its input. MCP servers
+configured in the live home still start despite `mcp_servers={}`, so the
+client runs under a `sandbox-exec` profile that allows network only to the
+probe's own loopback port. The probe forwards to the installed router from
+outside that sandbox, and live mode refuses to start if the sandbox cannot be
+applied. A call that still went elsewhere would be outside both caps, and the
+probe would stop after the first turn with `client bypassed the probe`.
+
+Limits: no live cell ran here. C2 waits for `tools/probe_wire_shapes.py`
+(Plan 185 step 1).
+
 ## MiMo V2.6 Pro compaction limit, 24 September 2026 AEST
 
 A Codex thread on `xiaomi/mimo-v2.6-pro` (xhigh, served by Xiaomi through

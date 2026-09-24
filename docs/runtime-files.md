@@ -52,10 +52,11 @@ are never copied between machines.
 `tools/probe_context_recovery.py`, `tools/probe_handoff_recovery.py`,
 `tools/probe_history_switch.py`, `tools/probe_media.py`,
 `tools/probe_standalone_outputs.py`, `tools/probe_agent_handoffs.py`,
-`tools/probe_claude_code.py`,
+`tools/probe_parent_switch.py`, `tools/probe_claude_code.py`,
 `tools/appserver_probe.py`, `tools/provision_key.py`,
 `tools/verify_runtime_pins.py`, `tools/check_installer_python39.py`,
 `tools/check_policy_scans.py`, `tools/check_source_limits.py`,
+`tools/check_acceptance_ledger.py`,
 `tools/publish_feed.py`, `tools/publish_first_install.py`,
 `tools/global_instructions.py`, `tools/disable.py`.
 
