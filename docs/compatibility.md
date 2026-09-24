@@ -45,6 +45,58 @@ without showing a dialog: the new installer marked those three models seen
 (the router's seen list grew from 22 to 25 models) and left the notice file
 untouched, and the updater then found nothing new to announce.
 
+## Candidate subscription legs on the live Codex home, 24 September 2026 AEST
+
+Plan 185 step 3 asked whether a subscription leg could reach a candidate
+router by launching the client on the live Codex home, which holds the
+ChatGPT sign-in, with a command-line override of `openai_base_url`, while the
+live home stays read-only. The override works on the live home, but the home
+does not stay read-only.
+
+The client bundled with Codex desktop `26.917.62051`
+(`codex-cli 0.155.0-alpha.16.3`) writes to its home on every launch, even for
+`--version` or `--help`: it creates a `tmp/arg0/codex-arg0` directory with a
+random suffix, holding a `.lock` file and links named `apply_patch`,
+`applypatch` and `codex-execve-wrapper`. A clean exit removes it; in scratch
+homes, the next launch also removed one left behind. Given a scratch home it
+could not write to, `codex --version` warned and carried on.
+
+One owner-authorised run at 16:56 AEST started `codex app-server` on the live
+home, with the override pointing at a loopback stand-in that answered every
+request itself with a canned reply, so nothing was forwarded or billed. A
+`sandbox-exec` profile let the client reach only the stand-in's port, never
+the installed router or any other host, and reported every write under
+`~/.codex`. The stand-in kept only each request's method, path and item
+types, never a header or body. On an ephemeral thread with one synthetic
+prompt to `z-ai/glm-5.3-flash`, both requests reached the stand-in: a
+websocket attempt on `/v1/responses`, refused with 426 as the router does,
+then `POST /v1/responses` with five message items. The turn completed with
+the canned reply and the client exited cleanly.
+
+Nothing in the home was added or removed. The run changed the `tmp/arg0`
+directory, whose new entry was gone again after exit, and the client's own
+SQLite databases: `logs_2.sqlite` and the write-ahead files of its `state`,
+`logs`, `goals`, `memories` and `queue` databases, which the desktop app also
+writes all the time. Three other changes in the same window had no write from
+the run and also changed during an idle window just before it: the installed
+router's log, one open desktop session and `thread_history_1.sqlite-wal`.
+From the live home the probe read only names, sizes and times; the list of
+writes comes from the sandbox's reports.
+
+A live mode that launches the client this way needs what this run used:
+
+- a 426 answer to the websocket attempt, because a 404 fails the turn with
+  `responseStreamDisconnected`;
+- `features.shell_snapshot=false`, because a snapshot copies the shell
+  environment into the home (in scratch it held an API key variable and was
+  still there as a temporary file afterwards);
+- `hooks`, `in_app_local_automation`, `in_app_updates` and `remote_plugin`
+  turned off, and a clean exit by closing the client's input;
+- a sandbox that allows only the probe's port: MCP servers configured in the
+  live home still tried to start with `mcp_servers={}` (nine startup events,
+  none on a scratch home), and the sandbox refused the client's seven attempts
+  to look up a host name.
+
 ## Router 0.6.122 beta gate, 24 September 2026 AEST
 
 Installed beta `0.6.122.118` (`v0.6.122-beta-express`, `develop` `2e14a13`,
