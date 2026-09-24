@@ -145,26 +145,21 @@ class ShowPendingTests(unittest.TestCase):
             self.assertTrue(doc['shown'])
             self.assertEqual(doc['pid'], 2358)
 
-    def test_notify_send_delivery_is_the_exit_status(self):
-        # notify-send exits as soon as the daemon answers, so pid liveness
-        # says nothing there: a zero exit is delivered, a non-zero one
-        # leaves the notice pending for a later run.
+    def test_named_notice_does_not_query_the_router_again(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             home.mkdir()
             self._pending(home)
-            for code, expected in ((0, True), (1, False)):
-                (home / 'update-notice.json').write_text(
-                    json.dumps({'version': '1.0.1'}))
-                with mock.patch.object(
-                        notice_mod, 'dialog_command',
-                        lambda *a, **k: ['notify-send', 'SCG Router', 'updated']), \
-                        mock.patch.object(
-                            notice_mod.subprocess, 'run',
-                            lambda *a, **k: mock.Mock(returncode=code)):
-                    self.assertIs(notice_mod.show_pending(home), expected)
-                doc = json.loads((home / 'update-notice.json').read_text())
-                self.assertEqual(bool(doc.get('shown')), expected)
+            self._with_dialog(self)
+            names = ['Z.ai: GLM 5.3 Flash']
+            with mock.patch.object(
+                    notice_mod._text, 'pending_names',
+                    side_effect=AssertionError('unexpected router read')):
+                self.assertTrue(notice_mod.show_pending(
+                    home, spawn=lambda cmd: 42,
+                    pid_alive=lambda pid: True, names=names))
+            doc = json.loads((home / 'update-notice.json').read_text())
+            self.assertEqual(doc['names'], names)
 
     def test_recycled_pid_is_not_mistaken_for_a_dialog(self):
         # A live process that is not one of our dialogs must not swallow a

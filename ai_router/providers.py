@@ -4,7 +4,7 @@ import json
 import time
 from . import (capabilities, compaction as comp, local_services, agent_handoffs,
                provider_defs, transport, turn_budget, jev_compaction)
-from .standalone_outputs import materialize_outputs
+from .standalone_outputs import materialize_outputs, portable_replay
 from . import subscription_history, context_recovery, subscription_roster
 from .capabilities import CANONICAL_ORDER, check_effort, input_modalities
 from .image_items import note_images
@@ -12,7 +12,7 @@ from .errors import PreparationError, SubscriptionRequired, UnknownModel
 from .registry import by_slug, near_miss, upstream_id_for
 from .events import log_event
 from .discovered import remember
-from .tool_adapter import prepare_tools, snoop_response_identity, stream_events, ToolEvents
+from .tool_adapter import prepare_tools, snoop_response_identity, stream_events, ToolEvents, SEARCH_NAME
 
 # Transport leaves live in transport.py (Plan 062); these aliases keep
 # existing importers working until the protocol split completes.
@@ -76,7 +76,7 @@ class SubscriptionProvider:
         # The URL path token is the loopback auth; Codex >=0.153.4 omits the
         # subscription Authorization header, so forward client headers unchanged.
         fwd = {k: v for k, v in headers.items() if k.lower() not in HOP_HEADERS}
-        normalized = (subscription_history.normalize(payload)
+        normalized = (subscription_history.normalize(portable_replay(payload, SEARCH_NAME))
                       if path in ('/responses', '/responses/compact') else payload)
         if path == '/responses':
             normalized = context_recovery.normalize(normalized)

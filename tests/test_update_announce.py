@@ -1,28 +1,23 @@
-"""The new-model restart offer the updater fires after a landed update.
+"""The dialog-only new-model offer fired by the updater.
 
-Unit level: the loopback reply, the platform commands, and the swallow
-contract, with the runner, opener and lookup injected. The integration point
-(the announce runs after the update log is written) stays in
-tests/test_update_channel.py, beside the update-log fixtures.
+The updater discovers pending model names, stages the shared restart notice,
+and hands it to the native dialog owner. It never opens a browser page or
+starts a separate desktop notification.
 """
-import contextlib
 import http.server
-import io
 import json
 import os
+import tempfile
 import threading
 import unittest
-from types import SimpleNamespace
+from pathlib import Path
 from unittest import mock
 
 from tests.install_fixtures import install_mod
 
-NONCE = 'n' * 43
-PAGE = 'http://127.0.0.1:9/tok/model-prompt/' + NONCE
-
 
 class AnnounceTests(unittest.TestCase):
-    """The restart offer is best-effort: it must never disturb an update."""
+    """A model notice is one native dialog and never disturbs an update."""
 
     def setUp(self):
         self.updater = install_mod._updater
@@ -45,115 +40,95 @@ class AnnounceTests(unittest.TestCase):
             return Resp()
         return fake
 
-    def _run(self, calls):
-        def fake(cmd, **kwargs):
-            calls.append(cmd)
-            return SimpleNamespace(returncode=0)
-        return fake
+    def _announce(self, home, state, reply):
+        record = mock.Mock()
+        show = mock.Mock()
+        with mock.patch.object(self.updater._svc, 'current_version',
+                               return_value='9.9.9'), \
+                mock.patch.object(self.updater._svc.notice, 'record', record), \
+                mock.patch.object(self.updater._svc.notice, 'show_pending', show):
+            self.updater._announce_new_models(home, state, _urlopen=reply)
+        return record, show
 
-    def test_macos_notifies_then_opens_the_single_use_page(self):
-        calls = []
-        fetch = self._reply({'pending': [{'slug': 'a', 'name': 'A'},
-                                         {'slug': 'b', 'name': 'B'},
-                                         {'slug': 'c', 'name': 'C'},
-                                         {'slug': 'd', 'name': 'D'}],
-                             'url': PAGE})
-        self.updater._announce_new_models({'port': 9, 'token': 'tok'},
-                                          _run=self._run(calls), _urlopen=fetch,
-                                          platform='darwin')
-        self.assertEqual([cmd[0] for cmd in calls], ['osascript', 'open'])
-        self.assertIn('A, B, C, +1 more', calls[0][-1])
-        self.assertNotIn('tok', calls[0][-1])
-        self.assertNotIn('http', calls[0][-1])
-        self.assertEqual(calls[1], ['open', PAGE])
-        self.assertEqual(fetch.url, 'http://127.0.0.1:9/tok/model-prompt')
+    def test_new_models_show_one_dialog_without_opening_the_page(self):
+        reply = self._reply({
+            'pending': [{'slug': 'a', 'name': 'A'},
+                        {'slug': 'b', 'name': 'B'},
+                        {'slug': 'c', 'name': 'C'},
+                        {'slug': 'd', 'name': 'D'}],
+            'url': 'http://evil.example/model-prompt/not-used'})
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            record, show = self._announce(
+                home, {'port': 9, 'token': 'tok'}, reply)
+        names = ['A', 'B', 'C', '+1 more']
+        record.assert_called_once_with(
+            home, '9.9.9', '9.9.9', None, names=names)
+        show.assert_called_once_with(home, names=names)
+        self.assertEqual(reply.url, 'http://127.0.0.1:9/tok/model-prompt')
 
-    def test_nothing_pending_runs_nothing(self):
-        calls = []
-        self.updater._announce_new_models(
-            {'port': 9, 'token': 'tok'}, _run=self._run(calls),
-            _urlopen=self._reply({'pending': [], 'url': None}), platform='darwin')
-        self.assertEqual(calls, [])
+    def test_nothing_pending_runs_no_dialog(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            record, show = self._announce(
+                Path(tmp), {'port': 9, 'token': 'tok'},
+                self._reply({'pending': [], 'url': None}))
+        record.assert_not_called()
+        show.assert_not_called()
 
-    def test_linux_uses_the_tools_only_when_they_exist(self):
-        calls = []
-        reply = self._reply({'pending': [{'slug': 'a', 'name': 'A'}],
-                             'url': PAGE})
-        self.updater._announce_new_models({'port': 9, 'token': 'tok'},
-                                          _run=self._run(calls), _urlopen=reply,
-                                          _which=lambda name: None, platform='linux')
-        self.assertEqual(calls, [])
-        self.updater._announce_new_models({'port': 9, 'token': 'tok'},
-                                          _run=self._run(calls), _urlopen=reply,
-                                          _which=lambda name: '/usr/bin/' + name,
-                                          platform='linux')
-        self.assertEqual([cmd[0] for cmd in calls], ['notify-send', 'xdg-open'])
-
-    def test_windows_logs_instead_of_notifying(self):
-        calls = []
-        reply = self._reply({'pending': [{'slug': 'a', 'name': 'A'}],
-                             'url': PAGE})
-        out = io.StringIO()
-        with contextlib.redirect_stdout(out):
-            self.updater._announce_new_models({'port': 9, 'token': 'tok'},
-                                              _run=self._run(calls), _urlopen=reply,
-                                              platform='win32')
-        self.assertEqual(calls, [])
-        self.assertIn('new models pending: A', out.getvalue())
-
-    def test_a_failed_announce_is_swallowed(self):
-        def boom(url, timeout=None):
-            raise OSError('router is not running')
-
-        self.updater._announce_new_models({'port': 9, 'token': 'tok'},
-                                          _urlopen=boom, platform='darwin')
-        self.assertEqual(self.updater._pending_reply({'port': 0, 'token': 'tok'}), {})
-
-    def test_a_reply_pointing_somewhere_else_is_not_opened(self):
-        calls = []
-        reply = self._reply({'pending': [{'slug': 'a', 'name': 'A'}],
-                             'url': 'http://evil.example/model-prompt/x'})
-        self.updater._announce_new_models({'port': 9, 'token': 'tok'},
-                                          _run=self._run(calls), _urlopen=reply,
-                                          platform='darwin')
-        self.assertEqual([cmd[0] for cmd in calls], ['osascript'])
-
-    def test_a_traversal_suffix_is_not_opened(self):
-        calls = []
-        reply = self._reply({'pending': [{'slug': 'a', 'name': 'A'}],
-                             'url': 'http://127.0.0.1:9/tok/model-prompt/../../health'})
-        self.updater._announce_new_models({'port': 9, 'token': 'tok'},
-                                          _run=self._run(calls), _urlopen=reply,
-                                          platform='darwin')
-        self.assertEqual([cmd[0] for cmd in calls], ['osascript'])
-
-    def test_a_claude_only_or_service_install_is_never_offered_codex(self):
-        asked = []
-
+    def test_a_claude_only_or_service_install_is_not_asked_about_codex(self):
         def opener(url, timeout=None):
-            asked.append(url)
             raise OSError('a non-Codex install must not be asked')
 
         for state in ({'port': 9, 'token': 'tok', 'clients': 'claude'},
                       {'port': 9, 'token': 'tok', 'clients': 'none'},
                       {'port': 9, 'token': 'tok', 'client': 'none'}):
-            calls = []
-            self.updater._announce_new_models(state, _run=self._run(calls),
-                                              _urlopen=opener, platform='darwin')
-            self.assertEqual(calls, [])
-        self.assertEqual(asked, [])
+            with tempfile.TemporaryDirectory() as tmp:
+                record, show = self._announce(Path(tmp), state, opener)
+            record.assert_not_called()
+            show.assert_not_called()
 
     def test_router_no_notice_silences_the_offer(self):
-        asked = []
-
         def opener(url, timeout=None):
-            asked.append(url)
             raise OSError('the notice is silenced')
 
-        with mock.patch.dict(os.environ, {'ROUTER_NO_NOTICE': '1'}):
-            self.updater._announce_new_models({'port': 9, 'token': 'tok'},
-                                              _urlopen=opener, platform='darwin')
-        self.assertEqual(asked, [])
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.dict(os.environ, {'ROUTER_NO_NOTICE': '1'}):
+            record, show = self._announce(
+                Path(tmp), {'port': 9, 'token': 'tok'}, opener)
+        record.assert_not_called()
+        show.assert_not_called()
+
+    def test_a_failed_announce_is_swallowed(self):
+        def boom(url, timeout=None):
+            raise OSError('router is not running')
+
+        with tempfile.TemporaryDirectory() as tmp:
+            self.updater._announce_new_models(
+                Path(tmp), {'port': 9, 'token': 'tok'}, _urlopen=boom)
+
+    def test_named_model_state_stays_quiet_until_the_names_change(self):
+        notice = self.updater._svc.notice
+        first = ['Z.ai: GLM 5.3 Flash']
+        changed = first + ['Xiaomi: MiMo V2.6 Flash']
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            self.assertTrue(notice.record(
+                home, '1.0.1', '1.0.1', names=first))
+            self.assertFalse(notice.record(
+                home, '1.0.1', '1.0.1', names=first))
+            with mock.patch.object(notice, 'dialog_command',
+                                   return_value=['fake-dialog']), \
+                    mock.patch.object(notice, '_dialog_up', return_value=True):
+                notice.show_pending(
+                    home, spawn=lambda cmd: 42,
+                    pid_alive=lambda pid: True, names=first)
+            self.assertFalse(notice.record(
+                home, '1.0.1', '1.0.1', names=first))
+            self.assertTrue(notice.record(
+                home, '1.0.1', '1.0.1', names=changed))
+            doc = json.loads((home / 'update-notice.json').read_text())
+            self.assertEqual(doc['names'], changed)
+            self.assertNotIn('shown', doc)
 
     def test_the_reply_read_is_capped(self):
         sizes = []

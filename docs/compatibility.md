@@ -1,5 +1,125 @@
 # Compatibility
 
+## Codex desktop 26.917 client check, 24 September 2026 AEST
+
+Codex desktop `26.917.62051` (build `10789`) with bundled
+`codex-cli 0.155.0-alpha.16.3`, updated from `26.917.51856`; Claude Code
+`2.1.223` (standalone CLI, unchanged). Router candidate `0.6.121` (`develop`
+`c6e1c1b` plus the replay fix below) ran as an isolated router on its own
+home, port and token; the installed release was `0.6.120.115`. Every leg used
+synthetic data and one round trip, with no retries: 9 upstream model calls
+against a cap of 10.
+
+| surface | router | requested model | effort | served | calls | result |
+|---|---|---|---|---|---|---|
+| Codex, OpenRouter | candidate `0.6.121` | `z-ai/glm-5.3-flash` | `low` | `z-ai/glm-5.3-flash` | 2 | passed |
+| Codex, ChatGPT subscription | installed `0.6.120.115` | `gpt-6-luna` | `low` | `gpt-6-luna` | 2 | passed |
+| Claude Code, OpenRouter | candidate `0.6.121` | `deepseek/deepseek-v4.1-flash` | `low` | not exposed | 3 | passed |
+| Claude Code, subscription | candidate `0.6.121` | `claude-sonnet-5` | `low` | not exposed | 2 | passed |
+
+Both Codex legs ran `tools/probe_codex_runtime.py --effort low` and returned
+`userMessage`, `dynamicToolCall` and `agentMessage` after the expected local
+426 websocket refusal. The OpenRouter leg used a scrubbed `--codex-home`
+against the candidate catalogue (21 rows). The subscription leg needs
+`--live-home`, so it reached the installed router rather than the candidate;
+that client listed 26 models, 5 subscription and 21 external.
+
+Claude Code ran headless (`claude -p`) with user settings excluded
+(`--setting-sources project`), `ANTHROPIC_BASE_URL` pointed at the candidate,
+`--strict-mcp-config` with no servers, `--max-turns 3` and a synthetic
+`probe.txt` marker. Both legs returned the exact marker in two turns, and the
+candidate log recorded every request as `/v1/messages` with status 200:
+`openrouter` for the routed leg and `anthropic` for the subscription leg,
+which kept the client's own sign-in. The routed leg's third call was a small
+request with no tools, probably the client's automatic terminal title; the
+subscription leg set `CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1` and sent exactly
+two. The Claude route does not expose served identity or effort.
+
+Limits: one routed and one subscription model per client and one tool per
+leg. Deferred tool loading, compaction, image input and the Claude desktop
+app were not rerun.
+
+## Mixed-model replay failures, 23 September 2026 AEST
+
+Task `01a0cdf4-61e8-7403-9132-1f055823773b` changed models while replaying a
+large thread containing custom tool runs, agent messages and provider-owned
+reasoning. Two independent wire-shape defects caused the visible refusals.
+
+External Responses requests failed with `invalid_prompt` on Xiaomi MiMo 2.6
+Pro and GPT-6 Luna. The rejected fingerprints contained 107 and 112
+`custom_tool_call` items but zero `custom_tool_call_output` items, while all
+outputs had been rewritten to `function_call_output`. The adapter was
+rewriting outputs unconditionally and calls only when the tool key was found
+in a narrower mapping. The fix decides both sides from the final exposed tool
+set and pairs outputs by `call_id`. Declared custom and function tools convert
+to matched function-call items; undeclared custom pairs remain matched custom
+items.
+
+Subscription remote compaction on GPT-6 Astra failed with an upstream
+`input` rejection. Its fingerprint contained 104 reasoning items from before
+the last model switch, three raw `agent_message` items and one
+`compaction_trigger`. In a thread that switched model, subscription replay now
+applies the existing portable history boundary, then projects fully readable
+agent messages, the shape external peers send, before its reasoning
+normalization. Native post-switch reasoning, encrypted child replies,
+app-delivered outputs such as `create_thread` assignments, tool runs and the
+compaction trigger stay unchanged, because the backend reads those itself. A
+turn without a model switch replays exactly as before: the 12 September Astra
+handoff runs proved that shape live, including readable external child
+replies.
+
+The offline real-client probe passed its switch, permanent-refusal and
+transient-retry scenarios with 3, 1 and 2 upstream attempts. A separate live
+Responses probe used an isolated candidate router and a two-call cap: Xiaomi
+MiMo 2.6 Pro at `low` and GPT-6 Luna at `max` both replayed a synthetic custom
+tool pair, returned the marker and reported the requested model as served.
+
+A live GPT-6 Astra subscription compaction was not run. A disposable signed-in
+ChatGPT home would require copying account credentials, so the V2 trigger is
+covered by the handler regression and the fake-upstream real-client switch
+probe instead. No production install or release was changed by this source
+fix.
+
+## Replayed compaction summary blob, 23 September 2026 AEST
+
+Installed release `0.6.114.108` (`v1.14-express`) refused every
+`codex-auto-review` approval turn with HTTP 400 `invalid_encrypted_content`.
+The diagnostics merged as #279 explain the refusal in one line:
+
+```
+annotation_retry  eligible=True attempted=False outcome=unchanged
+  repair=reasoning_blobs  encoding=zstd  decoded=True  parsed=True
+  input_is_list=True  items=6  reasoning_items=0  encrypted_fields=1  removed=0
+```
+
+The body decodes and parses, so the blocker is structural: the replayed
+history holds no `type: reasoning` item, and the single `encrypted_content`
+field sits on a `type: compaction` item whose value is the router's own
+`ocx1:` summary (one item-level key, `id` prefix `cmp_`, 4-7 kB). A structural
+scan of this host's Codex rollouts finds item-level blobs on exactly two item
+types, `compaction` and `reasoning`, and none in a nested content block.
+
+The client stores the V2 compaction item the router produced and replays it.
+The ChatGPT backend cannot read that blob, and #274's repair only ever removed
+the item-level key from a `reasoning` item, so the bounded retry never fired
+and the turn was refused.
+
+The repair is retry-only and keeps the #274 gate unchanged (subscription
+OpenAI dialect, HTTP 400, `invalid_encrypted_content`). The compaction item
+becomes the same readable user message `compaction.rewrite_input` already
+produces for external models, built from `compaction_text`: the decoded
+summary, or the fixed opaque note when the blob is not the router's own. A
+payload carrying an encrypted field outside those two sites is left unchanged,
+so an unknown shape is never retried against a request the repair cannot fix.
+The classification is the one-level structural count: an item-level
+`encrypted_content` key, or the same key on a block of a one-level `content`
+list. Content nested deeper, or shaped differently, is not classified and is
+neither stripped nor rewritten. Nothing is stripped globally, and the healthy
+path still forwards the blob that `subscription_history.normalize` preserves.
+
+Evidence: `tests/test_subscription_compaction_repair.py` and the updated table
+in `tests/test_strip_retry_encrypted_blob.py`.
+
 ## Encrypted child replies to external models, 23 September 2026 AEST
 
 Task `01a0bca7-91f5-7002-a2cb-ef6409c71ea3` failed at 10:28:15 AEST while
