@@ -3,25 +3,30 @@
 ## How to ship
 
 Work lands on `develop` via `fix/*`/`feat/*` branches, then `develop`
-merges to `main` via PR. Tag the merge with the full `v<VERSION>` label
+merges to `main` via PR. Release tags use the full `v<VERSION>` label
 matching `packaging/VERSION`: `0.6.117` becomes `v0.6.117`.
 Add `-beta` for a pre-release, `-express` for an urgent stable release, or
 `-beta-express` for an urgent beta. The release workflow runs on `v*` tags
-only, requires a commit already merged into `main` with a successful `Check`
-run for that exact commit, validates the exact version, builds the bundle,
-publishes the release to the public feed, and then creates the GitHub Release with
+only. A beta tag needs a commit that `develop` or `main` moved to, such as a
+PR merge commit, not a commit inside a merged branch. A
+stable tag needs a commit merged into `main` with a successful `Check` run for
+that exact commit, so tag the `main` merge commit after that run passes. The
+workflow then validates the exact version, builds the bundle, publishes the
+release to the public feed and creates the GitHub Release with
 `latest.json` as a public mirror for humans. The semantic version remains in
 the public tag, bundle and feed, where the updater uses it for ordering.
-Every router on the stable channel installs it within about four hours.
-Never push to `main` directly for a release; a direct push runs
+Every router on the stable channel installs a stable release within about four
+hours. Never push to `main` directly for a release; a direct push runs
 checks but publishes nothing.
 
 Develop PRs and branch pushes run fast static checks. The full offline suite,
 scoped native installer checks, plugin scheduler checks and hook-adapter
-portability checks run for main PRs and pushes to `main`. Beta and stable tags
-reuse that exact-commit acceptance and perform packaging, runtime-pin
-verification, signing and publication. Local tests and review still run before
-every commit. A tag runs the copy of the release workflow saved in the tagged
+portability checks run for main PRs and pushes to `main`. A beta tag does not
+wait for them: `develop` accepts commits only through pull requests that pass
+the required `Test` check, and local tests and review run before every commit.
+A stable tag reuses the exact-commit `main` acceptance instead of repeating it.
+Both channels then run packaging, runtime-pin verification, signing and
+publication. A tag runs the copy of the release workflow saved in the tagged
 commit, so a tag on a commit made before this acceptance check existed can
 still publish without it. Stopping those older copies from publishing is a
 separate step.
@@ -328,14 +333,18 @@ never announced.
 
 ## How to test first
 
-Promote the release candidate from `develop` to `main` through its PR, wait for
-`Check` to pass on the merge commit, then tag `v<VERSION>-beta` from that main
-commit. The workflow publishes a pre-release to the public beta document
-(`beta/latest.json`). Cyril's machine follows the
+Merge the release candidate into `develop` through its PR, then tag the
+resulting `develop` commit `v<VERSION>-beta`. A beta waits only for that PR's
+checks, not the long `main` checks. The workflow publishes a pre-release to the
+public beta document (`beta/latest.json`). Cyril's machine follows the
 `beta` channel (`beta`
 in the `channel` file beside the state directory), so it updates first;
-watch its `/health` version and `logs/update.log` before tagging the same main
-commit stable.
+watch its `/health` version and `logs/update.log` before promoting `develop`
+to `main` through its PR. Promote only what the beta ran: before merging the
+release PR, confirm its head is still the beta commit; if `develop` has moved,
+tag and watch a new beta on the new `develop` commit first. Once the `Check`
+run for the push to `main` passes on the merge commit, tag that merge commit
+`v<VERSION>` for stable.
 
 ## How to roll back
 
