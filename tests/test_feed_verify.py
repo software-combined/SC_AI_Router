@@ -48,8 +48,10 @@ class Ed25519Tests(unittest.TestCase):
     def test_malformed_inputs_are_false(self):
         seed, pub = feed_verify.generate_keypair()
         sig = feed_verify.sign_hex(seed, b'm')
+        # Flip the first byte: forcing it to 'ff' left sig valid 1 run in 256.
+        flipped = '%02x' % (int(sig[:2], 16) ^ 0xff) + sig[2:]
         for bad_pub, bad_sig in (('zz', sig), (pub, 'zz'), (pub, sig[:-2]),
-                                 (pub, 'ff' + sig[2:]), ('00' * 32, sig)):
+                                 (pub, flipped), ('00' * 32, sig)):
             self.assertFalse(feed_verify.verify_hex(bad_pub, b'm', bad_sig))
 
 

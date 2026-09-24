@@ -1,5 +1,71 @@
 # Compatibility
 
+## Router 0.6.123 beta check, 24 September 2026 AEST
+
+Installed beta `0.6.123.119` (`v0.6.123-beta-express`, `develop` `c86e59e`) on
+the clients of the 0.6.122 gate below (Codex desktop `26.917.62051` with
+bundled `codex-cli 0.155.0-alpha.16.3`; Claude Code `2.1.223`). The release
+changes only the update notice, so the router's request paths and the 0.6.122
+live evidence carry over unchanged, and no billed probe was run.
+
+This Mac was the live check of the notice fix. Its update notice still
+recorded the 0.6.122 dialog that listed Claude Opus 5.5, GPT-6 Luna and GPT-6
+Sol, none of which the router had marked seen, so every earlier update had
+listed them again. The scheduled update applied `0.6.123.119` at 14:22 AEST
+without showing a dialog: the new installer marked those three models seen
+(the router's seen list grew from 22 to 25 models) and left the notice file
+untouched, and the updater then found nothing new to announce.
+
+## Router 0.6.122 beta gate, 24 September 2026 AEST
+
+Installed beta `0.6.122.118` (`v0.6.122-beta-express`, `develop` `2e14a13`,
+the first beta cut from `develop`) on Codex desktop `26.917.62051` (build
+`10789`) with bundled `codex-cli 0.155.0-alpha.16.3`; Claude Code `2.1.223`
+was not exercised. Neither client had changed since the 0.6.121 gate, so the
+section 7 legs were not rerun. Probes ran from a `git archive` copy of the tag
+against the installed router with synthetic data: 8 upstream model calls
+against a cap of 20, all HTTP 200 with no stream retry and no leg retried.
+
+| surface | requested model | effort | served | calls | result |
+|---|---|---|---|---|---|
+| Codex, history switch canary (fake upstream) | `deepseek/deepseek-v4.1-flash` and `gpt-6-astra` | `low` | not applicable | 0 | passed |
+| Codex, external compaction then subscription switch | `deepseek/deepseek-v4.1-flash`, compact, then `gpt-6-luna` | `low` | `deepseek/deepseek-v4.1-flash`; Luna not logged | 4 | passed |
+| OpenRouter, undeclared custom pair | `xiaomi/mimo-v2.6-pro` | none sent | `xiaomi/mimo-v2.6-pro` | 1 | passed |
+| OpenRouter, native `apply_patch` pair | `xiaomi/mimo-v2.6-pro` | none sent | `xiaomi/mimo-v2.6-pro` | 1 | passed |
+| OpenRouter, undeclared custom pair | `meta/muse-spark-1.3-contributor` | none sent | `meta/muse-spark-1.3-contributor` | 1 | HTTP 200, marker missing |
+| OpenRouter, native `apply_patch` pair | `meta/muse-spark-1.3-contributor` | none sent | `meta/muse-spark-1.3-contributor` | 1 | passed |
+
+The compaction leg is the first live proof of the compaction summary entry
+below. The DeepSeek thread compacted through the V2 trigger: the router logged
+`compact_triggered` (one summary attempt, 1,247 characters) at 12:58:27, and
+the switched `gpt-6-luna` turn finished HTTP 200 in 1.95 s at 12:58:29 with no
+`upstream_rejected` or `annotation_retry` line. Under 0.6.121 that turn logged
+a 400 `invalid_encrypted_content` and a retry. The canary found the client's
+`<model_switch>` marker with switch 3, invalid 1 and transient 2 attempts.
+
+The pair legs gather evidence for audit finding U3. An offline prepare from
+the tag shows both pairs leave the router unconverted, with their original
+item types, a shared `call_id` and an empty `tools` list. Both rows accepted
+both shapes, so the refusal U3 predicts did not occur for them. Muse Spark
+answered the custom pair with HTTP 200 in 7.9 s but without the marker;
+metadata cannot say whether the model omitted it or the tool output never
+reached it, so the leg was not retried and U3 stays open for that case.
+
+From the install to 13:00:58 AEST the router log shows 44 requests started and
+41 completed, all HTTP 200 (40 OpenRouter, 1 OpenAI subscription, no
+Anthropic), with 3 other sessions' turns still streaming at read time. There
+were no `request_failed`, `upstream_rejected`, `upstream_unavailable` or
+`annotation_retry` lines; the only rejections were two local 426 websocket
+refusals, which switch Codex to HTTP streaming.
+
+Limits: success lines carry no item fingerprint, so the log cannot show
+directly that the router's summary reached Luna as readable text, and it does
+not record Luna's served model. No leg carried a native encrypted child reply,
+so that half of the fix still rests on offline tests. The new refusal fields
+(`top_level_keys`, `reasoning_shapes`, `pair_problems`) never fired because
+nothing was refused, and native `apply_patch` edits in external compaction
+summaries had no live leg.
+
 ## Router compaction summary on the subscription route, 24 September 2026 AEST
 
 Router candidate `0.6.122` sends the router's own compaction summary as
@@ -21,7 +87,8 @@ the healthy-path behaviour in the 23 September entry below.
 Evidence is offline only: `tests/test_subscription_router_compaction.py`,
 including handler tests that carry a native encrypted child reply in identity
 and zstd bodies, and the updated `test_07` in
-`tests/test_subscription_compaction_repair.py`. No live client session was run.
+`tests/test_subscription_compaction_repair.py`. No live client session was run
+here; the 0.6.122 beta gate above later proved the first-attempt path live.
 
 ## Router 0.6.121 beta gate, 24 September 2026 AEST
 
