@@ -10,7 +10,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from ai_router import errors, upstream, wire_shape
+from ai_router import errors, provider_defs, upstream, wire_shape
 from ai_router.runtime import LOG
 
 MARKER = 'SYNTH-CANARY-060-9f2c'
@@ -87,10 +87,21 @@ class SafeDiagnosticsTests(unittest.TestCase):
                           'tools': 1,
                           'top_level_keys': ['input', 'model', 'tools'],
                           'pair_problems': {'orphan_call': 1}})
-        blob = json.dumps(fingerprint)
-        self.assertNotIn(MARKER, blob)
-        for banned in ('text', 'arguments', 'description', 'name'):
-            self.assertNotIn(f"'{banned}'", blob.replace('"', "'"))
+        # A dialect adds its other contract rules; the orphan call is only
+        # ever counted under pair_problems.
+        payload = json.loads(body)
+        payload['input'].append({'type': 'function_call_output',
+                                 'output': f'delegated {MARKER}'})
+        external = wire_shape.fingerprint(json.dumps(payload).encode(),
+                                          provider_defs.DIALECT_OPENROUTER)
+        self.assertEqual(external['contract_violations'], {'output.standalone': 1})
+        self.assertEqual(external['pair_problems'], {'orphan_call': 1})
+        self.assertNotIn('contract_warnings', external)
+        for shape in (fingerprint, external):
+            blob = json.dumps(shape)
+            self.assertNotIn(MARKER, blob)
+            for banned in ('text', 'arguments', 'description', 'name'):
+                self.assertNotIn(f"'{banned}'", blob.replace('"', "'"))
         self.assertEqual(wire_shape.fingerprint(b'not json'), {})
         self.assertEqual(wire_shape.fingerprint(
             json.dumps({'input': 'a string, not a list'}).encode()), {})
@@ -121,7 +132,6 @@ class SafeDiagnosticsTests(unittest.TestCase):
             server=SimpleNamespace(credentials=SimpleNamespace(
                 key_rejected=lambda provider: False)),
             error=lambda err: None)
-        from ai_router import provider_defs
         emit = lambda event, **fields: LOG.info(json.dumps({'event': event, **fields}))
         with mock.patch('ai_router.relay.time.monotonic', return_value=110.0):
             relay.relay(inst, SimpleNamespace(defn=provider_defs.OPENROUTER),
