@@ -580,6 +580,7 @@ tool names a person no longer reads stay searchable in the log.
 | `turn_refused` | a turn refused before any upstream call for its size (`BODY_TOO_LARGE`, `INVALID_REQUEST_SIZE`), with compressed, decoded, limit and prepared bytes plus counts and byte weight per carried class and images; no content |
 | `turn_trimmed` | an oversized routed turn was reduced with visible notes; names the bytes dropped and how many images and tool outputs were replaced |
 | `usage_reported` | a routed Codex turn carrying tools had its reported input tokens raised to what the thread carries (never lowered); names the provider's figure and the reported one |
+| `wire_contract` | observe only: a prepared Responses body broke a rule learnt from an earlier upstream refusal (the check never changes or blocks the request); names each rule under `violations` or `warnings` with a count, plus up to eight unknown top-level field names (`error_type` instead when the check itself failed); refusal lines carry the same rules, pairing under `pair_problems` and the rest as `contract_violations` and `contract_warnings`; no content |
 
 ## Stream identity observation (last-observed, not proof)
 

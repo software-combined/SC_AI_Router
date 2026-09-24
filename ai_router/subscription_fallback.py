@@ -22,7 +22,7 @@ prompt to it.
 """
 import json
 
-from . import errors, provider_defs, subscription_roster
+from . import errors, provider_defs, subscription_roster, wire_shape
 from .image_items import has_images
 from .providers import ExternalResponsesProvider
 from .registry import by_slug
@@ -116,12 +116,36 @@ def plan(state, prepared, path, payload, raw_body, headers, credentials):
 
 
 def prepare(provider, model, path, payload, raw_body, headers, server, decoded_len=None):
-    """provider.prepare plus the refused-turn fallback plan when eligible."""
+    """provider.prepare plus the refused-turn fallback plan when eligible.
+
+    Only Responses adapters own these two paths, so every prepared Responses
+    body also passes the observe-only contract check.
+    """
     prepared = provider.prepare(model, path, payload, raw_body, headers,
                                 server.credentials, decoded_len=decoded_len)
+    if path in ('/responses', '/responses/compact'):
+        _observe_contract(provider, prepared, model, path, payload, raw_body)
     prepared.fallback = plan(server.state, prepared, path, payload, raw_body, headers,
                              server.credentials)
     return prepared
+
+
+def _observe_contract(provider, prepared, model, path, payload, raw_body):
+    """One `wire_contract` line of rule names and counts when a rule fires.
+
+    The body goes upstream unchanged whatever this finds. A passthrough body
+    is the client's payload, already parsed; only a rewritten one is parsed
+    again. A fault in the check is logged by its type and never fails a turn.
+    """
+    try:
+        wire = (payload if prepared.body is raw_body
+                else wire_shape.decode_wire(prepared.body))
+        found = wire_shape.violations(provider.defn.dialect, wire)
+    except Exception as exc:  # noqa: BLE001 - observation must never fail a turn
+        found = {'error_type': type(exc).__name__}
+    if any(found.values()):
+        log_event('wire_contract', provider=prepared.provider, model=model, path=path,
+                  **found)
 
 
 def refusal_message(prepared, metrics):
