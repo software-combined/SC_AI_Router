@@ -29,7 +29,6 @@ _spec.loader.exec_module(_svc)
 
 MAX_VERSION_FAILURES = 3
 ANNOUNCE_TIMEOUT_S = 5
-NOTIFY_NAMES = 3
 REPLY_LIMIT = 1 << 20
 
 _SHA256_SHAPE = re.compile(r'^[0-9a-f]{64}$')
@@ -148,9 +147,7 @@ def _announce_new_models(home, state, _urlopen=None):
         rows = reply.get('pending') or []
         if not rows:
             return
-        names = [row.get('name') or row.get('slug') for row in rows[:NOTIFY_NAMES]]
-        if len(rows) > NOTIFY_NAMES:
-            names.append('+%d more' % (len(rows) - NOTIFY_NAMES))
+        names = _svc.notice.dialog_names(rows)
         version = _svc.current_version(home)
         _svc.notice.record(home, version, version, state.get('clients'),
                            names=names)

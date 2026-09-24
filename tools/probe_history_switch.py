@@ -17,6 +17,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ai_router import catalogue, provider_defs, providers, upstream
+from ai_router.history_portability import portable_history
 from ai_router.registry import by_slug
 from tools.probe_context_budget import Client, Reply, MODEL, message
 
@@ -149,6 +150,9 @@ def run(binary, scenario, home):
                     assert any(i.get('type') == 'reasoning' and i.get('content')
                                for call in replay.call_args_list for i in call.args[0]['input']), \
                         'probe did not exercise replay of foreign reasoning'
+                    assert any(portable_history(c.args[0]['input'], providers.SEARCH_NAME, 'native')
+                               is not c.args[0]['input'] for c in replay.call_args_list), \
+                        'router did not find the client <model_switch> marker'
                 expected = {'switch': 3, 'invalid': 1, 'transient': 2}[scenario]
                 assert fake.calls == expected, f'expected {expected} attempts, got {fake.calls}'
                 assert not fake.failures, fake.failures

@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- The update dialog now lists each new model once. Models a dialog has shown
+  are marked seen, so later updates no longer repeat them, and an update or
+  check with no new model stays silent instead of showing a restart dialog.
+- A subscription turn whose history replays the router's own compaction
+  summary now sends it as readable text on the first attempt, instead of
+  failing once and retrying. A turn that also carried a native encrypted child
+  reply no longer fails.
+- Provider refusal log lines now also record the request's top-level field
+  names, reasoning item shapes and any broken tool call/output pairing, as
+  names and counts only, never content.
+
 ## 0.6.121
 
 - Keep custom-tool history paired when a thread changes model. Declared custom
