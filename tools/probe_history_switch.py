@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ai_router import catalogue, provider_defs, providers, upstream
 from ai_router.history_portability import portable_history
 from ai_router.registry import by_slug
-from tools.probe_context_budget import Client, Reply, MODEL, message
+from tools.probe_context_budget import Client, Reply, MODEL, contract_failure, message
 
 EXTERNAL = 'deepseek/deepseek-v4.1-flash'
 NATIVE = 'gpt-6-astra'
@@ -47,6 +47,9 @@ class Upstream:
                 if any(k.lower() == 'content-encoding' and v == 'zstd' for k, v in headers.items()):
                     body = zstd.decompress(body)
                 self.payload = json.loads(body)
+                failure = contract_failure(host, self.payload)
+                if failure:
+                    owner.failures.append(failure)
 
             def getresponse(self):
                 try:

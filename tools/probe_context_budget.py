@@ -22,11 +22,19 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ai_router.catalogue import external_entry
 from ai_router.registry import by_slug
-from ai_router import turn_budget
+from ai_router import provider_defs, turn_budget, wire_shape
 from tools.appserver_probe import AppServer, CONTEXT_BUDGET, scrub_env
 
 MODEL = 'meta/muse-spark-1.3-contributor'
 MARKER = 'CONTEXT_BUDGET_MARKER_719'
+DIALECTS = {provider_defs.OPENAI.host: provider_defs.OPENAI.dialect,
+            provider_defs.OPENROUTER.host: provider_defs.OPENROUTER.dialect}
+
+
+def contract_failure(host, payload):
+    """Why a real upstream would refuse this body, else None; warnings pass."""
+    found = wire_shape.violations(DIALECTS[host], payload)[wire_shape.VIOLATION]
+    return f'{host} body breaks the upstream contract: {found}' if found else None
 
 
 class Reply(io.BytesIO):
@@ -64,6 +72,9 @@ class Upstream:
             def request(self, method, path, body=None, headers=None):
                 assert path == '/api/v1/responses', 'unexpected upstream path'
                 self.payload = json.loads(body)
+                failure = contract_failure(host, self.payload)
+                if failure:
+                    owner.failures.append(failure)
 
             def getresponse(self):
                 try:

@@ -1,0 +1,120 @@
+{
+ "contract": {
+  "unknown_top_level": [],
+  "violations": {},
+  "warnings": {}
+ },
+ "wire": {
+  "include": [
+   "reasoning.encrypted_content"
+  ],
+  "input": [
+   {
+    "content": [
+     {
+      "text": "<permissions instructions>\nSynthetic sandbox: read-only; approvals are never requested.\n</permissions instructions>",
+      "type": "input_text"
+     }
+    ],
+    "role": "developer",
+    "type": "message"
+   },
+   {
+    "content": [
+     {
+      "text": "List the files in the synthetic project.",
+      "type": "input_text"
+     }
+    ],
+    "role": "user",
+    "type": "message"
+   },
+   {
+    "arguments": "{\"cmd\": \"ls\"}",
+    "call_id": "call_s01_ls",
+    "name": "exec_command",
+    "type": "function_call"
+   },
+   {
+    "call_id": "call_s01_ls",
+    "output": "README.md\nsrc",
+    "type": "function_call_output"
+   },
+   {
+    "content": [
+     {
+      "text": "The project holds README.md and src.",
+      "type": "output_text"
+     }
+    ],
+    "role": "assistant",
+    "type": "message"
+   },
+   {
+    "content": [
+     {
+      "text": "Summarise README.md.",
+      "type": "input_text"
+     }
+    ],
+    "role": "user",
+    "type": "message"
+   }
+  ],
+  "instructions": "You are the synthetic coding agent for the replay goldens.",
+  "max_output_tokens": 32000,
+  "model": "x-ai/grok-4.7",
+  "parallel_tool_calls": true,
+  "prompt_cache_key": "replay-s01",
+  "reasoning": {
+   "effort": "low",
+   "summary": "auto"
+  },
+  "store": false,
+  "stream": true,
+  "tool_choice": "auto",
+  "tools": [
+   {
+    "description": "Run a shell command in the synthetic workspace.",
+    "name": "exec_command",
+    "parameters": {
+     "additionalProperties": false,
+     "properties": {
+      "cmd": {
+       "description": "The command to run.",
+       "type": "string"
+      }
+     },
+     "required": [
+      "cmd"
+     ],
+     "type": "object"
+    },
+    "strict": false,
+    "type": "function"
+   },
+   {
+    "description": "Edit files with a synthetic patch.",
+    "name": "apply_patch",
+    "parameters": {
+     "additionalProperties": false,
+     "properties": {
+      "input": {
+       "description": "The complete raw tool input.",
+       "type": "string"
+      }
+     },
+     "required": [
+      "input"
+     ],
+     "type": "object"
+    },
+    "strict": true,
+    "type": "function"
+   },
+   {
+    "type": "web_search"
+   }
+  ]
+ }
+}
