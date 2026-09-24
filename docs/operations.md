@@ -318,14 +318,22 @@ policy scope, the updater asks the running router over loopback (the 3.9
 updater never imports the runtime) and shows one native restart dialog. The
 dialog names up to three new models the way the picker does
 (`<Vendor>: <Model>`, without the `· OpenRouter` route suffix). No browser
-page or separate desktop notification opens. A dialog that cannot reach the
-running router keeps its version-only sentence, so a stopped service never
-delays an update. `Later` leaves the client running; `Quit and reopen` quits
+page or separate desktop notification opens. The dialog appears only when the
+router names at least one model that no earlier dialog has listed. An update
+or check with no new model stays silent, and so does one that cannot reach
+the running router, so a stopped service never delays an update. Once a
+dialog is on screen, the router is told to mark every model it covers as
+seen (the dialog names three and counts the rest as `+2 more`), through the
+same Later action the old approval page used, so no later update lists them
+again. Dialogs never stack: a model that arrives while an earlier dialog is
+still open waits, and a later pass names it once that dialog has closed.
+`Later` leaves the client running; `Quit and reopen` quits
 and reopens Codex on macOS. The offer is skipped on installs whose state
 records no Codex attachment (`--clients claude`, `--client none`; a `clients`
 value recorded by an earlier run can lag the current attachment) and whenever
 `ROUTER_NO_NOTICE=1` silences the update notice. If no native dialog tool is
-available, the notice stays pending for a later GUI run. The first run seeds
+available, the notice stays pending for a later GUI run, and its models stay
+waiting until a dialog actually shows them. The first run seeds
 the snapshot without announcing the catalogue, so the first landing after
 this feature ships only seeds it and later landings announce; removals and
 version-only updates stay silent, and an unverified or out-of-policy row is

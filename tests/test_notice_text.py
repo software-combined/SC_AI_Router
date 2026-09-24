@@ -11,6 +11,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
+from urllib.parse import parse_qsl
 
 _ROOT = Path(__file__).resolve().parents[1]
 
@@ -106,6 +107,28 @@ class PendingNamesTests(unittest.TestCase):
             with tempfile.TemporaryDirectory() as tmp:
                 home = self._home(tmp, state)
                 self.assertEqual(text_mod.pending_names(home), [])
+
+    def test_acknowledge_posts_what_a_dialog_listed_to_this_install_only(self):
+        rows = [{'slug': 's/%d' % i, 'name': 'Model %d' % i} for i in range(4)]
+        listed = ['Model 0', 'Model 1', 'Model 2', '+1 more']
+        own = 'http://127.0.0.1:18749/tok/model-prompt/nonce'
+        every = [('action', 'later')] + [('m', row['slug']) for row in rows]
+        for names, link, posted in (
+                (listed, own, [(own, every)]),  # "+1 more" is covered too
+                (['Model 0'], own, []),  # a model arrived after the dialog
+                (listed, 'http://evil.example/tok/model-prompt/nonce', [])):
+            sent = []
+
+            def opener(url, timeout):
+                if isinstance(url, str):
+                    return _Reply({'pending': rows, 'url': link})
+                sent.append((url.full_url, parse_qsl(url.data.decode())))
+                return mock.MagicMock()
+            with self.subTest(names=names, link=link), \
+                    tempfile.TemporaryDirectory() as tmp:
+                home = self._home(tmp, {'port': 18749, 'token': 'tok'})
+                text_mod.acknowledge(home, names, _urlopen=opener)
+                self.assertEqual(sent, posted)
 
     def test_names_fall_back_on_a_malformed_reply(self):
         with tempfile.TemporaryDirectory() as tmp:
