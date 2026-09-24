@@ -41,8 +41,9 @@ def _adding_catalogue(slug):
 
 class ShowPendingTests(unittest.TestCase):
     def _pending(self, home, version='1.0.1'):
+        # A dialog needs a new model to name; without one it stays silent.
         (home / 'update-notice.json').write_text(
-            json.dumps({'version': version}))
+            json.dumps({'version': version, 'names': ['Acme: Model 1']}))
         return home / 'update-notice.json'
 
     def _with_dialog(self, test):
@@ -88,8 +89,8 @@ class ShowPendingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             home.mkdir()
-            (home / 'update-notice.json').write_text(
-                json.dumps({'version': '1.0.2', 'pid': 4321}))
+            (home / 'update-notice.json').write_text(json.dumps(
+                {'version': '1.0.2', 'pid': 4321, 'names': ['Acme: Model 1']}))
             self._with_dialog(self)
             seen = []
             self.assertFalse(notice_mod.show_pending(
@@ -105,8 +106,8 @@ class ShowPendingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             home.mkdir()
-            (home / 'update-notice.json').write_text(
-                json.dumps({'version': '1.0.1', 'pid': 4321}))
+            (home / 'update-notice.json').write_text(json.dumps(
+                {'version': '1.0.1', 'pid': 4321, 'names': ['Acme: Model 1']}))
             self._with_dialog(self)
             seen = []
             self.assertTrue(notice_mod.show_pending(
