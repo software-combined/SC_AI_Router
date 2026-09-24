@@ -86,6 +86,14 @@ probe or incident in `docs/compatibility.md`, and prefer
 `ignore: [<endpoint>]` over a hard `order` plus `allow_fallbacks: false`,
 which removes failover.
 
+A row may set `auto_compact_token_limit` to make Codex compact that model's
+threads earlier than its context window would; without it, Codex follows the
+window. Set it only from recorded evidence in `docs/compatibility.md`, as for
+MiMo V2.6 Pro. It is a separate field because `live_refresh` rewrites
+`context_window` from the provider's advertised length, so a lowered window
+would not stick. `live_refresh` and `models add` leave the limit alone, and
+the router's hourly model feed cannot replace the value a release ships.
+
 Picker labels follow the naming convention in `AGENTS.md` section 8
 (`<Vendor>: <Model> <Version?>`); `models add` and `live_refresh` produce
 conforming rows automatically. A hyphenated upstream version

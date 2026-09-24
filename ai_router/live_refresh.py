@@ -2,8 +2,8 @@
 
 Derived (rewritten in place in models.json): modalities, context_window,
 max_output_tokens, reasoning. Pinned (never touched): identity,
-excluded_efforts, schema_mode, max_tools, drop_images, priority, and the
-capability flags, which only probes may enable.
+excluded_efforts, schema_mode, max_tools, drop_images, priority, the
+compaction limit, and the capability flags, which only probes may enable.
 
 A refresh only rewrites rows owned by the provider whose catalogue it read
 (`provider_defs.external_catalogues`); a `manual`-shape provider has no live

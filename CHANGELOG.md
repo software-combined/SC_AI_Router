@@ -12,6 +12,8 @@
   subscription request now gets its refusal shape logged too, an item type
   that is not a plain name is logged as `unknown` so free text cannot reach
   the log, and an item with a role but no type counts as a `message`.
+- MiMo V2.6 Pro threads now compact at about 400,000 tokens, before Xiaomi's
+  endpoint starts failing long requests.
 
 ## 0.6.123
 
