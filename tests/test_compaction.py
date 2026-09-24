@@ -222,6 +222,19 @@ class TranscriptBoundaryTests(unittest.TestCase):
         self.assertIn('send_message', text)
         self.assertIn('slack.post', text)
 
+    def test_native_apply_patch_edit_survives_summary(self):
+        text = transcript_for_summary([
+            {'type': 'message', 'role': 'user', 'content': 'fix the note'},
+            {'type': 'apply_patch_call', 'call_id': 'p1', 'status': 'completed',
+             'operation': {'type': 'update_file', 'path': 'note.txt',
+                           'diff': '@@\n-old\n+PATCH-CANARY-1\n'}},
+            {'type': 'apply_patch_call_output', 'call_id': 'p1', 'output': 'Done OUTPUT-CANARY-2'},
+            {'type': 'function_call', 'name': 'send_message', 'arguments': '{"text":"hi"}'}])
+        for expected in ('call apply_patch: ', 'note.txt', 'PATCH-CANARY-1', 'Done OUTPUT-CANARY-2'):
+            self.assertIn(expected, text)
+        # A function call still renders its exact line.
+        self.assertIn('assistant tool call send_message: {"text":"hi"}', text.splitlines())
+
 
 class ReasoningAndShapeTests(unittest.TestCase):
     def test_reasoning_plaintext_kept_encrypted_dropped(self):
