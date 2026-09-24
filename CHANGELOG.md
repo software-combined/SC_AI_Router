@@ -4,6 +4,14 @@
 
 - Model-switch and context-reset markers are found even if the client moves
   them to another text block or the system role.
+- Responses requests the router prepares are now checked against the
+  upstream rules learnt from earlier refusals, and a broken rule leaves one
+  `wire_contract` log line of rule names and counts. The check only observes:
+  it never changes or blocks a request. Provider refusal lines carry the same
+  rule counts and whether the thread switched model, a compressed
+  subscription request now gets its refusal shape logged too, an item type
+  that is not a plain name is logged as `unknown` so free text cannot reach
+  the log, and an item with a role but no type counts as a `message`.
 
 ## 0.6.123
 

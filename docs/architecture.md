@@ -9,11 +9,12 @@ transitional owners name the plan that will move them.
 ```
 provider_defs (one definition per upstream, imports nothing) + errors,
 redaction, sse, tool_merge, image_items, turn_budget, atomic_write, state,
-wire_shape, events (leaves: no module-level local imports; events' one
-call-time state lookup is the only exception)
+events (leaves: no module-level local imports; events' one call-time state
+lookup is the only exception)
   ^
   |
-registry / capabilities (model facts; stdlib plus the provider table only)
+registry / capabilities (model facts) + wire_shape (the learnt wire
+contract): stdlib plus the provider table only
   ^
   |
 transport (Prepared, hop-header rules, raw stream, header relay) + upstream
@@ -81,9 +82,14 @@ client's answer rather than plumbing, the bounded hold that lets a retry replace
 plumbing instead of appending a second copy, the retry verdict, and opening
 the retry itself. It is a
 leaf beside `stream_errors.py`, never a dispatcher or a credential owner.
-`wire_shape.py` reduces a prepared Responses body to the names and counts a
-refusal log line carries and owns the tool call/output pairing rules the test
-fake also enforces; it observes and never changes a request.
+`wire_shape.py` owns the learnt upstream acceptance rules as data plus checks:
+the tool call/output pairing rules the test fake also enforces, and every
+other rule an incident taught, each with the route it binds, its level and its
+evidence. It observes and never changes a request. Each body prepared for a
+Responses turn is checked (not the helper-turn fallback twin, which is off
+by default), a broken rule becomes one `wire_contract` log line, and a
+refusal line carries the same facts beside the body's names and counts.
+Enforcing a rule is a separate, evidence-backed change.
 
 1. `provider_defs.py` owns every upstream fact (host, endpoint prefixes, key
    location, model catalogue, key-info endpoint, failure dialect) and imports

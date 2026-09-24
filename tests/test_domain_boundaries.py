@@ -73,6 +73,10 @@ RULES = {
     'ai_router/upstream.py': ('router', 'claude', 'providers', 'transport',
                               'runtime', 'setup', 'credentials', 'key_prompt'),
     'ai_router/setup_page.py': ('router', 'providers', 'credentials', 'key_prompt'),
+    # Plan 181: the wire contract only reads a body, so it stays below the
+    # adapters, the transport and the boot graph that build and send one.
+    'ai_router/wire_shape.py': ('router', 'providers', 'claude', 'transport',
+                                'runtime', 'setup', 'credentials'),
     'ai_router/transport.py': ('router', 'providers', 'claude', 'registry',
                                   'catalogue', 'models', 'setup', 'runtime'),
     'ai_router/stream_errors.py': ('router', 'providers', 'claude', 'runtime',
