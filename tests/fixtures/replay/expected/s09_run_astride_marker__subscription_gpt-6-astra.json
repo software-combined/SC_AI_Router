@@ -1,0 +1,131 @@
+{
+ "contract": {
+  "unknown_top_level": [],
+  "violations": {},
+  "warnings": {}
+ },
+ "wire": {
+  "include": [
+   "reasoning.encrypted_content"
+  ],
+  "input": [
+   {
+    "content": [
+     {
+      "text": "<permissions instructions>\nSynthetic sandbox: read-only; approvals are never requested.\n</permissions instructions>",
+      "type": "input_text"
+     }
+    ],
+    "role": "developer",
+    "type": "message"
+   },
+   {
+    "content": [
+     {
+      "text": "Read both synthetic files.",
+      "type": "input_text"
+     }
+    ],
+    "role": "user",
+    "type": "message"
+   },
+   {
+    "content": [
+     {
+      "text": "[reasoning summary from the previous model] Read them in parallel.",
+      "type": "input_text"
+     }
+    ],
+    "role": "user",
+    "type": "message"
+   },
+   {
+    "arguments": "{\"cmd\": \"cat a.txt\"}",
+    "call_id": "call_s09_a",
+    "name": "exec_command",
+    "type": "function_call"
+   },
+   {
+    "arguments": "{\"cmd\": \"cat b.txt\"}",
+    "call_id": "call_s09_b",
+    "name": "exec_command",
+    "type": "function_call"
+   },
+   {
+    "content": [
+     {
+      "text": "<model_switch>\nThe user was previously using a different model.\n</model_switch>",
+      "type": "input_text"
+     }
+    ],
+    "role": "developer",
+    "type": "message"
+   },
+   {
+    "call_id": "call_s09_a",
+    "output": "alpha",
+    "type": "function_call_output"
+   },
+   {
+    "call_id": "call_s09_b",
+    "output": "beta",
+    "type": "function_call_output"
+   },
+   {
+    "content": [
+     {
+      "text": "Compare them.",
+      "type": "input_text"
+     }
+    ],
+    "role": "user",
+    "type": "message"
+   }
+  ],
+  "instructions": "You are the synthetic coding agent for the replay goldens.",
+  "model": "gpt-6-astra",
+  "parallel_tool_calls": true,
+  "prompt_cache_key": "replay-s09",
+  "reasoning": {
+   "effort": "low",
+   "summary": "auto"
+  },
+  "store": false,
+  "stream": true,
+  "tool_choice": "auto",
+  "tools": [
+   {
+    "description": "Run a shell command in the synthetic workspace.",
+    "name": "exec_command",
+    "parameters": {
+     "additionalProperties": false,
+     "properties": {
+      "cmd": {
+       "description": "The command to run.",
+       "type": "string"
+      }
+     },
+     "required": [
+      "cmd"
+     ],
+     "type": "object"
+    },
+    "strict": false,
+    "type": "function"
+   },
+   {
+    "description": "Edit files with a synthetic patch.",
+    "format": {
+     "definition": "start: /(.|\\n)+/",
+     "syntax": "lark",
+     "type": "grammar"
+    },
+    "name": "apply_patch",
+    "type": "custom"
+   },
+   {
+    "type": "web_search"
+   }
+  ]
+ }
+}

@@ -1,0 +1,145 @@
+{
+ "contract": {
+  "unknown_top_level": [],
+  "violations": {},
+  "warnings": {}
+ },
+ "wire": {
+  "include": [
+   "reasoning.encrypted_content"
+  ],
+  "input": [
+   {
+    "content": [
+     {
+      "text": "<permissions instructions>\nSynthetic sandbox: read-only; approvals are never requested.\n</permissions instructions>",
+      "type": "input_text"
+     }
+    ],
+    "role": "developer",
+    "type": "message"
+   },
+   {
+    "content": [
+     {
+      "text": "Plan the synthetic migration.",
+      "type": "input_text"
+     }
+    ],
+    "role": "user",
+    "type": "message"
+   },
+   {
+    "content": [
+     {
+      "text": "[reasoning summary from the previous model] Outline the steps.",
+      "type": "input_text"
+     }
+    ],
+    "role": "user",
+    "type": "message"
+   },
+   {
+    "content": [
+     {
+      "text": "Step one: back up the synthetic data.",
+      "type": "output_text"
+     }
+    ],
+    "role": "assistant",
+    "type": "message"
+   },
+   {
+    "content": [
+     {
+      "text": "<model_switch>\nThe user was previously using a different model.\n</model_switch>",
+      "type": "input_text"
+     }
+    ],
+    "role": "developer",
+    "type": "message"
+   },
+   {
+    "content": [
+     {
+      "text": "Continue with step two.",
+      "type": "input_text"
+     }
+    ],
+    "role": "user",
+    "type": "message"
+   },
+   {
+    "encrypted_content": "gAAAAA-synthetic-native-reasoning-s04-after",
+    "id": "rs_s04_after",
+    "summary": [],
+    "type": "reasoning"
+   },
+   {
+    "content": [
+     {
+      "text": "Step two: migrate the synthetic tables.",
+      "type": "output_text"
+     }
+    ],
+    "role": "assistant",
+    "type": "message"
+   },
+   {
+    "content": [
+     {
+      "text": "And step three?",
+      "type": "input_text"
+     }
+    ],
+    "role": "user",
+    "type": "message"
+   }
+  ],
+  "instructions": "You are the synthetic coding agent for the replay goldens.",
+  "model": "gpt-6-astra",
+  "parallel_tool_calls": true,
+  "prompt_cache_key": "replay-s04",
+  "reasoning": {
+   "effort": "low",
+   "summary": "auto"
+  },
+  "store": false,
+  "stream": true,
+  "tool_choice": "auto",
+  "tools": [
+   {
+    "description": "Run a shell command in the synthetic workspace.",
+    "name": "exec_command",
+    "parameters": {
+     "additionalProperties": false,
+     "properties": {
+      "cmd": {
+       "description": "The command to run.",
+       "type": "string"
+      }
+     },
+     "required": [
+      "cmd"
+     ],
+     "type": "object"
+    },
+    "strict": false,
+    "type": "function"
+   },
+   {
+    "description": "Edit files with a synthetic patch.",
+    "format": {
+     "definition": "start: /(.|\\n)+/",
+     "syntax": "lark",
+     "type": "grammar"
+    },
+    "name": "apply_patch",
+    "type": "custom"
+   },
+   {
+    "type": "web_search"
+   }
+  ]
+ }
+}

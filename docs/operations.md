@@ -461,10 +461,33 @@ The code may live anywhere; only this directory matters at runtime.
 
 ## Verification after a Codex upgrade
 
-Run the suite, then the base probe against the installed router and
+Capture what the new client sends before anything else:
+
+```sh
+python3.14 tools/capture_codex_shapes.py
+```
+
+It drives the installed app-server through a dynamic-tool turn, a model
+switch and a V2 compaction against an in-process router and a fake
+upstream, so it is free, makes no network call and reads no credential.
+The sanitised request bodies land in
+`tests/fixtures/replay/captured/<codex version>/`, and the drift report
+lists the item types, top-level request fields and developer-message
+openings added or removed since the newest earlier capture. Read that
+report first and check the new files for personal paths or text (the
+report compares only names), then commit the new directory;
+`tests/test_switch_marker.py`
+checks that the router still finds the switch marker in every capture.
+
+Next, run the suite, then the base probe against the installed router and
 confirm discovery, one exact callback, and the marker in the final
 answer. If the app-server protocol changed, probes fail before any
 user task does; do not ship model changes until the base probe passes.
+
+`tests/test_replay_golden.py` pins the exact body each route sends for a
+set of synthetic histories. Regenerating those goldens with
+`REPLAY_GOLDEN_UPDATE=1` changes behaviour on purpose: explain the golden
+diff in the PR, and in `CHANGELOG.md` when users see the change.
 
 ## Latency phase fields (aggregate-only comparison recipe)
 

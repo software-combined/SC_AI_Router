@@ -1,0 +1,280 @@
+{
+ "contract": {
+  "unknown_top_level": [],
+  "violations": {},
+  "warnings": {}
+ },
+ "wire": {
+  "include": [
+   "reasoning.encrypted_content"
+  ],
+  "input": [
+   {
+    "content": [
+     {
+      "text": "<permissions instructions>\nSynthetic sandbox: read-only; approvals are never requested.\n</permissions instructions>",
+      "type": "input_text"
+     }
+    ],
+    "role": "developer",
+    "type": "message"
+   },
+   {
+    "id": "at_926e7ebf-675e-55f0-9b27-434d2f3943e6",
+    "role": "developer",
+    "tools": [
+     {
+      "description": "Work with other agents.",
+      "name": "collaboration",
+      "tools": [
+       {
+        "description": "Start a synthetic helper agent.\nWhen all subagent lanes are full, close finished agents, or all of them if needed, then retry spawn.",
+        "name": "spawn_agent",
+        "parameters": {
+         "additionalProperties": false,
+         "properties": {
+          "message": {
+           "description": "The assignment or message.",
+           "encrypted": true,
+           "type": "string"
+          },
+          "model": {
+           "type": "string"
+          },
+          "target": {
+           "type": "string"
+          },
+          "task_name": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "message"
+         ],
+         "type": "object"
+        },
+        "strict": true,
+        "type": "function"
+       },
+       {
+        "description": "Message a synthetic agent.",
+        "name": "send_message",
+        "parameters": {
+         "additionalProperties": false,
+         "properties": {
+          "message": {
+           "description": "The assignment or message.",
+           "encrypted": true,
+           "type": "string"
+          },
+          "target": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "message"
+         ],
+         "type": "object"
+        },
+        "strict": true,
+        "type": "function"
+       },
+       {
+        "description": "Give a synthetic agent more work.",
+        "name": "followup_task",
+        "parameters": {
+         "additionalProperties": false,
+         "properties": {
+          "message": {
+           "description": "The assignment or message.",
+           "encrypted": true,
+           "type": "string"
+          },
+          "target": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "message"
+         ],
+         "type": "object"
+        },
+        "strict": true,
+        "type": "function"
+       },
+       {
+        "description": "Close a finished synthetic agent.\nWhen all subagent lanes are full, close finished agents, or all of them if needed, then retry spawn.",
+        "name": "close_agent",
+        "parameters": {
+         "additionalProperties": false,
+         "properties": {
+          "message": {
+           "description": "The assignment or message.",
+           "encrypted": true,
+           "type": "string"
+          },
+          "target": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "message"
+         ],
+         "type": "object"
+        },
+        "strict": true,
+        "type": "function"
+       }
+      ],
+      "type": "namespace"
+     },
+     {
+      "description": "Use this namespace for every initial assignment and follow-up to externally billed agents. Previous calls may appear under collaboration in history because Codex executes the native tool; that does not change the need to choose collaboration_plaintext for the next message.",
+      "name": "collaboration_plaintext",
+      "tools": [
+       {
+        "description": "PLAINTEXT HANDOFF: use collaboration_plaintext.spawn_agent for externally billed agents. Start a synthetic helper agent.\nPlaintext handoff for mixed-provider agents. Use this variant for externally billed recipients and keep using it for their follow-ups. Use the original collaboration tool for encrypted native handoffs. Start mixed-provider children with fork_turns=\"none\" when spawning; encrypted inherited history cannot be translated.\nWhen all subagent lanes are full, close finished agents, or all of them if needed, then retry spawn.",
+        "name": "spawn_agent",
+        "parameters": {
+         "additionalProperties": false,
+         "properties": {
+          "message": {
+           "description": "The complete readable assignment or message. Do not encrypt it.",
+           "encrypted": false,
+           "type": "string"
+          },
+          "model": {
+           "type": "string"
+          },
+          "target": {
+           "type": "string"
+          },
+          "task_name": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "message"
+         ],
+         "type": "object"
+        },
+        "strict": true,
+        "type": "function"
+       },
+       {
+        "description": "PLAINTEXT HANDOFF: use collaboration_plaintext.send_message for externally billed agents. Message a synthetic agent.\nPlaintext handoff for mixed-provider agents. Use this variant for externally billed recipients and keep using it for their follow-ups. Use the original collaboration tool for encrypted native handoffs. Start mixed-provider children with fork_turns=\"none\" when spawning; encrypted inherited history cannot be translated.",
+        "name": "send_message",
+        "parameters": {
+         "additionalProperties": false,
+         "properties": {
+          "message": {
+           "description": "The complete readable assignment or message. Do not encrypt it.",
+           "encrypted": false,
+           "type": "string"
+          },
+          "target": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "message"
+         ],
+         "type": "object"
+        },
+        "strict": true,
+        "type": "function"
+       },
+       {
+        "description": "PLAINTEXT HANDOFF: use collaboration_plaintext.followup_task for externally billed agents. Give a synthetic agent more work.\nPlaintext handoff for mixed-provider agents. Use this variant for externally billed recipients and keep using it for their follow-ups. Use the original collaboration tool for encrypted native handoffs. Start mixed-provider children with fork_turns=\"none\" when spawning; encrypted inherited history cannot be translated.",
+        "name": "followup_task",
+        "parameters": {
+         "additionalProperties": false,
+         "properties": {
+          "message": {
+           "description": "The complete readable assignment or message. Do not encrypt it.",
+           "encrypted": false,
+           "type": "string"
+          },
+          "target": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "message"
+         ],
+         "type": "object"
+        },
+        "strict": true,
+        "type": "function"
+       }
+      ],
+      "type": "namespace"
+     }
+    ],
+    "type": "additional_tools"
+   },
+   {
+    "content": [
+     {
+      "text": "Spawn a synthetic helper for the tests.",
+      "type": "input_text"
+     }
+    ],
+    "role": "user",
+    "type": "message"
+   }
+  ],
+  "instructions": "You are the synthetic coding agent for the replay goldens.",
+  "max_output_tokens": 32000,
+  "model": "deepseek/deepseek-v4.1-flash",
+  "parallel_tool_calls": true,
+  "prompt_cache_key": "replay-s08",
+  "reasoning": {
+   "effort": "low",
+   "summary": "auto"
+  },
+  "store": false,
+  "stream": true,
+  "tool_choice": "auto",
+  "tools": [
+   {
+    "description": "Run a shell command in the synthetic workspace.",
+    "name": "exec_command",
+    "parameters": {
+     "additionalProperties": false,
+     "properties": {
+      "cmd": {
+       "description": "The command to run.",
+       "type": "string"
+      }
+     },
+     "required": [
+      "cmd"
+     ],
+     "type": "object"
+    },
+    "strict": false,
+    "type": "function"
+   },
+   {
+    "description": "Edit files with a synthetic patch.",
+    "name": "apply_patch",
+    "parameters": {
+     "additionalProperties": false,
+     "properties": {
+      "input": {
+       "description": "The complete raw tool input.",
+       "type": "string"
+      }
+     },
+     "required": [
+      "input"
+     ],
+     "type": "object"
+    },
+    "strict": true,
+    "type": "function"
+   }
+  ]
+ }
+}

@@ -1,0 +1,213 @@
+{
+ "scenario": "s02_sub_to_ext",
+ "targets": [
+  "external:deepseek/deepseek-v4.1-flash",
+  "external:meta/muse-spark-1.3-contributor",
+  "external:xiaomi/mimo-v2.6-pro"
+ ],
+ "payload": {
+  "instructions": "You are the synthetic coding agent for the replay goldens.",
+  "input": [
+   {
+    "type": "message",
+    "role": "developer",
+    "content": [
+     {
+      "type": "input_text",
+      "text": "<permissions instructions>\nSynthetic sandbox: read-only; approvals are never requested.\n</permissions instructions>"
+     }
+    ]
+   },
+   {
+    "type": "message",
+    "role": "user",
+    "content": [
+     {
+      "type": "input_text",
+      "text": "Add a greeting to the synthetic app."
+     }
+    ]
+   },
+   {
+    "type": "reasoning",
+    "id": "rs_s02_native",
+    "summary": [
+     {
+      "type": "summary_text",
+      "text": "Find the greeting helper first."
+     }
+    ],
+    "encrypted_content": "gAAAAA-synthetic-native-reasoning-s02"
+   },
+   {
+    "type": "tool_search_call",
+    "call_id": "ts_s02",
+    "execution": "client",
+    "status": "completed",
+    "arguments": {
+     "query": "greeting docs",
+     "limit": 5
+    }
+   },
+   {
+    "type": "tool_search_output",
+    "call_id": "ts_s02",
+    "execution": "client",
+    "status": "completed",
+    "tools": [
+     {
+      "type": "namespace",
+      "name": "mcp__synthetic_docs",
+      "description": "Synthetic documentation server.",
+      "tools": [
+       {
+        "type": "function",
+        "name": "lookup",
+        "description": "Look up one synthetic document.",
+        "defer_loading": true,
+        "parameters": {
+         "type": "object",
+         "properties": {
+          "topic": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "topic"
+         ],
+         "additionalProperties": false
+        }
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "custom_tool_call",
+    "status": "completed",
+    "call_id": "ct_s02_declared",
+    "name": "apply_patch",
+    "input": "*** Begin Patch\n*** Add File: hello.txt\n+hello\n*** End Patch\n"
+   },
+   {
+    "type": "custom_tool_call_output",
+    "call_id": "ct_s02_declared",
+    "output": "Success. Updated hello.txt."
+   },
+   {
+    "type": "custom_tool_call",
+    "status": "completed",
+    "call_id": "ct_s02_undeclared",
+    "name": "exec",
+    "input": "print(\"synthetic\")"
+   },
+   {
+    "type": "custom_tool_call_output",
+    "call_id": "ct_s02_undeclared",
+    "output": "synthetic"
+   },
+   {
+    "type": "apply_patch_call",
+    "call_id": "ap_s02",
+    "status": "completed",
+    "operation": {
+     "type": "update_file",
+     "path": "hello.txt",
+     "diff": "@@\n-hello\n+hello, world\n"
+    }
+   },
+   {
+    "type": "apply_patch_call_output",
+    "call_id": "ap_s02",
+    "status": "completed",
+    "output": "Done."
+   },
+   {
+    "type": "message",
+    "role": "developer",
+    "content": [
+     {
+      "type": "input_text",
+      "text": "<model_switch>\nThe user was previously using a different model.\n</model_switch>"
+     }
+    ]
+   },
+   {
+    "type": "message",
+    "role": "user",
+    "content": [
+     {
+      "type": "input_text",
+      "text": "Carry on with the greeting."
+     }
+    ]
+   }
+  ],
+  "tools": [
+   {
+    "type": "function",
+    "name": "exec_command",
+    "description": "Run a shell command in the synthetic workspace.",
+    "strict": false,
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "cmd": {
+       "type": "string",
+       "description": "The command to run."
+      }
+     },
+     "required": [
+      "cmd"
+     ],
+     "additionalProperties": false
+    }
+   },
+   {
+    "type": "custom",
+    "name": "apply_patch",
+    "description": "Edit files with a synthetic patch.",
+    "format": {
+     "type": "grammar",
+     "syntax": "lark",
+     "definition": "start: /(.|\\n)+/"
+    }
+   },
+   {
+    "type": "web_search"
+   },
+   {
+    "type": "tool_search",
+    "execution": "client",
+    "description": "Search the deferred synthetic tools by keyword.",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "query": {
+       "type": "string"
+      },
+      "limit": {
+       "type": "number"
+      }
+     },
+     "required": [
+      "query"
+     ],
+     "additionalProperties": false
+    }
+   }
+  ],
+  "tool_choice": "auto",
+  "parallel_tool_calls": true,
+  "reasoning": {
+   "effort": "low",
+   "summary": "auto"
+  },
+  "store": false,
+  "stream": true,
+  "include": [
+   "reasoning.encrypted_content"
+  ],
+  "prompt_cache_key": "replay-s02"
+ }
+}
