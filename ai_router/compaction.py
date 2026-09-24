@@ -16,6 +16,12 @@ import secrets
 from .agent_handoffs import recoverable_agent_message
 from .compaction_result import IncompleteSummary as IncompleteSummary, extract_summary as extract_summary
 from .history_portability import CALL_TYPES as CALL_TYPES, OUTPUT_TYPES as OUTPUT_TYPES, _block_text as _block_text, user_message_item as user_message_item
+# Plan 183 phase 1 moved these to history_items and tool_runs; the old names
+# stay importable here until phase 2 re-points their importers.
+from .history_items import (REASONING_TEXT_BLOCKS as REASONING_TEXT_BLOCKS,
+                            has_encryption_marked_agent_item as has_opaque_agent_item,
+                            reasoning_text as _reasoning_text)
+from .tool_runs import _call_complete as _call_complete, scrub_tool_fragments as scrub_tool_fragments
 PREFIX = 'ocx1:'
 TRIGGER_TYPE = 'compaction_trigger'
 SUMMARY_PREFIX = ('Another language model started to solve this problem and '
@@ -109,66 +115,6 @@ def rewrite_input(items):
         else:
             rewritten.append(item)
     return rewritten
-# Calls the endpoint accepts, and outputs keyed by call. A fragment missing
-# these fields (interrupted call, orphan output) 400s the whole turn, so the
-# scrub drops fragments before anything is forwarded. A partial call never
-# executed, so the next turn regenerates it if still needed. A standalone
-# output (no call_id) is the app-injected instruction shape, not an orphan,
-# and is never dropped here; providers materialize it before the scrub.
-def _call_complete(item):
-    kind = item.get('type')
-    if not isinstance(item.get('call_id'), str):
-        return False
-    field = {'function_call': 'arguments', 'custom_tool_call': 'input'}.get(kind)
-    if field is not None:
-        return isinstance(item.get(field), str)
-    if kind == 'apply_patch_call':
-        return (item.get('status') in ('in_progress', 'completed')
-                and isinstance(item.get('operation'), dict))
-    return True
-
-
-def scrub_tool_fragments(items):
-    """Drop incomplete tool history; complete pairs pass through untouched."""
-    if not isinstance(items, list):
-        return items
-    calls = {item.get('call_id') for item in items
-             if isinstance(item, dict) and item.get('type') in CALL_TYPES
-             and _call_complete(item)}
-    out = []
-    for item in items:
-        if not isinstance(item, dict):
-            out.append(item)
-            continue
-        kind = item.get('type')
-        if kind in CALL_TYPES and not _call_complete(item):
-            continue
-        if (kind in OUTPUT_TYPES and isinstance(item.get('call_id'), str)
-                and item['call_id'] not in calls):
-            continue
-        out.append(item)
-    return out
-
-
-REASONING_TEXT_BLOCKS = frozenset({'reasoning_text', 'text'})
-
-
-def _reasoning_text(item):
-    """Readable reasoning text; the provider blob value is never read."""
-    parts = []
-    for blocks, restricted in ((item.get('summary'), False), (item.get('content'), True)):
-        if isinstance(blocks, str) and blocks.strip():
-            parts.append(blocks.strip())
-        elif isinstance(blocks, list):
-            for block in blocks:
-                if not isinstance(block, dict):
-                    continue
-                if restricted and block.get('type') not in REASONING_TEXT_BLOCKS:
-                    continue
-                text = block.get('text')
-                if isinstance(text, str) and text.strip():
-                    parts.append(text.strip())
-    return ' '.join(parts)
 
 
 def strip_reasoning_blobs(items):
@@ -216,33 +162,16 @@ def _item_text(item):
         # retained. Anything encrypted stays out: the preparation guard owns
         # that rejection, and summaries must never launder opaque blocks.
         readable = recoverable_agent_message(item)
-        if readable: item = {**item, 'content': readable}
-        elif has_opaque_agent_item([item]): return ''
+        if readable:
+            item = {**item, 'content': readable}
+        elif has_opaque_agent_item([item]):
+            return ''
         author = item.get('author', 'agent') + (f' to {item["recipient"]}' if item.get('recipient') else '')
         text = _block_text(item.get('content', '')).strip() + ('\nEncrypted content was withheld from this external model. The result may be incomplete; request a plain-text resend if needed.' if readable else '')
         return f'{author}: {text}'.strip()
     return ''
 
 TRUNCATED_NOTE = '[truncated] '
-
-
-def has_opaque_agent_item(items):
-    """True when any agent item carries an unreadable encrypted block."""
-    if not isinstance(items, list):
-        return False
-    for item in items:
-        if not isinstance(item, dict) or item.get('type') != 'agent_message':
-            continue
-        if 'encrypted_content' in item:
-            return True
-        content = item.get('content')
-        blocks = content if isinstance(content, list) else [content]
-        for block in blocks:
-            if not isinstance(block, dict):
-                continue
-            if 'encrypted_content' in block or block.get('type') == 'encrypted_content':
-                return True
-    return False
 
 
 def transcript_for_summary(items):
