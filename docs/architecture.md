@@ -18,8 +18,9 @@ contract): stdlib plus the provider table only
   ^
   |
 transport (Prepared, hop-header rules, raw stream, header relay) + upstream
-(failure policy) + stream_errors (classification) + stream_relay (one stream
-for relay.py): wire and failure policy, consumed by the adapters below
+(failure policy) + stream_errors (classification) + stream_events /
+stream_attempt (frame kinds, the uncommitted attempt) + stream_relay (one
+stream for relay.py): wire and failure policy, consumed by the adapters below
   ^
   |
 subscription_discovery / subscription_catalogue + catalogue / models /
@@ -91,11 +92,28 @@ It also owns the exact legacy paragraph migration used by catalogue upgrades.
 `stream_errors.py` owns shared HTTP/SSE context-error classification and applies
 it to external Responses terminal events after tool adaptation. It preserves
 successful frames and records semantic failure separately from the HTTP status.
-`stream_relay.py` owns one upstream stream for `relay.py`: which frames are the
-client's answer rather than plumbing, the bounded hold that lets a retry replace
-plumbing instead of appending a second copy, the retry verdict, and opening
-the retry itself. It is a
-leaf beside `stream_errors.py`, never a dispatcher or a credential owner.
+The external Responses stream lifecycle (Plan 187) is shared by every model
+on that protocol, and nothing in it reads a model name. `stream_errors.events`
+parses each frame once and `stream_events.py` names its kind (setup,
+reasoning, plumbing, answer, failure, completion, or opaque for anything it
+cannot place), keeping the frame's original bytes. `stream_attempt.py` owns
+the uncommitted attempt: one slot each for `response.created` and
+`response.in_progress` in that order, one for a failure terminal without
+output, and a shared 64 KiB budget for reasoning and data-less frames, so one
+attempt retains at most three parser-capped frames plus that budget. Any frame
+it refuses commits the attempt: the held frames go out in order, then that
+frame. It also owns `replay_safe`, the request-level rule that a replay may
+only follow a prepared body offering no tools or only client-run ones
+(`function`, `custom`; preparation already turns client tool search and
+namespaced tools into functions); a hosted tool such as `web_search`, or an
+unknown type, may already have run upstream, so that request keeps the
+provider's verdict. `stream_relay.py` owns one upstream stream for `relay.py`:
+offering frames to the hold, what the client received by kind, the single
+retry verdict (a provider failure before any forwarded byte, transient,
+replay-safe), and opening the retry itself. A valid retry replaces the whole
+uncommitted attempt; a retry that cannot open leaves the held verdict to
+reach the client. These are leaves beside `stream_errors.py`, never a
+dispatcher or a credential owner.
 `wire_shape.py` owns the learnt upstream acceptance rules as data plus checks:
 the tool call/output pairing rules the test fake also enforces, and every
 other rule an incident taught, each with the route it binds, its level and its

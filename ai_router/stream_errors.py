@@ -1,7 +1,7 @@
 """Normalize external Responses terminal errors without changing success data."""
 import json
 import re
-from . import errors, sse
+from . import errors, sse, stream_events
 
 _CONTEXT_MESSAGE = re.compile(
     r'The prompt is too long: ([0-9]{1,16}), model maximum context length: ([0-9]{1,16})')
@@ -11,44 +11,6 @@ MAX_DETAIL_CHARS = 64
 # the log line cannot tell them apart without this field.
 TERMINAL_FROM_UPSTREAM = 'upstream'
 TERMINAL_FROM_ROUTER = 'router'
-# Answers, not plumbing: frames whose bytes the client cannot un-see. A
-# response.created or reasoning frame before a failure costs nothing to
-# replace, while a text or tool-call delta is output the client already has.
-# `normalize` records which of these it passed through, so the relay can tell
-# the two apart without re-parsing a stream it has already forwarded.
-ANSWER_FRAME_TYPES = frozenset((
-    'response.output_text.delta', 'response.output_text.done',
-    'response.function_call_arguments.delta',
-    'response.function_call_arguments.done',
-    'response.reasoning_summary_text.delta', 'response.reasoning_summary_text.done',
-    'response.custom_tool_call_input.delta', 'response.custom_tool_call_input.done',
-))
-
-# Reasoning a provider streams as text rather than as an item. The plan 177
-# capture saw these from deepseek-v4.1-flash, and their bytes were unattributed
-# before. Disjoint from ANSWER_FRAME_TYPES: a kind in both would be counted as
-# content and as reasoning in the same frame.
-REASONING_FRAME_TYPES = frozenset((
-    'response.reasoning_text.delta', 'response.reasoning_text.done',
-))
-
-
-def _answer_item(event):
-    """True for an output-item frame that carries an item the client keeps.
-
-    `response.output_item.added`/`done` wrap every item kind, and a reasoning
-    item is replaceable: the client shows it, but a retried attempt supersedes
-    it the same way it supersedes a setup frame, so it must not block a retry.
-    """
-    item = event.get('item')
-    return (isinstance(item, dict)
-            and item.get('type') not in (None, 'reasoning'))
-
-
-def _reasoning_item(event):
-    """True only for the exact `reasoning` item kind: no setup, no other type."""
-    item = event.get('item')
-    return isinstance(item, dict) and item.get('type') == 'reasoning'
 
 
 # Same rule the HTTP path applies to a provider code (upstream._CODE_SHAPE):
@@ -263,32 +225,23 @@ def _prompt_refusal(failure, event):
     return errors.upstream_invalid_prompt(code='invalid_prompt')
 
 
-def normalize(chunks, metrics):
-    """Keep HTTP status separate from the terminal event's inference outcome."""
+def events(chunks, metrics):
+    """Each frame once, as a `stream_events.StreamEvent` with its kind.
+
+    The one parse of an external Responses stream: every frame keeps its
+    original bytes, and only a terminal failure writes to `metrics`, which
+    carries the log facts (event, bounded codes, class, writer) rather than
+    per-frame control. HTTP status stays separate from the inference outcome.
+    """
     for frame, data in sse.blocks(sse.lines(chunks)):
         try:
             event = json.loads(data)
         except (ValueError, UnicodeDecodeError):
-            metrics.pop('answer_frame', None)
-            metrics.pop('reasoning_frame', None)
-            yield frame
-            continue
+            event = None
+        lifecycle = stream_events.classify(data, event)
         kind = event.get('type') if isinstance(event, dict) else None
-        item_frame = kind in ('response.output_item.added',
-                              'response.output_item.done')
-        # Per frame, so a caller that stops reading cannot see a stale verdict.
-        if kind in ANSWER_FRAME_TYPES or (item_frame and _answer_item(event)):
-            metrics['answer_frame'] = kind
-        else:
-            metrics.pop('answer_frame', None)
-        # Reasoning is plumbing a retry replaces, but it can be most of the
-        # forwarded bytes, so the log names it separately.
-        if (item_frame and _reasoning_item(event)) or kind in REASONING_FRAME_TYPES:
-            metrics['reasoning_frame'] = kind
-        else:
-            metrics.pop('reasoning_frame', None)
-        if kind not in ('response.failed', 'response.incomplete', 'error'):
-            yield frame
+        if lifecycle != stream_events.FAILURE:
+            yield stream_events.StreamEvent(frame, lifecycle, kind)
             continue
         failure = event.get('response') if kind.startswith('response.') else event
         if kind == 'error' and 'error' not in event:
@@ -314,5 +267,15 @@ def normalize(chunks, metrics):
             metrics['terminal_source'] = TERMINAL_FROM_ROUTER
             frame = sse.frame(json.dumps({
                 'type': 'response.failed', 'response': refusal.body()}).encode())
-        yield frame
+        # Output the provider put in its own verdict, whichever frame the
+        # client reads: the attempt must commit rather than let a retry lose it.
+        output = kind != 'error' and isinstance(failure, dict) and bool(failure.get('output'))
+        yield stream_events.StreamEvent(frame, lifecycle, kind,
+                                        metrics['terminal_source'], output)
         return  # A terminal failure cannot be followed by a successful completion.
+
+
+def normalize(chunks, metrics):
+    """The frame bytes of `events`, for a caller that only forwards them."""
+    for event in events(chunks, metrics):
+        yield event.frame

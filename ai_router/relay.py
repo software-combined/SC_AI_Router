@@ -155,7 +155,7 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
             # At most one retry: this guard is evaluated before the second pass,
             # so a provider that fails both attempts cannot loop.
             if record.stream_retry or not stream_relay.retryable_stream_failure(
-                    metrics, record):
+                    metrics, record, prepared.body):
                 break
             record.stream_retry = 1
             metrics['stream_retry'] = 1
@@ -175,12 +175,11 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
             # open body. Re-sending them would append a second header block to
             # the client's stream.
             upstream.validate_response(response, prepared)
-            # A retry that opened keeps the discard: its verdict replaces the
-            # failed attempt's held one, so the hold stays dropped after this
-            # point and only this attempt's frames can reach the client.
-            record.pending.clear()
-            record.pending_reasoning = 0
-            record.held_terminal = False
+            # A retry that opened replaces the whole uncommitted attempt: its
+            # verdict replaces the failed attempt's held one, so the hold stays
+            # dropped after this point and only this attempt's frames can
+            # reach the client.
+            record.hold.clear()
         # The settled path flushes the hold exactly like the error path: the
         # frames the client never saw still belong to it, and a flush that
         # moved bytes is the stream's first downstream write.
@@ -254,4 +253,7 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
         conn.close()
         for extra in attempts[1:]:
             extra.close()
+        # A client that left, or any other exit, releases what was still held.
+        if record is not None:
+            record.hold.clear()
         handler.close_connection = True

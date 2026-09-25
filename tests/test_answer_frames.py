@@ -4,7 +4,7 @@ import unittest
 from unittest import mock
 
 from ai_router import router as router_mod
-from ai_router import sse, stream_errors
+from ai_router import sse, stream_errors, stream_events
 from tests.fakes import FakeUpstream, install_fake
 from tests.harness import post as _post, start_auth_server as _start_auth_server
 
@@ -13,82 +13,62 @@ def _frame(event):
     return sse.frame(json.dumps(event).encode())
 
 
-def _marker(event, key):
-    """The per-frame marker `normalize` leaves in metrics, or None."""
-    metrics = {}
-    list(stream_errors.normalize([_frame(event)], metrics))
-    return metrics.get(key)
+def _kind(event):
+    """The lifecycle kind `stream_errors.events` gives one frame."""
+    (only,) = stream_errors.events([_frame(event)], {})
+    return only.kind
 
 
 class AnswerFrameTests(unittest.TestCase):
-    def _answer(self, event):
-        return _marker(event, 'answer_frame')
-
     def test_reasoning_items_are_replaceable(self):
         # A reasoning item added before a failure is not answer bytes: a retry
         # supersedes it, and treating it as an answer would suppress the retry
-        # for every reasoning-capable model.
+        # for every reasoning-capable model. An item with no type is neither,
+        # so it commits the attempt without counting as answer.
         for kind in ('response.output_item.added', 'response.output_item.done'):
-            for item_type in ('reasoning', None):
+            for item_type, expected in (('reasoning', stream_events.REASONING),
+                                        (None, stream_events.OPAQUE)):
                 with self.subTest(kind=kind, item=item_type):
-                    self.assertIsNone(self._answer(
-                        {'type': kind, 'item': {'type': item_type}}))
+                    self.assertEqual(_kind({'type': kind, 'item': {'type': item_type}}),
+                                     expected)
 
     def test_message_and_tool_items_are_answers(self):
         for item_type in ('message', 'function_call', 'custom_tool_call'):
             with self.subTest(item=item_type):
-                self.assertEqual(self._answer(
-                    {'type': 'response.output_item.added',
-                     'item': {'type': item_type}}),
-                    'response.output_item.added')
+                self.assertEqual(_kind({'type': 'response.output_item.added',
+                                        'item': {'type': item_type}}),
+                                 stream_events.ANSWER)
 
     def test_text_and_tool_argument_deltas_are_answers(self):
         for kind in ('response.output_text.delta',
                      'response.function_call_arguments.delta'):
             with self.subTest(kind=kind):
-                self.assertEqual(self._answer({'type': kind, 'delta': 'x'}), kind)
+                self.assertEqual(_kind({'type': kind, 'delta': 'x'}), stream_events.ANSWER)
 
     def test_setup_and_unknown_frames_are_not_answers(self):
-        for kind in ('response.created', 'response.in_progress', 'unknown.kind'):
+        for kind in ('response.created', 'response.in_progress'):
             with self.subTest(kind=kind):
-                self.assertIsNone(self._answer({'type': kind}))
+                self.assertEqual(_kind({'type': kind, 'response': {'id': 'r'}}),
+                                 stream_events.SETUP)
+        self.assertEqual(_kind({'type': 'unknown.kind'}), stream_events.OPAQUE)
 
 
 class ReasoningFrameTests(unittest.TestCase):
-    """The reasoning marker names replaceable bytes without calling them answer."""
-
-    def test_reasoning_items_set_the_reasoning_marker(self):
-        for kind in ('response.output_item.added', 'response.output_item.done'):
-            with self.subTest(kind=kind):
-                event = {'type': kind, 'item': {'type': 'reasoning', 'id': 'rs_1'}}
-                self.assertEqual(_marker(event, 'reasoning_frame'), kind)
-                # Reasoning stays replaceable plumbing, never an answer frame.
-                self.assertIsNone(_marker(event, 'answer_frame'))
-
-    def test_other_items_and_setup_frames_stay_unattributed(self):
-        events = (
-            {'type': 'response.output_item.added', 'item': {'type': 'message'}},
-            {'type': 'response.output_item.done', 'item': {'type': 'function_call'}},
-            {'type': 'response.created'},
-        )
-        for event in events:
-            with self.subTest(kind=event['type'], item=event.get('item', {}).get('type')):
-                self.assertIsNone(_marker(event, 'reasoning_frame'))
+    """The reasoning kind names replaceable bytes without calling them answer."""
 
     def test_reasoning_text_deltas_are_reasoning_not_answer(self):
         # The plan 177 capture: deepseek-v4.1-flash streams reasoning as text,
-        # and those bytes reached the log unattributed until this marker.
+        # and those bytes reached the log unattributed until this kind.
         for kind in ('response.reasoning_text.delta', 'response.reasoning_text.done'):
             with self.subTest(kind=kind):
-                event = {'type': kind, 'delta': 'x'}
-                self.assertEqual(_marker(event, 'reasoning_frame'), kind)
-                self.assertIsNone(_marker(event, 'answer_frame'))
+                self.assertEqual(_kind({'type': kind, 'delta': 'x'}),
+                                 stream_events.REASONING)
 
     def test_the_two_frame_sets_are_disjoint(self):
         # A kind in both sets would be counted as content and as reasoning in
         # the same frame, so forwarded bytes would stop being their sum.
-        self.assertEqual(stream_errors.ANSWER_FRAME_TYPES
-                         & stream_errors.REASONING_FRAME_TYPES, frozenset())
+        self.assertEqual(stream_events.ANSWER_FRAME_TYPES
+                         & stream_events.REASONING_FRAME_TYPES, frozenset())
 
 
 class ReasoningBytesTests(unittest.TestCase):
