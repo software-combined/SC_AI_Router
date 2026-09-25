@@ -7,6 +7,11 @@
   `response.in_progress` echoes a large request. The rule is shared across
   models. Requests that offer provider-run tools, such as web search, keep the
   provider's verdict and are not replayed.
+- A model-list refresh no longer changes a request that is already in flight.
+  Each request keeps the model settings it started with, including a helper
+  turn's fallback to OpenRouter, and the next request uses the new list. The
+  router log's start and completion records for one request share a request
+  ID.
 
 ## 0.6.124
 

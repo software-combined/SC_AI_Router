@@ -16,7 +16,7 @@ import hashlib
 import json
 import sys
 
-from . import claude_compat, provider_defs, transport
+from . import claude_compat, provider_defs, request_context, transport
 from .errors import ClaudeSubscriptionRequired, PreparationError, UnknownModel
 from . import registry
 from .clients import registry as client_table
@@ -31,10 +31,15 @@ CLAUDE_ROUTE_PREFIX = 'claude/scg/'
 
 def claude_alias(slug):
     """Discovery id for one registry slug; None when it must not list."""
-    entry = by_slug(slug) if isinstance(slug, str) else None
+    return row_alias(by_slug(slug) if isinstance(slug, str) else None)
+
+
+def row_alias(entry):
+    """Discovery id for one registry row; None when it must not list."""
     defn = provider_defs.get(entry.provider) if entry is not None else None
     if defn is None or not defn.serves(provider_defs.MESSAGES):
         return None
+    slug = entry.slug
     bare = slug.removeprefix('~')
     if bare.startswith('anthropic/'):
         return bare  # already passes the client filter
@@ -43,17 +48,21 @@ def claude_alias(slug):
     return CLAUDE_ROUTE_PREFIX + hashlib.sha256(slug.encode()).hexdigest()
 
 
-def unalias(model):
-    """Strip the discovery prefix back to the registry slug, tilde restored."""
+def unalias(model, catalogue=None):
+    """Strip the discovery prefix back to the registry slug, tilde restored.
+
+    `catalogue` is the request's captured generation (request_context);
+    None reads the live registry once, for callers outside a request."""
     if not isinstance(model, str) or not model.startswith(CLAUDE_ALIAS_PREFIX):
         return model
+    rows = request_context.capture() if catalogue is None else catalogue
     if model.startswith(CLAUDE_ROUTE_PREFIX):
-        return next((entry.slug for entry in registry.MODELS
-                     if claude_alias(entry.slug) == model), model)
+        return next((entry.slug for entry in rows.values()
+                     if row_alias(entry) == model), model)
     # Older discovery IDs remain valid for saved sessions and CLI commands.
     rest = model[len(CLAUDE_ALIAS_PREFIX):]
     for candidate in (rest, '~' + rest):
-        if by_slug(candidate) is not None:
+        if candidate in rows:
             return candidate
     return model  # unknown: leave untouched for subscription passthrough
 
@@ -116,24 +125,15 @@ if __name__ == '__main__':
     print(json.dumps(models_listing(), sort_keys=True))
 
 
-def resolve(model):
+def resolve(model, catalogue=None):
     """Registry slug for a discovery id or direct slug; model untouched if unknown."""
-    slug = unalias(model)
-    if isinstance(slug, str) and by_slug(slug) is not None:
+    rows = request_context.capture() if catalogue is None else catalogue
+    slug = unalias(model, rows)
+    if isinstance(slug, str) and slug in rows:
         return slug
-    if (
-        isinstance(model, str)
-        and model.startswith('anthropic/')
-        and by_slug('~' + model) is not None
-    ):
+    if isinstance(model, str) and model.startswith('anthropic/') and '~' + model in rows:
         return '~' + model  # bare Anthropic id lists without its tilde
     return model
-
-
-def row_def(model, _resolve=resolve):
-    """ProviderDef for a requested id, or None when no row owns it."""
-    entry = by_slug(_resolve(model)) if isinstance(model, str) else None
-    return provider_defs.get(entry.provider) if entry is not None else None
 
 
 class ExternalMessagesProvider:
@@ -146,12 +146,14 @@ class ExternalMessagesProvider:
         self.host = provider_defs.region_host(defn.id, self.region) or defn.host
         self.kind = defn.kind
 
-    def prepare(self, model, path, payload, raw_body, headers, credentials, decoded_len=None):
+    def prepare(self, model, path, payload, raw_body, headers, credentials, decoded_len=None,
+                context=None):
         if path not in CLAUDE_POST_PATHS:
             raise PreparationError('Claude ingress serves messages only')
         body = raw_body
-        slug = resolve(model)
-        entry = by_slug(slug) if isinstance(slug, str) else None
+        if context is None:  # a direct call; routed requests resolved at ingress
+            context = request_context.resolve(model, request_context.capture(), resolve(model))
+        slug, entry = context.slug, context.row
         upstream = upstream_id_for(entry) if entry is not None else slug
         # resolve() only returns a different string for a known registry slug.
         # payload is the parsed form of this same body, so rewrite the alias
@@ -170,7 +172,7 @@ class ExternalMessagesProvider:
             self.host, self.defn.path_for(provider_defs.MESSAGES, path),
             {'Authorization': 'Bearer ' + credentials.key_for(self.defn.id),
              'Content-Type': 'application/json'},
-            body, set(), self.name)
+            body, set(), self.name, context=context)
 
     def adapt(self, response, tool_names, notes=None):
         chunks = transport.passthrough(response)
@@ -188,22 +190,27 @@ class ClaudeSubscriptionProvider:
         self.host = self.defn.host
         self.kind = self.defn.kind
 
-    def prepare(self, model, path, payload, raw_body, headers, credentials, decoded_len=None):
+    def prepare(self, model, path, payload, raw_body, headers, credentials, decoded_len=None,
+                context=None):
         auth = headers.get('Authorization', '')
         if not (auth.startswith('Bearer ') or 'x-api-key' in headers):
             raise PermissionError('Claude subscription authentication required')
         fwd = {k: v for k, v in headers.items() if k.lower() not in transport.HOP_HEADERS}
-        return transport.Prepared(self.host, path, fwd, raw_body, set(), self.name)
+        return transport.Prepared(self.host, path, fwd, raw_body, set(), self.name,
+                                  context=context)
 
     def adapt(self, response, tool_names, notes=None):
         yield from transport.passthrough(response)
 
 
 def select(model, path, openai_mode='subscription', anthropic_mode=None,
-           region='global', allowed=None):
-    if isinstance(model, str) and model.startswith(CLAUDE_ROUTE_PREFIX) and resolve(model) == model:
+           region='global', allowed=None, catalogue=None):
+    rows = request_context.capture() if catalogue is None else catalogue
+    slug = resolve(model, rows)
+    if isinstance(model, str) and model.startswith(CLAUDE_ROUTE_PREFIX) and slug == model:
         raise UnknownModel(model, ())
-    defn = row_def(model)
+    entry = rows.get(slug) if isinstance(model, str) else None
+    defn = provider_defs.get(entry.provider) if entry is not None else None
     if defn is not None and defn.kind == provider_defs.EXTERNAL:
         if not defn.serves(provider_defs.MESSAGES):
             raise PreparationError(
@@ -212,7 +219,6 @@ def select(model, path, openai_mode='subscription', anthropic_mode=None,
         # Plan 068: a portco allowlist gates routing, never just the picker.
         # None means no policy provisioned (today's behavior). Aliases and
         # bare Anthropic ids resolve to the registry slug before the check.
-        slug = resolve(model)
         if allowed is not None and slug not in frozenset(allowed):
             raise UnknownModel(slug, ())
         # Key-filtered availability gates routing like the picker: with no

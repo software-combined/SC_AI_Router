@@ -190,8 +190,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.server.inflight -= 1
 
     def _owned_post(self, path, via_path, started):
-        provider = None
-        policy = None
+        provider = policy = None
         # Facts for the refusal line: sizes and classes, never content.
         facts = {'compressed_bytes': self._declared_bytes(),
                  'decode_limit_bytes': MAX_BODY * MAX_DECODE_FACTOR}
@@ -212,14 +211,15 @@ class Handler(BaseHTTPRequestHandler):
             policy = select_protocol(self.command, path)
             if policy is None:
                 return self.error(errors.unsupported_route())
+            context = policy.resolve(model)  # this request's one registry read (Plan 188)
             provider = policy.select_provider(
-                model, path, self.server.state, mode,
+                model, path, self.server.state, mode, catalogue=context.catalogue,
                 openai_models=subscription_discovery.request_models(
                     self.server, dict(self.headers), self.path.partition('?')[2]))
             if provider.kind == provider_defs.EXTERNAL: reject_opaque_agent_items(payload.get('input'))
             if provider.kind == provider_defs.SUBSCRIPTION and not via_path:
                 return self.error(errors.bearer_for_no_subscription_only())
-            compact_call = policy.compaction_call(provider, model, path, payload)
+            compact_call = policy.compaction_call(provider, model, path, payload, context)
             if compact_call is not None:
                 # zstd compacts share the ingress decode ceiling (bounded transcript).
                 if decoded_len > MAX_BODY * MAX_DECODE_FACTOR:
@@ -240,7 +240,7 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 prepared = subscription_fallback.prepare(provider, model, path, payload,
                                                          raw, dict(self.headers), self.server,
-                                                         decoded_len=decoded_len)
+                                                         decoded_len=decoded_len, context=context)
                 # Passthrough keeps the client's compressed bytes; use the
                 # decoded length there so a 16-64 MiB zstd turn cannot leak.
                 if (decoded_len if prepared.body is raw else len(prepared.body)) > MAX_BODY:
@@ -284,7 +284,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.error(err)
         _reasoning = payload.get('reasoning')
         prepare_done = time.monotonic()
-        metrics = {'provider': prepared.provider,
+        metrics = {'request_id': context.request_id, 'provider': prepared.provider,
                    'protocol': policy.name,
                    'model': model, 'path': path, 'request_bytes': size,
                    'stream': payload.get('stream') is True,

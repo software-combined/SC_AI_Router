@@ -21,17 +21,18 @@ class Prepared:
 
     `fallback` is the optional plan for answering this request elsewhere
     when upstream refuses it (see subscription_fallback); None means the
-    refusal is relayed as-is.
+    refusal is relayed as-is. `context` is the request's resolved snapshot
+    (request_context.Resolved) the adapter prepared against.
     """
 
     __slots__ = ('host', 'path', 'headers', 'body', 'tool_names', 'provider',
-                 'fallback', 'output_cap', 'context_tokens')
+                 'fallback', 'output_cap', 'context_tokens', 'context')
 
     def __init__(self, host, path, headers, body, tool_names, provider,
-                 fallback=None, output_cap=None, context_tokens=None):
+                 fallback=None, output_cap=None, context_tokens=None, context=None):
         self.host, self.path, self.headers = host, path, headers
         self.body, self.tool_names, self.provider = body, tool_names, provider
-        self.fallback = fallback
+        self.fallback, self.context = fallback, context
         # The output cap this request asks upstream for, when the adapter
         # computes one; None when the client's own body passes through.
         self.output_cap = output_cap
