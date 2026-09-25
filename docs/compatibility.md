@@ -1,5 +1,26 @@
 # Compatibility
 
+## Router 0.6.127 compaction summary candidate, 25 September 2026 AEST
+
+Three bounded synthetic summaries ran through the candidate's production
+request, extraction and telemetry path. Each used one 4,000-token output
+budget and the same small synthetic history; no conversation content was
+logged.
+
+| summary row | requested effort | elapsed | summary characters | result |
+|---|---|---:|---:|---|
+| `xiaomi/mimo-v2.6-pro` | `none` | 8,846 ms | 1,075 | completed |
+| `xiaomi/mimo-v2.6-flash` | `none` | 4,881 ms | 1,034 | completed |
+| `deepseek/deepseek-v4.1-flash` | `low` | 17,512 ms | 1,368 | completed |
+
+All three returned non-empty summaries in one attempt. The batch took 31.24
+seconds, and no attempt reached its 45-second cap or the 75-second total cap.
+MiMo Flash was the fastest candidate and remains the primary summary row.
+Call count was one per row and three in total. This direct candidate probe used
+no client version and exposed no served identity. It is synthetic summary-path
+evidence, not installed-router acceptance, and it does not establish sustained
+provider throughput.
+
 ## Router 0.6.125 beta candidate, 25 September 2026 AEST
 
 The request-size candidate passed 1,876 offline tests (three skips), compile,

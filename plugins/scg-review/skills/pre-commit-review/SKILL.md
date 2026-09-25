@@ -23,12 +23,20 @@ an unchanged release copy of the canonical optimal-subagents policy, not a
 second independently maintained model table. Exact user or project model/effort
 requirements take precedence.
 
-If a preferred model is unavailable, use a listed eligible fallback and record
-the substitution. A required pass is `❌ Block` when no permitted model can complete
-it, or when an exact model/effort requirement cannot be met. Never change runtimes,
-accounts, data constraints or review gates to bypass the requirement. Confirm
-access through actual review calls; accepted dispatch is not completed review.
-See [provider access and identity rules](../../references/reviewer-models.md).
+Local user policy override: every pre-commit pass, including code
+simplification, correctness, quality and adversarial review, uses
+`xiaomi/mimo-v2.6-pro` at `xhigh`. This exact model and effort requirement has
+no model fallback. If that route is unavailable, the affected pass is `❌ Block`;
+do not substitute another model or effort.
+
+If the effective policy includes a listed eligible fallback and the preferred
+model is unavailable, use that fallback and record the substitution. When the
+policy requires an exact model/effort or lists no fallback, the affected pass is
+`❌ Block` and no substitution is permitted. A required pass is also `❌ Block`
+when no permitted model can complete it. Never change runtimes, accounts, data
+constraints or review gates to bypass the requirement. Confirm access through
+actual review calls; accepted dispatch is not completed review. See
+[provider access and identity rules](../../references/reviewer-models.md).
 
 - **Codex:** use the bundled [code-simplifier](../code-simplifier/SKILL.md) for
   Pass 1 and the active subagent tools for the three independent review lanes.

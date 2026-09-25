@@ -27,9 +27,10 @@ class _Policy:
             region=state.get('openrouter_region', 'global'),
             allowed=state.get('allowed_models'), catalogue=catalogue)
 
-    def compaction_call(self, provider, model, path, payload, context=None):
+    def compaction_call(self, provider, model, path, payload, context=None,
+                        allowed=None):
         return providers.compaction_call(provider, model, path, payload,
-                                         row=None if context is None else context.row)
+                                         context=context, allowed=allowed)
 
 
 POLICY = _Policy()

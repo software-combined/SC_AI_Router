@@ -27,12 +27,14 @@ class CompactionResultTests(unittest.TestCase):
         with self.assertRaises(IncompleteSummary):
             extract_summary(200, payload)
 
-    def test_empty_truncated_output_is_not_retried(self):
-        with self.assertRaisesRegex(ValueError, 'empty'):
+    def test_empty_truncated_output_is_retried(self):
+        with self.assertRaises(IncompleteSummary):
             extract_summary(200, {
                 'status': 'incomplete',
                 'incomplete_details': {'reason': 'max_output_tokens'},
                 'output': []})
+        with self.assertRaisesRegex(ValueError, 'empty'):
+            extract_summary(200, {'output': []})
 
     def test_failed_and_nonterminal_statuses_are_rejected_with_text(self):
         for status in ('failed', 'incomplete', 'in_progress'):
