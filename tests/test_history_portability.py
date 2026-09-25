@@ -1,7 +1,11 @@
 import json
 import unittest
 
-from ai_router.tool_adapter import SEARCH_NAME, ToolEvents, prepare_tools
+from ai_router import provider_defs
+from ai_router.providers import ExternalResponsesProvider
+from ai_router.tool_adapter import SEARCH_NAME, ToolEvents
+from tests.harness import stub_credentials
+from tests.tool_stages import prepare_tools
 
 
 class HistoryPortabilityTests(unittest.TestCase):
@@ -147,9 +151,6 @@ class HistoryPortabilityTests(unittest.TestCase):
             # End-to-end through the provider this incident used: the refused
             # body had a carried reasoning item and Meta rejected it, while the
             # same body without that item is accepted.
-            from ai_router import provider_defs
-            from ai_router.providers import ExternalResponsesProvider
-            from tests.harness import stub_credentials
 
             def wire(model):
                 payload = self._history_payload(model)
@@ -255,9 +256,6 @@ class HistoryPortabilityTests(unittest.TestCase):
             # marker is dropped, the current model's own reasoning after it
             # reaches the wire (blob stripped, text kept). Proven to fail on
             # 48c00a0, where both items were dropped.
-            from ai_router import provider_defs
-            from ai_router.providers import ExternalResponsesProvider
-            from tests.harness import stub_credentials
             payload = {'model': 'deepseek/deepseek-v4.1-flash',
                        'tools': [{'type': 'function', 'name': 'exec',
                                   'parameters': {'type': 'object'}}],

@@ -6,9 +6,9 @@ discovered, so a change at one call site cannot silently diverge from the other.
 import unittest
 
 from ai_router.discovered import _dedup
-from ai_router.tool_adapter import prepare_tools
 from ai_router.tool_merge import (complete_parameters, key_of, merge_tool_defs,
                                   missing_schema)
+from tests.tool_stages import prepare_tools
 
 
 def _stub(name, namespace=None):
