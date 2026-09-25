@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 0.6.127
+
+- External compaction summaries now use Xiaomi MiMo V2.6 Flash first and
+  DeepSeek V4.1 Flash after a timeout or incomplete output. The summary can
+  therefore come from a different upstream vendor than the active model. Each
+  attempt has a 45-second limit and the whole summary stops within 75 seconds.
+  Aggregate timing logs record model, size, attempt and outcome without
+  conversation text. Summary responses must echo the pinned model, and a
+  registry row whose provider, upstream id or provider preferences change
+  fails closed instead of silently switching vendors.
+
+## 0.6.126
+
 - External compaction summaries now include native tool-search calls and the
   released tool definitions they return, alongside native file edits.
 

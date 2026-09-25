@@ -226,11 +226,19 @@ class _FakeResp:
 
 def _fake_conn_class(status, payload, seen=None):
     class FakeConn:
-        def __init__(self, *a, **k): pass
+        def __init__(self, *a, **k):
+            self._request_model = None
+        def connect(self):
+            pass
         def request(self, method, path, body=None, headers=None):
             if seen is not None and body is not None:
                 seen['body'] = json.loads(body)
-        def getresponse(self): return _FakeResp(status, payload)
+            if body is not None:
+                self._request_model = json.loads(body).get('model')
+        def getresponse(self):
+            response = dict(payload)
+            response.setdefault('model', self._request_model)
+            return _FakeResp(status, response)
         def close(self): pass
     return FakeConn
 

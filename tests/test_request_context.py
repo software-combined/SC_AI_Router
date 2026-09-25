@@ -223,9 +223,10 @@ class RoutedGenerationTests(unittest.TestCase):
         self.assertEqual([json.loads(call[3])['model'] for call in recorded],
                          [MESSAGES_SLUG, 'moonshotai/fresh'])
 
-    def test_compaction_budgets_come_from_the_resolved_row(self):
+    def test_compaction_summary_ignores_an_active_row_refresh(self):
         isolated_home(self)
-        summary = json.dumps({'output': [{'type': 'message', 'content': [
+        summary = json.dumps({'model': 'xiaomi/mimo-v2.6-flash',
+                              'output': [{'type': 'message', 'content': [
             {'type': 'output_text', 'text': 'kept'}]}]}).encode()
         recorded = install_fake(self, lambda: FakeUpstream(200, summary, []))
         payload = {'model': RESPONSES_SLUG,
@@ -237,9 +238,11 @@ class RoutedGenerationTests(unittest.TestCase):
         self.assertEqual(self._send('/responses/compact', payload)[0], 200)
         old, new = (json.loads(call[3]) for call in recorded)
         self.assertEqual((old['model'], old['reasoning'], old.get('provider')),
-                         (RESPONSES_SLUG, {'effort': 'low'}, None))
-        self.assertEqual((new['model'], new['reasoning'], new['provider']),
-                         ('google/fresh', {'effort': 'high'}, {'order': ['fresh']}))
+                         ('xiaomi/mimo-v2.6-flash', {'effort': 'none'}, None))
+        self.assertEqual((new['model'], new['reasoning'], new.get('provider')),
+                         ('xiaomi/mimo-v2.6-flash', {'effort': 'none'}, None))
+        self.assertEqual((old['max_output_tokens'], new['max_output_tokens']),
+                         (4000, 4000))
 
     def test_helper_fallback_prepares_the_twin_from_the_refused_generation(self):
         self.server.state.update(openai_helper_fallback=True, openai_models=['gpt-6-luna'])
