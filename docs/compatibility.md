@@ -1,5 +1,41 @@
 # Compatibility
 
+## Plan 187 stream retry candidate, 25 September 2026 AEST
+
+Candidate evidence only: the 0.6.125 stream retry change ran from an isolated,
+uncommitted worktree, never an installed or released router, so none of this
+is release acceptance. Clients: Codex desktop `26.917.62051` with bundled
+`codex-cli 0.155.0-alpha.16.3`, and Claude Code `2.1.223`, installed but not
+exercised by these probes.
+
+Recovery ran the actual Codex app-server against the router with a synthetic
+local HTTPS upstream whose first attempt fails before any answer, driven by
+`plans/handover-2026-09-25/scratch/probe_shared_stream_client.py <worktree>
+[model effort]` in the primary checkout. No call was paid. Before the change:
+one attempt, no router retry, and the client showed `Reconnecting 1/5` and
+exited 1. After it, on both `xiaomi/mimo-v2.6-pro` at xhigh and
+`deepseek/deepseek-v4.1-flash` at max: exactly one router retry, three
+upstream requests (the failed attempt, the retried tool call and the
+tool-result continuation), one client tool execution and the exact expected
+final marker.
+
+One bounded live turn on `xiaomi/mimo-v2.6-pro` at xhigh went through the
+candidate and the actual Codex client with 53 inert tool schemas, driven by
+`plans/handover-2026-09-25/scratch/probe_mimo_live.py`, which runs only with
+`--execute`. Its caps were four calls and 4,096 output tokens per call. It
+passed in two upstream calls (102,930 and 103,459 input bytes, both HTTP 200,
+5,348.1 and 1,278.0 ms) with one tool execution and the exact final marker; no
+retry was needed. The served identity was `xiaomi/mimo-v2.6-pro`; the served
+effort is not separately exposed.
+
+The two probes prove different things. The synthetic run proves recovery from
+an injected failure; the live run proves the real provider completes the
+candidate's tool round trip with the large tool list, and it met no natural
+timeout, so it says nothing about recovering from one. The retry rule reads
+no model name. 32 simultaneous synthetic held attempts retained 8,079,744
+wire bytes, with a `tracemalloc` peak of 8,515,571 bytes: held-state
+allocation only, not the process's total RSS.
+
 ## Acceptance matrix ledger, 24 September 2026 AEST
 
 Plan 185's acceptance matrix now has a machine-readable record, so a script
