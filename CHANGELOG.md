@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- An OpenRouter Responses stream that fails transiently before any byte reaches
+  the client can now be retried once, even when `response.created` or
+  `response.in_progress` echoes a large request. The rule is shared across
+  models. Requests that offer provider-run tools, such as web search, keep the
+  provider's verdict and are not replayed.
+
+## 0.6.124
+
 - Model-switch and context-reset markers are found even if the client moves
   them to another text block or the system role.
 - Responses requests the router prepares are now checked against the
