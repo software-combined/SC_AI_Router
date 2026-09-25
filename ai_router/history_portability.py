@@ -26,34 +26,35 @@ def rewrite_custom_pairs(items, exposed_keys, wire_names):
 
     A pair whose tool this turn exposes converts to matched function-call
     items; an undeclared pair stays matched custom items. One converted side
-    alone is the mixed shape strict providers refuse.
+    alone is the mixed shape strict providers refuse. Returns a new list;
+    converted items are copies, so the client's history is never edited.
     """
     calls = {item.get('call_id'): (item.get('namespace'), item.get('name'))
              for item in items
              if isinstance(item, dict) and item.get('type') == 'custom_tool_call'
              and isinstance(item.get('call_id'), str)}
+    rewritten = []
     for item in items:
-        if not isinstance(item, dict):
-            continue
-        kind = item.get('type')
+        kind = item.get('type') if isinstance(item, dict) else None
         if kind == 'custom_tool_call':
             key = (item.get('namespace'), item.get('name'))
-            if key not in exposed_keys:
-                continue
-            item['type'] = 'function_call'
-            item['arguments'] = json.dumps({'input': item.pop('input')})
         elif kind == 'custom_tool_call_output':
             key = calls.get(item.get('call_id'),
                             (item.get('namespace'), item.get('name')))
-            if key not in exposed_keys:
-                continue
-            item['type'] = 'function_call_output'
-        else:
+        if kind not in ('custom_tool_call', 'custom_tool_call_output') or key not in exposed_keys:
+            rewritten.append(item)
             continue
+        if kind == 'custom_tool_call':
+            item = {**item, 'type': 'function_call'}
+            item['arguments'] = json.dumps({'input': item.pop('input')})
+        else:
+            item = {**item, 'type': 'function_call_output'}
         wire = wire_names.get(key)
         if wire:
             item.pop('namespace', None)
             item['name'] = wire
+        rewritten.append(item)
+    return rewritten
 
 
 def marker_texts(item, tag):

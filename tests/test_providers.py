@@ -287,7 +287,7 @@ class SummarizerTests(unittest.TestCase):
         with mock.patch.object(providers.ExternalResponsesProvider, 'summarize', lambda *a: 'did stuff'):
             out = _external_responses().compact('z-ai/glm-5.3', {'input': items}, 'key')
         payload = {'tools': [], 'input': out}
-        prepare_tools(payload)
+        payload = prepare_tools(payload)[0]
         self.assertEqual(len(payload['tools']), 1)
         self.assertEqual(payload['tools'][0]['parameters'], {'type': 'object'})
 

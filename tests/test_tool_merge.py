@@ -75,7 +75,7 @@ class ToolMergeRuleTests(unittest.TestCase):
                 {'type': 'function', 'name': 'echo', 'namespace': 'a',
                  'parameters': {'type': 'object'}}]}],
             'tools': [{'type': 'function', 'name': 'echo', 'description': 'declared'}]}
-        prepare_tools(payload)
+        payload = prepare_tools(payload)[0]
         self.assertEqual(len(payload['tools']), 1)
         self.assertEqual(payload['tools'][0]['description'], 'declared')
         self.assertEqual(payload['tools'][0]['parameters'], {'type': 'object'})
@@ -96,7 +96,7 @@ class ToolMergeRuleTests(unittest.TestCase):
         payload = {'model': 'z-ai/glm-5.3', 'input': [
             {'type': 'tool_search_output', 'call_id': 's', 'tools': [_full('lookup')]}],
             'tools': [{'type': 'function', 'name': 'lookup', 'description': 'declared'}]}
-        prepare_tools(payload)
+        payload = prepare_tools(payload)[0]
         self.assertEqual(len(payload['tools']), 1)
         self.assertEqual(payload['tools'][0]['description'], 'declared')
         self.assertEqual(payload['tools'][0]['parameters'], {'type': 'object'})

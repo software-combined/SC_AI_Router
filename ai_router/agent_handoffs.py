@@ -93,58 +93,57 @@ def _tool_container(payload):
 
 
 def _hint_tool(tool):
-    """Append LANE_HINT once to spawn_agent/close_agent; walk namespaces."""
+    """`tool`, or a copy with LANE_HINT appended once to spawn/close; walks namespaces."""
     if not isinstance(tool, dict):
-        return False
+        return tool
     if tool.get('type') == 'namespace':
         children = tool.get('tools')
         if not isinstance(children, list):
-            return False
-        changed = False
-        for child in children:
-            changed |= _hint_tool(child)
-        return changed
+            return tool
+        hinted = _hint_tools(children)
+        return tool if hinted is children else {**tool, 'tools': hinted}
     if tool.get('type') != 'function' or tool.get('name') not in LANE_HINT_NAMES:
-        return False
+        return tool
     text = tool.get('description') or ''
     if LANE_HINT in text:
-        return False
-    tool['description'] = (text + '\n' if text else '') + LANE_HINT
-    return True
+        return tool
+    return {**tool, 'description': (text + '\n' if text else '') + LANE_HINT}
+
+
+def _hint_tools(tools):
+    hinted = [_hint_tool(tool) for tool in tools]
+    return tools if all(new is old for new, old in zip(hinted, tools)) else hinted
+
+
+def _hint_item(item):
+    """A discovery result or Lite prefix with hinted tools; a changed prefix gets a new ID."""
+    tools = item.get('tools') if isinstance(item, dict) else None
+    lite = tools is not None and item.get('type') == 'additional_tools' and item.get('role') == 'developer'
+    if not isinstance(tools, list) or not (lite or item.get('type') == 'tool_search_output'):
+        return item
+    hinted = _hint_tools(tools)
+    if hinted is tools or not lite:
+        return item if hinted is tools else {**item, 'tools': hinted}
+    identity = json.dumps([item.get('id'), hinted], sort_keys=True)
+    return {**item, 'tools': hinted,
+            'id': 'at_' + str(uuid.uuid5(uuid.NAMESPACE_URL, 'scg-lane-hint:' + identity))}
 
 
 def hint_full_lanes(payload):
-    """Codex-only: tell spawn/close to free lanes, without stacking."""
-    changed = False
+    """Codex-only: tell spawn/close to free lanes, without stacking; copies, never edits."""
     tools = payload.get('tools')
-    if isinstance(tools, list):
-        for tool in tools:
-            changed |= _hint_tool(tool)
+    hinted = _hint_tools(tools) if isinstance(tools, list) else tools
+    if hinted is not tools:
+        payload = {**payload, 'tools': hinted}
     items = payload.get('input')
     if not isinstance(items, list):
-        return changed
-    for index, item in enumerate(items):
-        if not isinstance(item, dict):
-            continue
-        tools = item.get('tools')
-        if not isinstance(tools, list):
-            continue
-        lite = item.get('type') == 'additional_tools' and item.get('role') == 'developer'
-        if item.get('type') != 'tool_search_output' and not lite:
-            continue
-        touched = False
-        for tool in tools:
-            touched |= _hint_tool(tool)
-        changed |= touched
-        if touched and lite:
-            identity = json.dumps([item.get('id'), tools], sort_keys=True)
-            ident = 'at_' + str(uuid.uuid5(uuid.NAMESPACE_URL, 'scg-lane-hint:' + identity))
-            items[index] = {**item, 'id': ident}
-    return changed
+        return payload
+    hinted = [_hint_item(item) for item in items]
+    return payload if all(new is old for new, old in zip(hinted, items)) else {**payload, 'input': hinted}
 
 
 def add_plaintext_tools(payload):
-    """Offer aliases only for native tools present in this request."""
+    """Offer aliases only for native tools present in this request: (payload or a copy, names)."""
     container, input_index = _tool_container(payload)
     tools = container.get('tools', [])
     aliases = []
@@ -184,7 +183,7 @@ def add_plaintext_tools(payload):
                 'the need to choose collaboration_plaintext for the next message.'),
             'tools': aliases}]
         if input_index is None:
-            payload['tools'] = augmented
+            payload = {**payload, 'tools': augmented}
         else:
             # Codex hashes prefix payloads into IDs; changed tools need a new,
             # stable identity too. Never modify the client's saved prefix.
@@ -192,8 +191,8 @@ def add_plaintext_tools(payload):
             ident = 'at_' + str(uuid.uuid5(uuid.NAMESPACE_URL, 'scg-plaintext:' + identity))
             items = list(payload['input'])
             items[input_index] = {**container, 'tools': augmented, 'id': ident}
-            payload['input'] = items
-    return AliasTools(names, payload.get('stream') is True, children)
+            payload = {**payload, 'input': items}
+    return payload, AliasTools(names, payload.get('stream') is True, children)
 
 
 def restore_item(item, names):

@@ -178,7 +178,7 @@ class Probe:
                         if marker in text and marker not in self.facts['replies']:
                             self.facts['replies'].append(marker)
             return raw
-        aliases = add_plaintext_tools(body)
+        body, aliases = add_plaintext_tools(body)
         if body.get('model') == PARENT and not aliases:
             raise ValueError('parent collaboration aliases were not advertised')
         if self.live and body.get('model') == PARENT:
