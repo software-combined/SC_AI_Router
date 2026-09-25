@@ -1,11 +1,6 @@
-"""Upstream failure policy (Plan 127 split; behaviour unchanged).
+"""Upstream failure classification, retries and response encoding.
 
-Failure classification, retries and response encoding. Adapters build requests; this module
-decides how an upstream refusal is described to the client.
-
-Pure policy: no dispatch, no model data, no credentials. It may read a
-response object but never a request body except the error snapshot the
-caller already bounded.
+Pure policy: no dispatch, model data, credentials or request body reads.
 """
 import hashlib
 import json
@@ -13,9 +8,9 @@ import re
 import threading
 import time
 
-from . import provider_defs
+from . import outcome, provider_defs
 from .events import log_event
-from .stream_errors import metadata_endpoint, is_context_error
+from .stream_errors import error_codes, metadata_endpoint, is_context_error
 
 KEY_NO_CREDIT_MESSAGE = (
     '{model} cannot run on the OpenRouter key: '
@@ -38,21 +33,15 @@ def parse_payload(body):
     except (ValueError, TypeError, UnicodeDecodeError, AttributeError):
         return None
     return payload if isinstance(payload, dict) else None
-
-
 def _429_codes(body):
-    """Structured 429 codes from the error envelope; never message prose."""
-    payload = parse_payload(body)
-    if payload is None or not isinstance(payload.get('error'), dict):
+    error = (parse_payload(body) or {}).get('error')
+    if not isinstance(error, dict):
         return ()
-    error = payload['error']
-    codes = [error.get('code'), error.get('type'), error.get('error_type')]
+    codes = [error.get(key) for key in ('code', 'type', 'error_type')]
     metadata = error.get('metadata')
     if isinstance(metadata, dict):
         codes.append(metadata.get('provider_code'))
-    return tuple(c.lower() for c in codes if isinstance(c, str))
-
-
+    return tuple(code.lower() for code in codes if isinstance(code, str))
 def classify_429(body):
     """'quota' | 'auth' | 'transient' from structured 429 codes only."""
     for code in _429_codes(body):
@@ -62,8 +51,6 @@ def classify_429(body):
                 or 'authentication' in code:
             return 'auth'
     return 'transient'
-
-
 def upstream_retry_after(response, prepared, metrics, body):
     """Consume an upstream 429; return (category, Retry-After), else None.
 
@@ -71,14 +58,12 @@ def upstream_retry_after(response, prepared, metrics, body):
     The caller passes the already-drained body: this module must never
     import transport (domain boundary), so it never reads the socket itself.
     """
-    if response.status != 429:
+    if response.status != 429 or is_context_error(body):
         return None
     category = classify_429(body)
     log_event('upstream_rate_limited', provider=prepared.provider, path=metrics['path'],
               category=category)
     return category, response.getheader('Retry-After', '2')
-
-
 _CODE_SHAPE = re.compile(r'^[A-Za-z0-9_.-]{1,40}$')
 
 # Serving-endpoint slugs: `endpoints.available[]`/`attempts[]` carry
@@ -272,20 +257,51 @@ def validate_response(response, prepared):
         encoding = response.getheader('Content-Encoding', '').strip().lower()
         if encoding not in ('', 'identity'):
             raise ValueError('unsupported plaintext handoff response encoding')
+_REJECTED_BY_STATUS = {401: outcome.AUTH, 403: outcome.AUTH, 402: outcome.QUOTA}
+_429_OUTCOMES = {'quota': outcome.QUOTA, 'auth': outcome.AUTH}
+def outcome_of(status, body, dialect=None):
+    """Classify one HTTP error status and bounded body; unreadable is UNKNOWN."""
+    payload = parse_payload(body)
+    error = payload.get('error') if payload is not None else None
+    reason = _provider_reason(body, dialect)
+    code = (_error_code(error, None) if isinstance(error, dict) else None) or (
+        reason[3] if reason else None)
+    codes = error_codes(payload, payload)
+    error_type = next((value.strip().lower()
+                       for source in (payload, error) if isinstance(source, dict)
+                       for key in ('error_type', 'type')
+                       for value in [source.get(key)]
+                       if isinstance(value, str) and _CODE_SHAPE.match(value.strip())), None)
+    named = outcome.category_for(error_type, codes)
+    deterministic_reason = (reason is not None and reason[1] in
+                            ('the tool schema was rejected', 'a tool call was rejected'))
+    context = is_context_error(body)
+    category = (
+        (outcome.CONTEXT_OVERFLOW if context
+         else named if named in (outcome.REFUSED, outcome.QUOTA, outcome.AUTH)
+         else _429_OUTCOMES.get(classify_429(body), outcome.RATE_LIMIT))
+        if status == 429
+        else outcome.CONTEXT_OVERFLOW if context
+        else _REJECTED_BY_STATUS.get(status) if status in _REJECTED_BY_STATUS
+        else named if named != outcome.UNKNOWN
+        else outcome.REFUSED if deterministic_reason
+        else outcome.TRANSIENT if status >= 500 or status == 408
+        else outcome.REFUSED if reason is not None
+        else outcome.UNKNOWN)
+    code = outcome.code_for(category, error_type, codes) or code
+    # A rejected request never ran; a failed or unreadable one may have.
+    return outcome.Outcome(category, outcome.STATUS, outcome.UPSTREAM, code,
+                           side_effects=category in (outcome.TRANSIENT, outcome.UNKNOWN))
 
 
 def describe_failure(exc, response, info):
-    """Name an upstream failure for the client: (status, message, code) or None.
-
-    Pure: no reads, no logging, no clock. `response` is a snapshot
-    {'status': int, 'body': bytes} or None when headers never arrived.
-    Unknown shapes return None so the caller keeps existing behavior.
-    Provider detail never reaches this sentence; the log line owns it.
-    """
+    """Name an upstream failure for the client, or None for an unknown shape."""
     model = info.get('model', 'the model')
     dialect = info.get('dialect')
     if response is not None:
-        if response.get('status') == 429:
+        body = response.get('body', b'')
+        context = is_context_error(body)
+        if response.get('status') == 429 and not context:
             return None  # existing Retry-After path owns 429s
         if response.get('status') == 402:
             # Status alone names the cause: the key cannot afford the turn.
@@ -294,14 +310,27 @@ def describe_failure(exc, response, info):
             code = parsed[3] if parsed is not None else None
             return 400, KEY_NO_CREDIT_MESSAGE.format(model=model), code
         if (info.get('protocol') == provider_defs.RESPONSES
+                and not context
                 and (response.get('status', 0) >= 500 or response.get('status') == 408)):
+            classified = outcome_of(response.get('status', 0), body, dialect)
+            if classified.category == outcome.REFUSED:
+                parsed = _provider_reason(body, dialect)
+                reason = parsed[1] if parsed is not None else 'the request was rejected'
+                code = classified.code or (parsed[3] if parsed is not None else None)
+                message = f'{model} refused this request: {reason}. Do not retry it unchanged'
+                if info.get('routed'):
+                    message += (' Switch this thread back to the previous model, '
+                                f'or start a new thread for {model}.')
+                return 400, message, code
             return 503, (f'{model} is temporarily unavailable and the turn was '
                          'not served. Retry shortly.'), None
-        parsed = _provider_reason(response.get('body', b''), dialect)
+        parsed = _provider_reason(body, dialect)
         if parsed is None:
+            if context:
+                return (409, f'{model} refused this request: the request was rejected. '
+                        'Do not retry it unchanged', 'context_length_exceeded')
             return None
         _, reason, tool, code = parsed
-        context = is_context_error(response.get('body', b''))
         unnamed = (code is None and tool is None
                    and reason == 'the request was rejected'
                    and rejection_parameter(response.get('body', b'')) is None
