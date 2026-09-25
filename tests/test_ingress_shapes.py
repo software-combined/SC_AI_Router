@@ -15,7 +15,7 @@ from ai_router import providers as providers_mod
 from ai_router import router as router_mod
 from tests.fakes import FakeUpstream, install_fake
 from tests.harness import (
-    auth_file as _auth_file,
+    auth_file as _auth_file, scaled_limits,
     start_server as _start_server,
     test_state as _test_state,
 )
@@ -104,17 +104,17 @@ class IngressShapeTests(unittest.TestCase):
     def test_missing_negative_or_oversized_lengths_are_400(self):
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
         big = json.dumps({'model': 'm' * 80}).encode()
-        cases = (
-            ('missing', ['Content-Type: application/json'], b''),
-            ('negative', ['Content-Type: application/json', 'Content-Length: -1'], b'{}'),
-            ('oversized', ['Content-Type: application/json',
-                           'Content-Length: %d' % len(big)], big),
+        json_type = 'Content-Type: application/json'
+        cases = (  # a declared size past the request ceiling is the turn's size
+            ('missing', [json_type], b'', 'INVALID_REQUEST_SIZE'),
+            ('negative', [json_type, 'Content-Length: -1'], b'{}', 'INVALID_REQUEST_SIZE'),
+            ('oversized', [json_type, 'Content-Length: %d' % len(big)], big, 'BODY_TOO_LARGE'),
         )
-        with mock.patch.object(router_mod, 'MAX_BODY', 64):
-            for name, headers, body in cases:
+        with scaled_limits(64, 64):
+            for name, headers, body, code in cases:
                 with self.subTest(name=name):
                     response = self.raw_request('/%s/responses' % TOKEN, headers, body)
-                    self.rejected(response, 400, 'INVALID_REQUEST_SIZE', recorded)
+                    self.rejected(response, 400, code, recorded)
 
     def test_a_malformed_length_is_a_payload_rejection(self):
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
@@ -172,12 +172,12 @@ class IngressShapeTests(unittest.TestCase):
                              for item in sent['input']))
 
     def test_zstd_body_still_too_large_after_prepare_is_400(self):
-        payload = {'model': 'z-ai/glm-5.3',
+        payload = {'model': 'z-ai/glm-5.3',  # prepare escapes two-byte 'é' to six
                    'input': [{'type': 'message', 'role': 'user',
-                              'content': 'x' * 1200}]}
-        packed = zstd.compress(json.dumps(payload).encode())
+                              'content': 'é' * 600}]}
+        packed = zstd.compress(json.dumps(payload, ensure_ascii=False).encode())
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
-        with mock.patch.object(router_mod, 'MAX_BODY', 900):
+        with scaled_limits(900, 2000):
             response = self.raw_request(
                 '/%s/responses' % TOKEN,
                 ['Content-Type: application/json', 'Content-Encoding: zstd',
@@ -195,7 +195,7 @@ class IngressShapeTests(unittest.TestCase):
         server = _start_server(state)
         self.addCleanup(server.server_close)
         self.addCleanup(server.shutdown)
-        with mock.patch.object(router_mod, 'MAX_BODY', 900):
+        with scaled_limits(900, 1000):  # small on the wire, past the ceiling decoded
             conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
             self.addCleanup(conn.close)
             conn.putrequest('POST', '/%s/responses' % TOKEN)
@@ -212,7 +212,7 @@ class IngressShapeTests(unittest.TestCase):
                               'content': 'x' * 5000}]}
         packed = zstd.compress(json.dumps(payload).encode())
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
-        with mock.patch.object(router_mod, 'MAX_BODY', 200):
+        with scaled_limits(200):
             response = self.raw_request(
                 '/%s/responses' % TOKEN,
                 ['Content-Type: application/json', 'Content-Encoding: zstd',
@@ -281,7 +281,7 @@ class IngressShapeTests(unittest.TestCase):
                              {'type': 'compaction_trigger'}]}
         packed = zstd.compress(json.dumps(payload).encode())
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
-        with mock.patch.object(router_mod, 'MAX_BODY', 200):
+        with scaled_limits(200):
             response = self.raw_request(
                 '/%s/responses' % TOKEN,
                 ['Content-Type: application/json', 'Content-Encoding: zstd',

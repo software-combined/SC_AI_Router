@@ -178,16 +178,22 @@ def refusal_message(prepared, metrics):
             'Retry shortly, or select a routed model instead.')
 
 
-def refused(handler, prepared, retry_after, metrics, started):
-    """Answer a refused turn: the planned twin row, else the retryable 503."""
+def refused(handler, prepared, retry_after, metrics, started, admit=None):
+    """Answer a refused turn: the planned twin row, else the retryable 503.
+
+    `admit` sizes the twin with the refused body still held, before its send.
+    """
     refusal = errors.upstream_rate_limited(refusal_message(prepared, metrics))
     fallback = prepared.fallback
     if fallback is None:
         return handler.error(refusal, retry_after)
     try:
         twin = fallback.prepared()
-    except (LookupError, ValueError, PermissionError, OSError) as exc:
-        # No key, unreadable twin row, rejected effort: keep today's answer.
+        if admit is not None:
+            admit(twin, prepared)
+    except (LookupError, ValueError, PermissionError, OSError, errors.OversizeBusy) as exc:
+        # No key, unreadable twin row, rejected effort, no room for the twin
+        # (InvalidSize is a ValueError): keep today's answer.
         log_event('subscription_fallback_unavailable', model=metrics.get('model'),
                   fallback_model=fallback.target.slug, reason=type(exc).__name__)
         return handler.error(refusal, retry_after)
@@ -209,7 +215,7 @@ def refused(handler, prepared, retry_after, metrics, started):
                         protocol=provider_defs.RESPONSES,
                         # The twin's own cap, from its freshly prepared body.
                         max_output_tokens=getattr(twin, 'output_cap', None))
-    # The owned-request slot still covers this hand-off; relay no longer
-    # takes or releases a slot of its own.
+    # The request's in-flight slot and large-request lease still cover this
+    # hand-off; the nested relay neither takes nor releases one of its own.
     return handler.relay(ExternalResponsesProvider(defn, _region), twin, twin_metrics, started,
                          has_images(fallback.payload.get('input')))

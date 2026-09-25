@@ -59,7 +59,6 @@ class SubscriptionProvider:
         return isinstance(model, str) and (model in openai_models or model in subscription_roster.HELPER_SLUGS)
 
     def prepare(self, model, path, payload, raw_body, headers, credentials, decoded_len=None, context=None):
-        del decoded_len  # Subscription rows keep the provider's own usage.
         # The URL path token is the loopback auth; Codex >=0.153.4 omits the
         # subscription Authorization header, so forward client headers unchanged.
         fwd = {k: v for k, v in headers.items() if k.lower() not in HOP_HEADERS}
@@ -68,8 +67,9 @@ class SubscriptionProvider:
             fwd = {k: v for k, v in fwd.items() if k.lower() not in ('content-encoding', 'accept-encoding')}
             fwd['Accept-Encoding'] = 'identity'
             raw_body = json.dumps(payload).encode()
-        return Prepared(self.host, self.defn.path_for(provider_defs.RESPONSES, path),
-                        fwd, raw_body, names, self.name, context=context)
+            decoded_len = len(raw_body)  # the only size a rewrite carries
+        return Prepared(self.host, self.defn.path_for(provider_defs.RESPONSES, path), fwd,
+                        raw_body, names, self.name, context=context, decoded_body_bytes=decoded_len)
 
     def adapt(self, response, tool_names, notes=None):
         if tool_names and response.status == 200:
@@ -132,7 +132,7 @@ class ExternalResponsesProvider:
                 log_event('turn_trimmed', model=model, prepared_bytes=len(body), **stats)
         return Prepared(self.host, self.defn.path_for(provider_defs.RESPONSES, '/responses'),
                         headers, body, tool_names, self.name, output_cap=cap,
-                        context_tokens=carried, context=context)
+                        context_tokens=carried, context=context, decoded_body_bytes=len(body))
 
     def adapt(self, response, tool_names, notes=None):
         if notes is not None and not tool_names and response.status == 200:

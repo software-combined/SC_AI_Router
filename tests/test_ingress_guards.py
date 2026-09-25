@@ -10,12 +10,11 @@ import json
 import socket
 import threading
 import unittest
-from unittest import mock
 from compression import zstd
 from ai_router import router as router_mod
 from tests.fakes import FakeUpstream, install_fake
 from tests.harness import (
-    auth_file as _auth_file,
+    auth_file as _auth_file, scaled_limits,
     start_server as _start_server,
     test_state as _test_state,
 )
@@ -197,7 +196,7 @@ class IngressGuardTests(unittest.TestCase):
         payload = {'model': 'z-ai/glm-5.3',
                    'input': [{'type': 'message', 'role': 'user', 'content': 'x' * 4096}]}
         body = zstd.compress(json.dumps(payload).encode())
-        with mock.patch.object(router_mod, 'MAX_BODY', 4096):
+        with scaled_limits(4096, 4096):
             conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
             conn.request('POST', '/test-token/responses', body=body,
                          headers={'Content-Type': 'application/json',
@@ -213,7 +212,7 @@ class IngressGuardTests(unittest.TestCase):
         payload = {'model': 'z-ai/glm-5.3',
                    'input': [{'type': 'message', 'role': 'user', 'content': 'x' * 4096}]}
         body = zstd.compress(json.dumps(payload).encode())
-        with mock.patch.object(router_mod, 'MAX_BODY', 4096):
+        with scaled_limits(4096, 4096):
             conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
             conn.request('POST', '/test-token/responses', body=body,
                          headers={'Content-Type': 'application/json',
@@ -221,7 +220,7 @@ class IngressGuardTests(unittest.TestCase):
             response = conn.getresponse()
             self.assertEqual(response.status, 400)
             message = json.loads(response.read())['error']['message']
-            self.assertIn('16 MiB', message)
+            self.assertIn('local 96 MiB request ceiling', message)
             self.assertIn('new thread', message)
         self.assertEqual(recorded, [])
 

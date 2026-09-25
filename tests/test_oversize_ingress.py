@@ -23,7 +23,7 @@ from compression import zstd
 from ai_router import router as router_mod
 from tests.fakes import FakeUpstream, install_fake
 from tests.harness import (
-    auth_file as _auth_file,
+    auth_file as _auth_file, scaled_limits,
     start_server as _start_server,
     test_state as _test_state,
 )
@@ -124,10 +124,10 @@ class OversizeIngressTests(unittest.TestCase):
         wire = json.dumps(payload).encode()
         packed = zstd.compress(wire)
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
-        cap = 600
-        with mock.patch.object(router_mod, 'MAX_BODY', cap), \
+        cap, ceiling = 600, 3600
+        with scaled_limits(cap, ceiling), \
                 mock.patch.object(router_mod, 'log_event') as logged:
-            self.assertGreater(len(wire), cap * router_mod.MAX_DECODE_FACTOR)
+            self.assertGreater(len(wire), ceiling)
             self.assertLess(len(packed), cap)
             response = self.raw_request(self.zstd_headers(packed), packed)
             self.assertEqual(response.status, 400)
@@ -138,18 +138,18 @@ class OversizeIngressTests(unittest.TestCase):
         facts = refusals[0].kwargs
         self.assertEqual(facts['code'], 'BODY_TOO_LARGE')
         self.assertEqual(facts['compressed_bytes'], len(packed))
-        self.assertEqual(facts['decode_limit_bytes'], cap * router_mod.MAX_DECODE_FACTOR)
+        self.assertEqual(facts['decode_limit_bytes'], ceiling)
         self.assertNotIn('decoded_bytes', facts)
 
-    def test_a_prepared_body_over_the_cap_names_the_carried_classes(self):
-        payload = _search_payload('x' * 2600)
-        wire = json.dumps(payload).encode()
+    def test_a_prepared_body_past_the_ceiling_names_the_carried_classes(self):
+        # Prepare re-serializes with escapes, so two bytes of 'é' become six.
+        wire = json.dumps(_search_payload('é' * 1300), ensure_ascii=False).encode()
         packed = zstd.compress(wire)
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
-        cap = 2000
-        with mock.patch.object(router_mod, 'MAX_BODY', cap), \
+        cap, ceiling = 2000, 4000
+        with scaled_limits(cap, ceiling), \
                 mock.patch.object(router_mod, 'log_event') as logged:
-            self.assertLess(len(wire), cap * router_mod.MAX_DECODE_FACTOR)
+            self.assertTrue(cap < len(wire) < ceiling)
             response = self.raw_request(self.zstd_headers(packed), packed)
             self.assertEqual(response.status, 400)
             self.assertEqual(json.loads(response.read())['error']['code'], 'BODY_TOO_LARGE')
@@ -160,7 +160,7 @@ class OversizeIngressTests(unittest.TestCase):
         self.assertEqual(facts['decoded_bytes'], len(wire))
         self.assertEqual(facts['tool_search_output'], 1)
         self.assertGreater(facts['tool_search_output_bytes'], 0)
-        self.assertGreater(facts['prepared_bytes'], cap)
+        self.assertGreater(facts['prepared_bytes'], ceiling)
 
     def test_only_one_oversized_read_runs_at_a_time(self):
         # The slot is taken on decoded bytes, not the declared size: these
@@ -188,8 +188,8 @@ class OversizeIngressTests(unittest.TestCase):
             self.assertEqual(len(recorded), 1)
             # Oversized while reading, small by the time upstream sees it.
             self.assertLess(len(recorded[0][3]), cap)
-            # The slot is free again once the turn has been prepared.
-            self.assertTrue(self.server.oversize_lock.acquire(blocking=False))
+            # The slot is free again once the turn has finished.
+            self.assertTrue(self.server.oversize_lock.acquire(timeout=5))
             self.server.oversize_lock.release()
 
     def test_a_small_zstd_body_never_waits_on_the_slot(self):
@@ -214,17 +214,17 @@ class OversizeIngressTests(unittest.TestCase):
         packed = zstd.compress(wire)
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
         cap = 5000
-        with mock.patch.object(router_mod, 'MAX_BODY', cap):
+        with scaled_limits(cap):
             self.assertGreater(len(packed), cap)
             self.assertGreater(len(wire), cap)
-            self.assertLess(len(wire), cap * router_mod.MAX_DECODE_FACTOR)
+            self.assertLess(len(wire), cap * 6)
             response = self.raw_request(self.zstd_headers(packed), packed)
             self.assertEqual(response.status, 200)
             response.read()
         self.assertEqual(len(recorded), 1)
         self.assertLess(len(recorded[0][3]), cap)
         # The pre-read acquire is released with the turn, not left held.
-        self.assertTrue(self.server.oversize_lock.acquire(blocking=False))
+        self.assertTrue(self.server.oversize_lock.acquire(timeout=5))
         self.server.oversize_lock.release()
 
     def test_a_zstd_body_decoding_past_the_ceiling_is_refused_as_too_large(self):
@@ -238,9 +238,9 @@ class OversizeIngressTests(unittest.TestCase):
         packed = zstd.compress(wire)
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
         cap = 700
-        with mock.patch.object(router_mod, 'MAX_BODY', cap):
+        with scaled_limits(cap):
             self.assertGreater(len(packed), cap)
-            self.assertGreater(len(wire), cap * router_mod.MAX_DECODE_FACTOR)
+            self.assertGreater(len(wire), cap * 6)
             response = self.raw_request(self.zstd_headers(packed), packed)
             self.assertEqual(response.status, 400)
             self.assertEqual(json.loads(response.read())['error']['code'],
@@ -251,22 +251,22 @@ class OversizeIngressTests(unittest.TestCase):
             self.server.oversize_lock.release()
         self.assertEqual(recorded, [])
 
-    def test_a_zstd_body_past_the_cap_is_refused_as_too_large_not_malformed(self):
-        # Read and prepared before it is refused: the answer is the size the
-        # turn carries, not a framing error the client cannot act on.
+    def test_a_zstd_body_past_the_ceiling_on_the_wire_is_too_large_not_malformed(self):
+        # Refused before the read, but on the size the turn carries, not as a
+        # framing error the client cannot act on.
         payload = {'model': MODEL,
                    'input': [{'type': 'message', 'role': 'user',
                               'content': _noise(11, 4000)}]}
         packed = zstd.compress(json.dumps(payload).encode())
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
-        cap = 900
-        with mock.patch.object(router_mod, 'MAX_BODY', cap):
-            self.assertGreater(len(packed), cap)
+        cap, ceiling = 900, 2000
+        with scaled_limits(cap, ceiling):
+            self.assertGreater(len(packed), ceiling)
             response = self.raw_request(self.zstd_headers(packed), packed)
             self.assertEqual(response.status, 400)
             self.assertEqual(json.loads(response.read())['error']['code'],
                              'BODY_TOO_LARGE')
-            # The wire-oversized ask is released by the same refusal path.
+            # Refused before the slot is asked for, so none is left held.
             self.assertTrue(self.server.oversize_lock.acquire(timeout=5))
             self.server.oversize_lock.release()
         self.assertEqual(recorded, [])
