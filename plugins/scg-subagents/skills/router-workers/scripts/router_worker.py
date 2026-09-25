@@ -2,9 +2,10 @@
 """Run one task on a router model as a headless Claude Code worker.
 
 The local SCG Router serves approved OpenRouter models to Claude Code, but a
-Claude desktop session talks to Anthropic directly, so its own subagents
-cannot use them. This starts a separate `claude -p` process pointed at the
-router, isolated from the caller's configuration, and prints one JSON result.
+Claude desktop Code session in the subscription profile talks to Anthropic
+directly, so its own subagents cannot use them. This starts a separate
+`claude -p` process pointed at the router, isolated from the caller's
+configuration, and prints one JSON result.
 
     python3 router_worker.py --list
     python3 router_worker.py --model z-ai/glm-5.3-flash --effort max \

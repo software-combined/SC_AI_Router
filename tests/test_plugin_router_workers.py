@@ -93,6 +93,16 @@ class RouterWorkersSkillTest(unittest.TestCase):
         entry = (PLUGIN / 'skills/optimal-subagents/SKILL.md').read_text()
         self.assertIn('../router-workers/SKILL.md', entry)
 
+    def test_skill_serves_only_the_desktop_subscription_profile(self):
+        text = (SKILL / 'SKILL.md').read_text()
+        self.assertIn('only for a Claude desktop Code session in the subscription',
+                      text)
+        self.assertIn('in the gateway profile, should keep doing that', text)
+        self.assertIn('subscription profile', (SKILL / 'scripts/router_worker.py').read_text())
+        entry = (PLUGIN / 'skills/optimal-subagents/SKILL.md').read_text()
+        self.assertIn('a Claude desktop Code session in the subscription profile',
+                      entry)
+
     def test_listing_id_is_the_id_the_router_advertises(self):
         rows = [{'id': alias} for alias in map(claude_alias, (m.slug for m in registry.MODELS))
                 if alias]
