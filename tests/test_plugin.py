@@ -47,6 +47,12 @@ class PluginTest(unittest.TestCase):
         self.assertIn('../../references/reviews.md', review)
         self.assertIn('listed eligible fallback', review)
         self.assertIn('Exact user or project model/effort', review)
+        required = re.search(
+            r'Local user policy override:.*?`([^`]+)` at `([^`]+)`',
+            canonical, re.S)
+        self.assertIsNotNone(required)
+        self.assertIn(f'`{required.group(1)}` at `{required.group(2)}`', review)
+        self.assertIn('no model fallback', review.lower())
         efforts = json.loads(
             (policy_root / 'model-evidence.json').read_text(encoding="utf-8"))['prescribed_efforts']
         for model, effort in re.findall(r'`([^`]+)` at `([^`]+)`', canonical):

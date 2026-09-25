@@ -1,13 +1,13 @@
 """Provider adapters. Each owns model membership, request preparation, upstream target and response adaptation."""
-import http.client
+import http.client  # noqa: F401 (re-exported: tests patch providers.http.client)
 import json
 import time
-from . import (capabilities, compaction as comp, local_services, agent_handoffs,
+from . import (compaction as comp, local_services, agent_handoffs,
                provider_defs, request_context, transport, turn_budget, jev_compaction)
-from . import compaction_result, history_items, outbound, rejected_repair, subscription_roster
-from .capabilities import CANONICAL_ORDER
+from . import outbound, rejected_repair, subscription_roster
+from .compaction_summary import summarize as _summarize
 from .errors import PreparationError, SubscriptionRequired, UnknownModel
-from .registry import by_slug, near_miss, upstream_id_for
+from .registry import by_slug, near_miss
 from .events import log_event
 from .discovered import remember
 from .tool_adapter import snoop_response_identity, stream_events, ToolEvents
@@ -19,20 +19,6 @@ NATIVE_SERVICE_PATHS = {'/alpha/search', '/alpha/notes/v2/thread_hint', '/guardi
 def is_native_service(path):
     # Any native path the subscription definitions claim (prefix rule).
     return provider_defs.native_service_path(path)
-SUMMARY_OUTPUT_TOKENS = 4000
-SUMMARY_RETRY_OUTPUT_TOKENS = 8000
-SUMMARY_DEADLINE_S = 120
-
-
-def _summary_budgets(entry):
-    ceiling = getattr(entry, 'max_output_tokens', SUMMARY_OUTPUT_TOKENS)
-    if (isinstance(ceiling, int) and not isinstance(ceiling, bool)
-            and ceiling > SUMMARY_OUTPUT_TOKENS):
-        return (SUMMARY_OUTPUT_TOKENS,
-                min(SUMMARY_RETRY_OUTPUT_TOKENS, ceiling))
-    return (SUMMARY_OUTPUT_TOKENS,)
-
-
 # router.py guards compaction with this name; the external stages use the same rule.
 reject_opaque_agent_items = outbound.contain
 
@@ -154,7 +140,7 @@ class ExternalResponsesProvider:
     def repair_rejected(self, prepared, described, raw):
         return rejected_repair.annotation_strip(self.defn, prepared, described, raw)
 
-    def compact(self, model, payload, key, row=None):
+    def compact(self, model, payload, key, row=None, context=None, allowed=None):
         try:
             items = payload.get('input', [])
             kinds, shapes = {}, {}
@@ -163,22 +149,27 @@ class ExternalResponsesProvider:
                 kinds[kind] = kinds.get(kind, 0) + 1
                 if isinstance(_item, dict):
                     shapes.setdefault(kind, set()).update(_item.keys())
-            log_event('compact_started', model=model,
+            log_event('compact_started', active_model=model,
                       input_items=len(items) if isinstance(items, list) else -1,
                       item_kinds=kinds,
                       item_keys={k: sorted(v) for k, v in shapes.items()})
             users = comp.extract_user_messages(items)
             if not users:
                 raise ValueError('No user messages to compact')
-            summary = jev_compaction.summary(model, key, items, self.defn, row=row) or self.summarize(model, key, items, row)
-            log_event('compact_summarized', model=model, summary_chars=len(summary))
+            summary = (
+                jev_compaction.summary(model, key, items, self.defn, row=row)
+                or self.summarize(model, key, items, row, context, allowed)
+            )
+            log_event('compact_summarized', active_model=model,
+                      summary_chars=len(summary))
             output = comp.build_compact_v1_output(users, summary)
             remember(items, summary)
             return output
         except ValueError as exc:
             raise PreparationError(str(exc))
 
-    def compact_trigger(self, model, payload, key, row=None):
+    def compact_trigger(self, model, payload, key, row=None, context=None,
+                        allowed=None):
         """Answer a V2 trigger inline with exactly one ocx1 compaction item."""
         try:
             items = [item for item in payload.get('input', [])
@@ -187,78 +178,25 @@ class ExternalResponsesProvider:
             users = comp.extract_user_messages(items)
             if not users:
                 raise ValueError('No user messages to compact')
-            summary = jev_compaction.summary(model, key, items, self.defn, row=row) or self.summarize(model, key, items, row)
-            log_event('compact_triggered', model=model, summary_chars=len(summary))
+            summary = (
+                jev_compaction.summary(model, key, items, self.defn, row=row)
+                or self.summarize(model, key, items, row, context, allowed)
+            )
+            log_event('compact_triggered', active_model=model,
+                      summary_chars=len(summary))
             remember(items, summary)
             return [comp.v2_compaction_item(summary)]
         except ValueError as exc:
             raise PreparationError(str(exc))
 
-    def summarize(self, model, key, payload_items, row=None):
-        """`row` is the routed request's captured row; None looks up `model` live."""
-        prompt = comp.COMPACT_PROMPT + '\n\nConversation:\n' + comp.transcript_for_summary(payload_items)
-        levels = row.reasoning if row is not None else capabilities.REASONING_LEVELS.get(model)
-        effort = min(levels, key=CANONICAL_ORDER.index) if levels else None
-        entry = row if row is not None else by_slug(model) if isinstance(model, str) else None
-        deadline = time.monotonic() + SUMMARY_DEADLINE_S
-        budgets = _summary_budgets(entry)
-        for attempt, budget in enumerate(budgets, 1):
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                log_event('compact_summary_attempt', model=model, attempt=attempt,
-                          max_output_tokens=budget, outcome='deadline')
-                raise TimeoutError('Compaction summarizer deadline exceeded')
-            upstream = upstream_id_for(entry) if entry is not None else model
-            body = {'model': upstream, 'input': [history_items.user_message_item(prompt)],
-                    'max_output_tokens': budget}
-            if getattr(entry, 'provider_prefs', None):
-                body['provider'] = dict(entry.provider_prefs)
-            if effort:
-                # Never let default high effort burn the whole budget on reasoning.
-                body['reasoning'] = {'effort': effort}
-            conn = None
-            try:
-                req = json.dumps(body).encode()
-                conn = http.client.HTTPSConnection(self.host,
-                                                    timeout=remaining)
-                headers = dict(self.defn.request_headers)
-                headers.update({'Authorization': 'Bearer ' + key,
-                                'Content-Type': 'application/json'})
-                conn.request('POST', self.defn.path_for(
-                    provider_defs.RESPONSES, '/responses'), body=req,
-                    headers=headers)
-                resp = conn.getresponse()
-                try:
-                    data = json.loads(transport.read_capped(resp, transport.MAX_UPSTREAM_BODY))
-                except ValueError:
-                    raise OSError('Summarizer returned invalid JSON')
-                summary = compaction_result.extract_summary(resp.status, data)
-            except compaction_result.IncompleteSummary:
-                if attempt == len(budgets):
-                    log_event('compact_summary_attempt', model=model,
-                              attempt=attempt, max_output_tokens=budget,
-                              outcome='rejected')
-                    raise
-                if time.monotonic() >= deadline:
-                    log_event('compact_summary_attempt', model=model,
-                              attempt=attempt, max_output_tokens=budget,
-                              outcome='deadline')
-                    raise TimeoutError('Compaction summarizer deadline exceeded')
-                log_event('compact_summary_attempt', model=model,
-                          attempt=attempt, max_output_tokens=budget,
-                          outcome='retry')
-                continue
-            except Exception:
-                log_event('compact_summary_attempt', model=model, attempt=attempt,
-                          max_output_tokens=budget, outcome='failed')
-                raise
-            else:
-                log_event('compact_summary_attempt', model=model, attempt=attempt,
-                          max_output_tokens=budget, outcome='completed')
-                return summary
-            finally:
-                if conn is not None:
-                    conn.close()
+    def summarize(self, model, key, payload_items, row=None, context=None,
+                  allowed=None):
+        """Summarize through the pinned fast rows; `model`/`row` identify the request."""
+        del row
+        return _summarize(self, key, payload_items,
+                          catalogue=None if context is None else context.catalogue,
+                          allowed=allowed, active_model=model, lookup=by_slug,
+                          log=log_event, monotonic=time.monotonic)
 
 
 class LocalServicesProvider:
@@ -292,14 +230,18 @@ def adapters(region='global'):
             + (SubscriptionProvider(), LocalServicesProvider()))
 
 
-def compaction_call(provider, model, path, payload, row=None):
+def compaction_call(provider, model, path, payload, row=None, context=None,
+                    allowed=None):
     """Bound local serve for external compact/V2-trigger turns, else None."""
     if provider.kind != provider_defs.EXTERNAL:
         return None
+    row = context.row if context is not None else row
     if path == '/responses/compact':
-        return lambda key: provider.compact(model, payload, key, row)
+        return lambda key: provider.compact(
+            model, payload, key, row, context=context, allowed=allowed)
     if path == '/responses' and comp.has_compaction_trigger(payload.get('input', [])):
-        return lambda key: provider.compact_trigger(model, payload, key, row)
+        return lambda key: provider.compact_trigger(
+            model, payload, key, row, context=context, allowed=allowed)
     return None
 
 

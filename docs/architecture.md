@@ -310,8 +310,10 @@ them while the child installer retains its own installation lock.
   rendering/reload half lives in `packaging/launchd.py` with the darwin backend
   (`packaging/platforms/darwin.py`), landed by Plan 103.
 - `ai_router/providers.py` holds the Responses adapters and dispatch;
-  the outgoing projection lives in `outbound.py`, failure policy in `upstream.py`, page markup in `setup_page.py`,
-  shared transport in `transport.py`, and dispatch in `protocols/`.
+  `compaction_summary.py` owns bounded summary-model selection and requests;
+  the outgoing projection lives in `outbound.py`, failure policy in
+  `upstream.py`, page markup in `setup_page.py`, shared transport in
+  `transport.py`, and dispatch in `protocols/`.
 - `ai_router/subscription_discovery.py` fetches Codex's native subscription
   catalogue; `subscription_catalogue.py` validates it and composes the
   effective roster without turning local configuration into entitlement data.

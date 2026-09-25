@@ -2,7 +2,7 @@
 
 
 class IncompleteSummary(ValueError):
-    """A non-empty summary was cut off by the output-token ceiling."""
+    """A summary was cut off or emptied by the output-token ceiling."""
 
 
 def _details(data):
@@ -61,12 +61,12 @@ def _output_text(data, allow_incomplete_item=False):
             if text:
                 texts.append(text)
     summary = '\n'.join(texts).strip()
-    if not summary:
+    if not summary and not allow_incomplete_item:
         raise ValueError('Compaction summary empty; retry compaction.')
     return summary
 
 
-def extract_summary(status, data):
+def extract_summary(status, data, expected_model=None):
     """Return valid summary text or a typed, fail-closed validation error."""
     # The provider must return a successful Responses envelope; the router's
     # own 409 is the fail-closed result after all summary attempts fail.
@@ -76,6 +76,8 @@ def extract_summary(status, data):
         raise ValueError('Summarizer response is not an object')
     if data.get('error') is not None:
         raise ValueError('Summarizer response contains an error')
+    if expected_model is not None and data.get('model') != expected_model:
+        raise ValueError('Summarizer served unexpected model')
     payload_status = _status(data)
     reason = _details(data)
     retryable = reason == 'max_output_tokens' and payload_status in (None, 'incomplete')
