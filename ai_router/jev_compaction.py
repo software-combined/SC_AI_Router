@@ -191,7 +191,7 @@ def _values(answers, questions):
     return {qid: answer['value'] for qid, answer in answers.items()}
 
 
-def summary(model, key, items, defn, home=None, ask=None) -> str | None:
+def summary(model, key, items, defn, home=None, ask=None, row=None) -> str | None:
     """Return kept evidence in on mode, or None for the unchanged summary path."""
     mode = state(home)
     if mode == 'off':
@@ -206,7 +206,7 @@ def summary(model, key, items, defn, home=None, ask=None) -> str | None:
         stats['candidate_pairs'] = len(pairs)
         if not pairs:
             _refuse('no_candidates')
-        row = registry.by_slug(model)
+        row = registry.by_slug(model) if row is None else row  # routed: the request's row
         window = getattr(row, 'auto_compact_token_limit', None) or getattr(row, 'context_window', 0)
         if not isinstance(window, int) or isinstance(window, bool) or window <= 0:
             _refuse('context_limit')

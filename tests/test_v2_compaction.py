@@ -35,7 +35,7 @@ class CompactTriggerProviderTests(unittest.TestCase):
         provider = ExternalResponsesProvider(provider_defs.OPENROUTER)
         seen = {}
 
-        def fake_summarize(model, key, items):
+        def fake_summarize(model, key, items, row=None):
             seen['items'] = items
             return summary
 

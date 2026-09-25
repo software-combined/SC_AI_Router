@@ -201,6 +201,37 @@ class ProtocolContractTests(unittest.TestCase):
                 response.read()
                 self.assertEqual(recorded, [])
 
+    def test_unsupported_external_protocol_pairs_fail_before_any_send(self):
+        # Plan 188: the pair is judged on the row resolved at ingress, so a
+        # refresh that makes the row servable mid-request cannot turn into a send.
+        from unittest import mock
+        from ai_router import model_refresh, provider_defs
+        from tests.test_request_context import _after_resolution, _generation, _refreshed
+        defs = tuple(provider_defs.ProviderDef(
+            id='acme-' + protocol, label='Acme', kind=provider_defs.EXTERNAL,
+            host='acme.invalid', key=provider_defs.KeySpec('ACME_KEY', 'acme.key'),
+            dialect=provider_defs.DIALECT_OPENAI_COMPATIBLE, **{protocol + '_path': '/v1'})
+            for protocol in (provider_defs.RESPONSES, provider_defs.MESSAGES))
+        every = provider_defs.PROVIDERS + defs
+        self.enterContext(mock.patch.object(provider_defs, 'PROVIDERS', every))
+        self.enterContext(mock.patch.object(provider_defs, 'BY_ID', {d.id: d for d in every}))
+        cases = (('/v1/messages', _messages('acme/responses-only'), 409, 'Codex only'),
+                 ('/responses', {'model': 'acme/messages-only', 'input': []}, 400,
+                  'Claude Code only'))
+        for (path, payload, status, reason), defn in zip(cases, defs):
+            slug = payload['model']
+            with self.subTest(path=path), _generation():
+                model_refresh.apply(_refreshed(slug, provider=defn.id))
+                recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
+                server = self._server()
+                move = lambda: model_refresh.apply(_refreshed(slug, provider='openrouter'))
+                with _after_resolution(move):
+                    response = _post(server.server_port, '/test-token' + path, payload,
+                                     {'Authorization': 'Bearer subscription-secret'})
+                self.assertEqual(response.status, status)
+                self.assertIn(reason, json.loads(response.read())['error']['message'])
+                self.assertEqual(recorded, [])
+
     def test_missing_token_is_rejected_without_upstream_call(self):
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
         server = self._server()

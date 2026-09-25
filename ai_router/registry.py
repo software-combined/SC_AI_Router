@@ -204,17 +204,19 @@ def upstream_id_for(entry):
     return getattr(entry, 'upstream_id', '') or entry.slug
 
 
-def near_miss(model):
+def near_miss(model, catalogue=None):
     """Canonical slug for a bare tilde-alias id, else None. Pure.
 
     Discovery lists tilde rows without their `~` (Claude ingress), so a
     caller can echo back an id the Responses path never owned. Offer the
     exact canonical slug only when the bare id is absent and `~`+bare is
-    present; never fuzzy-match, never route."""
-    if not isinstance(model, str) or not model or by_slug(model) is not None:
+    present; never fuzzy-match, never route. `catalogue` is a request's
+    captured generation; None reads the live one."""
+    rows = BY_SLUG if catalogue is None else catalogue
+    if not isinstance(model, str) or not model or model in rows:
         return None
     candidate = '~' + model
-    return candidate if by_slug(candidate) is not None else None
+    return candidate if candidate in rows else None
 
 
 def picker_key(vendor, tier, display_name, slug):
