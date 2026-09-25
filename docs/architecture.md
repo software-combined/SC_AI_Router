@@ -35,6 +35,7 @@ decisions (typed-decision wire client, imports only provider_defs)
 jev_compaction (opt-in evidence selection, consumes decisions/compaction/tool_runs)
   |
 outbound (each Responses route's ordered stage list over the stages above)
++ rejected_repair (the Responses adapters' pure rejected-request repair proposals)
   |
 providers (Responses adapters) + claude (Messages adapters)
   |
@@ -122,6 +123,16 @@ changed.
 `subscription_history.py` owns the pure outgoing projection of replayed
 reasoning and the router's own compaction summary (sent as readable text) for
 subscription Responses requests; it never edits persisted client history.
+`rejected_repair.py` owns the Responses adapters' rejected-request repair
+(Plan 183 step 2.5). Each adapter's `repair_rejected(prepared, described, raw)`
+proposes at most one repaired `Prepared` for the one rejection it can justify:
+the external annotation strip for an OpenRouter 400 that names no cause, and
+the subscription `invalid_encrypted_content` repair of reasoning blobs and the
+router's compaction summary. None means ineligible and a proposal without a
+body means unchanged. A proposal opens no connection, reads no response, logs
+nothing and never retries; `strip_retry.py` keeps the one-retry policy, the
+`annotation_retry` lines and, until Plan 188's relay-owned attempt ledger, the
+one send. The Messages adapters propose no repair.
 `context_recovery.py` adds fixed recovery guidance for client-declared context
 resets on either Responses route, finding the `<context_window>` message by the
 same rule. Codex owns saved history and executes its
