@@ -6,9 +6,9 @@ from ai_router.compaction import SUMMARY_PREFIX
 from ai_router.discovered import _MEMORY, remember
 from ai_router.capabilities import has_recursive_refs
 from ai_router.tool_adapter import (
-    prepare_tools, snoop_response_identity, stream_events, ToolEvents,
-    SEARCH_NAME, integer_json)
+    snoop_response_identity, stream_events, ToolEvents, SEARCH_NAME, integer_json)
 from tests.fakes import FakeUpstream
+from tests.tool_stages import prepare_tools
 from tests.harness import isolated_home as _isolated_home
 
 

@@ -8,7 +8,6 @@ forwarded that refusal instead of repairing the one named condition.
 Run from the copy root:
   <python> -m unittest discover -s tests -t . -v
 """
-import inspect
 import json
 import types
 import unittest
@@ -17,6 +16,8 @@ from compression import zstd
 
 from ai_router import (compaction, provider_defs, providers, strip_retry,
                        subscription_history, transport)
+from ai_router.registry import by_slug
+from tests.harness import stub_credentials
 
 
 OPENROUTER = types.SimpleNamespace(defn=provider_defs.get(provider_defs.DEFAULT_EXTERNAL))
@@ -154,11 +155,27 @@ class RetryRepairTests(unittest.TestCase):
             self.assertEqual(len(dispatches), 1)
 
     def test_06_guardian_approval_semantics_are_unchanged(self):
-        self.assertNotIn('strip_reasoning_blobs',
-                         inspect.getsource(providers.SubscriptionProvider),
-                         'the healthy subscription path must not strip blobs')
-        self.assertIn('strip_reasoning_blobs',
-                      inspect.getsource(providers.ExternalResponsesProvider))
+        def prepare(provider, model, payload):
+            out = provider.prepare(model, '/responses', payload, GUARDIAN_BODY, {},
+                                   stub_credentials())
+            return json.loads(out.body)['input']
+
+        # The healthy subscription path must not strip blobs, neither on the
+        # wire nor in the client's own payload.
+        client = json.loads(GUARDIAN_BODY)
+        native = prepare(providers.SubscriptionProvider(), 'codex-auto-review', client)
+        for items in (native, client['input']):
+            self.assertEqual([i.get('encrypted_content') for i in items
+                              if i.get('type') == 'reasoning'], ['BLOB-ONE', 'BLOB-TWO'])
+        # An external native-history row strips the owned blobs, drops the
+        # blob-only item and keeps the readable trace.
+        self.assertEqual(by_slug('z-ai/glm-5.3').history_mode, 'native')
+        external = prepare(providers.ExternalResponsesProvider(provider_defs.OPENROUTER),
+                           'z-ai/glm-5.3', json.loads(GUARDIAN_BODY))
+        reasoning = [i for i in external if i.get('type') == 'reasoning']
+        self.assertEqual([i.get('id') for i in reasoning], ['rs_2'])
+        self.assertEqual(reasoning[0]['summary'][0]['text'], 'readable trace')
+        self.assertNotIn('encrypted_content', json.dumps(external))
 
 
 class DiagnosticFactsTests(unittest.TestCase):

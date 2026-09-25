@@ -7,17 +7,11 @@ import json
 import re
 from copy import deepcopy
 from .capabilities import has_recursive_refs
-from .history_portability import portable_history, rewrite_custom_pairs
 from .discovered import recall
-from .registry import by_slug
 from . import agent_handoffs, sse, tool_aliases, tool_merge, transport, turn_budget
+from .tool_history import SEARCH_NAME, tool_key
 from .tool_merge import tool_entries
 from .upstream import serving_endpoint
-SEARCH_NAME = 'codex_client_tool_search'
-SEARCH_NEXT = 'Call the exact returned name; do not search again.'
-# Deliberately terse: this replaces a repeated listing, so every byte here is
-# charged 2,690 times on the thread this exists for.
-SEARCH_REPEAT_NOTE = 'repeated search result omitted'
 # Bytes retained per body for the post-EOF identity parse. Overflow drops
 # the observation, never the forwarded bytes.
 _OBSERVE_LIMIT = 64 * 1024
@@ -48,9 +42,6 @@ def integer_json(text):
     return re.sub(r'("(?:\\.|[^"\\])*")|(-?\d+)\.0+(?=\s*[,}\]]|\s*$)',
                   lambda match: match[1] if match[1] is not None else match[2], text)
 
-def tool_key(item):
-    return (item.get('namespace'), item.get('name'))
-
 def _wrap_string_envelope(tool, noun):
     """Share the arguments_json string envelope between json_text kinds."""
     schema = tool['parameters']
@@ -75,9 +66,11 @@ def _grok_needs_envelope(parameters):
                     return True
     return False
 
-def prepare_tools(payload, row=None):
-    """`row` is the request's captured registry row (Plan 188); None looks the model up."""
-    row = by_slug(payload.get('model', '')) if row is None else row
+def prepare_tools(payload, row):
+    """Shape this turn's declarations for `row`, the request's captured row.
+
+    Returns the kind map and wire-name map `tool_history` reads next.
+    """
     names = tool_aliases.ToolNames()
     # OpenAI reads discovered definitions from tool_search_output history. Other
     # providers require those released tools in the ordinary request tool list.
@@ -171,41 +164,7 @@ def prepare_tools(payload, row=None):
                 if isinstance(entry, dict):
                     names.dropped.add(entry['name'])
         payload['tools'] = kept
-    items = payload.get('input', []) if isinstance(payload.get('input'), list) else []
-    exposed_keys = {tool_merge.key_of(tool, namespace)
-                    for tool, namespace in tool_entries(payload.get('tools', []))}
-    exposed_keys.update(key for key, wire in wire_names.items() if (None, wire) in names)
-    rewrite_custom_pairs(items, exposed_keys, wire_names)
-    # Newest listing per tool key wins; an earlier repeat gets the note below.
-    latest_search, listings = tool_merge.newest_listings(items, wire_names)
-    for item in items:
-        if item.get('type') == 'tool_search_call':
-            item.pop('execution', None)
-            item.update(type='function_call', name=SEARCH_NAME, arguments=json.dumps(item['arguments']))
-        elif item.get('type') == 'tool_search_output':
-            item.pop('execution', None)
-            item.pop('status', None)
-            item.pop('tools', None)
-            entries = listings[id(item)]
-            found = {'available_tools': entries or [SEARCH_REPEAT_NOTE]}
-            if item is latest_search and entries:
-                found['how_to_use'] = SEARCH_NEXT
-            item.update(type='function_call_output', output=json.dumps(found))
-        elif item.get('type') == 'function_call':
-            wire = wire_names.get(tool_key(item))
-            if wire:
-                item.pop('namespace', None)
-                item['name'] = wire
-            entry = names.get(tool_key(item))
-            kind = entry.get('kind') if isinstance(entry, dict) else entry
-            if kind in ('json_text', 'json_text_root'):
-                item['arguments'] = json.dumps({'arguments_json': item['arguments']})
-        elif item.get('type') == 'function_call_output' and isinstance(item.get('output'), str):
-            item['output'] = tool_aliases.annotate(item['output'], names)
-    if isinstance(payload.get('input'), list):
-        payload['input'] = portable_history(
-            payload['input'], SEARCH_NAME, _quirk(row, 'history_mode'))
-    return names
+    return names, wire_names
 
 class ToolEvents:
     def __init__(self, names, notes=None):
