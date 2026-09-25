@@ -1,5 +1,14 @@
 # Changelog
 
+## scg-subagents 0.5.12 - 2026-09-25
+
+- State that `router-workers` serves only a Claude desktop Code session in
+  the subscription profile, the first-party profile that talks to Anthropic
+  directly. Sessions that can already spawn router models natively, such as
+  Codex, an attached terminal Claude Code session, or a desktop session in
+  the gateway profile, keep native spawning through the optimal-subagents
+  tool guide. Wording only; the runner is unchanged.
+
 ## scg-subagents 0.5.11 - 2026-09-23
 
 - Stop a router worker when its runner is interrupted. The worker runs in a
