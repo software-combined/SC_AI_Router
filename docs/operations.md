@@ -568,23 +568,30 @@ the failure; an oversized turn answers 400 with guidance instead of 413. The
 Anthropic Messages path keeps its existing answers except at that shared
 size boundary, where it answers 400 like Responses.
 
-One oversized body is expanded at a time. A zstd turn takes the single
-oversized-read slot the moment it is past the 16 MiB request cap, on the wire
-or on decode, before the rest of the body is expanded; a second such turn
-arriving while it is held answers 503 `OVERSIZE_BUSY` with `Retry-After: 2`
-and no upstream call. The decision is on decoded bytes, because the
-schema-heavy turns that need the headroom compress at ratios no declared-size
-check predicts, and a compressed body past the cap is read to the decode
-ceiling for that same reason. Turns inside the ordinary cap never touch the
-slot, and the slot covers reading and preparing only: the expanded buffers die
-before the stream starts.
+Every request has a local 96 MiB ceiling on its wire, decoded and prepared
+bytes, on all four routes and for identity and zstd bodies alike. A turn past
+it answers 400 `BODY_TOO_LARGE` with no upstream call, and the transport checks
+the same ceiling again on every send. The ceiling bounds what one turn makes
+this machine hold; it does not mean a provider or subscription accepts a body
+that size. Native history, images, signatures and headers are forwarded whole.
 
-A routed turn that is still over the 16 MiB prepared budget is reduced with
-visible notes before it is refused: repeated released-tool listings collapse to
-the newest copy per tool, the oldest images past the newest four (or 4 MiB)
+16 MiB is the ordinary request threshold, not a limit. A turn past it on the
+wire, on decode or once prepared takes the single large-request slot, before
+the rest of a compressed body is expanded, and keeps it until relay, any
+repair retry or subscription fallback, and cleanup finish. A second large turn
+arriving meanwhile answers 503 `OVERSIZE_BUSY` with `Retry-After: 2` and no
+upstream call; smaller turns proceed within the 32-request in-flight limit. A
+repair or fallback body is sized together with the body still held, and one
+that does not fit is never sent (a fallback keeps the refusal answer).
+
+An external Responses turn still over the 16 MiB prepared budget is reduced
+with visible notes before it is sent: repeated released-tool listings collapse
+to the newest copy per tool, the oldest images past the newest four (or 4 MiB)
 become a note, and long old tool outputs are truncated head and tail. Tool
 call/output pairing and the newest items are never touched, and a turn with
-nothing reducible left still answers 400 with today's message.
+nothing reducible left is sent as it is, within the ceiling. Native routes are
+never trimmed. Upstream answers keep their own caps: 16 MiB for a response
+body or one SSE frame, 1 MiB for an error body.
 
 A refused subscription turn (an upstream 429 on a login the client owns)
 answers 503 `UPSTREAM_RATE_LIMITED` whose message names the model and the

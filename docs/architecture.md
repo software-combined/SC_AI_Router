@@ -204,7 +204,15 @@ contract work.
    connection cleanup: `ingress.py` owns auth/rebinding, body limits, GET
    routes and error shaping; `relay.py` owns the upstream relay loop; and
    `router.py` keeps drain/inflight plus POST orchestration over both.
-   Protocol representation lives in `providers.py` (Responses/Messages) and
+   `transport.MAX_REQUEST_BYTES` (96 MiB) is the local hard ceiling on wire,
+   decoded and prepared bytes for every route and encoding, checked by
+   `ingress.read_body`, `router.Handler.admit` and again on every send in
+   `transport.post_with_phases`; `Prepared.decoded_body_bytes` keeps a
+   compressed passthrough from being under-counted. `runtime.MAX_BODY`
+   (16 MiB) is only the threshold for the single large-request slot, which
+   `router.py` holds until relay, repair, fallback and cleanup return.
+   `turn_budget.BODY_BUDGET` shapes external Responses turns only; native
+   bodies are forwarded whole. Protocol representation lives in `providers.py` (Responses/Messages) and
    `claude.py` (Messages ingress).
 3. Upstream adapters own target/credential construction and are
    parameterized by one `ProviderDef`, never by a provider-name branch. A

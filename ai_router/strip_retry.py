@@ -9,16 +9,17 @@ one-retry policy, the `annotation_retry` log lines and the one send; Plan
 """
 import http.client
 
-from . import provider_defs, transport, upstream
+from . import errors, provider_defs, transport, upstream
 
 
 def maybe_retry_unattributable(described, response, raw, metrics, provider,
-                               prepared, attempts, log_event):
+                               prepared, attempts, log_event, admit=None):
     """Retry once with the repair the adapter proposes for its own rejection.
 
     Returns (response, headers_done, prepared) plus its bounded error body, or
     None when ineligible or unchanged. The relay handles the retry's actual
-    response through its ordinary failure policy.
+    response through its ordinary failure policy. `admit` sizes the repaired
+    body with the original still held, before anything is sent.
     """
     proposal = None
     if (response.status == 400
@@ -38,6 +39,14 @@ def maybe_retry_unattributable(described, response, raw, metrics, provider,
         log_event('annotation_retry', eligible=True, attempted=False,
                   outcome='unchanged', **fields)
         return None
+    if admit is not None:
+        try:
+            admit(proposal.prepared, prepared)
+        except (errors.InvalidSize, errors.OversizeBusy) as exc:
+            log_event('annotation_retry', eligible=True, attempted=False,
+                      outcome='refused', error_type=type(exc).__name__,
+                      prepared_bytes=len(proposal.prepared.body), **fields)
+            raise
     if proposal.reports_rejection:
         log_event('upstream_rejected', status=response.status,
                   client_status=described[0], code=described[2],
@@ -70,7 +79,7 @@ def maybe_retry_unattributable(described, response, raw, metrics, provider,
     return response, headers_done, retried_prepared, retry_raw
 
 
-def post_with_retry(conn, prepared, metrics, attempts, provider, log_event):
+def post_with_retry(conn, prepared, metrics, attempts, provider, log_event, admit=None):
     """Dispatch at most twice and retain the final response for normal handling."""
     response, headers_done = transport.post_with_phases(conn, prepared, metrics)
     raw = None
@@ -81,7 +90,8 @@ def post_with_retry(conn, prepared, metrics, attempts, provider, log_event):
             {'model': metrics.get('model'), 'provider': prepared.provider,
              'protocol': metrics.get('protocol'), 'dialect': provider.defn.dialect})
         retried = maybe_retry_unattributable(
-            described, response, raw, metrics, provider, prepared, attempts, log_event)
+            described, response, raw, metrics, provider, prepared, attempts, log_event,
+            admit)
         if retried is not None:
             return retried
     return response, headers_done, prepared, raw

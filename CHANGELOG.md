@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.6.125
+
 - An OpenRouter Responses stream that fails transiently before any byte reaches
   the client can now be retried once, even when `response.created` or
   `response.in_progress` echoes a large request. The rule is shared across
@@ -18,6 +20,14 @@
   had already rewritten, so a turn offering agent tools is no longer refused
   with a plaintext collaboration namespace error. When an oversized turn has to shorten old tool outputs or drop old
   images to fit the size limit, only the request sent upstream is shortened.
+- A request can now be up to 96 MiB, sent or decompressed, on every route,
+  instead of being refused at 16 MiB. This is a resource limit on this
+  machine, not a promise that ChatGPT, Claude or OpenRouter accepts a request
+  that size. Long native threads with images are forwarded whole. One request
+  over 16 MiB is served at a time, to the end of its answer; another arriving
+  meanwhile is asked to retry shortly, and smaller requests carry on. A
+  compressed request to an external Claude-format model is now sent
+  decompressed, so its headers match its body.
 
 ## 0.6.124
 

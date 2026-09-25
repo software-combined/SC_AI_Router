@@ -24,6 +24,7 @@ Out of scope on purpose: form-encoded setup ``_post``/``_get`` variants
 (``tests/test_setup_handler.py``), bound-method ``_post`` helpers with
 narrower signatures, and ``tests/fakes.py`` / ``tests/_platform.py``.
 """
+import contextlib
 import http.client
 import json
 import os
@@ -34,6 +35,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
+from ai_router import router as _router_mod, transport as _transport
 from ai_router.discovered import _MEMORY
 from ai_router.router import Router
 
@@ -92,6 +94,15 @@ def get(port, path):
     return conn.getresponse()
 
 
+@contextlib.contextmanager
+def scaled_limits(cap, ceiling=None):
+    """Scale the ordinary threshold and the request ceiling (6x unless given)."""
+    with mock.patch.object(_router_mod, 'MAX_BODY', cap), \
+            mock.patch.object(_transport, 'MAX_REQUEST_BYTES',
+                              cap * 6 if ceiling is None else ceiling):
+        yield
+
+
 def isolated_home(test):
     tmp = tempfile.mkdtemp()
     test.addCleanup(shutil.rmtree, tmp, True)
@@ -111,4 +122,4 @@ def tmp_home(test):
 
 __all__ = ['StubCredentials', 'stub_credentials', 'test_state',
            'start_server', 'start_auth_server', 'auth_file', 'post',
-           'get', 'isolated_home', 'tmp_home']
+           'get', 'scaled_limits', 'isolated_home', 'tmp_home']

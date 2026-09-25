@@ -31,8 +31,8 @@ _ANNOTATION_ONLY_FIELDS = frozenset((
     'client_metadata', 'prompt_cache_options', 'prompt_cache_key', 'metadata',
     'safety_identifier', 'store', 'include', 'service_tier', 'truncation',
     'background', 'top_logprobs', 'user', 'stream_options'))
-# Matches runtime.MAX_DECODE_FACTOR without importing the composition root.
-ZSTD_DECODE_LIMIT = 6 * transport.MAX_UPSTREAM_BODY
+# A prepared body is never larger than the request ceiling, decoded or not.
+ZSTD_DECODE_LIMIT = transport.MAX_REQUEST_BYTES
 
 
 def annotation_strip(defn, prepared, described, raw):
@@ -165,4 +165,5 @@ def _with_body(prepared, body):
     return transport.Prepared(prepared.host, prepared.path, headers,
                                body, prepared.tool_names, prepared.provider,
                                prepared.fallback, prepared.output_cap,
-                               prepared.context_tokens, prepared.context)
+                               prepared.context_tokens, prepared.context,
+                               decoded_body_bytes=len(body))

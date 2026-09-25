@@ -16,7 +16,8 @@ from . import errors, local_services, provider_defs, setup, stream_errors, strea
 from .providers import is_native_service
 
 
-def relay(handler, provider, prepared, metrics, started, has_image=False, *, log_event):
+def relay(handler, provider, prepared, metrics, started, has_image=False, *, log_event,
+          admit=None):
     routed = (provider.defn.caches_deterministic_refusals()
               and metrics.get('protocol') == provider_defs.RESPONSES)
     if routed:
@@ -28,15 +29,13 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
             return handler.error(errors.upstream_invalid_request(message) if status == 400
                                  else errors.retryable_preparation(message))
     conn = http.client.HTTPSConnection(prepared.host, timeout=transport.UPSTREAM_TIMEOUT_S)
-    sent = False
-    response = None
-    record = None
+    sent, response, record = False, None, None
     attempts = [conn]
     refusal_body = prepared.body
     try:
         # Phases land inside post_with_phases even on failure.
         response, headers_done, prepared, drained = strip_retry.post_with_retry(
-            conn, prepared, metrics, attempts, provider, log_event)
+            conn, prepared, metrics, attempts, provider, log_event, admit)
         if (provider.defn.dialect == provider_defs.DIALECT_OPENAI
                 and is_native_service(metrics['path'])
                 and response.status in (401, 403)):
@@ -64,7 +63,7 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
                 return handler.error(errors.upstream_invalid_request(
                     f'The {provider_defs.label_for(prepared.provider)} account has no '
                     'remaining credit; check the provider billing settings'))
-            return subscription_fallback.refused(handler, prepared, retry_after, metrics, started)
+            return subscription_fallback.refused(handler, prepared, retry_after, metrics, started, admit)
         if response.status >= 400:
             raw = drained
             transport.note_first_data(metrics, headers_done)
@@ -194,6 +193,11 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
         if metrics.get('served_model'):
             with handler.server.lock:
                 handler.server.served_models[metrics['model']] = metrics['served_model']
+    # `admit` refused a repaired body before its send: the client holds no bytes yet.
+    except errors.OversizeBusy:
+        handler.error(errors.oversize_busy(), retry_after='2')
+    except errors.InvalidSize as exc:
+        handler.error(errors.invalid_size(str(exc)))
     except (OSError, http.client.HTTPException, ValueError, KeyError,
             TypeError, AttributeError) as exc:
         total_ms = round((time.monotonic() - started) * 1000, 1)

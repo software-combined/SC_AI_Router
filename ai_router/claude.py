@@ -159,20 +159,21 @@ class ExternalMessagesProvider:
         # payload is the parsed form of this same body, so rewrite the alias
         # there instead of decoding raw_body again. The body leaves untouched
         # unless the alias, the client's own billing block or its deferred-tool
-        # protocol has to change; both repairs always run.
+        # protocol has to change; both repairs always run. A compressed body is
+        # sent decoded: the headers below carry no Content-Encoding.
         rewritten = (isinstance(model, str) and upstream != model
                      and isinstance(payload, dict))
         if rewritten:
             payload['model'] = upstream
         changed = claude_compat.strip_billing_header(payload)
         changed |= claude_compat.flatten_deferred_tools(payload)
-        if changed or rewritten:
+        if changed or rewritten or transport.encoded(headers):
             body = json.dumps(payload).encode()
         return transport.Prepared(
             self.host, self.defn.path_for(provider_defs.MESSAGES, path),
             {'Authorization': 'Bearer ' + credentials.key_for(self.defn.id),
              'Content-Type': 'application/json'},
-            body, set(), self.name, context=context)
+            body, set(), self.name, context=context, decoded_body_bytes=len(body))
 
     def adapt(self, response, tool_names, notes=None):
         chunks = transport.passthrough(response)
@@ -197,7 +198,7 @@ class ClaudeSubscriptionProvider:
             raise PermissionError('Claude subscription authentication required')
         fwd = {k: v for k, v in headers.items() if k.lower() not in transport.HOP_HEADERS}
         return transport.Prepared(self.host, path, fwd, raw_body, set(), self.name,
-                                  context=context)
+                                  context=context, decoded_body_bytes=decoded_len)
 
     def adapt(self, response, tool_names, notes=None):
         yield from transport.passthrough(response)
