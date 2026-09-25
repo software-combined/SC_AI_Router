@@ -94,6 +94,14 @@ MiMo V2.6 Pro. It is a separate field because `live_refresh` rewrites
 would not stick. `live_refresh` and `models add` leave the limit alone, and
 the router's hourly model feed cannot replace the value a release ships.
 
+A new row on the external Responses protocol inherits the shared stream
+lifecycle (`docs/architecture.md`, Plan 187) with no per-model code: large
+setup frames and reasoning wait until the attempt commits, and a transient provider
+failure before anything reaches the client is retried once when the
+request's tools are all client-run. Whether a row keeps `web_search` decides replay safety through
+the prepared tools, not through the row's name; a row that needs different
+stream behaviour is a code change, not a quirk.
+
 Picker labels follow the naming convention in `AGENTS.md` section 8
 (`<Vendor>: <Model> <Version?>`); `models add` and `live_refresh` produce
 conforming rows automatically. A hyphenated upstream version

@@ -9,7 +9,7 @@ import unittest
 from unittest import mock
 
 from ai_router import router as router_mod
-from ai_router import sse, stream_relay
+from ai_router import sse, stream_errors, stream_relay
 from tests.fakes import FakeUpstream, install_fake
 from tests.harness import (
     auth_file as _auth_file,
@@ -81,13 +81,14 @@ class UpstreamTerminalRetryTests(_ServerFixture):
             return item
         return answer
 
-    def _stream_response(self, responder):
+    def _stream_response(self, responder, model=MODEL,
+                         tools=({'type': 'custom', 'name': 'exec'},)):
         recorded = install_fake(self, responder)
         server = self._server()
         with mock.patch.object(router_mod, 'log_event') as logged:
             response = _post(server.server_port, '/test-token/responses',
-                             {'model': self.MODEL, 'input': [], 'stream': True,
-                              'tools': [{'type': 'custom', 'name': 'exec'}]})
+                             {'model': model, 'input': [], 'stream': True,
+                              'tools': list(tools)})
             self.assertEqual(response.status, 200)
             body = response.read()
         return body, recorded, logged.call_args_list
@@ -111,6 +112,27 @@ class UpstreamTerminalRetryTests(_ServerFixture):
         # A clean second attempt does not inherit the first attempt's verdict.
         self.assertNotIn('terminal_source', completed[0].kwargs)
         self.assertFalse(any(c.args[0] == 'request_failed' for c in logs))
+
+    def test_hosted_search_failure_before_output_is_not_replayed(self):
+        # The provider may have run the search before its first frame, so a
+        # replay could run it twice: the client keeps the provider's verdict.
+        search = ({'type': 'custom', 'name': 'exec'}, {'type': 'web_search'})
+        body, recorded, logs = self._stream_response(self._responder(
+            self._failed_attempt(),
+            self._upstream(self._created() + self._completed())),
+            model='z-ai/glm-5.3', tools=search)
+        self.assertEqual(len(recorded), 1)
+        self.assertEqual(body, self._created() + self._failed())
+        self.assertNotIn('stream_retry', [c.args[0] for c in logs])
+        failures = [c for c in logs if c.args[0] == 'request_failed']
+        self.assertEqual(failures[0].kwargs['terminal_source'], 'upstream')
+        self.assertEqual(failures[0].kwargs['stream_retry'], 0)
+        # The rule reads the prepared body, not the model: a row that strips
+        # the search tool before sending it keeps the retry.
+        _body, recorded, _logs = self._stream_response(self._responder(
+            self._failed_attempt(),
+            self._upstream(self._created() + self._completed())), tools=search)
+        self.assertEqual(len(recorded), 2)
 
     def test_provider_failure_after_a_delta_is_surfaced_not_retried(self):
         delta = sse.frame(json.dumps({'type': 'response.output_text.delta',
@@ -249,13 +271,13 @@ class UpstreamTerminalRetryTests(_ServerFixture):
         record = stream_relay.StreamRecord()
         failed = sse.frame(json.dumps({'type': 'response.failed', 'response': {
             'id': 'r1', 'error': {'code': 'overloaded'}}}).encode())
-        record.pending += self._created() + failed
-        record.held_terminal = True
+        held = list(stream_errors.events([self._created() + failed], {}))
+        self.assertTrue(all(record.hold.take(event) for event in held))
         handler = type('H', (), {'wfile': DeadClient()})()
         self.assertFalse(record.flush(handler))
         self.assertEqual(record.forwarded_bytes, 0)
         # The verdict never left, so the client holds no terminal frame at
         # all; the relay reports that absence rather than claiming upstream.
         self.assertIsNone(record.client_terminal)
-        self.assertTrue(record.held_terminal)
-        self.assertEqual(bytes(record.pending), self._created() + failed)
+        self.assertEqual(record.hold.terminal, 'upstream')
+        self.assertEqual(b''.join(record.hold.frames), self._created() + failed)
