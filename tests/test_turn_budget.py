@@ -10,10 +10,12 @@ from unittest import mock
 from ai_router import provider_defs, providers, turn_budget
 from ai_router.image_items import IMAGE_TRIM_NOTE
 from ai_router.registry import by_slug
-from ai_router.tool_adapter import SEARCH_REPEAT_NOTE, prepare_tools, stream_events
+from ai_router.tool_adapter import stream_events
+from ai_router.tool_history import SEARCH_REPEAT_NOTE
 from ai_router.turn_budget import OUTPUT_TRIM_NOTE, carried_tokens, fit, report_usage
 from tests.fakes import FakeUpstream
 from tests.harness import stub_credentials as _stub_credentials
+from tests.tool_stages import prepare_tools
 
 MODEL = 'meta/muse-spark-1.3-contributor'
 

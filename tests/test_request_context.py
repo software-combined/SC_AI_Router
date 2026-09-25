@@ -13,8 +13,7 @@ import unittest
 from unittest import mock
 
 from ai_router import (agent_handoffs, capabilities, catalogue, claude, model_refresh,
-                       providers, registry, request_context, subscription_discovery,
-                       tool_adapter)
+                       providers, registry, request_context, subscription_discovery)
 from tests.fakes import FakeUpstream, install_fake
 from tests.harness import (auth_file, isolated_home, post, start_server, test_state)
 from tests.test_claude_ingress import _messages
@@ -83,7 +82,7 @@ def _poison(stack):
                          (capabilities, 'EXTERNAL_MODELS'), (capabilities, 'IMAGE_INPUT_MODELS'),
                          (capabilities, 'REASONING_LEVELS'), (capabilities, 'EXCLUDED_EFFORTS')):
         stack.enter_context(mock.patch.object(module, name, Dead()))
-    for module in (registry, providers, tool_adapter, claude):
+    for module in (registry, providers, claude):
         stack.enter_context(mock.patch.object(module, 'by_slug', dead))
 
 

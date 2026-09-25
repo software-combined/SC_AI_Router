@@ -1,7 +1,7 @@
 import json
 import unittest
 
-from ai_router.tool_adapter import prepare_tools
+from tests.tool_stages import prepare_tools
 
 
 def pair_payload(tools):

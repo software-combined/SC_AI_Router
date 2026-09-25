@@ -4,15 +4,13 @@ import json
 import time
 from . import (capabilities, compaction as comp, local_services, agent_handoffs,
                provider_defs, request_context, transport, turn_budget, jev_compaction)
-from .standalone_outputs import materialize_outputs, portable_replay
-from . import subscription_history, context_recovery, subscription_roster
-from .capabilities import CANONICAL_ORDER, check_row_effort
-from .image_items import note_images
+from . import outbound, subscription_roster
+from .capabilities import CANONICAL_ORDER
 from .errors import PreparationError, SubscriptionRequired, UnknownModel
 from .registry import by_slug, near_miss, upstream_id_for
 from .events import log_event
 from .discovered import remember
-from .tool_adapter import prepare_tools, snoop_response_identity, stream_events, ToolEvents, SEARCH_NAME
+from .tool_adapter import snoop_response_identity, stream_events, ToolEvents
 
 # Transport leaves live in transport.py (Plan 062); these aliases keep
 # existing importers working until the protocol split completes.
@@ -41,12 +39,8 @@ def _passthrough(response):
     yield from passthrough(response)
 
 
-def reject_opaque_agent_items(items):
-    """Fail closed on unreadable encrypted briefs before any dispatch."""
-    if isinstance(items, list) and any(comp.has_opaque_agent_item([item]) and not agent_handoffs.recoverable_agent_message(item) for item in items):
-        raise PreparationError(
-            'unsupported encrypted agent instructions; '
-            'resend the assignment as plain text')
+# router.py guards compaction with this name; the external stages use the same rule.
+reject_opaque_agent_items = outbound.contain
 
 
 class SubscriptionProvider:
@@ -75,21 +69,8 @@ class SubscriptionProvider:
         # The URL path token is the loopback auth; Codex >=0.153.4 omits the
         # subscription Authorization header, so forward client headers unchanged.
         fwd = {k: v for k, v in headers.items() if k.lower() not in HOP_HEADERS}
-        normalized = (subscription_history.normalize(portable_replay(payload, SEARCH_NAME))
-                      if path in ('/responses', '/responses/compact') else payload)
-        if path == '/responses':
-            normalized = context_recovery.normalize(normalized)
-        history_changed = normalized is not payload
-        payload = normalized
-        try:
-            names = set()
-            hinted = False
-            if path == '/responses':
-                names = agent_handoffs.add_plaintext_tools(payload)
-                hinted = agent_handoffs.hint_full_lanes(payload)
-        except ValueError as exc:
-            raise PreparationError(str(exc)) from exc
-        if names or history_changed or hinted:
+        payload, names, changed = outbound.project_subscription(payload, path)
+        if changed:
             fwd = {k: v for k, v in fwd.items() if k.lower() not in ('content-encoding', 'accept-encoding')}
             fwd['Accept-Encoding'] = 'identity'
             raw_body = json.dumps(payload).encode()
@@ -136,63 +117,10 @@ class ExternalResponsesProvider:
         # Before any rewrite: what this client's thread carries. The slim below
         # is invisible upstream, so provider usage alone never moves the trigger.
         carried = turn_budget.carried_tokens(payload, decoded_len) if decoded_len else None
-        # Contain before anything else: an opaque brief must never reach
-        # credential lookup or upstream dispatch, where a child would infer
-        # its assignment from inherited context instead.
-        reject_opaque_agent_items(payload.get('input', []))
-        if path == '/responses':
-            payload = context_recovery.normalize(payload)
-        # Standalone outputs (no call_id) are delegated messages, not orphans.
-        payload['input'] = materialize_outputs(payload.get('input', []))
-        # Scrub before prepare_tools: fragments KeyError its indexing, and
-        # tool_search_output items (released-tool discovery) are never scrubbed.
-        payload['input'] = comp.scrub_tool_fragments(payload.get('input', []))
-        try:
-            aliases = agent_handoffs.add_plaintext_tools(payload)
-            agent_handoffs.hint_full_lanes(payload)
-            tool_names = prepare_tools(payload, entry)
-            tool_names.handoffs = aliases
-            rewritten = comp.strip_reasoning_blobs(comp.rewrite_input(payload.get('input', [])))
-        except ValueError as exc:
-            raise PreparationError(str(exc))
-        keep_images = 'image' in getattr(entry, 'modalities', ())
-        # One expression owns the wire rule: images pass only for an
-        # image-capable row without drop_images; every other row gets the
-        # visible note, including text-only rows with historical images.
-        payload['input'] = (rewritten if keep_images and not getattr(entry, 'drop_images', False)
-                            else note_images(rewritten))
-        reasoning = payload.get('reasoning')
-        try:
-            check_row_effort(entry,
-                             reasoning.get('effort') if isinstance(reasoning, dict) else None)
-        except ValueError as exc:
-            raise PreparationError(str(exc))
-        payload.pop('service_tier', None)
-        # ChatGPT access-program enrolment is not an external-provider option.
-        payload.pop('access_programs', None)
-        if entry is None:
-            # Defence in depth: select()/owns() already refuses a slug that is
-            # not a matching registry row, so this only fires for a direct
-            # prepare() call and never for a routed request.
-            raise PreparationError(f'unknown model: {model}')
-        # The client id is the registry slug; the provider may expect another
-        # id for the same model (Plan 153).
-        payload['model'] = upstream_id_for(entry)
-        if getattr(entry, 'provider_prefs', None):
-            payload['provider'] = dict(entry.provider_prefs)
-        limit = entry.max_output_tokens
+        payload, tool_names = outbound.project_external(payload, path, model, entry)
+        cap = payload['max_output_tokens']
         window = getattr(entry, 'context_window', 0) or 0
         carried = min(carried, window) if carried and window else carried
-        if window:  # reservation counts against context; keep half for input
-            limit = min(limit, window // 2)
-        # Codex omits the cap and compacts at 90% of context. Its remaining
-        # headroom must fit our default output, not the provider's maximum.
-        default = min(32000, entry.max_output_tokens)
-        if window:
-            default = min(default, window - window * 9 // 10)
-        requested = payload.get('max_output_tokens')
-        cap = min(requested, limit) if requested else default
-        payload['max_output_tokens'] = cap
         # Context size stays the provider's call: a chars-per-token estimate
         # refused long turns the client still had room for.
         headers = dict(self.defn.request_headers)

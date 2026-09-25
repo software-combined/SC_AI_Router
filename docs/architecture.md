@@ -28,10 +28,13 @@ subscription_discovery / subscription_catalogue + catalogue / models /
 live_refresh / apply_catalogue (client projections and native discovery)
   |
 tool_runs (the pairing model, on history_items alone) + agent_handoffs /
-compaction / tool_adapter / tool_aliases / discovered (request normalization)
+compaction / tool_adapter / tool_history / tool_aliases / discovered (request
+normalization)
 decisions (typed-decision wire client, imports only provider_defs)
   |
 jev_compaction (opt-in evidence selection, consumes decisions/compaction)
+  |
+outbound (each Responses route's ordered stage list over the stages above)
   |
 providers (Responses adapters) + claude (Messages adapters)
   |
@@ -82,6 +85,22 @@ switch boundary's run check, the custom-pair call map and Jev's candidate
 pairing keep their own id rules (any truthy id and any later output; the last
 custom call; ambiguous ids pinned), so moving them onto `pairs` would be a
 behaviour change with its own review, not part of the move.
+`outbound.py` owns the outgoing Responses projection (Plan 183 phase 2).
+`EXTERNAL_STAGES` and `SUBSCRIPTION_STAGES` are tuples of named stages that
+run in order over one `Projection`: the path, the client's model id, the
+request's captured row, and what a later stage or the adapter reads back.
+`tests/test_outbound.py` pins both orders, so a reorder is a visible edit. A
+subscription compaction request runs only the two replay stages. The adapters
+resolve the row, then keep destination, credentials, headers, body encoding
+and the external turn-size fit. `outbound.contain` is the one opaque-brief
+rule: the first external stage and `router.py`'s compaction guard (through the
+`providers.reject_opaque_agent_items` name) both apply it.
+`tool_adapter.prepare_tools(payload, row)` shapes the declarations only and
+returns the kind and wire-name maps. `tool_history.py` then rewrites the
+external tool history against them: custom pairs, discovery listings,
+tool-search items, call renames and `json_text` arguments, output
+annotations, then the model-switch boundary. Neither looks a row up. Stages
+still edit the payload in place; phase 3 makes them copy-on-write.
 `subscription_history.py` owns the pure outgoing projection of replayed
 reasoning and the router's own compaction summary (sent as readable text) for
 subscription Responses requests; it never edits persisted client history.
@@ -134,7 +153,7 @@ slug-to-row snapshot before provider selection. It returns a frozen
 `Resolved`: the request id, the resolved slug, its row and that snapshot.
 Every later decision takes its row from `Resolved`, never from
 `registry.by_slug`. That covers the owner, the upstream id, the protocol pair,
-the tool quirks (`tool_adapter.prepare_tools(payload, row)`), effort
+the tool and history quirks (`outbound`'s tool stages), effort
 (`capabilities.check_row_effort`), images, the output cap, compaction budgets,
 the Claude alias and the helper-fallback twin. The next request captures the
 new registry. `Prepared.context` carries it to the relay, and the pending
@@ -253,7 +272,7 @@ them while the child installer retains its own installation lock.
   rendering/reload half lives in `packaging/launchd.py` with the darwin backend
   (`packaging/platforms/darwin.py`), landed by Plan 103.
 - `ai_router/providers.py` holds the Responses adapters and dispatch;
-  failure policy lives in `upstream.py`, page markup in `setup_page.py`,
+  the outgoing projection lives in `outbound.py`, failure policy in `upstream.py`, page markup in `setup_page.py`,
   shared transport in `transport.py`, and dispatch in `protocols/`.
 - `ai_router/subscription_discovery.py` fetches Codex's native subscription
   catalogue; `subscription_catalogue.py` validates it and composes the
