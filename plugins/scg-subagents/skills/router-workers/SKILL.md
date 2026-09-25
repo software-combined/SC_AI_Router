@@ -1,19 +1,21 @@
 ---
 name: router-workers
-description: Run a bounded task on a router model (the SCG Router's OpenRouter models, such as DeepSeek, GLM, MiMo, Muse, Kimi, Qwen, Gemini, Grok or the GPT twins) as an isolated headless Claude Code worker with shell and file tools. Use when the user asks to use or delegate to one of those models, to fan work out to other or cheaper models, or when optimal-subagents picks a router model the current client cannot spawn itself, as in the Claude desktop app.
+description: Run a bounded task on a router model (the SCG Router's OpenRouter models, such as DeepSeek, GLM, MiMo, Muse, Kimi, Qwen, Gemini, Grok or the GPT twins) as an isolated headless Claude Code worker with shell and file tools. Only for a Claude desktop Code session in the subscription profile (the first-party profile that talks to Anthropic directly). Use when the user asks to use or delegate to one of those models, to fan work out to other or cheaper models, or when optimal-subagents picks a router model that session cannot spawn itself.
 ---
 
 # Router workers
 
-A Claude desktop session talks to Anthropic directly, so its own subagents can
-only run Claude models. The local SCG Router serves the approved OpenRouter
-models to Claude Code, so this skill starts a separate headless Claude Code
-process on the chosen model and returns one JSON result. The worker works in
-the folder you give it, with shell and file tools; you stay the orchestrator
-and verify what it returns.
+This skill is only for a Claude desktop Code session in the subscription
+profile: the first-party profile that talks to Anthropic directly, so its own
+subagents can only run Claude models. The local SCG Router serves the
+approved OpenRouter models to Claude Code, so this skill starts a separate
+headless Claude Code process on the chosen model and returns one JSON result.
+The worker works in the folder you give it, with shell and file tools; you
+stay the orchestrator and verify what it returns.
 
-A client that can already spawn router models as native subagents, such as
-Codex, should keep doing that through the
+A session that can already spawn router models as native subagents, such as
+Codex, an attached terminal Claude Code session, or a Claude desktop session
+in the gateway profile, should keep doing that through the
 [tool guide](../optimal-subagents/references/tool-guide.md). The guide's
 runtime-neutral rules apply here too: no secrets in a brief, and record the
 requested and served model for every worker.
