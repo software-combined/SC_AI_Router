@@ -7,23 +7,29 @@ a later client contract test or live gate owns any divergence.
 Plan 155: the name is the constant the definition table exports, and the
 family serves no discovery listing, so a GET row can never be routed here.
 """
-from .. import provider_defs, providers
+from .. import provider_defs, providers, request_context
 
 
 class _Policy:
     name = provider_defs.RESPONSES
     listing = None
 
-    def select_provider(self, model, path, state, mode, openai_models=None):
+    def resolve(self, model):
+        """This request's snapshot: Responses ids are registry slugs as sent."""
+        return request_context.resolve(model, request_context.capture())
+
+    def select_provider(self, model, path, state, mode, openai_models=None,
+                        catalogue=None):
         if openai_models is None:
             openai_models = state.get('openai_models', [])
         return providers.select(
             model, path, openai_models, mode,
             region=state.get('openrouter_region', 'global'),
-            allowed=state.get('allowed_models'))
+            allowed=state.get('allowed_models'), catalogue=catalogue)
 
-    def compaction_call(self, provider, model, path, payload):
-        return providers.compaction_call(provider, model, path, payload)
+    def compaction_call(self, provider, model, path, payload, context=None):
+        return providers.compaction_call(provider, model, path, payload,
+                                         row=None if context is None else context.row)
 
 
 POLICY = _Policy()

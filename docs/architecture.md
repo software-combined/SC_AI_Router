@@ -13,8 +13,9 @@ events, history_items (leaves: no module-level local imports; events' one
 call-time state lookup is the only exception)
   ^
   |
-registry / capabilities (model facts) + wire_shape (the learnt wire
-contract): stdlib plus the provider table only
+registry / capabilities (model facts) + request_context (one request's
+registry snapshot) + wire_shape (the learnt wire contract): stdlib plus the
+provider table and registry only
   ^
   |
 transport (Prepared, hop-header rules, raw stream, header relay) + upstream
@@ -126,6 +127,24 @@ families stay local rather than coming from `history_items`: they map only
 the client-run calls that expect an output, including `computer_call_output`,
 while the vocabulary's call set also holds server-side calls that never get
 one, and the import would widen this layer.
+`request_context.py` owns the request's one registry read (Plan 188).
+A model refresh (`model_refresh.apply`) can swap the registry while a request
+is in flight. So the protocol policy's `resolve` captures one read-only
+slug-to-row snapshot before provider selection. It returns a frozen
+`Resolved`: the request id, the resolved slug, its row and that snapshot.
+Every later decision takes its row from `Resolved`, never from
+`registry.by_slug`. That covers the owner, the upstream id, the protocol pair,
+the tool quirks (`tool_adapter.prepare_tools(payload, row)`), effort
+(`capabilities.check_row_effort`), images, the output cap, compaction budgets,
+the Claude alias and the helper-fallback twin. The next request captures the
+new registry. `Prepared.context` carries it to the relay, and the pending
+fallback plan retargets it in place, so the twin keeps the same request id. A
+native id with no registry row resolves with `row=None` and goes out as the
+client spelled it. `request_started` and the final record share the
+`request_id`. It is a random id, not derived from request content.
+`agent_handoffs.steer_plaintext` still reads the live registry when it
+rewrites a spawn target on the response side; that moves with the handoff
+contract work.
 
 1. `provider_defs.py` owns every upstream fact (host, endpoint prefixes, key
    location, model catalogue, key-info endpoint, failure dialect) and imports

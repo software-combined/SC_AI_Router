@@ -5,6 +5,7 @@ subscription slug, so an exhausted allowance must either keep the existing
 503 (flag off) or be answered by the registry's OpenRouter twin (flag on),
 and nothing else may be redirected.
 """
+import dataclasses
 import json
 import os
 import tempfile
@@ -69,7 +70,7 @@ class HelperTurnTests(unittest.TestCase):
 
     def test_only_enabled_helper_turns_with_a_twin_get_a_plan(self):
         base = dict(state={'openai_helper_fallback': True},
-                    prepared=SimpleNamespace(provider='openai'),
+                    prepared=SimpleNamespace(provider='openai', context=None),
                     path='/responses', payload={'model': HELPER},
                     raw_body=b'{}', headers=HEADERS, credentials=object())
         self.assertIsNotNone(subscription_fallback.plan(**base))
@@ -256,7 +257,7 @@ class RefusedHelperTurnTests(unittest.TestCase):
     def test_snapshot_excluded_twin_gets_no_plan(self):
         self._snapshot({'z-ai/glm-5.3'})
         base = dict(state={'openai_helper_fallback': True},
-                    prepared=SimpleNamespace(provider='openai'),
+                    prepared=SimpleNamespace(provider='openai', context=None),
                     path='/responses', payload={'model': HELPER},
                     raw_body=b'{}', headers=HEADERS, credentials=object())
         self.assertIsNone(subscription_fallback.plan(**base))
@@ -273,11 +274,10 @@ class RefusedHelperTurnTests(unittest.TestCase):
         # The twin row rejects the carried effort, so prepare raises first.
         recorded = install_fake(self, self._refusal())
         server = self._server(openai_helper_fallback=True)
-        with mock.patch.dict('ai_router.capabilities.REASONING_LEVELS',
-                             {'openai/gpt-6-luna': ['low']}):
+        twin = dataclasses.replace(by_slug('openai/gpt-6-luna'), reasoning=('low',))
+        with mock.patch.dict('ai_router.registry.BY_SLUG', {twin.slug: twin}):
             with self.assertLogs('codex_router', level='INFO') as logs:
-                response = self._turn(server, HEADERS,
-                                      payload={'reasoning': {'effort': 'max'}})
+                response = self._turn(server, HEADERS, payload={'reasoning': {'effort': 'max'}})
         self.assertEqual(response.status, 503)
         self.assertEqual(response.getheader('Retry-After'), '2')
         response.read()

@@ -517,6 +517,11 @@ window, and use per-request ratios, never ratios of unrelated
 percentiles. Paid direct-versus-router comparisons need separate
 explicit authority.
 
+`request_started` and the request's final record carry the same
+`request_id`, a random 32-character hex id. Use it to join the two lines
+for one request, including a helper turn answered by the fallback twin. It
+is not derived from anything the client sent.
+
 ## Failed streams (why the provider ended it)
 
 `request_failed` records a terminal event the upstream sent inside a `200`

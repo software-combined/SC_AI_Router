@@ -118,7 +118,7 @@ def _copy_prepared(prepared, body):
     return transport.Prepared(prepared.host, prepared.path, headers,
                                body, prepared.tool_names, prepared.provider,
                                prepared.fallback, prepared.output_cap,
-                               prepared.context_tokens)
+                               prepared.context_tokens, prepared.context)
 
 
 def maybe_retry_unattributable(described, response, raw, metrics, provider,
