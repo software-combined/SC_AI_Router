@@ -12,7 +12,8 @@ encoding and the turn-size fit.
 from dataclasses import dataclass, field
 from typing import Any
 
-from . import agent_handoffs, compaction as comp, context_recovery, subscription_history
+from . import (agent_handoffs, context_recovery, external_history, history_items,
+               subscription_history, tool_runs)
 from .capabilities import check_row_effort
 from .errors import PreparationError
 from .image_items import note_images
@@ -35,8 +36,8 @@ class Projection:
 def contain(items):
     """Fail closed on unreadable encrypted briefs before any dispatch."""
     if isinstance(items, list) and any(
-            comp.has_opaque_agent_item([item])
-            and not agent_handoffs.recoverable_agent_message(item)
+            history_items.has_encryption_marked_agent_item([item])
+            and not history_items.recoverable_agent_message(item)
             for item in items):
         raise PreparationError(
             'unsupported encrypted agent instructions; '
@@ -67,7 +68,7 @@ def materialize_standalone(payload, p):
 def scrub_fragments(payload, p):
     # Scrub before prepare_tools: fragments KeyError its indexing, and
     # tool_search_output items (released-tool discovery) are never scrubbed.
-    return _set(payload, 'input', comp.scrub_tool_fragments(payload.get('input', [])))
+    return _set(payload, 'input', tool_runs.scrub_tool_fragments(payload.get('input', [])))
 
 
 def add_handoff_tools(payload, p):
@@ -91,11 +92,11 @@ def rewrite_history(payload, p):
 
 
 def compaction_text(payload, p):
-    return _set(payload, 'input', comp.rewrite_input(payload.get('input', [])))
+    return _set(payload, 'input', external_history.rewrite_input(payload.get('input', [])))
 
 
 def strip_reasoning(payload, p):
-    return _set(payload, 'input', comp.strip_reasoning_blobs(payload['input']))
+    return _set(payload, 'input', external_history.strip_reasoning_blobs(payload['input']))
 
 
 def note_media(payload, p):

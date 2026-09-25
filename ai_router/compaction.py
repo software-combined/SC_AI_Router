@@ -13,15 +13,8 @@ COMPACT_PROMPT = ('You are performing a CONTEXT CHECKPOINT COMPACTION. Create a 
     'tool results verbatim so the next model can repeat them exactly. Be concise and structured.')
 import base64
 import secrets
-from .agent_handoffs import recoverable_agent_message
-from .compaction_result import IncompleteSummary as IncompleteSummary, extract_summary as extract_summary
-from .history_portability import CALL_TYPES as CALL_TYPES, OUTPUT_TYPES as OUTPUT_TYPES, _block_text as _block_text, user_message_item as user_message_item
-# Plan 183 phase 1 moved these to history_items and tool_runs; the old names
-# stay importable here until phase 2 re-points their importers.
-from .history_items import (REASONING_TEXT_BLOCKS as REASONING_TEXT_BLOCKS,
-                            has_encryption_marked_agent_item as has_opaque_agent_item,
-                            reasoning_text as _reasoning_text)
-from .tool_runs import _call_complete as _call_complete, scrub_tool_fragments as scrub_tool_fragments
+from .history_items import (block_text, has_encryption_marked_agent_item, reasoning_text,
+                            recoverable_agent_message, user_message_item)
 PREFIX = 'ocx1:'
 TRIGGER_TYPE = 'compaction_trigger'
 SUMMARY_PREFIX = ('Another language model started to solve this problem and '
@@ -104,40 +97,13 @@ def build_compact_v1_output(user_messages, summary):
     selected.reverse()
     return [user_message_item(m) for m in selected] + [user_message_item(SUMMARY_PREFIX + '\n' + summary.strip())]
 
-def rewrite_input(items):
-    """Replace compaction items with visible text; never drop history silently."""
-    if not isinstance(items, list):
-        return items
-    rewritten = []
-    for item in items:
-        if is_compaction_item(item):
-            rewritten.append(user_message_item(compaction_text(item)))
-        else:
-            rewritten.append(item)
-    return rewritten
-
-
-def strip_reasoning_blobs(items):
-    """Strip OpenAI-owned reasoning blobs; keep items that still hold readable text."""
-    if not isinstance(items, list):
-        return items
-    out = []
-    for item in items:
-        if (isinstance(item, dict) and item.get('type') == 'reasoning'
-                and 'encrypted_content' in item):
-            item = {k: v for k, v in item.items() if k != 'encrypted_content'}
-            if not _reasoning_text(item):
-                continue
-        out.append(item)
-    return out
-
 def _item_text(item):
     if not isinstance(item, dict):
         return ''
     kind = item.get('type')
     if kind == 'message':
         role = item.get('role', 'user')
-        return f'{role}: {_block_text(item.get("content", ""))}'.strip()
+        return f'{role}: {block_text(item.get("content", ""))}'.strip()
     if kind in ('function_call', 'custom_tool_call', 'apply_patch_call'):
         label = item.get('name', 'apply_patch' if kind == 'apply_patch_call' else '')
         if item.get('namespace'):
@@ -147,13 +113,13 @@ def _item_text(item):
         label = f" {item['name']}" if item.get('name') else ''
         for key in ('output', 'result', 'content', 'text', 'data'):
             if item.get(key):
-                return f'tool result{label}: ' + _block_text(item[key])[:2000]
+                return f'tool result{label}: ' + block_text(item[key])[:2000]
         return ''
     if kind == 'reasoning':
         blob = item.get('encrypted_content')
         if isinstance(blob, str) and blob:
             return ''  # Real provider blob; opaque content never reaches summaries.
-        text = _reasoning_text(item)
+        text = reasoning_text(item)
         return f'reasoning: {text}'[:2000] if text else ''
     if is_compaction_item(item):
         return compaction_text(item)
@@ -164,10 +130,13 @@ def _item_text(item):
         readable = recoverable_agent_message(item)
         if readable:
             item = {**item, 'content': readable}
-        elif has_opaque_agent_item([item]):
+        elif has_encryption_marked_agent_item([item]):
             return ''
         author = item.get('author', 'agent') + (f' to {item["recipient"]}' if item.get('recipient') else '')
-        text = _block_text(item.get('content', '')).strip() + ('\nEncrypted content was withheld from this external model. The result may be incomplete; request a plain-text resend if needed.' if readable else '')
+        text = block_text(item.get('content', '')).strip()
+        if readable:
+            text += ('\nEncrypted content was withheld from this external model. '
+                     'The result may be incomplete; request a plain-text resend if needed.')
         return f'{author}: {text}'.strip()
     return ''
 

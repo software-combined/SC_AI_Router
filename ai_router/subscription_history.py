@@ -13,7 +13,8 @@ The retry repair below stays as the fallback for any blob the backend still
 rejects.
 """
 from . import compaction as comp
-from .history_portability import user_message_item
+from .external_history import strip_reasoning_blobs
+from .history_items import user_message_item
 
 
 def normalize(payload):
@@ -79,7 +80,7 @@ def repair_input(items):
            and not removable_encrypted(item) for item in items):
         return None
     repaired = []
-    for item in comp.strip_reasoning_blobs(items):
+    for item in strip_reasoning_blobs(items):
         if (isinstance(item, dict) and comp.is_compaction_item(item)
                 and 'encrypted_content' in item):
             item = user_message_item(comp.compaction_text(item))

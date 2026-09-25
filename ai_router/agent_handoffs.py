@@ -3,7 +3,7 @@ from copy import deepcopy
 import json
 import uuid
 
-from . import history_items, provider_defs, sse, transport
+from . import provider_defs, sse, transport
 from .registry import by_slug
 
 NATIVE_NAMESPACE = 'collaboration'
@@ -299,15 +299,6 @@ def steer_event(event, names):
         if steered is not response:
             mapped = {**mapped, 'response': steered}
     return mapped
-
-
-# Plan 183 phase 1 moved the readable agent-message predicates to
-# history_items; these names stay importable until phase 2 re-points callers.
-_readable_block = history_items._readable_block
-_encrypted_block = history_items.holds_encrypted_payload
-inbound_agent_message = history_items.inbound_agent_message
-recoverable_agent_message = history_items.recoverable_agent_message
-plaintext_agent_message = history_items.plaintext_agent_message
 
 
 def adapt_response(response, names, notes=None):

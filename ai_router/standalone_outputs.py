@@ -14,9 +14,8 @@ through untouched. No `namespace` is set on either member: OpenRouter
 same projection: a terminal assistant message is also rejected as prefill by
 Sonnet. Readable peer text stays tool-level data, never a user instruction.
 """
-from .compaction import OUTPUT_TYPES
-from .agent_handoffs import plaintext_agent_message, recoverable_agent_message
 from .errors import PreparationError
+from .history_items import OUTPUT_TYPES, plaintext_agent_message, recoverable_agent_message
 from .history_portability import portable_history
 
 TEXT_KEYS = ('output', 'result', 'content', 'text', 'data')
