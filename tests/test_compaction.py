@@ -237,6 +237,12 @@ class TranscriptBoundaryTests(unittest.TestCase):
         # A function call still renders its exact line.
         self.assertIn('assistant tool call send_message: {"text":"hi"}', text.splitlines())
 
+    def test_native_tool_search_call_and_output_survive_summary(self):
+        call = {'type': 'tool_search_call', 'call_id': 'ts1', 'execution': 'client', 'arguments': {'query': 'helper docs', 'limit': 5}}
+        output = {'type': 'tool_search_output', 'call_id': 'ts1', 'execution': 'client', 'tools': [{'type': 'namespace', 'name': 'mcp__synthetic_docs', 'tools': [{'type': 'function', 'name': 'lookup'}]}]}
+        text = transcript_for_summary([{'type': 'message', 'role': 'user', 'content': 'find the helper'}, call, output])
+        self.assertTrue(all(value in text for value in ('assistant tool search call:', 'helper docs', 'tool search result:', 'mcp__synthetic_docs', 'lookup')))
+
 
 class ReasoningAndShapeTests(unittest.TestCase):
     def test_reasoning_plaintext_kept_encrypted_dropped(self):

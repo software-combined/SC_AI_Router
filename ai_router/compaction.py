@@ -12,6 +12,7 @@ COMPACT_PROMPT = ('You are performing a CONTEXT CHECKPOINT COMPACTION. Create a 
     'critical data or tool results needed to continue. Quote exact values, codes, names and '
     'tool results verbatim so the next model can repeat them exactly. Be concise and structured.')
 import base64
+import json
 import secrets
 from .history_items import (block_text, has_encryption_marked_agent_item, reasoning_text,
                             recoverable_agent_message, user_message_item)
@@ -101,6 +102,13 @@ def _item_text(item):
     if not isinstance(item, dict):
         return ''
     kind = item.get('type')
+    if kind == 'tool_search_call':
+        return ('assistant tool search call: ' + json.dumps(
+            item.get('arguments', item.get('query', '')), ensure_ascii=False,
+            default=str)[:2000])
+    if kind == 'tool_search_output':
+        return ('tool search result: ' + json.dumps(
+            item.get('tools', ''), ensure_ascii=False, default=str)[:2000])
     if kind == 'message':
         role = item.get('role', 'user')
         return f'{role}: {block_text(item.get("content", ""))}'.strip()
