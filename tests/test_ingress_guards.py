@@ -10,7 +10,6 @@ import json
 import socket
 import threading
 import unittest
-from unittest import mock
 from compression import zstd
 from ai_router import router as router_mod
 from tests.fakes import FakeUpstream, install_fake
