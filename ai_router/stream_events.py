@@ -14,7 +14,9 @@ cannot place is `OPAQUE`, which the attempt forwards and so commits.
 - `ANSWER`: text, tool-call and other output items the client keeps.
 - `FAILURE`: `response.failed`, `response.incomplete` or `error`; the verdict
   a retry may replace, with its writer in `source`.
-- `COMPLETED`: `response.completed`, which ends the attempt as a success.
+- `COMPLETED`: a valid `response.completed`, which ends the attempt as a
+  success. A malformed or error-bearing completion is `FAILURE`, so it can
+  settle as a failure instead of silently becoming success.
 - `OPAQUE`: malformed data, an unknown type, or a setup shape outside the
   rule above (output present, a finished status, no response object).
 """
@@ -51,6 +53,7 @@ FAILURE_TYPES = frozenset(('response.failed', 'response.incomplete', 'error'))
 SETUP_ORDER = ('response.created', 'response.in_progress')
 _ITEM_TYPES = frozenset(('response.output_item.added', 'response.output_item.done'))
 _UNFINISHED = frozenset((None, 'queued', 'in_progress'))
+_COMPLETED_STATUSES = frozenset((None, 'completed'))
 
 
 class StreamEvent:
@@ -59,17 +62,20 @@ class StreamEvent:
     `frame` is the exact bytes to forward: the provider's own unless the
     documented refusal rewrite in `stream_errors` replaced them. `native` is
     the frame's own `type`, `source` names the writer of a `FAILURE` frame,
-    and `output` is True when that terminal carries output items.
+    and `output` is True when that terminal carries output items. `outcome`
+    is the `outcome.Outcome` a terminal frame settles, else None.
     """
 
-    __slots__ = ('frame', 'kind', 'native', 'source', 'output')
+    __slots__ = ('frame', 'kind', 'native', 'source', 'output', 'outcome')
 
-    def __init__(self, frame, kind, native=None, source=None, output=False):
+    def __init__(self, frame, kind, native=None, source=None, output=False,
+                 outcome=None):
         self.frame = frame
         self.kind = kind
         self.native = native
         self.source = source
         self.output = output
+        self.outcome = outcome
 
 
 def _item_type(event):
@@ -89,6 +95,24 @@ def _unstarted(event):
             and status in _UNFINISHED)
 
 
+def _completed_lifecycle(event):
+    """A completion is success only when its response says it completed."""
+    response = event.get('response')
+    if not isinstance(response, dict) or not response or 'error' in event:
+        return FAILURE
+    if 'error' in response or response.get('status') == 'failed':
+        return FAILURE
+    output = response.get('output')
+    if output is not None and (
+            not isinstance(output, list)
+            or not all(isinstance(item, dict) for item in output)):
+        return FAILURE
+    status = response.get('status')
+    return (COMPLETED if status is None or (isinstance(status, str)
+                                           and status in _COMPLETED_STATUSES)
+            else FAILURE)
+
+
 def classify(data, event):
     """The lifecycle kind of one frame from its data and parsed event.
 
@@ -105,7 +129,7 @@ def classify(data, event):
     if kind in FAILURE_TYPES:
         return FAILURE
     if kind == 'response.completed':
-        return COMPLETED
+        return _completed_lifecycle(event)
     if kind in SETUP_ORDER:
         return SETUP if _unstarted(event) else OPAQUE
     if kind in ANSWER_FRAME_TYPES:
