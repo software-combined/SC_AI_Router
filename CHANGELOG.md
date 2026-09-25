@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- External compaction summaries now include native tool-search calls and the
+  released tool definitions they return, alongside native file edits.
+
 ## 0.6.125
 
 - An OpenRouter Responses stream that fails transiently before any byte reaches
