@@ -35,8 +35,12 @@ class CompactTriggerProviderTests(unittest.TestCase):
         provider = ExternalResponsesProvider(provider_defs.OPENROUTER)
         seen = {}
 
-        def fake_summarize(model, key, items, row=None):
+        def fake_summarize(_model, _key, items, row=None, context=None,
+                           allowed=None):
             seen['items'] = items
+            seen['row'] = row
+            seen['context'] = context
+            seen['allowed'] = allowed
             return summary
 
         provider.summarize = fake_summarize
@@ -44,14 +48,20 @@ class CompactTriggerProviderTests(unittest.TestCase):
 
     def test_trigger_returns_exactly_one_decodable_item(self):
         provider, seen = self._provider()
+        context = SimpleNamespace(catalogue={'snapshot': 'kept'})
+        row = SimpleNamespace(slug='active/model')
         out = provider.compact_trigger('z-ai/glm-5.3-flash', {
             'input': [{'type': 'message', 'role': 'user', 'content': 'do it'},
-                      {'type': 'compaction_trigger'}]}, 'key')
+                      {'type': 'compaction_trigger'}]}, 'key', row=row,
+                             context=context, allowed={'active/model'})
         self.assertEqual(len(out), 1)
         self.assertEqual(out[0]['type'], 'compaction')
         self.assertTrue(out[0]['id'].startswith('cmp_'))
         self.assertEqual(decode_summary(out[0]['encrypted_content']), 'handoff done')
         self.assertNotIn({'type': 'compaction_trigger'}, seen['items'])
+        self.assertIs(seen['row'], row)
+        self.assertIs(seen['context'], context)
+        self.assertEqual(seen['allowed'], {'active/model'})
 
     def test_trigger_without_user_messages_is_409_shape(self):
         provider, _ = self._provider()

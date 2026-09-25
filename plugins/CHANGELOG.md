@@ -1,5 +1,12 @@
 # Changelog
 
+## scg-review 0.4.14 and scg-subagents 0.5.13 - 2026-09-25
+
+- Require `xiaomi/mimo-v2.6-pro` at `xhigh` for every pre-commit review pass,
+  including simplification, correctness, quality and adversarial review. The
+  exact model and effort have no fallback; an unavailable route blocks that
+  pass instead of substituting a reviewer.
+
 ## scg-subagents 0.5.12 - 2026-09-25
 
 - State that `router-workers` serves only a Claude desktop Code session in
