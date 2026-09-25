@@ -1,5 +1,34 @@
 # Compatibility
 
+## Router 0.6.125 beta candidate, 25 September 2026 AEST
+
+The request-size candidate passed 1,876 offline tests (three skips), compile,
+source-limit, policy, packaging and secret checks. Its runtime fingerprint was
+`4fe5e3280a2c88b62b0900e656648a9336abdb8f1367e8721e16610988658680`.
+These are candidate checks; installed acceptance is recorded separately.
+
+Codex desktop `26.917.62051`, bundled CLI `0.155.0-alpha.16.3`, completed a
+synthetic 18.9 MB continuation through the actual client and candidate router:
+three scripted sends, two completed turns, one tool call, and all eight images
+and the tool result preserved. The old router refused before sending upstream.
+No model was called; this does not establish a provider's maximum request size.
+
+Bounded live tool round trips used the same Codex client and Claude Code
+`2.1.223`. Codex passed on `deepseek/deepseek-v4.1-flash` and subscription
+`gpt-6-luna`; Claude Code passed on DeepSeek. Each used two HTTP 200 requests,
+one tool execution and the exact returned marker. Original upstream SSE
+reported the requested model in each leg. All requested low effort; served
+effort was unverified. Each leg capped requests at four and input at 512 KiB,
+with a 30,000-token usage budget that stops later calls; already-started calls
+may finish beyond it. External and Anthropic output was capped at 2,048 tokens.
+
+The fresh Claude subscription leg did not pass: Anthropic returned HTTP 401.
+A one-request diagnostic confirmed an expired OAuth token; no tool ran or
+model identity was returned. The client's sign-in was not changed. Native
+header/body preservation remains covered offline. This beta relieves the Codex
+size refusal; it does not close the remaining shared recovery, native handoff
+or diagnostics work. Stable publication remains the owner's decision after use.
+
 ## Plan 187 stream retry candidate, 25 September 2026 AEST
 
 Candidate evidence only: the 0.6.125 stream retry change ran from an isolated,

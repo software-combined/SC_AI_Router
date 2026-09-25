@@ -15,9 +15,10 @@ import io
 import json
 import secrets
 from compression import zstd
-from . import errors, model_prompt_page, protocols, setup, sse, subscription_discovery
+from . import (errors, model_prompt_page, protocols, setup, sse, subscription_discovery,
+               transport)
 from .errors import InvalidSize, OversizeBusy
-from .runtime import MAX_DECODE_FACTOR, VERSION
+from .runtime import VERSION
 
 
 def send_json(handler, status, obj, headers=None):
@@ -195,23 +196,21 @@ def do_get(handler):
 
 def read_body(handler, max_body, oversize_guard=None):
     # max_body arrives from the handler so the existing patch point on
-    # ai_router.router.MAX_BODY still bounds this read (Plan 128).
-    # `oversize_guard` is asked on the declared size and again on the decoded
-    # size, so a body past the ordinary cap is read or expanded only while the
-    # slot is free: the schema-heavy turns that need the headroom compress at
-    # ratios no declared-size check can predict.
+    # ai_router.router.MAX_BODY still bounds this read (Plan 128). It is the
+    # ordinary threshold: `oversize_guard` is asked on the declared size and
+    # again on the decoded size, so a body past it is read or expanded only
+    # while the large-request slot is free (the caller keeps the slot for the
+    # rest of the turn). Either encoding may carry up to the request ceiling:
+    # native history with images is forwarded whole, and a compressed turn
+    # the 2026-09-18 read refused as framing (17.6 MB on the wire) needs its
+    # decoded size to decide.
     size = int(handler.headers.get('Content-Length', '-1'))
     encoding = handler.headers.get('Content-Encoding', '')
-    # zstd may expand past max_body so prepare can slim tool_search schemas, and
-    # a compressed body past max_body is that same shape: the 2026-09-18 turn
-    # (17.6 MB on the wire) was refused here as a framing error before the trim
-    # that could have served it ever ran. Read it to the decode ceiling and let
-    # the decoded size decide, which is what the ceiling exists for.
-    limit = max_body * MAX_DECODE_FACTOR if encoding == 'zstd' else max_body
-    if size < 0 or size > limit or handler.headers.get('Transfer-Encoding'):
+    limit = transport.MAX_REQUEST_BYTES
+    if size < 0 or handler.headers.get('Transfer-Encoding'):
         raise InvalidSize('Invalid request size')
-    # One oversized body in memory at a time: the declared size asks before the
-    # read, the decoded size asks again before the expansion.
+    if size > limit:
+        raise InvalidSize('Decoded request is too large')
     if size > max_body and oversize_guard is not None and not oversize_guard():
         raise OversizeBusy()
     body = handler.rfile.read(size)
@@ -221,7 +220,7 @@ def read_body(handler, max_body, oversize_guard=None):
             if len(decoded) > max_body:
                 if oversize_guard is not None and not oversize_guard():
                     raise OversizeBusy()
-                decoded += stream.read(limit - max_body + 1)
+                decoded += stream.read(max(limit + 1 - len(decoded), 0))
     else:
         decoded = body
     if len(decoded) > limit:

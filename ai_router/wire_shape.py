@@ -31,9 +31,9 @@ _FIELD_NAME = re.compile(r'[A-Za-z0-9_.-]{1,40}')
 _MAX_FIELD_NAMES = 32
 _MAX_UNKNOWN_NAMES = 8
 _ZSTD_MAGIC = b'\x28\xb5\x2f\xfd'
-# Mirror rejected_repair.ZSTD_DECODE_LIMIT and compaction.PREFIX without their
-# import graphs; unit tests pin both.
-DECODE_LIMIT = 6 * 16 * 1024 * 1024
+# Mirror rejected_repair.ZSTD_DECODE_LIMIT (transport.MAX_REQUEST_BYTES) and
+# compaction.PREFIX without their import graphs; unit tests pin both.
+DECODE_LIMIT = 96 * 1024 * 1024
 _ROUTER_BLOB = 'ocx1:'
 
 VIOLATION, WARNING = 'violations', 'warnings'

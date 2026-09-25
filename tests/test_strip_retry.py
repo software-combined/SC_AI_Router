@@ -52,9 +52,10 @@ class StripAnnotationsTests(unittest.TestCase):
                 self.assertEqual(proposal.repair, repair)
                 sent = proposal.prepared
                 self.assertNotEqual(sent.body, body)
+                self.assertEqual(sent.decoded_body_bytes, len(sent.body))
                 self.assertEqual(sent.headers, {'Authorization': 'Bearer k'})
                 self.assertEqual([getattr(sent, key) for key in transport.Prepared.__slots__
-                                  if key not in ('headers', 'body')],
+                                  if key not in ('headers', 'body', 'decoded_body_bytes')],
                                  ['upstream.example', '/responses', {'tool': 'kind'},
                                   adapter.name, fallback, 321, 654, context])
                 self.assertEqual((original.body, original.headers),

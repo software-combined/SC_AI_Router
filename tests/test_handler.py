@@ -131,7 +131,7 @@ class HandlerCharacterisationTests(unittest.TestCase):
         conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
         conn.putrequest('POST', '/test-token/responses')
         conn.putheader('Content-Type', 'application/json')
-        conn.putheader('Content-Length', '17000000')
+        conn.putheader('Content-Length', str(96 * 1024 * 1024 + 1))
         conn.endheaders()
         self.assertEqual(conn.getresponse().status, 400)
         self.assertEqual(recorded, [])
