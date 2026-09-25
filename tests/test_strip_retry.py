@@ -4,7 +4,14 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from ai_router import provider_defs, strip_retry, upstream
+from ai_router import provider_defs, providers, rejected_repair, transport, upstream
+
+UNNAMED = json.dumps({'error': {'message': 'Provider returned error',
+                                'metadata': {'provider_name': 'Meta'}}}).encode()
+CONTEXT = json.dumps({'error': {'code': 'context_length_exceeded',
+                                'message': 'context length exceeded'}}).encode()
+ENCRYPTED = json.dumps({'error': {'message': 'the request was rejected',
+                                  'code': 'invalid_encrypted_content'}}).encode()
 
 
 class StripAnnotationsTests(unittest.TestCase):
@@ -14,17 +21,48 @@ class StripAnnotationsTests(unittest.TestCase):
                            'prompt_cache_options': {'mode': 'auto'},
                            'store': True, 'user': 'u',
                            'stream': True, 'max_output_tokens': 32000}).encode()
-        stripped = json.loads(strip_retry.strip_annotations(body))
+        stripped = json.loads(rejected_repair.strip_annotations(body))
         self.assertEqual(stripped, {'model': 'm', 'input': [], 'tools': [],
                                     'stream': True, 'max_output_tokens': 32000})
 
     def test_nothing_to_strip_returns_none(self):
         body = json.dumps({'model': 'm', 'input': []}).encode()
-        self.assertIsNone(strip_retry.strip_annotations(body))
+        self.assertIsNone(rejected_repair.strip_annotations(body))
 
     def test_unparseable_body_returns_none(self):
-        self.assertIsNone(strip_retry.strip_annotations(b'not json'))
-        self.assertIsNone(strip_retry.strip_annotations('a string'))
+        self.assertIsNone(rejected_repair.strip_annotations(b'not json'))
+        self.assertIsNone(rejected_repair.strip_annotations('a string'))
+
+    def test_each_adapter_proposes_only_its_own_repair_and_keeps_the_request(self):
+        external = providers.ExternalResponsesProvider(provider_defs.OPENROUTER)
+        native = providers.SubscriptionProvider()
+        unnamed = (400, 'refused', None)
+        encrypted = (400, 'refused', 'invalid_encrypted_content')
+        fallback, context = object(), object()
+        body = json.dumps({'model': 'm', 'store': True, 'input': [
+            {'type': 'reasoning', 'id': 'rs_1', 'encrypted_content': 'BLOB'}]}).encode()
+        for adapter, described, raw, repair in ((external, unnamed, UNNAMED, 'annotation_strip'),
+                                                (native, encrypted, ENCRYPTED, 'reasoning_blobs')):
+            with self.subTest(repair=repair):
+                original = transport.Prepared(
+                    'upstream.example', '/responses',
+                    {'Authorization': 'Bearer k', 'Connection': 'close'}, body,
+                    {'tool': 'kind'}, adapter.name, fallback, 321, 654, context)
+                proposal = adapter.repair_rejected(original, described, raw)
+                self.assertEqual(proposal.repair, repair)
+                sent = proposal.prepared
+                self.assertNotEqual(sent.body, body)
+                self.assertEqual(sent.headers, {'Authorization': 'Bearer k'})
+                self.assertEqual([getattr(sent, key) for key in transport.Prepared.__slots__
+                                  if key not in ('headers', 'body')],
+                                 ['upstream.example', '/responses', {'tool': 'kind'},
+                                  adapter.name, fallback, 321, 654, context])
+                self.assertEqual((original.body, original.headers),
+                                 (body, {'Authorization': 'Bearer k', 'Connection': 'close'}))
+                # A context error, or the other adapter's rejection, is not repaired.
+                self.assertIsNone(adapter.repair_rejected(original, described, CONTEXT))
+                other = encrypted if adapter is external else unnamed
+                self.assertIsNone(adapter.repair_rejected(original, other, UNNAMED))
 
     def test_attributed_category_keeps_refusal_wording(self):
         body = json.dumps({'error': {'message':
@@ -110,6 +148,8 @@ class StripRetryRelayTests(unittest.TestCase):
             wfile=wfile)
         provider = SimpleNamespace(
             defn=provider_defs.OPENROUTER,
+            repair_rejected=providers.ExternalResponsesProvider(
+                provider_defs.OPENROUTER).repair_rejected,
             adapt=lambda response, tool_names, notes=None: iter(
                 [b'event: done\ndata: {"ok":true}\n\n']))
         prepared = Prepared('openrouter.ai', '/responses', {}, body, {}, 'openrouter')

@@ -4,7 +4,7 @@ import json
 import time
 from . import (capabilities, compaction as comp, local_services, agent_handoffs,
                provider_defs, request_context, transport, turn_budget, jev_compaction)
-from . import compaction_result, history_items, outbound, subscription_roster
+from . import compaction_result, history_items, outbound, rejected_repair, subscription_roster
 from .capabilities import CANONICAL_ORDER
 from .errors import PreparationError, SubscriptionRequired, UnknownModel
 from .registry import by_slug, near_miss, upstream_id_for
@@ -12,8 +12,6 @@ from .events import log_event
 from .discovered import remember
 from .tool_adapter import snoop_response_identity, stream_events, ToolEvents
 
-# Transport leaves live in transport.py (Plan 062); these aliases keep
-# existing importers working until the protocol split completes.
 from .transport import HOP_HEADERS, Prepared, passthrough
 NATIVE_SERVICE_PATHS = {'/alpha/search', '/alpha/notes/v2/thread_hint', '/guardian', '/guardian-classifier'}
 
@@ -33,10 +31,6 @@ def _summary_budgets(entry):
         return (SUMMARY_OUTPUT_TOKENS,
                 min(SUMMARY_RETRY_OUTPUT_TOKENS, ceiling))
     return (SUMMARY_OUTPUT_TOKENS,)
-
-
-def _passthrough(response):
-    yield from passthrough(response)
 
 
 # router.py guards compaction with this name; the external stages use the same rule.
@@ -83,7 +77,10 @@ class SubscriptionProvider:
         elif notes is not None and response.status == 200:
             yield from snoop_response_identity(response, notes)
         else:
-            yield from _passthrough(response)
+            yield from passthrough(response)
+
+    def repair_rejected(self, prepared, described, raw):
+        return rejected_repair.encrypted_content(prepared, described, raw)
 
 
 class ExternalResponsesProvider:
@@ -152,7 +149,10 @@ class ExternalResponsesProvider:
                 turn_budget.report_usage(result.get('usage'), notes)
                 yield json.dumps(result).encode()
         else:
-            yield from _passthrough(response)
+            yield from passthrough(response)
+
+    def repair_rejected(self, prepared, described, raw):
+        return rejected_repair.annotation_strip(self.defn, prepared, described, raw)
 
     def compact(self, model, payload, key, row=None):
         try:

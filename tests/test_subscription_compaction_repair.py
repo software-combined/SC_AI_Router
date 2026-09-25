@@ -12,13 +12,13 @@ Run from the copy root:
   <python> -X utf8 -m unittest tests.test_subscription_compaction_repair -v
 """
 import json
-import types
 import unittest
 
-from ai_router import compaction, provider_defs, strip_retry, subscription_history, transport
+from ai_router import (compaction, provider_defs, providers, strip_retry,
+                       subscription_history, transport)
 
 
-SUBSCRIPTION = types.SimpleNamespace(defn=provider_defs.get('openai'))
+SUBSCRIPTION = providers.SubscriptionProvider()
 SUMMARY = 'the summary the router wrote for this thread'
 COMPACTION = {'type': 'compaction', 'id': 'cmp_1',
               'encrypted_content': compaction.encode_summary(SUMMARY)}

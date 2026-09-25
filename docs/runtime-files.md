@@ -44,6 +44,7 @@ are never copied between machines.
 `ai_router/relay.py`, `ai_router/tool_merge.py`, `ai_router/atomic_write.py`,
 `ai_router/stream_relay.py`, `ai_router/stream_events.py`,
 `ai_router/stream_attempt.py`, `ai_router/strip_retry.py`,
+`ai_router/rejected_repair.py`,
 `ai_router/state.py`, `ai_router/wire_shape.py`,
 `ai_router/events.py`,
 `ai_router/protocols/__init__.py`, `ai_router/protocols/responses.py`,
