@@ -277,7 +277,7 @@ class SummarizerTests(unittest.TestCase):
         self.assertNotIn('reasoning', seen)
 
     def test_compact_remembers_discovered_tools(self):
-        from ai_router.tool_adapter import prepare_tools
+        from tests.tool_stages import prepare_tools
         _isolated_home(self)
         items = [{'type': 'message', 'role': 'user', 'content': 'do it'},
                  {'type': 'tool_search_output', 'call_id': 's1', 'status': 'completed',

@@ -9,9 +9,10 @@ import unittest
 from unittest import mock
 
 from ai_router import tool_aliases, upstream
-from ai_router.tool_adapter import ToolEvents, prepare_tools
+from ai_router.tool_adapter import ToolEvents
 from tests.fakes import FakeUpstream, install_fake
 from tests.harness import auth_file, post, start_server, test_state
+from tests.tool_stages import prepare_tools
 
 
 def _namespaced(namespace, *names):
@@ -110,10 +111,9 @@ class AliasSchemeTests(unittest.TestCase):
         self.assertEqual(once.count('That name marks a message'), 1)
 
     def test_delivered_name_gets_the_delivered_hint(self):
-        from ai_router.tool_aliases import HINT_DELIVERED
         names, _ = _prepare('probe', 'echo')
         output = tool_aliases.annotate('unsupported call: delivered_message', names)
-        self.assertIn(HINT_DELIVERED, output)
+        self.assertIn(tool_aliases.HINT_DELIVERED, output)
         self.assertNotIn('probe__echo', output)
         with mock.patch('ai_router.tool_aliases.log_event') as logged:
             ToolEvents(names, {'model': 'm'}).item(_call('delivered_message'))
