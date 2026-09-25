@@ -46,7 +46,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from ai_router.agent_handoffs import inbound_agent_message
+from ai_router.history_items import inbound_agent_message
 from ai_router.catalogue import external_entry, subscription_stub
 from ai_router.registry import by_slug
 from ai_router.subscription_history import encrypted_field_count

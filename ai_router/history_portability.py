@@ -8,13 +8,8 @@ rewrites the whole history. Never splits a tool run across the boundary.
 """
 import json
 
-from . import history_items
-from .history_items import (CALL_TYPES, OUTPUT_TYPES, TOOL_RUN_TYPES,
-                            summary_text as _summary_text, user_message_item)
-
-# Plan 183 phase 1 moved the shared vocabulary to history_items; the imports
-# above and this alias keep the old names importable until phase 2.
-_block_text = history_items.block_text
+from .history_items import (CALL_TYPES, OUTPUT_TYPES, TOOL_RUN_TYPES, summary_text,
+                            user_message_item)
 
 PORTABLE_SEARCH_NOTE = ('[tool search result replayed as declared tools; '
                         'the search call itself is omitted on this model]')
@@ -170,7 +165,7 @@ def portable_history(items, search_name, history_mode):
             continue
         kind, name, call_id = item.get('type'), item.get('name'), item.get('call_id')
         if kind == 'reasoning':
-            note = _summary_text(item)
+            note = summary_text(item)
             if note:
                 emit(user_message_item(PORTABLE_REASONING_NOTE + note[:2000]))
             continue

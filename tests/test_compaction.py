@@ -1,9 +1,11 @@
 import unittest
 import base64
 from ai_router.compaction import (PREFIX, TRANSCRIPT_BUDGET, build_compact_v1_output,
-    compaction_text, decode_summary, encode_summary, extract_summary, extract_user_messages,
-    has_compaction_trigger, rewrite_input, scrub_tool_fragments,
-    transcript_for_summary, v2_compaction_item, OPAQUE_NOTE)
+    compaction_text, decode_summary, encode_summary, extract_user_messages,
+    has_compaction_trigger, transcript_for_summary, v2_compaction_item, OPAQUE_NOTE)
+from ai_router.compaction_result import extract_summary
+from ai_router.external_history import rewrite_input
+from ai_router.tool_runs import scrub_tool_fragments
 from ai_router.image_items import IMAGE_NOTE, note_images
 
 class CompactionTests(unittest.TestCase):

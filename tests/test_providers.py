@@ -4,7 +4,7 @@ import unittest
 from contextlib import ExitStack
 from types import SimpleNamespace
 from unittest import mock
-from ai_router import provider_defs, providers
+from ai_router import compaction_result, provider_defs, providers
 from ai_router.image_items import IMAGE_NOTE
 from tests.harness import (
     isolated_home as _isolated_home,
@@ -377,14 +377,14 @@ class SummarizerRetryTests(unittest.TestCase):
                          [4000, 6000])
         self.assertEqual(len(calls), len(closed))
         result, calls, closed = self._run([self._truncated()], ceiling=4000)
-        self.assertIsInstance(result, providers.comp.IncompleteSummary)
+        self.assertIsInstance(result, compaction_result.IncompleteSummary)
         self.assertEqual([call['body']['max_output_tokens'] for call in calls],
                          [4000])
         self.assertEqual(len(calls), len(closed))
 
     def test_truncation_twice_is_rejected_after_two_attempts(self):
         result, calls, closed = self._run([self._truncated(), self._truncated()])
-        self.assertIsInstance(result, providers.comp.IncompleteSummary)
+        self.assertIsInstance(result, compaction_result.IncompleteSummary)
         self.assertEqual(len(calls), 2)
         self.assertEqual(len(calls), len(closed))
 
@@ -419,7 +419,7 @@ class SummarizerRetryTests(unittest.TestCase):
             with self.subTest(name=name):
                 result, calls, closed = self._run([response])
                 self.assertIsInstance(result, Exception)
-                self.assertNotIsInstance(result, providers.comp.IncompleteSummary)
+                self.assertNotIsInstance(result, compaction_result.IncompleteSummary)
                 self.assertEqual(len(calls), 1)
                 self.assertEqual(len(calls), len(closed))
 

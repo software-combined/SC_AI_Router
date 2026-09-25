@@ -4,7 +4,7 @@ import json
 import time
 from . import (capabilities, compaction as comp, local_services, agent_handoffs,
                provider_defs, request_context, transport, turn_budget, jev_compaction)
-from . import outbound, subscription_roster
+from . import compaction_result, history_items, outbound, subscription_roster
 from .capabilities import CANONICAL_ORDER
 from .errors import PreparationError, SubscriptionRequired, UnknownModel
 from .registry import by_slug, near_miss, upstream_id_for
@@ -209,7 +209,7 @@ class ExternalResponsesProvider:
                           max_output_tokens=budget, outcome='deadline')
                 raise TimeoutError('Compaction summarizer deadline exceeded')
             upstream = upstream_id_for(entry) if entry is not None else model
-            body = {'model': upstream, 'input': [comp.user_message_item(prompt)],
+            body = {'model': upstream, 'input': [history_items.user_message_item(prompt)],
                     'max_output_tokens': budget}
             if getattr(entry, 'provider_prefs', None):
                 body['provider'] = dict(entry.provider_prefs)
@@ -232,8 +232,8 @@ class ExternalResponsesProvider:
                     data = json.loads(transport.read_capped(resp, transport.MAX_UPSTREAM_BODY))
                 except ValueError:
                     raise OSError('Summarizer returned invalid JSON')
-                summary = comp.extract_summary(resp.status, data)
-            except comp.IncompleteSummary:
+                summary = compaction_result.extract_summary(resp.status, data)
+            except compaction_result.IncompleteSummary:
                 if attempt == len(budgets):
                     log_event('compact_summary_attempt', model=model,
                               attempt=attempt, max_output_tokens=budget,

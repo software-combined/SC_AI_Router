@@ -3,7 +3,7 @@ from copy import deepcopy
 import json
 import unittest
 
-from ai_router import agent_handoffs as handoffs
+from ai_router import agent_handoffs as handoffs, history_items
 
 
 def native_tools(*names):
@@ -99,7 +99,7 @@ class PlaintextMessageTests(unittest.TestCase):
                 'content': [{'type': 'input_text', 'text': 'Assignment\n'},
                             {'type': 'input_text', 'text': 'Read only; do not edit.'}]}
         before = deepcopy(item)
-        message = handoffs.plaintext_agent_message(item)
+        message = history_items.plaintext_agent_message(item)
         self.assertEqual(message['role'], 'assistant')
         self.assertEqual(message['content'][0]['text'], 'Agent message from /root to /root/worker:\n')
         self.assertEqual([b['text'] for b in message['content'][1:]],
@@ -113,7 +113,7 @@ class PlaintextMessageTests(unittest.TestCase):
                          {'type': 'encrypted_content', 'encrypted_content': 'synthetic'}],
                         [{'type': 'input_image', 'image_url': 'synthetic'}]):
             with self.subTest(content=content), self.assertRaises(ValueError):
-                handoffs.plaintext_agent_message({**base, 'content': content})
+                history_items.plaintext_agent_message({**base, 'content': content})
 
 
 def encrypted_call(**changes):
