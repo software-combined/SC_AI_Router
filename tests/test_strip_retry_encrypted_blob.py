@@ -9,7 +9,6 @@ Run from the copy root:
   <python> -m unittest discover -s tests -t . -v
 """
 import json
-import types
 import unittest
 from unittest import mock
 from compression import zstd
@@ -20,8 +19,8 @@ from ai_router.registry import by_slug
 from tests.harness import stub_credentials
 
 
-OPENROUTER = types.SimpleNamespace(defn=provider_defs.get(provider_defs.DEFAULT_EXTERNAL))
-SUBSCRIPTION = types.SimpleNamespace(defn=provider_defs.get('openai'))
+OPENROUTER = providers.ExternalResponsesProvider(provider_defs.get(provider_defs.DEFAULT_EXTERNAL))
+SUBSCRIPTION = providers.SubscriptionProvider()
 
 
 def body(items):
@@ -83,18 +82,17 @@ class RetryRepairTests(unittest.TestCase):
 
     def test_01_healthy_request_is_untouched_and_never_stripped(self):
         called = []
-        # Fail loudly if the repair runs where it must not: this stand-in takes
-        # one argument, so a two-argument call raises TypeError.
-        with mock.patch.object(strip_retry, 'strip_reasoning_blobs',
-                               lambda b: called.append(b)):
+        # The policy gate never asks the adapter for a repair on a healthy turn.
+        with mock.patch.object(SUBSCRIPTION, 'repair_rejected',
+                               lambda *a: called.append(a)):
             self.assertIsNone(self.drive(200, None))
         self.assertEqual(called, [], 'healthy turn must not reach any strip')
         self.assertEqual(self.log.outcomes(), ['ineligible'])
 
     def test_02_non_400_never_triggers_the_repair(self):
         called = []
-        with mock.patch.object(strip_retry, 'strip_reasoning_blobs',
-                               lambda b: called.append(b)):
+        with mock.patch.object(SUBSCRIPTION, 'repair_rejected',
+                               lambda *a: called.append(a)):
             for status in (500, 429, 503):
                 self.assertIsNone(self.drive(status, ENCRYPTED_DESCRIBED))
         self.assertEqual(called, [], 'only a 400 may trigger the repair')
@@ -123,15 +121,26 @@ class RetryRepairTests(unittest.TestCase):
         normalized = subscription_history.normalize(json.loads(GUARDIAN_BODY))
         kept = [i for i in normalized['input'] if i.get('type') == 'reasoning']
         self.assertEqual([i['encrypted_content'] for i in kept], ['BLOB-ONE', 'BLOB-TWO'])
-        # The retry-only strip removes the field, drops the blob-only item,
-        # and keeps the item that still carries readable reasoning text.
-        out = json.loads(strip_retry.strip_reasoning_blobs(GUARDIAN_BODY))
+        # The retry-only proposal removes the field, drops the blob-only item,
+        # and keeps the item that still carries readable reasoning text. It is
+        # pure: proposing alone opens no connection and sends nothing.
+        forbidden = mock.Mock(side_effect=AssertionError('a proposal never sends'))
+        with mock.patch.object(transport.http.client, 'HTTPSConnection', forbidden), \
+                mock.patch.object(transport, 'post_with_phases', forbidden):
+            proposal = SUBSCRIPTION.repair_rejected(
+                prepared(GUARDIAN_BODY), ENCRYPTED_DESCRIBED, ERROR_RAW)
+            unchanged = SUBSCRIPTION.repair_rejected(
+                prepared(body([MESSAGE])), ENCRYPTED_DESCRIBED, ERROR_RAW)
+        forbidden.assert_not_called()
+        self.assertEqual(proposal.repair, 'reasoning_blobs')
+        out = json.loads(proposal.prepared.body)
         self.assertEqual([(i.get('type'), i.get('id')) for i in out['input']],
                          [('message', None), ('reasoning', 'rs_2')])
         self.assertEqual(out['input'][1]['summary'][0]['text'], 'readable trace')
         self.assertNotIn('encrypted_content', json.dumps(out))
-        # Nothing to repair means no rewrite at all.
-        self.assertIsNone(strip_retry.strip_reasoning_blobs(body([MESSAGE])))
+        # Nothing to repair means eligible but no rewrite at all.
+        self.assertEqual(unchanged.repair, 'reasoning_blobs')
+        self.assertIsNone(unchanged.prepared)
 
     def test_05_exactly_one_retry_and_no_loop(self):
         dispatches = []

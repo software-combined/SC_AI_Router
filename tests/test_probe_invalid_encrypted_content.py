@@ -5,7 +5,7 @@ import unittest
 from compression import zstd
 from unittest import mock
 
-from ai_router import provider_defs, strip_retry, transport
+from ai_router import provider_defs, providers, strip_retry, transport
 from tools import probe_invalid_encrypted_content as probe
 
 
@@ -86,7 +86,7 @@ class RetryEventTests(unittest.TestCase):
             'api.openai.com', '/responses', {'Content-Encoding': 'zstd'},
             body, set(), 'openai')
         response = types.SimpleNamespace(status=400)
-        provider = types.SimpleNamespace(defn=provider_defs.get('openai'))
+        provider = providers.SubscriptionProvider()
         metrics = {'protocol': provider_defs.RESPONSES,
                    'model': 'codex-auto-review'}
         events = []
@@ -124,7 +124,7 @@ class RetryEventTests(unittest.TestCase):
         prepared = transport.Prepared(
             'api.openai.com', '/responses', {'Content-Encoding': 'zstd'},
             body, set(), 'openai')
-        provider = types.SimpleNamespace(defn=provider_defs.get('openai'))
+        provider = providers.SubscriptionProvider()
         metrics = {'protocol': provider_defs.RESPONSES,
                    'model': 'codex-auto-review', 'request_bytes': len(body)}
         dispatches = []
@@ -156,7 +156,7 @@ class RetryEventTests(unittest.TestCase):
             types.SimpleNamespace(status=400), b'{}',
             {'protocol': provider_defs.RESPONSES,
              'model': 'codex-auto-review'},
-            types.SimpleNamespace(defn=provider_defs.get('openai')),
+            providers.SubscriptionProvider(),
             prepared, [], lambda event, **fields: events.append(event))
         self.assertIsNone(result)
         self.assertEqual(events, ['annotation_retry'])
