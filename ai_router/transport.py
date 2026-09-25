@@ -9,6 +9,7 @@ import time
 import traceback
 
 from . import provider_defs
+from .errors import InvalidSize
 
 
 HOP_HEADERS = {'host', 'connection', 'content-length', 'transfer-encoding',
@@ -23,22 +24,59 @@ class Prepared:
     when upstream refuses it (see subscription_fallback); None means the
     refusal is relayed as-is. `context` is the request's resolved snapshot
     (request_context.Resolved) the adapter prepared against.
+    `decoded_body_bytes` is what `body` decodes to: the size ingress decoded
+    for the client's own compressed bytes, len(body) for a body the adapter
+    serialized; `len(body)` is always the wire size.
     """
 
     __slots__ = ('host', 'path', 'headers', 'body', 'tool_names', 'provider',
-                 'fallback', 'output_cap', 'context_tokens', 'context')
+                 'fallback', 'output_cap', 'context_tokens', 'context',
+                 'decoded_body_bytes')
 
     def __init__(self, host, path, headers, body, tool_names, provider,
-                 fallback=None, output_cap=None, context_tokens=None, context=None):
+                 fallback=None, output_cap=None, context_tokens=None, context=None,
+                 decoded_body_bytes=None):
         self.host, self.path, self.headers = host, path, headers
         self.body, self.tool_names, self.provider = body, tool_names, provider
         self.fallback, self.context = fallback, context
+        self.decoded_body_bytes = decoded_body_bytes
         # The output cap this request asks upstream for, when the adapter
         # computes one; None when the client's own body passes through.
         self.output_cap = output_cap
         # Input tokens this thread carries, when the adapter computed one;
         # None keeps the provider's own usage on the wire.
         self.context_tokens = context_tokens
+
+
+# The local resource ceiling on one request, on the wire and decoded, for
+# every route and encoding. It bounds what one turn may make this router hold
+# (a native turn is forwarded whole, and a zstd one may decode this far so
+# prepare can slim released-tool schemas); it is no provider's or
+# subscription's limit. runtime.MAX_BODY stays the ordinary threshold.
+MAX_REQUEST_BYTES = 96 * 1024 * 1024
+
+
+def encoded(headers):
+    """True when `headers` declare a Content-Encoding other than identity."""
+    return any(key.lower() == 'content-encoding'
+               and value.strip().lower() not in ('', 'identity')
+               for key, value in headers.items())
+
+
+def request_bytes(prepared):
+    """The larger of one prepared body's wire and decoded sizes.
+
+    InvalidSize past MAX_REQUEST_BYTES, and for a compressed body that does
+    not carry its decoded size: its wire length alone would under-count it.
+    """
+    wire, decoded = len(prepared.body), prepared.decoded_body_bytes
+    if decoded is None:
+        if encoded(prepared.headers):
+            raise InvalidSize('Invalid request size')
+        decoded = wire
+    if max(wire, decoded) > MAX_REQUEST_BYTES:
+        raise InvalidSize('Decoded request is too large')
+    return max(wire, decoded)
 
 
 def passthrough(response):
@@ -80,8 +118,10 @@ def post_with_phases(conn, prepared, metrics):
 
     Each timestamp lands in a finally, so a failure raises with the
     phases recorded so far already in metrics (transport_error
-    carries them). Returns (response, headers_done) on success.
+    carries them). Returns (response, headers_done) on success. Every send
+    passes here, so no body past the request ceiling ever leaves.
     """
+    request_bytes(prepared)
     setup_done = time.monotonic()
     try:
         conn.connect()

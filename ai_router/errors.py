@@ -92,7 +92,7 @@ def missing_model():
 
 def invalid_size(message):
     if message == 'Decoded request is too large':
-        return _error(400, 'BODY_TOO_LARGE', "This turn is larger than the router's 16 MiB request limit; start a new thread, or trim large tool outputs and images before continuing.")
+        return _error(400, 'BODY_TOO_LARGE', "This turn is larger than this router's local 96 MiB request ceiling (a resource limit on this machine, not a provider limit); start a new thread, or trim large tool outputs and images before continuing.")
     return _error(400, 'INVALID_REQUEST_SIZE', 'Invalid request size')
 
 
@@ -162,11 +162,11 @@ def too_many_inflight():
 
 def oversize_busy():
     return _error(503, 'OVERSIZE_BUSY',
-                  'The router is still reading another oversized turn; retry shortly')
+                  'The router is still serving another very large turn; retry shortly')
 
 
 class OversizeBusy(Exception):
-    """Another turn already holds the single oversized-read slot."""
+    """Another turn already holds the single large-request slot."""
 
 
 def unsupported_media_type():

@@ -14,7 +14,8 @@ from .image_items import (IMAGE_TOKEN_ALLOWANCE, IMAGE_TRIM_NOTE, count_images,
 # Named in the refusal line, in the order a search-heavy thread grows them.
 CLASSES = ('tool_search_output', 'function_call_output', 'reasoning', 'message')
 
-# Matches runtime.MAX_BODY: the prepared body the ingress gate refuses above.
+# The external shaping target, separate from the request ceiling: an external
+# turn past it is fitted, a native one never is (Plan 188).
 BODY_BUDGET = 16 * 1024 * 1024  # pinned by a test
 # Trims keep the newest of each kind and note the rest: images first, because
 # their bytes are cheap to re-read and expensive to carry.
