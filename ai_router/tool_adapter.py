@@ -33,9 +33,8 @@ def _note_identity(payload, notes):
     if endpoint is not None:
         notes['serving_endpoint'] = endpoint
 
-def _quirk(payload, name):
-    entry = by_slug(payload.get('model', ''))
-    return getattr(entry, name, None) if entry else None
+def _quirk(row, name):
+    return getattr(row, name, None) if row else None
 
 def integer_json(text):
     # Meta emits e.g. 8.0 for integer arguments. Rust's integer deserializers
@@ -76,7 +75,9 @@ def _grok_needs_envelope(parameters):
                     return True
     return False
 
-def prepare_tools(payload):
+def prepare_tools(payload, row=None):
+    """`row` is the request's captured registry row (Plan 188); None looks the model up."""
+    row = by_slug(payload.get('model', '')) if row is None else row
     names = tool_aliases.ToolNames()
     # OpenAI reads discovered definitions from tool_search_output history. Other
     # providers require those released tools in the ordinary request tool list.
@@ -117,11 +118,11 @@ def prepare_tools(payload):
             tool.update(type='function', parameters={'type': 'object',
                 'properties': {'input': {'type': 'string', 'description': 'The complete raw tool input.'}},
                 'required': ['input'], 'additionalProperties': False}, strict=True)
-        elif (_quirk(payload, 'schema_mode') == 'json_text'
+        elif (_quirk(row, 'schema_mode') == 'json_text'
                 and has_recursive_refs(tool.get('parameters', {}))):
             _wrap_string_envelope(tool, 'object')
             names[(namespace, tool['name'])] = 'json_text'
-        elif (_quirk(payload, 'schema_mode') == 'json_text_root'
+        elif (_quirk(row, 'schema_mode') == 'json_text_root'
                 and _grok_needs_envelope(tool.get('parameters'))):
             # xAI rejects non-object parameter roots, including object roots
             # with an anyOf/oneOf union holding a non-object branch (e.g. the
@@ -146,13 +147,13 @@ def prepare_tools(payload):
             tool['name'] = wire
         tool.pop('defer_loading', None)
         flattened.append(tool)
-    if _quirk(payload, 'web_search') is False:
+    if _quirk(row, 'web_search') is False:
         # No web-search capability upstream: OpenRouter aborts the turn with
         # 'Server tool request failed' when the client's web_search server
         # tool rides along (2026-09-10, deepseek-v4.1-flash).
         flattened = [tool for tool in flattened if tool.get('type') != 'web_search']
     payload['tools'] = flattened
-    ceiling = _quirk(payload, 'max_tools')
+    ceiling = _quirk(row, 'max_tools')
     if ceiling and len(flattened) > ceiling:
         # ponytail: drop, don't page; the search tool reloads on demand.
         kinds = [names.get((None, tool.get('name'))) for tool in flattened]
@@ -203,7 +204,7 @@ def prepare_tools(payload):
             item['output'] = tool_aliases.annotate(item['output'], names)
     if isinstance(payload.get('input'), list):
         payload['input'] = portable_history(
-            payload['input'], SEARCH_NAME, _quirk(payload, 'history_mode'))
+            payload['input'], SEARCH_NAME, _quirk(row, 'history_mode'))
     return names
 
 class ToolEvents:
