@@ -23,7 +23,7 @@ class LiteHandoffTests(unittest.TestCase):
         payload = lite()
         original = deepcopy(payload)
         original_items = payload['input']
-        names = handoffs.add_plaintext_tools(payload)
+        payload, names = handoffs.add_plaintext_tools(payload)
         self.assertEqual(names, handoffs.HANDOFF_TOOLS)
         self.assertEqual(original_items, original['input'])
         self.assertNotIn('tools', payload)
@@ -37,8 +37,8 @@ class LiteHandoffTests(unittest.TestCase):
     def test_ids_are_stable_for_retries_and_change_with_schema(self):
         first, retry, changed = lite(), lite(), lite()
         changed['input'][0]['tools'][0]['tools'][0]['description'] = 'Changed constraint'
-        for payload in (first, retry, changed):
-            handoffs.add_plaintext_tools(payload)
+        first, retry, changed = (handoffs.add_plaintext_tools(payload)[0]
+                                 for payload in (first, retry, changed))
         self.assertEqual(first, retry)
         self.assertNotEqual(first['input'][0]['id'], changed['input'][0]['id'])
         # Reapplying to an already adapted declaration is a collision, as in classic.
@@ -50,7 +50,7 @@ class LiteHandoffTests(unittest.TestCase):
                 'content': json.dumps(lite())}]}, {'input': [
                 {**lite()['input'][0], 'role': 'user'}]}):
             original = deepcopy(payload)
-            self.assertFalse(handoffs.add_plaintext_tools(payload))
+            self.assertFalse(handoffs.add_plaintext_tools(payload)[1])
             self.assertEqual(payload, original)
 
     def test_duplicate_containers_and_collisions_fail_before_mutation(self):

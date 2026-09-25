@@ -114,7 +114,9 @@ class SubscriptionHistoryTests(unittest.TestCase):
                         payload = {'model': 'gpt-6-astra', 'input': [reasoning()] if foreign else []}
                         raw = zstd.compress(json.dumps(payload).encode())
                         names = {'spawn_agent'} if aliases and path == '/responses' else set()
-                        with mock.patch('ai_router.agent_handoffs.add_plaintext_tools', return_value=names):
+                        # Aliases come back on a copy; none leave the payload as sent.
+                        added = lambda payload, names=names: (dict(payload) if names else payload, names)
+                        with mock.patch('ai_router.agent_handoffs.add_plaintext_tools', added):
                             prepared = provider.prepare('gpt-6-astra', path, payload, raw,
                                 {'Content-Encoding': 'zstd', 'Accept-Encoding': 'zstd',
                                  'Authorization': 'Bearer synthetic', 'Content-Length': str(len(raw))}, None)
