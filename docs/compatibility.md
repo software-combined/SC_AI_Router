@@ -445,7 +445,7 @@ and the turn was refused.
 
 The repair is retry-only and keeps the #274 gate unchanged (subscription
 OpenAI dialect, HTTP 400, `invalid_encrypted_content`). The compaction item
-becomes the same readable user message `compaction.rewrite_input` already
+becomes the same readable user message `external_history.rewrite_input` already
 produces for external models, built from `compaction_text`: the decoded
 summary, or the fixed opaque note when the blob is not the router's own. A
 payload carrying an encrypted field outside those two sites is left unchanged,

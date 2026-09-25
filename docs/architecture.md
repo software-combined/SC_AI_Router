@@ -29,10 +29,10 @@ live_refresh / apply_catalogue (client projections and native discovery)
   |
 tool_runs (the pairing model, on history_items alone) + agent_handoffs /
 compaction / tool_adapter / tool_history / tool_aliases / discovered (request
-normalization)
+normalization); external_history reads compaction's codec, never the reverse
 decisions (typed-decision wire client, imports only provider_defs)
   |
-jev_compaction (opt-in evidence selection, consumes decisions/compaction)
+jev_compaction (opt-in evidence selection, consumes decisions/compaction/tool_runs)
   |
 outbound (each Responses route's ordered stage list over the stages above)
   |
@@ -78,9 +78,14 @@ predicates disagree on an empty marker: `has_encryption_marked_agent_item`
 counts an `encrypted_content` marker whatever its value, while
 `holds_encrypted_payload` needs a non-empty payload, and each call site keeps
 its own. `tool_runs.py` owns the pairing model (`pairs`, `open_calls`) and the
-fragment scrub, on `history_items` alone. Plan 183 phase 1 moved these out of
-`history_portability.py`, `compaction.py` and `agent_handoffs.py`, which keep
-the old names importable until its phase 2 re-points their importers. The
+fragment scrub, on `history_items` alone. Plan 183 moved these out of
+`history_portability.py`, `compaction.py` and `agent_handoffs.py`; every
+importer reads them from these two owners, and the old names are gone.
+`compaction.py` owns compaction only: the prompt, the `ocx1:` codec, the V1
+output and the summary transcript. `external_history.py` owns the two external
+stages that read that codec: compaction items replay as readable text
+(`rewrite_input`), and OpenAI-owned reasoning blobs go (`strip_reasoning_blobs`,
+which the subscription retry repair reuses). The
 switch boundary's run check, the custom-pair call map and Jev's candidate
 pairing keep their own id rules (any truthy id and any later output; the last
 custom call; ambiguous ids pinned), so moving them onto `pairs` would be a
@@ -317,7 +322,7 @@ The two summary assignments in `ExternalResponsesProvider.compact` and
 `compact_trigger` use it before falling back to `self.summarize`. The
 external-only `compaction_call` gate is unchanged: subscription threads and
 ordinary turns never reach Jev. Dependencies flow providers -> consumer ->
-decisions/compaction -> leaves. Upstream facts remain in `provider_defs`.
+decisions/compaction/tool_runs -> leaves. Upstream facts remain in `provider_defs`.
 
 The case-sensitive `jev-compaction` home file is read per compaction, with
 `ROUTER_HOME` respected. `shadow` evaluates but returns `None`; `on` returns

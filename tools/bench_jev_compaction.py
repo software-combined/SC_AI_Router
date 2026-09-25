@@ -25,10 +25,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from ai_router import compaction, decisions, jev_compaction, provider_defs  # noqa: E402
+from ai_router import decisions, history_items, jev_compaction, provider_defs  # noqa: E402
 
 ARCHIVE = Path.home() / '.codex' / 'archived_sessions'
-ITEM_TYPES = (frozenset(compaction.CALL_TYPES) | frozenset(compaction.OUTPUT_TYPES)
+ITEM_TYPES = (frozenset(history_items.CALL_TYPES) | frozenset(history_items.OUTPUT_TYPES)
               | {'message', 'reasoning', 'agent_message', 'tool_search_output'})
 WINDOW_ITEMS = 160
 THRESHOLDS = (0.50, 0.60, 0.70, 0.80, 0.85, 0.90, 0.95, 0.99)
@@ -153,9 +153,9 @@ def measure(path, live=False, timeout=5.0, window_items=WINDOW_ITEMS):
         pairs = []
         code = exc.code
     calls = [i for i, item in enumerate(items)
-             if item.get('type') in compaction.CALL_TYPES | {'tool_search_call'}]
+             if item.get('type') in history_items.CALL_TYPES | {'tool_search_call'}]
     outputs = [i for i, item in enumerate(items)
-               if item.get('type') in compaction.OUTPUT_TYPES | {'tool_search_output'}]
+               if item.get('type') in history_items.OUTPUT_TYPES | {'tool_search_output'}]
     call_ids = {items[i].get('call_id') for i in calls if items[i].get('call_id')}
     out_ids = {items[i].get('call_id') for i in outputs if items[i].get('call_id')}
     counts = {

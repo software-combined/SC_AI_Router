@@ -99,7 +99,7 @@ def _strip_reasoning_payload(payload):
 def strip_reasoning_blobs(body, content_encoding=None):
     """Remove OpenAI-owned reasoning blobs from `input`; None when unchanged.
 
-    `compaction.strip_reasoning_blobs` owns the field semantics: the blob goes,
+    `external_history.strip_reasoning_blobs` owns the field semantics: the blob goes,
     and an item left without readable reasoning text goes with it. Only the
     bounded retry reaches this, so a healthy subscription turn keeps the blob
     that `subscription_history.normalize` deliberately preserves.
