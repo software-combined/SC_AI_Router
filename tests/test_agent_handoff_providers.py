@@ -215,7 +215,7 @@ class ProviderTests(unittest.TestCase):
 class NativeStreamTests(unittest.TestCase):
     def test_missing_content_type_uses_the_requested_streaming_contract(self):
         payload = {'stream': True, 'tools': native_tools('send_message')}
-        names = agent_handoffs.add_plaintext_tools(payload)
+        _, names = agent_handoffs.add_plaintext_tools(payload)
         event = {'type': 'response.output_item.done', 'item': alias_call()}
         source = Response(b'data: ' + json.dumps(event).encode() + b'\n\n', '')
         result = b''.join(agent_handoffs.adapt_response(source, names))

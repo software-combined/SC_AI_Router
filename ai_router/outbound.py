@@ -3,9 +3,10 @@
 Each route's stages run in tuple order over one `Projection`: the facts the
 adapter resolved (path, client model id, the request's captured row) plus
 the values a later stage or the adapter reads back. A stage takes and returns
-the payload; stages still edit it in place, as the adapters did, until Plan
-183 phase 3 makes them copy-on-write. A ValueError from any stage is the
-client's 400. The adapters keep destination, credentials, headers, body
+the payload and never edits the one it was given (Plan 183 phase 3): it builds
+new lists and copies only the dictionaries it changes, so the client's payload
+prepares again unchanged, as the helper fallback's twin does. A ValueError
+from any stage is the client's 400. The adapters keep destination, credentials, headers, body
 encoding and the turn-size fit.
 """
 from dataclasses import dataclass, field
@@ -27,7 +28,6 @@ class Projection:
     model: Any = None  # the client's model id, named in a refusal
     row: Any = None  # the request's captured registry row; never looked up here
     handoffs: Any = field(default_factory=set)
-    hinted: bool = False
     names: Any = None
     wire_names: Any = None
 
@@ -41,6 +41,10 @@ def contain(items):
         raise PreparationError(
             'unsupported encrypted agent instructions; '
             'resend the assignment as plain text')
+
+
+def _set(payload, key, value):
+    return payload if key in payload and payload[key] is value else {**payload, key: value}
 
 
 def refuse_opaque_briefs(payload, p):
@@ -57,47 +61,41 @@ def recover_context(payload, p):
 
 def materialize_standalone(payload, p):
     # Standalone outputs (no call_id) are delegated messages, not orphans.
-    payload['input'] = materialize_outputs(payload.get('input', []))
-    return payload
+    return _set(payload, 'input', materialize_outputs(payload.get('input', [])))
 
 
 def scrub_fragments(payload, p):
     # Scrub before prepare_tools: fragments KeyError its indexing, and
     # tool_search_output items (released-tool discovery) are never scrubbed.
-    payload['input'] = comp.scrub_tool_fragments(payload.get('input', []))
-    return payload
+    return _set(payload, 'input', comp.scrub_tool_fragments(payload.get('input', [])))
 
 
 def add_handoff_tools(payload, p):
-    p.handoffs = agent_handoffs.add_plaintext_tools(payload)
+    payload, p.handoffs = agent_handoffs.add_plaintext_tools(payload)
     return payload
 
 
 def hint_lanes(payload, p):
-    p.hinted = agent_handoffs.hint_full_lanes(payload)
-    return payload
+    return agent_handoffs.hint_full_lanes(payload)
 
 
 def declare_tools(payload, p):
-    p.names, p.wire_names = prepare_tools(payload, p.row)
+    tools, p.names, p.wire_names = prepare_tools(payload, p.row)
     p.names.handoffs = p.handoffs
-    return payload
+    return {**payload, 'tools': tools}
 
 
 def rewrite_history(payload, p):
-    rewrite_tool_history(payload, p.names, p.wire_names,
-                         getattr(p.row, 'history_mode', None) if p.row else None)
-    return payload
+    return rewrite_tool_history(payload, p.names, p.wire_names,
+                                getattr(p.row, 'history_mode', None) if p.row else None)
 
 
 def compaction_text(payload, p):
-    payload['input'] = comp.rewrite_input(payload.get('input', []))
-    return payload
+    return _set(payload, 'input', comp.rewrite_input(payload.get('input', [])))
 
 
 def strip_reasoning(payload, p):
-    payload['input'] = comp.strip_reasoning_blobs(payload['input'])
-    return payload
+    return _set(payload, 'input', comp.strip_reasoning_blobs(payload['input']))
 
 
 def note_media(payload, p):
@@ -106,7 +104,7 @@ def note_media(payload, p):
     # visible note, including text-only rows with historical images.
     if not ('image' in getattr(p.row, 'modalities', ())
             and not getattr(p.row, 'drop_images', False)):
-        payload['input'] = note_images(payload['input'])
+        return _set(payload, 'input', note_images(payload['input']))
     return payload
 
 
@@ -117,10 +115,9 @@ def check_effort(payload, p):
 
 
 def drop_native_fields(payload, p):
-    payload.pop('service_tier', None)
     # ChatGPT access-program enrolment is not an external-provider option.
-    payload.pop('access_programs', None)
-    return payload
+    return {key: value for key, value in payload.items()
+            if key not in ('service_tier', 'access_programs')}
 
 
 def upstream_model(payload, p):
@@ -131,7 +128,7 @@ def upstream_model(payload, p):
         raise PreparationError(f'unknown model: {p.model}')
     # The client id is the registry slug; the provider may expect another
     # id for the same model (Plan 153).
-    payload['model'] = upstream_id_for(p.row)
+    payload = {**payload, 'model': upstream_id_for(p.row)}
     if getattr(p.row, 'provider_prefs', None):
         payload['provider'] = dict(p.row.provider_prefs)
     return payload
@@ -148,8 +145,7 @@ def output_cap(payload, p):
     if window:
         default = min(default, window - window * 9 // 10)
     requested = payload.get('max_output_tokens')
-    payload['max_output_tokens'] = min(requested, limit) if requested else default
-    return payload
+    return {**payload, 'max_output_tokens': min(requested, limit) if requested else default}
 
 
 def replay_boundary(payload, p):
@@ -193,5 +189,5 @@ def project_subscription(payload, path):
               '/responses/compact': SUBSCRIPTION_REPLAY}.get(path, ())
     projection = Projection(path)
     projected = _run(stages, payload, projection)
-    changed = projected is not payload or bool(projection.handoffs) or projection.hinted
+    changed = projected is not payload
     return projected, projection.handoffs, changed

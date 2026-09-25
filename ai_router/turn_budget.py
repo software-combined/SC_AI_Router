@@ -4,11 +4,12 @@ the last-resort trims that keep an oversized one inside the transport budget.
 Sizes only. Nothing here reads or logs message or tool content; the one
 value taken from an image is the byte length of its payload.
 """
+import itertools
 import json
 
 from .events import log_event
 from .image_items import (IMAGE_TOKEN_ALLOWANCE, IMAGE_TRIM_NOTE, count_images,
-                          image_blocks, image_payload_bytes)
+                          image_blocks, image_payload_bytes, is_image)
 
 # Named in the refusal line, in the order a search-heavy thread grows them.
 CLASSES = ('tool_search_output', 'function_call_output', 'reasoning', 'message')
@@ -90,24 +91,28 @@ def fit(payload, budget, size=None):
     """Replace the oldest reducible weight until the body fits `budget`.
 
     Images go first, then long tool outputs; structure is never touched, so
-    tool call/output pairing survives. Returns what was replaced, or an empty
-    mapping when nothing reducible was found - the caller then keeps today's
-    refusal. `size` is the caller's body length when it already has one.
+    tool call/output pairing survives. Returns (payload, stats): a trimmed
+    copy and what was replaced, or the caller's payload and an empty mapping
+    when nothing reducible was found - the caller then keeps today's refusal.
+    Only the items and containers on a trimmed path are copied; the caller's
+    history is never edited. `size` is the caller's body length when it
+    already has one.
     """
     if not isinstance(payload, dict) or not isinstance(payload.get('input'), list):
-        return {}
+        return payload, {}
     if (body_size(payload) if size is None else size) <= budget:
-        return {}
+        return payload, {}
     stats = {'dropped_bytes': 0, 'images': 0, 'outputs': 0}
+    items = payload['input']
     for name, trim in (('images', _trim_images), ('outputs', _trim_outputs)):
-        dropped, count = trim(payload)
+        items, dropped, count = trim(items)
         stats['dropped_bytes'] += dropped
         stats[name] += count
-        if body_size(payload) <= budget:
+        if body_size({**payload, 'input': items}) <= budget:
             break
     if not stats['images'] and not stats['outputs']:
-        return {}
-    return stats
+        return payload, {}
+    return {**payload, 'input': items}, stats
 
 
 def body_size(payload):
@@ -116,32 +121,52 @@ def body_size(payload):
     return len(json.dumps(payload).encode())
 
 
-def _trim_images(payload):
-    """Note every image past the newest kept set; returns (bytes, count)."""
-    kept, remaining, dropped, count = 0, IMAGE_KEEP_BYTES, 0, 0
-    for container, key in reversed(list(image_blocks(payload.get('input')))):
-        weight = image_payload_bytes(container[key])
-        if kept < IMAGE_KEEP and weight <= remaining:
-            kept, remaining = kept + 1, remaining - weight
-            continue
-        container[key] = {'type': 'input_text', 'text': IMAGE_TRIM_NOTE}
-        dropped, count = dropped + weight, count + 1
-    return dropped, count
+def _trim_images(items):
+    """Note every image past the newest kept set; returns (items, bytes, count)."""
+    weights = [image_payload_bytes(container[key]) for container, key in image_blocks(items)]
+    kept, remaining, drop = 0, IMAGE_KEEP_BYTES, set()
+    for ordinal in reversed(range(len(weights))):
+        if kept < IMAGE_KEEP and weights[ordinal] <= remaining:
+            kept, remaining = kept + 1, remaining - weights[ordinal]
+        else:
+            drop.add(ordinal)
+    if not drop:
+        return items, 0, 0
+    ordinals = itertools.count()
+
+    def note(block):
+        return {'type': 'input_text', 'text': IMAGE_TRIM_NOTE} if next(ordinals) in drop else block
+    return (_replace_images(items, note), sum(weights[ordinal] for ordinal in drop),
+            len(drop))
 
 
-def _trim_outputs(payload):
-    """Truncate long old tool outputs to head plus tail; (bytes, count)."""
-    outputs = []
-    for item in payload['input']:
-        if (isinstance(item, dict) and isinstance(item.get('output'), str)
-                and item.get('type') in ('function_call_output', 'custom_tool_call_output')):
-            outputs.append(item)
-    dropped = count = 0
-    for item in outputs[:-OUTPUT_KEEP]:
-        text = item['output']
+def _replace_images(value, replace):
+    """`value` with each image block, in `image_blocks` order, passed through
+    `replace`; only the containers on a replaced block's path are copied."""
+    if not isinstance(value, (dict, list)):
+        return value
+    copied = None
+    for key, child in value.items() if isinstance(value, dict) else enumerate(value):
+        new = replace(child) if is_image(child) else _replace_images(child, replace)
+        if new is not child:
+            if copied is None:
+                copied = dict(value) if isinstance(value, dict) else list(value)
+            copied[key] = new
+    return value if copied is None else copied
+
+
+def _trim_outputs(items):
+    """Truncate long old tool outputs to head plus tail; (items, bytes, count)."""
+    outputs = [index for index, item in enumerate(items)
+               if isinstance(item, dict) and isinstance(item.get('output'), str)
+               and item.get('type') in ('function_call_output', 'custom_tool_call_output')]
+    trimmed, dropped, count = list(items), 0, 0
+    for index in outputs[:-OUTPUT_KEEP]:
+        text = items[index]['output']
         if len(text) <= OUTPUT_TRIM_MIN:
             continue
-        item['output'] = text[:OUTPUT_HEAD] + OUTPUT_TRIM_NOTE + text[-OUTPUT_TAIL:]
-        dropped += len(text) - len(item['output'])
+        output = text[:OUTPUT_HEAD] + OUTPUT_TRIM_NOTE + text[-OUTPUT_TAIL:]
+        trimmed[index] = {**items[index], 'output': output}
+        dropped += len(text) - len(output)
         count += 1
-    return dropped, count
+    return (trimmed if count else items), dropped, count

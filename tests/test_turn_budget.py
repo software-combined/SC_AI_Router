@@ -56,7 +56,7 @@ def _output_payload(count, size):
 class RepeatedListingTests(unittest.TestCase):
     def test_repeated_search_results_collapse_to_the_newest_listing(self):
         payload = _search_payload(['s1', 's2', 's3'])
-        prepare_tools(payload)
+        payload = prepare_tools(payload)[0]
         outputs = [json.loads(item['output']) for item in payload['input']]
         self.assertEqual([item['call_id'] for item in payload['input']],
                          ['s1', 's2', 's3'])
@@ -74,7 +74,7 @@ class RepeatedListingTests(unittest.TestCase):
         payload = {'model': MODEL,
                    'tools': [{'type': 'tool_search', 'parameters': {'type': 'object'}}],
                    'input': [_search_item('s1'), _search_item('s2', name='other')]}
-        prepare_tools(payload)
+        payload = prepare_tools(payload)[0]
         outputs = [json.loads(item['output']) for item in payload['input']]
         self.assertEqual(outputs[0]['available_tools'],
                          [{'name': 'probe__echo', 'description': 'Echo.'}])
@@ -84,8 +84,7 @@ class RepeatedListingTests(unittest.TestCase):
 
 class FitTests(unittest.TestCase):
     def test_images_past_the_newest_kept_set_are_noted_oldest_first(self):
-        payload = _image_payload(6)
-        stats = fit(payload, 10)
+        payload, stats = fit(_image_payload(6), 10)
         blocks = [item['content'][1] for item in payload['input']]
         self.assertEqual(stats['images'], 2)
         self.assertEqual([block['type'] for block in blocks],
@@ -97,12 +96,13 @@ class FitTests(unittest.TestCase):
     def test_a_turn_inside_the_budget_is_untouched(self):
         payload = _image_payload(1)
         before = json.dumps(payload)
-        self.assertEqual(fit(payload, turn_budget.BODY_BUDGET), {})
-        self.assertEqual(json.dumps(payload), before)
+        trimmed, stats = fit(payload, turn_budget.BODY_BUDGET)
+        self.assertIs(trimmed, payload)
+        self.assertEqual((stats, json.dumps(payload)), ({}, before))
 
     def test_long_old_tool_outputs_are_truncated_head_and_tail(self):
-        payload = _output_payload(5, 40 * 1024)
-        stats = fit(payload, 10)
+        original = _output_payload(5, 40 * 1024)
+        payload, stats = fit(original, 10)
         outputs = [item for item in payload['input']
                    if item.get('type') == 'function_call_output']
         self.assertEqual(stats['outputs'], 3)
@@ -112,12 +112,15 @@ class FitTests(unittest.TestCase):
             self.assertTrue(item['output'].startswith('o'))
             self.assertTrue(item['output'].endswith('o'))
         self.assertEqual([len(item['output']) for item in outputs[3:]], [40 * 1024] * 2)
+        # Copy-on-write: only the trimmed items are new objects.
+        self.assertEqual([new is old for new, old in zip(payload['input'], original['input'])],
+                         [True] * 5 + [False] * 3 + [True] * 2)
 
     def test_an_irreducible_body_reports_no_trim(self):
         payload = {'model': MODEL, 'input': [{'type': 'message', 'role': 'user',
                                               'content': [{'type': 'input_text',
                                                            'text': 'x' * 4000}]}]}
-        self.assertEqual(fit(payload, 10), {})
+        self.assertEqual(fit(payload, 10), (payload, {}))
 
     def test_body_size_measures_the_body_the_adapter_sends(self):
         payload = _image_payload(6)
@@ -125,8 +128,8 @@ class FitTests(unittest.TestCase):
         self.assertEqual(turn_budget.body_size(payload), wire)
         # The compact form is smaller, so a gate using it would under-trigger.
         self.assertGreater(wire, len(json.dumps(payload, separators=(',', ':')).encode()))
-        self.assertEqual(fit(payload, wire), {})
-        self.assertEqual(fit(payload, wire - 1)['images'], 2)
+        self.assertEqual(fit(payload, wire), (payload, {}))
+        self.assertEqual(fit(payload, wire - 1)[1]['images'], 2)
 
 
 class PrepareTrimTests(unittest.TestCase):

@@ -12,6 +12,12 @@
   turn's fallback to OpenRouter, and the next request uses the new list. The
   router log's start and completion records for one request share a request
   ID.
+- Preparing a request no longer changes the client's own copy of it. When a
+  ChatGPT helper turn such as thread titling falls back to OpenRouter, the
+  fallback now starts from the original request, not one the ChatGPT attempt
+  had already rewritten, so a turn offering agent tools is no longer refused
+  with a plaintext collaboration namespace error. When an oversized turn has to shorten old tool outputs or drop old
+  images to fit the size limit, only the request sent upstream is shortened.
 
 ## 0.6.124
 

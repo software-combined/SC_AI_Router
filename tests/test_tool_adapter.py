@@ -32,7 +32,7 @@ class ToolAdapterTests(unittest.TestCase):
                 {'type': 'function', 'name': f'tool_{i}', 'parameters': {'type': 'object'}}
                 for i in range(400)],
             'input': []}
-        names = prepare_tools(payload)
+        payload, names = prepare_tools(payload)
         self.assertEqual([tool.get('name') for tool in payload['tools']],
                          [SEARCH_NAME])
         item = ToolEvents(names).item({'type': 'function_call', 'name': SEARCH_NAME,
@@ -51,7 +51,7 @@ class ToolAdapterTests(unittest.TestCase):
                 {'type': 'function', 'name': f'tool_{i}', 'parameters': {'type': 'object'}}
                 for i in range(130)],
             'input': [{'type': 'tool_search_output', 'call_id': 's1', 'tools': [released]}]}
-        names = prepare_tools(payload)
+        payload, names = prepare_tools(payload)
         self.assertEqual([tool.get('name') for tool in payload['tools']],
                          [SEARCH_NAME, 'probe__echo'])
         self.assertEqual(len(names), 2)
@@ -60,7 +60,7 @@ class ToolAdapterTests(unittest.TestCase):
         payload = {'model': 'x-ai/grok-4.7', 'tools': [
             {'type': 'function', 'name': f'tool_{i}', 'parameters': {'type': 'object'}} for i in range(351)]}
         with self.assertRaisesRegex(ValueError, '350'):
-            prepare_tools(payload)
+            payload = prepare_tools(payload)[0]
 
     def test_grok_released_stub_overlap_survives_the_ceiling_cut(self):
         released = {'type': 'namespace', 'name': 'probe', 'tools': [
@@ -75,7 +75,7 @@ class ToolAdapterTests(unittest.TestCase):
                 {'type': 'function', 'name': f'tool_{i}', 'parameters': {'type': 'object'}}
                 for i in range(400)],
             'input': [{'type': 'tool_search_output', 'call_id': 's1', 'tools': [released]}]}
-        names = prepare_tools(payload)
+        payload, names = prepare_tools(payload)
         self.assertEqual(len(payload['tools']), 2)
         item = ToolEvents(names).item({'type': 'function_call', 'name': payload['tools'][1]['name'],
             'arguments': '{"value":"probe"}'})
@@ -89,7 +89,7 @@ class ToolAdapterTests(unittest.TestCase):
                        'parameters': {'type': 'object', 'properties': {}}}],
             'input': [{'type': 'tool_search_output', 'call_id': 's1', 'tools': released}]}
         with self.assertRaisesRegex(ValueError, '350'):
-            prepare_tools(payload)
+            payload = prepare_tools(payload)[0]
 
     def test_grok_released_custom_tool_survives_with_its_kind(self):
         released = {'type': 'custom', 'name': 'exec', 'format': {'type': 'grammar'}}
@@ -99,7 +99,7 @@ class ToolAdapterTests(unittest.TestCase):
                 {'type': 'function', 'name': f'tool_{i}', 'parameters': {'type': 'object'}}
                 for i in range(400)],
             'input': [{'type': 'tool_search_output', 'call_id': 's1', 'tools': [released]}]}
-        names = prepare_tools(payload)
+        payload, names = prepare_tools(payload)
         self.assertEqual([tool.get('name') for tool in payload['tools']],
                          [SEARCH_NAME, 'exec'])
         item = ToolEvents(names).item({'type': 'function_call', 'name': 'exec',
@@ -113,19 +113,19 @@ class ToolAdapterTests(unittest.TestCase):
         payload = {'model': 'deepseek/deepseek-v4.1-flash', 'tools': [
             {'type': 'web_search', 'external_web_access': False},
             {'type': 'function', 'name': 'exec', 'parameters': {'type': 'object'}}]}
-        prepare_tools(payload)
+        payload = prepare_tools(payload)[0]
         self.assertEqual([tool['type'] for tool in payload['tools']], ['function'])
 
     def test_web_search_tool_kept_when_upstream_supports_it(self):
         payload = {'model': 'meta/muse-spark-1.3-contributor', 'tools': [
             {'type': 'web_search', 'external_web_access': False}]}
-        prepare_tools(payload)
+        payload = prepare_tools(payload)[0]
         self.assertEqual([tool['type'] for tool in payload['tools']], ['web_search'])
 
     def test_web_search_tool_kept_for_unknown_models(self):
         payload = {'model': 'no/such-model', 'tools': [
             {'type': 'web_search', 'external_web_access': False}]}
-        prepare_tools(payload)
+        payload = prepare_tools(payload)[0]
         self.assertEqual([tool['type'] for tool in payload['tools']], ['web_search'])
 
     def test_grok_released_tool_survives_the_ceiling_cut(self):
@@ -138,7 +138,7 @@ class ToolAdapterTests(unittest.TestCase):
                 {'type': 'function', 'name': f'tool_{i}', 'parameters': {'type': 'object'}}
                 for i in range(400)],
             'input': [{'type': 'tool_search_output', 'call_id': 's1', 'tools': [released]}]}
-        names = prepare_tools(payload)
+        payload, names = prepare_tools(payload)
         self.assertEqual(len(payload['tools']), 2)
         item = ToolEvents(names).item({'type': 'function_call', 'name': payload['tools'][1]['name'],
             'arguments': '{"value":"probe"}'})
@@ -149,7 +149,7 @@ class ToolAdapterTests(unittest.TestCase):
         payload = {'tools': [{'type': 'custom', 'name': 'exec', 'format': {'type': 'grammar'}}],
             'input': [{'type': 'custom_tool_call', 'call_id': 'call1', 'name': 'exec', 'input': code},
                       {'type': 'custom_tool_call_output', 'call_id': 'call1', 'output': 'result'}]}
-        names = prepare_tools(payload)
+        payload, names = prepare_tools(payload)
         self.assertEqual(names, {(None, 'exec'): 'custom'})
         self.assertEqual(payload['tools'][0]['type'], 'function')
         self.assertEqual(json.loads(payload['input'][0]['arguments']), {'input': code})
@@ -237,7 +237,7 @@ class ToolAdapterTests(unittest.TestCase):
         payload = {'tools': [{'type': 'tool_search', 'execution': 'client', 'parameters': {'type': 'object'}}],
             'input': [{'type': 'tool_search_call', 'call_id': 's1', 'execution': 'client', 'arguments': {'query': 'echo'}},
                       {'type': 'tool_search_output', 'call_id': 's1', 'execution': 'client', 'status': 'completed', 'tools': [{'name': 'echo'}]}]}
-        names = prepare_tools(payload)
+        payload, names = prepare_tools(payload)
         self.assertEqual(payload['tools'][0]['type'], 'function')
         self.assertNotIn('execution', payload['tools'][0])
         self.assertEqual(payload['input'][1]['type'], 'function_call_output')
@@ -247,7 +247,7 @@ class ToolAdapterTests(unittest.TestCase):
         empty = {'tools': [{'type': 'tool_search', 'parameters': {'type': 'object'}}],
                  'input': [{'type': 'tool_search_output', 'call_id': 's0', 'tools': []},
                            {'type': 'tool_search_output', 'call_id': 's1', 'tools': [{'name': 'echo'}]}]}
-        prepare_tools(empty)
+        empty = prepare_tools(empty)[0]
         first, second = (json.loads(item['output']) for item in empty['input'])
         self.assertNotIn('how_to_use', first)
         self.assertIn('how_to_use', second)
@@ -265,7 +265,7 @@ class ToolAdapterTests(unittest.TestCase):
                 payload = {'model': model, 'tools': [
                     {'type': 'function', 'name': 'flex', 'description': 'Flex',
                      'parameters': union}]}
-                names = prepare_tools(payload)
+                payload, names = prepare_tools(payload)
                 tool = payload['tools'][0]
                 if wrapped:
                     self.assertEqual(tool['parameters']['properties'], {'arguments_json': {'type': 'string'}})
@@ -286,7 +286,7 @@ class ToolAdapterTests(unittest.TestCase):
         payload = {'model': 'x-ai/grok-4.7', 'tools': [
             {'type': 'function', 'name': 'automation_update', 'description': 'D',
              'parameters': params}]}
-        names = prepare_tools(payload)
+        payload, names = prepare_tools(payload)
         tool = payload['tools'][0]
         self.assertEqual(tool['parameters']['properties'], {'arguments_json': {'type': 'string'}})
         self.assertIn(json.dumps(params), tool['description'])
@@ -304,7 +304,7 @@ class ToolAdapterTests(unittest.TestCase):
         payload = {'model': 'x-ai/grok-4.7', 'tools': [
             {'type': 'function', 'name': 'flex', 'description': 'Flex',
              'parameters': params}]}
-        names = prepare_tools(payload)
+        payload, names = prepare_tools(payload)
         self.assertEqual(payload['tools'][0]['parameters'], params)
         self.assertNotIn((None, 'flex'), names)
 
@@ -315,7 +315,7 @@ class ToolAdapterTests(unittest.TestCase):
         self.assertFalse(has_recursive_refs({'properties': {'name': {'$ref': '#/$defs/Name'}}, '$defs': {'Name': {'type': 'string'}}}))
         payload = {'model': 'meta/muse-spark-1.3', 'tools': [{'type': 'namespace', 'name': 'probe', 'tools': [
             {'type': 'function', 'name': 'echo', 'parameters': schema}]}]}
-        names = prepare_tools(payload)
+        payload, names = prepare_tools(payload)
         tool = payload['tools'][0]
         self.assertFalse(has_recursive_refs(tool['parameters']))
         self.assertIn(json.dumps(schema), tool['description'])
@@ -331,7 +331,7 @@ class ToolAdapterTests(unittest.TestCase):
         payload = {'tools': [], 'input': [
             {'type': 'tool_search_output', 'call_id': 's1', 'status': 'completed', 'execution': 'client', 'tools': [released]},
             {'type': 'function_call', 'namespace': 'probe', 'name': 'echo', 'call_id': 'e1', 'arguments': '{"value":"probe"}'}]}
-        names = prepare_tools(payload)
+        payload, names = prepare_tools(payload)
         tool = payload['tools'][0]
         self.assertEqual(tool['type'], 'function')
         self.assertNotIn('defer_loading', tool)
@@ -355,7 +355,7 @@ class ToolAdapterTests(unittest.TestCase):
         remember(items, 'run-7')
         payload = {'tools': [], 'input': [
             {'type': 'message', 'role': 'user', 'content': SUMMARY_PREFIX + '\nrun-7'}]}
-        prepare_tools(payload)
+        payload = prepare_tools(payload)[0]
         self.assertEqual(len(payload['tools']), 1)
         self.assertTrue(payload['tools'][0]['description'].startswith('probe.echo'))
         self.assertEqual(payload['tools'][0]['parameters'], {'type': 'object'})
@@ -373,11 +373,11 @@ class ToolAdapterTests(unittest.TestCase):
         for run in ('run-4', 'run-19'):
             payload = {'tools': [], 'input': [
                 {'type': 'message', 'role': 'user', 'content': SUMMARY_PREFIX + f'\n{run}'}]}
-            prepare_tools(payload)
+            payload = prepare_tools(payload)[0]
             self.assertEqual(len(payload['tools']), 1)
         gone = {'tools': [], 'input': [
             {'type': 'message', 'role': 'user', 'content': SUMMARY_PREFIX + '\nrun-0'}]}
-        prepare_tools(gone)
+        gone = prepare_tools(gone)[0]
         self.assertEqual(gone['tools'], [])
 
     def test_namespaced_custom_history_matches_flattened_definition(self):
@@ -389,7 +389,7 @@ class ToolAdapterTests(unittest.TestCase):
                         'call_id': 'c1', 'input': 'echo hi'},
                        {'type': 'custom_tool_call_output', 'namespace': 'probe', 'name': 'exec',
                         'call_id': 'c1', 'output': 'hi'}]}
-        names = prepare_tools(payload)
+        payload, names = prepare_tools(payload)
         wire = payload['tools'][0]['name']
         self.assertEqual(wire, 'probe__exec')
         call, result = payload['input']
@@ -445,7 +445,7 @@ class ToolAdapterTests(unittest.TestCase):
             'input': [{'type': 'tool_search_output', 'call_id': 's1', 'status': 'completed',
                        'execution': 'client',
                        'tools': [{'type': 'namespace', 'name': 'probe', 'tools': [full]}]}]}
-        prepare_tools(payload)
+        payload = prepare_tools(payload)[0]
         matches = [tool for tool in payload['tools']
                    if tool.get('description', '').startswith('probe.echo')]
         self.assertEqual(len(matches), 1)
@@ -459,7 +459,7 @@ class ToolAdapterTests(unittest.TestCase):
             'input': [{'type': 'tool_search_output', 'call_id': 's1', 'status': 'completed',
                        'execution': 'client',
                        'tools': [{'type': 'namespace', 'name': 'probe', 'tools': [stub]}]}]}
-        prepare_tools(payload)
+        payload = prepare_tools(payload)[0]
         matches = [tool for tool in payload['tools']
                    if tool.get('description', '').startswith('probe.echo')]
         self.assertEqual(len(matches), 1)
