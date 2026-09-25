@@ -83,7 +83,8 @@ fragment scrub, on `history_items` alone. Plan 183 moved these out of
 `history_portability.py`, `compaction.py` and `agent_handoffs.py`; every
 importer reads them from these two owners, and the old names are gone.
 `compaction.py` owns compaction only: the prompt, the `ocx1:` codec, the V1
-output and the summary transcript. `external_history.py` owns the two external
+output and the summary transcript, including bounded native `apply_patch` and
+tool-search call/result evidence. `external_history.py` owns the two external
 stages that read that codec: compaction items replay as readable text
 (`rewrite_input`), and OpenAI-owned reasoning blobs go (`strip_reasoning_blobs`,
 which the subscription retry repair reuses). The
