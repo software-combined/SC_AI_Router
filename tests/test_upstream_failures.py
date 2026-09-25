@@ -3,7 +3,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from ai_router import provider_defs, upstream
+from ai_router import provider_defs, providers, upstream
 
 
 class FailureDescriptionTests(unittest.TestCase):
@@ -212,7 +212,7 @@ class RelayEndpointLogTests(unittest.TestCase):
             server=SimpleNamespace(credentials=SimpleNamespace(
                 key_rejected=lambda provider: False)),
             error=lambda err, **k: None)
-        provider = SimpleNamespace(defn=provider_defs.OPENROUTER)
+        provider = providers.ExternalResponsesProvider(provider_defs.OPENROUTER)
         body = json.dumps({'model': 'm', 'input': []}).encode()
         prepared = Prepared('openrouter.ai', '/responses', {}, body, {}, 'openrouter')
         metrics = {'provider': 'openrouter', 'protocol': 'responses',
@@ -287,7 +287,7 @@ class RefusalCacheTests(unittest.TestCase):
             server=SimpleNamespace(credentials=SimpleNamespace(
                 key_rejected=lambda provider: False)),
             error=lambda err: seen.update(err=err))
-        provider = SimpleNamespace(defn=provider_defs.OPENROUTER)
+        provider = providers.ExternalResponsesProvider(provider_defs.OPENROUTER)
         body = json.dumps({'model': 'm', 'input': [], 'tools': []}).encode()
         prepared = Prepared('openrouter.ai', '/responses', {}, body, {}, 'openrouter')
         metrics = {'provider': 'openrouter', 'protocol': 'responses',
@@ -411,7 +411,7 @@ class RefusalCacheTests(unittest.TestCase):
             server=SimpleNamespace(credentials=SimpleNamespace(
                 key_rejected=lambda provider: False)),
             error=lambda err: seen.setdefault('err', err))
-        provider = SimpleNamespace(defn=provider_defs.OPENROUTER)
+        provider = providers.ExternalResponsesProvider(provider_defs.OPENROUTER)
         body = json.dumps({'model': 'm', 'input': [], 'tools': []}).encode()
         prepared = Prepared('openrouter.ai', '/responses', {}, body, {}, 'openrouter')
         metrics = {'provider': 'openrouter', 'protocol': 'responses',

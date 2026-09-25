@@ -13,7 +13,7 @@ import unittest
 from compression import zstd
 from unittest import mock
 
-from ai_router import compaction, provider_defs, strip_retry, wire_shape
+from ai_router import compaction, provider_defs, rejected_repair, wire_shape
 
 SUBSCRIPTION = provider_defs.DIALECT_OPENAI
 EXTERNAL = provider_defs.DIALECT_OPENROUTER
@@ -164,7 +164,7 @@ class RuleTests(unittest.TestCase):
 
 class DecodeTests(unittest.TestCase):
     def test_limits_mirror_their_owners(self):
-        self.assertEqual(wire_shape.DECODE_LIMIT, strip_retry.ZSTD_DECODE_LIMIT)
+        self.assertEqual(wire_shape.DECODE_LIMIT, rejected_repair.ZSTD_DECODE_LIMIT)
         self.assertEqual(wire_shape._ROUTER_BLOB, compaction.PREFIX)
 
     def test_identity_and_zstd_bodies_decode_to_the_object(self):
