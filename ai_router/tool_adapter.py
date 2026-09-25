@@ -69,7 +69,8 @@ def _grok_needs_envelope(parameters):
 def prepare_tools(payload, row):
     """Shape this turn's declarations for `row`, the request's captured row.
 
-    Returns the kind map and wire-name map `tool_history` reads next.
+    Returns the tool list to send, copied so the client's tools never change,
+    plus the kind map and wire-name map `tool_history` reads next.
     """
     names = tool_aliases.ToolNames()
     # OpenAI reads discovered definitions from tool_search_output history. Other
@@ -81,8 +82,9 @@ def prepare_tools(payload, row):
     released.extend(recall(payload.get('input', [])))
     released_keys = {tool_merge.key_of(tool, namespace)
                      for tool, namespace in tool_entries(released)}
+    entries = [(dict(tool), namespace) for tool, namespace in tool_entries(payload.get('tools', []))]
     declared = {}
-    for tool, namespace in tool_entries(payload.get('tools', [])):
+    for tool, namespace in entries:
         declared.setdefault(tool_merge.key_of(tool, namespace), tool)
     for tool, namespace in tool_entries(released):
         key = tool_merge.key_of(tool, namespace)
@@ -91,18 +93,17 @@ def prepare_tools(payload, row):
             # Complete a catalogue stub from the discovered schema; never clobber.
             tool_merge.complete_parameters(existing, tool)
             continue
-        if namespace:
-            payload.setdefault('tools', []).append({'type': 'namespace', 'name': namespace, 'description': namespace + ' tools', 'tools': [tool]})
-        else:
-            payload.setdefault('tools', []).append(tool)
+        tool = dict(tool)
+        entries.append((tool, namespace))
         declared[key] = tool
-    for tool, namespace in tool_entries(payload.get('tools', [])):
+    for tool, namespace in entries:
         if tool.get('type') == 'tool_search':
             tool.pop('execution', None)
             tool.update(type='function', name=SEARCH_NAME, strict=False)
             limit = tool.get('parameters', {}).get('properties', {}).get('limit')
             if isinstance(limit, dict):
-                limit.update(type='integer', minimum=1)
+                tool['parameters'] = deepcopy(tool['parameters'])  # the client's stays whole
+                tool['parameters']['properties']['limit'].update(type='integer', minimum=1)
             tool['description'] = tool.get('description', '') + '\nSearch using short keywords or an unqualified tool name, not a dotted namespace path. If there are no matches, retry with a shorter query.'
             names[(namespace, tool['name'])] = 'search'
         elif tool.get('type') == 'custom':
@@ -124,10 +125,10 @@ def prepare_tools(payload, row):
             # Object-only unions stay native.
             _wrap_string_envelope(tool, 'value')
             names[(namespace, tool['name'])] = 'json_text_root'
-    wire_names = tool_aliases.bind(tool_entries(payload.get('tools', [])))
+    wire_names = tool_aliases.bind(entries)
     names.reserved |= wire_names.reserved
     flattened = []
-    for tool, namespace in tool_entries(payload.get('tools', [])):
+    for tool, namespace in entries:
         if namespace:
             original = (namespace, tool['name'])
             wire = wire_names[original]
@@ -145,7 +146,6 @@ def prepare_tools(payload, row):
         # 'Server tool request failed' when the client's web_search server
         # tool rides along (2026-09-10, deepseek-v4.1-flash).
         flattened = [tool for tool in flattened if tool.get('type') != 'web_search']
-    payload['tools'] = flattened
     ceiling = _quirk(row, 'max_tools')
     if ceiling and len(flattened) > ceiling:
         # ponytail: drop, don't page; the search tool reloads on demand.
@@ -163,8 +163,8 @@ def prepare_tools(payload, row):
                 entry = names.pop((None, tool.get('name')), None)
                 if isinstance(entry, dict):
                     names.dropped.add(entry['name'])
-        payload['tools'] = kept
-    return names, wire_names
+        return kept, names, wire_names
+    return flattened, names, wire_names
 
 class ToolEvents:
     def __init__(self, names, notes=None):

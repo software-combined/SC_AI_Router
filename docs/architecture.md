@@ -96,11 +96,24 @@ and the external turn-size fit. `outbound.contain` is the one opaque-brief
 rule: the first external stage and `router.py`'s compaction guard (through the
 `providers.reject_opaque_agent_items` name) both apply it.
 `tool_adapter.prepare_tools(payload, row)` shapes the declarations only and
-returns the kind and wire-name maps. `tool_history.py` then rewrites the
-external tool history against them: custom pairs, discovery listings,
-tool-search items, call renames and `json_text` arguments, output
-annotations, then the model-switch boundary. Neither looks a row up. Stages
-still edit the payload in place; phase 3 makes them copy-on-write.
+returns the tool list to send with the kind and wire-name maps.
+`tool_history.py` then rewrites the external tool history against them:
+custom pairs, discovery listings, tool-search items, call renames and
+`json_text` arguments, output annotations, then the model-switch boundary.
+Neither looks a row up. Preparation never edits the client's payload (Plan 183
+phase 3). Every stage and helper returns its result: the value it was given
+when nothing changed, otherwise new lists with copies of only the items and
+containers it changed. `agent_handoffs.add_plaintext_tools` returns the payload
+with the alias metadata, `hint_full_lanes` and `rewrite_tool_history` return
+the payload, and `rewrite_custom_pairs` returns the items. The external
+turn-size fit follows the same rule: `turn_budget.fit` returns
+`(payload, stats)`, and its image and tool-output trims copy only the path to
+each trimmed block, never the whole body. The original body stays whole, so
+the helper fallback's twin or a second route prepares again from it
+with the same bytes. `tests/test_outbound_purity.py` pins this against every
+replay fixture on both routes, the native-then-twin sequence and both trims.
+Native passthrough still forwards the client's own bytes when nothing
+changed.
 `subscription_history.py` owns the pure outgoing projection of replayed
 reasoning and the router's own compaction summary (sent as readable text) for
 subscription Responses requests; it never edits persisted client history.

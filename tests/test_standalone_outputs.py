@@ -40,7 +40,8 @@ def _prepare_names(namespace, *names):
     payload = {'model': 'z-ai/glm-5.3',
                'tools': [{'type': 'namespace', 'name': namespace, 'tools': tools}],
                'input': []}
-    return prepare_tools(payload), payload
+    payload, names = prepare_tools(payload)
+    return names, payload
 
 
 def _inert_candidates(name):

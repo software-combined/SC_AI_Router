@@ -129,7 +129,7 @@ class ExternalResponsesProvider:
                         'Accept-Encoding': 'identity'})
         body = json.dumps(payload).encode()
         if len(body) > turn_budget.BODY_BUDGET:
-            stats = turn_budget.fit(payload, turn_budget.BODY_BUDGET, len(body))
+            payload, stats = turn_budget.fit(payload, turn_budget.BODY_BUDGET, len(body))
             if stats:
                 body = json.dumps(payload).encode()
                 log_event('turn_trimmed', model=model, prepared_bytes=len(body), **stats)
