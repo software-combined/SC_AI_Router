@@ -2650,3 +2650,20 @@ OpenRouter twin.
 | model | status | date | legs |
 |---|---|---|---|
 | anthropic/claude-opus-5.5 | verified | 2026-09-23 | tool,stream,image,compact,apply_patch |
+
+## DeepSeek streamed tool ID repair, 2026-09-26
+
+Client: Claude Code `2.1.223 (Claude Code)`. Requested model
+`deepseek/deepseek-v4.1-flash`, effort `max`, served identity matched. The
+candidate router was built from this worktree and the probe used synthetic
+files only. `tools/probe_claude_code.py --read-count 2` ran one row and one
+leg with `--max-rows 1 --max-legs 1`, a 300-second timeout, a documented
+synthetic `PROBE_AUTH_TOKEN`, and a hard `--max-budget-usd 1.00` cap. The gate
+required exactly two Read calls and two tool calls, with the second Read in a
+later assistant event after a tool-result boundary; it rejected parallel,
+extra, or errored streams and non-finite or non-positive budgets. It completed
+three turns and two Read calls, returning both synthetic markers in the final
+answer. A first attempt at the same probe with a `0.10` USD cap stopped after
+one turn with `error_max_budget_usd`, before an answer; no retry or extra row
+was attempted. The capped run therefore proves that both earlier Read results
+remain visible to DeepSeek after streamed tool IDs are rewritten.

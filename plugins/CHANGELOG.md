@@ -18,6 +18,12 @@
   run, exact-tree approval, the re-review rules and the reportability
   thresholds keep their meaning.
 
+## scg-subagents 0.5.14 - 2026-09-26
+
+- Router workers reject empty, interrupted, narration-only and recognized
+  missing-tool-result final replies instead of reporting them as successful
+  results. The transcript is still saved for diagnosis.
+
 ## scg-review 0.4.14 and scg-subagents 0.5.13 - 2026-09-25
 
 - Require `xiaomi/mimo-v2.6-pro` at `xhigh` for every pre-commit review pass,
