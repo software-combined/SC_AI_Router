@@ -1,5 +1,23 @@
 # Changelog
 
+## scg-review 0.4.15 - 2026-09-26
+
+- Rewrite the pre-commit-review skill as a ten-step checklist that less
+  capable models can follow in order. Each step names its exact commands and
+  when to stop with `❌ Block`, and the severity and re-review decisions are
+  tables.
+- Give all three lanes one copy-ready reviewer brief, and move the lane
+  definitions, reportability rules, severity scale and report format into
+  `references/lanes.md`. Each lane reads it, and the main agent adjudicates
+  against the same severity scale.
+- State the runtime split: in Codex every pass uses the routing policy's
+  required model; in Claude Code the passes run on the installed adapter
+  agents with their configured Claude models, never router models.
+- Add a worked example of the approval receipt's `--pass` encoding.
+- No gate is removed or loosened. The secret scan, the single verification
+  run, exact-tree approval, the re-review rules and the reportability
+  thresholds keep their meaning.
+
 ## scg-review 0.4.14 and scg-subagents 0.5.13 - 2026-09-25
 
 - Require `xiaomi/mimo-v2.6-pro` at `xhigh` for every pre-commit review pass,
