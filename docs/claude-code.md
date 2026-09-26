@@ -168,16 +168,20 @@ hand-edited conflict instead of overwriting it.
 ## Behaviour and limits
 
 - OpenRouter-bound requests reach OpenRouter's Anthropic-compatible
-  endpoint unchanged, so thinking blocks, `tool_use` IDs and
+  endpoint unchanged except for the repairs below, so thinking blocks and
   `cache_control` keep full fidelity, and `count_tokens` follows the same
-  split. Two shapes Claude Code 2.1.223 cannot survive are repaired in
-  flight and every other byte is left alone. The `system` block carrying
+  split. The router gives each streamed `tool_use` a fresh client-visible ID.
+  DeepSeek V4.1 Flash otherwise returns `call_0` for every tool call; Claude
+  Code collapses duplicate IDs and keeps only one earlier `tool_result`, which
+  makes later reads look empty. Non-streaming JSON responses stay byte-identical.
+  The `system` block carrying
   the client's own `x-anthropic-billing-header` line is dropped, because
   `anthropic/claude-fable-5.1` refuses any turn that carries it with HTTP
   400 and the line only matters to Anthropic's billing, which this route
   does not use. A thinking block that arrives with a signature but no
   thinking is dropped from the stream, because Claude Code throws away the
-  whole answer when one follows it. The subscription route keeps both.
+  whole answer when one follows it. The subscription route keeps both shapes
+  byte-identical.
   `GET /v1/models` answers `{data: [{id, display_name, anthropic_family_tier}]}` from
   the local registry without touching the network; unknown paths answer
   404.
@@ -237,7 +241,12 @@ it down afterwards, so a build can be checked before it is installed, and
 `PROBE_AUTH_TOKEN` supplies a synthetic bearer for a routed row on a host
 whose client login a non-interactive probe cannot read. Pass `--models` to
 narrow it, `--max-rows` to raise the cap, or `--json` for a machine-readable
-report, and set `CLAUDE_BIN` to drive a different client binary.
+report, and set `CLAUDE_BIN` to drive a different client binary. For the
+multi-turn history check, `--read-count 2` makes two sequential synthetic
+Read calls and requires `--max-budget-usd` as a hard spend cap; it reports the
+client version, requested and served model, effort, call count and result.
+Budgeted runs accept exactly one row and one leg, so the cap cannot be
+multiplied across models.
 
 ## Claude desktop app
 
