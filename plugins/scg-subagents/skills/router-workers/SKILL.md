@@ -68,13 +68,17 @@ Windows the stop is immediate, so a shell command can outlive it.
 
 The runner prints one JSON object and exits non-zero when `ok` is false:
 
-- `ok`: the worker finished without an error, a timeout or an interruption.
+- `ok`: the worker finished without an error, a timeout, an interruption or a
+  final reply that is empty, narration-only or a recognized report of missing
+  tool results. The usable-answer check is conservative and recognizes common
+  explicit failure wording; it does not attempt semantic validation.
 - `answer`: its final reply.
 - `served`: the model names the upstream reported. Record them beside the
   requested model; a mismatch invalidates the result.
 - `tool_calls`, `turns`, `seconds` and `tokens`: the size of the run.
 - `transcript`: the redacted event stream, kept in `~/.cache/router-workers`.
-- `error`: why it did not finish.
+- `error`: why it did not finish or which unusable final-reply category was
+  recognized.
 
 Treat the answer as a claim. Read the diff, rerun the checks and verify facts
 yourself before you use or report them. When `ok` is false, a model the router

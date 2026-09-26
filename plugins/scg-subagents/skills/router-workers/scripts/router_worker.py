@@ -17,6 +17,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -46,6 +47,158 @@ class Interrupted(Exception):
 
 def interrupted(signum, _frame):
     raise Interrupted('interrupted by ' + signal.Signals(signum).name)
+
+
+def answer_error(answer):
+    """Why a final reply is not a usable result, or None when it is."""
+    if answer is None:
+        return 'empty_answer'
+    if not isinstance(answer, str):
+        return 'invalid_answer'
+    text = answer.strip()
+    if not text:
+        return 'empty_answer'
+    lowered = text.casefold().replace('\u2019', "'")
+    if lowered.startswith('[tool use interrupted]'):
+        return 'interrupted_answer'
+    if lowered.startswith('i need to stop here'):
+        return 'narration_only_answer'
+    if len(text) < 240 and lowered.startswith((
+            'i\'ll read', 'i\'ll continue', 'i\'ll look',
+            'i will read', 'i will continue', 'i will look',
+            'let me read', 'let me try reading', 'let me look',
+            'let me continue')):
+        return 'narration_only_answer'
+    sentences = re.split(r'(?<=[.!?])\s+', lowered)
+    tool_failure = re.compile(
+            r'\b(read|glob|grep|file tool|file-reading tools?|tool calls?|'
+            r'tool result|tools?)\b'
+            r'[^.!?]{0,100}\b(returned no\s+(?:content|data|output|result|text|bytes|items)|'
+            r'returned empty|'
+            r'returned nothing(?:\s*(?:[.!;]|$)|\s+(?:at all|from|in|for|on|after|during)\b)|'
+            r'did not return\s+(?:any\s+|the\s+)?(?:content|data|output|result|text|bytes|items)|'
+            r'failed to return\s+(?:any\s+|the\s+)?(?:content|data|output|result|text|bytes|items)|'
+            r'produced no\s+(?:content|data|output|result|text|bytes|items)|came back empty|'
+            r'no content|no data|no output|no result|result (?:was|is|remains) missing|'
+            r'failed|failure|error|could not|couldn\'t|cannot verify|'
+            r'were empty|was missing)(?!\w)'
+            r'|\b(?:i|we|my|our)\s+(?:could not|couldn\'t|cannot|can\'t|'
+            r'failed to|unable to)\s+(?:read|glob|grep|open|load)\b')
+    recovered = re.compile(
+            r'\b(?:(?:i|we)\s+(?:re-?read|retry|second attempt|'
+            r'subsequent (?:read|tool call))|(?:a|the|my|this)\s+'
+            r'(?:retry|re-?read|second attempt)|subsequent (?:read|tool call))\b'
+            r'[^.!?]{0,80}\b(?:succeeded|passed|worked|verified|confirmed|'
+            r'validated|returned\s+(?:the\s+)?(?:expected|final)?\s*'
+            r'(?:result|content|output|marker|contents)|'
+            r'now returns|returns the expected)\b'
+            r'|\b(?:i|we|my|our)\s+used (?:glob|grep)\b[^.!?]{0,40}\band\s+'
+            r'(?:verified|confirmed|validated|passed)\b')
+    expected_recovered = re.compile(
+            r'\b(?:verified|confirmed|validated|matches|matched|passed|passes)\b'
+            r'[^.!?]{0,80}\b(?:expected (?:empty|result)|empty (?:state|fixture|file)|'
+            r'intentionally empty|fixture|file)\b'
+            r'|\b(?:expected (?:empty|result)|empty (?:state|fixture|file)|'
+            r'intentionally empty|fixture|file)\b'
+            r'[^.!?]{0,80}\b(?:verified|confirmed|validated|matches|matched|'
+            r'passed|passes)\b')
+    recovery_negation = re.compile(
+            r'\b(?:failed|did not|didn\'t|does not|doesn\'t|is not|isn\'t|'
+            r'are not|aren\'t|was not|wasn\'t|were not|weren\'t|cannot|can\'t|'
+            r'could not|couldn\'t|will not|won\'t|would not|wouldn\'t|'
+            r'should not|shouldn\'t|has not|hasn\'t|have not|haven\'t|'
+            r'had not|hadn\'t|never|not)\b')
+    result_subject = (
+            r'(?:this version|the (?:change|patch|task|result|file|contents?|'
+            r'output|evidence|read|tool)|requested (?:file|result|contents?|'
+            r'output|evidence)|file (?:result|contents?|output)|tool result|'
+            r'read result)')
+    result_state = (
+            r'(?:unverified|unavailable|unobtainable|missing|'
+            r'(?:not|isn\'t|is not|aren\'t|are not|wasn\'t|was not|weren\'t|'
+            r'were not|doesn\'t|does not|can\'t|cannot|couldn\'t|could not|'
+            r'never)\s+(?:be\s+)?(?:verified|confirmed|validated|available|'
+            r'obtained|retrieved|retrievable|complete|readable)|'
+            r'(?:cannot|can\'t|could not|couldn\'t)\s+(?:be\s+)?'
+            r'(?:verify|confirmed|validate|obtain|retrieve|read))')
+    result_denial = re.compile(
+            rf'\b{result_subject}\b[^.!?]{{0,80}}\b{result_state}\b'
+            rf'|\b{result_state}\b[^.!?]{{0,80}}\b{result_subject}\b'
+            r'|^\s*(?:not\s+(?:verified|confirmed|validated|available|obtained|'
+            r'retrieved|retrievable|complete|readable)|'
+            r'(?:remain|remains|remained)\s+(?:unavailable|unobtainable|missing|'
+            r'not\s+(?:available|obtained|retrieved|retrievable|readable))|'
+            r'unverified|unavailable|unobtainable)\s*[.!?]?$')
+    recovery_scope_denied = re.compile(
+            r'\b(?:unrelated|different|another|separate|cache)\b')
+    failed_recovery = re.compile(
+            r'\b(?:retry|re-?read|second attempt|subsequent (?:read|tool call))\b'
+            r'[^.!?]{0,60}\b(?:failed|did not|didn\'t|does not|doesn\'t|'
+            r'could not|couldn\'t|cannot|can\'t|was not|wasn\'t|never)\b')
+    prior_recovered = re.compile(
+            r'\b(?:this version|final result|final suite|the fix|change)\b'
+            r'[^.!?]{0,80}\b(?<!not )(?<!never )'
+            r'(passes|passed|works|verified|confirmed|validated|matches|'
+            r'matched|returns the expected)\b')
+    empty_context = re.compile(
+            r'\b(?:empty|zero-byte|zero byte|0-byte|blank)\s+'
+            r'(?:file|fixture|result|output|state)|'
+            r'\b(?:file|fixture|result|output|state)\s+'
+            r'(?:is|was|are|were|remains?|remain)?\s*empty\b|'
+            r'\bintentionally empty\b')
+    verification = re.compile(
+            r'\b(?:verified|confirmed|validated|matches|matched|passed|passes|'
+            r'works|working)\b')
+    historical_failure = re.compile(
+            r'\b(?:earlier|previously|before the fix)\b')
+    tool_failure_sentences = [sentence for sentence in sentences
+                              if tool_failure.search(sentence)]
+    if not tool_failure_sentences:
+        return None
+    def recovered_clause(clause):
+        return (not result_denial.search(clause)
+                and (recovered.search(clause) or expected_recovered.search(clause))
+                and not recovery_negation.search(clause)
+                and not recovery_scope_denied.search(clause))
+
+    all_clauses = [
+        clause for sentence in sentences
+        for clause in re.split(r'\s*(?:;|,\s*but\b|,\s*so\b)\s*', sentence)]
+    for sentence in sentences:
+        clauses = re.split(r'\s*(?:;|,\s*but\b|,\s*so\b)\s*', sentence)
+        denial_parts = re.split(
+                r'\s*(?:;|,\s*but\b|,\s*so\b|\s+and\s+)\s*', sentence)
+        if (any(result_denial.search(part) for part in denial_parts)
+                and not any(recovered_clause(clause) for clause in clauses)):
+            return 'tool_result_missing'
+    if (empty_context.search(lowered) and verification.search(lowered)
+            and not recovery_scope_denied.search(lowered)):
+        return None
+    def affirmative_clause(clause):
+        return (recovered_clause(clause)
+                or (prior_recovered.search(clause)
+                    and not result_denial.search(clause)
+                    and not recovery_negation.search(clause)
+                    and not recovery_scope_denied.search(clause)))
+    if any(failed_recovery.search(clause) and not recovered_clause(clause)
+           for clause in all_clauses):
+        return 'tool_result_missing'
+    if (all(historical_failure.search(sentence)
+            for sentence in tool_failure_sentences)
+            and any(affirmative_clause(clause) for clause in all_clauses)):
+        return None
+    failure_indices = [index for index, sentence in enumerate(sentences)
+                       if tool_failure.search(sentence)]
+    for index in failure_indices:
+        sentence = sentences[index]
+        clauses = re.split(r'\s*(?:;|,\s*but\b|,\s*so\b)\s*', sentence)
+        if any(recovered_clause(clause) for clause in clauses):
+            continue
+        if (index + 1 < len(sentences)
+                and recovered_clause(sentences[index + 1])):
+            continue
+        return 'tool_result_missing'
+    return None
 
 
 def router():
@@ -156,9 +309,13 @@ def summarise(stream):
     usage = result.get('usage') or {}
     input_total = sum(usage.get(key) or 0 for key in (
         'input_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens'))
-    return {'finished': bool(result) and not result.get('is_error'),
+    has_answer = 'result' in result
+    quality_error = answer_error(result.get('result')) if has_answer else None
+    return {'finished': has_answer and not result.get('is_error')
+            and quality_error is None,
             'answer': result.get('result'), 'served': sorted(served),
-            'error': result.get('subtype') if result.get('is_error') else None,
+            'error': (result.get('subtype') if result.get('is_error')
+                      else quality_error),
             'tool_calls': calls, 'turns': result.get('num_turns'),
             'tokens': {'input': input_total, 'output': usage.get('output_tokens')}}
 

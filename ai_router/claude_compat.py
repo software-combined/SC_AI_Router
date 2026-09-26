@@ -8,6 +8,7 @@ protocol. Every repair below is narrow, applies only where the shape is what
 breaks the route, and leaves every other byte alone.
 """
 import json
+from uuid import uuid4
 
 from . import sse
 
@@ -15,6 +16,12 @@ BILLING_HEADER = 'x-anthropic-billing-header:'
 DEFERRED_PLACEHOLDER = 'DeferredToolPlaceholder'
 REFERENCE_TYPE = 'tool_reference'
 SERVER_TOOL_PREFIX = 'tool_search_tool'
+TOOL_ID_PREFIX = 'toolu_scg_'
+
+
+def _fresh_tool_id():
+    """One client-visible id for one tool call, unique across turns."""
+    return TOOL_ID_PREFIX + uuid4().hex
 
 
 def strip_billing_header(payload):
@@ -112,18 +119,21 @@ def _plain_reference(block):
 
 
 def shape(chunks):
-    """Drop thinking blocks that carry a signature but no thinking.
+    """Repair streamed Messages shapes before Claude Code sees them.
 
     OpenRouter returns a trailing `thinking` block holding only a
     signature after a tool result on `google/gemini-3.8-flash`. Claude Code
     discards the whole turn's text when it follows the answer, so the user
     sees an empty reply. A block that streams real thinking is emitted as
     soon as its first `thinking_delta` arrives, so only the empty shape is
-    ever held back.
+    ever held back. DeepSeek V4.1 Flash also returns `call_0` for every tool
+    call; Claude Code collapses duplicate ids and keeps only one earlier
+    `tool_result`, so each response gets a fresh client-visible id here.
     """
     pending, index = [], None
     for frame, data in sse.blocks(sse.lines(chunks)):
         event = _parsed(data)
+        frame = _rewrite_tool_use(frame, event)
         kind = event.get('type')
         if index is None:
             if (kind == 'content_block_start'
@@ -147,6 +157,19 @@ def shape(chunks):
             pending, index = [], None
     for held, _ in pending:
         yield held
+
+
+def _rewrite_tool_use(frame, event):
+    """Replace one streamed tool id; leave every other frame unchanged."""
+    if event.get('type') != 'content_block_start':
+        return frame
+    block = event.get('content_block')
+    if not isinstance(block, dict) or block.get('type') != 'tool_use':
+        return frame
+    if not isinstance(block.get('id'), str):
+        return frame
+    block['id'] = _fresh_tool_id()
+    return sse.replace_data(frame, json.dumps(event, separators=(',', ':')).encode())
 
 
 def _parsed(data):
