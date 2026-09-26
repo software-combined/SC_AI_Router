@@ -7,6 +7,7 @@ The subscription route is untouched and is pinned as such here.
 """
 import json
 import unittest
+from unittest.mock import patch
 
 from tests.fakes import FakeUpstream, install_fake
 from tests.harness import (
@@ -125,6 +126,29 @@ class ThinkingShapeTests(unittest.TestCase):
         frames = [_start(0, 'thinking')]
         self.assertEqual(self._shaped(frames), b''.join(frames))
 
+    def test_streamed_tool_use_ids_are_unique_across_calls(self):
+        def tool_start(tool_id):
+            return _frame('content_block_start',
+                          {'type': 'content_block_start', 'index': 0,
+                           'content_block': {'type': 'tool_use', 'id': tool_id,
+                                             'name': 'Read', 'input': {}}})
+
+        frames = [tool_start('call_0'), _stop(0),
+                  tool_start('call_0'), _stop(0)]
+        with patch.object(
+                compat, '_fresh_tool_id',
+                side_effect=('toolu_scg_a', 'toolu_scg_b')):
+            shaped = self._shaped(frames)
+        ids = []
+        for line in shaped.splitlines():
+            if not line.startswith(b'data: '):
+                continue
+            event = json.loads(line[6:])
+            if event.get('type') == 'content_block_start':
+                ids.append(event['content_block']['id'])
+        self.assertEqual(ids, ['toolu_scg_a', 'toolu_scg_b'])
+        self.assertNotIn(b'call_0', shaped)
+
 
 class DeferredToolTests(unittest.TestCase):
     def test_placeholder_and_flag_go_and_the_released_definition_stays(self):
@@ -189,8 +213,24 @@ class ProviderSurfaceTests(unittest.TestCase):
         self.assertEqual(b''.join(self._provider().adapt(source, None)),
                          b''.join([frames[0], frames[1], frames[3]]))
 
+    def test_streaming_tool_ids_are_rewritten_by_the_provider(self):
+        frames = [_frame('content_block_start',
+                         {'type': 'content_block_start', 'index': 0,
+                          'content_block': {'type': 'tool_use', 'id': 'call_0',
+                                            'name': 'Read', 'input': {}}}),
+                  _stop(0)]
+        with patch.object(compat, '_fresh_tool_id', return_value='toolu_scg_provider'):
+            shaped = b''.join(self._provider().adapt(
+                FakeUpstream(200, b''.join(frames),
+                             [('Content-Type', 'text/event-stream')]), None))
+        self.assertIn(b'toolu_scg_provider', shaped)
+        self.assertNotIn(b'call_0', shaped)
+
     def test_json_response_is_handed_over_untouched(self):
-        body = b'{"id":"msg_1","type":"message","content":[{"type":"text","text":"hi"}]}'
+        body = (b'{"id":"msg_1","type":"message","content":['
+                b'{"type":"tool_use","id":"call_0","name":"Read",'
+                b'"input":{"nested":{"type":"tool_use","id":"payload-id"}}},'
+                b'{"type":"text","text":"hi"}]}')
         source = FakeUpstream(200, body, [('Content-Type', 'application/json')])
         self.assertEqual(b''.join(self._provider().adapt(source, None)), body)
 

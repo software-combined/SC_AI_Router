@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- External Claude Messages streams now give every `tool_use` a unique
+  client-visible ID. DeepSeek V4.1 Flash reused `call_0` on every tool turn,
+  so Claude Code collapsed the history and the model could not see earlier
+  `tool_result` content. Non-streaming JSON responses remain byte-identical.
+- `router-worker` reports empty, interrupted, narration-only and recognized
+  missing-tool-result final replies as `ok: false` with an error category.
+
 ## 0.6.127
 
 - External compaction summaries now use Xiaomi MiMo V2.6 Flash first and
