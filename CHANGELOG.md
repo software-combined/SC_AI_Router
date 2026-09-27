@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Native Responses streams now retain their terminal outcome when the upstream
+  omits an SSE content type. Opaque or encoded data no longer counts as answer
+  text or becomes a successful model outcome at EOF. Forwarded bytes,
+  subscription headers and retry permissions are unchanged.
 - A completed Responses turn with `error: null` now remains successful. This
   standard no-error field previously caused a false stream failure on external
   routes and a false failure record on subscription routes. Actual error
