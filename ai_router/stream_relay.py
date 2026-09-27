@@ -155,6 +155,10 @@ def relay_stream(handler, provider, response, prepared, metrics, started,
                        'request_id': metrics.get('request_id'), 'attempt': attempt,
                        'context_tokens': metrics.get('context_tokens')}
     raw_encoded = metrics['response_encoding'] != 'identity'
+    # Native Responses can stream without declaring an SSE content type.
+    streamed = (metrics['response_kind'] == 'sse'
+                or (metrics.get('stream') is True and metrics['response_kind'] == 'other'
+                    and metrics.get('protocol') == provider_defs.RESPONSES))
     normalized = (provider.defn.dialect == provider_defs.DIALECT_OPENROUTER
                   and metrics.get('protocol') == provider_defs.RESPONSES
                   and metrics['response_kind'] == 'sse'
@@ -168,10 +172,11 @@ def relay_stream(handler, provider, response, prepared, metrics, started,
                   for chunk in chunks)
     elif normalized:
         frames = stream_errors.events(chunks, attempt_metrics)
-    elif metrics['response_kind'] == 'sse':
+    elif streamed:
         frames = _raw_events(chunks, metrics)
     else:
-        frames = (stream_events.StreamEvent(chunk, stream_events.ANSWER)
+        kind = stream_events.ANSWER if metrics['response_kind'] == 'json' else stream_events.OPAQUE
+        frames = (stream_events.StreamEvent(chunk, kind)
                   for chunk in chunks)
     try:
         for event in frames:
@@ -209,8 +214,8 @@ def relay_stream(handler, provider, response, prepared, metrics, started,
                 record.content_delta_bytes += len(event.frame)
             elif event.kind == stream_events.REASONING:
                 record.reasoning_bytes += len(event.frame)
-        if metrics['response_kind'] != 'sse':
-            # A complete non-SSE body has no terminal frame; EOF is its success.
+        if metrics['response_kind'] == 'json' and not raw_encoded:
+            # Known non-stream JSON keeps its EOF rule; opaque data proves no outcome.
             record.outcome = outcome.Outcome(outcome.SUCCESS, outcome.STATUS, outcome.UPSTREAM)
     finally:
         # Keep request model/context facts when attempt facts merge back.

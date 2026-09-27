@@ -1,5 +1,47 @@
 # Compatibility
 
+## Router 0.6.132 native stream candidate, 28 September 2026 AEST
+
+The preceding Codex subscription probe completed its tool call, but its
+unlabelled stream bypassed the common Responses observer. The router treated
+EOF as success and counted every byte as answer content. Routed synthetic
+tests reproduced false success for a failure, an incomplete stream and an
+opaque encoded body before the correction.
+
+An identity Responses stream now uses the existing lossless observer when the
+request asks for streaming but the upstream content type is unrecognised.
+Readable completions and failures supply the outcome; opaque data stays
+unknown. Tests preserve exact native bytes, request bodies and subscription
+headers, exercise partial-frame forwarding, and require a single upstream
+send. Existing native rejection repair remains unchanged. Fresh candidate
+evidence covers 109 focused protocol, preservation, history, native repair,
+replay and commitment checks, all passing.
+
+Codex desktop `26.917.62051`, bundled CLI `0.155.0-alpha.16.3`, passed a real
+subscription tool round trip through `tools/probe_codex_runtime.py`: two HTTP
+200 upstream calls, one tool execution and 6,345 usage tokens. Requested and
+reported model was `gpt-6-luna`, requested effort `low`; served effort remained
+unverified. Both identity responses retained the upstream `other` content-type
+category while the router observed their completion as a successful stream
+outcome. The preceding candidate had recorded status/EOF success on that path.
+The probe capped calls at two and input at 512 KiB, with a 30,000-token usage
+budget that stops later calls. Its unchanged runtime fingerprint was
+`7cf1672d6ff4cb9b295787cd03bee6c0a08b91d3fedce481c951ba7660b05966`.
+
+Claude Code `2.1.283` also passed a subscription Read-tool round trip on the
+same runtime: two HTTP 200 calls and one tool execution. The requested alias
+was `sonnet` at `low`, sent as `claude-sonnet-5`. Both responses were gzip SSE,
+preserved unchanged and recorded as opaque/unknown by the router. Served
+identity, effort and usage were unavailable to the probe's wire observer;
+its zero observed usage counter is not a claim of zero model usage. This
+probe capped calls at two, each request at 512 KiB and output at 2,048 tokens
+per call. It proves the client round trip; Messages outcome classification
+remains unverified for this encoded traffic. The earlier login-storage failure
+was resolved by reauthenticating macOS Keychain and renewing the Claude login.
+
+Installed acceptance, full Messages lifecycle migration, shared identity
+provenance and the original MiMo handoff defect remain open.
+
 ## Router 0.6.131 completion candidate, 28 September 2026 AEST
 
 The four-route acceptance check exposed a Responses completion regression:
