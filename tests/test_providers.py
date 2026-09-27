@@ -2,7 +2,7 @@ import json
 import unittest
 from types import SimpleNamespace
 from unittest import mock
-from ai_router import compaction_summary, provider_defs, providers
+from ai_router import availability, compaction_summary, provider_defs, providers
 from ai_router.image_items import IMAGE_NOTE
 from tests.harness import (
     isolated_home as _isolated_home,
@@ -13,6 +13,11 @@ from tests.harness import (
 def _external_responses():
     """The OpenRouter Codes adapter; Plan 141 makes adapters per-provider."""
     return providers.ExternalResponsesProvider(provider_defs.OPENROUTER)
+
+
+def _summary_snapshot():
+    return {'key': availability.key_fingerprint('key'), 'region': 'global',
+            'models': frozenset(compaction_summary.SUMMARY_MODEL_SLUGS)}
 
 
 class SelectTests(unittest.TestCase):
@@ -122,7 +127,10 @@ class DefinitionHeaderTests(unittest.TestCase):
                                         read=lambda: json.dumps(payload).encode())
             def close(self):
                 pass
-        with mock.patch.object(providers.http.client, 'HTTPSConnection', FakeConn):
+        with mock.patch.object(compaction_summary.availability, 'current',
+                               return_value=_summary_snapshot()), \
+                mock.patch.object(compaction_summary.http.client,
+                                  'HTTPSConnection', FakeConn):
             _external_responses().summarize('z-ai/glm-5.3', 'key', [])
         self.assertEqual(seen.get('X-OpenRouter-Metadata'), 'enabled')
         self.assertEqual(seen.get('Authorization'), 'Bearer key')
@@ -171,7 +179,10 @@ class ProviderPrefsTests(unittest.TestCase):
         prefs = {'require_parameters': True}
         rows = {slug: self._entry(prefs, slug)
                 for slug in compaction_summary.SUMMARY_MODEL_SLUGS}
-        with mock.patch.object(providers.http.client, 'HTTPSConnection', FakeConn), \
+        with mock.patch.object(compaction_summary.availability, 'current',
+                               return_value=_summary_snapshot()), \
+                mock.patch.object(compaction_summary.http.client,
+                                  'HTTPSConnection', FakeConn), \
                 mock.patch.object(providers, 'by_slug',
                                    side_effect=lambda slug: rows.get(slug)):
             with self.assertRaisesRegex(ValueError, 'failed pin'):
@@ -269,11 +280,16 @@ class SummarizerTests(unittest.TestCase):
                 return SimpleNamespace(status=200, read=lambda: json.dumps(payload).encode())
             def close(self):
                 pass
-        with mock.patch.object(providers.http.client, 'HTTPSConnection', FakeConn):
+        with mock.patch.object(compaction_summary.availability, 'current',
+                               return_value=_summary_snapshot()), \
+                mock.patch.object(compaction_summary.http.client,
+                                  'HTTPSConnection', FakeConn):
             return _external_responses().summarize(model, 'key', [])
 
     def test_summary_rows_resolve_in_primary_fallback_order(self):
-        entries = compaction_summary.summary_entries(provider_defs.OPENROUTER.id)
+        entries = compaction_summary.summary_entries(
+            provider_defs.OPENROUTER.id,
+            availability_snapshot=_summary_snapshot())
         self.assertEqual([entry.slug for entry in entries],
                          list(compaction_summary.SUMMARY_MODEL_SLUGS))
 
@@ -292,8 +308,10 @@ class SummarizerTests(unittest.TestCase):
                           'max_output_tokens': 4000}
                 rows[primary] = SimpleNamespace(
                     **{**vars(rows[primary]), changed: values[changed]})
-                with mock.patch.object(providers.http.client,
-                                       'HTTPSConnection') as conn, \
+                with mock.patch.object(compaction_summary.availability, 'current',
+                                       return_value=_summary_snapshot()), \
+                        mock.patch.object(compaction_summary.http.client,
+                                          'HTTPSConnection') as conn, \
                         mock.patch.object(providers, 'by_slug',
                                           side_effect=lambda slug: rows.get(slug)):
                     with self.assertRaisesRegex(ValueError, 'failed pin'):
@@ -308,8 +326,11 @@ class SummarizerTests(unittest.TestCase):
         self.assertEqual(seen['max_output_tokens'], 4000)
 
     def test_missing_summary_rows_fail_cleanly(self):
-        with mock.patch.object(providers, 'by_slug', return_value=None), \
-                mock.patch.object(providers.http.client, 'HTTPSConnection') as conn:
+        with mock.patch.object(compaction_summary.availability, 'current',
+                               return_value=_summary_snapshot()), \
+                mock.patch.object(providers, 'by_slug', return_value=None), \
+                mock.patch.object(compaction_summary.http.client,
+                                  'HTTPSConnection') as conn:
             with self.assertRaisesRegex(ValueError, 'models unavailable'):
                 _external_responses().summarize('unknown-model-xyz', 'key', [])
         conn.assert_not_called()
@@ -322,7 +343,9 @@ class SummarizerTests(unittest.TestCase):
                   'execution': 'client', 'tools': [
                       {'type': 'function', 'name': 'echo', 'description': 'Echo',
                        'parameters': {'type': 'object'}}]}]
-        with mock.patch.object(providers.ExternalResponsesProvider, 'summarize', lambda *a: 'did stuff'):
+        with mock.patch.object(providers.ExternalResponsesProvider, 'summarize', lambda *a: 'did stuff'), \
+                mock.patch.object(providers.ExternalResponsesProvider,
+                                  '_require_summary_rows', return_value={}):
             out = _external_responses().compact('z-ai/glm-5.3', {'input': items}, 'key')
         payload = {'tools': [], 'input': out}
         payload = prepare_tools(payload)[0]

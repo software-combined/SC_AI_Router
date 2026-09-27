@@ -1,5 +1,15 @@
 # Compatibility
 
+## Router 0.6.129 request recovery candidate, 28 September 2026 AEST
+
+The request/attempt, stream-outcome and encrypted-history candidate passed
+2,051 offline tests with three skips. Compile, source-limit and policy checks
+also passed on the exact exported tree. The tests cover bounded attempt
+ownership, conservative replay and fallback decisions, raw stream forwarding,
+response commitment, and preservation of opaque, malformed or mixed encrypted
+native compaction history. This is offline candidate evidence only. It does not
+claim Codex or Claude client acceptance, provider identity, or beta deployment.
+
 ## Router 0.6.127 compaction summary candidate, 25 September 2026 AEST
 
 Three bounded synthetic summaries ran through the candidate's production
@@ -494,12 +504,14 @@ the item-level key from a `reasoning` item, so the bounded retry never fired
 and the turn was refused.
 
 The repair is retry-only and keeps the #274 gate unchanged (subscription
-OpenAI dialect, HTTP 400, `invalid_encrypted_content`). The compaction item
-becomes the same readable user message `external_history.rewrite_input` already
-produces for external models, built from `compaction_text`: the decoded
-summary, or the fixed opaque note when the blob is not the router's own. A
-payload carrying an encrypted field outside those two sites is left unchanged,
-so an unknown shape is never retried against a request the repair cannot fix.
+OpenAI dialect, HTTP 400, `invalid_encrypted_content`). A router-owned
+non-empty `ocx1:` compaction item becomes the same readable user message
+`external_history.rewrite_input` already produces for external models. Native
+opaque, malformed, or mixed encrypted compaction data is preserved and makes
+the repair ineligible; it is never replaced with a note or retried. A payload
+carrying an encrypted field outside the owned reasoning and structurally valid
+router-summary sites is left unchanged, so an unknown shape is never retried
+against a request the repair cannot fix.
 The classification is the one-level structural count: an item-level
 `encrypted_content` key, or the same key on a block of a one-level `content`
 list. Content nested deeper, or shaped differently, is not classified and is

@@ -336,7 +336,7 @@ class InFlightBodyDrainTests(unittest.TestCase):
             def close(self):
                 pass
 
-        patcher = mock.patch.object(providers.http.client, 'HTTPSConnection', _FailConn)
+        patcher = mock.patch.object(http.client, 'HTTPSConnection', _FailConn)
         patcher.start()
         self.addCleanup(patcher.stop)
         response = _post(server.server_port, '/test-token/responses',

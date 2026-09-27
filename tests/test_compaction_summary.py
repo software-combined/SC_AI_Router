@@ -39,7 +39,17 @@ class Clock:
         self.now += seconds
 
 
-class SummarizerRetryTests(unittest.TestCase):
+class SummaryAvailabilityTest(unittest.TestCase):
+    def setUp(self):
+        self.enterContext(mock.patch.object(
+            availability, 'current',
+            return_value={'key': availability.key_fingerprint('key'),
+                          'region': 'global',
+                          'models': frozenset(
+                              compaction_summary.SUMMARY_MODEL_SLUGS)}))
+
+
+class SummarizerRetryTests(SummaryAvailabilityTest):
     @staticmethod
     def _result(text='summary', status=None, **extra):
         payload = {'output': [{'type': 'message', 'content': [
@@ -104,7 +114,7 @@ class SummarizerRetryTests(unittest.TestCase):
 
         with ExitStack() as stack:
             stack.enter_context(mock.patch.object(
-                providers.http.client, 'HTTPSConnection', Connection))
+                compaction_summary.http.client, 'HTTPSConnection', Connection))
             rows = _summary_rows(100000 if ceiling is None else ceiling)
             stack.enter_context(mock.patch.object(
                 providers, 'by_slug', side_effect=lambda slug: rows.get(slug)))
@@ -208,7 +218,7 @@ class SummarizerRetryTests(unittest.TestCase):
                              compaction_summary.SUMMARY_TOTAL_DEADLINE_S)
         self.assertEqual(len(calls), len(closed))
 
-    def test_total_deadline_stops_before_fallback(self):
+    def test_total_deadline_after_dispatch_reports_unknown_commitment(self):
         clock = Clock()
         with mock.patch.object(providers, 'log_event') as logged:
             result, calls, closed = self._run(
@@ -220,25 +230,23 @@ class SummarizerRetryTests(unittest.TestCase):
                          compaction_summary.SUMMARY_ATTEMPT_DEADLINE_S)
         complete = next(call.kwargs for call in logged.call_args_list
                         if call.args and call.args[0] == 'compaction_summary_complete')
-        self.assertEqual(complete['outcome'], 'deadline')
+        self.assertEqual(complete['outcome'], 'unknown')
 
-    def test_attempt_timeout_falls_back_to_deepseek(self):
+    def test_attempt_response_timeout_cannot_fall_back(self):
         clock = Clock()
         with mock.patch.object(providers, 'log_event') as logged:
-            result, calls, closed = self._run([
-                self._result('late'), self._result('complete')],
-                clock=clock, delays=(50,))
-        self.assertEqual(result, 'complete')
+            result, calls, closed = self._run(
+                [self._result('late')], clock=clock, delays=(50,))
+        self.assertIsInstance(result, TimeoutError)
         self.assertEqual([call['body']['model'] for call in calls],
-                         ['xiaomi/mimo-v2.6-flash',
-                          'deepseek/deepseek-v4.1-flash'])
-        self.assertTrue(all(call['timeout']
-                            <= compaction_summary.SUMMARY_ATTEMPT_DEADLINE_S
-                            for call in calls))
+                         ['xiaomi/mimo-v2.6-flash'])
+        self.assertLessEqual(calls[0]['timeout'],
+                             compaction_summary.SUMMARY_ATTEMPT_DEADLINE_S)
         complete = next(call.kwargs for call in logged.call_args_list
-                        if call.args and call.args[0] == 'compaction_summary_complete')
-        self.assertEqual([event['outcome'] for event in complete['attempts']],
-                         ['timeout', 'completed'])
+                         if call.args and call.args[0] == 'compaction_summary_complete')
+        self.assertEqual([(event['outcome'], event['commitment'])
+                          for event in complete['attempts']],
+                         [('timeout', 'unknown')])
         self.assertEqual(len(calls), len(closed))
 
     def test_final_attempt_deadline_raises_timeout(self):
@@ -282,22 +290,11 @@ class SummarizerRetryTests(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         self.assertEqual(len(calls), len(closed))
 
-    def test_summary_rows_use_one_catalogue_and_policy_snapshot(self):
-        rows = _summary_rows()
-        lookup = mock.Mock(side_effect=AssertionError('live lookup'))
-        entries = compaction_summary.summary_entries(
-            provider_defs.OPENROUTER.id, catalogue=rows,
-            allowed={'deepseek/deepseek-v4.1-flash'},
-            availability_snapshot={'models': {'deepseek/deepseek-v4.1-flash'}},
-            lookup=lookup)
-        self.assertEqual([entry.slug for entry in entries],
-                         ['deepseek/deepseek-v4.1-flash'])
-        lookup.assert_not_called()
-
     def test_summary_policy_fails_closed_before_any_http_call(self):
         with mock.patch.object(availability, 'current',
-                               return_value={'models': frozenset()}), \
-                mock.patch.object(providers.http.client, 'HTTPSConnection') as conn:
+                               return_value={'key': availability.key_fingerprint('key'), 'region': 'global', 'models': frozenset()}), \
+                mock.patch.object(compaction_summary.http.client,
+                                  'HTTPSConnection') as conn:
             with self.assertRaisesRegex(ValueError, 'models unavailable'):
                 _external_responses().summarize(
                     'z-ai/glm-5.3', 'key', [],
@@ -341,7 +338,7 @@ class SummarizerRetryTests(unittest.TestCase):
                     clock)
 
 
-class NetworkDeadlineTests(unittest.TestCase):
+class NetworkDeadlineTests(SummaryAvailabilityTest):
     def test_connect_timeout_cannot_send_after_fallback(self):
         release, finished = threading.Event(), threading.Event()
         sent = []

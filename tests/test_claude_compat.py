@@ -226,11 +226,8 @@ class ProviderSurfaceTests(unittest.TestCase):
         self.assertIn(b'toolu_scg_provider', shaped)
         self.assertNotIn(b'call_0', shaped)
 
-    def test_json_response_is_handed_over_untouched(self):
-        body = (b'{"id":"msg_1","type":"message","content":['
-                b'{"type":"tool_use","id":"call_0","name":"Read",'
-                b'"input":{"nested":{"type":"tool_use","id":"payload-id"}}},'
-                b'{"type":"text","text":"hi"}]}')
+    def test_json_without_tool_use_is_handed_over_untouched(self):
+        body = b'{"id":"msg_1","type":"message","content":[{"type":"text","text":"hi"}]}'
         source = FakeUpstream(200, body, [('Content-Type', 'application/json')])
         self.assertEqual(b''.join(self._provider().adapt(source, None)), body)
 
@@ -265,7 +262,8 @@ class IngressContractTests(unittest.TestCase):
         self.assertEqual(sent['system'], [{'type': 'text', 'text': 'Be brief.'}])
         self.assertNotIn('x-anthropic-billing-header', body.decode())
         self.assertEqual(headers, {'Authorization': 'Bearer test-key',
-                                   'Content-Type': 'application/json'})
+                                   'Content-Type': 'application/json',
+                                   'Accept-Encoding': 'identity'})
 
     def test_a_request_without_the_block_stays_byte_identical(self):
         payload = {'model': FABLE, 'max_tokens': 8,

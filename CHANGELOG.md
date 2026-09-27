@@ -2,17 +2,43 @@
 
 ## Unreleased
 
+- Opaque, malformed, or mixed encrypted native compaction history is no longer
+  rewritten during an `invalid_encrypted_content` repair. The retry now only
+  replaces a non-empty, structurally valid router-owned `ocx1:` summary;
+  unknown native blobs are preserved and the request is left unrepaired rather
+  than sent with invented readable text.
+- The router records one shared outcome and bounded attempt ledger per request.
+  Existing repair, replay and opt-in fallback limits are unchanged; unknown
+  stream failures remain unknown and are not replayed.
+- Raw upstream streams are now forwarded byte for byte, including compressed
+  and incomplete final frames. Terminal observation is best effort and cannot
+  delay or rewrite the client's stream; readable raw failures still record
+  `failure_class` and the terminal writer.
 - External Claude Messages streams now give every `tool_use` a unique
   client-visible ID. DeepSeek V4.1 Flash reused `call_0` on every tool turn,
   so Claude Code collapsed the history and the model could not see earlier
-  `tool_result` content. Non-streaming JSON responses remain byte-identical.
-- `router-worker` reports empty, interrupted, narration-only and recognized
-  missing-tool-result final replies as `ok: false` with an error category.
+  `tool_result` content. JSON without top-level tool calls remains
+  byte-identical; top-level JSON `tool_use` IDs receive the same repair.
+- A missing pinned compaction-summary registry row no longer silently switches
+  vendors: if another eligible row remains, summary fails closed before any
+  request. No eligible summary row, or a missing or stale key/region
+  availability snapshot, fails closed before Jev or any summary request, so
+  flattened history cannot reach a vendor before its permitted set is known.
+  Allowlist and availability filtering still decide which pinned rows are
+  eligible. Jev remains global only; regional compaction uses the region-bound
+  summary path instead.
+- The Claude Code multi-read probe now labels served identity and rejects a
+  known requested-versus-served model mismatch and requires `probe-1.txt`
+  before `probe-2.txt`; it also requires exactly one matching `tool_result`
+  for each rewritten `tool_use` id, rejecting stale or duplicate result ids.
+  Hashed listing aliases resolve to their upstream id before comparison, and
+  absent identity stays `unverified`.
 
 ## 0.6.127
 
 - External compaction summaries now use Xiaomi MiMo V2.6 Flash first and
-  DeepSeek V4.1 Flash after a timeout or incomplete output. The summary can
+  DeepSeek V4.1 Flash after an unsent timeout or incomplete output. A timeout
+  after dispatch fails closed to avoid duplicate side effects. The summary can
   therefore come from a different upstream vendor than the active model. Each
   attempt has a 45-second limit and the whole summary stops within 75 seconds.
   Aggregate timing logs record model, size, attempt and outcome without

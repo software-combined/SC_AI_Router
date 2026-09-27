@@ -69,6 +69,28 @@ def listing(home):
         return [row['id'] for row in json.load(response).get('data', [])]
 
 
+def _registry_rows(home):
+    try:
+        release = (home / 'current').read_text().strip()
+        path = home / 'releases' / release / 'ai_router' / 'models.json'
+        return json.loads(path.read_text())
+    except (OSError, ValueError, KeyError, TypeError):
+        return []
+
+
+def _expected_model(home, model):
+    """Upstream id behind an advertised alias, or the input when unresolved."""
+    for row in _registry_rows(home):
+        slug = row.get('slug')
+        if not isinstance(slug, str):
+            continue
+        ids = {slug, slug.removeprefix('~'),
+               'claude/scg/' + hashlib.sha256(slug.encode()).hexdigest()}
+        if model in ids:
+            return row.get('upstream_id') or slug
+    return model
+
+
 def probe(home, model, deferred=False, read_count=1, effort=None,
           max_budget_usd=None):
     """One synthetic round trip; returns a result record."""
@@ -132,16 +154,27 @@ def probe(home, model, deferred=False, read_count=1, effort=None,
         # Containment, not an exact echo: a model that reads the file and then
         # says "the contents are: <marker>" has done the job, and several rows
         # narrate their answers. An empty or refused turn still fails here.
-        paths = set(report.get('read_paths') or ())
-        passed = _accepted(read_count, markers, report)
-        return {'model': model, 'leg': leg_of(deferred, read_count),
+        read_paths = sorted(set(report.get('read_paths') or ()))
+        expected_model = _expected_model(home, model)
+        identity = _identity(expected_model, report)
+        passed = _accepted(read_count, markers, report, expected_model)
+        if report.get('is_error'):
+            error = report.get('subtype')
+        elif identity == 'mismatched':
+            error = 'served_model_mismatch'
+        else:
+            error = None
+        return {'model': model, 'expected_model': expected_model,
+                'leg': leg_of(deferred, read_count),
                 'effort': effort, 'max_budget_usd': max_budget_usd, 'pass': passed,
                 'turns': report.get('num_turns'),
                 'calls': report.get('read_calls', report.get('tool_calls')),
-                'read_paths': sorted(paths),
+                'read_paths': read_paths,
                 'sequential_reads': report.get('sequential_reads'),
+                'tool_result_ids_match': report.get('tool_result_ids_match'),
                 'served': report.get('served'),
-                'error': report.get('subtype') if report.get('is_error') else None,
+                'served_identity': identity,
+                'error': error,
                 'answer': answer[:80],
                 'seconds': round(time.time() - started, 1)}
     finally:
@@ -166,17 +199,28 @@ def _report(stdout):
         return {}
 
 
-def _accepted(read_count, markers, report):
+def _identity(expected_model, report):
+    """Classify provider-reported identity without inventing a match."""
+    served = report.get('served') or []
+    if not served:
+        return 'unverified'
+    return ('matched' if all(item == expected_model for item in served)
+            else 'mismatched')
+
+
+def _accepted(read_count, markers, report, expected_model):
     """Accept only a non-error answer with the requested Read history."""
     answer = report.get('result') or ''
-    if report.get('is_error') or not all(item in answer for item in markers):
+    if (report.get('is_error') or _identity(expected_model, report) == 'mismatched'
+            or not all(item in answer for item in markers)):
         return False
     if read_count == 1:
         return True
     return (report.get('read_calls') == read_count
             and report.get('tool_calls') == read_count
-            and set(report.get('read_paths') or ()) == {'probe-1.txt', 'probe-2.txt'}
-            and bool(report.get('sequential_reads')))
+            and report.get('read_paths') == ['probe-1.txt', 'probe-2.txt']
+            and bool(report.get('sequential_reads'))
+            and bool(report.get('tool_result_ids_match')))
 
 
 def _event_content(event):
@@ -191,7 +235,7 @@ def _stream_report(stdout):
     calls = read_calls = 0
     read_paths = []
     read_steps = []
-    tool_results = 0
+    read_ids, result_ids = [], []
     for step, line in enumerate(stdout.splitlines()):
         try:
             event = json.loads(line)
@@ -208,24 +252,31 @@ def _stream_report(stdout):
                 if part.get('name') != 'Read':
                     continue
                 read_calls += 1
+                read_ids.append(part.get('id'))
                 inputs = part.get('input') if isinstance(part.get('input'), dict) else {}
                 path = inputs.get('file_path') or inputs.get('path')
                 if path:
                     name = Path(str(path)).name
                     read_paths.append(name)
-                    read_steps.append((step, tool_results, name))
+                    read_steps.append((step, len(result_ids), name))
         elif event.get('type') == 'user':
-            tool_results += any(
-                isinstance(part, dict) and part.get('type') == 'tool_result'
-                for part in _event_content(event))
+            for part in _event_content(event):
+                if isinstance(part, dict) and part.get('type') == 'tool_result':
+                    result_ids.append(part.get('tool_use_id'))
         elif event.get('type') == 'result':
             result = event
     sequential_reads = any(
         later[0] > earlier[0] and later[1] > earlier[1]
         and {earlier[2], later[2]} == {'probe-1.txt', 'probe-2.txt'}
         for earlier, later in zip(read_steps, read_steps[1:]))
+    tool_result_ids_match = (
+        len(read_ids) == len(result_ids)
+        and all(isinstance(tool_id, str) and tool_id for tool_id in read_ids)
+        and len(set(read_ids)) == len(read_ids)
+        and result_ids == read_ids)
     result.update(tool_calls=calls, read_calls=read_calls,
                   read_paths=read_paths, sequential_reads=sequential_reads,
+                  tool_result_ids_match=tool_result_ids_match,
                   served=sorted(served))
     return result
 
@@ -237,8 +288,8 @@ def client_version():
                               text=True, timeout=10)
     except (OSError, subprocess.TimeoutExpired):
         return None
-    return (done.stdout or done.stderr).strip().splitlines()[0] if (
-        done.stdout or done.stderr).strip() else None
+    text = (done.stdout or done.stderr).strip()
+    return text.splitlines()[0] if text else None
 
 
 def _positive_budget(value):

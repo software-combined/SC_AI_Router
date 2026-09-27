@@ -172,6 +172,25 @@ def _rewrite_tool_use(frame, event):
     return sse.replace_data(frame, json.dumps(event, separators=(',', ':')).encode())
 
 
+def shape_json(raw):
+    """Give JSON tool calls unique client IDs without changing nested input."""
+    try:
+        payload = json.loads(raw)
+    except ValueError:
+        return raw
+    if not isinstance(payload, dict):
+        return raw
+    content = payload.get('content')
+    changed = False
+    for block in content if isinstance(content, list) else []:
+        if (isinstance(block, dict) and block.get('type') == 'tool_use'
+                and isinstance(block.get('id'), str)):
+            block['id'] = _fresh_tool_id()
+            changed = True
+    return (json.dumps(payload, separators=(',', ':')).encode()
+            if changed else raw)
+
+
 def _parsed(data):
     """One SSE data field as an object; malformed or non-object reads empty."""
     try:

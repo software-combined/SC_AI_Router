@@ -14,6 +14,7 @@ COMPACT_PROMPT = ('You are performing a CONTEXT CHECKPOINT COMPACTION. Create a 
 import base64
 import json
 import secrets
+import unicodedata
 from .history_items import (block_text, has_encryption_marked_agent_item, reasoning_text,
                             recoverable_agent_message, user_message_item)
 PREFIX = 'ocx1:'
@@ -26,13 +27,23 @@ COMPACTION_TYPES = {'compaction', 'compaction_summary', 'context_compaction'}
 RETAINED_CHARS = 20000 * 4
 TRANSCRIPT_BUDGET = 24000
 
+def _contains_control(text):
+    return any(unicodedata.category(ch) == 'Cc' and not ch.isspace()
+               for ch in text)
+
+
 def decode_summary(blob):
     if not isinstance(blob, str) or not blob.startswith(PREFIX):
         return None
+    payload = blob[len(PREFIX):]
     try:
-        return base64.b64decode(blob[len(PREFIX):]).decode()
-    except ValueError:
+        raw = base64.b64decode(payload, validate=True)
+        if base64.b64encode(raw).decode() != payload:
+            return None
+        text = raw.decode()
+    except (ValueError, UnicodeDecodeError):
         return None
+    return text if text.strip() and not _contains_control(text) else None
 
 def compaction_text(item):
     text = decode_summary(item.get('encrypted_content'))
@@ -52,6 +63,8 @@ def has_compaction_trigger(items):
 
 
 def encode_summary(summary):
+    if not isinstance(summary, str) or _contains_control(summary):
+        raise ValueError('Compaction summary contains control characters.')
     return PREFIX + base64.b64encode(summary.encode()).decode()
 
 
@@ -125,7 +138,7 @@ def _item_text(item):
         return ''
     if kind == 'reasoning':
         blob = item.get('encrypted_content')
-        if isinstance(blob, str) and blob:
+        if isinstance(blob, str) and blob.strip():
             return ''  # Real provider blob; opaque content never reaches summaries.
         text = reasoning_text(item)
         return f'reasoning: {text}'[:2000] if text else ''

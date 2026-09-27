@@ -81,7 +81,7 @@ def error_codes(failure, event, depth=0):
     return tuple(dict.fromkeys(value for value in values if value))
 
 
-def _record_detail(metrics, kind, failure, event):
+def record_detail(metrics, kind, failure, event):
     """Record bounded terminal metadata, never provider message text."""
     metrics['terminal_event'] = kind
     metrics['terminal_source'] = TERMINAL_FROM_UPSTREAM
@@ -156,12 +156,10 @@ def _terminal_endpoint(failure, event):
 
 def failure_class(failure, event):
     """Class name from the shared cause; unknown is never replayable."""
-    if _context_error(failure) or _context_error(event):
-        return 'context'
     category = _category_from_causes(failure, event)
-    if category == outcome.TRANSIENT:
-        return 'transient'
-    return 'unknown' if category == outcome.UNKNOWN else 'final'
+    return ('context' if _context_error(failure) or _context_error(event)
+            else 'transient' if category == outcome.TRANSIENT
+            else 'unknown' if category == outcome.UNKNOWN else 'final')
 
 
 def _context_error(data, depth=0):
@@ -207,6 +205,77 @@ def _prompt_refusal(failure, event):
         return None
     return errors.upstream_invalid_prompt(code='invalid_prompt')
 
+def terminal_code(kind, failure, event, generic_terminal=False):
+    """Canonical terminal code for raw and normalized stream observations."""
+    return ('UPSTREAM_INCOMPLETE' if kind == 'response.incomplete' else
+            'UPSTREAM_STREAM_FAILED' if generic_terminal
+            else 'context_length_exceeded' if _context_error(failure) or _context_error(event)
+            else 'UPSTREAM_INVALID_PROMPT' if _prompt_refusal(failure, event) is not None else 'UPSTREAM_STREAM_FAILED')
+
+
+def terminal_event(frame, lifecycle, kind, event, metrics, *,
+                   output_seen=False, rewrite=True):
+    """Classify one parsed event through the shared terminal policy.
+
+    `rewrite=False` keeps a raw provider frame byte-for-byte while retaining
+    the same verdict fields a normalized frame would settle.
+    """
+    response = event.get('response') if isinstance(event, dict) else None
+    terminal_output = bool(
+        isinstance(response, dict) and response.get('output'))
+    if lifecycle != stream_events.FAILURE:
+        settled = (outcome.Outcome(
+            outcome.SUCCESS, outcome.STREAM, outcome.UPSTREAM,
+            output=output_seen or terminal_output)
+            if lifecycle == stream_events.COMPLETED else None)
+        return stream_events.StreamEvent(
+            frame, lifecycle, kind, output=terminal_output, outcome=settled)
+
+    failure = stream_events.failure_for(kind, event)
+    context = (kind != 'response.incomplete'
+               and (_context_error(failure) or _context_error(event)))
+    record_detail(metrics, kind, failure, event)
+    refusal = None
+    generic_terminal = False
+    metrics['failure_class'] = ('final' if kind == 'response.incomplete'
+                                else failure_class(failure, event))
+    if kind != 'response.incomplete':
+        refusal = errors.context_window() if context else _prompt_refusal(failure, event)
+        if refusal is None and kind == 'response.completed':
+            # Never let a malformed completion reach a type-driven client.
+            refusal = errors.upstream_failed()
+            generic_terminal = True
+    metrics['code'] = terminal_code(kind, failure, event, generic_terminal)
+    metrics.pop('served_model', None)
+    terminal_output = bool(
+        event.get('output') or (isinstance(failure, dict)
+                                and failure.get('output')))
+    if refusal is not None and rewrite:
+        source = TERMINAL_FROM_ROUTER
+        metrics['terminal_source'] = source
+        body = refusal.body()
+        if terminal_output:
+            body['output'] = (event.get('output')
+                              if event.get('output') is not None
+                              else failure.get('output'))
+        frame = sse.frame(json.dumps({
+            'type': 'response.failed', 'response': body}).encode())
+    else:
+        source = TERMINAL_FROM_UPSTREAM
+    category = (outcome.INCOMPLETE if kind == 'response.incomplete'
+                else outcome.CONTEXT_OVERFLOW if context
+                else outcome.UNKNOWN if generic_terminal
+                else outcome.REFUSED if refusal is not None
+                else _category_from_causes(failure, event))
+    settled = outcome.Outcome(
+        category, outcome.STREAM, source,
+        (outcome.code_for(category, _top_error_type(failure, event),
+                          error_codes(failure, event))
+         or metrics.get('upstream_reason')),
+        output_seen or terminal_output)
+    return stream_events.StreamEvent(
+        frame, lifecycle, kind, source, terminal_output, settled)
+
 
 def events(chunks, metrics):
     """Yield each frame once with its lifecycle and terminal outcome."""
@@ -222,82 +291,18 @@ def events(chunks, metrics):
                 stream_events.FAILURE, stream_events.ANSWER,
                 stream_events.REASONING, stream_events.SETUP):
             continue
+        observed = terminal_event(
+            frame, lifecycle, kind, event, metrics,
+            output_seen=output_seen, rewrite=True)
         if lifecycle != stream_events.FAILURE:
-            response = event.get('response') if isinstance(event, dict) else None
-            terminal_output = (isinstance(response, dict)
-                               and bool(response.get('output')))
-            output_seen = output_seen or lifecycle == stream_events.ANSWER or terminal_output
-            settled = None
-            if lifecycle == stream_events.COMPLETED:
-                settled = outcome.Outcome(
-                    outcome.SUCCESS, outcome.STREAM, outcome.UPSTREAM,
-                    output=output_seen or terminal_output)
-            yield stream_events.StreamEvent(
-                frame, lifecycle, kind, output=terminal_output, outcome=settled)
+            output_seen = (output_seen or lifecycle == stream_events.ANSWER
+                           or observed.output)
+            yield observed
             if lifecycle == stream_events.COMPLETED:
                 success_seen = True
             continue
-        failure = event.get('response') if kind.startswith('response.') else event
-        if kind == 'error' and 'error' not in event:
-            failure = {'error': event}
-        context = (kind != 'response.incomplete'
-                   and (_context_error(failure) or _context_error(event)))
-        _record_detail(metrics, kind, failure, event)
-        refusal = None
-        generic_terminal = False
-        if kind != 'response.incomplete':
-            metrics['failure_class'] = failure_class(failure, event)
-            refusal = errors.context_window() if context else _prompt_refusal(failure, event)
-            if refusal is None and kind == 'response.completed':
-                # Never let a malformed completion reach a type-driven client.
-                refusal = errors.upstream_failed()
-                generic_terminal = True
-        if refusal is None or generic_terminal:
-            metrics['code'] = ('UPSTREAM_INCOMPLETE' if kind == 'response.incomplete'
-                               else 'UPSTREAM_STREAM_FAILED')
-        else:
-            metrics['code'] = ('context_length_exceeded' if context
-                               else 'UPSTREAM_INVALID_PROMPT')
-        metrics.pop('served_model', None)
-        terminal_output = bool(
-            event.get('output') or (isinstance(failure, dict)
-                                    and failure.get('output')))
-        if refusal is not None:
-            # The router wrote this frame; bounded upstream facts stay in metrics.
-            metrics['terminal_source'] = TERMINAL_FROM_ROUTER
-            body = refusal.body()
-            if terminal_output:
-                body['output'] = (event.get('output')
-                                  if event.get('output') is not None
-                                  else failure.get('output'))
-            frame = sse.frame(json.dumps({
-                'type': 'response.failed', 'response': body}).encode())
-        # Provider output must commit even when the frame is rewritten.
-        output = output_seen or terminal_output
-        category = _category(kind, context, generic_terminal, refusal, failure, event)
-        settled = outcome.Outcome(
-            category, outcome.STREAM,
-            metrics['terminal_source'],
-            (outcome.code_for(category, _top_error_type(failure, event),
-                              error_codes(failure, event))
-             or metrics.get('upstream_reason')),
-            output)
-        yield stream_events.StreamEvent(frame, lifecycle, kind,
-                                        metrics['terminal_source'], terminal_output, settled)
+        yield observed
         return
-
-
-def _category(kind, context, generic_terminal, refusal, failure, event):
-    """Outcome category for one terminal failure frame."""
-    if kind == 'response.incomplete':
-        return outcome.INCOMPLETE
-    if context:
-        return outcome.CONTEXT_OVERFLOW
-    if generic_terminal:
-        return outcome.UNKNOWN
-    if refusal is not None:
-        return outcome.REFUSED
-    return _category_from_causes(failure, event)
 
 
 def _category_from_causes(failure, event):

@@ -5,7 +5,7 @@ import unittest
 from compression import zstd
 from unittest import mock
 
-from ai_router import provider_defs, providers, strip_retry, transport
+from ai_router import attempt_policy, provider_defs, providers, strip_retry, transport
 from tools import probe_invalid_encrypted_content as probe
 
 
@@ -100,7 +100,8 @@ class RetryEventTests(unittest.TestCase):
                                   return_value=raw):
             result = strip_retry.maybe_retry_unattributable(
                 (400, 'refused', 'invalid_encrypted_content'), response, raw,
-                {**metrics, 'request_bytes': len(body)}, provider, prepared, [],
+                {**metrics, 'request_bytes': len(body)}, provider, prepared,
+                attempt_policy.Ledger(provider, metrics),
                 lambda event, **fields: events.append((event, fields)))
         self.assertIsNotNone(result)
         self.assertEqual([event for event, _ in events],
@@ -139,7 +140,7 @@ class RetryEventTests(unittest.TestCase):
                 mock.patch.object(strip_retry.transport, 'read_capped',
                                   return_value=raw):
             result = strip_retry.post_with_retry(
-                object(), prepared, metrics, [], provider,
+                attempt_policy.Ledger(provider, metrics), prepared, metrics, provider,
                 lambda event, **fields: None)
         self.assertEqual(len(dispatches), 2)
         self.assertEqual(result[0].status, 200)
@@ -157,9 +158,14 @@ class RetryEventTests(unittest.TestCase):
             {'protocol': provider_defs.RESPONSES,
              'model': 'codex-auto-review'},
             providers.SubscriptionProvider(),
-            prepared, [], lambda event, **fields: events.append(event))
+            prepared, attempt_policy.Ledger(providers.SubscriptionProvider(),
+                                            {'protocol': provider_defs.RESPONSES}),
+            lambda event, **fields: events.append((event, fields)))
         self.assertIsNone(result)
-        self.assertEqual(events, ['annotation_retry'])
+        self.assertEqual([event for event, _ in events], ['annotation_retry'])
+        self.assertEqual(events[0][1]['eligible'], True)
+        self.assertEqual(events[0][1]['attempted'], False)
+        self.assertEqual(events[0][1]['outcome'], 'unchanged')
 
 
 if __name__ == '__main__':
