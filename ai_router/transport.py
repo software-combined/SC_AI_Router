@@ -184,12 +184,20 @@ def describe_location(exc):
         for frame in traceback.extract_tb(exc.__traceback__, limit=3))
 
 
+def write_full(wfile, data):
+    """Write one complete body or raise on an explicit short write."""
+    written = wfile.write(data)
+    if written is not None and written != len(data):
+        raise OSError('short client write')
+    wfile.flush()
+
+
 def emit_terminal_failure(wfile, metrics):
     """Best-effort mid-stream terminal frame on Responses SSE only.
 
     The protocol, not the provider name, decides: a Messages stream carries
     no `response.failed` frame. No-op for non-SSE bodies; a dead socket never
-    raises from the error path.
+    raises from the error path. True only when the frame was written.
     """
     from .errors import upstream_failed
     if not (metrics.get('stream') is True
@@ -198,20 +206,19 @@ def emit_terminal_failure(wfile, metrics):
             and metrics.get('protocol') == provider_defs.RESPONSES):
         # Identity only: appending plaintext to an encoded stream would be
         # undecodable for the client.
-        return
+        return False
     frame = ('event: response.failed\ndata: ' + json.dumps(
         {'type': 'response.failed',
          'response': upstream_failed().body()}) + '\n\n').encode()
     try:
-        wfile.write(frame)
-        wfile.flush()
+        write_full(wfile, frame)
     except (OSError, ValueError):
         # Closed-file ValueError plus dead-socket OSError: never raise here.
-        pass
-    else:
-        # Only claim the frame once it is written: the log line must not report
-        # a terminal frame the client never received.
-        metrics['terminal_source'] = 'router'
+        return False
+    # Only claim the frame once it is written: the log line must not report
+    # a terminal frame the client never received.
+    metrics['terminal_source'] = 'router'
+    return True
 
 
 def relay_headers(response, send_header, model):

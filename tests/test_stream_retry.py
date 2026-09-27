@@ -113,6 +113,15 @@ class UpstreamTerminalRetryTests(_ServerFixture):
         self.assertNotIn('terminal_source', completed[0].kwargs)
         self.assertFalse(any(c.args[0] == 'request_failed' for c in logs))
 
+    def test_clean_eof_without_a_terminal_gets_one_router_failure(self):
+        body, _, logs = self._stream_response(self._responder(
+            self._upstream(self._created())))
+        self.assertEqual([e['type'] for e in self._events(body)],
+                         ['response.created', 'response.failed'])
+        failures = [c for c in logs if c.args[0] == 'request_failed']
+        self.assertEqual(failures[0].kwargs['terminal_source'], 'router')
+        self.assertEqual(failures[0].kwargs['outcome'], 'unknown')
+
     def test_hosted_search_failure_before_output_is_not_replayed(self):
         # The provider may have run the search before its first frame, so a
         # replay could run it twice: the client keeps the provider's verdict.

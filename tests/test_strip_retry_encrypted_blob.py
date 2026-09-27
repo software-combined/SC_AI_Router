@@ -13,20 +13,17 @@ import unittest
 from unittest import mock
 from compression import zstd
 
-from ai_router import (compaction, provider_defs, providers, strip_retry,
+from ai_router import (attempt_policy, compaction, provider_defs, providers, strip_retry,
                        subscription_history, transport)
 from ai_router.registry import by_slug
 from tests.harness import stub_credentials
 
-
 OPENROUTER = providers.ExternalResponsesProvider(provider_defs.get(provider_defs.DEFAULT_EXTERNAL))
 SUBSCRIPTION = providers.SubscriptionProvider()
-
 
 def body(items):
     return json.dumps({'model': 'codex-auto-review', 'stream': True,
                        'input': items}, separators=(',', ':')).encode()
-
 
 MESSAGE = {'type': 'message', 'role': 'user',
            'content': [{'type': 'input_text', 'text': 'judge this action'}]}
@@ -47,11 +44,9 @@ ENCRYPTED_DESCRIBED = (400, 'codex-auto-review refused this request: the request
                             'was rejected. Do not retry it unchanged',
                        'invalid_encrypted_content')
 
-
 class Response:
     def __init__(self, status):
         self.status = status
-
 
 def prepared(body_bytes):
     return transport.Prepared('api.openai.com', '/responses', {}, body_bytes,
@@ -78,7 +73,7 @@ class RetryRepairTests(unittest.TestCase):
               body_bytes=GUARDIAN_BODY):
         return strip_retry.maybe_retry_unattributable(
             described, Response(status), raw, self.metrics, provider,
-            prepared(body_bytes), [], self.log)
+            prepared(body_bytes), attempt_policy.Ledger(provider, self.metrics), self.log)
 
     def test_01_healthy_request_is_untouched_and_never_stripped(self):
         called = []
@@ -152,15 +147,17 @@ class RetryRepairTests(unittest.TestCase):
         with mock.patch.object(transport, 'post_with_phases', post_with_phases), \
                 mock.patch.object(transport, 'read_capped',
                                   lambda r, n: ERROR_RAW):
-            result = strip_retry.post_with_retry(object(), prepared(GUARDIAN_BODY),
-                                                 self.metrics, [], SUBSCRIPTION, self.log)
+            result = strip_retry.post_with_retry(
+                attempt_policy.Ledger(SUBSCRIPTION, self.metrics), prepared(GUARDIAN_BODY),
+                self.metrics, SUBSCRIPTION, self.log)
             self.assertEqual(len(dispatches), 2, 'initial dispatch plus exactly one retry')
             self.assertNotIn(b'encrypted_content', result[2].body)
             self.assertEqual(result[0].status, 200)
             # An unrepairable rejection is not retried at all.
             dispatches.clear()
-            strip_retry.post_with_retry(object(), prepared(GUARDIAN_BODY), self.metrics,
-                                        [], OPENROUTER, self.log)
+            strip_retry.post_with_retry(attempt_policy.Ledger(OPENROUTER, self.metrics),
+                                        prepared(GUARDIAN_BODY), self.metrics,
+                                        OPENROUTER, self.log)
             self.assertEqual(len(dispatches), 1)
 
     def test_06_guardian_approval_semantics_are_unchanged(self):
@@ -205,7 +202,7 @@ class DiagnosticFactsTests(unittest.TestCase):
                                      body_bytes, set(), 'openai')
         strip_retry.maybe_retry_unattributable(
             ENCRYPTED_DESCRIBED, Response(400), ERROR_RAW, self.metrics, SUBSCRIPTION,
-            request, [], self.log)
+            request, attempt_policy.Ledger(SUBSCRIPTION, self.metrics), self.log)
         # The first event is the repair decision; a successful repair adds a
         # second one for the retry's own outcome.
         return [f for e, f in self.log.events if e == 'annotation_retry'][0]
@@ -249,6 +246,11 @@ class DiagnosticFactsTests(unittest.TestCase):
             ('replayed compaction summary blob', body([COMPACTION]), None,
              {'items': 1, 'reasoning_items': 0, 'encrypted_fields': 1, 'removed': 1},
              'started'),
+            ('opaque native compaction blob',
+             body([{'type': 'compaction', 'id': 'cmp_opaque',
+                    'encrypted_content': 'NATIVE-OPAQUE-BLOB'}]), None,
+             {'items': 1, 'reasoning_items': 0, 'encrypted_fields': 1, 'removed': 0},
+             'unchanged'),
             # A nested block is not a shape this repair owns, so the payload
             # fails closed: nothing is removed and the turn is not retried.
             ('nested block blob on a reasoning item',

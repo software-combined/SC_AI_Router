@@ -66,7 +66,7 @@ class ClaudeIngressTests(unittest.TestCase):
         self.assertEqual(host, 'openrouter.ai')
         self.assertEqual(path, '/api/v1/messages')
         self.assertEqual(headers, {'Authorization': 'Bearer test-key',
-                                   'Content-Type': 'application/json'})
+                                   'Content-Type': 'application/json', 'Accept-Encoding': 'identity'})
         self.assertEqual(body.decode(), raw)
         self.assertNotIn('subscription-secret', json.dumps(headers) + body.decode())
         self.assertNotIn('client-key', json.dumps(headers) + body.decode())

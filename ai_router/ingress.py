@@ -23,6 +23,8 @@ from .runtime import VERSION
 
 def send_json(handler, status, obj, headers=None):
     body = json.dumps(obj).encode()
+    handler.response_committed = False
+    handler.delivery_error = None
     try:
         handler.send_response(status)
         handler.send_header('Content-Type', 'application/json')
@@ -31,9 +33,12 @@ def send_json(handler, status, obj, headers=None):
             handler.send_header(k, v)
         handler.send_header('Connection', 'close')
         handler.end_headers()
-        handler.wfile.write(body)
-    except OSError:
-        pass  # Client already disconnected; nothing more can be delivered.
+        handler.response_committed = True
+        transport.write_full(handler.wfile, body)
+        return True
+    except (OSError, ValueError) as exc:
+        handler.delivery_error = exc
+        return False  # Client already disconnected; nothing more can be delivered.
     finally:
         handler.close_connection = True
 
@@ -59,8 +64,8 @@ def send_compaction_stream(handler, output):
         handler.send_header('Content-Length', str(len(body)))
         handler.send_header('Connection', 'close')
         handler.end_headers()
-        handler.wfile.write(body)
-    except (OSError, http.client.HTTPException):
+        transport.write_full(handler.wfile, body)
+    except (OSError, ValueError, http.client.HTTPException):
         pass  # Client already disconnected after the single response began.
     finally:
         handler.close_connection = True
@@ -84,11 +89,8 @@ def error(handler, err, *, log_event, retry_after=None):
     if retry_after:
         fields['retry_after'] = retry_after
     log_event('request_rejected', **fields)
-    try:
-        handler.send_json(err.status, err.body(),
-                          {'Retry-After': retry_after} if retry_after else None)
-    except OSError:
-        pass  # Client already disconnected; the event log keeps the record.
+    return handler.send_json(err.status, err.body(),
+                             {'Retry-After': retry_after} if retry_after else None) is True
 
 
 def authorized_path(handler):
@@ -136,15 +138,20 @@ def context_error(handler, streaming, *, log_event):
     log_event('request_rejected', status=200, code=err.code)
     body = ('event: response.failed\ndata: ' + json.dumps(
         {'type': 'response.failed', 'response': err.body()}) + '\n\n').encode()
+    handler.response_committed = False
+    handler.delivery_error = None
     try:
         handler.send_response(200)
         handler.send_header('Content-Type', 'text/event-stream')
         handler.send_header('Content-Length', str(len(body)))
         handler.send_header('Connection', 'close')
         handler.end_headers()
-        handler.wfile.write(body)
-    except OSError:
-        pass  # Client already disconnected after the stream was requested.
+        handler.response_committed = True
+        transport.write_full(handler.wfile, body)
+        return True
+    except (OSError, ValueError) as exc:
+        handler.delivery_error = exc
+        return False  # Client already disconnected after the stream was requested.
     finally:
         handler.close_connection = True
 

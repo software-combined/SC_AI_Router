@@ -317,7 +317,6 @@ class InFlightBodyDrainTests(unittest.TestCase):
         # Plan 090 Step 2 negative case: an owned request whose upstream
         # transport fails (mapped to 502) must not leak or double-release the
         # slot the wrapper took.
-        from ai_router import providers
         server = _start_auth_server(self)
 
         class _FailConn:
@@ -336,7 +335,7 @@ class InFlightBodyDrainTests(unittest.TestCase):
             def close(self):
                 pass
 
-        patcher = mock.patch.object(providers.http.client, 'HTTPSConnection', _FailConn)
+        patcher = mock.patch.object(http.client, 'HTTPSConnection', _FailConn)
         patcher.start()
         self.addCleanup(patcher.stop)
         response = _post(server.server_port, '/test-token/responses',

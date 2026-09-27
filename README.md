@@ -215,9 +215,10 @@ sees is the call text and a status or length label for each candidate, never
 the result body, so a failure that lives only inside a result's text is not
 visible to it; keep `on` experimental until shadow data has calibrated it.
 Errors and size limits fall back to the bounded fast summarizer. It uses
-Xiaomi MiMo V2.6 Flash first and DeepSeek V4.1 Flash after a timeout or
+Xiaomi MiMo V2.6 Flash first and DeepSeek V4.1 Flash after an unsent timeout or
 incomplete output, so the summary can come from a different upstream vendor
-than the active model. The switch is read at each compaction;
+than the active model. A timeout after dispatch fails closed to avoid duplicate
+side effects. The switch is read at each compaction;
 no restart is needed. Only lowercase `shadow` and `on` enable it; missing,
 empty, unreadable or other values disable it. Surrounding whitespace is ignored.
 

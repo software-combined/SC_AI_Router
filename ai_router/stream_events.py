@@ -56,6 +56,17 @@ _UNFINISHED = frozenset((None, 'queued', 'in_progress'))
 _COMPLETED_STATUSES = frozenset((None, 'completed'))
 
 
+def failure_for(kind, event):
+    """Canonical failure envelope for raw and normalized terminal views."""
+    if not isinstance(event, dict):
+        return event
+    if kind == 'error' and 'error' not in event:
+        return {'error': event}
+    if isinstance(kind, str) and kind.startswith('response.'):
+        return event.get('response', event)
+    return event
+
+
 class StreamEvent:
     """One frame as the client will receive it, plus what it is.
 
@@ -76,6 +87,10 @@ class StreamEvent:
         self.source = source
         self.output = output
         self.outcome = outcome
+
+    def with_frame(self, frame):
+        return StreamEvent(frame, self.kind, self.native, self.source,
+                           self.output, self.outcome)
 
 
 def _item_type(event):

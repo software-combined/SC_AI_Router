@@ -10,13 +10,11 @@ from .capabilities import CANONICAL_ORDER
 from .events import log_event as _log_event
 from .registry import upstream_id_for
 
-SUMMARY_OUTPUT_TOKENS = 4000
-SUMMARY_RETRY_OUTPUT_TOKENS = 8000
+SUMMARY_OUTPUT_TOKENS, SUMMARY_RETRY_OUTPUT_TOKENS = 4000, 8000
 SUMMARY_MODEL_SLUGS = ('xiaomi/mimo-v2.6-flash',
                        'deepseek/deepseek-v4.1-flash')
 SUMMARY_ATTEMPT_DEADLINE_S = 45
 SUMMARY_TOTAL_DEADLINE_S = 75
-
 
 def _bounded_call(func, bound, monotonic, on_timeout, *args, **kwargs):
     """Run one blocking network call with a real wall-clock bound."""
@@ -30,7 +28,7 @@ def _bounded_call(func, bound, monotonic, on_timeout, *args, **kwargs):
         done.set()
 
     threading.Thread(target=run, daemon=True).start()
-    stop = time.monotonic() + _deadline_timeout(bound, monotonic)
+    stop = time.monotonic() + _remaining_time(bound, monotonic)
     while not done.wait(min(0.05, max(0, stop - time.monotonic()))):
         if time.monotonic() >= stop:
             on_timeout()
@@ -38,7 +36,6 @@ def _bounded_call(func, bound, monotonic, on_timeout, *args, **kwargs):
     if 'error' in state:
         raise state['error']
     return state['value']
-
 
 def _summary_budgets(entry):
     ceiling = getattr(entry, 'max_output_tokens', SUMMARY_OUTPUT_TOKENS)
@@ -48,16 +45,23 @@ def _summary_budgets(entry):
                 min(SUMMARY_RETRY_OUTPUT_TOKENS, ceiling))
     return (SUMMARY_OUTPUT_TOKENS,)
 
-
 def summary_entries(provider_id, catalogue=None, allowed=None,
                     availability_snapshot=None, lookup=None):
     """Resolve eligible pinned rows from one registry generation."""
-    lookup = lookup or registry.by_slug
-    rows = catalogue.get if catalogue is not None else lookup
-    entries = []
+    if availability_snapshot is None:
+        # Summaries carry history; fail closed before a vendor is known.
+        return []
+    lookup_row = (catalogue.get if catalogue is not None
+                  else (lookup or registry.by_slug))
+    entries, missing = [], False
     for slug in SUMMARY_MODEL_SLUGS:
-        entry = rows(slug)
+        if allowed is not None and slug not in allowed:
+            continue
+        if not availability.permitted(slug, availability_snapshot):
+            continue
+        entry = lookup_row(slug)
         if entry is None:
+            missing = True
             continue
         if (getattr(entry, 'slug', None) != slug
                 or getattr(entry, 'provider', None) != provider_id
@@ -66,21 +70,14 @@ def summary_entries(provider_id, catalogue=None, allowed=None,
                 or not isinstance(getattr(entry, 'max_output_tokens', None), int)
                 or getattr(entry, 'max_output_tokens', 0) < SUMMARY_RETRY_OUTPUT_TOKENS):
             raise ValueError('Compaction summary registry row failed pin')
-        if allowed is not None and slug not in allowed:
-            continue
-        if not availability.permitted(slug, availability_snapshot):
-            continue
         entries.append(entry)
+    if missing and entries:
+        raise ValueError('Compaction summary registry row missing')
     return entries
 
 
 def _elapsed_ms(started, monotonic):
     return round((monotonic() - started) * 1000, 3)
-
-
-def _check_deadline(deadline, monotonic):
-    if monotonic() >= deadline:
-        raise TimeoutError('Compaction summarizer deadline exceeded')
 
 
 def _set_timeout(conn, timeout):
@@ -89,7 +86,7 @@ def _set_timeout(conn, timeout):
         sock.settimeout(timeout)
 
 
-def _deadline_timeout(deadline, monotonic):
+def _remaining_time(deadline, monotonic):
     remaining = deadline - monotonic()
     if remaining <= 0:
         raise TimeoutError('Compaction summarizer deadline exceeded')
@@ -100,19 +97,17 @@ def _read_summary_body(conn, response, limit, deadline, monotonic):
     """Read a response while enforcing the one compaction deadline."""
     read1 = getattr(response, 'read1', None)
     if read1 is None:
-        _check_deadline(deadline, monotonic)
-        _set_timeout(conn, _deadline_timeout(deadline, monotonic))
+        _set_timeout(conn, _remaining_time(deadline, monotonic))
         body = _bounded_call(response.read, deadline, monotonic, conn.close)
-        _check_deadline(deadline, monotonic)
+        _remaining_time(deadline, monotonic)
         if len(body) > limit:
             raise ValueError('upstream body exceeds %d bytes' % limit)
         return body
     chunks, total = [], 0
     while True:
-        _check_deadline(deadline, monotonic)
-        _set_timeout(conn, _deadline_timeout(deadline, monotonic))
+        _set_timeout(conn, _remaining_time(deadline, monotonic))
         piece = _bounded_call(read1, deadline, monotonic, conn.close, 65536)
-        _check_deadline(deadline, monotonic)
+        _remaining_time(deadline, monotonic)
         if not piece:
             return b''.join(chunks)
         total += len(piece)
@@ -122,34 +117,35 @@ def _read_summary_body(conn, response, limit, deadline, monotonic):
 
 
 def _fetch_summary(provider, key, body, timeout, deadline, attempt_deadline,
-                   monotonic):
+                   monotonic, dispatched=None):
     """One summary request; every failure propagates for the caller to classify."""
     bound = min(deadline, attempt_deadline)
-    _check_deadline(bound, monotonic)
+    _remaining_time(bound, monotonic)
     conn = http.client.HTTPSConnection(provider.host, timeout=timeout)
     try:
         req = json.dumps(body).encode()
         headers = dict(provider.defn.request_headers)
         headers.update({'Authorization': 'Bearer ' + key,
-                        'Content-Type': 'application/json'})
-        _check_deadline(bound, monotonic)
+                        'Content-Type': 'application/json',
+                        'Accept-Encoding': 'identity'})
+        _remaining_time(bound, monotonic)
         _bounded_call(conn.connect, bound, monotonic, conn.close)
-        _check_deadline(bound, monotonic)
+        _remaining_time(bound, monotonic)
+        if dispatched is not None:
+            dispatched.append(True)
         _bounded_call(conn.request, bound, monotonic, conn.close, 'POST',
                       provider.defn.path_for(provider_defs.RESPONSES, '/responses'),
                       body=req, headers=headers)
-        _check_deadline(bound, monotonic)
-        _set_timeout(conn, _deadline_timeout(bound, monotonic))
+        _set_timeout(conn, _remaining_time(bound, monotonic))
         resp = _bounded_call(conn.getresponse, bound, monotonic, conn.close)
-        _check_deadline(bound, monotonic)
-        _set_timeout(conn, _deadline_timeout(bound, monotonic))
+        _set_timeout(conn, _remaining_time(bound, monotonic))
         raw = _read_summary_body(
             conn, resp, transport.MAX_UPSTREAM_BODY, bound, monotonic)
         try:
             data = json.loads(raw)
         except ValueError:
             raise OSError('Summarizer returned invalid JSON')
-        _check_deadline(bound, monotonic)
+        _remaining_time(bound, monotonic)
         return compaction_result.extract_summary(
             resp.status, data, expected_model=body['model'])
     finally:
@@ -157,7 +153,8 @@ def _fetch_summary(provider, key, body, timeout, deadline, attempt_deadline,
 
 
 def summarize(provider, key, payload_items, catalogue=None, allowed=None,
-              active_model=None, lookup=None, log=None, monotonic=None):
+              active_model=None, lookup=None, log=None, monotonic=None,
+              availability_snapshot=None):
     """Return a bounded summary from MiMo Flash, then DeepSeek Flash."""
     lookup = lookup or registry.by_slug
     log = log or _log_event
@@ -167,9 +164,8 @@ def summarize(provider, key, payload_items, catalogue=None, allowed=None,
     started = monotonic()
     deadline = started + SUMMARY_TOTAL_DEADLINE_S
     entries = summary_entries(
-        provider.defn.id, catalogue, allowed, availability.current(), lookup)
+        provider.defn.id, catalogue, allowed, availability_snapshot, lookup)
     attempts = []
-
     def complete(outcome, summary='', summary_model=None):
         log('compaction_summary_complete',
             active_model=active_model,
@@ -198,7 +194,7 @@ def summarize(provider, key, payload_items, catalogue=None, allowed=None,
                 attempts.append({'attempt': attempt,
                                  'summary_model': entry.slug,
                                  'max_output_tokens': budget, 'elapsed_ms': 0,
-                                 'outcome': 'deadline'})
+                                 'outcome': 'deadline', 'commitment': 'unsent'})
                 complete('deadline', summary_model=entry.slug)
                 raise TimeoutError('Compaction summarizer deadline exceeded')
             attempt_started = monotonic()
@@ -211,23 +207,25 @@ def summarize(provider, key, payload_items, catalogue=None, allowed=None,
             if effort:
                 # Never let default high effort burn the whole budget on reasoning.
                 body['reasoning'] = {'effort': effort}
+            dispatched = []
 
-            def record(outcome):
+            def record(outcome, commitment):
                 attempts.append({'attempt': attempt,
                                  'summary_model': entry.slug,
                                  'max_output_tokens': budget,
                                  'elapsed_ms': _elapsed_ms(attempt_started, monotonic),
-                                 'outcome': outcome})
+                                 'outcome': outcome, 'commitment': commitment})
 
             try:
                 summary = _fetch_summary(
                     provider, key, body, timeout, deadline, attempt_deadline,
-                    monotonic)
+                    monotonic, dispatched)
             except compaction_result.IncompleteSummary as exc:
                 last_error = exc
-                record('retry' if budget_index + 1 < len(budgets)
-                       else 'fallback' if entry_index + 1 < len(entries)
-                       else 'rejected')
+                outcome = ('retry' if budget_index + 1 < len(budgets)
+                           else 'fallback' if entry_index + 1 < len(entries)
+                           else 'rejected')
+                record(outcome, 'committed')
                 if monotonic() >= deadline:
                     complete('deadline', summary_model=entry.slug)
                     raise TimeoutError(
@@ -235,26 +233,24 @@ def summarize(provider, key, payload_items, catalogue=None, allowed=None,
                 continue
             except TimeoutError as exc:
                 last_error = exc
-                record('timeout')
+                record('timeout', 'unknown' if dispatched else 'unsent')
+                if dispatched:
+                    complete('unknown', summary_model=entry.slug)
+                    raise
                 if monotonic() >= deadline:
                     complete('deadline', summary_model=entry.slug)
                     raise TimeoutError(
                         'Compaction summarizer deadline exceeded') from exc
                 break
             except Exception:
-                record('failed')
+                record('failed', 'unknown' if dispatched else 'unsent')
                 complete('failed', summary_model=entry.slug)
                 raise
             else:
                 if monotonic() >= deadline:
                     complete('deadline', summary_model=entry.slug)
                     raise TimeoutError('Compaction summarizer deadline exceeded')
-                if monotonic() >= attempt_deadline:
-                    last_error = TimeoutError(
-                        'Compaction summarizer deadline exceeded')
-                    record('timeout')
-                    break
-                record('completed')
+                record('completed', 'committed')
                 complete('completed', summary, entry.slug)
                 return summary
 
