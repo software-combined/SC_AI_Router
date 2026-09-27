@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from ai_router import (outcome, provider_defs, relay, sse, stream_errors,
-                       stream_relay, transport)
+                       stream_relay)
 from tests.fakes import FakeUpstream
 from tests.test_stream_outcome_recovery import (
     _defn, _metrics, _prepared, _provider)
