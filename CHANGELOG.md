@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- A completed Responses turn with `error: null` now remains successful. This
+  standard no-error field previously caused a false stream failure on external
+  routes and a false failure record on subscription routes. Actual error
+  objects and failed completion statuses still fail.
 - Native agent handoff diagnostics now distinguish the upstream tool namespace
   and encryption marker from the router's restoration and rejection decisions.
   Bounded, content-free records join the request and attempt logs, helping
