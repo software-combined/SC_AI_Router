@@ -552,6 +552,31 @@ Each routed request ends with one `attempt_ledger` record containing ids, route,
 send reasons, decisions, commitment, terminal writer and outcome. It contains
 fixed codes and counts; terminal request records repeat those outcome fields.
 
+## Agent handoff failures
+
+`handoff_observed` joins a native Responses handoff to `request_id`, the ledger's
+`attempt`, and a response-local `call_ordinal`. It records the tool, declaration
+location, alias advertisement, namespace category, encryption-marker state and
+argument JSON kind before restoration, after restoration and after the guard.
+`envelope_changed` identifies a namespace or marker change between envelopes;
+`identity_consistent` reports whether their identifiers agree. Raw identifiers,
+assignments, recipients, ciphertext and results are never logged.
+
+An upstream native call with a nonempty or absent plaintext marker and
+`guard_rejected=true` was refused by the existing encrypted-handoff rule. A
+plaintext alias that becomes native with an empty marker and an object argument
+passed that rule. `restoration_rejected` identifies an invalid alias envelope.
+These facts locate the failure without inferring readable text from ciphertext.
+
+`frame_end_offset` is the end of the adapted frame in that attempt's outgoing
+body. Compare it with `forwarded_delta_bytes` for the same request and attempt:
+the router confirmed the complete write only when that counter reaches the
+offset. A failed or partial write remains unconfirmed; a successful socket write
+does not prove the child ran. `handoff_observation_finished` lists missing
+envelopes. Each response retains at most 32 call identities and emits at most 96
+observations, 32 summaries and one limit record. A limit or logging failure
+marks observation incomplete while forwarding continues unchanged.
+
 ## Tool alias repair (why a called name changed)
 
 `tool_call_repaired` and `tool_call_unresolved` carry a `cause`: `native`

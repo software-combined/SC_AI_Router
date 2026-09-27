@@ -1,7 +1,7 @@
 """Provider adapters. Each owns model membership, request preparation, upstream target and response adaptation."""
 import json
 import time
-from . import (availability, compaction as comp, local_services, agent_handoffs,
+from . import (availability, compaction as comp, local_services, handoff_response,
                provider_defs, request_context, transport, turn_budget, jev_compaction)
 from . import outbound, rejected_repair, subscription_roster
 from .compaction_summary import (summary_entries as _summary_entries,
@@ -59,7 +59,7 @@ class SubscriptionProvider:
 
     def adapt(self, response, tool_names, notes=None):
         if tool_names and response.status == 200:
-            yield from agent_handoffs.adapt_response(response, tool_names, notes)
+            yield from handoff_response.adapt_response(response, tool_names, notes)
         elif notes is not None and response.status == 200:
             yield from snoop_response_identity(response, notes)
         else:

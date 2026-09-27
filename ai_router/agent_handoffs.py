@@ -3,7 +3,7 @@ from copy import deepcopy
 import json
 import uuid
 
-from . import provider_defs, sse, transport
+from . import provider_defs
 from .registry import by_slug
 
 NATIVE_NAMESPACE = 'collaboration'
@@ -16,10 +16,11 @@ LANE_HINT = ('When all subagent lanes are full, close finished agents, '
 
 class AliasTools(frozenset):
     """Advertised names plus the request's response framing, scoped to one call."""
-    def __new__(cls, names, stream=False, spawn_models=None):
+    def __new__(cls, names, stream=False, spawn_models=None, location='unknown'):
         value = super().__new__(cls, names)
         value.stream = stream
         value.spawn_models = dict(spawn_models or {})
+        value.location = location
         return value
 
 
@@ -192,7 +193,8 @@ def add_plaintext_tools(payload):
             items = list(payload['input'])
             items[input_index] = {**container, 'tools': augmented, 'id': ident}
             payload = {**payload, 'input': items}
-    return payload, AliasTools(names, payload.get('stream') is True, children)
+    return payload, AliasTools(names, payload.get('stream') is True, children,
+                               'classic' if input_index is None else 'lite')
 
 
 def restore_item(item, names):
@@ -299,26 +301,3 @@ def steer_event(event, names):
         if steered is not response:
             mapped = {**mapped, 'response': steered}
     return mapped
-
-
-def adapt_response(response, names, notes=None):
-    """Adapt aliases only; never run provider-specific rewrites on native calls."""
-    if not getattr(names, 'stream', False) and 'text/event-stream' not in response.getheader('Content-Type', ''):
-        raw = transport.read_capped(response, transport.MAX_UPSTREAM_BODY)
-        result = json.loads(raw)
-        restored = steer_response(restore_response(result, names), names)
-        if notes is not None and isinstance(result.get('model'), str):
-            notes['served_model'] = result['model']
-        yield json.dumps(restored).encode() if restored is not result else raw
-        return
-    for frame, data in sse.blocks(sse.lines(transport.passthrough(response))):
-        if not data or data == b'[DONE]':
-            yield frame
-            continue
-        event = json.loads(data)
-        restored = steer_event(restore_event(event, names), names)
-        if event.get('type') == 'response.completed' and notes is not None:
-            model = event.get('response', {}).get('model')
-            if isinstance(model, str):
-                notes['served_model'] = model
-        yield sse.replace_data(frame, json.dumps(restored).encode()) if restored is not event else frame

@@ -57,6 +57,10 @@ handler's injected `log_event`), and nothing else under `ai_router/` does.
 Rules:
 
 `agent_handoffs.py` owns collaboration alias schemas and native-name restoration;
+`handoff_response.py` applies those decisions to native Responses envelopes and
+records bounded structural provenance through the shared event logger. Its
+per-response call ordinals retain upstream ids only until that response closes.
+Observation never grants plaintext authority or changes a handoff decision.
 `sse.py` owns shared event framing without provider-specific argument rewriting.
 `standalone_outputs.py` owns app-injected output projection. External requests
 project readable peer messages and standalone outputs into matched tool results.
