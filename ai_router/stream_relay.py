@@ -148,10 +148,11 @@ def _raw_events(chunks, metrics):
 
 
 def relay_stream(handler, provider, response, prepared, metrics, started,
-                 headers_done, record):
+                 headers_done, record, *, attempt=None):
     """Forward one stream; normalized frames may wait for safe replay."""
     # Tool repair logs need request model/context without changing the request.
     attempt_metrics = {'model': metrics.get('model'),
+                       'request_id': metrics.get('request_id'), 'attempt': attempt,
                        'context_tokens': metrics.get('context_tokens')}
     raw_encoded = metrics['response_encoding'] != 'identity'
     normalized = (provider.defn.dialect == provider_defs.DIALECT_OPENROUTER

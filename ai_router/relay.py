@@ -179,7 +179,7 @@ def _route(handler, provider, prepared, metrics, has_image, started, ledger, log
         record = stream_relay.StreamRecord()
         while True:
             stream_relay.relay_stream(handler, provider, response, prepared,
-                                      metrics, started, headers_done, record)
+                                      metrics, started, headers_done, record, attempt=len(ledger.attempts))
             if not ledger.replay(record, prepared.body):
                 break
             response, headers_done = attempt_policy.replay_stream(
