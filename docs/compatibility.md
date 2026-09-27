@@ -1,5 +1,51 @@
 # Compatibility
 
+## Router 0.6.131 completion candidate, 28 September 2026 AEST
+
+The four-route acceptance check exposed a Responses completion regression:
+`error: null` was treated as an error merely because the field existed. That
+shape is a normal successful completion in the
+[OpenAI Responses reference](https://developers.openai.com/api/reference/typescript/resources/beta/subresources/responses/methods/create).
+For classified Responses streams, the external route replaced its terminal
+with a failure; the subscription route preserved the bytes but recorded the
+wrong outcome. Regression tests failed in both cases before the fix. A null
+error now means no error; non-null errors and failed statuses still fail.
+
+The preceding `0.6.130` candidate passed the Codex subscription and Claude
+external tool checks with one tool execution and two upstream requests each.
+Both exposed the requested upstream model; served effort was unverified.
+Codex external failed in three bounded attempts, each after one upstream
+request and before tool execution. Its final diagnostic recorded a router
+failure at `response.completed`. These failed checks remain evidence against
+that candidate and are not overridden by older passing checks.
+
+Clients: Codex desktop `26.917.62051`, bundled CLI `0.155.0-alpha.16.3`, and
+Claude Code `2.1.283`. The Claude subscription check stopped locally before any
+upstream request because its login could not be saved to macOS Keychain.
+
+Both corrected Codex legs passed through `tools/probe_codex_runtime.py` with
+one tool execution and two HTTP 200 upstream requests each:
+
+| route | requested and served model | requested effort | usage tokens |
+|---|---|---|---:|
+| external | `deepseek/deepseek-v4.1-flash` | `low` | 8,177 |
+| subscription | `gpt-6-luna` | `low` | 6,341 |
+
+Served effort was unverified. Each leg capped upstream calls at two and input
+at 512 KiB, with a 30,000-token usage budget that stops later calls. External
+output was capped at 2,048 tokens. Both used runtime fingerprint
+`2b7441c38cb80802cbad7877f99adf04b384e018e0ce27d89f4a204526d81015`.
+On both real external completions, the recorded shape had `response.error:
+null`: the old classifier rejected it and the corrected classifier accepted
+it. The earlier Claude external pass remains applicable because this fix only
+changes Responses classification. Claude subscription acceptance, native
+stream lifecycle conformance and installed acceptance remain pending.
+
+The structural handoff diagnostic is integrated, but the original intermittent
+MiMo dispatch failure remains open. Successful classic and Lite alias probes
+with synthetic child responses do not close that defect or prove installed
+mixed-provider continuation.
+
 ## Router 0.6.129 request recovery candidate, 28 September 2026 AEST
 
 The request/attempt, stream-outcome and encrypted-history candidate passed
