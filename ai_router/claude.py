@@ -172,13 +172,18 @@ class ExternalMessagesProvider:
         return transport.Prepared(
             self.host, self.defn.path_for(provider_defs.MESSAGES, path),
             {'Authorization': 'Bearer ' + credentials.key_for(self.defn.id),
-             'Content-Type': 'application/json'},
+             'Content-Type': 'application/json',
+             'Accept-Encoding': 'identity'},
             body, set(), self.name, context=context, decoded_body_bytes=len(body))
 
     def adapt(self, response, tool_names, notes=None):
         chunks = transport.passthrough(response)
-        if transport.describe_response(response)[0] == 'sse':
+        kind, encoding = transport.describe_response(response)
+        if kind == 'sse':
             chunks = claude_compat.shape(chunks)
+        elif kind == 'json' and encoding == 'identity':
+            chunks = [claude_compat.shape_json(
+                transport.read_capped(response, transport.MAX_UPSTREAM_BODY))]
         yield from chunks
 
 

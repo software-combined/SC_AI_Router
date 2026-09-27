@@ -27,7 +27,7 @@ JSON_HEADERS = {'Content-Type': 'application/json'}
 
 class IngressShapeTests(unittest.TestCase):
     def setUp(self):
-        self.server = _start_server(_test_state(_auth_file(self)))
+        self.server = _start_server(_test_state(_auth_file(self))); self.enterContext(mock.patch.object(providers_mod.ExternalResponsesProvider, '_require_summary_rows', return_value={}))
         self.addCleanup(self.server.server_close)
         self.addCleanup(self.server.shutdown)
 

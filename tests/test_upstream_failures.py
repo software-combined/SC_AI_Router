@@ -286,7 +286,7 @@ class RefusalCacheTests(unittest.TestCase):
         handler = SimpleNamespace(
             server=SimpleNamespace(credentials=SimpleNamespace(
                 key_rejected=lambda provider: False)),
-            error=lambda err: seen.update(err=err))
+            error=lambda err: seen.update(err=err) or True)
         provider = providers.ExternalResponsesProvider(provider_defs.OPENROUTER)
         body = json.dumps({'model': 'm', 'input': [], 'tools': []}).encode()
         prepared = Prepared('openrouter.ai', '/responses', {}, body, {}, 'openrouter')
@@ -302,10 +302,11 @@ class RefusalCacheTests(unittest.TestCase):
         self.assertEqual(len(dispatches), 1)
         self.assertEqual(seen['err'].status, 400)
         self.assertEqual(seen['err'].message, first.message)
-        cached = [e for e, _ in events if e == 'upstream_rejected_cached']
-        self.assertEqual(len(cached), 1)
-        fields = dict(events[-1][1])
-        self.assertNotIn('request_bytes', fields)
+        self.assertEqual([e for e, _ in events].count('upstream_rejected_cached'), 1)
+        fields = {event: values for event, values in events}
+        self.assertNotIn('request_bytes', fields['upstream_rejected_cached'])
+        self.assertEqual((fields['attempt_ledger']['outcome'], fields['attempt_ledger']['outcome_phase']), ('refused', 'status'))
+        self.assertTrue(fields['attempt_ledger']['committed'])
 
     def test_changed_body_dispatches_again(self):
         body = json.dumps({'input': []}).encode()

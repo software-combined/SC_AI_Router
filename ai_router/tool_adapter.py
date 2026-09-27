@@ -288,7 +288,7 @@ def snoop_response_identity(response, notes):
         yield piece
         if not watching:
             continue
-        spare, frames = _split_frames(spare + piece)
+        spare, frames = sse.split_frames(spare + piece)
         if len(spare) > _OBSERVE_LIMIT:
             spare, watching = b'', False
             continue
@@ -296,28 +296,6 @@ def snoop_response_identity(response, notes):
             _observe_sse_frame(frame, notes)
     # An unterminated tail is discarded like the canonical framer does;
     # only complete frames may observe identity.
-
-
-def _split_frames(buf):
-    """Split blank-line-terminated SSE frames off buf.
-
-    Returns (spare, frames): frames are complete and parseable now;
-    spare is the incomplete tail held for the next piece.
-    """
-    frames = []
-    start = 0
-    while True:
-        nl = buf.find(b'\n', start)
-        if nl < 0:
-            break
-        end = nl + 1
-        if buf[start:end].strip():
-            start = end
-            continue
-        frames.append(buf[:end])
-        buf = buf[end:]
-        start = 0
-    return buf, frames
 
 
 def _observe_sse_frame(frame, notes):

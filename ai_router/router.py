@@ -175,7 +175,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.error(errors.too_many_inflight(), retry_after='1')
         try:
             ready = self._owned_post(path, via_path, started)
-            if ready is not None:
+            if isinstance(ready, tuple):
                 self.relay(*ready)
         finally:
             # A large prepared body lives until relay returns, so the slot
@@ -217,7 +217,8 @@ class Handler(BaseHTTPRequestHandler):
             if provider.kind == provider_defs.EXTERNAL: reject_opaque_agent_items(payload.get('input'))
             if provider.kind == provider_defs.SUBSCRIPTION and not via_path:
                 return self.error(errors.bearer_for_no_subscription_only())
-            compact_call = policy.compaction_call(provider, model, path, payload, context=context, allowed=self.server.state.get('allowed_models'))
+            compact_call = policy.compaction_call(
+                provider, model, path, payload, context=context, allowed=self.server.state.get('allowed_models'))
             if compact_call is not None:
                 # Compact before prepare(): a rejected effort must not block it.
                 # Key lookup stays outside the send try so credential

@@ -22,7 +22,8 @@ prompt to it.
 """
 import json
 
-from . import errors, provider_defs, request_context, subscription_roster, wire_shape
+from . import (attempt_policy, errors, provider_defs, request_context,
+               subscription_roster, wire_shape)
 from .image_items import has_images
 from .providers import ExternalResponsesProvider
 from .events import log_event
@@ -178,15 +179,29 @@ def refusal_message(prepared, metrics):
             'Retry shortly, or select a routed model instead.')
 
 
-def refused(handler, prepared, retry_after, metrics, started, admit=None):
-    """Answer a refused turn: the planned twin row, else the retryable 503.
+def _answer_refusal(handler, ledger, refusal, retry_after):
+    """Commit the refusal only after the client writer reports delivery."""
+    sent = handler.error(refusal, retry_after)
+    if sent is True or getattr(handler, 'response_committed', False):
+        ledger.mark_committed()
+    attempt_policy.settle_delivery(ledger, handler)
 
-    `admit` sizes the twin with the refused body still held, before its send.
+
+def refused(handler, prepared, retry_after, metrics, started, admit=None, *, ledger):
+    """Answer a refused turn, else name the planned twin route that answers it.
+
+    Returns the twin's `attempt_policy.Route` once `ledger` has moved to it,
+    else None after sending the retryable 503. The ledger allows one route
+    change per request, so a twin can never fall back again. `admit` sizes the
+    twin with the refused body still held, before its send.
     """
     refusal = errors.upstream_rate_limited(refusal_message(prepared, metrics))
     fallback = prepared.fallback
-    if fallback is None:
-        return handler.error(refusal, retry_after)
+    if fallback is None or not ledger.permits(attempt_policy.HELPER_FALLBACK):
+        ledger.decide(attempt_policy.HELPER_FALLBACK,
+                      'no_plan' if fallback is None else 'budget')
+        _answer_refusal(handler, ledger, refusal, retry_after)
+        return None
     try:
         twin = fallback.prepared()
         if admit is not None:
@@ -196,7 +211,10 @@ def refused(handler, prepared, retry_after, metrics, started, admit=None):
         # (InvalidSize is a ValueError): keep today's answer.
         log_event('subscription_fallback_unavailable', model=metrics.get('model'),
                   fallback_model=fallback.target.slug, reason=type(exc).__name__)
-        return handler.error(refusal, retry_after)
+        ledger.decide(attempt_policy.HELPER_FALLBACK, 'unavailable')
+        _answer_refusal(handler, ledger, refusal, retry_after)
+        return None
+    ledger.decide(attempt_policy.HELPER_FALLBACK)
     log_event('subscription_fallback', model=metrics.get('model'),
               fallback_model=fallback.target.slug, path=fallback.path)
     fields = ('request_bytes', 'stream', 'reasoning_effort', 'tool_definitions',
@@ -207,15 +225,16 @@ def refused(handler, prepared, retry_after, metrics, started, admit=None):
     # The twin's context is the refused request's, so its final record
     # carries the same request id.
     defn = provider_defs.get(twin.context.row.provider)
-    _region = getattr(fallback, 'region', 'global')
     twin_metrics = {k: metrics[k] for k in fields if k in metrics}
     twin_metrics.update(request_id=twin.context.request_id, provider=defn.id,
                         model=twin.context.slug,
                         path=fallback.path, helper_fallback=True,
                         protocol=provider_defs.RESPONSES,
                         # The twin's own cap, from its freshly prepared body.
-                        max_output_tokens=getattr(twin, 'output_cap', None))
+                        max_output_tokens=twin.output_cap)
     # The request's in-flight slot and large-request lease still cover this
-    # hand-off; the nested relay neither takes nor releases one of its own.
-    return handler.relay(ExternalResponsesProvider(defn, _region), twin, twin_metrics, started,
-                         has_images(fallback.payload.get('input')))
+    # hand-off; the twin route neither takes nor releases one of its own.
+    twin_provider = ExternalResponsesProvider(defn, fallback.region)
+    ledger.transition(twin_provider, provider_defs.RESPONSES)
+    return attempt_policy.Route(twin_provider, twin, twin_metrics,
+                                has_images(fallback.payload.get('input')))

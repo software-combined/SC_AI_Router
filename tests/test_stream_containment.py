@@ -59,6 +59,17 @@ class _ServerFixture(unittest.TestCase):
         return events
 
 
+class _DeadWriter:
+    def __init__(self, error):
+        self.error = error
+
+    def write(self, _):
+        raise self.error
+
+    def flush(self):
+        raise self.error
+
+
 class RelayContainmentTests(_ServerFixture):
     def test_non_dict_sse_payload_ends_stream_with_response_failed(self):
         wire = b'data: [1,2,3]\n\n'
@@ -218,17 +229,24 @@ class EmitTerminalFailureTests(unittest.TestCase):
     def test_dead_socket_never_raises(self):
         for error in (OSError('gone'), ValueError('I/O operation on closed file')):
             with self.subTest(error=type(error).__name__):
-                class Dead:
-                    def write(self, _):
-                        raise error
+                self.assertFalse(transport.emit_terminal_failure(
+                    _DeadWriter(error),
+                    {'stream': True, 'response_kind': 'sse',
+                     'response_encoding': 'identity', 'protocol': 'responses'}))
 
-                    def flush(self):
-                        raise error
+    def test_return_value_tracks_delivery_and_attribution(self):
+        metrics = {'stream': True, 'response_kind': 'sse',
+                   'response_encoding': 'identity', 'protocol': 'responses'}
+        buf = io.BytesIO()
+        self.assertTrue(transport.emit_terminal_failure(buf, metrics))
+        self.assertTrue(buf.getvalue())
+        self.assertEqual(metrics['terminal_source'], 'router')
 
-                transport.emit_terminal_failure(
-                    Dead(), {'stream': True, 'response_kind': 'sse',
-                             'response_encoding': 'identity',
-                             'protocol': 'responses'})
+        metrics = {'stream': True, 'response_kind': 'sse',
+                   'response_encoding': 'identity', 'protocol': 'responses'}
+        self.assertFalse(transport.emit_terminal_failure(
+            _DeadWriter(OSError('gone')), metrics))
+        self.assertNotIn('terminal_source', metrics)
 
 
 if __name__ == '__main__':
