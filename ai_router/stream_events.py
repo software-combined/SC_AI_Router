@@ -113,9 +113,9 @@ def _unstarted(event):
 def _completed_lifecycle(event):
     """A completion is success only when its response says it completed."""
     response = event.get('response')
-    if not isinstance(response, dict) or not response or 'error' in event:
+    if not isinstance(response, dict) or not response or event.get('error') is not None:
         return FAILURE
-    if 'error' in response or response.get('status') == 'failed':
+    if response.get('error') is not None or response.get('status') == 'failed':
         return FAILURE
     output = response.get('output')
     if output is not None and (
