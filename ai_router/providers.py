@@ -1,11 +1,11 @@
 """Provider adapters. Each owns model membership, request preparation, upstream target and response adaptation."""
-import http.client  # noqa: F401 (re-exported: tests patch providers.http.client)
 import json
 import time
-from . import (compaction as comp, local_services, agent_handoffs,
+from . import (availability, compaction as comp, local_services, agent_handoffs,
                provider_defs, request_context, transport, turn_budget, jev_compaction)
 from . import outbound, rejected_repair, subscription_roster
-from .compaction_summary import summarize as _summarize
+from .compaction_summary import (summary_entries as _summary_entries,
+                                 summarize as _summarize)
 from .errors import PreparationError, SubscriptionRequired, UnknownModel
 from .registry import by_slug, near_miss
 from .events import log_event
@@ -140,6 +140,36 @@ class ExternalResponsesProvider:
     def repair_rejected(self, prepared, described, raw):
         return rejected_repair.annotation_strip(self.defn, prepared, described, raw)
 
+    def _summary_snapshot(self, key):
+        snap = availability.current()
+        return snap if (snap is not None
+                        and snap.get('key') == availability.key_fingerprint(key)
+                        and snap.get('region') == self.region) else None
+
+    def _jev_enabled(self):
+        return self.region == 'global' and jev_compaction.state() != 'off'
+
+    def _require_summary_rows(self, key, context, allowed):
+        snapshot = self._summary_snapshot(key)
+        if snapshot is None:
+            raise ValueError('Compaction summary models unavailable')
+        entries = _summary_entries(
+            self.defn.id, None if context is None else context.catalogue,
+            allowed, snapshot, by_slug)
+        if not entries:
+            raise ValueError('Compaction summary models unavailable')
+        return snapshot
+
+    def _summary_for_compaction(self, model, key, items, row, context, allowed):
+        summary_snapshot = self._require_summary_rows(key, context, allowed)
+        use_jev = self._jev_enabled()
+        return (
+            (jev_compaction.summary(model, key, items, self.defn, row=row)
+             if use_jev else None)
+            or self.summarize(model, key, items, row, context, allowed,
+                              summary_snapshot)
+        )
+
     def compact(self, model, payload, key, row=None, context=None, allowed=None):
         try:
             items = payload.get('input', [])
@@ -156,10 +186,8 @@ class ExternalResponsesProvider:
             users = comp.extract_user_messages(items)
             if not users:
                 raise ValueError('No user messages to compact')
-            summary = (
-                jev_compaction.summary(model, key, items, self.defn, row=row)
-                or self.summarize(model, key, items, row, context, allowed)
-            )
+            summary = self._summary_for_compaction(
+                model, key, items, row, context, allowed)
             log_event('compact_summarized', active_model=model,
                       summary_chars=len(summary))
             output = comp.build_compact_v1_output(users, summary)
@@ -178,10 +206,8 @@ class ExternalResponsesProvider:
             users = comp.extract_user_messages(items)
             if not users:
                 raise ValueError('No user messages to compact')
-            summary = (
-                jev_compaction.summary(model, key, items, self.defn, row=row)
-                or self.summarize(model, key, items, row, context, allowed)
-            )
+            summary = self._summary_for_compaction(
+                model, key, items, row, context, allowed)
             log_event('compact_triggered', active_model=model,
                       summary_chars=len(summary))
             remember(items, summary)
@@ -190,13 +216,18 @@ class ExternalResponsesProvider:
             raise PreparationError(str(exc))
 
     def summarize(self, model, key, payload_items, row=None, context=None,
-                  allowed=None):
+                  allowed=None, availability_snapshot=None):
         """Summarize through the pinned fast rows; `model`/`row` identify the request."""
         del row
+        snapshot = (self._summary_snapshot(key)
+                    if availability_snapshot is None else availability_snapshot)
+        if snapshot is None:
+            raise ValueError('Compaction summary models unavailable')
         return _summarize(self, key, payload_items,
                           catalogue=None if context is None else context.catalogue,
                           allowed=allowed, active_model=model, lookup=by_slug,
-                          log=log_event, monotonic=time.monotonic)
+                          log=log_event, monotonic=time.monotonic,
+                          availability_snapshot=snapshot)
 
 
 class LocalServicesProvider:

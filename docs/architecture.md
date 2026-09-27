@@ -19,9 +19,10 @@ provider table and registry only
   ^
   |
 transport (Prepared, hop-header rules, raw stream, header relay) + upstream
-(failure policy) + stream_errors (classification) + stream_events /
-stream_attempt (frame kinds, the uncommitted attempt) + stream_relay (one
-stream for relay.py): wire and failure policy, consumed by the adapters below
+(failure policy) + outcome / attempt_policy (terminal verdicts and sends) +
+stream_errors (classification) + stream_events / stream_attempt (frame kinds,
+the uncommitted attempt) + stream_relay (one stream for relay.py): wire and
+failure policy, consumed by the adapters below
   ^
   |
 subscription_discovery / subscription_catalogue + catalogue / models /
@@ -122,26 +123,36 @@ replay fixture on both routes, the native-then-twin sequence and both trims.
 Native passthrough still forwards the client's own bytes when nothing
 changed.
 `subscription_history.py` owns the pure outgoing projection of replayed
-reasoning and the router's own compaction summary (sent as readable text) for
-subscription Responses requests; it never edits persisted client history.
+reasoning and the router's own non-empty, structurally valid `ocx1:` compaction
+summary (sent as readable text) for subscription Responses requests; it never
+edits persisted client history. Opaque, malformed, or mixed encrypted native
+compaction data is preserved and never becomes a repair target.
 `rejected_repair.py` owns the Responses adapters' rejected-request repair
 (Plan 183 step 2.5). Each adapter's `repair_rejected(prepared, described, raw)`
 proposes at most one repaired `Prepared` for the one rejection it can justify:
 the external annotation strip for an OpenRouter 400 that names no cause, and
 the subscription `invalid_encrypted_content` repair of reasoning blobs and the
-router's compaction summary. None means ineligible and a proposal without a
-body means unchanged. A proposal opens no connection, reads no response, logs
-nothing and never retries; `strip_retry.py` keeps the one-retry policy, the
-`annotation_retry` lines and, until Plan 188's relay-owned attempt ledger, the
-one send. The Messages adapters propose no repair.
+router's non-empty, structurally valid compaction summary. Opaque, malformed,
+or mixed encrypted native compaction data makes the proposal ineligible. None
+means ineligible and a proposal without a body means unchanged. A proposal
+opens no connection, reads no response, logs
+nothing and never retries. `strip_retry.py` keeps the `annotation_retry`
+lines and asks `attempt_policy.Ledger` for the one repair send. The Messages
+adapters propose no repair.
 `context_recovery.py` adds fixed recovery guidance for client-declared context
 resets on either Responses route, finding the `<context_window>` message by the
 same rule. Codex owns saved history and executes its
 retrieval tools; the router stores no assignment or transcript cache.
 It also owns the exact legacy paragraph migration used by catalogue upgrades.
+`outcome.py` owns the terminal vocabulary. `attempt_policy.py` owns every send
+and the one helper-fallback transition, deciding from `Outcome` and commitment
+facts rather than metrics. Responses routes allow three, two and one sends;
+the fallback gets one fresh route and cannot fall back again. `attempt_ledger`
+reports bounded request, attempt and terminal facts.
 `stream_errors.py` owns shared HTTP/SSE context-error classification and applies
 it to external Responses terminal events after tool adaptation. It preserves
 successful frames and records semantic failure separately from the HTTP status.
+An unrecognised terminal error stays `unknown` and is never replayable.
 The external Responses stream lifecycle (Plan 187) is shared by every model
 on that protocol, and nothing in it reads a model name. `stream_errors.events`
 parses each frame once and `stream_events.py` names its kind (setup,
@@ -158,12 +169,14 @@ only follow a prepared body offering no tools or only client-run ones
 namespaced tools into functions); a hosted tool such as `web_search`, or an
 unknown type, may already have run upstream, so that request keeps the
 provider's verdict. `stream_relay.py` owns one upstream stream for `relay.py`:
-offering frames to the hold, what the client received by kind, the single
-retry verdict (a provider failure before any forwarded byte, transient,
-replay-safe), and opening the retry itself. A valid retry replaces the whole
-uncommitted attempt; a retry that cannot open leaves the held verdict to
-reach the client. These are leaves beside `stream_errors.py`, never a
-dispatcher or a credential owner.
+offering frames to the hold and recording what the client received by kind.
+For a stream outside that normalized lifecycle, every upstream chunk is
+forwarded unchanged. Only complete frames are observed as a sidecar, so an
+encoded body or incomplete final frame cannot be delayed, rewritten or turned
+into a router parsing failure.
+`attempt_policy` decides and opens a safe replay. It replaces the uncommitted
+attempt; a failed replay leaves its verdict to reach the client. These leaves
+never dispatch or own credentials.
 `wire_shape.py` owns the learnt upstream acceptance rules as data plus checks:
 the tool call/output pairing rules the test fake also enforces, and every
 other rule an incident taught, each with the route it binds, its level and its
@@ -311,6 +324,9 @@ them while the child installer retains its own installation lock.
   (`packaging/platforms/darwin.py`), landed by Plan 103.
 - `ai_router/providers.py` holds the Responses adapters and dispatch;
   `compaction_summary.py` owns bounded summary-model selection and requests;
+  a key/region-matched availability snapshot gates summary disclosure before
+  any history-bearing request; Jev is global-only and is skipped on regional
+  routes, which use the region-bound summary path;
   the outgoing projection lives in `outbound.py`, failure policy in
   `upstream.py`, page markup in `setup_page.py`, shared transport in
   `transport.py`, and dispatch in `protocols/`.

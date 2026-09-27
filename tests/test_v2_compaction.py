@@ -36,14 +36,16 @@ class CompactTriggerProviderTests(unittest.TestCase):
         seen = {}
 
         def fake_summarize(_model, _key, items, row=None, context=None,
-                           allowed=None):
+                           allowed=None, availability_snapshot=None):
             seen['items'] = items
             seen['row'] = row
             seen['context'] = context
             seen['allowed'] = allowed
+            seen['availability_snapshot'] = availability_snapshot
             return summary
 
         provider.summarize = fake_summarize
+        provider._require_summary_rows = lambda *args: {}
         return provider, seen
 
     def test_trigger_returns_exactly_one_decodable_item(self):
@@ -101,6 +103,10 @@ class CompactionCallSelectionTests(unittest.TestCase):
 
 
 class CompactTriggerHandlerTests(unittest.TestCase):
+    def setUp(self):
+        self.enterContext(mock.patch.object(
+            ExternalResponsesProvider, '_require_summary_rows', return_value={}))
+
     def _server(self, **overrides):
         state = _test_state(_auth_file(self))
         state.update(overrides)

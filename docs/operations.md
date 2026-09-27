@@ -533,13 +533,13 @@ Six fields say why:
 
 | Field | Meaning |
 |---|---|
-| `terminal_event` | `response.failed`, `response.incomplete`, or `error` |
+| `terminal_event` | `response.failed`, `response.incomplete`, `error`, or `message_error` |
 | `upstream_reason` | the `incomplete_details.reason` enum, when reported |
 | `upstream_code` | the error envelope's `code` or `error_type`, when present |
 | `upstream_error_type` | the canonical top-level `error_type`, when reported |
 | `upstream_provider_code` | the `error.metadata.provider_code`, when reported |
 | `serving_endpoint` | the OpenRouter endpoint that answered; absent when the router or an edge validation answered |
-| `failure_class` | `context`, `final` or `transient`; the stream retry runs only on `transient` |
+| `failure_class` | `context`, `final`, `transient` or `unknown`; the stream replay runs only on a recognised `transient` failure |
 
 Every detail must be code-shaped (letters, digits, dot, dash, underscore,
 slash for endpoint slugs) and
@@ -547,6 +547,10 @@ at most 64 characters; anything else, including message text, is dropped
 rather than recorded, because provider prose can quote prompt content. A
 missing detail means the provider did not say why, or said it in a form this
 rule refuses to record.
+
+Each routed request ends with one `attempt_ledger` record containing ids, route,
+send reasons, decisions, commitment, terminal writer and outcome. It contains
+fixed codes and counts; terminal request records repeat those outcome fields.
 
 ## Tool alias repair (why a called name changed)
 

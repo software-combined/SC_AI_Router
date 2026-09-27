@@ -283,6 +283,7 @@ class JevCompactionTests(unittest.TestCase):
             expected = self.run_summary() if mode == 'on' else 'existing summary'
             with mock.patch.object(decisions, 'ask', side_effect=asker()), mock.patch.object(
                     provider, 'summarize', return_value='existing summary') as old, \
+                    mock.patch.object(provider, '_require_summary_rows', return_value={}), \
                     mock.patch.object(providers, 'remember') as remember:
                 v1 = provider.compact(MODEL, payload, 'key')
                 self.assertEqual(v1[-1]['content'][0]['text'], comp.SUMMARY_PREFIX + '\n' + expected)

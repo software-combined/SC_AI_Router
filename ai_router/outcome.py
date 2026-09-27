@@ -2,9 +2,8 @@
 
 Leaf beside `stream_events.py`: `stream_errors` names a stream's terminal
 frame here, `upstream.outcome_of` names an HTTP error status, and the relay
-names an exception. `attempt_policy` is the intended sole decision consumer;
-until that integration replaces `stream_relay`'s existing gate, this record is
-additive and current retry authority is unchanged. Metrics remain log facts.
+names an exception. `attempt_policy` consumes this record; metrics remain log
+facts.
 
 `UNKNOWN` is what the router cannot name (a stream with no terminal frame,
 an unreadable error body, an unexpected exception). It is never replayable:

@@ -173,7 +173,9 @@ hand-edited conflict instead of overwriting it.
   split. The router gives each streamed `tool_use` a fresh client-visible ID.
   DeepSeek V4.1 Flash otherwise returns `call_0` for every tool call; Claude
   Code collapses duplicate IDs and keeps only one earlier `tool_result`, which
-  makes later reads look empty. Non-streaming JSON responses stay byte-identical.
+  makes later reads look empty. The same repair applies to top-level tool calls
+  in non-streaming JSON; nested tool-shaped input and unknown fields stay
+  unchanged.
   The `system` block carrying
   the client's own `x-anthropic-billing-header` line is dropped, because
   `anthropic/claude-fable-5.1` refuses any turn that carries it with HTTP
@@ -243,8 +245,16 @@ whose client login a non-interactive probe cannot read. Pass `--models` to
 narrow it, `--max-rows` to raise the cap, or `--json` for a machine-readable
 report, and set `CLAUDE_BIN` to drive a different client binary. For the
 multi-turn history check, `--read-count 2` makes two sequential synthetic
-Read calls and requires `--max-budget-usd` as a hard spend cap; it reports the
+Read calls in the exact `probe-1.txt` then `probe-2.txt` order and requires
+`--max-budget-usd` as a hard spend cap; it reports the
 client version, requested and served model, effort, call count and result.
+It also requires exactly one `tool_result` for each rewritten `tool_use` id,
+so stale or duplicate result ids fail the gate.
+The report labels served identity `matched`, `mismatched` or `unverified`;
+a known mismatch fails the probe, while absent identity remains unverified.
+Hashed listing aliases resolve to their registry upstream id before that
+comparison, so a valid routed row is not rejected for using a client-safe
+discovery id.
 Budgeted runs accept exactly one row and one leg, so the cap cannot be
 multiplied across models.
 

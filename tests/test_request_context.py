@@ -12,8 +12,9 @@ import json
 import unittest
 from unittest import mock
 
-from ai_router import (agent_handoffs, capabilities, catalogue, claude, model_refresh,
-                       providers, registry, request_context, subscription_discovery)
+from ai_router import (agent_handoffs, availability, capabilities, catalogue, claude,
+                       compaction_summary, model_refresh, providers, registry,
+                       request_context, subscription_discovery)
 from tests.fakes import FakeUpstream, install_fake
 from tests.harness import (auth_file, isolated_home, post, start_server, test_state)
 from tests.test_claude_ingress import _messages
@@ -233,9 +234,14 @@ class RoutedGenerationTests(unittest.TestCase):
                    'input': [{'type': 'message', 'role': 'user', 'content': 'hello'}]}
         fresh = dict(upstream_id='google/fresh', reasoning=('high',),
                      provider_prefs={'order': ['fresh']})
-        with _after_resolution(self._refresh(RESPONSES_SLUG, **fresh)):
+        with mock.patch.object(availability, 'current', return_value={
+                    'key': availability.key_fingerprint('test-key'),
+                    'region': 'global',
+                    'models': frozenset((*compaction_summary.SUMMARY_MODEL_SLUGS,
+                                         RESPONSES_SLUG))}), \
+                _after_resolution(self._refresh(RESPONSES_SLUG, **fresh)):
             self.assertEqual(self._send('/responses/compact', payload)[0], 200)
-        self.assertEqual(self._send('/responses/compact', payload)[0], 200)
+            self.assertEqual(self._send('/responses/compact', payload)[0], 200)
         old, new = (json.loads(call[3]) for call in recorded)
         self.assertEqual((old['model'], old['reasoning'], old.get('provider')),
                          ('xiaomi/mimo-v2.6-flash', {'effort': 'none'}, None))

@@ -245,18 +245,20 @@ def clear_refusals():
         _REFUSALS.clear()
 
 
-def validate_response(response, prepared):
-    """Check adapted Responses encoding before forwarding response headers.
-
-    Only dialect-adapted upstreams are gated: a Messages passthrough never
-    promises plaintext tool handoff in the Responses sense.
-    """
+def validate_response(response, prepared, *, raw_encoded=False):
+    """Reject encodings that require repair before response headers."""
     defn = provider_defs.get(prepared.provider)
-    if (defn is not None and defn.serves(provider_defs.RESPONSES)
-            and prepared.tool_names):
-        encoding = response.getheader('Content-Encoding', '').strip().lower()
-        if encoding not in ('', 'identity'):
-            raise ValueError('unsupported plaintext handoff response encoding')
+    encoding = response.getheader('Content-Encoding', '').strip().lower()
+    if (defn is not None and defn.kind == provider_defs.EXTERNAL
+            and defn.serves(provider_defs.MESSAGES) and 'json' in
+            response.getheader('Content-Type', '').lower()
+            and encoding not in ('', 'identity')):
+        raise ValueError('unsupported Messages JSON response encoding')
+    if raw_encoded or not (defn is not None
+            and defn.serves(provider_defs.RESPONSES) and prepared.tool_names):
+        return
+    if encoding not in ('', 'identity'):
+        raise ValueError('unsupported plaintext handoff response encoding')
 _REJECTED_BY_STATUS = {401: outcome.AUTH, 403: outcome.AUTH, 402: outcome.QUOTA}
 _429_OUTCOMES = {'quota': outcome.QUOTA, 'auth': outcome.AUTH}
 def outcome_of(status, body, dialect=None):

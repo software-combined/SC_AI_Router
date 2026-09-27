@@ -4,16 +4,15 @@ The relay retries once when the adapter that prepared the request proposes a
 repair for its own rejection (`repair_rejected`, built by `rejected_repair`):
 the external annotation strip for an OpenRouter 400 that names no cause, and
 the subscription `invalid_encrypted_content` repair. This module keeps the
-one-retry policy, the `annotation_retry` log lines and the one send; Plan
-188's relay-owned attempt ledger takes that send over.
+`annotation_retry` log lines; the request's `attempt_policy.Ledger` owns the
+send, its connection and the one-repair budget (Plan 188).
 """
-import http.client
-
 from . import errors, provider_defs, transport, upstream
+from .attempt_policy import REPAIR
 
 
 def maybe_retry_unattributable(described, response, raw, metrics, provider,
-                               prepared, attempts, log_event, admit=None):
+                               prepared, ledger, log_event, admit=None):
     """Retry once with the repair the adapter proposes for its own rejection.
 
     Returns (response, headers_done, prepared) plus its bounded error body, or
@@ -22,8 +21,12 @@ def maybe_retry_unattributable(described, response, raw, metrics, provider,
     body with the original still held, before anything is sent.
     """
     proposal = None
-    if (response.status == 400
-            and metrics.get('protocol') == provider_defs.RESPONSES):
+    # Only a Responses 400 is a repair candidate; the ledger records no
+    # decision for any other status.
+    candidate = (response.status == 400
+                 and metrics.get('protocol') == provider_defs.RESPONSES)
+    has_budget = ledger.permits(REPAIR)
+    if candidate and has_budget:
         proposal = provider.repair_rejected(prepared, described, raw)
     # An ineligible line has always named the annotation strip.
     fields = {'provider': prepared.provider, 'model': metrics.get('model'),
@@ -31,11 +34,14 @@ def maybe_retry_unattributable(described, response, raw, metrics, provider,
     if metrics.get('request_bytes') is not None:
         fields['request_bytes'] = metrics['request_bytes']
     if proposal is None:
+        if candidate:
+            ledger.decide(REPAIR, 'ineligible' if has_budget else 'budget')
         log_event('annotation_retry', eligible=False, attempted=False,
                   outcome='ineligible', **fields)
         return None
     fields.update(proposal.facts)
     if proposal.prepared is None:
+        ledger.decide(REPAIR, 'unchanged')
         log_event('annotation_retry', eligible=True, attempted=False,
                   outcome='unchanged', **fields)
         return None
@@ -43,6 +49,7 @@ def maybe_retry_unattributable(described, response, raw, metrics, provider,
         try:
             admit(proposal.prepared, prepared)
         except (errors.InvalidSize, errors.OversizeBusy) as exc:
+            ledger.decide(REPAIR, 'refused')
             log_event('annotation_retry', eligible=True, attempted=False,
                       outcome='refused', error_type=type(exc).__name__,
                       prepared_bytes=len(proposal.prepared.body), **fields)
@@ -54,22 +61,19 @@ def maybe_retry_unattributable(described, response, raw, metrics, provider,
                   parameter=upstream.rejection_parameter(raw),
                   serving_endpoint=upstream.serving_endpoint(raw),
                   category='PROVIDER_REJECTED', **metrics)
+    ledger.decide(REPAIR)
     log_event('annotation_retry', eligible=True, attempted=True,
               outcome='started', **fields)
     retried_prepared = proposal.prepared
-    fresh = http.client.HTTPSConnection(prepared.host,
-                                        timeout=transport.UPSTREAM_TIMEOUT_S)
     try:
-        response, headers_done = transport.post_with_phases(
-            fresh, retried_prepared, metrics)
+        response, headers_done = ledger.send(retried_prepared, metrics, REPAIR)
+        metrics['upstream_status'] = response.status
         retry_raw = (transport.read_capped(response, transport.ERROR_BODY_LIMIT)
                      if response.status >= 400 else None)
     except BaseException as exc:
-        fresh.close()
         log_event('annotation_retry', eligible=True, attempted=True,
                   outcome='transport_error', error_type=type(exc).__name__, **fields)
         raise
-    attempts.append(fresh)
     log_event('annotation_retry', eligible=True, attempted=True,
               outcome='rejected' if retry_raw is not None else 'accepted',
               status=response.status,
@@ -79,9 +83,10 @@ def maybe_retry_unattributable(described, response, raw, metrics, provider,
     return response, headers_done, retried_prepared, retry_raw
 
 
-def post_with_retry(conn, prepared, metrics, attempts, provider, log_event, admit=None):
+def post_with_retry(ledger, prepared, metrics, provider, log_event, admit=None):
     """Dispatch at most twice and retain the final response for normal handling."""
-    response, headers_done = transport.post_with_phases(conn, prepared, metrics)
+    response, headers_done = ledger.send(prepared, metrics, ledger.opening)
+    metrics['upstream_status'] = response.status
     raw = None
     if response.status >= 400:
         raw = transport.read_capped(response, transport.ERROR_BODY_LIMIT)
@@ -90,7 +95,7 @@ def post_with_retry(conn, prepared, metrics, attempts, provider, log_event, admi
             {'model': metrics.get('model'), 'provider': prepared.provider,
              'protocol': metrics.get('protocol'), 'dialect': provider.defn.dialect})
         retried = maybe_retry_unattributable(
-            described, response, raw, metrics, provider, prepared, attempts, log_event,
+            described, response, raw, metrics, provider, prepared, ledger, log_event,
             admit)
         if retried is not None:
             return retried

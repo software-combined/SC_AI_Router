@@ -9,12 +9,17 @@ ChatGPT backend cannot read it, refusing the turn with
 compaction blob belongs to the backend and goes out unchanged. Only the
 outbound projection changes; the client's history is never edited.
 
-The retry repair below stays as the fallback for any blob the backend still
-rejects.
+The retry repair below only handles reasoning blobs and non-empty router-owned
+summaries. Native opaque compaction stays unchanged and is not retried.
 """
 from . import compaction as comp
 from .external_history import strip_reasoning_blobs
 from .history_items import user_message_item
+
+
+def _owned_summary(item):
+    """The non-empty router summary in one compaction item, else None."""
+    return comp.decode_summary(item.get('encrypted_content'))
 
 
 def normalize(payload):
@@ -31,11 +36,14 @@ def normalize(payload):
     for item in items:
         if (isinstance(item, dict) and item.get('type') == 'reasoning'
                 and isinstance(item.get('content'), list) and item['content']):
-            changed = True
-            if item.get('encrypted_content'):
+            if encrypted_field_count(item) == 0:
+                changed = True
+            elif removable_encrypted(item):
+                changed = True
                 result.append({key: value for key, value in item.items() if key != 'content'})
-        elif (comp.is_compaction_item(item)
-                and comp.decode_summary(item.get('encrypted_content')) is not None):
+            else:
+                result.append(item)
+        elif comp.is_compaction_item(item) and removable_encrypted(item):
             changed = True
             result.append(user_message_item(comp.compaction_text(item)))
         else:
@@ -44,12 +52,16 @@ def normalize(payload):
 
 
 def encrypted_field_count(item):
-    """How many `encrypted_content` fields one item carries, one level deep."""
-    count = 1 if 'encrypted_content' in item else 0
-    blocks = item.get('content')
-    if isinstance(blocks, list):
-        count += sum(1 for block in blocks
-                     if isinstance(block, dict) and 'encrypted_content' in block)
+    """How many `encrypted_content` fields one item carries at any depth."""
+    count = 0
+    pending = [item]
+    while pending:
+        value = pending.pop()
+        if isinstance(value, dict):
+            count += 1 if 'encrypted_content' in value else 0
+            pending.extend(value.values())
+        if isinstance(value, list):
+            pending.extend(value)
     return count
 
 
@@ -57,27 +69,31 @@ def removable_encrypted(item):
     """True when the retry repair owns every encrypted field on this item.
 
     Owned: the item-level `encrypted_content` key on a `reasoning` item,
-    which goes, and on a compaction item, which becomes readable text. A
-    nested content block, or the key on any other item type, is not a shape
-    this repair owns, so the caller fails closed on the whole payload.
+    which goes, and on a compaction item carrying a non-empty router-owned
+    `ocx1:` summary, which becomes readable text. A native opaque compaction
+    blob, nested content block, or the key on any other item type is not a
+    shape this repair owns, so the caller fails closed on the whole payload.
     """
     kind = item.get('type')
+    blob = item.get('encrypted_content')
     return (encrypted_field_count(item) == 1
             and 'encrypted_content' in item
-            and (kind == 'reasoning' or comp.is_compaction_item(item)))
+            and ((kind == 'reasoning' and isinstance(blob, str) and blob.strip())
+                 or (comp.is_compaction_item(item) and _owned_summary(item) is not None)))
 
 
 def repair_input(items):
-    """The retried `input` with every unreadable blob repaired, else None.
+    """The retried `input` with every owned blob repaired, else None.
 
     None means nothing may change: a payload carrying an encrypted field
-    this repair does not own is left alone, so the turn is not retried
-    against a request the repair cannot fix.
+    this repair does not own, including opaque native compaction, is left
+    alone, so the turn is not retried against a request the repair cannot fix.
     """
     if not isinstance(items, list):
         return None
-    if any(isinstance(item, dict) and encrypted_field_count(item)
-           and not removable_encrypted(item) for item in items):
+    if any(encrypted_field_count(item)
+           and not (isinstance(item, dict) and removable_encrypted(item))
+           for item in items):
         return None
     repaired = []
     for item in strip_reasoning_blobs(items):
