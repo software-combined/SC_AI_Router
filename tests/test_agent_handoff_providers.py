@@ -5,7 +5,7 @@ import json
 import unittest
 from unittest.mock import Mock
 
-from ai_router import agent_handoffs, compaction, providers, upstream
+from ai_router import agent_handoffs, compaction, handoff_response, providers, upstream
 from tests.test_agent_handoffs import alias_call, native_tools
 from ai_router.tool_adapter import tool_entries
 
@@ -218,7 +218,7 @@ class NativeStreamTests(unittest.TestCase):
         _, names = agent_handoffs.add_plaintext_tools(payload)
         event = {'type': 'response.output_item.done', 'item': alias_call()}
         source = Response(b'data: ' + json.dumps(event).encode() + b'\n\n', '')
-        result = b''.join(agent_handoffs.adapt_response(source, names))
+        result = b''.join(handoff_response.adapt_response(source, names))
         self.assertEqual(json.loads(result[6:])['item']['encrypted_function_args'], [])
 
     def test_json_alias_restoration_keeps_native_calls_exact(self):
@@ -246,7 +246,7 @@ class NativeStreamTests(unittest.TestCase):
                 return len(chunk)
         source = io.BufferedReader(Fragmented(native + alias + b'data: [DONE]\n\n'))
         source.getheader = lambda name, default='': 'text/event-stream' if name == 'Content-Type' else default
-        result = b''.join(agent_handoffs.adapt_response(source, {'send_message'}))
+        result = b''.join(handoff_response.adapt_response(source, {'send_message'}))
         self.assertTrue(result.startswith(native))
         self.assertIn(b'id: synthetic\n: comment\n', result)
         self.assertIn(b'data: [DONE]\n\n', result)
@@ -259,7 +259,7 @@ class NativeStreamTests(unittest.TestCase):
         for raw in (b'data: {', b'data: ' + json.dumps({'type': 'response.output_item.done',
                         'item': alias_call(encrypted_function_args=['message'])}).encode() + b'\n\n'):
             with self.assertRaises(ValueError):
-                list(agent_handoffs.adapt_response(Response(raw, 'text/event-stream'), {'send_message'}))
+                list(handoff_response.adapt_response(Response(raw, 'text/event-stream'), {'send_message'}))
 
 
 class SteerWiringTests(unittest.TestCase):

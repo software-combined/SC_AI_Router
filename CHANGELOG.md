@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Native agent handoff diagnostics now distinguish the upstream tool namespace
+  and encryption marker from the router's restoration and rejection decisions.
+  Bounded, content-free records join the request and attempt logs, helping
+  identify why an external helper did not receive its assignment.
 - Opaque, malformed, or mixed encrypted native compaction history is no longer
   rewritten during an `invalid_encrypted_content` repair. The retry now only
   replaces a non-empty, structurally valid router-owned `ocx1:` summary;
