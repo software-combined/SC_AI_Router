@@ -178,6 +178,12 @@ For a stream outside that normalized lifecycle, every upstream chunk is
 forwarded unchanged. Only complete frames are observed as a sidecar, so an
 encoded body or incomplete final frame cannot be delayed, rewritten or turned
 into a router parsing failure.
+The same Responses observer reads identity-encoded streaming turns whose
+content type is absent or unrecognised, as current native Codex traffic can
+use that representation. It preserves partial frames immediately and requires
+a readable terminal to name the outcome. Unrecognised nonstream data and all
+encoded data stay opaque and unknown; only known identity JSON retains the
+existing nonstream EOF success rule. This adds no native replay permission.
 `attempt_policy` decides and opens a safe replay. It replaces the uncommitted
 attempt; a failed replay leaves its verdict to reach the client. These leaves
 never dispatch or own credentials.

@@ -161,7 +161,7 @@ class StripRetryRelayTests(unittest.TestCase):
             repair_rejected=providers.ExternalResponsesProvider(
                 provider_defs.OPENROUTER).repair_rejected,
             adapt=lambda response, tool_names, notes=None: iter(
-                [b'event: done\ndata: {"ok":true}\n\n']))
+                [b'data: {"type":"response.completed","response":{"output":[]}}\n\n']))
         prepared = Prepared('openrouter.ai', '/responses', {}, body, {}, 'openrouter')
         metrics = {'provider': 'openrouter', 'protocol': 'responses',
                    'model': 'meta/muse-spark-1.3-contributor', 'path': '/responses',
@@ -180,7 +180,7 @@ class StripRetryRelayTests(unittest.TestCase):
                            'tools': [], 'client_metadata': {'x': 1}}).encode()
         dispatches, events, wfile, _ = self._relay([(400, refused), (200, b'')], body)
         self.assertEqual(len(dispatches), 2)
-        self.assertIn(b'event: done', b''.join(wfile.parts))
+        self.assertIn(b'"type":"response.completed"', b''.join(wfile.parts))
         self.assertEqual([f['status'] for e, f in events if e == 'request_completed'], [200])
         self.assertEqual([e for e, _ in events if e == 'upstream_rejected'], [])
         self.assertEqual([f['outcome'] for e, f in events if e == 'annotation_retry'],

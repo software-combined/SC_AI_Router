@@ -74,7 +74,8 @@ class LatencyMetricTests(unittest.TestCase):
         return server
 
     def test_phase_fields_present_with_exact_fake_durations(self):
-        install_fake(self, lambda: FakeUpstream(200, b'{"output": []}', []))
+        install_fake(self, lambda: FakeUpstream(
+            200, b'{"output": []}', [('Content-Type', 'application/json')]))
         handler = _capture(self)
         server = self._server()
         ticks = (1000 + i * 0.005 for i in itertools.count())
