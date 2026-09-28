@@ -24,7 +24,8 @@ class RawAccountingTests(unittest.TestCase):
             adapt=lambda *args: iter(frames))
         metrics = {'protocol': provider_defs.RESPONSES, 'response_kind': 'sse',
                    'response_encoding': 'identity', 'model': 'm'}
-        record = stream_relay.StreamRecord()
+        record = stream_relay.StreamRecord(transport.ResponseFormat(
+            provider_defs.RESPONSES, '/v1/responses', True, 'sse', 'identity'))
         stream_relay.relay_stream(
             client, provider, object(), SimpleNamespace(tool_names=set()), metrics,
             0.0, 0.0, record)

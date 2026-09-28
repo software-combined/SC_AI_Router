@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from ai_router import (agent_handoffs, events, handoff_response, provider_defs,
-                       providers, sse, stream_relay)
+                       providers, sse, stream_relay, transport)
 from tests.test_agent_handoff_providers import Response
 
 REQUEST = '0123456789abcdef0123456789abcdef'
@@ -197,7 +197,9 @@ class HandoffObservationTests(unittest.TestCase):
                 metrics = {'request_id': REQUEST, 'model': 'gpt-6-luna',
                            'protocol': provider_defs.RESPONSES, 'response_kind': 'sse',
                            'response_encoding': 'identity'}
-                record, rows = stream_relay.StreamRecord(), []
+                record = stream_relay.StreamRecord(transport.ResponseFormat(
+                    provider_defs.RESPONSES, '/v1/responses', True, 'sse', 'identity'))
+                rows = []
                 with mock.patch.object(events.LOG, 'info', side_effect=lambda row: rows.append(json.loads(row))):
                     def relay():
                         stream_relay.relay_stream(

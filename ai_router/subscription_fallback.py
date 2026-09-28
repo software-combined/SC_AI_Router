@@ -221,9 +221,8 @@ def refused(handler, prepared, retry_after, metrics, started, admit=None, *, led
               fallback_model=fallback.target.slug, path=fallback.path)
     fields = ('request_bytes', 'stream', 'reasoning_effort', 'tool_definitions',
               'read_ms', 'prepare_ms', 'local_prepare_ms')
-    # Fresh metrics: attempt one's upstream timings belong to the 429. The
-    # protocol rides along so a mid-stream failure still emits the terminal
-    # frame (transport.emit_terminal_failure keys on it, Plan 141).
+    # Fresh metrics: attempt one's upstream timings belong to the 429.
+    # Protocol here is diagnostic; the ledger owns the route's wire facts.
     # The twin's context is the refused request's, so its final record
     # carries the same request id.
     defn = provider_defs.get(twin.context.row.provider)
@@ -237,6 +236,6 @@ def refused(handler, prepared, retry_after, metrics, started, admit=None, *, led
     # The request's in-flight slot and large-request lease still cover this
     # hand-off; the twin route neither takes nor releases one of its own.
     twin_provider = ExternalResponsesProvider(defn, fallback.region)
-    ledger.transition(twin_provider, provider_defs.RESPONSES)
+    ledger.transition(twin_provider, provider_defs.RESPONSES, model=twin.context.slug)
     return attempt_policy.Route(twin_provider, twin, twin_metrics,
                                 has_images(fallback.payload.get('input')))
