@@ -30,6 +30,26 @@ def load_helper(name):
     return module
 
 
+def isolated_env(root):
+    return {
+        'HOME': str(Path(root) / 'home'),
+        'USERPROFILE': str(Path(root) / 'home'),
+        'APPDATA': str(Path(root) / 'appdata'),
+        'LOCALAPPDATA': str(Path(root) / 'localappdata'),
+        'XDG_CONFIG_HOME': str(Path(root) / 'config'),
+        'CLAUDE_CONFIG_DIR': str(Path(root) / 'claude-config'),
+    }
+
+
+def simulate_subscription_identity(module_path):
+    """Replace only the native identity boundary in an extracted test release."""
+    with module_path.open('a', encoding='utf-8') as out:
+        out.write('\ndef subscription(profile):\n'
+                  ' import json\n'
+                  ' doc=json.loads((Path(profile)/"config.json").read_bytes())\n'
+                  ' return doc["lastKnownAccountUuid"],doc["lastKnownOrganizationUuid"]\n')
+
+
 STORES = ('local-agent-mode-sessions', 'claude-code-sessions')
 
 
