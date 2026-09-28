@@ -1,10 +1,8 @@
 import json
-import io
 import unittest
-from contextlib import ExitStack
 from types import SimpleNamespace
 from unittest import mock
-from ai_router import provider_defs, providers
+from ai_router import availability, compaction_summary, provider_defs, providers
 from ai_router.image_items import IMAGE_NOTE
 from tests.harness import (
     isolated_home as _isolated_home,
@@ -15,6 +13,11 @@ from tests.harness import (
 def _external_responses():
     """The OpenRouter Codes adapter; Plan 141 makes adapters per-provider."""
     return providers.ExternalResponsesProvider(provider_defs.OPENROUTER)
+
+
+def _summary_snapshot():
+    return {'key': availability.key_fingerprint('key'), 'region': 'global',
+            'models': frozenset(compaction_summary.SUMMARY_MODEL_SLUGS)}
 
 
 class SelectTests(unittest.TestCase):
@@ -111,27 +114,37 @@ class DefinitionHeaderTests(unittest.TestCase):
         class FakeConn:
             def __init__(self, *a, **k):
                 pass
+            def connect(self):
+                pass
             def request(self, method, path, body=None, headers=None):
                 seen.update(headers)
                 seen['body'] = json.loads(body)
             def getresponse(self):
-                payload = {'output': [{'type': 'message', 'content': [
+                payload = {'model': seen['body'].get('model'),
+                           'output': [{'type': 'message', 'content': [
                     {'type': 'output_text', 'text': 's'}]}]}
                 return SimpleNamespace(status=200,
                                         read=lambda: json.dumps(payload).encode())
             def close(self):
                 pass
-        with mock.patch.object(providers.http.client, 'HTTPSConnection', FakeConn):
+        with mock.patch.object(compaction_summary.availability, 'current',
+                               return_value=_summary_snapshot()), \
+                mock.patch.object(compaction_summary.http.client,
+                                  'HTTPSConnection', FakeConn):
             _external_responses().summarize('z-ai/glm-5.3', 'key', [])
         self.assertEqual(seen.get('X-OpenRouter-Metadata'), 'enabled')
+        self.assertEqual(seen.get('Authorization'), 'Bearer key')
+        self.assertNotIn('x-api-key', {key.lower() for key in seen})
+        self.assertNotIn('chatgpt-account-id', {key.lower() for key in seen})
         self.assertNotIn('provider', seen['body'])
 
 
 class ProviderPrefsTests(unittest.TestCase):
-    def _entry(self, prefs):
-        return SimpleNamespace(slug='x/m', provider='openrouter',
+    def _entry(self, prefs, slug='xiaomi/mimo-v2.6-flash'):
+        return SimpleNamespace(slug=slug, provider='openrouter',
                                max_output_tokens=1000, context_window=0,
-                               provider_prefs=prefs, drop_images=False)
+                               provider_prefs=prefs, drop_images=False,
+                               reasoning=('none', 'low'), upstream_id=slug)
 
     def test_wire_body_has_no_provider_without_prefs(self):
         prepared = _external_responses().prepare(
@@ -146,11 +159,13 @@ class ProviderPrefsTests(unittest.TestCase):
             b'raw', {}, _stub_credentials())
         self.assertEqual(json.loads(prepared.body)['provider'], prefs)
 
-    def test_summarizer_body_carries_provider_exactly_when_set(self):
+    def test_summarizer_rejects_provider_routing_overrides(self):
         seen = {}
 
         class FakeConn:
             def __init__(self, *a, **k):
+                pass
+            def connect(self):
                 pass
             def request(self, method, path, body=None, headers=None):
                 seen.update(json.loads(body))
@@ -162,11 +177,17 @@ class ProviderPrefsTests(unittest.TestCase):
             def close(self):
                 pass
         prefs = {'require_parameters': True}
-        with mock.patch.object(providers.http.client, 'HTTPSConnection', FakeConn), \
+        rows = {slug: self._entry(prefs, slug)
+                for slug in compaction_summary.SUMMARY_MODEL_SLUGS}
+        with mock.patch.object(compaction_summary.availability, 'current',
+                               return_value=_summary_snapshot()), \
+                mock.patch.object(compaction_summary.http.client,
+                                  'HTTPSConnection', FakeConn), \
                 mock.patch.object(providers, 'by_slug',
-                                   return_value=self._entry(prefs)):
-            _external_responses().summarize('x/m', 'key', [])
-        self.assertEqual(seen.get('provider'), prefs)
+                                   side_effect=lambda slug: rows.get(slug)):
+            with self.assertRaisesRegex(ValueError, 'failed pin'):
+                _external_responses().summarize('x/m', 'key', [])
+        self.assertNotIn('model', seen)
 
 
 class OutputCapTests(unittest.TestCase):
@@ -249,180 +270,90 @@ class SummarizerTests(unittest.TestCase):
         class FakeConn:
             def __init__(self, *a, **k):
                 pass
+            def connect(self):
+                pass
             def request(self, method, path, body=None, headers=None):
                 seen.update(json.loads(body))
             def getresponse(self):
-                payload = {'output': [{'type': 'message', 'content': [
+                payload = {'model': seen.get('model'), 'output': [{'type': 'message', 'content': [
                     {'type': 'output_text', 'text': 's'}]}]}
                 return SimpleNamespace(status=200, read=lambda: json.dumps(payload).encode())
             def close(self):
                 pass
-        with mock.patch.object(providers.http.client, 'HTTPSConnection', FakeConn):
+        with mock.patch.object(compaction_summary.availability, 'current',
+                               return_value=_summary_snapshot()), \
+                mock.patch.object(compaction_summary.http.client,
+                                  'HTTPSConnection', FakeConn):
             return _external_responses().summarize(model, 'key', [])
 
-    def test_summarizer_pins_lowest_supported_effort(self):
-        for model, effort in (('deepseek/deepseek-v4.1-flash', 'low'),
-                              ('z-ai/glm-5.3', 'low')):
-            with self.subTest(model=model):
-                seen = {}
-                self.assertEqual(self._summarize(model, seen), 's')
-                self.assertEqual(seen['reasoning'], {'effort': effort})
+    def test_summary_rows_resolve_in_primary_fallback_order(self):
+        entries = compaction_summary.summary_entries(
+            provider_defs.OPENROUTER.id,
+            availability_snapshot=_summary_snapshot())
+        self.assertEqual([entry.slug for entry in entries],
+                         list(compaction_summary.SUMMARY_MODEL_SLUGS))
 
-    def test_summarizer_raises_output_cap_and_omits_effort_when_unknown(self):
+    def test_summary_rows_fail_closed_on_changed_pin(self):
+        for changed in ('slug', 'provider', 'upstream_id', 'provider_prefs',
+                        'max_output_tokens'):
+            with self.subTest(changed=changed):
+                rows = {slug: SimpleNamespace(
+                    slug=slug, provider='openrouter', upstream_id=slug,
+                    provider_prefs=None, max_output_tokens=100000)
+                    for slug in compaction_summary.SUMMARY_MODEL_SLUGS}
+                primary = compaction_summary.SUMMARY_MODEL_SLUGS[0]
+                values = {'slug': 'other/model', 'provider': 'other',
+                          'upstream_id': 'other/model',
+                          'provider_prefs': {'order': ['other']},
+                          'max_output_tokens': 4000}
+                rows[primary] = SimpleNamespace(
+                    **{**vars(rows[primary]), changed: values[changed]})
+                with mock.patch.object(compaction_summary.availability, 'current',
+                                       return_value=_summary_snapshot()), \
+                        mock.patch.object(compaction_summary.http.client,
+                                          'HTTPSConnection') as conn, \
+                        mock.patch.object(providers, 'by_slug',
+                                          side_effect=lambda slug: rows.get(slug)):
+                    with self.assertRaisesRegex(ValueError, 'failed pin'):
+                        _external_responses().summarize('z-ai/glm-5.3', 'key', [])
+                conn.assert_not_called()
+
+    def test_summarizer_uses_pinned_fast_row(self):
         seen = {}
-        self._summarize('z-ai/glm-5.3', seen)
+        self.assertEqual(self._summarize('z-ai/glm-5.3', seen), 's')
+        self.assertEqual(seen['model'], 'xiaomi/mimo-v2.6-flash')
+        self.assertEqual(seen['reasoning'], {'effort': 'none'})
         self.assertEqual(seen['max_output_tokens'], 4000)
-        seen = {}
-        self._summarize('unknown-model-xyz', seen)
-        self.assertNotIn('reasoning', seen)
+
+    def test_missing_summary_rows_fail_cleanly(self):
+        with mock.patch.object(compaction_summary.availability, 'current',
+                               return_value=_summary_snapshot()), \
+                mock.patch.object(providers, 'by_slug', return_value=None), \
+                mock.patch.object(compaction_summary.http.client,
+                                  'HTTPSConnection') as conn:
+            with self.assertRaisesRegex(ValueError, 'models unavailable'):
+                _external_responses().summarize('unknown-model-xyz', 'key', [])
+        conn.assert_not_called()
 
     def test_compact_remembers_discovered_tools(self):
-        from ai_router.tool_adapter import prepare_tools
+        from tests.tool_stages import prepare_tools
         _isolated_home(self)
         items = [{'type': 'message', 'role': 'user', 'content': 'do it'},
                  {'type': 'tool_search_output', 'call_id': 's1', 'status': 'completed',
                   'execution': 'client', 'tools': [
                       {'type': 'function', 'name': 'echo', 'description': 'Echo',
                        'parameters': {'type': 'object'}}]}]
-        with mock.patch.object(providers.ExternalResponsesProvider, 'summarize', lambda *a: 'did stuff'):
+        with mock.patch.object(providers.ExternalResponsesProvider, 'summarize', lambda *a: 'did stuff'), \
+                mock.patch.object(providers.ExternalResponsesProvider,
+                                  '_require_summary_rows', return_value={}):
             out = _external_responses().compact('z-ai/glm-5.3', {'input': items}, 'key')
         payload = {'tools': [], 'input': out}
-        prepare_tools(payload)
+        payload = prepare_tools(payload)[0]
         self.assertEqual(len(payload['tools']), 1)
         self.assertEqual(payload['tools'][0]['parameters'], {'type': 'object'})
 
 
-class SummarizerRetryTests(unittest.TestCase):
-    @staticmethod
-    def _result(text='summary', status=None, **extra):
-        payload = {'output': [{'type': 'message', 'content': [
-            {'type': 'output_text', 'text': text}]}]}
-        if status is not None:
-            payload['status'] = status
-        payload.update(extra)
-        return 200, payload
-
-    @classmethod
-    def _truncated(cls):
-        result = cls._result('partial', status='incomplete',
-                             incomplete_details={'reason': 'max_output_tokens'})
-        result[1]['output'][0]['status'] = 'incomplete'
-        return result
-
-    def _run(self, responses, model='z-ai/glm-5.3', ceiling=None):
-        queue, calls, closed = list(responses), [], []
-
-        class Response:
-            def __init__(self, status, payload):
-                self.status = status
-                self.body = io.BytesIO(json.dumps(payload).encode())
-
-            def read(self, *args):
-                return self.body.read(*args)
-
-        class Connection:
-            def __init__(self, *args, **kwargs):
-                calls.append({'timeout': kwargs.get('timeout')})
-
-            def request(self, method, path, body=None, headers=None):
-                calls[-1]['body'] = json.loads(body)
-
-            def getresponse(self):
-                if not queue:
-                    raise AssertionError('summarizer retried beyond the fixture')
-                response = queue.pop(0)
-                if isinstance(response, BaseException):
-                    raise response
-                return Response(*response)
-
-            def close(self):
-                closed.append(True)
-
-        with ExitStack() as stack:
-            stack.enter_context(mock.patch.object(
-                providers.http.client, 'HTTPSConnection', Connection))
-            if ceiling is not None:
-                stack.enter_context(mock.patch.object(
-                    providers, 'by_slug',
-                    return_value=SimpleNamespace(max_output_tokens=ceiling, slug=model)))
-            try:
-                result = _external_responses().summarize(model, 'key', [
-                    {'type': 'message', 'role': 'user', 'content': 'marker'}])
-            except Exception as exc:  # Return the result so every path checks closure.
-                result = exc
-        return result, calls, closed
-
-    def test_truncated_summary_retries_once_and_keeps_request(self):
-        with mock.patch.object(providers, 'log_event') as logged:
-            result, calls, closed = self._run([
-                self._truncated(), self._result('complete')])
-        self.assertEqual(result, 'complete')
-        self.assertEqual([call['body']['max_output_tokens'] for call in calls],
-                         [4000, 8000])
-        self.assertEqual(calls[0]['body']['input'], calls[1]['body']['input'])
-        self.assertEqual(calls[0]['body']['reasoning'], {'effort': 'low'})
-        self.assertEqual(len(calls), len(closed))
-        events = [call.kwargs for call in logged.call_args_list
-                  if call.args and call.args[0] == 'compact_summary_attempt']
-        self.assertEqual([event['outcome'] for event in events],
-                         ['retry', 'completed'])
-        self.assertTrue(all(set(event) <= {
-            'model', 'attempt', 'max_output_tokens', 'outcome'} for event in events))
-
-    def test_retry_ceiling_clamps_or_disables_second_attempt(self):
-        result, calls, closed = self._run([
-            self._truncated(), self._result('complete')], ceiling=6000)
-        self.assertEqual(result, 'complete')
-        self.assertEqual([call['body']['max_output_tokens'] for call in calls],
-                         [4000, 6000])
-        self.assertEqual(len(calls), len(closed))
-        result, calls, closed = self._run([self._truncated()], ceiling=4000)
-        self.assertIsInstance(result, providers.comp.IncompleteSummary)
-        self.assertEqual([call['body']['max_output_tokens'] for call in calls],
-                         [4000])
-        self.assertEqual(len(calls), len(closed))
-
-    def test_truncation_twice_is_rejected_after_two_attempts(self):
-        result, calls, closed = self._run([self._truncated(), self._truncated()])
-        self.assertIsInstance(result, providers.comp.IncompleteSummary)
-        self.assertEqual(len(calls), 2)
-        self.assertEqual(len(calls), len(closed))
-
-    def test_retry_uses_one_shared_deadline(self):
-        with mock.patch.object(providers.time, 'monotonic',
-                               side_effect=[0, 1, 2, 3]):
-            result, calls, closed = self._run([
-                self._truncated(), self._result('complete')])
-        self.assertEqual(result, 'complete')
-        self.assertLess(calls[1]['timeout'], calls[0]['timeout'])
-        self.assertLessEqual(calls[0]['timeout'], providers.SUMMARY_DEADLINE_S)
-        self.assertEqual(len(calls), len(closed))
-        with mock.patch.object(providers.time, 'monotonic',
-                               side_effect=[0, 1, 120]):
-            result, calls, closed = self._run([self._truncated()])
-        self.assertIsInstance(result, TimeoutError)
-        self.assertEqual(len(calls), 1)
-        self.assertEqual(len(calls), len(closed))
-
-    def test_other_failures_do_not_retry(self):
-        valid = self._result('partial')
-        cases = {
-            'failed status': self._result(status='failed'),
-            'in progress': self._result(status='in_progress'),
-            'embedded error': (200, {**valid[1], 'error': {'code': 'bad'}}),
-            'empty': (200, {'output': []}),
-            'malformed': (200, {'output': 'bad'}),
-            'auth': (401, {'error': 'unauthorized'}),
-            'timeout': TimeoutError('timed out'),
-        }
-        for name, response in cases.items():
-            with self.subTest(name=name):
-                result, calls, closed = self._run([response])
-                self.assertIsInstance(result, Exception)
-                self.assertNotIsInstance(result, providers.comp.IncompleteSummary)
-                self.assertEqual(len(calls), 1)
-                self.assertEqual(len(calls), len(closed))
-
+class ImageProjectionTests(unittest.TestCase):
     def test_current_turn_image_is_noted_on_text_only_rows(self):
         payload = {'model': 'z-ai/glm-5.3', 'input': [
             {'type': 'message', 'role': 'user', 'content': [

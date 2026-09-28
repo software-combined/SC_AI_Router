@@ -2,6 +2,140 @@
 
 ## Unreleased
 
+## 0.6.140
+
+- Repair and stream handling now use captured request and response facts.
+  Clearing or replacing diagnostic fields cannot disable an eligible repair,
+  change stream classification, or suppress the final error sent to a client.
+
+## 0.6.139
+
+- Align the Python package version and runtime inventory with the release.
+  Their existing checks now run in the core suite so release-record drift is
+  caught before beta publication.
+
+## 0.6.138
+
+- New model promotion now requires offline conformance and successful Codex
+  and Claude Code route checks against the same source and capabilities.
+  Structured evidence replaces the old scalar probe result, and a newer failed
+  run supersedes an older pass. Isolated probes cap upstream attempts and
+  tokens, including retries, while incomplete checks leave the model hidden.
+- Wire diagnostics use the request's measured model profile. Extra input shapes
+  observed on DeepSeek V4.1 Flash no longer count as verified for its whole
+  model family. Image timeout advice now applies to any request carrying an
+  image. Offline conformance covers every registered model and supported route,
+  including hidden rows, native preservation and recovery boundaries.
+- Request diagnostics retain each attempt's reported model, identity source,
+  effort and transport timing, including evidence received before a failure.
+  An installed read-only command shows recent request chains and filters missing,
+  mismatched or contradictory model reports without making a model call.
+  Client disconnects are identified from the failed response write even when
+  a shortened traceback omits the socket frame.
+- Agent handoff validation now retains the request's model list. A model
+  refresh during a response cannot change whether an encrypted assignment
+  needs a plaintext handoff. Spawn, follow-up and message delivery use the
+  same captured list on both Codex tool layouts.
+- External Claude requests can recover once from a temporary stream failure
+  before any content or tool action. Thinking, signatures and unknown events
+  prohibit replay, including empty thinking removed by compatibility repair.
+  Upstream HTTP errors now use Claude's native envelope and distinguish outages,
+  rate limits and credit problems. Subscription requests remain single-send.
+- Claude Messages outcomes now distinguish successful completion, truncation,
+  refusal and context exhaustion using the final stop reason. Missing or
+  unreadable endings stay unknown. Request preparation also leaves the original
+  client payload unchanged when applying external billing and tool repairs.
+  Native bytes are preserved.
+- Native Responses streams now retain their terminal outcome when the upstream
+  omits an SSE content type. Opaque or encoded data no longer counts as answer
+  text or becomes a successful model outcome at EOF. Forwarded bytes,
+  subscription headers and retry permissions are unchanged.
+- A completed Responses turn with `error: null` now remains successful. This
+  standard no-error field previously caused a false stream failure on external
+  routes and a false failure record on subscription routes. Actual error
+  objects and failed completion statuses still fail.
+- Native agent handoff diagnostics now distinguish the upstream tool namespace
+  and encryption marker from the router's restoration and rejection decisions.
+  Bounded, content-free records join the request and attempt logs, helping
+  identify why an external helper did not receive its assignment.
+- Opaque, malformed, or mixed encrypted native compaction history is no longer
+  rewritten during an `invalid_encrypted_content` repair. The retry now only
+  replaces a non-empty, structurally valid router-owned `ocx1:` summary;
+  unknown native blobs are preserved and the request is left unrepaired rather
+  than sent with invented readable text.
+- The router records one shared outcome and bounded attempt ledger per request.
+  Existing repair, replay and opt-in fallback limits are unchanged; unknown
+  stream failures remain unknown and are not replayed.
+- Raw upstream streams are now forwarded byte for byte, including compressed
+  and incomplete final frames. Terminal observation is best effort and cannot
+  delay or rewrite the client's stream; readable raw failures still record
+  `failure_class` and the terminal writer.
+- External Claude Messages streams now give every `tool_use` a unique
+  client-visible ID. DeepSeek V4.1 Flash reused `call_0` on every tool turn,
+  so Claude Code collapsed the history and the model could not see earlier
+  `tool_result` content. JSON without top-level tool calls remains
+  byte-identical; top-level JSON `tool_use` IDs receive the same repair.
+- A missing pinned compaction-summary registry row no longer silently switches
+  vendors: if another eligible row remains, summary fails closed before any
+  request. No eligible summary row, or a missing or stale key/region
+  availability snapshot, fails closed before Jev or any summary request, so
+  flattened history cannot reach a vendor before its permitted set is known.
+  Allowlist and availability filtering still decide which pinned rows are
+  eligible. Jev remains global only; regional compaction uses the region-bound
+  summary path instead.
+- The Claude Code multi-read probe now labels served identity and rejects a
+  known requested-versus-served model mismatch and requires `probe-1.txt`
+  before `probe-2.txt`; it also requires exactly one matching `tool_result`
+  for each rewritten `tool_use` id, rejecting stale or duplicate result ids.
+  Hashed listing aliases resolve to their upstream id before comparison, and
+  absent identity stays `unverified`.
+
+## 0.6.127
+
+- External compaction summaries now use Xiaomi MiMo V2.6 Flash first and
+  DeepSeek V4.1 Flash after an unsent timeout or incomplete output. A timeout
+  after dispatch fails closed to avoid duplicate side effects. The summary can
+  therefore come from a different upstream vendor than the active model. Each
+  attempt has a 45-second limit and the whole summary stops within 75 seconds.
+  Aggregate timing logs record model, size, attempt and outcome without
+  conversation text. Summary responses must echo the pinned model, and a
+  registry row whose provider, upstream id or provider preferences change
+  fails closed instead of silently switching vendors.
+
+## 0.6.126
+
+- External compaction summaries now include native tool-search calls and the
+  released tool definitions they return, alongside native file edits.
+
+## 0.6.125
+
+- An OpenRouter Responses stream that fails transiently before any byte reaches
+  the client can now be retried once, even when `response.created` or
+  `response.in_progress` echoes a large request. The rule is shared across
+  models. Requests that offer provider-run tools, such as web search, keep the
+  provider's verdict and are not replayed.
+- A model-list refresh no longer changes a request that is already in flight.
+  Each request keeps the model settings it started with, including a helper
+  turn's fallback to OpenRouter, and the next request uses the new list. The
+  router log's start and completion records for one request share a request
+  ID.
+- Preparing a request no longer changes the client's own copy of it. When a
+  ChatGPT helper turn such as thread titling falls back to OpenRouter, the
+  fallback now starts from the original request, not one the ChatGPT attempt
+  had already rewritten, so a turn offering agent tools is no longer refused
+  with a plaintext collaboration namespace error. When an oversized turn has to shorten old tool outputs or drop old
+  images to fit the size limit, only the request sent upstream is shortened.
+- A request can now be up to 96 MiB, sent or decompressed, on every route,
+  instead of being refused at 16 MiB. This is a resource limit on this
+  machine, not a promise that ChatGPT, Claude or OpenRouter accepts a request
+  that size. Long native threads with images are forwarded whole. One request
+  over 16 MiB is served at a time, to the end of its answer; another arriving
+  meanwhile is asked to retry shortly, and smaller requests carry on. A
+  compressed request to an external Claude-format model is now sent
+  decompressed, so its headers match its body.
+
+## 0.6.124
+
 - Model-switch and context-reset markers are found even if the client moves
   them to another text block or the system role.
 - Responses requests the router prepares are now checked against the

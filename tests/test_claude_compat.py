@@ -7,6 +7,7 @@ The subscription route is untouched and is pinned as such here.
 """
 import json
 import unittest
+from unittest.mock import patch
 
 from tests.fakes import FakeUpstream, install_fake
 from tests.harness import (
@@ -64,19 +65,19 @@ class BillingHeaderTests(unittest.TestCase):
     def test_billing_block_goes_and_the_rest_of_the_prompt_stays(self):
         payload = {'system': [{'type': 'text', 'text': BILLING},
                               {'type': 'text', 'text': 'You are an agent.'}]}
-        self.assertTrue(compat.strip_billing_header(payload))
+        payload = compat.strip_billing_header(payload)
         self.assertEqual(payload['system'],
                          [{'type': 'text', 'text': 'You are an agent.'}])
 
     def test_lone_billing_block_removes_the_key_entirely(self):
         payload = {'system': [{'type': 'text', 'text': BILLING}]}
-        self.assertTrue(compat.strip_billing_header(payload))
+        payload = compat.strip_billing_header(payload)
         self.assertNotIn('system', payload)
 
     def test_a_prompt_that_merely_names_the_field_is_kept(self):
         payload = {'system': [{'type': 'text',
                                'text': 'Explain the x-anthropic-billing-header: field.'}]}
-        self.assertFalse(compat.strip_billing_header(payload))
+        self.assertIs(compat.strip_billing_header(payload), payload)
         self.assertEqual(len(payload['system']), 1)
 
     def test_untouched_shapes_report_no_change(self):
@@ -84,7 +85,7 @@ class BillingHeaderTests(unittest.TestCase):
                         {'system': 'a plain string'},
                         {'system': [{'type': 'text', 'text': 'Be brief.'}]}):
             with self.subTest(payload=payload):
-                self.assertFalse(compat.strip_billing_header(payload))
+                self.assertIs(compat.strip_billing_header(payload), payload)
 
 
 class ThinkingShapeTests(unittest.TestCase):
@@ -125,11 +126,34 @@ class ThinkingShapeTests(unittest.TestCase):
         frames = [_start(0, 'thinking')]
         self.assertEqual(self._shaped(frames), b''.join(frames))
 
+    def test_streamed_tool_use_ids_are_unique_across_calls(self):
+        def tool_start(tool_id):
+            return _frame('content_block_start',
+                          {'type': 'content_block_start', 'index': 0,
+                           'content_block': {'type': 'tool_use', 'id': tool_id,
+                                             'name': 'Read', 'input': {}}})
+
+        frames = [tool_start('call_0'), _stop(0),
+                  tool_start('call_0'), _stop(0)]
+        with patch.object(
+                compat, '_fresh_tool_id',
+                side_effect=('toolu_scg_a', 'toolu_scg_b')):
+            shaped = self._shaped(frames)
+        ids = []
+        for line in shaped.splitlines():
+            if not line.startswith(b'data: '):
+                continue
+            event = json.loads(line[6:])
+            if event.get('type') == 'content_block_start':
+                ids.append(event['content_block']['id'])
+        self.assertEqual(ids, ['toolu_scg_a', 'toolu_scg_b'])
+        self.assertNotIn(b'call_0', shaped)
+
 
 class DeferredToolTests(unittest.TestCase):
     def test_placeholder_and_flag_go_and_the_released_definition_stays(self):
         payload = {'tools': [SEARCH_TOOL, dict(PLACEHOLDER), dict(RELEASED)]}
-        self.assertTrue(compat.flatten_deferred_tools(payload))
+        payload = compat.flatten_deferred_tools(payload)
         self.assertEqual([tool['name'] for tool in payload['tools']],
                          ['ToolSearch', 'mcp__stubtools__tool_000'])
         self.assertTrue(all('defer_loading' not in tool for tool in payload['tools']))
@@ -141,7 +165,7 @@ class DeferredToolTests(unittest.TestCase):
                                      dict(kept),
                                      {'type': 'tool_reference',
                                       'tool_name': 'mcp__stubtools__tool_000'}])]}]}
-        self.assertTrue(compat.flatten_deferred_tools(payload))
+        payload = compat.flatten_deferred_tools(payload)
         block = payload['messages'][0]['content'][0]
         self.assertEqual(block['tool_use_id'], 'toolu_capture')
         self.assertEqual([item['type'] for item in block['content']],
@@ -151,7 +175,7 @@ class DeferredToolTests(unittest.TestCase):
 
     def test_a_lone_reference_leaves_one_text_block(self):
         payload = {'messages': [{'role': 'user', 'content': [dict(REFERENCE)]}]}
-        self.assertTrue(compat.flatten_deferred_tools(payload))
+        payload = compat.flatten_deferred_tools(payload)
         block = payload['messages'][0]['content'][0]
         self.assertEqual(len(block['content']), 1)
         self.assertEqual(block['content'][0]['type'], 'text')
@@ -159,7 +183,7 @@ class DeferredToolTests(unittest.TestCase):
     def test_a_server_side_search_tool_is_dropped(self):
         payload = {'tools': [{'type': 'tool_search_tool_regex_20251119',
                               'name': 'tool_search'}, SEARCH_TOOL]}
-        self.assertTrue(compat.flatten_deferred_tools(payload))
+        payload = compat.flatten_deferred_tools(payload)
         self.assertEqual([tool['name'] for tool in payload['tools']], ['ToolSearch'])
 
     def test_ordinary_requests_report_no_change(self):
@@ -170,7 +194,7 @@ class DeferredToolTests(unittest.TestCase):
                         {'messages': [{'role': 'user', 'content': [text_result]}]},
                         {'messages': [{'role': 'user', 'content': 'plain'}]}):
             with self.subTest(payload=payload):
-                self.assertFalse(compat.flatten_deferred_tools(payload))
+                self.assertIs(compat.flatten_deferred_tools(payload), payload)
 
 
 class ProviderSurfaceTests(unittest.TestCase):
@@ -189,7 +213,20 @@ class ProviderSurfaceTests(unittest.TestCase):
         self.assertEqual(b''.join(self._provider().adapt(source, None)),
                          b''.join([frames[0], frames[1], frames[3]]))
 
-    def test_json_response_is_handed_over_untouched(self):
+    def test_streaming_tool_ids_are_rewritten_by_the_provider(self):
+        frames = [_frame('content_block_start',
+                         {'type': 'content_block_start', 'index': 0,
+                          'content_block': {'type': 'tool_use', 'id': 'call_0',
+                                            'name': 'Read', 'input': {}}}),
+                  _stop(0)]
+        with patch.object(compat, '_fresh_tool_id', return_value='toolu_scg_provider'):
+            shaped = b''.join(self._provider().adapt(
+                FakeUpstream(200, b''.join(frames),
+                             [('Content-Type', 'text/event-stream')]), None))
+        self.assertIn(b'toolu_scg_provider', shaped)
+        self.assertNotIn(b'call_0', shaped)
+
+    def test_json_without_tool_use_is_handed_over_untouched(self):
         body = b'{"id":"msg_1","type":"message","content":[{"type":"text","text":"hi"}]}'
         source = FakeUpstream(200, body, [('Content-Type', 'application/json')])
         self.assertEqual(b''.join(self._provider().adapt(source, None)), body)
@@ -225,7 +262,8 @@ class IngressContractTests(unittest.TestCase):
         self.assertEqual(sent['system'], [{'type': 'text', 'text': 'Be brief.'}])
         self.assertNotIn('x-anthropic-billing-header', body.decode())
         self.assertEqual(headers, {'Authorization': 'Bearer test-key',
-                                   'Content-Type': 'application/json'})
+                                   'Content-Type': 'application/json',
+                                   'Accept-Encoding': 'identity'})
 
     def test_a_request_without_the_block_stays_byte_identical(self):
         payload = {'model': FABLE, 'max_tokens': 8,

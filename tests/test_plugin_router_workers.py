@@ -93,6 +93,16 @@ class RouterWorkersSkillTest(unittest.TestCase):
         entry = (PLUGIN / 'skills/optimal-subagents/SKILL.md').read_text()
         self.assertIn('../router-workers/SKILL.md', entry)
 
+    def test_skill_serves_only_the_desktop_subscription_profile(self):
+        text = (SKILL / 'SKILL.md').read_text()
+        self.assertIn('only for a Claude desktop Code session in the subscription',
+                      text)
+        self.assertIn('in the gateway profile, should keep doing that', text)
+        self.assertIn('subscription profile', (SKILL / 'scripts/router_worker.py').read_text())
+        entry = (PLUGIN / 'skills/optimal-subagents/SKILL.md').read_text()
+        self.assertIn('a Claude desktop Code session in the subscription profile',
+                      entry)
+
     def test_listing_id_is_the_id_the_router_advertises(self):
         rows = [{'id': alias} for alias in map(claude_alias, (m.slug for m in registry.MODELS))
                 if alias]
@@ -120,7 +130,54 @@ class RouterWorkersSkillTest(unittest.TestCase):
         failed = worker.summarise(json.dumps(
             {'type': 'result', 'is_error': True, 'subtype': 'error_during_execution'}))
         self.assertEqual((failed['finished'], failed['error']), (False, 'error_during_execution'))
-        self.assertFalse(worker.summarise('')['finished'])
+        missing = worker.summarise('')
+        self.assertEqual((missing['finished'], missing['error']), (False, None))
+
+    def test_summary_rejects_empty_interrupted_and_narration_only_answers(self):
+        cases = (
+            ('', 'empty_answer'),
+            ('[Tool use interrupted]', 'interrupted_answer'),
+            ("I'll read the BUILD playbook and the repo's AGENTS.md next.", 'narration_only_answer'),
+            ('Let me try reading the key skill file again.', 'narration_only_answer'),
+            ('I will read the file and continue after that.', 'narration_only_answer'),
+            ('My file-reading tools returned no content after the first call in this session.',
+             'tool_result_missing'),
+            ('The Read tool returned no output, so I cannot verify the changes.', 'tool_result_missing'),
+            ('Done. The Read tool returned no output, so I cannot verify the changes.', 'tool_result_missing'),
+            ('Fixed the parser. Read returned no output, so I cannot verify.',
+             'tool_result_missing'),
+            ('Every subsequent tool call came back empty.', 'tool_result_missing'),
+            ('I need to stop here and report a hard constraint.', 'narration_only_answer'),
+        )
+        for answer, error in cases:
+            with self.subTest(answer=answer):
+                summary = worker.summarise(json.dumps(
+                    {'type': 'result', 'result': answer, 'is_error': False,
+                     'num_turns': 2, 'usage': {}}))
+                self.assertFalse(summary['finished'])
+                self.assertEqual(summary['error'], error)
+
+    def test_summary_keeps_substantive_answers_that_mention_tool_failures(self):
+        for answer in (
+                'The parser could not read the malformed fixture; the fix is '
+                'validated by the passing suite.',
+                'Fixed the parser. Earlier diagnostics said tools returned '
+                'empty, but the final suite passes.',
+                'This version returns the expected result. Earlier the Read '
+                'tool returned no output.'):
+            with self.subTest(answer=answer):
+                summary = worker.summarise(json.dumps(
+                    {'type': 'result', 'result': answer, 'is_error': False,
+                     'num_turns': 2, 'usage': {}}))
+                self.assertTrue(summary['finished'])
+                self.assertIsNone(summary['error'])
+
+    def test_summary_rejects_non_string_final_answers(self):
+        summary = worker.summarise(json.dumps(
+            {'type': 'result', 'result': {'text': 'done'}, 'is_error': False,
+             'num_turns': 1, 'usage': {}}))
+        self.assertFalse(summary['finished'])
+        self.assertEqual(summary['error'], 'invalid_answer')
 
     def test_worker_environment_carries_none_of_the_callers_credentials(self):
         # USERPROFILE keeps Path.home() working on Windows once the rest is cleared.

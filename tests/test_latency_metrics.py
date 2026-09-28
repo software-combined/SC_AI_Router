@@ -14,6 +14,7 @@ import json
 import logging
 import time
 import unittest
+from types import SimpleNamespace
 from unittest import mock
 
 from ai_router.runtime import LOG
@@ -74,11 +75,16 @@ class LatencyMetricTests(unittest.TestCase):
         return server
 
     def test_phase_fields_present_with_exact_fake_durations(self):
-        install_fake(self, lambda: FakeUpstream(200, b'{"output": []}', []))
+        install_fake(self, lambda: FakeUpstream(
+            200, b'{"output": []}', [('Content-Type', 'application/json')]))
         handler = _capture(self)
         server = self._server()
         ticks = (1000 + i * 0.005 for i in itertools.count())
         real_clock = time.monotonic
+        # Diagnostics sample time independently of these latency boundaries;
+        # extra observations must not advance the boundary test's fake clock.
+        self.enterContext(mock.patch('ai_router.request_evidence.time',
+                                     SimpleNamespace(monotonic=real_clock)))
         with mock.patch('ai_router.router.time.monotonic',
                         side_effect=lambda: next(ticks)):
             response = _post(server.server_port, '/test-token/responses',
@@ -159,6 +165,8 @@ class LatencyMetricTests(unittest.TestCase):
             server = self._server()
             ticks = (2000 + i * 0.005 for i in itertools.count())
             real_clock = time.monotonic
+            self.enterContext(mock.patch('ai_router.request_evidence.time',
+                                         SimpleNamespace(monotonic=real_clock)))
             with mock.patch('ai_router.router.time.monotonic',
                             side_effect=lambda: next(ticks)):
                 response = _post(server.server_port, '/test-token/responses',

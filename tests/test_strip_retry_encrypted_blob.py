@@ -8,25 +8,22 @@ forwarded that refusal instead of repairing the one named condition.
 Run from the copy root:
   <python> -m unittest discover -s tests -t . -v
 """
-import inspect
 import json
-import types
 import unittest
 from unittest import mock
 from compression import zstd
 
-from ai_router import (compaction, provider_defs, providers, strip_retry,
+from ai_router import (attempt_policy, compaction, provider_defs, providers, strip_retry,
                        subscription_history, transport)
+from ai_router.registry import by_slug
+from tests.harness import stub_credentials
 
-
-OPENROUTER = types.SimpleNamespace(defn=provider_defs.get(provider_defs.DEFAULT_EXTERNAL))
-SUBSCRIPTION = types.SimpleNamespace(defn=provider_defs.get('openai'))
-
+OPENROUTER = providers.ExternalResponsesProvider(provider_defs.get(provider_defs.DEFAULT_EXTERNAL))
+SUBSCRIPTION = providers.SubscriptionProvider()
 
 def body(items):
     return json.dumps({'model': 'codex-auto-review', 'stream': True,
                        'input': items}, separators=(',', ':')).encode()
-
 
 MESSAGE = {'type': 'message', 'role': 'user',
            'content': [{'type': 'input_text', 'text': 'judge this action'}]}
@@ -47,11 +44,9 @@ ENCRYPTED_DESCRIBED = (400, 'codex-auto-review refused this request: the request
                             'was rejected. Do not retry it unchanged',
                        'invalid_encrypted_content')
 
-
 class Response:
     def __init__(self, status):
         self.status = status
-
 
 def prepared(body_bytes):
     return transport.Prepared('api.openai.com', '/responses', {}, body_bytes,
@@ -78,22 +73,21 @@ class RetryRepairTests(unittest.TestCase):
               body_bytes=GUARDIAN_BODY):
         return strip_retry.maybe_retry_unattributable(
             described, Response(status), raw, self.metrics, provider,
-            prepared(body_bytes), [], self.log)
+            prepared(body_bytes), attempt_policy.Ledger(provider, self.metrics), self.log)
 
     def test_01_healthy_request_is_untouched_and_never_stripped(self):
         called = []
-        # Fail loudly if the repair runs where it must not: this stand-in takes
-        # one argument, so a two-argument call raises TypeError.
-        with mock.patch.object(strip_retry, 'strip_reasoning_blobs',
-                               lambda b: called.append(b)):
+        # The policy gate never asks the adapter for a repair on a healthy turn.
+        with mock.patch.object(SUBSCRIPTION, 'repair_rejected',
+                               lambda *a: called.append(a)):
             self.assertIsNone(self.drive(200, None))
         self.assertEqual(called, [], 'healthy turn must not reach any strip')
         self.assertEqual(self.log.outcomes(), ['ineligible'])
 
     def test_02_non_400_never_triggers_the_repair(self):
         called = []
-        with mock.patch.object(strip_retry, 'strip_reasoning_blobs',
-                               lambda b: called.append(b)):
+        with mock.patch.object(SUBSCRIPTION, 'repair_rejected',
+                               lambda *a: called.append(a)):
             for status in (500, 429, 503):
                 self.assertIsNone(self.drive(status, ENCRYPTED_DESCRIBED))
         self.assertEqual(called, [], 'only a 400 may trigger the repair')
@@ -122,15 +116,26 @@ class RetryRepairTests(unittest.TestCase):
         normalized = subscription_history.normalize(json.loads(GUARDIAN_BODY))
         kept = [i for i in normalized['input'] if i.get('type') == 'reasoning']
         self.assertEqual([i['encrypted_content'] for i in kept], ['BLOB-ONE', 'BLOB-TWO'])
-        # The retry-only strip removes the field, drops the blob-only item,
-        # and keeps the item that still carries readable reasoning text.
-        out = json.loads(strip_retry.strip_reasoning_blobs(GUARDIAN_BODY))
+        # The retry-only proposal removes the field, drops the blob-only item,
+        # and keeps the item that still carries readable reasoning text. It is
+        # pure: proposing alone opens no connection and sends nothing.
+        forbidden = mock.Mock(side_effect=AssertionError('a proposal never sends'))
+        with mock.patch.object(transport.http.client, 'HTTPSConnection', forbidden), \
+                mock.patch.object(transport, 'post_with_phases', forbidden):
+            proposal = SUBSCRIPTION.repair_rejected(
+                prepared(GUARDIAN_BODY), ENCRYPTED_DESCRIBED, ERROR_RAW)
+            unchanged = SUBSCRIPTION.repair_rejected(
+                prepared(body([MESSAGE])), ENCRYPTED_DESCRIBED, ERROR_RAW)
+        forbidden.assert_not_called()
+        self.assertEqual(proposal.repair, 'reasoning_blobs')
+        out = json.loads(proposal.prepared.body)
         self.assertEqual([(i.get('type'), i.get('id')) for i in out['input']],
                          [('message', None), ('reasoning', 'rs_2')])
         self.assertEqual(out['input'][1]['summary'][0]['text'], 'readable trace')
         self.assertNotIn('encrypted_content', json.dumps(out))
-        # Nothing to repair means no rewrite at all.
-        self.assertIsNone(strip_retry.strip_reasoning_blobs(body([MESSAGE])))
+        # Nothing to repair means eligible but no rewrite at all.
+        self.assertEqual(unchanged.repair, 'reasoning_blobs')
+        self.assertIsNone(unchanged.prepared)
 
     def test_05_exactly_one_retry_and_no_loop(self):
         dispatches = []
@@ -142,23 +147,41 @@ class RetryRepairTests(unittest.TestCase):
         with mock.patch.object(transport, 'post_with_phases', post_with_phases), \
                 mock.patch.object(transport, 'read_capped',
                                   lambda r, n: ERROR_RAW):
-            result = strip_retry.post_with_retry(object(), prepared(GUARDIAN_BODY),
-                                                 self.metrics, [], SUBSCRIPTION, self.log)
+            result = strip_retry.post_with_retry(
+                attempt_policy.Ledger(SUBSCRIPTION, self.metrics), prepared(GUARDIAN_BODY),
+                self.metrics, SUBSCRIPTION, self.log)
             self.assertEqual(len(dispatches), 2, 'initial dispatch plus exactly one retry')
             self.assertNotIn(b'encrypted_content', result[2].body)
             self.assertEqual(result[0].status, 200)
             # An unrepairable rejection is not retried at all.
             dispatches.clear()
-            strip_retry.post_with_retry(object(), prepared(GUARDIAN_BODY), self.metrics,
-                                        [], OPENROUTER, self.log)
+            strip_retry.post_with_retry(attempt_policy.Ledger(OPENROUTER, self.metrics),
+                                        prepared(GUARDIAN_BODY), self.metrics,
+                                        OPENROUTER, self.log)
             self.assertEqual(len(dispatches), 1)
 
     def test_06_guardian_approval_semantics_are_unchanged(self):
-        self.assertNotIn('strip_reasoning_blobs',
-                         inspect.getsource(providers.SubscriptionProvider),
-                         'the healthy subscription path must not strip blobs')
-        self.assertIn('strip_reasoning_blobs',
-                      inspect.getsource(providers.ExternalResponsesProvider))
+        def prepare(provider, model, payload):
+            out = provider.prepare(model, '/responses', payload, GUARDIAN_BODY, {},
+                                   stub_credentials())
+            return json.loads(out.body)['input']
+
+        # The healthy subscription path must not strip blobs, neither on the
+        # wire nor in the client's own payload.
+        client = json.loads(GUARDIAN_BODY)
+        native = prepare(providers.SubscriptionProvider(), 'codex-auto-review', client)
+        for items in (native, client['input']):
+            self.assertEqual([i.get('encrypted_content') for i in items
+                              if i.get('type') == 'reasoning'], ['BLOB-ONE', 'BLOB-TWO'])
+        # An external native-history row strips the owned blobs, drops the
+        # blob-only item and keeps the readable trace.
+        self.assertEqual(by_slug('z-ai/glm-5.3').history_mode, 'native')
+        external = prepare(providers.ExternalResponsesProvider(provider_defs.OPENROUTER),
+                           'z-ai/glm-5.3', json.loads(GUARDIAN_BODY))
+        reasoning = [i for i in external if i.get('type') == 'reasoning']
+        self.assertEqual([i.get('id') for i in reasoning], ['rs_2'])
+        self.assertEqual(reasoning[0]['summary'][0]['text'], 'readable trace')
+        self.assertNotIn('encrypted_content', json.dumps(external))
 
 
 class DiagnosticFactsTests(unittest.TestCase):
@@ -179,7 +202,7 @@ class DiagnosticFactsTests(unittest.TestCase):
                                      body_bytes, set(), 'openai')
         strip_retry.maybe_retry_unattributable(
             ENCRYPTED_DESCRIBED, Response(400), ERROR_RAW, self.metrics, SUBSCRIPTION,
-            request, [], self.log)
+            request, attempt_policy.Ledger(SUBSCRIPTION, self.metrics), self.log)
         # The first event is the repair decision; a successful repair adds a
         # second one for the retry's own outcome.
         return [f for e, f in self.log.events if e == 'annotation_retry'][0]
@@ -223,6 +246,11 @@ class DiagnosticFactsTests(unittest.TestCase):
             ('replayed compaction summary blob', body([COMPACTION]), None,
              {'items': 1, 'reasoning_items': 0, 'encrypted_fields': 1, 'removed': 1},
              'started'),
+            ('opaque native compaction blob',
+             body([{'type': 'compaction', 'id': 'cmp_opaque',
+                    'encrypted_content': 'NATIVE-OPAQUE-BLOB'}]), None,
+             {'items': 1, 'reasoning_items': 0, 'encrypted_fields': 1, 'removed': 0},
+             'unchanged'),
             # A nested block is not a shape this repair owns, so the payload
             # fails closed: nothing is removed and the turn is not retried.
             ('nested block blob on a reasoning item',

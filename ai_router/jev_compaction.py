@@ -3,7 +3,7 @@ import json
 import time
 from pathlib import Path
 
-from . import compaction, decisions, registry, turn_budget
+from . import compaction, decisions, history_items, registry, tool_runs, turn_budget
 from .events import log_event
 from .state import default_home
 
@@ -51,24 +51,24 @@ def _render(item):
     kind = item.get('type')
     if kind in (None, 'message'):
         return f'{item.get("role", "user")}:\n' + _text(item.get('content', ''))
-    if kind in compaction.CALL_TYPES:
+    if kind in history_items.CALL_TYPES:
         name = item.get('name', kind)
         if item.get('namespace'):
             name = f'{item["namespace"]}.{name}'
         value = next((item[k] for k in ('arguments', 'input', 'operation')
                       if k in item), item)
         return f'assistant tool call {name}:\n' + _text(value)
-    if kind in compaction.OUTPUT_TYPES:
+    if kind in history_items.OUTPUT_TYPES:
         return 'tool result:\n' + _output(item)
     if kind == 'agent_message':
-        if compaction.has_opaque_agent_item([item]):
+        if history_items.has_encryption_marked_agent_item([item]):
             _refuse('bad_history')
         author = item.get('author', 'agent')
         if item.get('recipient'):
             author += f' to {item["recipient"]}'
         return f'{author}:\n' + _text(item.get('content', ''))
     if kind == 'reasoning':
-        return '' if item.get('encrypted_content') else compaction._reasoning_text(item)
+        return '' if item.get('encrypted_content') else history_items.reasoning_text(item)
     if compaction.is_compaction_item(item):
         return compaction._item_text(item)
     return _text(item)
@@ -79,10 +79,10 @@ def _evidence(item):
     kind = item.get('type')
     if kind is None and 'role' in item:
         item = dict(item, type='message')
-    elif kind in compaction.CALL_TYPES - {'function_call', 'custom_tool_call'}:
+    elif kind in history_items.CALL_TYPES - {'function_call', 'custom_tool_call'}:
         item = dict(type='function_call', name=item.get('name', kind),
                     arguments=_render(item))
-    elif kind in compaction.OUTPUT_TYPES | {'tool_search_output'}:
+    elif kind in history_items.OUTPUT_TYPES | {'tool_search_output'}:
         item = dict(type='function_call_output', output=(
             _text(item) if kind == 'tool_search_output' else _output(item)))
     return compaction._item_text(item)
@@ -108,8 +108,8 @@ def _pairs(items):
                 or kind in ('tool_search_output', 'agent_message')
                 or item.get('role') in ('developer', 'system')):
             pinned.add(i)
-        call = kind in compaction.CALL_TYPES | {'tool_search_call'}
-        output = kind in compaction.OUTPUT_TYPES | {'tool_search_output'}
+        call = kind in history_items.CALL_TYPES | {'tool_search_call'}
+        output = kind in history_items.OUTPUT_TYPES | {'tool_search_output'}
         if not (call or output):
             continue
         cid = item.get('call_id')
@@ -126,9 +126,9 @@ def _pairs(items):
     pairs = [(a, outputs[cid]) for cid, a in calls.items()
              if cid in outputs and a < outputs[cid]
              and a not in pinned and outputs[cid] not in pinned
-             and items[a].get('type') in compaction.CALL_TYPES
-             and items[outputs[cid]].get('type') in compaction.OUTPUT_TYPES
-             and compaction._call_complete(items[a])]
+             and items[a].get('type') in history_items.CALL_TYPES
+             and items[outputs[cid]].get('type') in history_items.OUTPUT_TYPES
+             and tool_runs._call_complete(items[a])]
     pairs.sort(key=lambda pair: len(_output(items[pair[1]])), reverse=True)
     return pairs[:16], last_user
 
@@ -191,7 +191,7 @@ def _values(answers, questions):
     return {qid: answer['value'] for qid, answer in answers.items()}
 
 
-def summary(model, key, items, defn, home=None, ask=None) -> str | None:
+def summary(model, key, items, defn, home=None, ask=None, row=None) -> str | None:
     """Return kept evidence in on mode, or None for the unchanged summary path."""
     mode = state(home)
     if mode == 'off':
@@ -206,7 +206,7 @@ def summary(model, key, items, defn, home=None, ask=None) -> str | None:
         stats['candidate_pairs'] = len(pairs)
         if not pairs:
             _refuse('no_candidates')
-        row = registry.by_slug(model)
+        row = registry.by_slug(model) if row is None else row  # routed: the request's row
         window = getattr(row, 'auto_compact_token_limit', None) or getattr(row, 'context_window', 0)
         if not isinstance(window, int) or isinstance(window, bool) or window <= 0:
             _refuse('context_limit')

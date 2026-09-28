@@ -22,7 +22,9 @@ FIELDS = ('slug', 'provider', 'display_name', 'vendor', 'reasoning',
 # Fields a row may carry or omit. `upstream_id` empty (or absent) means the
 # slug is the id the provider expects, which every current row relies on.
 OPTIONAL_FIELDS = ('listed', 'provider_prefs', 'upstream_id',
-                   'auto_compact_token_limit')
+                   'auto_compact_token_limit', 'observed_item_types')
+OBSERVABLE_ITEM_TYPES = frozenset(('custom_tool_call', 'custom_tool_call_output',
+                                  'compaction', 'additional_tools'))
 
 
 @dataclass(frozen=True)
@@ -54,6 +56,7 @@ class Model:
     upstream_id: str = ''            # id the provider expects; '' means the slug
     auto_compact_token_limit: int | None = None  # Codex compacts at this many
                                                  # tokens; None keeps its default
+    observed_item_types: tuple = ()  # measured Responses shapes; diagnostic only
 
 
 # Documented OpenRouter `provider` object keys (router-metadata guide,
@@ -158,6 +161,10 @@ def load(text):
             raise SystemExit(f'models.json {row["slug"]}: bad auto_compact_token_limit')
         if row.get('listed', False) and row['tier'] != 'verified':
             raise SystemExit(f'models.json {row["slug"]}: preview row must not be listed')
+        observed = row.get('observed_item_types', [])
+        if (not isinstance(observed, list) or any(not isinstance(v, str) for v in observed)
+                or not set(observed) <= OBSERVABLE_ITEM_TYPES or len(set(observed)) != len(observed)):
+            raise SystemExit(f'models.json {row["slug"]}: bad observed_item_types')
         # One upstream model may appear on several providers, but the picker
         # must be able to tell them apart: two rows that share an upstream id
         # may not share a label.
@@ -181,7 +188,8 @@ def load(text):
             web_search=row['web_search'], tier=row['tier'],
             listed=row.get('listed', True),
             provider_prefs=dict(prefs) if prefs is not None else None,
-            upstream_id=upstream_id, auto_compact_token_limit=limit))
+            upstream_id=upstream_id, auto_compact_token_limit=limit,
+            observed_item_types=tuple(observed)))
     return tuple(models)
 
 
@@ -204,17 +212,19 @@ def upstream_id_for(entry):
     return getattr(entry, 'upstream_id', '') or entry.slug
 
 
-def near_miss(model):
+def near_miss(model, catalogue=None):
     """Canonical slug for a bare tilde-alias id, else None. Pure.
 
     Discovery lists tilde rows without their `~` (Claude ingress), so a
     caller can echo back an id the Responses path never owned. Offer the
     exact canonical slug only when the bare id is absent and `~`+bare is
-    present; never fuzzy-match, never route."""
-    if not isinstance(model, str) or not model or by_slug(model) is not None:
+    present; never fuzzy-match, never route. `catalogue` is a request's
+    captured generation; None reads the live one."""
+    rows = BY_SLUG if catalogue is None else catalogue
+    if not isinstance(model, str) or not model or model in rows:
         return None
     candidate = '~' + model
-    return candidate if by_slug(candidate) is not None else None
+    return candidate if candidate in rows else None
 
 
 def picker_key(vendor, tier, display_name, slug):

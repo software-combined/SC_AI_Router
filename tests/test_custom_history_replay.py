@@ -1,7 +1,7 @@
 import json
 import unittest
 
-from ai_router.tool_adapter import prepare_tools
+from tests.tool_stages import prepare_tools
 
 
 def pair_payload(tools):
@@ -16,7 +16,7 @@ class CustomHistoryReplayTests(unittest.TestCase):
     def test_function_declared_custom_history_converts_symmetrically(self):
         payload = pair_payload([{'type': 'function', 'name': 'exec',
                                  'parameters': {'type': 'object'}}])
-        prepare_tools(payload)
+        payload = prepare_tools(payload)[0]
         call, result = payload['input']
         self.assertEqual((call['type'], result['type']),
                          ('function_call', 'function_call_output'))
@@ -25,7 +25,7 @@ class CustomHistoryReplayTests(unittest.TestCase):
 
     def test_unknown_custom_pair_keeps_symmetric_custom_shape(self):
         payload = pair_payload([])
-        prepare_tools(payload)
+        payload = prepare_tools(payload)[0]
         self.assertEqual([item['type'] for item in payload['input']],
                          ['custom_tool_call', 'custom_tool_call_output'])
         self.assertEqual([item['call_id'] for item in payload['input']],

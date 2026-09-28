@@ -11,6 +11,11 @@ optimal-subagents skill.
 
 ## Defaults and authorized availability fallbacks
 
+Local user policy override: all pre-commit passes use
+`xiaomi/mimo-v2.6-pro` at `xhigh`. This exact model and effort requirement
+overrides the table below and has no model fallback. If that route is
+unavailable, the affected pass is `BLOCK`.
+
 These are provisional, evidence-based choices from the September 12, 2026 evidence.
 Public benchmarks do not directly measure code-review defect recall. Validate
 with representative real regressions before claiming superiority. Use one fixed
@@ -27,12 +32,12 @@ replace these public-benchmark priors, within an authorized evaluation budget.
 The same defaults apply to normal and elevated-risk reviews. Elevated risk
 changes inspection depth and required evidence, not automatically the model bill.
 
-| Pass | Default model, fixed effort | Ordered fallback models, fixed effort |
+| Pass | Required model, fixed effort | Ordered fallback models, fixed effort |
 | --- | --- | --- |
-| Simplification | `deepseek/deepseek-v4.1-flash` at `max` | `openai/gpt-5.6-luna` at `max` → `openai/gpt-5.6-sol` at `max` |
-| Correctness | `meta/muse-spark-1.3-contributor` at `xhigh` | `z-ai/glm-5.3-flash` at `max` → `openai/gpt-5.6-sol` at `max` → `meta/muse-spark-1.3` at `max` |
-| Quality | `meta/muse-spark-1.3-contributor` at `xhigh` | `deepseek/deepseek-v4.1-flash` at `max` → `openai/gpt-5.6-luna` at `max` → `openai/gpt-5.6-sol` at `max` |
-| Adversarial | `meta/muse-spark-1.3-contributor` at `xhigh` | `z-ai/glm-5.3-flash` at `max` → `meta/muse-spark-1.3` at `max` → `openai/gpt-5.6-sol` at `max` |
+| Simplification | `xiaomi/mimo-v2.6-pro` at `xhigh` | None |
+| Correctness | `xiaomi/mimo-v2.6-pro` at `xhigh` | None |
+| Quality | `xiaomi/mimo-v2.6-pro` at `xhigh` | None |
+| Adversarial | `xiaomi/mimo-v2.6-pro` at `xhigh` | None |
 
 Resolve the selected model's actual tool identifier from the active catalogue.
 For example, GPT-5.6 Sol may be exposed as `gpt-5.6-sol`; that is an identifier

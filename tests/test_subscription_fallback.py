@@ -5,6 +5,7 @@ subscription slug, so an exhausted allowance must either keep the existing
 503 (flag off) or be answered by the registry's OpenRouter twin (flag on),
 and nothing else may be redirected.
 """
+import dataclasses
 import json
 import os
 import tempfile
@@ -69,7 +70,7 @@ class HelperTurnTests(unittest.TestCase):
 
     def test_only_enabled_helper_turns_with_a_twin_get_a_plan(self):
         base = dict(state={'openai_helper_fallback': True},
-                    prepared=SimpleNamespace(provider='openai'),
+                    prepared=SimpleNamespace(provider='openai', context=None),
                     path='/responses', payload={'model': HELPER},
                     raw_body=b'{}', headers=HEADERS, credentials=object())
         self.assertIsNotNone(subscription_fallback.plan(**base))
@@ -91,9 +92,6 @@ class HelperTurnTests(unittest.TestCase):
                        {'openai_helper_fallback': True, 'allowed_models': ['z-ai/glm-5.3']}):
             with self.subTest(policy=policy):
                 self.assertIsNone(subscription_fallback.plan(**dict(base, state=policy)))
-        disqualified += (('state', {'openai_helper_fallback': True, 'allowed_models': []}),
-                         ('state', {'openai_helper_fallback': True,
-                                    'allowed_models': ['z-ai/glm-5.3']}))
         for field, value in disqualified:
             with self.subTest(field=field, value=value):
                 self.assertIsNone(subscription_fallback.plan(**dict(base, **{field: value})))
@@ -202,22 +200,16 @@ class RefusedHelperTurnTests(unittest.TestCase):
         # Plan 141: transport.emit_terminal_failure keys on metrics['protocol'],
         # so the twin hand-off must carry it or a mid-stream failure on the
         # fallback loses its terminal frame (it emitted one before the move).
-        from ai_router.router import Handler
-        recorded = install_fake(self, self._refusal())
+        install_fake(self, self._refusal())
         server = self._server(openai_helper_fallback=True)
-        calls = []
-        real_relay = Handler.relay
-
-        def relay(self, provider, prepared, metrics, started, has_image=False):
-            calls.append(dict(metrics))
-            return real_relay(self, provider, prepared, metrics, started, has_image)
-
-        with mock.patch.object(Handler, 'relay', relay):
+        with self.assertLogs('codex_router', level='INFO') as logs:
             response = self._turn(server, HEADERS)
-        self.assertEqual(response.status, 200)
-        response.read()
-        twin = [c for c in calls if c.get('helper_fallback')]
-        self.assertEqual(len(twin), 1, calls)
+            self.assertEqual(response.status, 200)
+            response.read()
+        events = [json.loads(record.getMessage()) for record in logs.records]
+        twin = [e for e in events if e.get('event') == 'request_completed']
+        self.assertEqual(len(twin), 1, events)
+        self.assertTrue(twin[0].get('helper_fallback'))
         self.assertEqual(twin[0].get('protocol'), 'responses')
         self.assertEqual(twin[0].get('model'), 'openai/gpt-6-luna')
 
@@ -256,7 +248,7 @@ class RefusedHelperTurnTests(unittest.TestCase):
     def test_snapshot_excluded_twin_gets_no_plan(self):
         self._snapshot({'z-ai/glm-5.3'})
         base = dict(state={'openai_helper_fallback': True},
-                    prepared=SimpleNamespace(provider='openai'),
+                    prepared=SimpleNamespace(provider='openai', context=None),
                     path='/responses', payload={'model': HELPER},
                     raw_body=b'{}', headers=HEADERS, credentials=object())
         self.assertIsNone(subscription_fallback.plan(**base))
@@ -273,11 +265,10 @@ class RefusedHelperTurnTests(unittest.TestCase):
         # The twin row rejects the carried effort, so prepare raises first.
         recorded = install_fake(self, self._refusal())
         server = self._server(openai_helper_fallback=True)
-        with mock.patch.dict('ai_router.capabilities.REASONING_LEVELS',
-                             {'openai/gpt-6-luna': ['low']}):
+        twin = dataclasses.replace(by_slug('openai/gpt-6-luna'), reasoning=('low',))
+        with mock.patch.dict('ai_router.registry.BY_SLUG', {twin.slug: twin}):
             with self.assertLogs('codex_router', level='INFO') as logs:
-                response = self._turn(server, HEADERS,
-                                      payload={'reasoning': {'effort': 'max'}})
+                response = self._turn(server, HEADERS, payload={'reasoning': {'effort': 'max'}})
         self.assertEqual(response.status, 503)
         self.assertEqual(response.getheader('Retry-After'), '2')
         response.read()

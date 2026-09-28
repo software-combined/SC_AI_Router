@@ -31,9 +31,9 @@ _FIELD_NAME = re.compile(r'[A-Za-z0-9_.-]{1,40}')
 _MAX_FIELD_NAMES = 32
 _MAX_UNKNOWN_NAMES = 8
 _ZSTD_MAGIC = b'\x28\xb5\x2f\xfd'
-# Mirror strip_retry.ZSTD_DECODE_LIMIT and compaction.PREFIX without their
-# import graphs; unit tests pin both.
-DECODE_LIMIT = 6 * 16 * 1024 * 1024
+# Mirror rejected_repair.ZSTD_DECODE_LIMIT (transport.MAX_REQUEST_BYTES) and
+# compaction.PREFIX without their import graphs; unit tests pin both.
+DECODE_LIMIT = 96 * 1024 * 1024
 _ROUTER_BLOB = 'ocx1:'
 
 VIOLATION, WARNING = 'violations', 'warnings'
@@ -62,10 +62,8 @@ CONTRACT = {
 _PAIR_RULES = {'family_mismatch': 'pair.family_mismatch', 'orphan_output': 'pair.orphan_output',
                'orphan_call': 'pair.orphan_call', 'duplicate_call_id': 'pair.duplicate_call_id',
                'interrupted_run': 'run.interrupted', 'namespace_both': 'pair.namespace_both'}
-# Item types measured on the external wire; DeepSeek V4.1 Flash took four more (17 Sep).
+# Common measured types; a captured row may supply further measured shapes.
 _VERIFIED_TYPES = frozenset(('message', 'function_call', 'function_call_output', 'reasoning'))
-_DEEPSEEK_TYPES = frozenset(('custom_tool_call', 'custom_tool_call_output',
-                             'compaction', 'additional_tools'))
 # Codex's 19 Sep first-turn fields (the first twelve), then the fields the
 # router sets or knows; only the subscription route may carry the last two.
 _KNOWN_TOP_LEVEL = frozenset((
@@ -161,23 +159,23 @@ def _item_rules(item, verified):
         yield 'reasoning.id_only'
 
 
-def violations(dialect, payload):
+def violations(dialect, payload, observed_types=()):
     """The CONTRACT rules a wire payload breaks, for the dialect it goes to.
 
     {'violations': {rule: count}, 'warnings': {rule: count},
     'unknown_top_level': [names]}, all empty for a clean or non-object
     payload or a dialect no rule binds (Messages, None). At most eight
     name-shaped unknown fields are listed; the warning counts them all.
-    Never raises on decoded JSON.
+    `observed_types` is the captured row's measured profile, never inferred
+    from its name. An absent measurement is unknown, not a refusal.
+    Never raises on decoded JSON and a validated profile.
     """
     found = {VIOLATION: {}, WARNING: {}, 'unknown_top_level': []}
     if dialect not in _BOTH or not isinstance(payload, dict):
         return found
     items = payload.get('input')
     items = items if isinstance(items, list) else []
-    # Tilde aliases and pinned ids share the vendor prefix.
-    deepseek = str(payload.get('model')).removeprefix('~').startswith('deepseek/')
-    verified = _VERIFIED_TYPES | _DEEPSEEK_TYPES if deepseek else _VERIFIED_TYPES
+    verified = _VERIFIED_TYPES | frozenset(observed_types)
     hits = Counter({_PAIR_RULES[name]: n for name, n in pair_problems(items).items()})
     hits.update(rule for item in items for rule in _item_rules(item, verified))
     unknown = sorted(key for key in payload if key not in _KNOWN_TOP_LEVEL)
@@ -208,7 +206,7 @@ def decode_wire(body):
     return payload if isinstance(payload, dict) else None
 
 
-def fingerprint(body, dialect=None):
+def fingerprint(body, dialect=None, observed_types=()):
     """Names and counts from a prepared Responses body; never content.
 
     {} unless `body` decodes to an object with an `input` list, so a Messages
@@ -236,7 +234,7 @@ def fingerprint(body, dialect=None):
     problems = pair_problems(items)
     if problems:
         shape['pair_problems'] = problems
-    found = violations(dialect, payload)
+    found = violations(dialect, payload, observed_types)
     for key, level in (('contract_violations', VIOLATION), ('contract_warnings', WARNING)):
         rules = {rule: count for rule, count in found[level].items()
                  if rule not in _PAIR_RULES.values()}

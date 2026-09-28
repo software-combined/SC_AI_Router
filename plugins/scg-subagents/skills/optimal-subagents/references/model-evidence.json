@@ -1019,6 +1019,31 @@
       "webdev": null,
       "catalogue_origin": "Codex",
       "intelligence_estimated": false
+    },
+    {
+      "id": "xiaomi/mimo-v2.6-pro",
+      "effort": "not specified",
+      "aa_identity": "missing",
+      "aa_source": null,
+      "aa_eligible": false,
+      "scores": {
+        "intelligence": null,
+        "terminal": null,
+        "scicode": null,
+        "lcr": null,
+        "gdpval": null,
+        "pdf": null,
+        "automation": null,
+        "vision": null,
+        "omniscience": null,
+        "briefcase": null
+      },
+      "aa_task_usd": null,
+      "briefcase_ci95": null,
+      "prices_usd_per_million": null,
+      "webdev": null,
+      "catalogue_origin": "OpenRouter",
+      "intelligence_estimated": false
     }
   ],
   "excluded_system_rows": [
@@ -1055,6 +1080,7 @@
     "z-ai/glm-5.3": "max",
     "gpt-5.5": "xhigh",
     "gpt-5.4-mini": "xhigh",
-    "gpt-5.3-codex-spark": "xhigh"
+    "gpt-5.3-codex-spark": "xhigh",
+    "xiaomi/mimo-v2.6-pro": "xhigh"
   }
 }

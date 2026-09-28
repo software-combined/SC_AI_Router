@@ -8,7 +8,7 @@ import json
 import unittest
 from unittest import mock
 
-from ai_router import router as router_mod
+from ai_router import provider_defs, router as router_mod
 from ai_router import sse, transport
 from tests.fakes import FakeUpstream, install_fake
 from tests.harness import (
@@ -57,6 +57,17 @@ class _ServerFixture(unittest.TestCase):
                 if line.startswith(b'data:'):
                     events.append(json.loads(line[5:].strip()))
         return events
+
+
+class _DeadWriter:
+    def __init__(self, error):
+        self.error = error
+
+    def write(self, _):
+        raise self.error
+
+    def flush(self):
+        raise self.error
 
 
 class RelayContainmentTests(_ServerFixture):
@@ -191,7 +202,9 @@ class RelayContainmentTests(_ServerFixture):
 class EmitTerminalFailureTests(unittest.TestCase):
     def _frame(self, **metrics):
         buf = io.BytesIO()
-        transport.emit_terminal_failure(buf, dict(metrics, protocol='responses'))
+        transport.emit_terminal_failure(buf, transport.ResponseFormat(
+            provider_defs.RESPONSES, '/v1/responses', metrics.get('stream'),
+            metrics.get('response_kind'), metrics.get('response_encoding')))
         return buf.getvalue()
 
     def test_emits_generic_frame_on_responses_sse(self):
@@ -205,7 +218,8 @@ class EmitTerminalFailureTests(unittest.TestCase):
     def test_silent_for_claude_non_sse_and_unstreamed(self):
         buf = io.BytesIO()
         transport.emit_terminal_failure(
-            buf, {'stream': True, 'response_kind': 'sse', 'protocol': 'messages'})
+            buf, transport.ResponseFormat(provider_defs.MESSAGES, '/v1/messages',
+                                          True, 'sse', None))
         self.assertEqual(buf.getvalue(), b'')
         for metrics in ({'stream': True, 'response_kind': 'json'},
                         {'stream': False, 'response_kind': 'sse'},
@@ -218,17 +232,20 @@ class EmitTerminalFailureTests(unittest.TestCase):
     def test_dead_socket_never_raises(self):
         for error in (OSError('gone'), ValueError('I/O operation on closed file')):
             with self.subTest(error=type(error).__name__):
-                class Dead:
-                    def write(self, _):
-                        raise error
+                self.assertFalse(transport.emit_terminal_failure(
+                    _DeadWriter(error),
+                    transport.ResponseFormat(provider_defs.RESPONSES, '/v1/responses',
+                                             True, 'sse', 'identity')))
 
-                    def flush(self):
-                        raise error
+    def test_return_value_tracks_delivery(self):
+        response_format = transport.ResponseFormat(provider_defs.RESPONSES, '/v1/responses',
+                                                   True, 'sse', 'identity')
+        buf = io.BytesIO()
+        self.assertTrue(transport.emit_terminal_failure(buf, response_format))
+        self.assertTrue(buf.getvalue())
 
-                transport.emit_terminal_failure(
-                    Dead(), {'stream': True, 'response_kind': 'sse',
-                             'response_encoding': 'identity',
-                             'protocol': 'responses'})
+        self.assertFalse(transport.emit_terminal_failure(
+            _DeadWriter(OSError('gone')), response_format))
 
 
 if __name__ == '__main__':

@@ -10,6 +10,7 @@ advertising it; Grok has no max/minimal. Defaults stay low.
 `EXTERNAL_MODELS` is every slug routed to an external provider's own key,
 whatever that provider is; upstream facts live in provider_defs.py.
 """
+from . import provider_defs
 from .registry import MODELS, external_slugs
 EXTERNAL_MODELS = frozenset()
 IMAGE_INPUT_MODELS = frozenset()
@@ -87,7 +88,16 @@ def check_effort(slug, effort):
     """
     if effort is None or slug not in EXTERNAL_MODELS:
         return
-    levels = REASONING_LEVELS[slug]
+    _refuse_unlisted(slug, REASONING_LEVELS[slug], effort)
+
+
+def check_row_effort(row, effort):
+    """check_effort for one request's captured row (Plan 188), not the live maps."""
+    if effort is not None and provider_defs.is_external(getattr(row, 'provider', None)):
+        _refuse_unlisted(row.slug, list(row.reasoning), effort)
+
+
+def _refuse_unlisted(slug, levels, effort):
     if effort not in levels:
         raise ValueError(
             slug + ' does not support reasoning effort ' + repr(effort)

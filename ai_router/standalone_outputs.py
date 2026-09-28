@@ -8,15 +8,14 @@ acted on (the child replied NO-ASSIGNMENT and a router probe returned
 no output items). Each standalone output is therefore rendered as a
 matched pair -- a synthesized complete `function_call` plus the
 `function_call_output` carrying the delegation text verbatim -- which
-the model treats as a tool result and the scrub in compaction.py passes
+the model treats as a tool result and the scrub in tool_runs.py passes
 through untouched. No `namespace` is set on either member: OpenRouter
 400s when it is present on both members of the pair. Peer messages use the
 same projection: a terminal assistant message is also rejected as prefill by
 Sonnet. Readable peer text stays tool-level data, never a user instruction.
 """
-from .compaction import OUTPUT_TYPES
-from .agent_handoffs import plaintext_agent_message, recoverable_agent_message
 from .errors import PreparationError
+from .history_items import OUTPUT_TYPES, plaintext_agent_message, recoverable_agent_message
 from .history_portability import portable_history
 
 TEXT_KEYS = ('output', 'result', 'content', 'text', 'data')

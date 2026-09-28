@@ -51,6 +51,7 @@ comparable price. Contributor permits prompts/outputs to improve Meta products p
 | `gpt-5.5` | `xhigh` | 5 / 30 | Legacy compatibility/reproduction; no automatic advantage over newer models. |
 | `gpt-5.4-mini` | `xhigh` | 0.75 / 4.5 | Lightweight legacy option; weak current terminal score; verify runtime availability. |
 | `gpt-5.3-codex-spark` | `xhigh` | Unverified | Latency-oriented candidate; no exact independent benchmark row found. Do not invent a ranking. |
+| `xiaomi/mimo-v2.6-pro` | `xhigh` | Unverified | Exact pre-commit reviewer requirement; no independent benchmark row found. |
 
 ## Comparable benchmark evidence
 

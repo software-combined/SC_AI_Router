@@ -1,203 +1,81 @@
 """One bounded retry for a repairable Responses 400.
 
-The relay retries once when a provider 400 can be repaired without changing
-what the turn means. Two conditions qualify: an OpenRouter Responses 400 that
-names no cause (no code, tool or parameter) is retried with annotation-only
-top-level fields removed, and a subscription Responses 400 reporting
-`invalid_encrypted_content` is retried with the unreadable blobs removed from
-`input`: the OpenAI-owned reasoning blob and the router's own compaction
-summary. The strip lists and the retry gates live here with the retry policy;
-the source-limit ceiling on `ai_router/upstream.py` keeps the pure helpers here
-rather than beside the other wire-body helpers.
+The relay retries once when the adapter that prepared the request proposes a
+repair for its own rejection (`repair_rejected`, built by `rejected_repair`):
+the external annotation strip for an OpenRouter 400 that names no cause, and
+the subscription `invalid_encrypted_content` repair. This module keeps the
+`annotation_retry` log lines; the request's `attempt_policy.Ledger` owns the
+send, its connection and the one-repair budget (Plan 188).
 """
-import http.client
-import io
-import json
-from compression import zstd
-
-from . import provider_defs, subscription_history, transport, upstream
-
-_ANNOTATION_ONLY_FIELDS = frozenset((
-    'client_metadata', 'prompt_cache_options', 'prompt_cache_key', 'metadata',
-    'safety_identifier', 'store', 'include', 'service_tier', 'truncation',
-    'background', 'top_logprobs', 'user', 'stream_options'))
-# Matches runtime.MAX_DECODE_FACTOR without importing the composition root.
-ZSTD_DECODE_LIMIT = 6 * transport.MAX_UPSTREAM_BODY
-
-
-def strip_annotations(body):
-    """Remove annotation-only top-level fields; None when nothing would change."""
-    payload = upstream.parse_payload(body)
-    if payload is None:
-        return None
-    cut = {key: value for key, value in payload.items()
-           if key not in _ANNOTATION_ONLY_FIELDS}
-    if len(cut) == len(payload):
-        return None
-    return json.dumps(cut, separators=(',', ':')).encode('utf-8')
-
-
-def _scan(body, content_encoding=None):
-    """(payload, facts) for one wire body.
-
-    `facts` is structure and state only: the observed `Content-Encoding` value,
-    whether decoding and JSON parsing succeeded, whether `input` is a list, and
-    counts of items, reasoning items and `encrypted_content` fields. It never
-    carries item text, field values, blob bytes or any other content, so one
-    `annotation_retry` line can explain an `outcome=unchanged` without logging
-    the request.
-    """
-    encoding = (content_encoding or '').strip().lower()
-    facts = {'encoding': encoding, 'decoded': False, 'parsed': False,
-             'input_is_list': False, 'items': 0, 'reasoning_items': 0,
-             'encrypted_fields': 0, 'removed': 0}
-    raw = body
-    if encoding == 'zstd':
-        try:
-            with zstd.ZstdFile(io.BytesIO(body)) as stream:
-                raw = stream.read(ZSTD_DECODE_LIMIT + 1)
-        except (OSError, EOFError, ValueError, zstd.ZstdError):
-            return None, facts
-        if len(raw) > ZSTD_DECODE_LIMIT:
-            return None, facts
-        facts['decoded'] = True
-    elif encoding not in ('', 'identity'):
-        return None, facts
-    else:
-        facts['decoded'] = True
-    payload = upstream.parse_payload(raw)
-    if payload is None:
-        return None, facts
-    facts['parsed'] = True
-    items = payload.get('input')
-    if not isinstance(items, list):
-        return payload, facts
-    facts['input_is_list'] = True
-    facts['items'] = len(items)
-    for item in items:
-        if not isinstance(item, dict):
-            continue
-        facts['encrypted_fields'] += subscription_history.encrypted_field_count(item)
-        if item.get('type') == 'reasoning':
-            facts['reasoning_items'] += 1
-        # `removed` counts the fields this repair takes out; a nested block or
-        # an unowned item type is counted above and never removed.
-        if subscription_history.removable_encrypted(item):
-            facts['removed'] += 1
-    return payload, facts
-
-
-def _strip_reasoning_payload(payload):
-    """The repaired payload for the retry; None when nothing may change."""
-    repaired = subscription_history.repair_input(payload.get('input'))
-    if repaired is None:
-        return None
-    return json.dumps({**payload, 'input': repaired},
-                      separators=(',', ':')).encode('utf-8')
-
-
-def strip_reasoning_blobs(body, content_encoding=None):
-    """Remove OpenAI-owned reasoning blobs from `input`; None when unchanged.
-
-    `compaction.strip_reasoning_blobs` owns the field semantics: the blob goes,
-    and an item left without readable reasoning text goes with it. Only the
-    bounded retry reaches this, so a healthy subscription turn keeps the blob
-    that `subscription_history.normalize` deliberately preserves.
-
-    A compaction item's unreadable summary blob becomes readable text instead,
-    because the client replays that item and the backend cannot read it.
-    """
-    payload, _facts = _scan(body, content_encoding)
-    return None if payload is None else _strip_reasoning_payload(payload)
-
-
-def _copy_prepared(prepared, body):
-    headers = {key: value for key, value in prepared.headers.items()
-               if key.lower() not in transport.HOP_HEADERS
-               and key.lower() != 'content-encoding'}
-    return transport.Prepared(prepared.host, prepared.path, headers,
-                               body, prepared.tool_names, prepared.provider,
-                               prepared.fallback, prepared.output_cap,
-                               prepared.context_tokens)
+from . import errors, provider_defs, request_evidence, transport, upstream
+from .attempt_policy import REPAIR
 
 
 def maybe_retry_unattributable(described, response, raw, metrics, provider,
-                               prepared, attempts, log_event):
-    """Retry once with the repair its own rejection calls for.
+                               prepared, ledger, log_event, admit=None):
+    """Retry once with the repair the adapter proposes for its own rejection.
 
     Returns (response, headers_done, prepared) plus its bounded error body, or
-    None when ineligible. The relay handles the retry's actual response through
-    its ordinary failure policy.
+    None when ineligible or unchanged. The relay handles the retry's actual
+    response through its ordinary failure policy. `admit` sizes the repaired
+    body with the original still held, before anything is sent.
     """
-    code = described[2] if described is not None else None
-    responses_400 = (response.status == 400
-            and metrics.get('protocol') == provider_defs.RESPONSES)
-    unnamed = (responses_400
-            and provider.defn.dialect == provider_defs.DIALECT_OPENROUTER
-            and described is not None
-            and code is None
-            and not upstream.is_context_error(raw)
-            and upstream.rejection_tool(raw, provider.defn.dialect) is None
-            and upstream.rejection_parameter(raw) is None
-            and upstream.rejection_reason(raw, provider.defn.dialect)
-            == 'the request was rejected')
-    # The subscription route forwards the reasoning blobs that
-    # `subscription_history.normalize` preserves, and the ChatGPT backend
-    # rejects a turn whose replayed blob it will not accept. Repair that one
-    # named condition on the retry only.
-    encrypted_blob = (responses_400
-            and provider.defn.dialect == provider_defs.DIALECT_OPENAI
-            and code == 'invalid_encrypted_content'
-            and not upstream.is_context_error(raw))
+    proposal = None
+    # Only a Responses 400 is a repair candidate; the ledger records no
+    # decision for any other status.
+    candidate = (response.status == 400
+                 and ledger.protocol == provider_defs.RESPONSES)
+    has_budget = ledger.permits(REPAIR)
+    if candidate and has_budget:
+        proposal = provider.repair_rejected(prepared, described, raw)
+    # An ineligible line has always named the annotation strip.
     fields = {'provider': prepared.provider, 'model': metrics.get('model'),
-              'repair': 'reasoning_blobs' if encrypted_blob else 'annotation_strip'}
+              'repair': 'annotation_strip' if proposal is None else proposal.repair}
     if metrics.get('request_bytes') is not None:
         fields['request_bytes'] = metrics['request_bytes']
-    if not (unnamed or encrypted_blob):
+    if proposal is None:
+        if candidate:
+            ledger.decide(REPAIR, 'ineligible' if has_budget else 'budget')
         log_event('annotation_retry', eligible=False, attempted=False,
                   outcome='ineligible', **fields)
         return None
-    content_encoding = next(
-        (value for key, value in prepared.headers.items()
-         if key.lower() == 'content-encoding'), '')
-    if encrypted_blob:
-        # One scan serves both the diagnostics and the repair, and only a
-        # rejected turn reaches it, so a healthy or unrelated turn is unchanged.
-        payload, facts = _scan(prepared.body, content_encoding)
-        stripped = (None if payload is None
-                    else _strip_reasoning_payload(payload))
-        if stripped is None:
-            facts['removed'] = 0  # nothing was removed, so the line must say so
-        fields.update(facts)
-    else:
-        stripped = strip_annotations(prepared.body)
-    if stripped is None:
+    fields.update(proposal.facts)
+    if proposal.prepared is None:
+        ledger.decide(REPAIR, 'unchanged')
         log_event('annotation_retry', eligible=True, attempted=False,
                   outcome='unchanged', **fields)
         return None
-    if encrypted_blob:
+    if admit is not None:
+        try:
+            admit(proposal.prepared, prepared)
+        except (errors.InvalidSize, errors.OversizeBusy) as exc:
+            ledger.decide(REPAIR, 'refused')
+            log_event('annotation_retry', eligible=True, attempted=False,
+                      outcome='refused', error_type=type(exc).__name__,
+                      prepared_bytes=len(proposal.prepared.body), **fields)
+            raise
+    if proposal.reports_rejection:
         log_event('upstream_rejected', status=response.status,
-                  client_status=described[0], code=code,
+                  client_status=described[0], code=described[2],
                   tool=upstream.rejection_tool(raw, provider.defn.dialect),
                   parameter=upstream.rejection_parameter(raw),
                   serving_endpoint=upstream.serving_endpoint(raw),
                   category='PROVIDER_REJECTED', **metrics)
+    ledger.decide(REPAIR)
     log_event('annotation_retry', eligible=True, attempted=True,
               outcome='started', **fields)
-    retried_prepared = _copy_prepared(prepared, stripped)
-    fresh = http.client.HTTPSConnection(prepared.host,
-                                        timeout=transport.UPSTREAM_TIMEOUT_S)
+    retried_prepared = proposal.prepared
     try:
-        response, headers_done = transport.post_with_phases(
-            fresh, retried_prepared, metrics)
+        response, headers_done = ledger.send(retried_prepared, metrics, REPAIR)
+        metrics['upstream_status'] = response.status
         retry_raw = (transport.read_capped(response, transport.ERROR_BODY_LIMIT)
                      if response.status >= 400 else None)
+        if retry_raw is not None:
+            request_evidence.verdict(metrics, upstream.outcome_of(response.status, retry_raw, provider.defn.dialect))
     except BaseException as exc:
-        fresh.close()
         log_event('annotation_retry', eligible=True, attempted=True,
                   outcome='transport_error', error_type=type(exc).__name__, **fields)
         raise
-    attempts.append(fresh)
     log_event('annotation_retry', eligible=True, attempted=True,
               outcome='rejected' if retry_raw is not None else 'accepted',
               status=response.status,
@@ -207,18 +85,21 @@ def maybe_retry_unattributable(described, response, raw, metrics, provider,
     return response, headers_done, retried_prepared, retry_raw
 
 
-def post_with_retry(conn, prepared, metrics, attempts, provider, log_event):
+def post_with_retry(ledger, prepared, metrics, provider, log_event, admit=None):
     """Dispatch at most twice and retain the final response for normal handling."""
-    response, headers_done = transport.post_with_phases(conn, prepared, metrics)
+    response, headers_done = ledger.send(prepared, metrics, ledger.opening)
+    metrics['upstream_status'] = response.status
     raw = None
     if response.status >= 400:
         raw = transport.read_capped(response, transport.ERROR_BODY_LIMIT)
+        request_evidence.verdict(metrics, upstream.outcome_of(response.status, raw, provider.defn.dialect))
         described = upstream.describe_failure(
             None, {'status': response.status, 'body': raw},
             {'model': metrics.get('model'), 'provider': prepared.provider,
-             'protocol': metrics.get('protocol'), 'dialect': provider.defn.dialect})
+             'protocol': ledger.protocol, 'dialect': provider.defn.dialect})
         retried = maybe_retry_unattributable(
-            described, response, raw, metrics, provider, prepared, attempts, log_event)
+            described, response, raw, metrics, provider, prepared, ledger, log_event,
+            admit)
         if retried is not None:
             return retried
     return response, headers_done, prepared, raw

@@ -1,6 +1,6 @@
 """Portable history for model-switched threads (Plan 168 split).
 
-Leaf for the `<model_switch>` boundary rule: items before the client's last
+Owns the `<model_switch>` boundary rule: items before the client's last
 marker were produced under another model and get the portable treatment
 (discovery pair collapses to a note, reasoning never rides along); items
 after it are the current model's and replay natively. A `portable` row
@@ -8,38 +8,12 @@ rewrites the whole history. Never splits a tool run across the boundary.
 """
 import json
 
-
-def _block_text(content):
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        return ' '.join(b.get('text', '') for b in content
-            if isinstance(b, dict) and isinstance(b.get('text'), str))
-    return str(content) if content else ''
-
-
-def user_message_item(text):
-    return {'type': 'message', 'role': 'user',
-            'content': [{'type': 'input_text', 'text': text}]}
-
-
-
+from .history_items import (CALL_TYPES, OUTPUT_TYPES, TOOL_RUN_TYPES, summary_text,
+                            user_message_item)
 
 PORTABLE_SEARCH_NOTE = ('[tool search result replayed as declared tools; '
                         'the search call itself is omitted on this model]')
 PORTABLE_REASONING_NOTE = '[reasoning summary from the previous model] '
-CALL_TYPES = frozenset({'function_call', 'custom_tool_call', 'apply_patch_call',
-                        'web_search_call', 'file_search_call', 'image_generation_call',
-                        'code_interpreter_call', 'computer_call'})
-OUTPUT_TYPES = frozenset({'function_call_output', 'custom_tool_call_output',
-                          'apply_patch_call_output'})
-# A tool run is the call/output block of one assistant step. Nothing may be
-# inserted inside it: a note between a parallel call and its output makes a
-# strict upstream refuse the whole turn ("incomplete parallel tool-call
-# group", measured on deepseek/deepseek-v4.1-flash 2026-09-13). The discovery
-# pair keeps its names here because the portable pass may run on either side
-# of the adapter rewrite that turns it into a plain function call.
-TOOL_RUN_TYPES = CALL_TYPES | OUTPUT_TYPES | {'tool_search_call', 'tool_search_output'}
 
 
 def rewrite_custom_pairs(items, exposed_keys, wire_names):
@@ -47,42 +21,35 @@ def rewrite_custom_pairs(items, exposed_keys, wire_names):
 
     A pair whose tool this turn exposes converts to matched function-call
     items; an undeclared pair stays matched custom items. One converted side
-    alone is the mixed shape strict providers refuse.
+    alone is the mixed shape strict providers refuse. Returns a new list;
+    converted items are copies, so the client's history is never edited.
     """
     calls = {item.get('call_id'): (item.get('namespace'), item.get('name'))
              for item in items
              if isinstance(item, dict) and item.get('type') == 'custom_tool_call'
              and isinstance(item.get('call_id'), str)}
+    rewritten = []
     for item in items:
-        if not isinstance(item, dict):
-            continue
-        kind = item.get('type')
+        kind = item.get('type') if isinstance(item, dict) else None
         if kind == 'custom_tool_call':
             key = (item.get('namespace'), item.get('name'))
-            if key not in exposed_keys:
-                continue
-            item['type'] = 'function_call'
-            item['arguments'] = json.dumps({'input': item.pop('input')})
         elif kind == 'custom_tool_call_output':
             key = calls.get(item.get('call_id'),
                             (item.get('namespace'), item.get('name')))
-            if key not in exposed_keys:
-                continue
-            item['type'] = 'function_call_output'
-        else:
+        if kind not in ('custom_tool_call', 'custom_tool_call_output') or key not in exposed_keys:
+            rewritten.append(item)
             continue
+        if kind == 'custom_tool_call':
+            item = {**item, 'type': 'function_call'}
+            item['arguments'] = json.dumps({'input': item.pop('input')})
+        else:
+            item = {**item, 'type': 'function_call_output'}
         wire = wire_names.get(key)
         if wire:
             item.pop('namespace', None)
             item['name'] = wire
-
-
-def _summary_text(item):
-    """Readable summary text only; a provider blob value is never read."""
-    blocks = item.get('summary')
-    if not isinstance(blocks, (str, list)):
-        return ''
-    return _block_text(blocks).strip()
+        rewritten.append(item)
+    return rewritten
 
 
 def marker_texts(item, tag):
@@ -198,7 +165,7 @@ def portable_history(items, search_name, history_mode):
             continue
         kind, name, call_id = item.get('type'), item.get('name'), item.get('call_id')
         if kind == 'reasoning':
-            note = _summary_text(item)
+            note = summary_text(item)
             if note:
                 emit(user_message_item(PORTABLE_REASONING_NOTE + note[:2000]))
             continue
