@@ -1,10 +1,5 @@
 """Upstream relay loop: response streaming and failure policy (Plan 128).
 
-Collaborator behind `ai_router.router.Handler`. The body moved here
-verbatim from `Handler.relay` with no behaviour change; the handler keeps
-a thin wrapper so the public method name used by tests stays valid. The
-handler stays the router: new relay/failure behaviour goes here.
-
 `log_event` is injected by the handler so a test patching
 `ai_router.router.log_event` keeps seeing this module's events; always call
 the injected object, never a fresh import.
@@ -16,12 +11,12 @@ and `_route` is one route's send, failure policy and stream.
 import http.client
 import json
 import time
-from . import attempt_policy, errors, local_services, provider_defs, setup, stream_errors, stream_relay, strip_retry, subscription_fallback, transport, upstream, wire_shape
+from . import attempt_policy, errors, local_services, messages_errors, provider_defs, setup, stream_errors, stream_relay, strip_retry, subscription_fallback, transport, upstream, wire_shape
 from .providers import is_native_service
 def _error(handler, ledger, error, **kwargs):
     if getattr(handler, 'response_committed', False):
         ledger.mark_committed(); return False
-    sent = handler.error(error, **kwargs)
+    sent = handler.error(messages_errors.render(error) if ledger.protocol == provider_defs.MESSAGES else error, **kwargs)
     if sent is True or getattr(handler, 'response_committed', False): ledger.mark_committed()
     attempt_policy.settle_delivery(ledger, handler); return sent
 
@@ -74,6 +69,11 @@ def _route(handler, provider, prepared, metrics, has_image, started, ledger, log
                 return _error(handler, ledger, exc)
         retry_after = upstream.upstream_retry_after(
             response, prepared, metrics, body=drained)
+        if response.status >= 400 and ledger.protocol == provider_defs.MESSAGES:
+            return _error(handler, ledger, messages_errors.from_outcome(ledger.outcome, response.status,
+                          subscription_fallback.refusal_message(prepared, metrics),
+                          upstream.KEY_NO_CREDIT_MESSAGE.format(model=metrics.get('model')), provider.defn.kind == provider_defs.SUBSCRIPTION),
+                          retry_after=retry_after[1] if retry_after else None)
         if retry_after is not None:
             category, retry_after = retry_after
             if (category in ('quota', 'auth')

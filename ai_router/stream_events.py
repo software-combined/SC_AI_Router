@@ -1,4 +1,4 @@
-"""What one external Responses frame is, decided once per frame (Plan 187).
+"""Common frame facts; protocol decoders retain their native wire policy.
 
 Leaf beside `stream_errors.py`, which parses each frame and hands it here:
 `classify` names the frame's lifecycle kind, and `StreamEvent` carries the
@@ -74,23 +74,28 @@ class StreamEvent:
     documented refusal rewrite in `stream_errors` replaced them. `native` is
     the frame's own `type`, `source` names the writer of a `FAILURE` frame,
     and `output` is True when that terminal carries output items. `outcome`
-    is the `outcome.Outcome` a terminal frame settles, else None.
+    is the `outcome.Outcome` a terminal frame settles, else None. `setup_slot`
+    is the decoder's ordered slot number. `commit` prohibits replay even when
+    compatibility repair removed the frame's wire bytes.
     """
 
-    __slots__ = ('frame', 'kind', 'native', 'source', 'output', 'outcome')
+    __slots__ = ('frame', 'kind', 'native', 'source', 'output', 'outcome',
+                 'setup_slot', 'commit')
 
     def __init__(self, frame, kind, native=None, source=None, output=False,
-                 outcome=None):
+                 outcome=None, *, setup_slot=None, commit=False):
         self.frame = frame
         self.kind = kind
         self.native = native
         self.source = source
         self.output = output
         self.outcome = outcome
+        self.setup_slot, self.commit = setup_slot, commit
 
     def with_frame(self, frame):
         return StreamEvent(frame, self.kind, self.native, self.source,
-                           self.output, self.outcome)
+                           self.output, self.outcome, setup_slot=self.setup_slot,
+                           commit=self.commit)
 
 
 def _item_type(event):

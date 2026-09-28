@@ -104,7 +104,7 @@ class HeldFrameTests(unittest.TestCase):
         record = stream_relay.StreamRecord()
         held = b'data: {"type": "response.created", "response": {"id": "r"}}\n\n'
         self.assertTrue(record.hold.take(stream_events.StreamEvent(
-            held, stream_events.SETUP, 'response.created')))
+            held, stream_events.SETUP, 'response.created', setup_slot=0)))
         record.flush(client)
         self.assertEqual(bytes(client.written), held)
         self.assertEqual(record.forwarded_bytes, len(held))
