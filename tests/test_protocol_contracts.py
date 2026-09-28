@@ -93,15 +93,15 @@ class ProtocolContractTests(unittest.TestCase):
         self.addCleanup(server.shutdown)
         return server
 
-    def test_messages_quota_429_keeps_retryable_503_shape(self):
-        # The 429 quota/auth split is Responses-only: a Messages 429 with a
-        # quota-coded body keeps today's 503, byte-identical.
+    def test_messages_quota_429_names_credit_in_a_native_final_error(self):
+        # An explicit credit cause is not a temporary rate limit.
         install_fake(self, lambda: FakeUpstream(429, b'{"error": {"code": "insufficient_quota"}}',
                                                 [('Content-Type', 'application/json')]))
         server = self._server()
         response = _post(server.server_port, '/test-token/v1/messages',
                          _messages(), {'Authorization': 'Bearer subscription-secret'})
-        self.assertEqual(response.status, 503)
+        self.assertEqual(response.status, 400)
+        self.assertEqual(json.loads(response.read())['error']['type'], 'invalid_request_error')
 
     def test_messages_402_names_key_credit(self):
         # No separate wording fork: the shared policy names the key on
@@ -117,16 +117,14 @@ class ProtocolContractTests(unittest.TestCase):
         self.assertEqual(body['error']['code'], 'KEY_NO_CREDIT')
         self.assertIn('Contact IT', body['error']['message'])
 
-    def test_messages_429_keeps_retryable_503_shape(self):
-        # Responses pins this in test_handler; Messages must keep the same
-        # transport-level retry contract through the shared relay path.
+    def test_messages_429_uses_native_rate_limit_and_preserves_retry_after(self):
         install_fake(self, lambda: FakeUpstream(429, b'{"error": "slow"}',
                                                 [('Content-Type', 'application/json'),
                                                  ('Retry-After', '7')]))
         server = self._server()
         response = _post(server.server_port, '/test-token/v1/messages',
                          _messages(), {'Authorization': 'Bearer subscription-secret'})
-        self.assertEqual(response.status, 503)
+        self.assertEqual(response.status, 429)
         self.assertEqual(response.getheader('Retry-After'), '7')
         body = json.loads(response.read())
         self.assertEqual(body['error']['code'], 'UPSTREAM_RATE_LIMITED')
@@ -154,7 +152,7 @@ class ProtocolContractTests(unittest.TestCase):
         response = _post(server.server_port, '/test-token/v1/messages',
                          _messages('claude-opus-4-6'),
                          {'Authorization': 'Bearer subscription-secret'})
-        self.assertEqual(response.status, 503)
+        self.assertEqual(response.status, 429)
         body = json.loads(response.read())
         self.assertEqual(body['error']['code'], 'UPSTREAM_RATE_LIMITED')
         self.assertIn('claude-opus-4-6 is rate limited on your Claude subscription',

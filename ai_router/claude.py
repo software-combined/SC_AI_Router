@@ -16,7 +16,7 @@ import hashlib
 import json
 import sys
 
-from . import claude_compat, outbound, provider_defs, request_context, transport
+from . import claude_compat, messages_events, outbound, provider_defs, request_context, transport
 from .errors import ClaudeSubscriptionRequired, PreparationError, UnknownModel
 from . import registry
 from .clients import registry as client_table
@@ -176,6 +176,10 @@ class ExternalMessagesProvider:
             chunks = [claude_compat.shape_json(
                 transport.read_capped(response, transport.MAX_UPSTREAM_BODY))]
         yield from chunks
+
+    def events(self, response, notes):
+        return messages_events.external_events(
+            claude_compat.shaped_frames(transport.passthrough(response)), notes)
 
 
 class ClaudeSubscriptionProvider:

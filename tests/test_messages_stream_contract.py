@@ -173,7 +173,7 @@ class MessagesStreamContractTests(unittest.TestCase):
             record, _ = self._observe(wire, kind='json')
         self.assertIsNone(record.outcome)
 
-    def test_routed_messages_failures_keep_one_send_and_one_logged_verdict(self):
+    def test_routed_messages_failures_keep_bounded_sends_and_one_logged_verdict(self):
         for model, expected_host in (('claude-sonnet-5', provider_defs.ANTHROPIC.host),
                                      ('deepseek/deepseek-v4.1-flash', provider_defs.OPENROUTER.host)):
             with self.subTest(model=model):
@@ -188,7 +188,7 @@ class MessagesStreamContractTests(unittest.TestCase):
                                     {'model': model, 'messages': [], 'stream': True},
                                     {'Authorization': 'Bearer subscription-fixture'})
                     self.assertEqual(response.read(), wire)
-                self.assertEqual(len(sends), 1)
+                self.assertEqual(len(sends), 2 if expected_host == provider_defs.OPENROUTER.host else 1)
                 self.assertEqual(sends[0][0], expected_host)
                 ledger = [call.kwargs for call in logged.call_args_list
                           if call.args[0] == 'attempt_ledger']

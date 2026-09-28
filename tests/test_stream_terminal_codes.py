@@ -56,7 +56,8 @@ class RawTerminalOwnershipTests(unittest.TestCase):
     def _raw(self, frames, protocol):
         client = SimpleNamespace(wfile=io.BytesIO())
         provider = SimpleNamespace(
-            defn=SimpleNamespace(id='openai', dialect=provider_defs.DIALECT_OPENAI),
+            defn=(provider_defs.ANTHROPIC if protocol == provider_defs.MESSAGES
+                  else provider_defs.OPENAI),
             adapt=lambda *args: iter((frames,)))
         metrics = {'protocol': protocol, 'response_kind': 'sse',
                    'response_encoding': 'identity', 'model': 'm'}
