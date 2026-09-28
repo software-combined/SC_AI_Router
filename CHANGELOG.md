@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.6.140
+
+- Repair and stream handling now use captured request and response facts.
+  Clearing or replacing diagnostic fields cannot disable an eligible repair,
+  change stream classification, or suppress the final error sent to a client.
+
 ## 0.6.139
 
 - Align the Python package version and runtime inventory with the release.

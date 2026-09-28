@@ -4,7 +4,7 @@ import io
 import unittest
 from types import SimpleNamespace
 
-from ai_router import outcome, provider_defs, sse, stream_errors, stream_relay
+from ai_router import outcome, provider_defs, sse, stream_errors, stream_relay, transport
 
 
 class TerminalCodeTests(unittest.TestCase):
@@ -29,7 +29,7 @@ class TerminalCodeTests(unittest.TestCase):
                 raw_metrics = {'protocol': provider_defs.RESPONSES,
                                'response_kind': 'sse',
                                'response_encoding': 'identity'}
-                list(stream_relay._raw_events([frame], raw_metrics))
+                list(stream_relay._raw_events([frame], raw_metrics, provider_defs.RESPONSES))
                 normalized_metrics = {}
                 list(stream_errors.events([frame], normalized_metrics))
                 self.assertEqual(raw_metrics['code'], expected)
@@ -43,7 +43,7 @@ class TerminalCodeTests(unittest.TestCase):
         raw_metrics = {'protocol': provider_defs.RESPONSES,
                        'response_kind': 'sse',
                        'response_encoding': 'identity'}
-        list(stream_relay._raw_events([frame], raw_metrics))
+        list(stream_relay._raw_events([frame], raw_metrics, provider_defs.RESPONSES))
         normalized_metrics = {}
         list(stream_errors.events([frame], normalized_metrics))
         self.assertEqual(raw_metrics['failure_class'], 'final')
@@ -61,7 +61,9 @@ class RawTerminalOwnershipTests(unittest.TestCase):
             adapt=lambda *args: iter((frames,)))
         metrics = {'protocol': protocol, 'response_kind': 'sse',
                    'response_encoding': 'identity', 'model': 'm'}
-        record = stream_relay.StreamRecord()
+        operation = '/v1/messages' if protocol == provider_defs.MESSAGES else '/v1/responses'
+        record = stream_relay.StreamRecord(transport.ResponseFormat(
+            protocol, operation, True, 'sse', 'identity'))
         stream_relay.relay_stream(
             client, provider, object(), SimpleNamespace(tool_names=set()), metrics,
             0.0, 0.0, record)
