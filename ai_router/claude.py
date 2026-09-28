@@ -16,7 +16,7 @@ import hashlib
 import json
 import sys
 
-from . import claude_compat, provider_defs, request_context, transport
+from . import claude_compat, outbound, provider_defs, request_context, transport
 from .errors import ClaudeSubscriptionRequired, PreparationError, UnknownModel
 from . import registry
 from .clients import registry as client_table
@@ -155,20 +155,11 @@ class ExternalMessagesProvider:
             context = request_context.resolve(model, request_context.capture(), resolve(model))
         slug, entry = context.slug, context.row
         upstream = upstream_id_for(entry) if entry is not None else slug
-        # resolve() only returns a different string for a known registry slug.
-        # payload is the parsed form of this same body, so rewrite the alias
-        # there instead of decoding raw_body again. The body leaves untouched
-        # unless the alias, the client's own billing block or its deferred-tool
-        # protocol has to change; both repairs always run. A compressed body is
-        # sent decoded: the headers below carry no Content-Encoding.
-        rewritten = (isinstance(model, str) and upstream != model
-                     and isinstance(payload, dict))
-        if rewritten:
-            payload['model'] = upstream
-        changed = claude_compat.strip_billing_header(payload)
-        changed |= claude_compat.flatten_deferred_tools(payload)
-        if changed or rewritten or transport.encoded(headers):
-            body = json.dumps(payload).encode()
+        projected = outbound.project_messages_external(payload, model, upstream)
+        # Unchanged bodies keep client serialization. Encoded external input
+        # leaves decoded because these fresh headers omit Content-Encoding.
+        if projected is not payload or transport.encoded(headers):
+            body = json.dumps(projected).encode()
         return transport.Prepared(
             self.host, self.defn.path_for(provider_defs.MESSAGES, path),
             {'Authorization': 'Bearer ' + credentials.key_for(self.defn.id),
@@ -202,7 +193,9 @@ class ClaudeSubscriptionProvider:
         if not (auth.startswith('Bearer ') or 'x-api-key' in headers):
             raise PermissionError('Claude subscription authentication required')
         fwd = {k: v for k, v in headers.items() if k.lower() not in transport.HOP_HEADERS}
-        return transport.Prepared(self.host, path, fwd, raw_body, set(), self.name,
+        projected = outbound.project_messages_subscription(payload)
+        body = raw_body if projected is payload else json.dumps(projected).encode()
+        return transport.Prepared(self.host, path, fwd, body, set(), self.name,
                                   context=context, decoded_body_bytes=decoded_len)
 
     def adapt(self, response, tool_names, notes=None):

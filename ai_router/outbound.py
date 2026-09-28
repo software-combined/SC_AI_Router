@@ -1,4 +1,4 @@
-"""One ordered outgoing Responses projection per route (Plans 183 and 188).
+"""Pure outgoing Responses and Messages projections (Plans 183 and 188).
 
 Each route's stages run in tuple order over one `Projection`: the facts the
 adapter resolved (path, client model id, the request's captured row) plus
@@ -12,7 +12,7 @@ encoding and the turn-size fit.
 from dataclasses import dataclass, field
 from typing import Any
 
-from . import (agent_handoffs, context_recovery, external_history, history_items,
+from . import (agent_handoffs, claude_compat, context_recovery, external_history, history_items,
                subscription_history, tool_runs)
 from .capabilities import check_row_effort
 from .errors import PreparationError
@@ -192,3 +192,16 @@ def project_subscription(payload, path):
     projected = _run(stages, payload, projection)
     changed = projected is not payload
     return projected, projection.handoffs, changed
+
+
+def project_messages_external(payload, model, upstream):
+    """Existing Messages repairs in order; copy only the changed containers."""
+    if isinstance(payload, dict) and isinstance(model, str) and upstream != model:
+        payload = {**payload, 'model': upstream}
+    payload = claude_compat.strip_billing_header(payload)
+    return claude_compat.flatten_deferred_tools(payload)
+
+
+def project_messages_subscription(payload):
+    """Native Messages history belongs to the client and passes unchanged."""
+    return payload
