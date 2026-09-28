@@ -4,8 +4,8 @@
 installed router only knows released rows, so the round trip always failed.
 The preview-activate-verify-promote sequence instead boots a throwaway router
 from the working tree (which already holds the preview row) with its own
-home, port, token and picker catalogue, probes it with the desktop harness,
-then tears it down. Billing and the desktop app make this owner-gated; with
+home, port, token and picker catalogue, probes it with both real clients,
+then tears it down. Billing makes this owner-gated; with
 no credential it fails closed before spending anything.
 """
 import json
@@ -19,12 +19,12 @@ import time
 import urllib.request
 from pathlib import Path
 
-from . import provider_defs
+from . import candidate_evidence, provider_defs
+from .clients.registry import CLIENTS
 from .registry import by_slug
 
 ROOT = Path(__file__).resolve().parents[1]
-PROBE_TOOL = ROOT / 'tools' / 'probe_codex_runtime.py'
-ROUND_TRIP_MARKER = '"desktop_runtime_tool_round_trip": "passed"'
+PROBE_TOOL = ROOT / 'tools' / 'probe_candidate.py'
 START_TIMEOUT = 60
 
 
@@ -37,10 +37,11 @@ def _free_port():
 class IsolatedRouter:
     """Throwaway router plus catalogue; close() always tears it down."""
 
-    def __init__(self, slug=None):
+    def __init__(self, slug=None, row=None, bounded=False):
         self.tmp = tempfile.TemporaryDirectory()
         self.home = Path(self.tmp.name)
         self.slug = slug
+        self.row, self.bounded = row, bounded
         self.process = None
 
     def __enter__(self):
@@ -51,7 +52,8 @@ class IsolatedRouter:
 
     def boot(self):
         from .credentials import Credentials, opencode_auth_path
-        entry = by_slug(self.slug) if isinstance(self.slug, str) else None
+        entry = (candidate_evidence.model(self.row) if self.row is not None else
+                 by_slug(self.slug) if isinstance(self.slug, str) else None)
         provider_id = entry.provider if entry is not None else provider_defs.DEFAULT_EXTERNAL
         state = {'port': _free_port(), 'token': secrets.token_urlsafe(32),
                  'openai_models': []}
@@ -81,8 +83,10 @@ class IsolatedRouter:
         return self._spawn()
 
     def _spawn(self):
+        command = ([sys.executable, str(PROBE_TOOL), '--serve', '--home', str(self.home)]
+                   if self.bounded else [sys.executable, '-m', 'ai_router'])
         self.process = subprocess.Popen(
-            [sys.executable, '-m', 'ai_router'],
+            command,
             env={**os.environ, 'ROUTER_HOME': str(self.home)}, cwd=str(ROOT),
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         if not self._wait_healthy():
@@ -107,6 +111,7 @@ class IsolatedRouter:
                 self.process.wait(timeout=20)
             except subprocess.SubprocessError:
                 self.process.kill()
+                self.process.wait(timeout=20)
             self.process = None
 
     def _wait_healthy(self):
@@ -155,35 +160,25 @@ def legs_for(slug, row=None):
     return legs
 
 
-def run_probe(slug, scope, _run=subprocess.run, row=None, _mkdtemp=None):
-    """Implied legs through the isolated router; True when all pass.
-
-    The probe refuses router legs without --codex-home (never the live
-    Codex home), so the candidate always gets a disposable client home.
-    """
-    home = (_mkdtemp(prefix='candidate-codex-home-') if _mkdtemp is not None
-            else tempfile.mkdtemp(prefix='candidate-codex-home-'))
-    cmd = [sys.executable, str(PROBE_TOOL), slug,
-           '--router-state', str(scope.home / 'mixed-router-state.json'),
-           '--catalog', str(scope.catalog),
-           '--codex-home', home]
-    legs = legs_for(slug, row)
-    if 'image' in legs:
-        cmd.append('--image')
-    if 'compact' in legs:
-        cmd.append('--compact')
+def run_probe(slug, scope, _run=subprocess.run, row=None):
+    """Content-free proof for every advertised route, never a scalar pass."""
+    cmd = [sys.executable, str(PROBE_TOOL), '--model', slug,
+           '--home', str(scope.home), '--catalog', str(scope.catalog)]
     try:
-        proc = _run(cmd, capture_output=True, text=True, timeout=300)
-    except (OSError, subprocess.SubprocessError):
-        return False
-    # A later leg (image/compact) can fail after the base marker is printed,
-    # so the exit status is part of the pass contract, not just the marker.
-    return proc.returncode == 0 and ROUND_TRIP_MARKER in (proc.stdout or '')
+        proc = _run(cmd, capture_output=True, text=True, timeout=750,
+                    env={**os.environ, 'PROBE_AUTH_TOKEN': 'candidate-synthetic'})
+        record = candidate_evidence.validate(json.loads(proc.stdout))
+        if proc.returncode:
+            for route in record['routes']:
+                route['result'] = 'fail'
+        return record
+    except (OSError, subprocess.SubprocessError, ValueError, TypeError):
+        return None
 
 
 def verify(slug, _scope=IsolatedRouter, _run_probe=run_probe, row=None):
-    """Boot an isolated router for the candidate and probe it. True on pass."""
-    with _scope(slug) as scope:
+    """Boot an isolated router and return its per-route candidate proof."""
+    with _scope(slug, row=row, bounded=True) as scope:
         return _run_probe(slug, scope, row=row)
 
 
@@ -199,12 +194,16 @@ def main(argv=None):
     slug = slugs[0]
     legs = legs_for(slug)
     if not (probe and confirm):
+        entry = by_slug(slug)
+        routes = [c.protocol for c in CLIENTS
+                  if entry and provider_defs.get(entry.provider).serves(c.protocol)]
         print(json.dumps({'slug': slug, 'legs': legs, 'billed': False,
-                          'note': 'rerun with --probe --confirm to bill the legs'}))
+                          'routes': routes,
+                          'note': 'rerun with --probe --confirm for bounded real-client checks'}))
         return 0
-    passed = verify(slug)
-    print(json.dumps({'slug': slug, 'legs': legs,
-                      'result': 'passed' if passed else 'failed'}))
+    record = verify(slug)
+    passed = not candidate_evidence.problems(by_slug(slug), record)
+    print(json.dumps(record))
     return 0 if passed else 1
 
 

@@ -92,7 +92,7 @@ def _expected_model(home, model):
 
 
 def probe(home, model, deferred=False, read_count=1, effort=None,
-          max_budget_usd=None):
+          max_budget_usd=None, expected_model=None):
     """One synthetic round trip; returns a result record."""
     state = json.loads((home / 'mixed-router-state.json').read_text())
     marker = 'SCGCC_' + hashlib.sha256(
@@ -155,7 +155,7 @@ def probe(home, model, deferred=False, read_count=1, effort=None,
         # says "the contents are: <marker>" has done the job, and several rows
         # narrate their answers. An empty or refused turn still fails here.
         read_paths = sorted(set(report.get('read_paths') or ()))
-        expected_model = _expected_model(home, model)
+        expected_model = expected_model or _expected_model(home, model)
         identity = _identity(expected_model, report)
         passed = _accepted(read_count, markers, report, expected_model)
         if report.get('is_error'):

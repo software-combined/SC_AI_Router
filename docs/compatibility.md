@@ -1,5 +1,45 @@
 # Compatibility
 
+## Router 0.6.138 onboarding candidate, 28 September 2026 AEST
+
+At 17:01 AEST the bounded onboarding probe passed on the real clients, using
+the source checkout based on `8c7a9112878b605ac7c5cea1b827793167a9da9b`.
+The source-content binding is
+`80a539c6225324d5b76107cdc92bd22b0b64f1697eecc88f78a9199797a99919`;
+the structured record is in `acceptance-ledger.json`. Codex desktop
+`26.917.62051` bundles CLI `0.155.0-alpha.16.3`; Claude Code is `2.1.283`.
+
+| Route | Requested model / effort | Provider-reported identity | Attempts | Result |
+| --- | --- | --- | --- | --- |
+| Codex Responses | DeepSeek V4.1 Flash / low | Exact model and low effort | 4, including one compaction summary | Tool, image and compaction passed |
+| Claude Code Messages | DeepSeek V4.1 Flash / low | Exact model; effort unverified | 3 | Two sequential reads with matching results passed |
+
+The guard allowed 12 total upstream attempts, including summary helpers and
+retries, with 512 KiB input and 65,536 output tokens per attempt. Claude also
+used its $0.25 client budget. Offline conformance ran before the model calls.
+The first probe omitted summary calls from its counter; an offline reproduction
+confirmed that gap. A shared reservation now covers both send paths, and the
+table records the corrected rerun. This is source-candidate proof, not installed
+acceptance or new Plan 185 cell evidence.
+
+## Plan 184 shape decisions, 28 September 2026 AEST
+
+Plan 188 allows a recorded decision to retain an unmeasured shape. The
+following choices close that decision gate without claiming new live results.
+
+| Shape | Decision and evidence boundary |
+| --- | --- |
+| Readable post-switch agent messages | Keep the current projection. The historical C3 pass exercised that projection; the raw-versus-projected comparison remains unmeasured. The two native-parent handoff runs below do not substitute for it. |
+| Native reasoning across subscription switches | Keep the current foreign-shape rule pending a current C4 comparison. The historical pass used a note projection and did not prove native reasoning replay. Preserve native signed and encrypted content. |
+| Bare or summary-only reasoning IDs | Keep the current representation. This candidate's recorded evidence does not establish a rejection that would justify removing it. |
+| Undeclared custom and apply-patch pairs | Keep the current paired representation. Extra-shape evidence belongs only to the measured DeepSeek V4.1 Flash profile; other rows inherit none. |
+
+The original MiMo assignment failure still has no proven historical cause.
+The successful handoff runs establish current behavior, not that encryption
+caused that earlier failure. Historical Plan 185 runs retain their actual
+statuses and client versions; these new source runs do not turn them into
+current passes.
+
 ## Router 0.6.137 offline conformance, 28 September 2026 AEST
 
 The real-handler matrix covers all 21 registry rows on both supported
@@ -291,6 +331,30 @@ no model name. 32 simultaneous synthetic held attempts retained 8,079,744
 wire bytes, with a `tracemalloc` peak of 8,515,571 bytes: held-state
 allocation only, not the process's total RSS.
 
+## Historical beta acceptance, 24 September 2026 AEST
+
+The saved release record for `v0.6.124-beta-express` is reconciled here and in
+the ledger. It tagged develop `702e101`, built `0.6.124.121`, and was installed
+on this Mac at 17:50 AEST. Stable `v0.6.124-express` later tagged main `7fb2846`
+after PR #317 and main acceptance. These are historical results, not proof of
+the current candidate.
+
+The four recorded cells used Codex desktop `26.917.62051`, bundled CLI
+`0.155.0-alpha.16.3`, and 16 calls within the approved 20-call budget, at low
+effort. Claude Code `2.1.223` was installed but was not exercised.
+
+| Cell | Time (AEST) | Calls | Recorded result |
+| --- | --- | --- | --- |
+| C2 | 17:52 | 4 | Failed: MiMo Flash returned both pair markers; Muse accepted the undeclared custom pair with HTTP 200 but omitted its marker, while its apply-patch pair passed. |
+| C3 | 17:53 | 4 | Passed: the readable DeepSeek child reply survived the GLM parent's switch to Luna, through the existing projection. |
+| C4 | 17:53 | 3 | Passed: Luna completed its tool round trip and the switch to Sol retained history, through the existing reasoning-note projection. Serving identities were unverified. |
+| C5 | 17:57 | 5 | Shape not produced: compaction dropped the child reply, so the successful switched request did not test an encrypted child block. |
+
+The ledger retains the original records verbatim. C3 and C4 are stale for the
+current Claude version; C2 remains failed and C5 remains non-passing. These
+records neither authorize a new history conversion nor establish current
+native replay acceptance.
+
 ## Acceptance matrix ledger, 24 September 2026 AEST
 
 Plan 185's acceptance matrix now has a machine-readable record, so a script
@@ -301,28 +365,30 @@ can tell which cells still hold for the current clients.
 `null` where the run exposed no identity), `calls`, `result` and `notes`. Only
 a `pass` result counts as a pass.
 
-| cell | transition | rows | calls |
+| cell | transition | rows | run calls |
 |---|---|---|---|
 | C1 | external compaction, then switch to subscription | `deepseek/deepseek-v4.1-flash` to `gpt-6-luna` | 4 |
 | C2 | direct OpenRouter acceptance of an undeclared custom pair and an `apply_patch_call` pair | `xiaomi/mimo-v2.6-flash`, `meta/muse-spark-1.3` | 4 |
 | C3 | external parent with a readable external child reply, parent switched to subscription | `z-ai/glm-5.3-flash` to `gpt-6-luna`, child `deepseek/deepseek-v4.1-flash` | 4 |
-| C4 | switch between two subscription models with native reasoning | `gpt-6-luna` to `gpt-6-sol` | 2 |
-| C5 | external parent, subscription child whose reply carries an encrypted block, parent compaction, parent switched to subscription | `deepseek/deepseek-v4.1-flash`, child `gpt-6-luna` | 6 |
+| C4 | switch between two subscription models with native reasoning | `gpt-6-luna` to `gpt-6-sol` | 3 |
+| C5 | external parent, subscription child whose reply carries an encrypted block, parent compaction, parent switched to subscription | `deepseek/deepseek-v4.1-flash`, child `gpt-6-luna` | 5 |
 
-`python3.14 tools/check_acceptance_ledger.py` compares each cell's latest pass
+`python3.14 tools/check_acceptance_ledger.py` compares each cell's latest run
 with the newest clients this page names in the backticked forms Codex desktop
 `X` and Claude Code `X`, the way every gate records them; an unbackticked
 mention, such as a later release an app bundle refers to, does not count. A
 cell is stale when its latest pass ran on an older version of either client,
 because section 7 of `AGENTS.md` treats either upgrade as the trigger for new
-evidence. The check exits 1 while any P1 cell (C1 to C4) is stale or missing,
-and reports C5 without failing on it.
+evidence. The check exits 1 while any P1 cell (C1 to C4) is stale, failed,
+missing or conflicting, and reports C5 without failing on it.
 
-The ledger starts with C1 alone, from the 0.6.122 beta gate below: router
+The ledger started with C1 alone, from the 0.6.122 beta gate below: router
 `0.6.122.118`, Codex desktop `26.917.62051`, Claude Code `2.1.223` (installed,
 not exercised) and 4 calls. That gate's installed-router pair legs sit in C1's
 notes rather than counting as C2, because C2 goes direct to OpenRouter on
-different rows. C2 to C5 have not run, so the check exits 1 until they do.
+different rows. C2 to C5 ran later that day, as the historical record above
+shows. Their original statuses and versions remain distinct from the current
+candidate-bound onboarding record.
 
 `tools/probe_parent_switch.py --cell C3` or `--cell C5` drives the two
 parent-switch cells. The first parent spawns the child and calls `wait_agent`
@@ -379,8 +445,8 @@ outside that sandbox, and live mode refuses to start if the sandbox cannot be
 applied. A call that still went elsewhere would be outside both caps, and the
 probe would stop after the first turn with `client bypassed the probe`.
 
-Limits: no live cell ran here. C2 waits for `tools/probe_wire_shapes.py`
-(Plan 185 step 1).
+Limits: the recorded C2 run failed, and C5 did not produce its target shape.
+The historical passes do not replace current-client acceptance.
 
 ## MiMo V2.6 Pro compaction limit, 24 September 2026 AEST
 

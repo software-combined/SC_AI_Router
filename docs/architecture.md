@@ -73,6 +73,16 @@ The policy scan rejects literal model-name comparisons and prefix decisions in
 runtime Python. Only the existing, exact discovery, picker and tracking-alias
 predicates are exempt; preparation and recovery use capability data instead.
 
+`candidate_evidence.py` owns content-free onboarding proof beside `candidate.py`.
+It reads normalized registry capabilities, provider protocols and client IDs;
+request handling never imports it. `models.py` promotes a new row only after
+every advertised route passes offline conformance and a real-client probe
+against unchanged source and capabilities. The ledger checker shares this
+validator. `tools/probe_candidate.py` owns one isolated send budget across the
+common transport and compaction summary boundaries. Repairs, replays and
+summary retries all consume that cap.
+This guard belongs to the probe process and never changes production limits.
+
 Rules:
 
 `agent_handoffs.py` owns collaboration alias schemas and native-name restoration;

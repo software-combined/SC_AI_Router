@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.6.138
+
+- New model promotion now requires offline conformance and successful Codex
+  and Claude Code route checks against the same source and capabilities.
+  Structured evidence replaces the old scalar probe result, and a newer failed
+  run supersedes an older pass. Isolated probes cap upstream attempts and
+  tokens, including retries, while incomplete checks leave the model hidden.
 - Wire diagnostics use the request's measured model profile. Extra input shapes
   observed on DeepSeek V4.1 Flash no longer count as verified for its whole
   model family. Image timeout advice now applies to any request carrying an
