@@ -356,6 +356,13 @@ that mode after Claude exits normally; it never changes attachment or
 credentials. Its stable `claude_switch_launch.py` entry point follows the
 installed release pointer so the app survives updates and release pruning.
 
+`claude_profile_rules.py` owns the local-data transfer policy being integrated
+by Plan 169. It keeps conversation payloads intact, excludes separate sign-in
+and credential files, and relocates only recognized metadata paths. It imports
+only the standard library. Callers must supply validated source and destination
+paths and publish through their own transaction; the helper does not select an
+account, change profiles or start synchronization.
+
 ## Distribution (outside the request path)
 
 `infra/` owns the update feed as code (repository-only templates, deployed from a checkout): the certificate stack, the private

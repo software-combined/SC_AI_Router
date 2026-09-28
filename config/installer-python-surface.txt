@@ -19,6 +19,7 @@ load packaging/bundle.py
 load packaging/claude_config.py
 load packaging/claude_desktop_config.py
 load packaging/claude_desktop_switch.py
+load packaging/claude_profile_rules.py
 load packaging/codex_config.py
 load packaging/diagnostics.py
 load packaging/feed.py
