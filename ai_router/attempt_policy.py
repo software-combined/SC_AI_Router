@@ -11,19 +11,20 @@ INITIAL, REPAIR, STREAM_REPLAY, HELPER_FALLBACK = (
 Route = namedtuple('Route', 'provider prepared metrics has_image')
 
 
-def budget(defn, protocol, opening=INITIAL):
+def budget(defn, protocol, opening=INITIAL, operation=None):
     reasons = [opening]
     if protocol == provider_defs.RESPONSES:
         reasons.append(REPAIR)
-        if defn.kind != provider_defs.SUBSCRIPTION:
-            reasons.append(STREAM_REPLAY)
+    if defn.kind == provider_defs.EXTERNAL and (protocol == provider_defs.RESPONSES
+            or (protocol == provider_defs.MESSAGES and operation == '/v1/messages')):
+        reasons.append(STREAM_REPLAY)
     return dict.fromkeys(reasons, 1)
 
 
 def replay_rejection(ledger, settled, record, body):
     if not ledger.permits(STREAM_REPLAY):
         return 'budget'
-    if record.forwarded_bytes:
+    if record.forwarded_bytes or record.replay_blocked:
         return 'committed'
     if not settled.replayable:
         return 'not_transient'
@@ -31,7 +32,7 @@ def replay_rejection(ledger, settled, record, body):
         return 'router_terminal'
     if settled.output:
         return 'output'
-    if not stream_attempt.replay_safe(body):
+    if not stream_attempt.replay_safe(body, ledger.protocol):
         return 'side_effects'
     return None
 
@@ -67,7 +68,6 @@ def raised(exc, sent, response, record, client_abort=False, response_seen=False)
 
 
 def settle_delivery(ledger, handler):
-    """Settle a delivery failure without replacing a contained ValueError."""
     exc = getattr(handler, 'delivery_error', None)
     if exc is None or isinstance(exc, ValueError):
         return ledger.outcome
@@ -130,7 +130,7 @@ class Ledger:
 
     def _enter(self, provider, opening):
         self.route, self.opening = provider.defn.id, opening
-        self._budget = budget(provider.defn, self.protocol, opening)
+        self._budget = budget(provider.defn, self.protocol, opening, self.operation)
         self._spent = dict.fromkeys(self._budget, 0)
 
     def permits(self, reason):

@@ -30,15 +30,15 @@ CATEGORIES = frozenset((SUCCESS, INCOMPLETE, REFUSED, CONTEXT_OVERFLOW, AUTH, QU
 # The parser keeps unknown values unknown; only these named causes may drive a
 # recovery decision.
 _FINAL_ERROR_TYPES = frozenset((
-    'invalid_request', 'refusal', 'moderation', 'insufficient_quota'))
+    'invalid_request', 'invalid_request_error', 'refusal', 'moderation', 'insufficient_quota'))
 _TRANSIENT_CODES = frozenset((
     'server_error', 'provider_unavailable', 'provider_overloaded',
-    'timeout', 'server', 'overloaded', 'overloaded_error'))
+    'timeout', 'timeout_error', 'api_error', 'server', 'overloaded', 'overloaded_error'))
 _RATE_LIMIT_TYPES = frozenset((
-    'rate_limit', 'rate_limit_exceeded', 'too_many_requests'))
+    'rate_limit', 'rate_limit_error', 'rate_limit_exceeded', 'too_many_requests'))
 _AUTH_TYPES = frozenset((
     'invalid_api_key', 'authentication_error', 'unauthorized',
-    'insufficient_permissions', 'account_deactivated'))
+    'insufficient_permissions', 'permission_error', 'account_deactivated'))
 _QUOTA_CODES = frozenset((
     'insufficient_quota', 'billing_hard_limit_reached', 'billing_not_active',
     'credit_balance_too_low'))

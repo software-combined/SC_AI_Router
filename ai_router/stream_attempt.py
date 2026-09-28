@@ -10,8 +10,8 @@ and from then on the attempt streams through and can no longer be retried.
 Each kind waits in its own bounded place, so an echoing setup frame no
 longer spends the budget the reasoning frames share:
 
-- one slot each for `response.created` then `response.in_progress`, in that
-  order and before any reasoning; a duplicate or late one commits,
+- setup slots supplied by the decoder, in order and before any reasoning;
+  Responses has two slots and Messages one; a duplicate or late one commits,
 - one slot for a failure terminal carrying no output; one with output commits
   so that output never disappears into a retried attempt,
 - `PENDING_LIMIT` bytes shared by reasoning and data-less frames.
@@ -21,12 +21,13 @@ A slot holds one frame, which the parser already caps at
 `PENDING_LIMIT`. That bounds retained wire bytes per stream, not the
 process's memory: parsing and adapting each frame costs more on top.
 
-Holding only helps when re-sending the request is safe at all, which
+Messages content, thinking and plumbing explicitly commit. Holding only
+helps when re-sending the request is safe at all, which
 `replay_safe` decides once per request from the tools it offers upstream.
 """
 import json
 
-from . import stream_events
+from . import provider_defs, stream_events
 
 # How many reasoning and data-less bytes one attempt may hold together.
 PENDING_LIMIT = 65536
@@ -39,19 +40,30 @@ PENDING_LIMIT = 65536
 CLIENT_TOOL_TYPES = frozenset(('function', 'custom'))
 
 
-def replay_safe(body):
+def replay_safe(body, protocol=provider_defs.RESPONSES):
     """True when re-sending the prepared `body` cannot repeat upstream work.
 
     Decided from the tool types the provider was offered, never a model name:
-    no tools, or only client-run ones. A body this cannot read is unsafe.
+    no tools, or only client-run ones. Messages uses input_schema and the
+    custom type and requires stream=True. Unreadable is unsafe.
     """
     try:
-        tools = json.loads(body).get('tools') or []
+        payload = json.loads(body)
+        tools = payload.get('tools', [])
     except (ValueError, TypeError, AttributeError):
         return False
-    return isinstance(tools, list) and all(
-        isinstance(tool, dict) and tool.get('type') in CLIENT_TOOL_TYPES
-        for tool in tools)
+    if tools is None:
+        tools = []
+    if not isinstance(tools, list):
+        return False
+    if protocol == provider_defs.MESSAGES:
+        if payload.get('stream') is not True:
+            return False
+        return all(isinstance(tool, dict) and tool.get('type') in (None, 'custom')
+                   and isinstance(tool.get('input_schema'), dict)
+                   and tool['input_schema'].get('type') == 'object' for tool in tools)
+    return protocol == provider_defs.RESPONSES and all(
+        isinstance(tool, dict) and tool.get('type') in CLIENT_TOOL_TYPES for tool in tools)
 
 
 class AttemptHold:
@@ -79,14 +91,13 @@ class AttemptHold:
 
     def take(self, event):
         """Hold `event` and return True, or return False: the attempt commits."""
-        if self.terminal is not None:
+        if self.terminal is not None or event.commit:
             return False  # Nothing follows a verdict; a stray frame commits it.
         kind = event.kind
         if kind == stream_events.SETUP:
-            if (self.reasoning or len(self.setup) == len(stream_events.SETUP_ORDER)
-                    or event.native != stream_events.SETUP_ORDER[len(self.setup)]):
+            if self.reasoning or event.setup_slot != len(self.setup):
                 return False
-            self.setup.append(event.native)
+            self.setup.append(event.setup_slot)
         elif kind == stream_events.FAILURE:
             if event.output:
                 return False
