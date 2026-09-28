@@ -39,7 +39,8 @@ class MessagesStreamContractTests(unittest.TestCase):
         metrics = {'protocol': provider_defs.MESSAGES, 'stream': kind == 'sse',
                    'path': path or '/v1/messages', 'response_kind': kind,
                    'response_encoding': encoding}
-        record = stream_relay.StreamRecord()
+        record = stream_relay.StreamRecord(transport.ResponseFormat(
+            provider_defs.MESSAGES, path or '/v1/messages', kind == 'sse', kind, encoding))
         stream_relay.relay_stream(handler, provider, response, SimpleNamespace(tool_names=set()),
                                   metrics, 0.0, 0.0, record)
         self.assertEqual(handler.wfile.getvalue(), wire)
@@ -152,7 +153,8 @@ class MessagesStreamContractTests(unittest.TestCase):
         provider = SimpleNamespace(defn=provider_defs.ANTHROPIC, adapt=chunks)
         metrics = {'protocol': provider_defs.MESSAGES, 'path': '/v1/messages',
                    'response_kind': 'sse', 'response_encoding': 'identity'}
-        record = stream_relay.StreamRecord()
+        record = stream_relay.StreamRecord(transport.ResponseFormat(
+            provider_defs.MESSAGES, '/v1/messages', True, 'sse', 'identity'))
         stream_relay.relay_stream(handler, provider, None, SimpleNamespace(tool_names=set()),
                                   metrics, 0.0, 0.0, record)
         self.assertEqual(handler.wfile.getvalue(), first + last)
