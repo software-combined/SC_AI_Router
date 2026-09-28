@@ -7,6 +7,7 @@ import http.client  # noqa: F401 (re-exported for consumer call sites)
 import json
 import time
 import traceback
+from collections import namedtuple
 
 from . import messages_errors, provider_defs, request_evidence
 from .errors import InvalidSize
@@ -15,6 +16,15 @@ from .errors import InvalidSize
 HOP_HEADERS = {'host', 'connection', 'content-length', 'transfer-encoding',
                'upgrade', 'keep-alive', 'proxy-authorization', 'proxy-authenticate',
                'te', 'trailer', 'cookie'}
+
+
+class ResponseFormat(namedtuple('ResponseFormat', 'protocol operation stream kind encoding')):
+    """Immutable wire facts for one HTTP response attempt, separate from logs."""
+    __slots__ = ()
+
+    @classmethod
+    def capture(cls, request, response):
+        return cls(request.protocol, request.operation, request.stream, *describe_response(response))
 
 
 class Prepared:
@@ -195,17 +205,17 @@ def write_full(wfile, data):
     wfile.flush()
 
 
-def emit_terminal_failure(wfile, metrics):
+def emit_terminal_failure(wfile, response_format):
     """Best-effort native terminal on a repairable identity event stream."""
     from .errors import upstream_failed
-    if not (metrics.get('stream') is True
-            and metrics.get('response_kind') == 'sse'
-            and metrics.get('response_encoding') == 'identity'
-            and metrics.get('protocol') in (provider_defs.RESPONSES, provider_defs.MESSAGES)):
+    if not (response_format.stream is True
+            and response_format.kind == 'sse'
+            and response_format.encoding == 'identity'
+            and response_format.protocol in (provider_defs.RESPONSES, provider_defs.MESSAGES)):
         # Identity only: appending plaintext to an encoded stream would be
         # undecodable for the client.
         return False
-    messages = metrics.get('protocol') == provider_defs.MESSAGES
+    messages = response_format.protocol == provider_defs.MESSAGES
     native = 'error' if messages else 'response.failed'
     body = (messages_errors.render(upstream_failed()).body() if messages else
             {'type': native, 'response': upstream_failed().body()})
@@ -215,9 +225,7 @@ def emit_terminal_failure(wfile, metrics):
     except (OSError, ValueError):
         # Closed-file ValueError plus dead-socket OSError: never raise here.
         return False
-    # Only claim the frame once it is written: the log line must not report
-    # a terminal frame the client never received.
-    metrics['terminal_source'] = 'router'
+    # The caller records its terminal only after successful delivery.
     return True
 
 

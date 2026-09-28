@@ -87,7 +87,7 @@ def cached_refusal(status):
 
 
 class Ledger:
-    __slots__ = ('request_id', 'operation', 'protocol', 'route', 'opening',
+    __slots__ = ('request_id', 'operation', 'protocol', 'model', 'stream', 'route', 'opening',
                  'attempts', 'decisions', 'transitions', 'committed', 'outcome',
                  'terminal_source', '_budget', '_spent', '_owned', 'evidence', 'version', 'dialect')
 
@@ -95,6 +95,7 @@ class Ledger:
         self.request_id = metrics.get('request_id')
         self.operation = metrics.get('path')
         self.protocol = metrics.get('protocol')
+        self.model, self.stream = metrics.get('model'), metrics.get('stream')
         self.attempts, self.decisions, self._owned = [], [], []
         self.evidence, self.version = [], metrics.get('router_version')
         self.transitions, self.committed = 0, False
@@ -178,12 +179,13 @@ class Ledger:
         self.settle(settled)
         return self.decide(STREAM_REPLAY, rejection)
 
-    def transition(self, provider, protocol):
+    def transition(self, provider, protocol, *, model=None):
         if not self.permits(HELPER_FALLBACK):
             raise RuntimeError('no fallback of a fallback')
         self.transitions += 1
         self.close()
         self.protocol = protocol
+        if model is not None: self.model = model
         self._enter(provider, HELPER_FALLBACK)
         self.outcome = self.terminal_source = None
 
@@ -239,6 +241,7 @@ def replay_stream(ledger, record, prepared, metrics, started, log_event):
               forwarded_delta_bytes=record.forwarded_bytes)
     response, headers_done = ledger.reopen(prepared, metrics, started)
     upstream.validate_response(response, prepared)
+    record.response_format = transport.ResponseFormat.capture(ledger, response)
     record.hold.clear()
     record.outcome = None
     return response, headers_done

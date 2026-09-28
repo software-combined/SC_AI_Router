@@ -185,8 +185,8 @@ class CancelledStreamTests(unittest.TestCase):
         class Recorded(stream_relay.StreamRecord):
             __slots__ = ()
 
-            def __init__(self):
-                super().__init__()
+            def __init__(self, response_format=None):
+                super().__init__(response_format)
                 records.append(self)
 
         handler = SimpleNamespace(

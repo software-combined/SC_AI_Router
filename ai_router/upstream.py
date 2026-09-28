@@ -61,7 +61,7 @@ def upstream_retry_after(response, prepared, metrics, body):
     if response.status != 429 or is_context_error(body):
         return None
     category = classify_429(body)
-    log_event('upstream_rate_limited', provider=prepared.provider, path=metrics['path'],
+    log_event('upstream_rate_limited', provider=prepared.provider, path=metrics.get('path'),
               category=category)
     return category, response.getheader('Retry-After', '2')
 _CODE_SHAPE = re.compile(r'^[A-Za-z0-9_.-]{1,40}$')
