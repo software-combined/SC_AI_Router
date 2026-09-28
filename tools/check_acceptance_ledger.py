@@ -1,11 +1,12 @@
-"""Report acceptance-matrix cells whose latest pass predates the newest clients.
+"""Check the latest acceptance run and candidate-bound route evidence.
 
 `docs/acceptance-ledger.json` holds one object per cell run (Plan 185). The
 newest clients are the highest versions `docs/compatibility.md` names in the
 backticked forms Codex desktop `X` and Claude Code `X`, where AGENTS.md
 section 7 records both after every client upgrade. A cell is stale when its
 latest pass ran on an older version of either client, and missing when it has
-no pass. Exit 1 when any P1 cell (C1-C4) is stale or missing, or when either
+no run. Newer failures or conflicting tied runs supersede a pass.
+Exit 1 when any P1 cell (C1-C4) is stale, failed or missing, or when either
 file is unreadable or malformed; a stale or missing C5 is reported only.
 """
 import argparse
@@ -15,6 +16,9 @@ import re
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from ai_router import candidate_evidence, registry
+
 CELLS = ('C1', 'C2', 'C3', 'C4', 'C5')
 P1 = CELLS[:4]
 FIELDS = ('cell', 'date_aest', 'router_version', 'codex_version', 'claude_code_version',
@@ -48,6 +52,9 @@ def load(text):
     if not isinstance(entries, list):
         raise ValueError('the ledger is not a JSON list')
     for index, entry in enumerate(entries):
+        if isinstance(entry, dict) and entry.get('kind') == candidate_evidence.KIND:
+            candidate_evidence.validate(entry)
+            continue
         if not isinstance(entry, dict) or sorted(entry) != sorted(FIELDS):
             raise ValueError(f'entry {index} does not carry exactly the ledger fields')
         text_fields = [entry[f] for f in ('cell', 'date_aest', 'result', *CLIENTS)]
@@ -56,6 +63,7 @@ def load(text):
                 or not all(re.fullmatch(VERSION, entry[f]) for f in CLIENTS)
                 or not isinstance(entry['calls'], int)):
             raise ValueError(f'entry {index} has a bad cell, date_aest, client version, calls or result')
+        candidate_evidence.timestamp(entry)
     return entries
 
 
@@ -63,10 +71,13 @@ def report(entries, clients):
     """One line per cell, and the P1 cells that are stale or missing."""
     lines, failing = [], []
     for cell in CELLS:
-        passes = [e for e in entries if e['cell'] == cell and e['result'] == 'pass']
-        latest = max(passes, key=lambda e: e['date_aest'], default=None)
-        if latest is None:
+        latest, error = candidate_evidence.latest([e for e in entries if e.get('cell') == cell])
+        if error == 'conflicting':
+            state = 'conflicting: latest runs disagree'
+        elif latest is None:
             state = 'missing: no pass recorded'
+        elif latest['result'] != 'pass':
+            state = 'failed: latest run ' + latest['date_aest']
         else:
             old = any(version(latest[f]) < version(clients[f]) for f in CLIENTS)
             state = (('stale' if old else 'current') + ': latest pass ' + latest['date_aest']
@@ -81,11 +92,24 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--ledger', type=Path, default=ROOT / 'docs' / 'acceptance-ledger.json')
     parser.add_argument('--compatibility', type=Path, default=ROOT / 'docs' / 'compatibility.md')
+    parser.add_argument('--model', help='check this candidate instead of historical Plan 185 cells')
+    parser.add_argument('--client-version', action='append', default=[], metavar='CLIENT=VERSION')
     args = parser.parse_args(argv)
     try:
         entries = load(args.ledger.read_text())
+        if args.model:
+            row = registry.by_slug(args.model)
+            if row is None:
+                raise ValueError('model is not in this candidate registry')
+            versions = dict(value.split('=', 1) for value in args.client_version)
+            latest, error = candidate_evidence.latest(
+                [e for e in entries if e.get('kind') == candidate_evidence.KIND
+                 and (e['model'], e['provider']) == (row.slug, row.provider)])
+            problems = [error] if error else candidate_evidence.problems(row, latest, clients=versions)
+            print(args.model + ': ' + ('; '.join(problems) if problems else 'current route evidence'))
+            return 1 if problems else 0
         clients = newest(args.compatibility.read_text())
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, TypeError) as exc:
         print(f'acceptance-ledger: unreadable or malformed input: {exc}', file=sys.stderr)
         return 1
     print('newest named clients: '

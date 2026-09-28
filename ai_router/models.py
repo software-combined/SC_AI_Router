@@ -13,16 +13,15 @@ import argparse
 import json
 import sys
 import urllib.request
-from datetime import datetime, timezone
 from pathlib import Path
-from . import provider_defs
+from . import candidate_evidence, provider_defs
 from .apply_catalogue import write_guarded
 from .capabilities import CANONICAL_ORDER
 from .model_metadata import project_modalities, qualify_name
 from .registry import load, picker_key, upstream_id_for
 
 MODELS_PATH = Path(__file__).with_name('models.json')
-COMPAT_PATH = Path(__file__).resolve().parents[1] / 'docs' / 'compatibility.md'
+EVIDENCE_PATH = Path(__file__).resolve().parents[1] / 'docs' / 'acceptance-ledger.json'
 
 
 def fetch_live(provider_id=provider_defs.DEFAULT_EXTERNAL):
@@ -128,19 +127,12 @@ def cmd_add(path, slug, live_by_id, tier=None, dry_run=False, probe=False,
     if tier is not None:
         if tier not in ('preview', 'verified'):
             raise SystemExit('--tier must be preview or verified')
-        row['tier'] = tier
         if tier == 'verified' and not probe:
-            print(f'{slug} stays unlisted: --tier verified needs --probe to pass first')
+            print(f'{slug} stays unlisted preview: remove --tier and use --probe')
         elif tier is not None and probe:
             print(f'{slug} stays unlisted: --tier {tier} skips the probe; '
                   'drop --tier to run it')
     promote = probe and tier is None
-    if promote:
-        # Preview-activate-verify-promote: the registry is file-baked, so the
-        # candidate must be written before anything can route it. Verification
-        # runs isolated (own router, home and catalogue); only a pass promotes.
-        row['tier'] = 'preview'
-        row['listed'] = False
     rows = renumbered(rows + [row])
     # Fail closed before the write: the router loads this file at import time,
     # so a row it would refuse must never reach disk (Plan 153).
@@ -151,31 +143,32 @@ def cmd_add(path, slug, live_by_id, tier=None, dry_run=False, probe=False,
         print(json.dumps(row, indent=2))
         return row
     if promote:
-        from .candidate import legs_for, verify
+        from .candidate import verify
         write_guarded(path, before, json.dumps(rows, indent=2) + '\n')
-        # Legs come from the row we just wrote, not the import-time registry
-        # (which predates this slug and would under-probe it).
-        legs = legs_for(slug, row)
         try:
-            passed = (_probe or (lambda s: verify(s, row=row)))(slug)
+            record = (_probe or (lambda s: verify(s, row=row)))(slug)
         except SystemExit as exc:
             print(f'probe refused for {slug}: {exc}')
             print(json.dumps({'added': slug, 'tier': row['tier'],
                               'listed': row['listed']}))
             return row
-        if passed:
-            activated = Path(path).read_text()
+        activated = Path(path).read_text()
+        active_rows = json.loads(activated)
+        active = next((r for r in active_rows if r.get('slug') == slug), None)
+        _record_evidence(record)
+        if active is None or candidate_evidence.capability_fingerprint(active) != candidate_evidence.capability_fingerprint(row):
+            raise SystemExit('Candidate changed during its probe; no promotion applied')
+        problems = candidate_evidence.problems(active, record)
+        if not problems:
             promoted = renumbered(
                 [{**entry, 'tier': 'verified', 'listed': True}
                  if entry.get('slug') == slug
-                 else entry for entry in json.loads(activated)])
+                 else entry for entry in active_rows])
             write_guarded(path, activated, json.dumps(promoted, indent=2) + '\n')
             row = next(entry for entry in promoted if entry['slug'] == slug)
         else:
             print(f'probe failed for {slug}: row stays unlisted preview '
-                  f'(legs attempted: {",".join(legs)}; the row records '
-                  'preview until a probe passes)')
-        _record_compat(slug, row['tier'], legs)
+                  f'({"; ".join(problems)})')
     else:
         write_guarded(path, before, json.dumps(rows, indent=2) + '\n')
     print(json.dumps({'added': slug, 'tier': row['tier'],
@@ -183,16 +176,21 @@ def cmd_add(path, slug, live_by_id, tier=None, dry_run=False, probe=False,
     return row
 
 
-def _record_compat(slug, tier, legs=()):
-    probed = ','.join(legs) if legs else 'base round trip'
-    line = (f'| {slug} | {tier} | '
-            f'{datetime.now(timezone.utc).date()} | {probed} |\n')
-    if not COMPAT_PATH.exists():
-        COMPAT_PATH.write_text('# Compatibility matrix\n\n'
-                               '| model | tier | date | probes |\n'
-                               '|---|---|---|---|\n')
-    with open(COMPAT_PATH, 'a') as stream:
-        stream.write(line)
+def _record_evidence(record):
+    try:
+        candidate_evidence.validate(record)
+    except (ValueError, TypeError, KeyError):
+        return
+    if not EVIDENCE_PATH.exists():
+        EVIDENCE_PATH.write_text('[]\n')
+    before = EVIDENCE_PATH.read_text()
+    previous = json.loads(before)
+    if not isinstance(previous, list):
+        raise SystemExit('Acceptance ledger is not a list; no promotion applied')
+    # Preserve historical entries verbatim; only append the new bounded record.
+    prefix = before.rstrip()[:-1].rstrip() + (',' if previous else '')
+    text = prefix + '\n' + json.dumps(record, indent=2) + '\n]\n'
+    write_guarded(EVIDENCE_PATH, before, text)
 
 
 def cmd_remove(path, slug):

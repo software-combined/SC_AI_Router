@@ -11,5 +11,178 @@
     "calls": 4,
     "result": "pass",
     "notes": "Router 0.6.122 beta gate in docs/compatibility.md: the Codex external-compaction-then-switch leg against the installed router. The DeepSeek thread compacted through the V2 trigger at 12:58:27 and the switched gpt-6-luna turn finished HTTP 200 on its first attempt at 12:58:29. Codex desktop bundled codex-cli 0.155.0-alpha.16.3; Claude Code 2.1.223 was installed but not exercised. The router log did not record Luna's served model. Not C2: the same gate's installed-router custom and apply_patch pair legs on xiaomi/mimo-v2.6-pro and meta/muse-spark-1.3-contributor (4 calls, all HTTP 200; Muse's custom pair answered without its marker) bear on C2's question, but C2 goes direct to OpenRouter with xiaomi/mimo-v2.6-flash and meta/muse-spark-1.3."
+  },
+  {
+    "kind": "model_routes_v1",
+    "observed_at": "2026-09-28T07:01:02.882431+00:00",
+    "model": "deepseek/deepseek-v4.1-flash",
+    "provider": "openrouter",
+    "capability_fingerprint": "bbaa906ae35184d0f6d5d70def3e1b46685d1c66b6c63e9a21c9be51f32362ea",
+    "runtime_fingerprint": "80a539c6225324d5b76107cdc92bd22b0b64f1697eecc88f78a9199797a99919",
+    "router_version": "0.6.138",
+    "router_revision": "8c7a9112878b605ac7c5cea1b827793167a9da9b",
+    "routes": [
+      {
+        "protocol": "responses",
+        "client": "codex",
+        "client_version": "0.155.0-alpha.16.3",
+        "requested_effort": "low",
+        "served_models": [
+          {
+            "value": "deepseek/deepseek-v4.1-flash",
+            "source": "response.created.response.model"
+          },
+          {
+            "value": "deepseek/deepseek-v4.1-flash",
+            "source": "response.in_progress.response.model"
+          },
+          {
+            "value": "deepseek/deepseek-v4.1-flash",
+            "source": "response.completed.response.model"
+          },
+          {
+            "value": "deepseek/deepseek-v4.1-flash",
+            "source": "response.created.response.model"
+          },
+          {
+            "value": "deepseek/deepseek-v4.1-flash",
+            "source": "response.in_progress.response.model"
+          },
+          {
+            "value": "deepseek/deepseek-v4.1-flash",
+            "source": "response.completed.response.model"
+          },
+          {
+            "value": "deepseek/deepseek-v4.1-flash",
+            "source": "response.created.response.model"
+          },
+          {
+            "value": "deepseek/deepseek-v4.1-flash",
+            "source": "response.in_progress.response.model"
+          },
+          {
+            "value": "deepseek/deepseek-v4.1-flash",
+            "source": "response.completed.response.model"
+          }
+        ],
+        "served_efforts": [
+          {
+            "value": "low",
+            "source": "response.created.response.reasoning.effort"
+          },
+          {
+            "value": "low",
+            "source": "response.in_progress.response.reasoning.effort"
+          },
+          {
+            "value": "low",
+            "source": "response.completed.response.reasoning.effort"
+          },
+          {
+            "value": "low",
+            "source": "response.created.response.reasoning.effort"
+          },
+          {
+            "value": "low",
+            "source": "response.in_progress.response.reasoning.effort"
+          },
+          {
+            "value": "low",
+            "source": "response.completed.response.reasoning.effort"
+          },
+          {
+            "value": "low",
+            "source": "response.created.response.reasoning.effort"
+          },
+          {
+            "value": "low",
+            "source": "response.in_progress.response.reasoning.effort"
+          },
+          {
+            "value": "low",
+            "source": "response.completed.response.reasoning.effort"
+          }
+        ],
+        "calls": 4,
+        "conformance": "pass",
+        "result": "pass"
+      },
+      {
+        "protocol": "messages",
+        "client": "claude",
+        "client_version": "2.1.283",
+        "requested_effort": "low",
+        "served_models": [
+          {
+            "value": "deepseek/deepseek-v4.1-flash",
+            "source": "message_start.message.model"
+          },
+          {
+            "value": "deepseek/deepseek-v4.1-flash",
+            "source": "message_start.message.model"
+          },
+          {
+            "value": "deepseek/deepseek-v4.1-flash",
+            "source": "message_start.message.model"
+          }
+        ],
+        "served_efforts": [],
+        "calls": 3,
+        "conformance": "pass",
+        "result": "pass"
+      }
+    ]
+  },
+  {
+    "cell": "C2",
+    "date_aest": "2026-09-24 17:52 AEST",
+    "router_version": "0.6.124.121",
+    "codex_version": "26.917.62051",
+    "claude_code_version": "2.1.223",
+    "rows": ["xiaomi/mimo-v2.6-flash", "meta/muse-spark-1.3"],
+    "requested_effort": "low",
+    "served": ["xiaomi/mimo-v2.6-flash", "meta/muse-spark-1.3"],
+    "calls": 4,
+    "result": "fail",
+    "notes": "tools/probe_wire_shapes.py --live --max-calls 4 --shape custom_undeclared --shape apply_patch, direct to OpenRouter. MiMo Flash (serving endpoint Xiaomi) returned the marker for both pairs. Muse Spark 1.3 (serving endpoint Meta) accepted the undeclared custom pair with HTTP 200 but answered without its marker, and passed the apply_patch pair; the 0.6.122 gate saw the same miss on the Contributor row. Plan 184 step 4 converts undeclared custom pairs for the Meta rows; rerun C2 once it ships."
+  },
+  {
+    "cell": "C3",
+    "date_aest": "2026-09-24 17:53 AEST",
+    "router_version": "0.6.124.121",
+    "codex_version": "26.917.62051",
+    "claude_code_version": "2.1.223",
+    "rows": ["z-ai/glm-5.3-flash", "deepseek/deepseek-v4.1-flash", "gpt-6-luna"],
+    "requested_effort": "low",
+    "served": ["z-ai/glm-5.3-flash", "deepseek/deepseek-v4.1-flash", "gpt-6-luna"],
+    "calls": 4,
+    "result": "pass",
+    "notes": "tools/probe_parent_switch.py --cell C3 --live, caps 5 calls and 100,000 tokens: 36,886 tokens used. The GLM parent spawned the DeepSeek child and waited in one step; the parent then switched to gpt-6-luna. Child marker and switched marker both returned, the child reply reached the switched request readable, no errors. This exercised the projected delivered_message shape from 0.6.121."
+  },
+  {
+    "cell": "C4",
+    "date_aest": "2026-09-24 17:53 AEST",
+    "router_version": "0.6.124.121",
+    "codex_version": "26.917.62051",
+    "claude_code_version": "2.1.223",
+    "rows": ["gpt-6-luna", "gpt-6-sol"],
+    "requested_effort": "low",
+    "served": [null, null],
+    "calls": 3,
+    "result": "pass",
+    "notes": "tools/probe_codex_runtime.py gpt-6-luna --live-home --effort low --switch-in gpt-6-sol against the installed router: the desktop runtime tool round trip passed and the switch to gpt-6-sol kept history. The probe exposes no served identity. This exercised 0.6.121 turning earlier native reasoning into a note on a subscription-to-subscription switch, not native reasoning replay."
+  },
+  {
+    "cell": "C5",
+    "date_aest": "2026-09-24 17:57 AEST",
+    "router_version": "0.6.124.121",
+    "codex_version": "26.917.62051",
+    "claude_code_version": "2.1.223",
+    "rows": ["deepseek/deepseek-v4.1-flash", "gpt-6-luna"],
+    "requested_effort": "low",
+    "served": ["deepseek/deepseek-v4.1-flash", "gpt-6-luna"],
+    "calls": 5,
+    "result": "shape not produced",
+    "notes": "tools/probe_parent_switch.py --cell C5 --live, caps 6 calls and 150,000 tokens: 36,724 tokens used. DeepSeek parent, native gpt-6-luna child, parent compaction (its call exposed no served identity), then the switch to gpt-6-luna. The compaction dropped the child reply, so no encrypted child block reached the switched request; that request completed without a refusal and both markers returned."
   }
 ]

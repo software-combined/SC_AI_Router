@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 
 from ai_router import models as models_mod
+from tests.candidate_fixtures import proof
 from ai_router.models import (cmd_add, cmd_check, cmd_discover, cmd_list, cmd_remove,
                                  derive_row, qualify_name)
 
@@ -147,15 +148,15 @@ class AddTests(unittest.TestCase):
 
     def test_probe_activates_preview_before_verifying(self):
         with tempfile.TemporaryDirectory() as tmp:
-            models_mod.COMPAT_PATH, saved = Path(tmp) / 'compatibility.md', models_mod.COMPAT_PATH
-            self.addCleanup(setattr, models_mod, 'COMPAT_PATH', saved)
+            models_mod.EVIDENCE_PATH, saved = Path(tmp) / 'acceptance-ledger.json', models_mod.EVIDENCE_PATH
+            self.addCleanup(setattr, models_mod, 'EVIDENCE_PATH', saved)
             path = _seeded(tmp, [_row()])
             seen = {}
 
             def fake_probe(slug):
                 rows = json.loads(path.read_text())
                 seen['during'] = next(r['tier'] for r in rows if r['slug'] == slug)
-                return True
+                return proof(next(r for r in rows if r['slug'] == slug))
 
             row = cmd_add(path, 'qwen/qwen4-coder', LIVE,
                           probe=True, _probe=fake_probe)
@@ -168,8 +169,8 @@ class AddTests(unittest.TestCase):
 
     def test_failed_probe_keeps_preview(self):
         with tempfile.TemporaryDirectory() as tmp:
-            models_mod.COMPAT_PATH, saved = Path(tmp) / 'compatibility.md', models_mod.COMPAT_PATH
-            self.addCleanup(setattr, models_mod, 'COMPAT_PATH', saved)
+            models_mod.EVIDENCE_PATH, saved = Path(tmp) / 'acceptance-ledger.json', models_mod.EVIDENCE_PATH
+            self.addCleanup(setattr, models_mod, 'EVIDENCE_PATH', saved)
             path = _seeded(tmp, [_row()])
             row = cmd_add(path, 'qwen/qwen4-coder', LIVE,
                           probe=True, _probe=lambda slug: False)
@@ -204,27 +205,26 @@ class AddTests(unittest.TestCase):
 
     def test_passed_probe_promotes_to_listed_verified(self):
         with tempfile.TemporaryDirectory() as tmp:
-            models_mod.COMPAT_PATH, saved = Path(tmp) / 'compatibility.md', models_mod.COMPAT_PATH
-            self.addCleanup(setattr, models_mod, 'COMPAT_PATH', saved)
+            models_mod.EVIDENCE_PATH, saved = Path(tmp) / 'acceptance-ledger.json', models_mod.EVIDENCE_PATH
+            self.addCleanup(setattr, models_mod, 'EVIDENCE_PATH', saved)
             path = _seeded(tmp, [_row()])
             row = cmd_add(path, 'qwen/qwen4-coder', LIVE,
-                          probe=True, _probe=lambda slug: True)
+                          probe=True, _probe=lambda slug: proof(next(r for r in json.loads(path.read_text()) if r['slug'] == slug)))
             self.assertEqual(row['tier'], 'verified')
             self.assertTrue(row['listed'])
             stored = next(r for r in json.loads(path.read_text())
                           if r['slug'] == 'qwen/qwen4-coder')
             self.assertEqual(stored['tier'], 'verified')
             self.assertTrue(stored['listed'])
-            compat = models_mod.COMPAT_PATH.read_text()
+            compat = models_mod.EVIDENCE_PATH.read_text()
             self.assertIn('qwen/qwen4-coder', compat)
-            self.assertIn('tool', compat)
+            self.assertIn('model_routes_v1', compat)
 
     def test_failed_probe_changes_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
-            models_mod.COMPAT_PATH, saved = Path(tmp) / 'compatibility.md', models_mod.COMPAT_PATH
-            self.addCleanup(setattr, models_mod, 'COMPAT_PATH', saved)
+            models_mod.EVIDENCE_PATH, saved = Path(tmp) / 'acceptance-ledger.json', models_mod.EVIDENCE_PATH
+            self.addCleanup(setattr, models_mod, 'EVIDENCE_PATH', saved)
             path = _seeded(tmp, [_row()])
-            before = path.read_text()
             buf = io.StringIO()
             with contextlib.redirect_stdout(buf):
                 row = cmd_add(path, 'qwen/qwen4-coder', LIVE,
@@ -237,8 +237,8 @@ class AddTests(unittest.TestCase):
 
     def test_refused_probe_changes_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
-            models_mod.COMPAT_PATH, saved = Path(tmp) / 'compatibility.md', models_mod.COMPAT_PATH
-            self.addCleanup(setattr, models_mod, 'COMPAT_PATH', saved)
+            models_mod.EVIDENCE_PATH, saved = Path(tmp) / 'acceptance-ledger.json', models_mod.EVIDENCE_PATH
+            self.addCleanup(setattr, models_mod, 'EVIDENCE_PATH', saved)
             path = _seeded(tmp, [_row()])
 
             def refused(slug):
@@ -257,25 +257,25 @@ class AddTests(unittest.TestCase):
             buf = io.StringIO()
             with contextlib.redirect_stdout(buf):
                 row = cmd_add(path, 'qwen/qwen4-coder', LIVE, tier='verified')
-            self.assertEqual(row['tier'], 'verified')
+            self.assertEqual(row['tier'], 'preview')
             self.assertFalse(row['listed'])
             self.assertIn('stays unlisted', buf.getvalue())
 
     def test_probe_sets_tier(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = _seeded(tmp, [_row()])
-            saved = models_mod.COMPAT_PATH
-            models_mod.COMPAT_PATH = Path(tmp) / 'compatibility.md'
+            saved = models_mod.EVIDENCE_PATH
+            models_mod.EVIDENCE_PATH = Path(tmp) / 'acceptance-ledger.json'
             try:
                 row = cmd_add(path, 'qwen/qwen4-coder', LIVE,
-                              probe=True, _probe=lambda slug: True)
+                              probe=True, _probe=lambda slug: proof(next(r for r in json.loads(path.read_text()) if r['slug'] == slug)))
                 self.assertEqual(row['tier'], 'verified')
                 row = cmd_add(path, 'plain/model', LIVE,
                               probe=True, _probe=lambda slug: False)
                 self.assertEqual(row['tier'], 'preview')
-                self.assertIn('qwen/qwen4-coder', models_mod.COMPAT_PATH.read_text())
+                self.assertIn('qwen/qwen4-coder', models_mod.EVIDENCE_PATH.read_text())
             finally:
-                models_mod.COMPAT_PATH = saved
+                models_mod.EVIDENCE_PATH = saved
 
 
 class DiscoverTests(unittest.TestCase):
