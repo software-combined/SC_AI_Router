@@ -391,6 +391,13 @@ ambiguous. Private control directories protect backups without changing the
 permissions of hard-linked attachments outside the profile. Callers must stop
 Claude, hold both profile locks and provide a private, fully prepared bundle.
 
+`claude_profile_bundle.py` assembles the complete admitted bundle union before
+publication. It uses the shared transfer rules and retains unique duplicate
+content before retirement. `claude_profile_history.py` separates foreign request
+metadata from native response diagnostics while preserving messages and IDs.
+Repairs to shared CLI transcripts retain a private original and recover through
+a separate journal because those files sit outside the desktop bundle.
+
 ## Distribution (outside the request path)
 
 `infra/` owns the update feed as code (repository-only templates, deployed from a checkout): the certificate stack, the private
