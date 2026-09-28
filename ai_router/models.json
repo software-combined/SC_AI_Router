@@ -171,6 +171,12 @@
     "drop_images": false,
     "context_window": 1048576,
     "priority": 106,
+    "observed_item_types": [
+      "custom_tool_call",
+      "custom_tool_call_output",
+      "compaction",
+      "additional_tools"
+    ],
     "max_output_tokens": 384000,
     "reasoning_summary": "none",
     "apply_patch": "freeform",

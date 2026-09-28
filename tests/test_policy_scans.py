@@ -77,6 +77,36 @@ class PolicyScanTests(unittest.TestCase):
         self.assertTrue(module.check_publication_identifiers())
         self.assertTrue(module.check_setup_single_owner())
         self.assertTrue(module.check_dialect_literals())
+        self.assertTrue(module.check_model_decisions())
+
+    def test_model_conditioned_retry_and_prefix_boolean_are_rejected(self):
+        root = self._tree()
+        module = _load(root)
+        for expression in ("model == 'vendor/model'", "'vendor/model' != requested_model",
+                           "slug in ('vendor/a', 'vendor/b')",
+                           "str(payload.get('model')).removeprefix('~').startswith('vendor/')",
+                           "row.slug.endswith('-special')"):
+            with self.subTest(expression=expression):
+                (root / 'ai_router' / 'retry.py').write_text(
+                    f'def replay(model, slug, requested_model, payload, row):\n'
+                    f'    special = {expression}\n    if special: retry()\n')
+                self.assertFalse(module.check_model_decisions())
+
+    def test_model_decision_exceptions_cover_only_the_existing_alias_expressions(self):
+        root = self._tree()
+        module = _load(root)
+        alias = ("def row_alias(entry):\n    bare = entry.slug.removeprefix('~')\n"
+                 "    return bare.startswith('anthropic/')\n")
+        path = root / 'ai_router' / 'claude.py'
+        path.write_text(alias)
+        (root / 'ai_router' / 'catalogue.py').write_text(
+            "ROSTER = ['vendor/model']\ndef decide(row):\n    return row.provider == 'external'\n")
+        (root / 'tests' / 'fixture.py').write_text("if model == 'vendor/model': retry()\n")
+        self.assertTrue(module.check_model_decisions())
+        path.write_text(alias.replace("'anthropic/'", "'vendor/'"))
+        self.assertFalse(module.check_model_decisions())
+        path.write_text(alias.replace('row_alias', 'replay'))
+        self.assertFalse(module.check_model_decisions())
 
     def test_dialect_literal_outside_the_definition_table_is_caught(self):
         # Plan 152: a call site reads the constant the table exports, in

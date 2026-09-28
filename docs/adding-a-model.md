@@ -48,6 +48,21 @@ to hold that order. A model that needs behaviour the adapter does not
 have (a new quirk type) is a normal code change and release, not a data
 row.
 
+The offline conformance gate enumerates every registry row and each protocol
+its provider serves, including preview and hidden rows. Run
+`python3.14 -m unittest tests.test_model_route_conformance` after changing a
+row. The real handler checks preparation, credentials, outcomes, recovery and
+cleanup against simulated upstreams. These checks prove shared route behavior;
+they do not establish live acceptance for each model.
+
+`observed_item_types` records extra Responses input shapes that a bounded wire
+probe actually accepted. It affects diagnostic warnings only. The four shapes
+recorded for DeepSeek V4.1 Flash came from the 17 September measurement; other
+rows and future aliases inherit none of that evidence. Missing evidence means
+unknown, not unsupported. Set the field only with a recorded measurement;
+model refresh retains a bundled measurement only while the provider and
+effective upstream ID match. A changed target returns to unknown.
+
 To preview a per-portco subset in CI without touching runtime policy:
 `python3.14 -m ai_router.catalogue --allowed slug-a,slug-b --merge <file>`
 followed by the same `--allowed` with `--check`. Runtime enforcement

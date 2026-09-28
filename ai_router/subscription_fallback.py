@@ -153,7 +153,9 @@ def _observe_contract(provider, prepared, model, path, payload, raw_body):
     try:
         wire = (payload if prepared.body is raw_body
                 else wire_shape.decode_wire(prepared.body))
-        found = wire_shape.violations(provider.defn.dialect, wire)
+        row = getattr(prepared.context, 'row', None)
+        found = wire_shape.violations(provider.defn.dialect, wire,
+                                      getattr(row, 'observed_item_types', ()))
     except Exception as exc:  # noqa: BLE001 - observation must never fail a turn
         found = {'error_type': type(exc).__name__}
     if any(found.values()):
