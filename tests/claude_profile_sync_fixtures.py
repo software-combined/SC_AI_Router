@@ -4,6 +4,8 @@ import hashlib
 import importlib.util
 import json
 import stat
+import tempfile
+import unittest
 from pathlib import Path
 
 
@@ -75,6 +77,39 @@ def namespace(profile_path, store, account, organization):
     path = Path(profile_path) / store / account / organization
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+class PairFixture(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name).resolve()
+        self.store = self.root / 'store'
+        self.ns = self.store / 'account' / 'org'
+        self.ns.mkdir(parents=True)
+        self.record = self.ns / 'local_same.json'
+        self.bundle = self.record.with_suffix('')
+        self.stage = self.ns / ('local_same.tmp-' + 'a' * 32)
+        self.record.write_text('{"sessionId":"same","title":"old"}')
+        (self.bundle / 'outputs').mkdir(parents=True)
+        (self.bundle / 'outputs/old.txt').write_text('old')
+        (self.stage / 'outputs').mkdir(parents=True)
+        (self.stage / 'outputs/new.txt').write_text('new')
+        self.text = json.dumps({'sessionId': 'same', 'title': 'new'})
+        self.transaction = load_helper('claude_profile_transaction')
+        self.publish = self.transaction._publish
+
+    def manifest(self, duplicates=()):
+        return self.transaction.write_pair_manifest(
+            self.store, self.record, self.bundle, self.text, self.stage,
+            duplicates=duplicates)
+
+    def duplicate(self, name='duplicate'):
+        path = self.ns / ('local_' + name + '.json')
+        path.write_text('{"sessionId":"same","title":"duplicate"}')
+        path.with_suffix('').mkdir()
+        (path.with_suffix('') / 'unique.txt').write_text('unique')
+        return path
 
 
 def record(profile_path, store, account, organization, session_id, *,

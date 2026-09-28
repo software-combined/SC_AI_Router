@@ -45,6 +45,8 @@ PACKAGING_FILES = (
     'packaging/claude_profile_rules.py',
     'packaging/claude_profile_identity.py',
     'packaging/claude_profile_records.py',
+    'packaging/claude_profile_publish.py',
+    'packaging/claude_profile_transaction.py',
     'packaging/client_choice.py',
     'packaging/client_dialog.py',
     'packaging/diagnostics.py', 'packaging/provider_keys.py',
