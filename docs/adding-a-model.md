@@ -17,13 +17,16 @@ only ever rewrites rows owned by the provider whose catalogue it read.
 Without `--probe` the row lands as `tier: preview` and `listed: false`:
 it stays out of both pickers (the Codex catalogue and `GET /v1/models`)
 but remains routable so its own probe can reach it. With `--probe` the
-implied legs run on an isolated router (tool round trip always, `--image`
-when the row's modalities include image, compaction when it declares a
-context window); a pass writes `tier: verified` with `listed: true`,
-anything else leaves the row unlisted and prints why, and the run is
-recorded in `docs/compatibility.md` with the legs that ran. An explicit
-`--tier verified` without a passing probe keeps the row unlisted and says
-so, and a hand-edited `listed: true` on a non-verified row is refused at
+offline route matrix runs first, then both real clients use an isolated router.
+Codex checks a streamed tool round trip, images when the row supports them
+without dropping them, and compaction when it declares a context window.
+Claude Code checks two sequential reads and their matching tool results.
+Each route uses the row's default effort, including `none`.
+Only a complete pass writes `tier: verified` with `listed: true`.
+Anything else leaves the row unlisted and prints why. Structured evidence,
+including failed routes, is appended to `docs/acceptance-ledger.json`.
+An explicit `--tier` skips promotion; it cannot bypass the probe. A
+hand-edited `listed: true` on a non-verified row is refused at
 load. Rows shipped before the flag keep working without it and stay
 visible. Validate with `python3.14 -m ai_router.models check`
 (`0 problems` required) and remove with
@@ -40,6 +43,26 @@ python3.14 -m ai_router.models discover --provider ID
 
 A standalone probe preview bills nothing: `python3.14 -m ai_router.candidate
 <slug>` prints the legs it would run; add `--probe --confirm` to bill them.
+The isolated probe allows at most 12 upstream attempts across both routes,
+including repair, retry and compaction summaries. Each request is limited to 512 KiB and 65,536
+output tokens; an uncapped request is refused before sending. Claude also has
+a $0.25 client budget. These are probe limits, not production request limits.
+
+Evidence binds the normalized capability row and Python runtime contents to
+the actual client versions. It records requested effort, exposed serving
+identity and its source, and attempt counts including summary helpers.
+Counts reserve the budget before dispatch, so an unsent connection failure can
+count as an attempt without implying a charge. Missing serving facts stay
+unverified; a known model or effort mismatch fails the gate. Source, capability
+or client changes invalidate the proof. A later failure supersedes an earlier
+pass, and conflicting results with the same timestamp cannot certify a row.
+Historical Plan 185 cells remain separate and are never inferred from these
+route runs. Check a saved candidate record with both current client versions:
+
+```sh
+python3.14 tools/check_acceptance_ledger.py --model <slug> \
+  --client-version codex=<bundled-CLI-version> --client-version claude=<CLI-version>
+```
 
 Preview models route exactly like verified ones; only the picker label
 and their position differ: the picker groups rows by vendor A-Z, verified
@@ -77,19 +100,13 @@ text-only) rows. The router does not follow
 upstream `latest` movement on its own: when a new version ships, add its
 pinned row, probe it, and put the superseded slug in `RETIRED_SLUGS` so
 upgrades drop it from the picker. Rows land as `preview` until the isolated
-`--probe` round trip passes and the run is recorded in
-`docs/compatibility.md`. `models add --probe` runs its round trip at `low`
-and takes no effort flag, so a model whose only effort is `none` (Claude
-Haiku 4.5) is verified by hand: add the row as `preview`, boot
-`ai_router.candidate.IsolatedRouter(slug)`, run
-`python3.14 tools/probe_codex_runtime.py <slug> --router-state
-<home>/mixed-router-state.json --catalog <home>/candidate-catalogue.json
---effort none`, then set the row's `tier` to `verified` in
-`ai_router/models.json` and record the run in `docs/compatibility.md`.
-The same hand path covers a row that must carry its quirks before the probe
-runs (a `drop_images` row, say): write the preview row with them, then
+`--probe` route checks pass and the run is recorded in the acceptance ledger.
+A row that needs capabilities set before probing, such as `drop_images`,
+must first be authored as unlisted preview. Then
 `python3.14 -m ai_router.candidate <slug> --probe --confirm` bills the legs
-that row implies.
+that row implies and prints the structured proof. Save that record in the
+ledger and check it against the unchanged candidate before reviewing a manual
+tier promotion. The standalone command never changes the registry.
 A tilde alias slug is used only when the roster deliberately tracks upstream
 and upstream actually serves the `~`-prefixed id; never invent one, and an
 alias keeps the `Latest` label. New entries are Preview, not
