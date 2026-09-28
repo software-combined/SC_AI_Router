@@ -234,9 +234,10 @@ fallback plan retargets it in place, so the twin keeps the same request id. A
 native id with no registry row resolves with `row=None` and goes out as the
 client spelled it. `request_started` and the final record share the
 `request_id`. It is a random id, not derived from request content.
-`agent_handoffs.steer_plaintext` still reads the live registry when it
-rewrites a spawn target on the response side; that moves with the handoff
-contract work.
+Handoff aliases retain that same catalogue through response adaptation.
+The encrypted spawn and follow-up guard resolves child models from it, so a
+refresh cannot change an in-flight request's decision. Direct helper callers
+without a request context capture once when creating their aliases.
 
 1. `provider_defs.py` owns every upstream fact (host, endpoint prefixes, key
    location, model catalogue, key-info endpoint, failure dialect) and imports
