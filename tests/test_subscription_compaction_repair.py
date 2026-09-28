@@ -12,13 +12,13 @@ Run from the copy root:
   <python> -X utf8 -m unittest tests.test_subscription_compaction_repair -v
 """
 import json
-import types
 import unittest
 
-from ai_router import compaction, provider_defs, strip_retry, subscription_history, transport
+from ai_router import (attempt_policy, compaction, provider_defs, providers, strip_retry,
+                       subscription_history, transport)
 
 
-SUBSCRIPTION = types.SimpleNamespace(defn=provider_defs.get('openai'))
+SUBSCRIPTION = providers.SubscriptionProvider()
 SUMMARY = 'the summary the router wrote for this thread'
 COMPACTION = {'type': 'compaction', 'id': 'cmp_1',
               'encrypted_content': compaction.encode_summary(SUMMARY)}
@@ -79,7 +79,7 @@ class CompactionRepairTests(unittest.TestCase):
     def drive(self, items, status=400, described=DESCRIBED, provider=SUBSCRIPTION):
         return strip_retry.maybe_retry_unattributable(
             described, Response(status), ERROR_RAW, self.metrics, provider,
-            prepared(items), [], self.log)
+            prepared(items), attempt_policy.Ledger(provider, self.metrics), self.log)
 
     def test_01_the_replayed_compaction_summary_is_repaired_readably(self):
         self.assertIsNotNone(self.drive([MESSAGE, COMPACTION]))
@@ -92,14 +92,14 @@ class CompactionRepairTests(unittest.TestCase):
                          'text': compaction.SUMMARY_PREFIX + '\n\n' + SUMMARY}]})
         self.assertEqual(self.log.outcomes(), ['started', 'accepted'])
 
-    def test_02_an_opaque_compaction_summary_is_replaced_not_forwarded(self):
+    def test_02_an_opaque_compaction_summary_is_not_repaired(self):
         opaque = {'type': 'compaction', 'id': 'cmp_2',
                   'encrypted_content': 'NATIVE-OPAQUE-BLOB'}
-        self.assertIsNotNone(self.drive([opaque]))
-        sent = self.dispatches[-1]
-        self.assertNotIn(b'NATIVE-OPAQUE-BLOB', sent)
-        self.assertIn(compaction.OPAQUE_NOTE,
-                      json.loads(sent)['input'][0]['content'][0]['text'])
+        before = json.dumps([opaque])
+        self.assertIsNone(self.drive([opaque]))
+        self.assertEqual(self.dispatches, [])
+        self.assertEqual(json.dumps([opaque]), before)
+        self.assertEqual(self.log.outcomes(), ['unchanged'])
 
     def test_03_the_reasoning_blob_repair_still_works(self):
         self.assertIsNotNone(self.drive([MESSAGE, REASONING]))
@@ -134,8 +134,9 @@ class CompactionRepairTests(unittest.TestCase):
             self.dispatches.append(prep.body)
             return Response(400), True
         transport.post_with_phases = post_400
-        strip_retry.post_with_retry(object(), prepared([MESSAGE, COMPACTION]),
-                                    self.metrics, [], SUBSCRIPTION, self.log)
+        strip_retry.post_with_retry(attempt_policy.Ledger(SUBSCRIPTION, self.metrics),
+                                    prepared([MESSAGE, COMPACTION]), self.metrics,
+                                    SUBSCRIPTION, self.log)
         self.assertEqual(len(self.dispatches), 2, 'initial dispatch plus one retry')
         self.assertNotIn(b'encrypted_content', self.dispatches[1])
 
@@ -166,6 +167,16 @@ class CompactionRepairTests(unittest.TestCase):
                            'judge this action'):
                 self.assertNotIn(secret, rendered)
             self.assertTrue(set(emitted) <= allowed, set(emitted) - allowed)
+
+    def test_09_deeply_nested_unowned_encrypted_content_fails_closed(self):
+        nested = {'type': 'encrypted_content', 'encrypted_content': 'NATIVE'}
+        for _ in range(500):
+            nested = [nested]
+        item = {'type': 'reasoning', 'id': 'rs_deep', 'content': nested}
+        payload = {'input': [item]}
+        self.assertIs(subscription_history.normalize(payload), payload)
+        self.assertIsNone(subscription_history.repair_input([item]))
+        self.assertIs(item['content'], nested)
 
 
 if __name__ == '__main__':

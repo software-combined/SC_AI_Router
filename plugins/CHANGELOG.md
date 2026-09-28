@@ -1,5 +1,45 @@
 # Changelog
 
+## scg-review 0.4.15 - 2026-09-26
+
+- Rewrite the pre-commit-review skill as a ten-step checklist that less
+  capable models can follow in order. Each step names its exact commands and
+  when to stop with `❌ Block`, and the severity and re-review decisions are
+  tables.
+- Give all three lanes one copy-ready reviewer brief, and move the lane
+  definitions, reportability rules, severity scale and report format into
+  `references/lanes.md`. Each lane reads it, and the main agent adjudicates
+  against the same severity scale.
+- State the runtime split: in Codex every pass uses the routing policy's
+  required model; in Claude Code the passes run on the installed adapter
+  agents with their configured Claude models, never router models.
+- Add a worked example of the approval receipt's `--pass` encoding.
+- No gate is removed or loosened. The secret scan, the single verification
+  run, exact-tree approval, the re-review rules and the reportability
+  thresholds keep their meaning.
+
+## scg-subagents 0.5.14 - 2026-09-26
+
+- Router workers reject empty, interrupted, narration-only and recognized
+  missing-tool-result final replies instead of reporting them as successful
+  results. The transcript is still saved for diagnosis.
+
+## scg-review 0.4.14 and scg-subagents 0.5.13 - 2026-09-25
+
+- Require `xiaomi/mimo-v2.6-pro` at `xhigh` for every pre-commit review pass,
+  including simplification, correctness, quality and adversarial review. The
+  exact model and effort have no fallback; an unavailable route blocks that
+  pass instead of substituting a reviewer.
+
+## scg-subagents 0.5.12 - 2026-09-25
+
+- State that `router-workers` serves only a Claude desktop Code session in
+  the subscription profile, the first-party profile that talks to Anthropic
+  directly. Sessions that can already spawn router models natively, such as
+  Codex, an attached terminal Claude Code session, or a desktop session in
+  the gateway profile, keep native spawning through the optimal-subagents
+  tool guide. Wording only; the runner is unchanged.
+
 ## scg-subagents 0.5.11 - 2026-09-23
 
 - Stop a router worker when its runner is interrupted. The worker runs in a

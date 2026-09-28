@@ -63,7 +63,22 @@ RULES = {
     'ai_router/registry.py': ('router', 'providers', 'catalogue', 'models',
                                  'claude', 'setup', 'activation'),
     'ai_router/capabilities.py': ('router', 'providers', 'claude', 'setup'),
-    'ai_router/compaction.py': ('router', 'providers'),
+    # Plan 183: compaction reads the vocabulary alone; the history stages
+    # read its codec, so compaction never imports one of them back.
+    'ai_router/compaction.py': ('router', 'providers', 'agent_handoffs',
+                                'history_portability', 'external_history',
+                                'subscription_history', 'standalone_outputs',
+                                'tool_runs', 'outbound', 'jev_compaction'),
+    # Plan 183: the shared history vocabulary is a leaf and the pairing model
+    # sits on it alone, so neither may reach a stage that consumes them.
+    'ai_router/history_items.py': ('router', 'providers', 'claude', 'compaction',
+                                   'agent_handoffs', 'history_portability',
+                                   'standalone_outputs', 'subscription_history',
+                                   'tool_adapter', 'tool_runs', 'external_history'),
+    'ai_router/tool_runs.py': ('router', 'providers', 'claude', 'compaction',
+                               'agent_handoffs', 'history_portability',
+                               'standalone_outputs', 'subscription_history',
+                               'tool_adapter', 'jev_compaction', 'external_history'),
     'ai_router/tool_adapter.py': ('router', 'providers'),
     'ai_router/providers.py': ('router', 'claude'),
     'ai_router/claude.py': ('router', 'providers'),
@@ -81,6 +96,11 @@ RULES = {
                                   'catalogue', 'models', 'setup', 'runtime'),
     'ai_router/stream_errors.py': ('router', 'providers', 'claude', 'runtime',
                                    'setup'),
+    # Plan 183 step 2.5: a repair proposal never sends, logs or retries, so
+    # it stays below the relay, the bounded sender and the event log.
+    'ai_router/rejected_repair.py': ('router', 'providers', 'claude', 'relay',
+                                     'strip_retry', 'stream_relay', 'events',
+                                     'runtime', 'setup', 'credentials'),
     'ai_router/protocols/__init__.py': ('router',),
     'ai_router/protocols/responses.py': ('router',),
     'ai_router/protocols/messages.py': ('router', 'providers'),

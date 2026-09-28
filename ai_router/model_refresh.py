@@ -70,16 +70,19 @@ def _pin_release(row, bundled_by_slug):
 
     The feed may add a row the bundle has never seen. It must not shrink or
     widen the effort list this release pinned, or a restart loads the older
-    gate and refuses an effort the picker just offered. Nor may it drop the
-    release's compaction limit: a cache written before an update would let
-    that model's threads grow past it until the next hourly fetch.
+    gate and refuses an effort the picker just offered. The release also owns
+    its compaction limit and measured wire shapes; an older cache must not
+    remove them or broaden the measurement to another model.
     """
     pinned = bundled_by_slug.get(row.slug)
     if pinned is None:
         return row
+    same_target = ((row.provider, registry.upstream_id_for(row)) ==
+                   (pinned.provider, registry.upstream_id_for(pinned)))
     return replace(row, reasoning=pinned.reasoning,
                    default_reasoning=pinned.default_reasoning,
-                   auto_compact_token_limit=pinned.auto_compact_token_limit)
+                   auto_compact_token_limit=pinned.auto_compact_token_limit,
+                   observed_item_types=pinned.observed_item_types if same_target else ())
 
 
 def overlay(bundled, cached):
@@ -92,7 +95,7 @@ def overlay(bundled, cached):
     own rows, the cache carries live data forward and may add rows the
     bundle has never seen, and a slug the bundle retired stays retired.
     A feed row for a bundled slug keeps that release's reasoning list and
-    compaction limit.
+    compaction limit and measured wire shapes.
     """
     retired = catalogue.RETIRED_SLUGS
     bundled_by_slug = {row.slug: row for row in bundled}

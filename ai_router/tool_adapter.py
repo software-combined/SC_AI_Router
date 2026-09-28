@@ -7,35 +7,29 @@ import json
 import re
 from copy import deepcopy
 from .capabilities import has_recursive_refs
-from .history_portability import portable_history, rewrite_custom_pairs
 from .discovered import recall
-from .registry import by_slug
-from . import agent_handoffs, sse, tool_aliases, tool_merge, transport, turn_budget
+from . import agent_handoffs, request_evidence, sse, tool_aliases, tool_merge, transport, turn_budget
+from .tool_history import SEARCH_NAME, tool_key
 from .tool_merge import tool_entries
 from .upstream import serving_endpoint
-SEARCH_NAME = 'codex_client_tool_search'
-SEARCH_NEXT = 'Call the exact returned name; do not search again.'
-# Deliberately terse: this replaces a repeated listing, so every byte here is
-# charged 2,690 times on the thread this exists for.
-SEARCH_REPEAT_NOTE = 'repeated search result omitted'
 # Bytes retained per body for the post-EOF identity parse. Overflow drops
 # the observation, never the forwarded bytes.
 _OBSERVE_LIMIT = 64 * 1024
 
 
-def _note_identity(payload, notes):
+def _note_identity(payload, notes, source='response'):
     """Record the serving model and endpoint from one parsed payload."""
     if not isinstance(payload, dict):
         return
-    if isinstance(payload.get('model'), str):
-        notes['served_model'] = payload['model']
+    request_evidence.observe(notes, payload, source)
+    if model := request_evidence.identifier(payload.get('model')):
+        notes['served_model'] = model
     endpoint = serving_endpoint(payload)
     if endpoint is not None:
         notes['serving_endpoint'] = endpoint
 
-def _quirk(payload, name):
-    entry = by_slug(payload.get('model', ''))
-    return getattr(entry, name, None) if entry else None
+def _quirk(row, name):
+    return getattr(row, name, None) if row else None
 
 def integer_json(text):
     # Meta emits e.g. 8.0 for integer arguments. Rust's integer deserializers
@@ -48,9 +42,6 @@ def integer_json(text):
         return text  # Leave malformed arguments for the native validator to reject.
     return re.sub(r'("(?:\\.|[^"\\])*")|(-?\d+)\.0+(?=\s*[,}\]]|\s*$)',
                   lambda match: match[1] if match[1] is not None else match[2], text)
-
-def tool_key(item):
-    return (item.get('namespace'), item.get('name'))
 
 def _wrap_string_envelope(tool, noun):
     """Share the arguments_json string envelope between json_text kinds."""
@@ -76,7 +67,12 @@ def _grok_needs_envelope(parameters):
                     return True
     return False
 
-def prepare_tools(payload):
+def prepare_tools(payload, row):
+    """Shape this turn's declarations for `row`, the request's captured row.
+
+    Returns the tool list to send, copied so the client's tools never change,
+    plus the kind map and wire-name map `tool_history` reads next.
+    """
     names = tool_aliases.ToolNames()
     # OpenAI reads discovered definitions from tool_search_output history. Other
     # providers require those released tools in the ordinary request tool list.
@@ -87,8 +83,9 @@ def prepare_tools(payload):
     released.extend(recall(payload.get('input', [])))
     released_keys = {tool_merge.key_of(tool, namespace)
                      for tool, namespace in tool_entries(released)}
+    entries = [(dict(tool), namespace) for tool, namespace in tool_entries(payload.get('tools', []))]
     declared = {}
-    for tool, namespace in tool_entries(payload.get('tools', [])):
+    for tool, namespace in entries:
         declared.setdefault(tool_merge.key_of(tool, namespace), tool)
     for tool, namespace in tool_entries(released):
         key = tool_merge.key_of(tool, namespace)
@@ -97,18 +94,17 @@ def prepare_tools(payload):
             # Complete a catalogue stub from the discovered schema; never clobber.
             tool_merge.complete_parameters(existing, tool)
             continue
-        if namespace:
-            payload.setdefault('tools', []).append({'type': 'namespace', 'name': namespace, 'description': namespace + ' tools', 'tools': [tool]})
-        else:
-            payload.setdefault('tools', []).append(tool)
+        tool = dict(tool)
+        entries.append((tool, namespace))
         declared[key] = tool
-    for tool, namespace in tool_entries(payload.get('tools', [])):
+    for tool, namespace in entries:
         if tool.get('type') == 'tool_search':
             tool.pop('execution', None)
             tool.update(type='function', name=SEARCH_NAME, strict=False)
             limit = tool.get('parameters', {}).get('properties', {}).get('limit')
             if isinstance(limit, dict):
-                limit.update(type='integer', minimum=1)
+                tool['parameters'] = deepcopy(tool['parameters'])  # the client's stays whole
+                tool['parameters']['properties']['limit'].update(type='integer', minimum=1)
             tool['description'] = tool.get('description', '') + '\nSearch using short keywords or an unqualified tool name, not a dotted namespace path. If there are no matches, retry with a shorter query.'
             names[(namespace, tool['name'])] = 'search'
         elif tool.get('type') == 'custom':
@@ -117,11 +113,11 @@ def prepare_tools(payload):
             tool.update(type='function', parameters={'type': 'object',
                 'properties': {'input': {'type': 'string', 'description': 'The complete raw tool input.'}},
                 'required': ['input'], 'additionalProperties': False}, strict=True)
-        elif (_quirk(payload, 'schema_mode') == 'json_text'
+        elif (_quirk(row, 'schema_mode') == 'json_text'
                 and has_recursive_refs(tool.get('parameters', {}))):
             _wrap_string_envelope(tool, 'object')
             names[(namespace, tool['name'])] = 'json_text'
-        elif (_quirk(payload, 'schema_mode') == 'json_text_root'
+        elif (_quirk(row, 'schema_mode') == 'json_text_root'
                 and _grok_needs_envelope(tool.get('parameters'))):
             # xAI rejects non-object parameter roots, including object roots
             # with an anyOf/oneOf union holding a non-object branch (e.g. the
@@ -130,10 +126,10 @@ def prepare_tools(payload):
             # Object-only unions stay native.
             _wrap_string_envelope(tool, 'value')
             names[(namespace, tool['name'])] = 'json_text_root'
-    wire_names = tool_aliases.bind(tool_entries(payload.get('tools', [])))
+    wire_names = tool_aliases.bind(entries)
     names.reserved |= wire_names.reserved
     flattened = []
-    for tool, namespace in tool_entries(payload.get('tools', [])):
+    for tool, namespace in entries:
         if namespace:
             original = (namespace, tool['name'])
             wire = wire_names[original]
@@ -146,13 +142,12 @@ def prepare_tools(payload):
             tool['name'] = wire
         tool.pop('defer_loading', None)
         flattened.append(tool)
-    if _quirk(payload, 'web_search') is False:
+    if _quirk(row, 'web_search') is False:
         # No web-search capability upstream: OpenRouter aborts the turn with
         # 'Server tool request failed' when the client's web_search server
         # tool rides along (2026-09-10, deepseek-v4.1-flash).
         flattened = [tool for tool in flattened if tool.get('type') != 'web_search']
-    payload['tools'] = flattened
-    ceiling = _quirk(payload, 'max_tools')
+    ceiling = _quirk(row, 'max_tools')
     if ceiling and len(flattened) > ceiling:
         # ponytail: drop, don't page; the search tool reloads on demand.
         kinds = [names.get((None, tool.get('name'))) for tool in flattened]
@@ -169,42 +164,8 @@ def prepare_tools(payload):
                 entry = names.pop((None, tool.get('name')), None)
                 if isinstance(entry, dict):
                     names.dropped.add(entry['name'])
-        payload['tools'] = kept
-    items = payload.get('input', []) if isinstance(payload.get('input'), list) else []
-    exposed_keys = {tool_merge.key_of(tool, namespace)
-                    for tool, namespace in tool_entries(payload.get('tools', []))}
-    exposed_keys.update(key for key, wire in wire_names.items() if (None, wire) in names)
-    rewrite_custom_pairs(items, exposed_keys, wire_names)
-    # Newest listing per tool key wins; an earlier repeat gets the note below.
-    latest_search, listings = tool_merge.newest_listings(items, wire_names)
-    for item in items:
-        if item.get('type') == 'tool_search_call':
-            item.pop('execution', None)
-            item.update(type='function_call', name=SEARCH_NAME, arguments=json.dumps(item['arguments']))
-        elif item.get('type') == 'tool_search_output':
-            item.pop('execution', None)
-            item.pop('status', None)
-            item.pop('tools', None)
-            entries = listings[id(item)]
-            found = {'available_tools': entries or [SEARCH_REPEAT_NOTE]}
-            if item is latest_search and entries:
-                found['how_to_use'] = SEARCH_NEXT
-            item.update(type='function_call_output', output=json.dumps(found))
-        elif item.get('type') == 'function_call':
-            wire = wire_names.get(tool_key(item))
-            if wire:
-                item.pop('namespace', None)
-                item['name'] = wire
-            entry = names.get(tool_key(item))
-            kind = entry.get('kind') if isinstance(entry, dict) else entry
-            if kind in ('json_text', 'json_text_root'):
-                item['arguments'] = json.dumps({'arguments_json': item['arguments']})
-        elif item.get('type') == 'function_call_output' and isinstance(item.get('output'), str):
-            item['output'] = tool_aliases.annotate(item['output'], names)
-    if isinstance(payload.get('input'), list):
-        payload['input'] = portable_history(
-            payload['input'], SEARCH_NAME, _quirk(payload, 'history_mode'))
-    return names
+        return kept, names, wire_names
+    return flattened, names, wire_names
 
 class ToolEvents:
     def __init__(self, names, notes=None):
@@ -279,6 +240,7 @@ class ToolEvents:
         return item
 
     def event(self, event):
+        request_evidence.response_event(self.notes, event)
         self.changed = False
         kind = event.get('type', '')
         if kind in ('response.function_call_arguments.delta', 'response.function_call_arguments.done'):
@@ -290,7 +252,7 @@ class ToolEvents:
             response = event['response']
             response['output'] = [self.item(item) for item in response.get('output', [])]
             if kind == 'response.completed' and self.notes is not None:
-                _note_identity(response, self.notes)
+                _note_identity(response, self.notes, 'response.completed.response')
                 self.changed |= turn_budget.report_usage(response.get('usage'), self.notes)
         return event
 
@@ -328,7 +290,7 @@ def snoop_response_identity(response, notes):
         yield piece
         if not watching:
             continue
-        spare, frames = _split_frames(spare + piece)
+        spare, frames = sse.split_frames(spare + piece)
         if len(spare) > _OBSERVE_LIMIT:
             spare, watching = b'', False
             continue
@@ -338,28 +300,6 @@ def snoop_response_identity(response, notes):
     # only complete frames may observe identity.
 
 
-def _split_frames(buf):
-    """Split blank-line-terminated SSE frames off buf.
-
-    Returns (spare, frames): frames are complete and parseable now;
-    spare is the incomplete tail held for the next piece.
-    """
-    frames = []
-    start = 0
-    while True:
-        nl = buf.find(b'\n', start)
-        if nl < 0:
-            break
-        end = nl + 1
-        if buf[start:end].strip():
-            start = end
-            continue
-        frames.append(buf[:end])
-        buf = buf[end:]
-        start = 0
-    return buf, frames
-
-
 def _observe_sse_frame(frame, notes):
     """Record identity from one complete SSE frame; never raises."""
     try:
@@ -367,8 +307,9 @@ def _observe_sse_frame(frame, notes):
                         frame.split(b'\n') if part.startswith(b'data:')).strip()
         if data and data != b'[DONE]':
             event = json.loads(data)
+            request_evidence.response_event(notes, event)
             if event.get('type') == 'response.completed':
-                _note_identity(event.get('response'), notes)
+                _note_identity(event.get('response'), notes, 'response.completed.response')
     except Exception:
         pass  # observation is best-effort; never fail forwarded bytes
 

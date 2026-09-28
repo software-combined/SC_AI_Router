@@ -3,8 +3,7 @@ from copy import deepcopy
 import json
 import uuid
 
-from . import provider_defs, sse, transport
-from .registry import by_slug
+from . import provider_defs, request_context
 
 NATIVE_NAMESPACE = 'collaboration'
 PLAINTEXT_NAMESPACE = 'collaboration_plaintext'
@@ -15,11 +14,13 @@ LANE_HINT = ('When all subagent lanes are full, close finished agents, '
 
 
 class AliasTools(frozenset):
-    """Advertised names plus the request's response framing, scoped to one call."""
-    def __new__(cls, names, stream=False, spawn_models=None):
+    """Advertised names, response framing and target catalogue for one request."""
+    def __new__(cls, names, stream=False, spawn_models=None, location='unknown', catalogue=None):
         value = super().__new__(cls, names)
         value.stream = stream
         value.spawn_models = dict(spawn_models or {})
+        value.location = location
+        value.catalogue = request_context.capture() if catalogue is None else catalogue
         return value
 
 
@@ -93,58 +94,57 @@ def _tool_container(payload):
 
 
 def _hint_tool(tool):
-    """Append LANE_HINT once to spawn_agent/close_agent; walk namespaces."""
+    """`tool`, or a copy with LANE_HINT appended once to spawn/close; walks namespaces."""
     if not isinstance(tool, dict):
-        return False
+        return tool
     if tool.get('type') == 'namespace':
         children = tool.get('tools')
         if not isinstance(children, list):
-            return False
-        changed = False
-        for child in children:
-            changed |= _hint_tool(child)
-        return changed
+            return tool
+        hinted = _hint_tools(children)
+        return tool if hinted is children else {**tool, 'tools': hinted}
     if tool.get('type') != 'function' or tool.get('name') not in LANE_HINT_NAMES:
-        return False
+        return tool
     text = tool.get('description') or ''
     if LANE_HINT in text:
-        return False
-    tool['description'] = (text + '\n' if text else '') + LANE_HINT
-    return True
+        return tool
+    return {**tool, 'description': (text + '\n' if text else '') + LANE_HINT}
+
+
+def _hint_tools(tools):
+    hinted = [_hint_tool(tool) for tool in tools]
+    return tools if all(new is old for new, old in zip(hinted, tools)) else hinted
+
+
+def _hint_item(item):
+    """A discovery result or Lite prefix with hinted tools; a changed prefix gets a new ID."""
+    tools = item.get('tools') if isinstance(item, dict) else None
+    lite = tools is not None and item.get('type') == 'additional_tools' and item.get('role') == 'developer'
+    if not isinstance(tools, list) or not (lite or item.get('type') == 'tool_search_output'):
+        return item
+    hinted = _hint_tools(tools)
+    if hinted is tools or not lite:
+        return item if hinted is tools else {**item, 'tools': hinted}
+    identity = json.dumps([item.get('id'), hinted], sort_keys=True)
+    return {**item, 'tools': hinted,
+            'id': 'at_' + str(uuid.uuid5(uuid.NAMESPACE_URL, 'scg-lane-hint:' + identity))}
 
 
 def hint_full_lanes(payload):
-    """Codex-only: tell spawn/close to free lanes, without stacking."""
-    changed = False
+    """Codex-only: tell spawn/close to free lanes, without stacking; copies, never edits."""
     tools = payload.get('tools')
-    if isinstance(tools, list):
-        for tool in tools:
-            changed |= _hint_tool(tool)
+    hinted = _hint_tools(tools) if isinstance(tools, list) else tools
+    if hinted is not tools:
+        payload = {**payload, 'tools': hinted}
     items = payload.get('input')
     if not isinstance(items, list):
-        return changed
-    for index, item in enumerate(items):
-        if not isinstance(item, dict):
-            continue
-        tools = item.get('tools')
-        if not isinstance(tools, list):
-            continue
-        lite = item.get('type') == 'additional_tools' and item.get('role') == 'developer'
-        if item.get('type') != 'tool_search_output' and not lite:
-            continue
-        touched = False
-        for tool in tools:
-            touched |= _hint_tool(tool)
-        changed |= touched
-        if touched and lite:
-            identity = json.dumps([item.get('id'), tools], sort_keys=True)
-            ident = 'at_' + str(uuid.uuid5(uuid.NAMESPACE_URL, 'scg-lane-hint:' + identity))
-            items[index] = {**item, 'id': ident}
-    return changed
+        return payload
+    hinted = [_hint_item(item) for item in items]
+    return payload if all(new is old for new, old in zip(hinted, items)) else {**payload, 'input': hinted}
 
 
-def add_plaintext_tools(payload):
-    """Offer aliases only for native tools present in this request."""
+def add_plaintext_tools(payload, catalogue=None):
+    """Offer aliases only for native tools present in this request: (payload or a copy, names)."""
     container, input_index = _tool_container(payload)
     tools = container.get('tools', [])
     aliases = []
@@ -184,7 +184,7 @@ def add_plaintext_tools(payload):
                 'the need to choose collaboration_plaintext for the next message.'),
             'tools': aliases}]
         if input_index is None:
-            payload['tools'] = augmented
+            payload = {**payload, 'tools': augmented}
         else:
             # Codex hashes prefix payloads into IDs; changed tools need a new,
             # stable identity too. Never modify the client's saved prefix.
@@ -192,8 +192,9 @@ def add_plaintext_tools(payload):
             ident = 'at_' + str(uuid.uuid5(uuid.NAMESPACE_URL, 'scg-plaintext:' + identity))
             items = list(payload['input'])
             items[input_index] = {**container, 'tools': augmented, 'id': ident}
-            payload['input'] = items
-    return AliasTools(names, payload.get('stream') is True, children)
+            payload = {**payload, 'input': items}
+    return payload, AliasTools(names, payload.get('stream') is True, children,
+                               'classic' if input_index is None else 'lite', catalogue=catalogue)
 
 
 def restore_item(item, names):
@@ -258,18 +259,15 @@ def steer_plaintext(item, names):
     spawns = getattr(names, 'spawn_models', {})
     if item.get('name') == 'spawn_agent':
         model = args.get('model')
-        entry = by_slug(model) if isinstance(model, str) else None
-        if entry is None or not provider_defs.is_external(entry.provider):
-            return item
         detail = ('spawn via collaboration_plaintext.spawn_agent '
                   'with fork_turns="none" for externally billed models')
     else:
         target = args.get('target')
         model = _spawn_model(spawns, target)
-        entry = by_slug(model) if isinstance(model, str) else None
-        if entry is None or not provider_defs.is_external(entry.provider):
-            return item
         detail = 'call collaboration_plaintext.' + item['name'] + ' with the same target'
+    entry = getattr(names, 'catalogue', {}).get(model) if isinstance(model, str) else None
+    if entry is None or not provider_defs.is_external(entry.provider):
+        return item
     diagnostic = ('That handoff cannot be delivered readably; ' + detail
                   + ' and resend the message as plain text.')
     return {**item, 'arguments': json.dumps(diagnostic), 'encrypted_function_args': []}
@@ -300,69 +298,3 @@ def steer_event(event, names):
         if steered is not response:
             mapped = {**mapped, 'response': steered}
     return mapped
-
-
-def _readable_block(block):
-    """A plaintext input_text block with no encrypted sidecar."""
-    return (isinstance(block, dict) and block.get('type') == 'input_text'
-            and 'encrypted_content' not in block and isinstance(block.get('text'), str)
-            and bool(block['text'].strip()))
-
-def _encrypted_block(block):
-    payload = block.get('encrypted_content') if isinstance(block, dict) else None; return bool(payload) and isinstance(payload, (str, dict))
-
-
-def inbound_agent_message(item):
-    """True only for a strict child-to-parent message path."""
-    author, recipient = item.get('author'), item.get('recipient')
-    if not isinstance(author, str) or not isinstance(recipient, str): return False
-    child = [part for part in author.split('/') if part]
-    parent = [part for part in recipient.split('/') if part]
-    return bool(parent) and len(child) > len(parent) and child[:len(parent)] == parent
-
-
-def recoverable_agent_message(item):
-    """Readable blocks of an inbound reply with an encrypted sidecar, else None."""
-    if not inbound_agent_message(item) or 'encrypted_content' in item: return None
-    content = item.get('content')
-    if not isinstance(content, list) or not content: return None
-    readable = [block for block in content if _readable_block(block)]
-    encrypted = [block for block in content if _encrypted_block(block)]
-    return readable if readable and encrypted and len(readable) + len(encrypted) == len(content) else None
-
-
-def plaintext_agent_message(item):
-    """Represent a readable peer message without elevating its authority."""
-    author, recipient = item.get('author'), item.get('recipient')
-    content = item.get('content')
-    if (not isinstance(author, str) or not author or not isinstance(recipient, str)
-            or not recipient or not isinstance(content, list) or not content):
-        raise ValueError('unsupported plaintext agent message shape')
-    if 'encrypted_content' in item or not all(_readable_block(block) for block in content):
-        raise ValueError('unsupported agent message content; use a fresh plaintext handoff')
-    return {'type': 'message', 'role': 'assistant', 'content': [
-        {'type': 'output_text', 'text': f'Agent message from {author} to {recipient}:\n'},
-        *({'type': 'output_text', 'text': block['text']} for block in content)]}
-
-
-def adapt_response(response, names, notes=None):
-    """Adapt aliases only; never run provider-specific rewrites on native calls."""
-    if not getattr(names, 'stream', False) and 'text/event-stream' not in response.getheader('Content-Type', ''):
-        raw = transport.read_capped(response, transport.MAX_UPSTREAM_BODY)
-        result = json.loads(raw)
-        restored = steer_response(restore_response(result, names), names)
-        if notes is not None and isinstance(result.get('model'), str):
-            notes['served_model'] = result['model']
-        yield json.dumps(restored).encode() if restored is not result else raw
-        return
-    for frame, data in sse.blocks(sse.lines(transport.passthrough(response))):
-        if not data or data == b'[DONE]':
-            yield frame
-            continue
-        event = json.loads(data)
-        restored = steer_event(restore_event(event, names), names)
-        if event.get('type') == 'response.completed' and notes is not None:
-            model = event.get('response', {}).get('model')
-            if isinstance(model, str):
-                notes['served_model'] = model
-        yield sse.replace_data(frame, json.dumps(restored).encode()) if restored is not event else frame

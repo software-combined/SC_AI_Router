@@ -1,264 +1,249 @@
-"""One upstream stream: what the client received and whether to retry it.
-
-Leaf for `relay.py`, the same way `stream_errors.py` is: no dispatch, no
-credentials, no provider construction. It owns three decisions that only make
-sense together, so a reader never has to hold one without the others:
-
-- what counts as the client's answer rather than plumbing (`StreamRecord`),
-- that plumbing is held until the answer starts, so a retry replaces it
-  instead of appending a second copy (`relay_stream`),
-- when one retry is safe (`retryable_stream_failure`): the provider failed the
-  turn before any answer frame reached the client, and the code says the
-  provider failed rather than refused the request,
-- how that retry opens (`reopen_stream`): the client already holds a 200
-  text/event-stream header block, so a non-200 or non-SSE answer cannot be
-  appended and the retry is refused instead.
-
-`log_event` stays injected by the caller for the same reason it does in
-`relay.py`: a test patching `ai_router.router.log_event` must keep seeing
-these events.
-"""
-import http.client
+"""Stream forwarding, client-byte accounting and terminal outcome ownership."""
+import json
 import time
 
-from . import provider_defs, stream_errors, transport
+from . import (messages_events, outcome, provider_defs, request_evidence, sse, stream_attempt, stream_errors,
+               stream_events, transport)
 
-# How many plumbing bytes one attempt may hold before it streams them.
-PENDING_LIMIT = 65536
+TERMINAL_FIELDS = (
+    'code', 'upstream_code', 'upstream_error_type', 'upstream_provider_code',
+    'failure_class', 'terminal_event', 'upstream_reason', 'terminal_source',
+    'serving_endpoint')
 
 
 class StreamRecord:
-    """Per-response stream state the log line reports.
-
-    `forwarded_bytes` is everything the client received, `content_delta_bytes`
-    is how much of that was answer rather than plumbing, `reasoning_bytes` is
-    how much of the plumbing was reasoning, `terminal_source` is which tier
-    wrote the terminal frame, and `stream_retry` is whether the caller
-    re-opened the upstream once.
-    """
+    """Per-response byte counters, held frames and the settled outcome."""
 
     __slots__ = ('forwarded_bytes', 'content_delta_bytes', 'reasoning_bytes',
-                 'pending', 'pending_reasoning',
-                 'stream_retry', 'client_terminal', 'held_terminal')
+                 'hold', 'stream_retry', 'client_terminal', 'delivery_failed',
+                 'outcome', 'normalized', 'replay_blocked', 'response_format')
 
-    def __init__(self):
+    def __init__(self, response_format=None):
+        self.response_format = response_format
         self.forwarded_bytes = 0
         self.content_delta_bytes = 0
         self.reasoning_bytes = 0
-        # Which tier wrote the terminal frame the client holds, or None while it
-        # holds none. One durable fact: a retry can neither re-attribute it nor
-        # add a second frame, and a death after one never appends a generic
-        # frame over the verdict the client already read.
+        self.outcome = None
+        self.normalized = self.delivery_failed = False
+        self.replay_blocked = False
+        # One terminal source survives retries and late generic frames.
         self.client_terminal = None
         self.stream_retry = 0
-        self.held_terminal = False
-        self.pending = bytearray()
-        # Held reasoning bytes, folded into `reasoning_bytes` only if flush
-        # actually gets them out; a retry drops them with the rest of the hold.
-        self.pending_reasoning = 0
+        self.hold = stream_attempt.AttemptHold()
 
-    def note_source(self, attempt_metrics):
+    def note_source(self, event):
         """Remember the writer of a terminal frame this attempt sent."""
-        if attempt_metrics.get('terminal_event'):
-            self.client_terminal = (attempt_metrics.get('terminal_source')
-                                    or stream_errors.TERMINAL_FROM_ROUTER)
+        if event.source and self.client_terminal is None:
+            self.client_terminal = event.source
 
     def flush(self, handler):
-        """Write the held setup frames; a retry clears them instead.
-
-        Best-effort: a client that already closed its socket must not turn this
-        into an exception inside the relay's error path, which would skip the
-        log line and the terminal frame. Returns True only when every held
-        byte actually left, so a caller never reports a frame the client
-        missed.
-        """
-        held = len(self.pending)
-        if self.pending:
-            try:
-                handler.wfile.write(bytes(self.pending))
-                handler.wfile.flush()
-            except (OSError, ValueError):
-                return False
-            self.forwarded_bytes += held
-            self.pending.clear()
-            self.reasoning_bytes += self.pending_reasoning
-            self.pending_reasoning = 0
-            # The caller must know a terminal frame left in this write: it may
-            # not append its own generic one on top of the provider's verdict.
-            if self.held_terminal:
-                self.client_terminal = stream_errors.TERMINAL_FROM_UPSTREAM
-                self.held_terminal = False
-            return True
-        return False
+        """Write held frames in order; return True only when all left."""
+        hold = self.hold
+        if not hold.frames:
+            return False
+        held = hold.size()
+        try:
+            for frame in hold.frames:
+                transport.write_full(handler.wfile, frame)
+        except (OSError, ValueError) as exc:
+            self.delivery_failed = exc
+            if hold.terminal is not None:
+                self.outcome = None
+            return False
+        self.forwarded_bytes += held
+        self.reasoning_bytes += hold.reasoning
+        # Preserve the source of any terminal frame that left this write.
+        if hold.terminal is not None:
+            self.client_terminal = hold.terminal
+        hold.clear()
+        return True
 
 
 def streamed_metrics(record):
     """The counters every log line for this response carries."""
-    unattributed = (record.forwarded_bytes - record.content_delta_bytes
-                    - record.reasoning_bytes)
-    return {'forwarded_delta_bytes': record.forwarded_bytes,
-            'content_delta_bytes': record.content_delta_bytes,
-            'reasoning_delta_bytes': record.reasoning_bytes,
-            'unattributed_delta_bytes': unattributed}
+    unattributed = record.forwarded_bytes - record.content_delta_bytes - record.reasoning_bytes
+    return {
+        'forwarded_delta_bytes': record.forwarded_bytes,
+        'content_delta_bytes': record.content_delta_bytes,
+        'reasoning_delta_bytes': record.reasoning_bytes,
+        'unattributed_delta_bytes': unattributed,
+    }
+
+
+def _raw_terminal(frame, metrics, decoder=None):
+    """Classify one complete raw frame as a non-fatal observation."""
+    return _raw_classify(frame, metrics, json.loads, decoder)
+
+
+def _raw_hint(data, metrics, decoder=None):
+    """Classify one complete oversized frame from its parsed event."""
+    return _raw_classify(
+        data, metrics,
+        json.loads if decoder else lambda payload: json.JSONDecoder().raw_decode(payload)[0], decoder)
+
+
+def _raw_classify(data, metrics, decode, decoder):
+    try:
+        payload = b'\n'.join(
+            line[5:].lstrip() for line in data.splitlines()
+            if line.startswith(b'data:')).strip()
+        event = decode(payload.decode())
+        if decoder is not None:
+            return decoder.observe(data, event, metrics)
+        lifecycle = stream_events.classify(payload, event)
+        native = event.get('type') if isinstance(event, dict) else None
+        return stream_errors.terminal_event(
+            data, lifecycle, native, event, metrics,
+            output_seen=False, rewrite=False)
+    except Exception:
+        return None
+
+
+def _raw_events(chunks, metrics, protocol):
+    decoder = messages_events.Decoder() if protocol == provider_defs.MESSAGES else None
+    pending = bytearray()
+    emitted_pending = 0
+    overflow = False
+    for chunk in chunks:
+        if not chunk:
+            continue
+        if overflow:
+            yield stream_events.StreamEvent(chunk, stream_events.OPAQUE)
+            continue
+        pending.extend(chunk)
+        rest, frames = sse.split_frames(pending)
+        pending = bytearray(rest)
+        prefix = emitted_pending
+        for raw_frame in frames:
+            frame = bytes(raw_frame)
+            observed = (_raw_hint(frame, metrics, decoder)
+                        if len(frame) > sse.MAX_FRAME_BYTES
+                        else _raw_terminal(frame, metrics, decoder))
+            if prefix:
+                suffix = frame[prefix:]
+                if suffix:
+                    yield stream_events.StreamEvent(suffix, stream_events.OPAQUE)
+                if observed is not None:
+                    yield observed.with_frame(b'')
+                prefix = 0
+            elif observed is not None:
+                yield observed
+            else:
+                yield stream_events.StreamEvent(frame, stream_events.OPAQUE)
+        if frames:
+            emitted_pending = 0
+        if pending:
+            tail = bytes(pending[emitted_pending:])
+            if tail:
+                yield stream_events.StreamEvent(tail, stream_events.OPAQUE)
+            emitted_pending = len(pending)
+        else:
+            emitted_pending = 0
+        if len(pending) > sse.MAX_FRAME_BYTES:
+            pending.clear()
+            emitted_pending = 0
+            overflow = True
 
 
 def relay_stream(handler, provider, response, prepared, metrics, started,
-                 headers_done, record):
-    """Forward one upstream stream and record what the client received.
-
-    Setup frames (`response.created`, so far) are held until the first answer
-    frame arrives or the stream ends, so an attempt the provider fails before
-    any answer leaves nothing behind: the caller's retry replaces those frames
-    instead of appending a second copy, and a terminal failure replaces them
-    with the provider's own verdict.
-
-    The terminal-source rule: `stream_errors.normalize` marks a terminal frame
-    the provider sent before yielding it, so this leaf only claims the frame
-    when it is still unclaimed after the upstream body ended -- that residue is
-    the router's own best-effort frame on a socket that died mid-stream.
-    """
-    # Adapters hand this mapping to the tool repair helpers, whose log lines
-    # carry the model; the request metrics are the only place it exists.
+                 headers_done, record, *, attempt=None):
+    """Forward one stream; normalized frames may wait for safe replay."""
+    # Tool repair logs need request model/context without changing the request.
     attempt_metrics = {'model': metrics.get('model'),
+                       'attempt_evidence': metrics.get('attempt_evidence'),
+                       'request_id': metrics.get('request_id'), 'attempt': attempt,
                        'context_tokens': metrics.get('context_tokens')}
-    pending = record.pending
-    chunks = provider.adapt(response, prepared.tool_names, attempt_metrics)
-    normalized = (provider.defn.dialect == provider_defs.DIALECT_OPENROUTER
-                  and metrics.get('protocol') == provider_defs.RESPONSES
-                  and metrics['response_kind'] == 'sse'
-                  and metrics['response_encoding'] == 'identity')
-    if normalized:
-        chunks = stream_errors.normalize(chunks, attempt_metrics)
-    delivered = False
+    wire = record.response_format
+    raw_encoded = wire.encoding != 'identity'
+    # Native Responses can stream without declaring an SSE content type.
+    streamed = (wire.kind == 'sse' or (wire.stream is True and wire.kind == 'other'
+                                     and wire.protocol == provider_defs.RESPONSES))
+    messages_external = (wire.protocol == provider_defs.MESSAGES
+                         and provider.defn.kind == provider_defs.EXTERNAL
+                         and wire.operation == '/v1/messages')
+    normalized = ((messages_external or provider.defn.dialect == provider_defs.DIALECT_OPENROUTER
+                  and wire.protocol == provider_defs.RESPONSES
+                   ) and wire.kind == 'sse' and not raw_encoded)
+    record.normalized = normalized
+    messages_json = (wire.protocol == provider_defs.MESSAGES
+                     and wire.operation == '/v1/messages' and wire.kind == 'json')
+    terminal_metrics = None
+    chunks = (transport.passthrough(response) if raw_encoded
+              else provider.adapt(response, prepared.tool_names, attempt_metrics))
+    if raw_encoded:
+        frames = (stream_events.StreamEvent(chunk, stream_events.OPAQUE)
+                  for chunk in chunks)
+    elif normalized and messages_external:
+        frames = provider.events(response, metrics)
+    elif normalized:
+        frames = stream_errors.events(chunks, attempt_metrics)
+    elif streamed:
+        frames = _raw_events(chunks, metrics, wire.protocol)
+    elif messages_json:
+        frames = messages_events.json_events(chunks, metrics)
+    else:
+        kind = stream_events.ANSWER if wire.kind == 'json' else stream_events.OPAQUE
+        frames = (stream_events.StreamEvent(chunk, kind)
+                  for chunk in chunks)
     try:
-        for chunk in chunks:
+        for event in frames:
             if 'first_chunk_ms' not in metrics:
                 metrics['first_chunk_ms'] = round((time.monotonic() - started) * 1000, 1)
             transport.note_first_data(metrics, headers_done)
-            # A non-normalized stream never sets the marker, so every frame
-            # counts as the answer: only the normalizing path can tell.
-            answered = (not normalized or attempt_metrics.get('answer_frame')
-                        in stream_errors.ANSWER_FRAME_TYPES)
-            # Only the normalizing path sets this marker, so a passthrough
-            # stream reports no reasoning rather than guessing from bytes.
-            reasoning = attempt_metrics.get('reasoning_frame') is not None
-            # A terminal frame is held too: the caller either retries (and
-            # drops it) or flushes it to the client unchanged.
-            if not answered and len(pending) + len(chunk) <= PENDING_LIMIT:
-                pending += chunk
-                if reasoning:
-                    record.pending_reasoning += len(chunk)
-                if attempt_metrics.get('terminal_event'):
-                    record.held_terminal = True
+            record.replay_blocked |= event.commit
+            held = normalized and not (record.forwarded_bytes or record.replay_blocked) and record.hold.take(event)
+            settled_now = event.outcome is not None and record.outcome is None
+            if settled_now:
+                request_evidence.verdict(metrics, event.outcome)
+                terminal_metrics = {key: metrics.get(key) for key in TERMINAL_FIELDS}
+                if held:
+                    record.outcome = event.outcome
+            if not held and record.hold.frames and not record.flush(handler):
+                raise record.delivery_failed or OSError('held frame delivery failed')
+            if not event.frame:
+                if settled_now:
+                    record.outcome = event.outcome
+                    record.note_source(event)
                 continue
-            record.flush(handler)
-            handler.wfile.write(chunk)
-            handler.wfile.flush()
+            if held:
+                continue
+            try:
+                transport.write_full(handler.wfile, event.frame)
+            except (OSError, ValueError) as exc:
+                record.delivery_failed = exc
+                raise
             transport.note_first_write(metrics, headers_done)
-            metrics.setdefault('time_to_first_delta_ms', round(
-                (time.monotonic() - started) * 1000, 1))
-            record.forwarded_bytes += len(chunk)
-            record.note_source(attempt_metrics)
-            delivered = delivered or record.client_terminal is not None
-            if answered:
-                record.content_delta_bytes += len(chunk)
-            if reasoning:
-                record.reasoning_bytes += len(chunk)
+            metrics.setdefault('time_to_first_delta_ms', round((time.monotonic() - started) * 1000, 1))
+            record.forwarded_bytes += len(event.frame)
+            if settled_now:
+                record.outcome = event.outcome
+                record.note_source(event)
+            if event.kind == stream_events.ANSWER:
+                record.content_delta_bytes += len(event.frame)
+            elif event.kind == stream_events.REASONING:
+                record.reasoning_bytes += len(event.frame)
+        if wire.kind == 'json' and not raw_encoded and not messages_json:
+            # Known non-stream JSON keeps its EOF rule; opaque data proves no outcome.
+            record.outcome = outcome.Outcome(outcome.SUCCESS, outcome.STATUS, outcome.UPSTREAM)
     finally:
-        # The request model is request facts, not an attempt verdict: the
-        # caller's mapping must not lose it when the attempt state is merged.
+        # Keep request model/context facts when attempt facts merge back.
         attempt_metrics.pop('model', None)
-        # The per-frame answer and reasoning markers are loop state, not log
-        # facts: the counters already say what the client received, and a second
-        # attempt must re-derive them rather than inherit the first attempt's.
-        attempt_metrics.pop('answer_frame', None)
-        attempt_metrics.pop('reasoning_frame', None)
-        # Only a stream that ended with a terminal frame has a source, and a
-        # clean completion never claims one.
-        if delivered:
+        if terminal_metrics is not None:
+            clear_terminal_fields(metrics)
+            metrics.update({key: value for key, value in terminal_metrics.items() if value is not None})
+        # Only a terminal frame claims a source; clean completion has none.
+        if record.client_terminal:
             metrics['terminal_source'] = record.client_terminal
         elif attempt_metrics.get('terminal_event'):
             metrics['terminal_source'] = (attempt_metrics.get('terminal_source')
                                           or stream_errors.TERMINAL_FROM_ROUTER)
         else:
             metrics.pop('terminal_source', None)
-        # Decision fields stay in `metrics` for the log line; the caller clears
-        # them before a retry so the second attempt cannot inherit the first's
-        # verdict. Adapters only ever write to this mapping, so merging it back
-        # keeps the success path unchanged.
+        # Merge attempt facts back; retry callers clear verdict fields first.
         metrics.update(attempt_metrics)
-
-
-def code_of(metrics):
-    """The code-shaped verdict this attempt recorded, or None."""
-    return stream_errors._bounded(metrics.get('upstream_code') or metrics.get('code'))
-
-
-def retryable_stream_failure(metrics, record):
-    """True only for a provider terminal frame before any answer reached the client.
-
-    A retry re-runs the whole request, so it is safe exactly when the client
-    has no answer frames to duplicate, the terminal frame came from the
-    provider, and the provider's own code says it failed the turn rather than
-    refusing the request. A deterministic refusal would fail again, and a
-    post-answer death belongs to the client's turn retry, which can switch
-    models.
-    """
-    # Any byte already flushed blocks the retry, not just answer frames: a
-    # second response.created appended after bytes the client holds would give
-    # one stream two response identities, whatever those bytes contained.
-    return (record.forwarded_bytes == 0
-            and metrics.get('terminal_source') == stream_errors.TERMINAL_FROM_UPSTREAM
-            and metrics.get('code') == 'UPSTREAM_STREAM_FAILED'
-            and metrics.get('failure_class') == 'transient'
-            and code_of(metrics) not in (None, 'invalid_prompt',
-                                         'context_length_exceeded'))
 
 
 def clear_terminal_fields(metrics):
     """Drop the failed attempt's verdict before the retry overwrites it."""
-    for key in ('code', 'upstream_code', 'upstream_error_type', 'upstream_provider_code',
-                'failure_class', 'terminal_event', 'upstream_reason',
-                'terminal_source', 'serving_endpoint'):
+    for key in TERMINAL_FIELDS:
         metrics.pop(key, None)
-
-
-def reopen_stream(prepared, metrics, attempts, started):
-    """Second attempt for a stream the provider failed before it committed.
-
-    Phase timings belong to the first attempt; leaving them out of the retry's
-    metrics would silently drop the connect/send numbers the log already had,
-    so they are carried over rather than overwritten. The caller owns
-    `attempts`, so a reopened connection never outlives the request.
-    """
-    phases = {key: metrics[key] for key in
-              ('connect_ms', 'send_ms', 'headers_ms') if key in metrics}
-    fresh = http.client.HTTPSConnection(prepared.host, timeout=120)
-    try:
-        response, headers_done = transport.post_with_phases(
-            fresh, prepared, metrics)
-    except BaseException:
-        metrics.update(phases)
-        fresh.close()
-        raise
-    attempts.append(fresh)
-    metrics.update(phases)
-    # The client's status line and headers are already 200 text/event-stream,
-    # so the retry cannot become a JSON reply: raw bytes there are not an SSE
-    # frame, and a non-identity encoding cannot be appended to what the client
-    # is decoding. Close the attempt instead, which lets the relay's error
-    # path end the body with a terminal frame and record why the retry failed.
-    if response.status != 200:
-        response.read()
-        metrics['retry_code'] = 'retry_http_%d' % response.status
-        raise ValueError('upstream refused the retry')
-    kind, encoding = transport.describe_response(response)
-    if (kind, encoding) != ('sse', 'identity'):
-        metrics['retry_code'] = 'retry_%s_%s' % (kind, encoding)
-        raise ValueError('upstream answered the retry with a different body')
-    # Cumulative from the original request start: the retry's own connect,
-    # upload and header wait belong in the field, and the restored first
-    # attempt's phases must not be counted twice.
-    metrics['upstream_headers_ms'] = round((headers_done - started) * 1000, 1)
-    metrics['response_kind'], metrics['response_encoding'] = kind, encoding
-    return response, headers_done

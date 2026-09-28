@@ -1,59 +1,13 @@
 """Normalize external Responses terminal errors without changing success data."""
 import json
 import re
-from . import errors, sse
+from . import errors, outcome, request_evidence, sse, stream_events
 
 _CONTEXT_MESSAGE = re.compile(
     r'The prompt is too long: ([0-9]{1,16}), model maximum context length: ([0-9]{1,16})')
 MAX_DETAIL_CHARS = 64
-# Which tier wrote the frame the client received. A provider terminal frame and
-# the router's best-effort frame on a dead socket carry different evidence, and
-# the log line cannot tell them apart without this field.
 TERMINAL_FROM_UPSTREAM = 'upstream'
 TERMINAL_FROM_ROUTER = 'router'
-# Answers, not plumbing: frames whose bytes the client cannot un-see. A
-# response.created or reasoning frame before a failure costs nothing to
-# replace, while a text or tool-call delta is output the client already has.
-# `normalize` records which of these it passed through, so the relay can tell
-# the two apart without re-parsing a stream it has already forwarded.
-ANSWER_FRAME_TYPES = frozenset((
-    'response.output_text.delta', 'response.output_text.done',
-    'response.function_call_arguments.delta',
-    'response.function_call_arguments.done',
-    'response.reasoning_summary_text.delta', 'response.reasoning_summary_text.done',
-    'response.custom_tool_call_input.delta', 'response.custom_tool_call_input.done',
-))
-
-# Reasoning a provider streams as text rather than as an item. The plan 177
-# capture saw these from deepseek-v4.1-flash, and their bytes were unattributed
-# before. Disjoint from ANSWER_FRAME_TYPES: a kind in both would be counted as
-# content and as reasoning in the same frame.
-REASONING_FRAME_TYPES = frozenset((
-    'response.reasoning_text.delta', 'response.reasoning_text.done',
-))
-
-
-def _answer_item(event):
-    """True for an output-item frame that carries an item the client keeps.
-
-    `response.output_item.added`/`done` wrap every item kind, and a reasoning
-    item is replaceable: the client shows it, but a retried attempt supersedes
-    it the same way it supersedes a setup frame, so it must not block a retry.
-    """
-    item = event.get('item')
-    return (isinstance(item, dict)
-            and item.get('type') not in (None, 'reasoning'))
-
-
-def _reasoning_item(event):
-    """True only for the exact `reasoning` item kind: no setup, no other type."""
-    item = event.get('item')
-    return isinstance(item, dict) and item.get('type') == 'reasoning'
-
-
-# Same rule the HTTP path applies to a provider code (upstream._CODE_SHAPE):
-# an upstream must not get a sentence into the log, so a value that is not
-# already code-shaped is dropped rather than recorded.
 _CODE_SHAPE = re.compile(r'[A-Za-z0-9_.\-]{1,%d}' % MAX_DETAIL_CHARS)
 
 
@@ -82,20 +36,53 @@ def _top_error_type(failure, event):
         value = _bounded(source.get('error_type'))
         if value:
             return value
+        # Provider envelopes use top-level `type`; event lifecycle never does.
+        value = _bounded(source.get('type'))
+        if (source is failure and value
+                and value not in stream_events.FAILURE_TYPES
+                and value != 'response.completed'):
+            return value
         envelope = source.get('error')
         if isinstance(envelope, dict):
-            value = _bounded(envelope.get('error_type'))
+            value = (_bounded(envelope.get('error_type'))
+                     or _bounded(envelope.get('type')))
             if value:
                 return value
     return None
 
 
-def _record_detail(metrics, kind, failure, event):
-    """Record why the provider ended the stream, bounded to fixed metadata.
+def error_codes(failure, event, depth=0):
+    values = []
+    for source in (failure, event):
+        if not isinstance(source, dict):
+            continue
+        values += [_bounded(source.get(key)) for key in ('error_type', 'code')]
+        top_type = _bounded(source.get('type'))
+        if (source is failure and top_type
+                and top_type not in stream_events.FAILURE_TYPES
+                and top_type != 'response.completed'):
+            values.append(top_type)
+        envelope = source.get('error')
+        if not isinstance(envelope, dict):
+            continue
+        values += [_bounded(envelope.get(key))
+                   for key in ('code', 'error_type', 'type')]
+        metadata = envelope.get('metadata')
+        if not isinstance(metadata, dict):
+            continue
+        values.append(_bounded(metadata.get('provider_code')))
+        raw = metadata.get('raw')
+        if isinstance(raw, str) and depth < 2:
+            try:
+                nested = json.loads(raw)
+                values += error_codes(nested, nested, depth + 1)
+            except (ValueError, TypeError):
+                pass
+    return tuple(dict.fromkeys(value for value in values if value))
 
-    A reason or code explains an Anthropic-style mid-stream refusal without
-    ever logging the message text, which can quote prompt content.
-    """
+
+def record_detail(metrics, kind, failure, event):
+    """Record bounded terminal metadata, never provider message text."""
     metrics['terminal_event'] = kind
     metrics['terminal_source'] = TERMINAL_FROM_UPSTREAM
     if kind == 'response.incomplete':
@@ -135,11 +122,7 @@ def _bounded_endpoint(value):
 
 
 def metadata_endpoint(source, bounded):
-    """First bounded provider from selected available[], then attempts[].
-
-    Shared with `upstream.serving_endpoint`; the bounding rule stays with
-    the caller so each log path keeps its own width.
-    """
+    """First bounded provider from selected available[], then attempts[]."""
     metadata = source.get('openrouter_metadata') if isinstance(source, dict) else None
     if not isinstance(metadata, dict):
         return None
@@ -154,8 +137,6 @@ def metadata_endpoint(source, bounded):
                     return value
     attempts = metadata.get('attempts')
     if isinstance(attempts, list):
-        # The last attempt produced the terminal state; earlier entries name
-        # providers that already failed over.
         for attempt in reversed(attempts):
             if isinstance(attempt, dict):
                 value = bounded(attempt.get('provider'))
@@ -165,12 +146,7 @@ def metadata_endpoint(source, bounded):
 
 
 def _terminal_endpoint(failure, event):
-    """Bounded serving endpoint from a terminal event's metadata, else None.
-
-    Reads the same `openrouter_metadata` shapes `upstream.serving_endpoint`
-    reads (selected `endpoints.available[]` entry, then `attempts[]`);
-    local because `upstream` already imports this module.
-    """
+    """Bounded serving endpoint from terminal metadata, else None."""
     for source in (failure, event):
         value = metadata_endpoint(source, _bounded_endpoint)
         if value:
@@ -178,48 +154,23 @@ def _terminal_endpoint(failure, event):
     return None
 
 
-_FINAL_ERROR_TYPES = frozenset((
-    'invalid_request', 'refusal', 'moderation', 'insufficient_quota'))
-_TRANSIENT_ERROR_TYPES = frozenset((
-    'server_error', 'provider_unavailable', 'provider_overloaded',
-    'timeout', 'server'))
-
-
 def failure_class(failure, event):
-    """'context' | 'final' | 'transient' from the canonical cause.
-
-    Decided on the top-level error_type first (the Responses skin's code is
-    a lossy collapse); an `invalid_prompt` code with no error_type is a
-    deterministic refusal, and anything unrecognised is transient so an
-    unknown provider death stays retryable.
-    """
-    if _context_error(failure) or _context_error(event):
-        return 'context'
-    error_type = _top_error_type(failure, event)
-    if error_type in _FINAL_ERROR_TYPES:
-        return 'final'
-    if error_type in _TRANSIENT_ERROR_TYPES:
-        return 'transient'
-    envelope = _error_envelope(failure, event)
-    code = (_bounded(envelope.get('code')) if isinstance(envelope, dict) else None)
-    if code == 'invalid_prompt' and error_type is None:
-        return 'final'
-    return 'transient'
+    """Class name from the shared cause; unknown is never replayable."""
+    category = _category_from_causes(failure, event)
+    return ('context' if _context_error(failure) or _context_error(event)
+            else 'transient' if category == outcome.TRANSIENT
+            else 'unknown' if category == outcome.UNKNOWN else 'final')
 
 
 def _context_error(data, depth=0):
     """Explicit codes or the exact numeric refusal in an error envelope."""
     if not isinstance(data, dict):
         return False
-    if data.get('error_type') == 'context_length_exceeded':
+    if 'context_length_exceeded' in error_codes(data, data):
         return True
     error = data.get('error')
     if not isinstance(error, dict):
         return False
-    if error.get('code') == 'context_length_exceeded':
-        return True
-    if error.get('error_type') == 'context_length_exceeded':
-        return True
     message = error.get('message')
     match = _CONTEXT_MESSAGE.fullmatch(message.strip()) if isinstance(message, str) else None
     if match and int(match[1]) > int(match[2]) > 0:
@@ -245,74 +196,123 @@ def is_context_error(body):
 
 
 def _prompt_refusal(failure, event):
-    """OpenRouter's own provider-400 code, raised after the stream opened.
-
-    The converted chat body was refused upstream and replaying it cannot
-    succeed, so the client gets one actionable sentence instead of the
-    provider's schema dump. The emitted code stays `invalid_prompt`: Codex
-    classifies that as fatal, while an unknown code would be retried. The
-    bounded code still reaches the log.
-    """
+    """Rewrite OpenRouter's provider-400 `invalid_prompt` as one safe line."""
     envelope = _error_envelope(failure, event)
     if envelope is None:
         return None
-    codes = (_bounded(envelope.get('code')), _bounded(envelope.get('error_type')),
-             _top_error_type(failure, event))
+    codes = error_codes(failure, event)
     if 'invalid_prompt' not in codes:
         return None
     return errors.upstream_invalid_prompt(code='invalid_prompt')
 
+def terminal_code(kind, failure, event, generic_terminal=False):
+    """Canonical terminal code for raw and normalized stream observations."""
+    return ('UPSTREAM_INCOMPLETE' if kind == 'response.incomplete' else
+            'UPSTREAM_STREAM_FAILED' if generic_terminal
+            else 'context_length_exceeded' if _context_error(failure) or _context_error(event)
+            else 'UPSTREAM_INVALID_PROMPT' if _prompt_refusal(failure, event) is not None else 'UPSTREAM_STREAM_FAILED')
 
-def normalize(chunks, metrics):
-    """Keep HTTP status separate from the terminal event's inference outcome."""
+
+def terminal_event(frame, lifecycle, kind, event, metrics, *,
+                   output_seen=False, rewrite=True):
+    """Classify one parsed event through the shared terminal policy.
+    `rewrite=False` keeps a raw provider frame byte-for-byte while retaining
+    the same verdict fields a normalized frame would settle.
+    """
+    request_evidence.response_event(metrics, event)
+    response = event.get('response') if isinstance(event, dict) else None
+    terminal_output = bool(
+        isinstance(response, dict) and response.get('output'))
+    if lifecycle != stream_events.FAILURE:
+        settled = (outcome.Outcome(
+            outcome.SUCCESS, outcome.STREAM, outcome.UPSTREAM,
+            output=output_seen or terminal_output)
+            if lifecycle == stream_events.COMPLETED else None)
+        return stream_events.StreamEvent(
+            frame, lifecycle, kind, output=terminal_output, outcome=settled, setup_slot=(stream_events.SETUP_ORDER.index(kind)
+                        if lifecycle == stream_events.SETUP else None))
+
+    failure = stream_events.failure_for(kind, event)
+    context = (kind != 'response.incomplete'
+               and (_context_error(failure) or _context_error(event)))
+    record_detail(metrics, kind, failure, event)
+    refusal = None
+    generic_terminal = False
+    metrics['failure_class'] = ('final' if kind == 'response.incomplete'
+                                else failure_class(failure, event))
+    if kind != 'response.incomplete':
+        refusal = errors.context_window() if context else _prompt_refusal(failure, event)
+        if refusal is None and kind == 'response.completed':
+            # Never let a malformed completion reach a type-driven client.
+            refusal = errors.upstream_failed()
+            generic_terminal = True
+    metrics['code'] = terminal_code(kind, failure, event, generic_terminal)
+    metrics.pop('served_model', None)
+    terminal_output = bool(
+        event.get('output') or (isinstance(failure, dict)
+                                and failure.get('output')))
+    if refusal is not None and rewrite:
+        source = TERMINAL_FROM_ROUTER
+        metrics['terminal_source'] = source
+        body = refusal.body()
+        if terminal_output:
+            body['output'] = (event.get('output')
+                              if event.get('output') is not None
+                              else failure.get('output'))
+        frame = sse.frame(json.dumps({
+            'type': 'response.failed', 'response': body}).encode())
+    else:
+        source = TERMINAL_FROM_UPSTREAM
+    category = (outcome.INCOMPLETE if kind == 'response.incomplete'
+                else outcome.CONTEXT_OVERFLOW if context
+                else outcome.UNKNOWN if generic_terminal
+                else outcome.REFUSED if refusal is not None
+                else _category_from_causes(failure, event))
+    settled = outcome.Outcome(
+        category, outcome.STREAM, source,
+        (outcome.code_for(category, _top_error_type(failure, event),
+                          error_codes(failure, event))
+         or metrics.get('upstream_reason')),
+        output_seen or terminal_output)
+    return stream_events.StreamEvent(
+        frame, lifecycle, kind, source, terminal_output, settled)
+
+
+def events(chunks, metrics):
+    """Yield each frame once with its lifecycle and terminal outcome."""
+    output_seen = success_seen = False
     for frame, data in sse.blocks(sse.lines(chunks)):
         try:
             event = json.loads(data)
         except (ValueError, UnicodeDecodeError):
-            metrics.pop('answer_frame', None)
-            metrics.pop('reasoning_frame', None)
-            yield frame
-            continue
+            event = None
+        lifecycle = stream_events.classify(data, event)
         kind = event.get('type') if isinstance(event, dict) else None
-        item_frame = kind in ('response.output_item.added',
-                              'response.output_item.done')
-        # Per frame, so a caller that stops reading cannot see a stale verdict.
-        if kind in ANSWER_FRAME_TYPES or (item_frame and _answer_item(event)):
-            metrics['answer_frame'] = kind
-        else:
-            metrics.pop('answer_frame', None)
-        # Reasoning is plumbing a retry replaces, but it can be most of the
-        # forwarded bytes, so the log names it separately.
-        if (item_frame and _reasoning_item(event)) or kind in REASONING_FRAME_TYPES:
-            metrics['reasoning_frame'] = kind
-        else:
-            metrics.pop('reasoning_frame', None)
-        if kind not in ('response.failed', 'response.incomplete', 'error'):
-            yield frame
+        if success_seen and lifecycle in (
+                stream_events.FAILURE, stream_events.ANSWER,
+                stream_events.REASONING, stream_events.SETUP):
             continue
-        failure = event.get('response') if kind.startswith('response.') else event
-        if kind == 'error' and 'error' not in event:
-            failure = {'error': event}
-        context = (kind != 'response.incomplete'
-                   and (_context_error(failure) or _context_error(event)))
-        _record_detail(metrics, kind, failure, event)
-        refusal = None
-        if kind != 'response.incomplete':
-            metrics['failure_class'] = failure_class(failure, event)
-            refusal = errors.context_window() if context else _prompt_refusal(failure, event)
-        if refusal is None:
-            metrics['code'] = ('UPSTREAM_INCOMPLETE' if kind == 'response.incomplete'
-                               else 'UPSTREAM_STREAM_FAILED')
-        else:
-            metrics['code'] = ('context_length_exceeded' if context
-                               else 'UPSTREAM_INVALID_PROMPT')
-        metrics.pop('served_model', None)
-        if refusal is not None:
-            # The provider's frame is gone: this router wrote the one the
-            # client reads, so the attribution must say so, while the bounded
-            # upstream event and code stay as the reason.
-            metrics['terminal_source'] = TERMINAL_FROM_ROUTER
-            frame = sse.frame(json.dumps({
-                'type': 'response.failed', 'response': refusal.body()}).encode())
-        yield frame
-        return  # A terminal failure cannot be followed by a successful completion.
+        observed = terminal_event(
+            frame, lifecycle, kind, event, metrics,
+            output_seen=output_seen, rewrite=True)
+        if lifecycle != stream_events.FAILURE:
+            output_seen = (output_seen or lifecycle == stream_events.ANSWER
+                           or observed.output)
+            yield observed
+            if lifecycle == stream_events.COMPLETED:
+                success_seen = True
+            continue
+        yield observed
+        return
+
+
+def _category_from_causes(failure, event):
+    """Shared category from the canonical error type and native codes."""
+    return outcome.category_for(_top_error_type(failure, event),
+                                error_codes(failure, event))
+
+
+def normalize(chunks, metrics):
+    """The frame bytes of `events`, for a caller that only forwards them."""
+    for event in events(chunks, metrics):
+        yield event.frame

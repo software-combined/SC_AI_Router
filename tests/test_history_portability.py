@@ -1,7 +1,11 @@
 import json
 import unittest
 
-from ai_router.tool_adapter import SEARCH_NAME, ToolEvents, prepare_tools
+from ai_router import provider_defs
+from ai_router.providers import ExternalResponsesProvider
+from ai_router.tool_adapter import SEARCH_NAME, ToolEvents
+from tests.harness import stub_credentials
+from tests.tool_stages import prepare_tools
 
 
 class HistoryPortabilityTests(unittest.TestCase):
@@ -21,7 +25,7 @@ class HistoryPortabilityTests(unittest.TestCase):
             # The regression that matters most: the plain pair and the discovery
             # pair pass through untouched in native mode, deterministically.
             payload = self._history_payload('deepseek/deepseek-v4.1-flash')
-            prepare_tools(payload)
+            payload = prepare_tools(payload)[0]
             kinds = [(i.get('type'), i.get('name')) for i in payload['input']]
             self.assertEqual(kinds, [('function_call', SEARCH_NAME),
                                      ('function_call_output', None),
@@ -29,13 +33,13 @@ class HistoryPortabilityTests(unittest.TestCase):
                                      ('function_call_output', 'exec')])
             self.assertEqual(payload['input'][2]['arguments'], '{"value":"probe"}')
             rerun = self._history_payload('deepseek/deepseek-v4.1-flash')
-            prepare_tools(rerun)
+            rerun = prepare_tools(rerun)[0]
             self.assertEqual(json.dumps(payload['input'], sort_keys=True),
                              json.dumps(rerun['input'], sort_keys=True))
 
         def test_portable_replaces_only_the_discovery_pair_with_a_note(self):
             payload = self._history_payload()
-            names = prepare_tools(payload)
+            payload, names = prepare_tools(payload)
             kinds = [(i.get('type'), i.get('role')) for i in payload['input']]
             self.assertEqual(kinds, [('message', 'user'), ('function_call', None),
                                      ('function_call_output', None)])
@@ -51,17 +55,17 @@ class HistoryPortabilityTests(unittest.TestCase):
                 {'type': 'input_text', 'text': '<model_switch> hop'}]}
             by_marker = self._history_payload('deepseek/deepseek-v4.1-flash')
             by_marker['input'].append(marker)
-            prepare_tools(by_marker)
+            by_marker = prepare_tools(by_marker)[0]
             self.assertEqual(json.dumps(by_marker['input'][:3], sort_keys=True),
                              json.dumps(payload['input'], sort_keys=True))
             self.assertEqual(by_marker['input'][-1], marker)
             # Mirror: the marker at index 0 means nothing is foreign, so the
             # payload is byte-identical to the native run.
             native = self._history_payload('deepseek/deepseek-v4.1-flash')
-            prepare_tools(native)
+            native = prepare_tools(native)[0]
             leading = self._history_payload('deepseek/deepseek-v4.1-flash')
             leading['input'].insert(0, marker)
-            prepare_tools(leading)
+            leading = prepare_tools(leading)[0]
             self.assertEqual(json.dumps(leading['input'][1:], sort_keys=True),
                              json.dumps(native['input'], sort_keys=True))
 
@@ -71,7 +75,7 @@ class HistoryPortabilityTests(unittest.TestCase):
                          {'type': 'function_call_output', 'name': SEARCH_NAME, 'call_id': 's9', 'output': '{}'}):
                 with self.subTest(item=item['type']):
                     payload = {'model': 'meta/muse-spark-1.3-contributor', 'tools': [exec_tool], 'input': [item]}
-                    prepare_tools(payload)
+                    payload = prepare_tools(payload)[0]
                     self.assertEqual(payload['input'], [])
 
         def test_portable_keeps_a_nameless_plain_output(self):
@@ -84,7 +88,7 @@ class HistoryPortabilityTests(unittest.TestCase):
                     'arguments': '{"value":"probe"}'}
             output = {'type': 'function_call_output', 'call_id': 'e2', 'output': 'kept'}
             payload['input'].extend([call, output])
-            prepare_tools(payload)
+            payload = prepare_tools(payload)[0]
             kept = [item for item in payload['input'] if item.get('call_id') == 'e2']
             self.assertEqual([item.get('type') for item in kept],
                              ['function_call', 'function_call_output'])
@@ -99,7 +103,7 @@ class HistoryPortabilityTests(unittest.TestCase):
                 {'type': 'input_text', 'text': '<model_switch> typed by a person'}]}
             payload = self._history_payload('deepseek/deepseek-v4.1-flash')
             payload['input'].insert(0, marker)
-            prepare_tools(payload)
+            payload = prepare_tools(payload)[0]
             self.assertEqual([(item.get('type'), item.get('name')) for item in payload['input']],
                              [('message', None), ('function_call', SEARCH_NAME),
                               ('function_call_output', None), ('function_call', 'exec'),
@@ -126,19 +130,19 @@ class HistoryPortabilityTests(unittest.TestCase):
                     payload['input'].insert(0, self._reasoning_item())
                     if with_marker:
                         payload['input'].insert(1, marker)
-                    prepare_tools(payload)
+                    payload = prepare_tools(payload)[0]
                     self.assertEqual(
                         [item for item in payload['input'] if item.get('type') == 'reasoning'], [])
             after = self._history_payload('deepseek/deepseek-v4.1-flash')
             after['input'].insert(0, marker)
             after['input'].insert(1, self._reasoning_item())
-            prepare_tools(after)
+            after = prepare_tools(after)[0]
             self.assertEqual(
                 [item.get('id') for item in after['input'] if item.get('type') == 'reasoning'],
                 ['rs_tmp_probe'])
             native = self._history_payload('deepseek/deepseek-v4.1-flash')
             native['input'].insert(0, self._reasoning_item())
-            prepare_tools(native)
+            native = prepare_tools(native)[0]
             self.assertEqual(
                 [item.get('id') for item in native['input'] if item.get('type') == 'reasoning'],
                 ['rs_tmp_probe'])
@@ -147,9 +151,6 @@ class HistoryPortabilityTests(unittest.TestCase):
             # End-to-end through the provider this incident used: the refused
             # body had a carried reasoning item and Meta rejected it, while the
             # same body without that item is accepted.
-            from ai_router import provider_defs
-            from ai_router.providers import ExternalResponsesProvider
-            from tests.harness import stub_credentials
 
             def wire(model):
                 payload = self._history_payload(model)
@@ -171,7 +172,7 @@ class HistoryPortabilityTests(unittest.TestCase):
                               summary=[{'type': 'text', 'text': 'ten-call cap'}])
             payload = self._history_payload()
             payload['input'].insert(0, summarised)
-            prepare_tools(payload)
+            payload = prepare_tools(payload)[0]
             self.assertEqual([i for i in payload['input'] if i.get('type') == 'reasoning'], [])
             notes = [i for i in payload['input']
                      if i.get('type') == 'message' and i.get('role') == 'user']
@@ -202,7 +203,7 @@ class HistoryPortabilityTests(unittest.TestCase):
                 marker,
                 {'type': 'message', 'role': 'user', 'content': [
                     {'type': 'input_text', 'text': 'next'}]}]
-            prepare_tools(payload)
+            payload = prepare_tools(payload)[0]
             # A group after the marker is native and receives no note; the
             # marker sits between the rewritten foreign prefix and the rest.
             self.assertEqual([item.get('type') for item in payload['input']],
@@ -235,7 +236,7 @@ class HistoryPortabilityTests(unittest.TestCase):
                 marker,
                 {'type': 'message', 'role': 'user', 'content': [
                     {'type': 'input_text', 'text': 'next'}]}]
-            prepare_tools(payload)
+            payload = prepare_tools(payload)[0]
             # A group after the marker is native and receives no note.
             self.assertEqual([item.get('type') for item in payload['input']],
                              ['apply_patch_call', 'apply_patch_call_output',
@@ -255,9 +256,6 @@ class HistoryPortabilityTests(unittest.TestCase):
             # marker is dropped, the current model's own reasoning after it
             # reaches the wire (blob stripped, text kept). Proven to fail on
             # 48c00a0, where both items were dropped.
-            from ai_router import provider_defs
-            from ai_router.providers import ExternalResponsesProvider
-            from tests.harness import stub_credentials
             payload = {'model': 'deepseek/deepseek-v4.1-flash',
                        'tools': [{'type': 'function', 'name': 'exec',
                                   'parameters': {'type': 'object'}}],
@@ -281,7 +279,7 @@ class HistoryPortabilityTests(unittest.TestCase):
                                 dict(self._reasoning_item(), id='rs_second'),
                                 self._marker('<model_switch> two'),
                                 dict(self._reasoning_item(), id='rs_native')]
-            prepare_tools(payload)
+            payload = prepare_tools(payload)[0]
             self.assertEqual(
                 [i.get('id') for i in payload['input'] if i.get('type') == 'reasoning'],
                 ['rs_native'])
@@ -291,7 +289,7 @@ class HistoryPortabilityTests(unittest.TestCase):
             payload['input'] = [dict(self._reasoning_item(), id='rs_before'),
                                 self._marker(),
                                 dict(self._reasoning_item(), id='rs_after')]
-            prepare_tools(payload)
+            payload = prepare_tools(payload)[0]
             self.assertEqual(
                 [i for i in payload['input'] if i.get('type') == 'reasoning'], [])
 
@@ -310,7 +308,7 @@ class HistoryPortabilityTests(unittest.TestCase):
                 self._marker(),
                 {'type': 'function_call_output', 'name': 'exec', 'call_id': 'c0', 'output': 'a'},
                 search_output]
-            prepare_tools(payload)
+            payload = prepare_tools(payload)[0]
             kinds = [(i.get('type'), i.get('name')) for i in payload['input']]
             self.assertEqual(kinds, [('function_call', 'exec'),
                                      ('function_call', SEARCH_NAME),
@@ -327,7 +325,7 @@ class HistoryPortabilityTests(unittest.TestCase):
                 dict(self._reasoning_item(), id='rs_straddle'),
                 self._marker(),
                 {'type': 'function_call_output', 'name': 'exec', 'call_id': 'c0', 'output': 'a'}]
-            prepare_tools(payload2)
+            payload2 = prepare_tools(payload2)[0]
             self.assertEqual(
                 [i.get('id') for i in payload2['input'] if i.get('type') == 'reasoning'],
                 ['rs_straddle'])
@@ -346,7 +344,7 @@ class HistoryPortabilityTests(unittest.TestCase):
                 {'type': 'function_call_output', 'name': 'exec', 'call_id': 'c0', 'output': 'a'},
                 {'type': 'tool_search_output', 'call_id': 's1', 'execution': 'client',
                  'status': 'completed', 'tools': []}]
-            prepare_tools(payload)
+            payload = prepare_tools(payload)[0]
             kinds = [(i.get('type'), i.get('name')) for i in payload['input']]
             self.assertEqual(kinds, [('function_call', SEARCH_NAME),
                                      ('function_call', 'exec'),

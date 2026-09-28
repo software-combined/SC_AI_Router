@@ -10,7 +10,7 @@ For installation or updates of this bundled skill, complete the plugin's
 Agents must verify the schedule and an update run; a pull alone is not setup.
 Respect explicit read-only scope; ordinary tasks reuse the existing schedule.
 
-Delegate using the [pre-commit runtime mapping](../pre-commit-review/SKILL.md#runtime-mapping) entry for the active runtime. Apply its availability and identity-recording rules, and let an explicit applicable host/project model policy take precedence. Use a Codex executor subagent or the native `code-simplifier` agent in OpenCode/Claude Code; do not maintain a second model table here.
+Delegate using the active runtime's entry under [models and runtimes](../pre-commit-review/SKILL.md#models-and-runtimes) in the pre-commit review skill. Apply its availability and identity-recording rules, and let an explicit applicable host/project model policy take precedence. Use a Codex executor subagent, or the installed `code-simplifier` agent in Claude Code or OpenCode; do not maintain a second model table here.
 
 Supply the staged scope and relevant context with the prompt below. Require the executor to read the bundled [ponytail](../ponytail/SKILL.md) in full before inspection; supply its resolved absolute path. During its edits the main agent pauses writing; the main agent stages and verifies the result afterwards.
 

@@ -22,10 +22,10 @@ prompt to it.
 """
 import json
 
-from . import errors, provider_defs, subscription_roster, wire_shape
+from . import (attempt_policy, errors, provider_defs, request_context,
+               subscription_roster, wire_shape)
 from .image_items import has_images
 from .providers import ExternalResponsesProvider
-from .registry import by_slug
 from .events import log_event
 
 HELPER_SOURCES = frozenset({'thread_title', 'thread_description',
@@ -50,12 +50,15 @@ def helper_turn(headers):
     return isinstance(source, str) and source in HELPER_SOURCES
 
 
-def twin_slug(model):
-    """Registry slug of the external twin for a subscription slug, else None."""
+def twin_slug(model, catalogue=None):
+    """Registry slug of the external twin for a subscription slug, else None.
+
+    `catalogue` is the request's captured generation; None reads the live one."""
     if not isinstance(model, str):
         return None
     successor = subscription_roster.SUCCESSORS.get(model, model)
-    entry = by_slug(TWIN_PREFIX + successor)
+    rows = request_context.capture() if catalogue is None else catalogue
+    entry = rows.get(TWIN_PREFIX + successor)
     if entry is None or not provider_defs.is_external(entry.provider):
         return None
     defn = provider_defs.get(entry.provider)
@@ -63,25 +66,30 @@ def twin_slug(model):
 
 
 class Plan:
-    """External twin prepared lazily, only once upstream actually refuses."""
+    """External twin prepared lazily, only once upstream actually refuses.
 
-    __slots__ = ('slug', 'path', 'payload', 'raw_body', 'headers', 'credentials',
+    `target` is the refused request's own context retargeted to the twin
+    row: same request id, same registry generation, whatever a refresh
+    swapped in between the plan and the refusal."""
+
+    __slots__ = ('target', 'path', 'payload', 'raw_body', 'headers', 'credentials',
                  'region')
 
-    def __init__(self, slug, path, payload, raw_body, headers, credentials,
+    def __init__(self, target, path, payload, raw_body, headers, credentials,
                  region='global'):
-        self.slug, self.path, self.payload = slug, path, payload
+        self.target, self.path, self.payload = target, path, payload
         self.raw_body, self.headers = raw_body, headers
         self.credentials = credentials
         self.region = region
 
     def prepared(self):
         """Prepared request for the twin row; raises exactly as prepare() does."""
-        payload = dict(self.payload, model=self.slug)
-        defn = provider_defs.get(by_slug(self.slug).provider)
+        target = self.target
+        payload = dict(self.payload, model=target.slug)
+        defn = provider_defs.get(target.row.provider)
         return ExternalResponsesProvider(defn, self.region).prepare(
-            self.slug, self.path, payload, self.raw_body, self.headers,
-            self.credentials)
+            target.slug, self.path, payload, self.raw_body, self.headers,
+            self.credentials, context=target)
 
 
 def plan(state, prepared, path, payload, raw_body, headers, credentials):
@@ -96,7 +104,9 @@ def plan(state, prepared, path, payload, raw_body, headers, credentials):
         return None
     if not helper_turn(headers):
         return None
-    slug = twin_slug(payload.get('model'))
+    context = prepared.context or request_context.resolve(
+        payload.get('model'), request_context.capture())  # a direct call
+    slug = twin_slug(context.slug, context.catalogue)
     if slug is None:
         return None
     # Plan 068: the twin is an external row, so the portco allowlist gates
@@ -112,17 +122,20 @@ def plan(state, prepared, path, payload, raw_body, headers, credentials):
     region = state.get('openrouter_region', 'global')
     if not provider_defs.valid_region(region):
         region = 'global'
-    return Plan(slug, path, payload, raw_body, headers, credentials, region)
+    return Plan(request_context.retarget(context, slug), path, payload, raw_body,
+                headers, credentials, region)
 
 
-def prepare(provider, model, path, payload, raw_body, headers, server, decoded_len=None):
+def prepare(provider, model, path, payload, raw_body, headers, server, decoded_len=None,
+            context=None):
     """provider.prepare plus the refused-turn fallback plan when eligible.
 
     Only Responses adapters own these two paths, so every prepared Responses
     body also passes the observe-only contract check.
     """
     prepared = provider.prepare(model, path, payload, raw_body, headers,
-                                server.credentials, decoded_len=decoded_len)
+                                server.credentials, decoded_len=decoded_len,
+                                context=context)
     if path in ('/responses', '/responses/compact'):
         _observe_contract(provider, prepared, model, path, payload, raw_body)
     prepared.fallback = plan(server.state, prepared, path, payload, raw_body, headers,
@@ -140,7 +153,9 @@ def _observe_contract(provider, prepared, model, path, payload, raw_body):
     try:
         wire = (payload if prepared.body is raw_body
                 else wire_shape.decode_wire(prepared.body))
-        found = wire_shape.violations(provider.defn.dialect, wire)
+        row = getattr(prepared.context, 'row', None)
+        found = wire_shape.violations(provider.defn.dialect, wire,
+                                      getattr(row, 'observed_item_types', ()))
     except Exception as exc:  # noqa: BLE001 - observation must never fail a turn
         found = {'error_type': type(exc).__name__}
     if any(found.values()):
@@ -166,35 +181,61 @@ def refusal_message(prepared, metrics):
             'Retry shortly, or select a routed model instead.')
 
 
-def refused(handler, prepared, retry_after, metrics, started):
-    """Answer a refused turn: the planned twin row, else the retryable 503."""
+def _answer_refusal(handler, ledger, refusal, retry_after):
+    """Commit the refusal only after the client writer reports delivery."""
+    sent = handler.error(refusal, retry_after)
+    if sent is True or getattr(handler, 'response_committed', False):
+        ledger.mark_committed()
+    attempt_policy.settle_delivery(ledger, handler)
+
+
+def refused(handler, prepared, retry_after, metrics, started, admit=None, *, ledger):
+    """Answer a refused turn, else name the planned twin route that answers it.
+
+    Returns the twin's `attempt_policy.Route` once `ledger` has moved to it,
+    else None after sending the retryable 503. The ledger allows one route
+    change per request, so a twin can never fall back again. `admit` sizes the
+    twin with the refused body still held, before its send.
+    """
     refusal = errors.upstream_rate_limited(refusal_message(prepared, metrics))
     fallback = prepared.fallback
-    if fallback is None:
-        return handler.error(refusal, retry_after)
+    if fallback is None or not ledger.permits(attempt_policy.HELPER_FALLBACK):
+        ledger.decide(attempt_policy.HELPER_FALLBACK,
+                      'no_plan' if fallback is None else 'budget')
+        _answer_refusal(handler, ledger, refusal, retry_after)
+        return None
     try:
         twin = fallback.prepared()
-    except (LookupError, ValueError, PermissionError, OSError) as exc:
-        # No key, unreadable twin row, rejected effort: keep today's answer.
+        if admit is not None:
+            admit(twin, prepared)
+    except (LookupError, ValueError, PermissionError, OSError, errors.OversizeBusy) as exc:
+        # No key, unreadable twin row, rejected effort, no room for the twin
+        # (InvalidSize is a ValueError): keep today's answer.
         log_event('subscription_fallback_unavailable', model=metrics.get('model'),
-                  fallback_model=fallback.slug, reason=type(exc).__name__)
-        return handler.error(refusal, retry_after)
+                  fallback_model=fallback.target.slug, reason=type(exc).__name__)
+        ledger.decide(attempt_policy.HELPER_FALLBACK, 'unavailable')
+        _answer_refusal(handler, ledger, refusal, retry_after)
+        return None
+    ledger.decide(attempt_policy.HELPER_FALLBACK)
     log_event('subscription_fallback', model=metrics.get('model'),
-              fallback_model=fallback.slug, path=fallback.path)
+              fallback_model=fallback.target.slug, path=fallback.path)
     fields = ('request_bytes', 'stream', 'reasoning_effort', 'tool_definitions',
               'read_ms', 'prepare_ms', 'local_prepare_ms')
-    # Fresh metrics: attempt one's upstream timings belong to the 429. The
-    # protocol rides along so a mid-stream failure still emits the terminal
-    # frame (transport.emit_terminal_failure keys on it, Plan 141).
-    defn = provider_defs.get(by_slug(fallback.slug).provider)
-    _region = getattr(fallback, 'region', 'global')
+    # Fresh metrics: attempt one's upstream timings belong to the 429.
+    # Protocol here is diagnostic; the ledger owns the route's wire facts.
+    # The twin's context is the refused request's, so its final record
+    # carries the same request id.
+    defn = provider_defs.get(twin.context.row.provider)
     twin_metrics = {k: metrics[k] for k in fields if k in metrics}
-    twin_metrics.update(provider=defn.id, model=fallback.slug,
+    twin_metrics.update(request_id=twin.context.request_id, provider=defn.id,
+                        model=twin.context.slug,
                         path=fallback.path, helper_fallback=True,
                         protocol=provider_defs.RESPONSES,
                         # The twin's own cap, from its freshly prepared body.
-                        max_output_tokens=getattr(twin, 'output_cap', None))
-    # The owned-request slot still covers this hand-off; relay no longer
-    # takes or releases a slot of its own.
-    return handler.relay(ExternalResponsesProvider(defn, _region), twin, twin_metrics, started,
-                         has_images(fallback.payload.get('input')))
+                        max_output_tokens=twin.output_cap)
+    # The request's in-flight slot and large-request lease still cover this
+    # hand-off; the twin route neither takes nor releases one of its own.
+    twin_provider = ExternalResponsesProvider(defn, fallback.region)
+    ledger.transition(twin_provider, provider_defs.RESPONSES, model=twin.context.slug)
+    return attempt_policy.Route(twin_provider, twin, twin_metrics,
+                                has_images(fallback.payload.get('input')))

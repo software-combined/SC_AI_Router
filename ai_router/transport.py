@@ -7,8 +7,10 @@ import http.client  # noqa: F401 (re-exported for consumer call sites)
 import json
 import time
 import traceback
+from collections import namedtuple
 
-from . import provider_defs
+from . import messages_errors, provider_defs, request_evidence
+from .errors import InvalidSize
 
 
 HOP_HEADERS = {'host', 'connection', 'content-length', 'transfer-encoding',
@@ -16,28 +18,75 @@ HOP_HEADERS = {'host', 'connection', 'content-length', 'transfer-encoding',
                'te', 'trailer', 'cookie'}
 
 
+class ResponseFormat(namedtuple('ResponseFormat', 'protocol operation stream kind encoding')):
+    """Immutable wire facts for one HTTP response attempt, separate from logs."""
+    __slots__ = ()
+
+    @classmethod
+    def capture(cls, request, response):
+        return cls(request.protocol, request.operation, request.stream, *describe_response(response))
+
+
 class Prepared:
     """Upstream target plus wire body. Built by protocol adapters.
 
     `fallback` is the optional plan for answering this request elsewhere
     when upstream refuses it (see subscription_fallback); None means the
-    refusal is relayed as-is.
+    refusal is relayed as-is. `context` is the request's resolved snapshot
+    (request_context.Resolved) the adapter prepared against.
+    `decoded_body_bytes` is what `body` decodes to: the size ingress decoded
+    for the client's own compressed bytes, len(body) for a body the adapter
+    serialized; `len(body)` is always the wire size.
     """
 
     __slots__ = ('host', 'path', 'headers', 'body', 'tool_names', 'provider',
-                 'fallback', 'output_cap', 'context_tokens')
+                 'fallback', 'output_cap', 'context_tokens', 'context',
+                 'decoded_body_bytes')
 
     def __init__(self, host, path, headers, body, tool_names, provider,
-                 fallback=None, output_cap=None, context_tokens=None):
+                 fallback=None, output_cap=None, context_tokens=None, context=None,
+                 decoded_body_bytes=None):
         self.host, self.path, self.headers = host, path, headers
         self.body, self.tool_names, self.provider = body, tool_names, provider
-        self.fallback = fallback
+        self.fallback, self.context = fallback, context
+        self.decoded_body_bytes = decoded_body_bytes
         # The output cap this request asks upstream for, when the adapter
         # computes one; None when the client's own body passes through.
         self.output_cap = output_cap
         # Input tokens this thread carries, when the adapter computed one;
         # None keeps the provider's own usage on the wire.
         self.context_tokens = context_tokens
+
+
+# The local resource ceiling on one request, on the wire and decoded, for
+# every route and encoding. It bounds what one turn may make this router hold
+# (a native turn is forwarded whole, and a zstd one may decode this far so
+# prepare can slim released-tool schemas); it is no provider's or
+# subscription's limit. runtime.MAX_BODY stays the ordinary threshold.
+MAX_REQUEST_BYTES = 96 * 1024 * 1024
+
+
+def encoded(headers):
+    """True when `headers` declare a Content-Encoding other than identity."""
+    return any(key.lower() == 'content-encoding'
+               and value.strip().lower() not in ('', 'identity')
+               for key, value in headers.items())
+
+
+def request_bytes(prepared):
+    """The larger of one prepared body's wire and decoded sizes.
+
+    InvalidSize past MAX_REQUEST_BYTES, and for a compressed body that does
+    not carry its decoded size: its wire length alone would under-count it.
+    """
+    wire, decoded = len(prepared.body), prepared.decoded_body_bytes
+    if decoded is None:
+        if encoded(prepared.headers):
+            raise InvalidSize('Invalid request size')
+        decoded = wire
+    if max(wire, decoded) > MAX_REQUEST_BYTES:
+        raise InvalidSize('Decoded request is too large')
+    return max(wire, decoded)
 
 
 def passthrough(response):
@@ -79,20 +128,25 @@ def post_with_phases(conn, prepared, metrics):
 
     Each timestamp lands in a finally, so a failure raises with the
     phases recorded so far already in metrics (transport_error
-    carries them). Returns (response, headers_done) on success.
+    carries them). Returns (response, headers_done) on success. Every send
+    passes here, so no body past the request ceiling ever leaves.
     """
+    request_bytes(prepared)
     setup_done = time.monotonic()
+    request_evidence.phase(metrics, 'connect')
     try:
         conn.connect()
     finally:
         connect_done = time.monotonic()
         metrics['connect_ms'] = round((connect_done - setup_done) * 1000, 1)
+    request_evidence.phase(metrics, 'send')
     try:
         conn.request('POST', prepared.path, body=prepared.body,
                      headers=prepared.headers)
     finally:
         send_done = time.monotonic()
         metrics['send_ms'] = round((send_done - connect_done) * 1000, 1)
+    request_evidence.phase(metrics, 'headers')
     try:
         response = conn.getresponse()
     finally:
@@ -143,34 +197,36 @@ def describe_location(exc):
         for frame in traceback.extract_tb(exc.__traceback__, limit=3))
 
 
-def emit_terminal_failure(wfile, metrics):
-    """Best-effort mid-stream terminal frame on Responses SSE only.
+def write_full(wfile, data):
+    """Write one complete body or raise on an explicit short write."""
+    written = wfile.write(data)
+    if written is not None and written != len(data):
+        raise OSError('short client write')
+    wfile.flush()
 
-    The protocol, not the provider name, decides: a Messages stream carries
-    no `response.failed` frame. No-op for non-SSE bodies; a dead socket never
-    raises from the error path.
-    """
+
+def emit_terminal_failure(wfile, response_format):
+    """Best-effort native terminal on a repairable identity event stream."""
     from .errors import upstream_failed
-    if not (metrics.get('stream') is True
-            and metrics.get('response_kind') == 'sse'
-            and metrics.get('response_encoding') == 'identity'
-            and metrics.get('protocol') == provider_defs.RESPONSES):
+    if not (response_format.stream is True
+            and response_format.kind == 'sse'
+            and response_format.encoding == 'identity'
+            and response_format.protocol in (provider_defs.RESPONSES, provider_defs.MESSAGES)):
         # Identity only: appending plaintext to an encoded stream would be
         # undecodable for the client.
-        return
-    frame = ('event: response.failed\ndata: ' + json.dumps(
-        {'type': 'response.failed',
-         'response': upstream_failed().body()}) + '\n\n').encode()
+        return False
+    messages = response_format.protocol == provider_defs.MESSAGES
+    native = 'error' if messages else 'response.failed'
+    body = (messages_errors.render(upstream_failed()).body() if messages else
+            {'type': native, 'response': upstream_failed().body()})
+    frame = ('event: ' + native + '\ndata: ' + json.dumps(body) + '\n\n').encode()
     try:
-        wfile.write(frame)
-        wfile.flush()
+        write_full(wfile, frame)
     except (OSError, ValueError):
         # Closed-file ValueError plus dead-socket OSError: never raise here.
-        pass
-    else:
-        # Only claim the frame once it is written: the log line must not report
-        # a terminal frame the client never received.
-        metrics['terminal_source'] = 'router'
+        return False
+    # The caller records its terminal only after successful delivery.
+    return True
 
 
 def relay_headers(response, send_header, model):

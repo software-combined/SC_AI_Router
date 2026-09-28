@@ -3,7 +3,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from ai_router import provider_defs, upstream
+from ai_router import provider_defs, providers, upstream
 
 
 class FailureDescriptionTests(unittest.TestCase):
@@ -17,9 +17,8 @@ class FailureDescriptionTests(unittest.TestCase):
         self.assertIn('Retry a shorter turn', message)
         self.assertNotIn('120', message)
 
-    def test_grok_image_stall_suggests_dropping_the_image(self):
-        # The hint matches the pinned id and any tilde alias of the vendor.
-        for model in ('x-ai/grok-4.7', '~x-ai/grok-latest'):
+    def test_image_stall_suggests_dropping_the_image_for_any_model(self):
+        for model in ('x-ai/grok-4.7', '~x-ai/grok-latest', 'z-ai/glm-5.3'):
             with self.subTest(model=model):
                 status, message, _ = upstream.describe_failure(
                     TimeoutError('timed out'), None,
@@ -30,7 +29,7 @@ class FailureDescriptionTests(unittest.TestCase):
         _, message, _ = upstream.describe_failure(
             TimeoutError('timed out'), None,
             {'model': 'z-ai/glm-5.3', 'provider': 'openrouter',
-             'elapsed_ms': 120001.0, 'timeout_s': 120, 'has_image': True})
+             'elapsed_ms': 120001.0, 'timeout_s': 120, 'has_image': False})
         self.assertNotIn('image', message)
 
     def test_dns_failure_names_the_model_and_leaves_the_host_to_the_log(self):
@@ -212,7 +211,7 @@ class RelayEndpointLogTests(unittest.TestCase):
             server=SimpleNamespace(credentials=SimpleNamespace(
                 key_rejected=lambda provider: False)),
             error=lambda err, **k: None)
-        provider = SimpleNamespace(defn=provider_defs.OPENROUTER)
+        provider = providers.ExternalResponsesProvider(provider_defs.OPENROUTER)
         body = json.dumps({'model': 'm', 'input': []}).encode()
         prepared = Prepared('openrouter.ai', '/responses', {}, body, {}, 'openrouter')
         metrics = {'provider': 'openrouter', 'protocol': 'responses',
@@ -286,8 +285,8 @@ class RefusalCacheTests(unittest.TestCase):
         handler = SimpleNamespace(
             server=SimpleNamespace(credentials=SimpleNamespace(
                 key_rejected=lambda provider: False)),
-            error=lambda err: seen.update(err=err))
-        provider = SimpleNamespace(defn=provider_defs.OPENROUTER)
+            error=lambda err: seen.update(err=err) or True)
+        provider = providers.ExternalResponsesProvider(provider_defs.OPENROUTER)
         body = json.dumps({'model': 'm', 'input': [], 'tools': []}).encode()
         prepared = Prepared('openrouter.ai', '/responses', {}, body, {}, 'openrouter')
         metrics = {'provider': 'openrouter', 'protocol': 'responses',
@@ -302,10 +301,11 @@ class RefusalCacheTests(unittest.TestCase):
         self.assertEqual(len(dispatches), 1)
         self.assertEqual(seen['err'].status, 400)
         self.assertEqual(seen['err'].message, first.message)
-        cached = [e for e, _ in events if e == 'upstream_rejected_cached']
-        self.assertEqual(len(cached), 1)
-        fields = dict(events[-1][1])
-        self.assertNotIn('request_bytes', fields)
+        self.assertEqual([e for e, _ in events].count('upstream_rejected_cached'), 1)
+        fields = {event: values for event, values in events}
+        self.assertNotIn('request_bytes', fields['upstream_rejected_cached'])
+        self.assertEqual((fields['attempt_ledger']['outcome'], fields['attempt_ledger']['outcome_phase']), ('refused', 'status'))
+        self.assertTrue(fields['attempt_ledger']['committed'])
 
     def test_changed_body_dispatches_again(self):
         body = json.dumps({'input': []}).encode()
@@ -411,7 +411,7 @@ class RefusalCacheTests(unittest.TestCase):
             server=SimpleNamespace(credentials=SimpleNamespace(
                 key_rejected=lambda provider: False)),
             error=lambda err: seen.setdefault('err', err))
-        provider = SimpleNamespace(defn=provider_defs.OPENROUTER)
+        provider = providers.ExternalResponsesProvider(provider_defs.OPENROUTER)
         body = json.dumps({'model': 'm', 'input': [], 'tools': []}).encode()
         prepared = Prepared('openrouter.ai', '/responses', {}, body, {}, 'openrouter')
         metrics = {'provider': 'openrouter', 'protocol': 'responses',

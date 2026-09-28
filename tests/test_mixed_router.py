@@ -8,7 +8,7 @@ import threading
 import time
 import unittest
 from unittest import mock
-from ai_router import providers
+from ai_router import compaction_summary, providers
 from ai_router.credentials import Credentials
 from tests.harness import (
     StubCredentials as _StubCredentials,
@@ -24,6 +24,8 @@ def _external_responses():
     return providers.ExternalResponsesProvider(_defs.OPENROUTER)
 
 
+class SummaryAvailabilityTest(unittest.TestCase):
+    def setUp(self): self.enterContext(mock.patch.object(compaction_summary.availability, 'current', return_value={'key': compaction_summary.availability.key_fingerprint('key'), 'region': 'global', 'models': frozenset((*compaction_summary.SUMMARY_MODEL_SLUGS, 'z-ai/glm-5.3'))})); self.enterContext(mock.patch.object(providers.ExternalResponsesProvider, '_require_summary_rows', return_value={}))
 
 
 def _prepared(model, path, payload, headers=None, openai_models=None):
@@ -226,15 +228,23 @@ class _FakeResp:
 
 def _fake_conn_class(status, payload, seen=None):
     class FakeConn:
-        def __init__(self, *a, **k): pass
+        def __init__(self, *a, **k):
+            self._request_model = None
+        def connect(self):
+            pass
         def request(self, method, path, body=None, headers=None):
             if seen is not None and body is not None:
                 seen['body'] = json.loads(body)
-        def getresponse(self): return _FakeResp(status, payload)
+            if body is not None:
+                self._request_model = json.loads(body).get('model')
+        def getresponse(self):
+            response = dict(payload)
+            response.setdefault('model', self._request_model)
+            return _FakeResp(status, response)
         def close(self): pass
     return FakeConn
 
-class CompactBranchTests(unittest.TestCase):
+class CompactBranchTests(SummaryAvailabilityTest):
     def _server(self):
         self._started = _start_auth_server(self)
 
@@ -317,9 +327,9 @@ class CompactBranchTests(unittest.TestCase):
 
     def test_summarizer_receives_flattened_transcript(self):
         seen = {}
-        with mock.patch.object(providers.http.client, 'HTTPSConnection', _fake_conn_class(200, {'output': [
-                {'type': 'message', 'content': [
-                    {'type': 'output_text', 'text': 'summary'}]}]}, seen)):
+        with mock.patch.object(compaction_summary.http.client, 'HTTPSConnection', _fake_conn_class(200, {'output': [
+                                      {'type': 'message', 'content': [
+                                          {'type': 'output_text', 'text': 'summary'}]}]}, seen)):
             summary = _external_responses().summarize('z-ai/glm-5.3', 'key', [
                 {'type': 'message', 'role': 'user', 'content': 'user bit'},
                 {'type': 'function_call_output', 'call_id': 'c', 'output': 'tool bit'}])
@@ -367,12 +377,10 @@ class CompactBranchTests(unittest.TestCase):
             self.assertTrue(responded.wait(timeout=10))
             self._await_quiet(self._started)
 
-class SummarizerParsingTests(unittest.TestCase):
+class SummarizerParsingTests(SummaryAvailabilityTest):
     def _fake_conn(self, status, payload):
-        patcher = mock.patch.object(providers.http.client, 'HTTPSConnection',
-                                    _fake_conn_class(status, payload))
-        patcher.start()
-        self.addCleanup(patcher.stop)
+        self.enterContext(mock.patch.object(
+            compaction_summary.http.client, 'HTTPSConnection', _fake_conn_class(status, payload)))
 
     def test_non_200_fails_closed(self):
         self._fake_conn(500, {'error': 'busy'})

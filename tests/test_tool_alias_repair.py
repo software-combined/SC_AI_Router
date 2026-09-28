@@ -9,9 +9,10 @@ import unittest
 from unittest import mock
 
 from ai_router import tool_aliases, upstream
-from ai_router.tool_adapter import ToolEvents, prepare_tools
+from ai_router.tool_adapter import ToolEvents
 from tests.fakes import FakeUpstream, install_fake
 from tests.harness import auth_file, post, start_server, test_state
+from tests.tool_stages import prepare_tools
 
 
 def _namespaced(namespace, *names):
@@ -21,9 +22,9 @@ def _namespaced(namespace, *names):
 
 
 def _prepare(namespace, *names):
-    payload = {'model': 'z-ai/glm-5.3', 'tools': _namespaced(namespace, *names),
-               'input': []}
-    return prepare_tools(payload), payload
+    payload, names = prepare_tools({'model': 'z-ai/glm-5.3',
+                                    'tools': _namespaced(namespace, *names), 'input': []})
+    return names, payload
 
 
 def _call(name, **extra):
@@ -110,10 +111,9 @@ class AliasSchemeTests(unittest.TestCase):
         self.assertEqual(once.count('That name marks a message'), 1)
 
     def test_delivered_name_gets_the_delivered_hint(self):
-        from ai_router.tool_aliases import HINT_DELIVERED
         names, _ = _prepare('probe', 'echo')
         output = tool_aliases.annotate('unsupported call: delivered_message', names)
-        self.assertIn(HINT_DELIVERED, output)
+        self.assertIn(tool_aliases.HINT_DELIVERED, output)
         self.assertNotIn('probe__echo', output)
         with mock.patch('ai_router.tool_aliases.log_event') as logged:
             ToolEvents(names, {'model': 'm'}).item(_call('delivered_message'))
@@ -154,7 +154,7 @@ class AliasSchemeTests(unittest.TestCase):
                    'tools': _namespaced('gamma', 'send_message')
                             + _namespaced('delta', 'send_message'),
                    'input': []}
-        names = prepare_tools(payload)
+        payload, names = prepare_tools(payload)
         dropped = [key for key in names if names[key].get('name') == 'send_message'][0]
         names.pop(dropped)
         names.dropped.add('send_message')  # the ceiling withheld that native name
@@ -177,7 +177,7 @@ class AliasSchemeTests(unittest.TestCase):
                 {'type': 'function', 'name': f'unrelated_{i}',
                  'parameters': {'type': 'object'}} for i in range(400)],
             'input': [{'type': 'tool_search_output', 'call_id': 's1', 'tools': [released]}]}
-        names = prepare_tools(payload)
+        payload, names = prepare_tools(payload)
         self.assertIn('gamma__send_message', [tool['name'] for tool in payload['tools']])
         self.assertIn('send_message', names.dropped)
         back = ToolEvents(names).item(_call('send_message'))
@@ -223,7 +223,7 @@ class AliasSchemeTests(unittest.TestCase):
                'parameters': {'type': 'object'}}
         payload = {'model': 'z-ai/glm-5.3',
                    'tools': [top] + _namespaced('probe', 'echo'), 'input': []}
-        names = prepare_tools(payload)
+        payload, names = prepare_tools(payload)
         with mock.patch('ai_router.tool_aliases.log_event') as logged:
             back = ToolEvents(names, {'model': 'z-ai/glm-5.3'}).item(_call('echo'))
         self.assertEqual(back['name'], 'echo')
@@ -242,7 +242,7 @@ class AliasSchemeTests(unittest.TestCase):
         payload = {'model': 'z-ai/glm-5.3',
                    'tools': _namespaced('alpha', 'echo') + _namespaced('beta', 'echo'),
                    'input': []}
-        names = prepare_tools(payload)
+        payload, names = prepare_tools(payload)
         back = ToolEvents(names).item(_call('echo'))
         self.assertEqual(back['name'], 'echo')
         self.assertNotIn('namespace', back)
@@ -253,7 +253,7 @@ class GuidanceTests(unittest.TestCase):
         payload = {'model': 'z-ai/glm-5.3', 'tools': _namespaced('probe', 'echo'),
                    'input': [{'type': 'function_call_output', 'call_id': 'c1',
                               'output': text}]}
-        prepare_tools(payload)
+        payload = prepare_tools(payload)[0]
         return payload['input'][0]['output']
 
     def test_damaged_name_gains_exact_alias(self):
@@ -273,9 +273,9 @@ class GuidanceTests(unittest.TestCase):
         payload = {'model': 'z-ai/glm-5.3', 'tools': _namespaced('probe', 'echo'),
                    'input': [{'type': 'function_call_output', 'call_id': 'c1',
                               'output': 'unsupported call: probe__ech'}]}
-        prepare_tools(payload)
+        payload = prepare_tools(payload)[0]
         once = payload['input'][0]['output']
-        prepare_tools(payload)
+        payload = prepare_tools(payload)[0]
         self.assertEqual(payload['input'][0]['output'], once)
         self.assertEqual(once.count('No tool with that exact name'), 1)
 

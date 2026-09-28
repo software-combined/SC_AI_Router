@@ -4,7 +4,14 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from ai_router import provider_defs, strip_retry, upstream
+from ai_router import provider_defs, providers, rejected_repair, transport, upstream
+
+UNNAMED = json.dumps({'error': {'message': 'Provider returned error',
+                                'metadata': {'provider_name': 'Meta'}}}).encode()
+CONTEXT = json.dumps({'error': {'code': 'context_length_exceeded',
+                                'message': 'context length exceeded'}}).encode()
+ENCRYPTED = json.dumps({'error': {'message': 'the request was rejected',
+                                  'code': 'invalid_encrypted_content'}}).encode()
 
 
 class StripAnnotationsTests(unittest.TestCase):
@@ -14,17 +21,49 @@ class StripAnnotationsTests(unittest.TestCase):
                            'prompt_cache_options': {'mode': 'auto'},
                            'store': True, 'user': 'u',
                            'stream': True, 'max_output_tokens': 32000}).encode()
-        stripped = json.loads(strip_retry.strip_annotations(body))
+        stripped = json.loads(rejected_repair.strip_annotations(body))
         self.assertEqual(stripped, {'model': 'm', 'input': [], 'tools': [],
                                     'stream': True, 'max_output_tokens': 32000})
 
     def test_nothing_to_strip_returns_none(self):
         body = json.dumps({'model': 'm', 'input': []}).encode()
-        self.assertIsNone(strip_retry.strip_annotations(body))
+        self.assertIsNone(rejected_repair.strip_annotations(body))
 
     def test_unparseable_body_returns_none(self):
-        self.assertIsNone(strip_retry.strip_annotations(b'not json'))
-        self.assertIsNone(strip_retry.strip_annotations('a string'))
+        self.assertIsNone(rejected_repair.strip_annotations(b'not json'))
+        self.assertIsNone(rejected_repair.strip_annotations('a string'))
+
+    def test_each_adapter_proposes_only_its_own_repair_and_keeps_the_request(self):
+        external = providers.ExternalResponsesProvider(provider_defs.OPENROUTER)
+        native = providers.SubscriptionProvider()
+        unnamed = (400, 'refused', None)
+        encrypted = (400, 'refused', 'invalid_encrypted_content')
+        fallback, context = object(), object()
+        body = json.dumps({'model': 'm', 'store': True, 'input': [
+            {'type': 'reasoning', 'id': 'rs_1', 'encrypted_content': 'BLOB'}]}).encode()
+        for adapter, described, raw, repair in ((external, unnamed, UNNAMED, 'annotation_strip'),
+                                                (native, encrypted, ENCRYPTED, 'reasoning_blobs')):
+            with self.subTest(repair=repair):
+                original = transport.Prepared(
+                    'upstream.example', '/responses',
+                    {'Authorization': 'Bearer k', 'Connection': 'close'}, body,
+                    {'tool': 'kind'}, adapter.name, fallback, 321, 654, context)
+                proposal = adapter.repair_rejected(original, described, raw)
+                self.assertEqual(proposal.repair, repair)
+                sent = proposal.prepared
+                self.assertNotEqual(sent.body, body)
+                self.assertEqual(sent.decoded_body_bytes, len(sent.body))
+                self.assertEqual(sent.headers, {'Authorization': 'Bearer k'})
+                self.assertEqual([getattr(sent, key) for key in transport.Prepared.__slots__
+                                  if key not in ('headers', 'body', 'decoded_body_bytes')],
+                                 ['upstream.example', '/responses', {'tool': 'kind'},
+                                  adapter.name, fallback, 321, 654, context])
+                self.assertEqual((original.body, original.headers),
+                                 (body, {'Authorization': 'Bearer k', 'Connection': 'close'}))
+                # A context error, or the other adapter's rejection, is not repaired.
+                self.assertIsNone(adapter.repair_rejected(original, described, CONTEXT))
+                other = encrypted if adapter is external else unnamed
+                self.assertIsNone(adapter.repair_rejected(original, other, UNNAMED))
 
     def test_attributed_category_keeps_refusal_wording(self):
         body = json.dumps({'error': {'message':
@@ -44,7 +83,8 @@ class StripRetryRelayTests(unittest.TestCase):
         upstream.clear_refusals()
         self.addCleanup(upstream.clear_refusals)
 
-    def _relay(self, resps, body, key_rejected=False):
+    def _relay(self, resps, body, key_rejected=False, writer_error=None,
+               context_result=None, stream=True):
         """Drive relay.relay with FakeConn returning each (status, body) in turn."""
         from ai_router import relay
         from ai_router.transport import Prepared
@@ -86,36 +126,46 @@ class StripRetryRelayTests(unittest.TestCase):
                 pass
 
         class FakeWriter:
-            def __init__(self):
+            def __init__(self, error=None):
                 self.parts = []
+                self.error = error
 
             def write(self, buf):
+                if self.error is not None:
+                    raise self.error
                 self.parts.append(buf)
 
             def flush(self):
                 pass
 
-        wfile = FakeWriter()
+        wfile = FakeWriter(writer_error)
         errors = []
+        def context_error(_stream):
+            errors.append(SimpleNamespace(status='context'))
+            handler.response_committed = True
+            return True if context_result is None else context_result
+
         handler = SimpleNamespace(
             server=SimpleNamespace(lock=threading.RLock(), served_models={},
                                    credentials=SimpleNamespace(
                                        home='synthetic',
                                        key_rejected=lambda provider: key_rejected)),
             error=lambda err, **k: errors.append(err),
-            context_error=lambda stream: errors.append(SimpleNamespace(status='context')),
+            context_error=context_error,
             send_response=lambda status: None,
             send_header=lambda k, v: None,
             end_headers=lambda: None,
             wfile=wfile)
         provider = SimpleNamespace(
             defn=provider_defs.OPENROUTER,
+            repair_rejected=providers.ExternalResponsesProvider(
+                provider_defs.OPENROUTER).repair_rejected,
             adapt=lambda response, tool_names, notes=None: iter(
-                [b'event: done\ndata: {"ok":true}\n\n']))
+                [b'data: {"type":"response.completed","response":{"output":[]}}\n\n']))
         prepared = Prepared('openrouter.ai', '/responses', {}, body, {}, 'openrouter')
         metrics = {'provider': 'openrouter', 'protocol': 'responses',
                    'model': 'meta/muse-spark-1.3-contributor', 'path': '/responses',
-                   'stream': True}
+                   'stream': stream}
         events = []
         with mock.patch.object(relay.http.client, 'HTTPSConnection', FakeConn), \
                 mock.patch.object(relay.setup, 'open_key_window'):
@@ -130,11 +180,70 @@ class StripRetryRelayTests(unittest.TestCase):
                            'tools': [], 'client_metadata': {'x': 1}}).encode()
         dispatches, events, wfile, _ = self._relay([(400, refused), (200, b'')], body)
         self.assertEqual(len(dispatches), 2)
-        self.assertIn(b'event: done', b''.join(wfile.parts))
+        self.assertIn(b'"type":"response.completed"', b''.join(wfile.parts))
         self.assertEqual([f['status'] for e, f in events if e == 'request_completed'], [200])
         self.assertEqual([e for e, _ in events if e == 'upstream_rejected'], [])
         self.assertEqual([f['outcome'] for e, f in events if e == 'annotation_retry'],
                          ['started', 'accepted'])
+
+    def test_unrecognised_error_body_commits_the_ledger_before_forwarding(self):
+        raw = b'upstream sent an unrecognised error body'
+        body = b'{"model":"m","input":[]}'
+        dispatches, events, wfile, errors = self._relay([(418, raw)], body)
+        self.assertEqual(len(dispatches), 1)
+        self.assertEqual(b''.join(wfile.parts), raw)
+        self.assertFalse(errors)
+        ledger = [facts for event, facts in events if event == 'attempt_ledger'][0]
+        self.assertTrue(ledger['committed'])
+
+    def test_context_refusal_records_router_terminal_and_commitment(self):
+        body = b'{"model":"m","input":[]}'
+        _, events, _, errors = self._relay([(400, CONTEXT)], body)
+        self.assertEqual(errors[0].status, 'context')
+        fields = next(fields for event, fields in events
+                      if event == 'attempt_ledger')
+        self.assertTrue(fields['committed'])
+        self.assertEqual(fields['terminal_source'], 'router')
+        self.assertEqual(fields['outcome'], 'context_overflow')
+
+    def test_failed_context_terminal_delivery_does_not_claim_router_terminal(self):
+        body = b'{"model":"m","input":[]}'
+        _, events, _, errors = self._relay([(400, CONTEXT)], body, context_result=False)
+        self.assertEqual(errors[0].status, 'context')
+        fields = next(fields for event, fields in events
+                      if event == 'attempt_ledger')
+        self.assertTrue(fields['committed'])
+        self.assertIsNone(fields['terminal_source'])
+
+    def test_nonstream_context_error_has_no_stream_terminal_source(self):
+        body = b'{"model":"m","input":[]}'
+        _, events, _, errors = self._relay([(400, CONTEXT)], body,
+                                           context_result=True, stream=False)
+        self.assertEqual(errors[0].status, 'context')
+        fields = next(fields for event, fields in events
+                      if event == 'attempt_ledger')
+        self.assertTrue(fields['committed'])
+        self.assertIsNone(fields['terminal_source'])
+
+    def test_raw_error_body_disconnect_is_contained_without_stream_phase(self):
+        from ai_router import relay
+
+        raw = b'upstream sent an unrecognised error body'
+        body = b'{"model":"m","input":[]}'
+        with mock.patch.object(relay.transport, 'describe_location',
+                               return_value='socketserver.py:1:write'):
+            dispatches, events, _, errors = self._relay(
+                [(418, raw)], body, writer_error=BrokenPipeError(32, 'Broken pipe'))
+        self.assertEqual(len(dispatches), 1)
+        self.assertFalse(errors)
+        kinds = [event for event, _ in events]
+        self.assertIn('client_disconnected', kinds)
+        self.assertNotIn('transport_error', kinds)
+        fields = next(fields for event, fields in events
+                      if event == 'attempt_ledger')
+        self.assertEqual(fields['outcome_phase'], 'status')
+        self.assertTrue(fields['committed'])
+        self.assertIsNone(fields['terminal_source'])
 
     def test_retried_400_is_reported_and_cached_against_the_original_request(self):
         refused = json.dumps({'error': {'message': 'Provider returned error',

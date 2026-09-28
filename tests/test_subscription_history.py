@@ -6,7 +6,7 @@ import unittest
 from compression import zstd
 from unittest import mock
 
-from ai_router import providers, subscription_history, upstream
+from ai_router import compaction, providers, subscription_history, upstream
 from tests.fakes import FakeUpstream, install_fake
 from tests.harness import isolated_home, post, start_server
 
@@ -105,6 +105,102 @@ class SubscriptionHistoryTests(unittest.TestCase):
                 payload = {'input': items}
                 self.assertIs(subscription_history.normalize(payload), payload)
 
+    def test_empty_router_summary_blob_is_not_rewritten_or_repaired(self):
+        item = {'type': 'compaction', 'id': 'cmp_empty',
+                'encrypted_content': compaction.encode_summary('')}
+        payload = {'input': [item]}
+        self.assertIs(subscription_history.normalize(payload), payload)
+        self.assertIsNone(subscription_history.repair_input([item]))
+
+    def test_unicode_format_router_summary_round_trips_and_remains_owned(self):
+        summary = 'text\u200dtext'
+        item = {'type': 'compaction', 'id': 'cmp_format',
+                'encrypted_content': compaction.encode_summary(summary)}
+        self.assertEqual(compaction.decode_summary(item['encrypted_content']), summary)
+        self.assertTrue(subscription_history.removable_encrypted(item))
+        normalized = subscription_history.normalize({'input': [item]})
+        self.assertEqual(normalized['input'][0]['content'][0]['text'],
+                         compaction.SUMMARY_PREFIX + '\n\n' + summary)
+
+    def test_control_character_router_summary_is_rejected_by_the_producer(self):
+        summary = 'before\x1bafter'
+        with self.assertRaises(ValueError):
+            compaction.encode_summary(summary)
+        with self.assertRaises(ValueError):
+            compaction.v2_compaction_item(summary)
+
+    def test_nested_encrypted_compaction_is_not_rewritten_or_repaired(self):
+        item = {'type': 'compaction', 'id': 'cmp_mixed',
+                'encrypted_content': compaction.encode_summary('summary'),
+                'content': [{'type': 'encrypted_content',
+                             'encrypted_content': 'NATIVE'}]}
+        payload = {'input': [item]}
+        before = copy.deepcopy(payload)
+        self.assertIs(subscription_history.normalize(payload), payload)
+        self.assertIsNone(subscription_history.repair_input([item]))
+        self.assertEqual(payload, before)
+
+    def test_deeply_nested_encrypted_compaction_is_not_rewritten_or_repaired(self):
+        item = {'type': 'compaction', 'id': 'cmp_deep',
+                'encrypted_content': compaction.encode_summary('summary'),
+                'content': [{'content': [{'type': 'encrypted_content',
+                                          'encrypted_content': 'NATIVE'}]}]}
+        payload = {'input': [item]}
+        self.assertIs(subscription_history.normalize(payload), payload)
+        self.assertIsNone(subscription_history.repair_input([item]))
+
+    def test_unowned_encrypted_field_in_non_object_item_blocks_repair(self):
+        items = [{'type': 'reasoning', 'id': 'rs_owned',
+                  'encrypted_content': 'OWNED'},
+                 [{'type': 'message', 'encrypted_content': 'UNOWNED'}]]
+        before = copy.deepcopy(items)
+        self.assertIsNone(subscription_history.repair_input(items))
+        self.assertEqual(items, before)
+
+    def test_nested_only_encrypted_reasoning_is_preserved(self):
+        item = {'type': 'reasoning', 'id': 'rs_nested',
+                'content': [{'type': 'encrypted_content',
+                             'encrypted_content': 'NATIVE'}]}
+        payload = {'input': [item]}
+        before = copy.deepcopy(payload)
+        self.assertIs(subscription_history.normalize(payload), payload)
+        self.assertIsNone(subscription_history.repair_input([item]))
+        self.assertEqual(payload, before)
+
+    def test_empty_or_null_reasoning_blob_is_preserved_and_not_repaired(self):
+        for value in (None, '', ' ', '\t'):
+            with self.subTest(value=value):
+                item = {'type': 'reasoning', 'id': 'rs_empty',
+                        'encrypted_content': value,
+                        'content': [{'type': 'reasoning_text',
+                                     'text': 'READABLE'}]}
+                payload = {'input': [item]}
+                before = copy.deepcopy(payload)
+                self.assertIs(subscription_history.normalize(payload), payload)
+                self.assertIsNone(subscription_history.repair_input([item]))
+                self.assertEqual(payload, before)
+
+    def test_whitespace_blob_does_not_hide_reasoning_from_compaction(self):
+        for value in (' ', '\t'):
+            with self.subTest(value=value):
+                text = compaction.transcript_for_summary([
+                    {'type': 'reasoning',
+                     'summary': [{'type': 'summary_text', 'text': 'sum-marker'}],
+                     'content': [{'type': 'reasoning_text', 'text': 'content-marker'}],
+                     'encrypted_content': value},
+                ])
+                self.assertIn('sum-marker', text)
+                self.assertIn('content-marker', text)
+
+    def test_malformed_router_summary_envelopes_are_not_rewritten_or_repaired(self):
+        for blob in ('ocx1:YWJj!!', 'ocx1:AAAA', 'ocx1:!!!!', 'ocx1:AEE=', 'ocx1:TQ'):
+            with self.subTest(blob=blob):
+                item = {'type': 'compaction', 'id': 'cmp_bad',
+                        'encrypted_content': blob}
+                payload = {'input': [item]}
+                self.assertIs(subscription_history.normalize(payload), payload)
+                self.assertIsNone(subscription_history.repair_input([item]))
+
     def test_adapter_reencodes_only_changed_history_or_aliases(self):
         provider = providers.SubscriptionProvider()
         for path in ('/responses', '/responses/compact'):
@@ -114,7 +210,9 @@ class SubscriptionHistoryTests(unittest.TestCase):
                         payload = {'model': 'gpt-6-astra', 'input': [reasoning()] if foreign else []}
                         raw = zstd.compress(json.dumps(payload).encode())
                         names = {'spawn_agent'} if aliases and path == '/responses' else set()
-                        with mock.patch('ai_router.agent_handoffs.add_plaintext_tools', return_value=names):
+                        # Aliases come back on a copy; none leave the payload as sent.
+                        added = lambda payload, catalogue=None, names=names: (dict(payload) if names else payload, names)
+                        with mock.patch('ai_router.agent_handoffs.add_plaintext_tools', added):
                             prepared = provider.prepare('gpt-6-astra', path, payload, raw,
                                 {'Content-Encoding': 'zstd', 'Accept-Encoding': 'zstd',
                                  'Authorization': 'Bearer synthetic', 'Content-Length': str(len(raw))}, None)

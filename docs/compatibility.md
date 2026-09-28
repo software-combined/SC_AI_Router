@@ -1,5 +1,360 @@
 # Compatibility
 
+## Router 0.6.138 onboarding candidate, 28 September 2026 AEST
+
+At 17:01 AEST the bounded onboarding probe passed on the real clients, using
+the source checkout based on `8c7a9112878b605ac7c5cea1b827793167a9da9b`.
+The source-content binding is
+`80a539c6225324d5b76107cdc92bd22b0b64f1697eecc88f78a9199797a99919`;
+the structured record is in `acceptance-ledger.json`. Codex desktop
+`26.917.62051` bundles CLI `0.155.0-alpha.16.3`; Claude Code is `2.1.283`.
+
+| Route | Requested model / effort | Provider-reported identity | Attempts | Result |
+| --- | --- | --- | --- | --- |
+| Codex Responses | DeepSeek V4.1 Flash / low | Exact model and low effort | 4, including one compaction summary | Tool, image and compaction passed |
+| Claude Code Messages | DeepSeek V4.1 Flash / low | Exact model; effort unverified | 3 | Two sequential reads with matching results passed |
+
+The guard allowed 12 total upstream attempts, including summary helpers and
+retries, with 512 KiB input and 65,536 output tokens per attempt. Claude also
+used its $0.25 client budget. Offline conformance ran before the model calls.
+The first probe omitted summary calls from its counter; an offline reproduction
+confirmed that gap. A shared reservation now covers both send paths, and the
+table records the corrected rerun. This is source-candidate proof, not installed
+acceptance or new Plan 185 cell evidence.
+
+## Plan 184 shape decisions, 28 September 2026 AEST
+
+Plan 188 allows a recorded decision to retain an unmeasured shape. The
+following choices close that decision gate without claiming new live results.
+
+| Shape | Decision and evidence boundary |
+| --- | --- |
+| Readable post-switch agent messages | Keep the current projection. The historical C3 pass exercised that projection; the raw-versus-projected comparison remains unmeasured. The two native-parent handoff runs below do not substitute for it. |
+| Native reasoning across subscription switches | Keep the current foreign-shape rule pending a current C4 comparison. The historical pass used a note projection and did not prove native reasoning replay. Preserve native signed and encrypted content. |
+| Bare or summary-only reasoning IDs | Keep the current representation. This candidate's recorded evidence does not establish a rejection that would justify removing it. |
+| Undeclared custom and apply-patch pairs | Keep the current paired representation. Extra-shape evidence belongs only to the measured DeepSeek V4.1 Flash profile; other rows inherit none. |
+
+The original MiMo assignment failure still has no proven historical cause.
+The successful handoff runs establish current behavior, not that encryption
+caused that earlier failure. Historical Plan 185 runs retain their actual
+statuses and client versions; these new source runs do not turn them into
+current passes.
+
+## Router 0.6.137 offline conformance, 28 September 2026 AEST
+
+The real-handler matrix covers all 21 registry rows on both supported
+protocols: 42 model/provider/protocol pairs, independent of picker visibility.
+Shared fixtures verify JSON and streaming outcomes, recovery before output,
+no replay after output, credentials, model evidence, capability preparation,
+disabled-route refusal and connection cleanup. Four native IDs, including
+discovered and future IDs, preserve signed history, bytes and authentication;
+encoded replies remain unknown. These are offline checks, not fresh live
+acceptance for every row. Earlier live results below retain their own scope.
+
+The DeepSeek extra-shape measurement now belongs only to the measured
+V4.1 Flash row. A regression reproduced the previous family-wide evidence
+claim on Pro and a future alias before the fix. A feed retargeting a row also
+loses the original target's measurement. The profile changes warnings only
+and never permits dropping or rewriting unmeasured input.
+
+## Router 0.6.135 handoff candidate, 28 September 2026 AEST
+
+Real Codex child sessions passed spawn, follow-up, both returned replies and
+parent continuation on two profiles: Classic `gpt-6-luna` at low with
+`xiaomi/mimo-v2.6-pro` at xhigh, and Lite `gpt-6-astra` at low with
+`deepseek/deepseek-v4.1-flash` at low. Each run made six native and two external
+requests, all completed, reporting 27,317 and 26,849 tokens respectively.
+Distinct child-authored receipts and the follow-up target matched the spawned
+child. Requested and provider-reported models matched; served efforts were
+unverified. Native encrypted history remained native; the external child
+received the supported plaintext handoff.
+
+Both used Codex desktop `26.917.62051`, bundled CLI `0.155.0-alpha.16.3`, tree
+`2d1c1ba80b1b78266b1e5604093bfb6fb52e0e14` and runtime fingerprint
+`dbf956a91e65de325fca8997c6ccf247b56df1d3ca2b1383f8fa631abc2ef4a6`.
+Per-run hard caps were eight native and two external sends, 128 KiB input,
+1 MiB response, 4,096 external output tokens per send and 300 seconds.
+The 60,000 reported-token threshold stopped further calls, with possible
+in-flight overshoot; a native output-token cap was unavailable. Temporary
+authentication, client process and router cleanup all passed.
+
+These are source-candidate results, not installed acceptance. Earlier failed
+probe records remain: helper defects prevented several initial runs; one later
+run completed both MiMo calls before a native failure with no retained cause.
+The original intermittent failure's encryption hypothesis remains unproven.
+
+## Router 0.6.134 Messages recovery candidate, 28 September 2026 AEST
+
+Routed offline regressions reproduce an empty overload reaching Claude
+without recovery and transient HTTP failures reported as deterministic 409
+refusals. External generation now permits one stream replay within the shared
+ledger. Native subscription and token-count requests retain one send; HTTP
+failures gain native error envelopes and correct categories, without an
+additional router retry.
+
+The Messages tool definition follows the [official API contract](https://platform.claude.com/docs/en/api/messages/create):
+client tools declare an object input schema and an omitted, null or custom
+type. Hosted and unknown forms prohibit replay. The common event path retains
+a replay fence for empty thinking removed by compatibility repair. Thinking,
+signatures, tool starts, unknown data and prior client bytes prohibit replay.
+The [native error contract](https://platform.claude.com/docs/en/api/errors)
+supplies the documented API, timeout and overload causes.
+
+Claude Code 2.1.283 passed recovery on frozen tree `42ee164a0e43b2a9376e648127e711c4f42f8365`:
+one injected overload, one router replay, then a normal continuation produced
+exactly two visible message starts, one Read call and the expected answer.
+Both paid calls reported `deepseek/deepseek-v4.1-flash`; requested effort was low,
+served effort unverified. Caps were three sends, two paid, 512 KiB per request
+and 2,048 output tokens per send. Zero-paid real-client fixtures also verified
+HTTP refusal, a refused replay and no router replay after partial output.
+Claude's own retries appeared as separate requests and were counted separately.
+This candidate was not published or installed; the later handoff result is above.
+
+## Router 0.6.133 Messages candidate, 28 September 2026 AEST
+
+Synthetic Messages streams reproduced false success after `max_tokens`,
+`refusal` and `model_context_window_exceeded`, as well as a bare stop frame.
+External preparation also changed the original client payload, including
+nested tool definitions and results. Both faults are covered by regression
+tests that failed against the preceding revision.
+
+Both routes now use the same read-only Messages observer and named pure
+outgoing projections. Stream outcomes require a valid start, final delta and
+stop; JSON requires a readable message and stop reason. The mapping follows
+the [Anthropic stop-reason contract](https://platform.claude.com/docs/en/build-with-claude/handling-stop-reasons).
+Unknown and encoded bodies stay unknown. Native bytes, subscription headers,
+external empty-thinking and tool-ID repairs, and the one-send budget remain
+unchanged. External recovery and error rendering are a separate acceptance
+gate; this candidate does not enable them.
+
+Claude Code `2.1.283` passed a real Read-tool round trip on each route against
+the candidate runtime fingerprint
+`47a608971cace08bc279952a1898991808987100d487fdecfd38bdf7abef35c7`.
+Each run made two HTTP 200 calls and executed Read once, with hard caps of two
+calls, 512 KiB input and 2,048 output tokens per call. External requested and
+reported model was `deepseek/deepseek-v4.1-flash` at requested `low` effort;
+served effort was unverified. It reported 1,972 usage tokens. The shared
+observer correctly recorded successful `tool_use` and `end_turn` outcomes.
+
+Native requested `sonnet` at `low`, sent as `claude-sonnet-5`, and returned the
+expected synthetic answer. Its gzip SSE stayed opaque and unknown. Served
+identity, effort and usage remain unverified; the probe's zero usage counter
+means no readable usage was observed. This proves client continuation and
+preservation, not parsed native outcome classification. Codex paths are
+unchanged and retain the preceding candidate evidence. The original MiMo
+handoff defect, external Messages recovery and installed acceptance remain open.
+A subsequent correction only aligns unknown/context failure labels with their
+settled outcomes. Successful and opaque gzip paths are unchanged, so the live
+evidence above is reused; the final source runs the full offline suite again.
+
+## Router 0.6.132 native stream candidate, 28 September 2026 AEST
+
+The preceding Codex subscription probe completed its tool call, but its
+unlabelled stream bypassed the common Responses observer. The router treated
+EOF as success and counted every byte as answer content. Routed synthetic
+tests reproduced false success for a failure, an incomplete stream and an
+opaque encoded body before the correction.
+
+An identity Responses stream now uses the existing lossless observer when the
+request asks for streaming but the upstream content type is unrecognised.
+Readable completions and failures supply the outcome; opaque data stays
+unknown. Tests preserve exact native bytes, request bodies and subscription
+headers, exercise partial-frame forwarding, and require a single upstream
+send. Existing native rejection repair remains unchanged. Fresh candidate
+evidence covers 109 focused protocol, preservation, history, native repair,
+replay and commitment checks, all passing.
+
+Codex desktop `26.917.62051`, bundled CLI `0.155.0-alpha.16.3`, passed a real
+subscription tool round trip through `tools/probe_codex_runtime.py`: two HTTP
+200 upstream calls, one tool execution and 6,345 usage tokens. Requested and
+reported model was `gpt-6-luna`, requested effort `low`; served effort remained
+unverified. Both identity responses retained the upstream `other` content-type
+category while the router observed their completion as a successful stream
+outcome. The preceding candidate had recorded status/EOF success on that path.
+The probe capped calls at two and input at 512 KiB, with a 30,000-token usage
+budget that stops later calls. Its unchanged runtime fingerprint was
+`7cf1672d6ff4cb9b295787cd03bee6c0a08b91d3fedce481c951ba7660b05966`.
+
+Claude Code `2.1.283` also passed a subscription Read-tool round trip on the
+same runtime: two HTTP 200 calls and one tool execution. The requested alias
+was `sonnet` at `low`, sent as `claude-sonnet-5`. Both responses were gzip SSE,
+preserved unchanged and recorded as opaque/unknown by the router. Served
+identity, effort and usage were unavailable to the probe's wire observer;
+its zero observed usage counter is not a claim of zero model usage. This
+probe capped calls at two, each request at 512 KiB and output at 2,048 tokens
+per call. It proves the client round trip; Messages outcome classification
+remains unverified for this encoded traffic. The earlier login-storage failure
+was resolved by reauthenticating macOS Keychain and renewing the Claude login.
+
+Installed acceptance, full Messages lifecycle migration, shared identity
+provenance and the original MiMo handoff defect remain open.
+
+## Router 0.6.131 completion candidate, 28 September 2026 AEST
+
+The four-route acceptance check exposed a Responses completion regression:
+`error: null` was treated as an error merely because the field existed. That
+shape is a normal successful completion in the
+[OpenAI Responses reference](https://developers.openai.com/api/reference/typescript/resources/beta/subresources/responses/methods/create).
+For classified Responses streams, the external route replaced its terminal
+with a failure; the subscription route preserved the bytes but recorded the
+wrong outcome. Regression tests failed in both cases before the fix. A null
+error now means no error; non-null errors and failed statuses still fail.
+
+The preceding `0.6.130` candidate passed the Codex subscription and Claude
+external tool checks with one tool execution and two upstream requests each.
+Both exposed the requested upstream model; served effort was unverified.
+Codex external failed in three bounded attempts, each after one upstream
+request and before tool execution. Its final diagnostic recorded a router
+failure at `response.completed`. These failed checks remain evidence against
+that candidate and are not overridden by older passing checks.
+
+Clients: Codex desktop `26.917.62051`, bundled CLI `0.155.0-alpha.16.3`, and
+Claude Code `2.1.283`. The Claude subscription check stopped locally before any
+upstream request because its login could not be saved to macOS Keychain.
+
+Both corrected Codex legs passed through `tools/probe_codex_runtime.py` with
+one tool execution and two HTTP 200 upstream requests each:
+
+| route | requested and served model | requested effort | usage tokens |
+|---|---|---|---:|
+| external | `deepseek/deepseek-v4.1-flash` | `low` | 8,177 |
+| subscription | `gpt-6-luna` | `low` | 6,341 |
+
+Served effort was unverified. Each leg capped upstream calls at two and input
+at 512 KiB, with a 30,000-token usage budget that stops later calls. External
+output was capped at 2,048 tokens. Both used runtime fingerprint
+`2b7441c38cb80802cbad7877f99adf04b384e018e0ce27d89f4a204526d81015`.
+On both real external completions, the recorded shape had `response.error:
+null`: the old classifier rejected it and the corrected classifier accepted
+it. The earlier Claude external pass remains applicable because this fix only
+changes Responses classification. Claude subscription acceptance, native
+stream lifecycle conformance and installed acceptance remain pending.
+
+The structural handoff diagnostic is integrated, but the original intermittent
+MiMo dispatch failure remains open. Successful classic and Lite alias probes
+with synthetic child responses do not close that defect or prove installed
+mixed-provider continuation.
+
+## Router 0.6.129 request recovery candidate, 28 September 2026 AEST
+
+The request/attempt, stream-outcome and encrypted-history candidate passed
+2,051 offline tests with three skips. Compile, source-limit and policy checks
+also passed on the exact exported tree. The tests cover bounded attempt
+ownership, conservative replay and fallback decisions, raw stream forwarding,
+response commitment, and preservation of opaque, malformed or mixed encrypted
+native compaction history. This is offline candidate evidence only. It does not
+claim Codex or Claude client acceptance, provider identity, or beta deployment.
+
+## Router 0.6.127 compaction summary candidate, 25 September 2026 AEST
+
+Three bounded synthetic summaries ran through the candidate's production
+request, extraction and telemetry path. Each used one 4,000-token output
+budget and the same small synthetic history; no conversation content was
+logged.
+
+| summary row | requested effort | elapsed | summary characters | result |
+|---|---|---:|---:|---|
+| `xiaomi/mimo-v2.6-pro` | `none` | 8,846 ms | 1,075 | completed |
+| `xiaomi/mimo-v2.6-flash` | `none` | 4,881 ms | 1,034 | completed |
+| `deepseek/deepseek-v4.1-flash` | `low` | 17,512 ms | 1,368 | completed |
+
+All three returned non-empty summaries in one attempt. The batch took 31.24
+seconds, and no attempt reached its 45-second cap or the 75-second total cap.
+MiMo Flash was the fastest candidate and remains the primary summary row.
+Call count was one per row and three in total. This direct candidate probe used
+no client version and exposed no served identity. It is synthetic summary-path
+evidence, not installed-router acceptance, and it does not establish sustained
+provider throughput.
+
+## Router 0.6.125 beta candidate, 25 September 2026 AEST
+
+The request-size candidate passed 1,876 offline tests (three skips), compile,
+source-limit, policy, packaging and secret checks. Its runtime fingerprint was
+`4fe5e3280a2c88b62b0900e656648a9336abdb8f1367e8721e16610988658680`.
+These are candidate checks; installed acceptance is recorded separately.
+
+Codex desktop `26.917.62051`, bundled CLI `0.155.0-alpha.16.3`, completed a
+synthetic 18.9 MB continuation through the actual client and candidate router:
+three scripted sends, two completed turns, one tool call, and all eight images
+and the tool result preserved. The old router refused before sending upstream.
+No model was called; this does not establish a provider's maximum request size.
+
+Bounded live tool round trips used the same Codex client and Claude Code
+`2.1.223`. Codex passed on `deepseek/deepseek-v4.1-flash` and subscription
+`gpt-6-luna`; Claude Code passed on DeepSeek. Each used two HTTP 200 requests,
+one tool execution and the exact returned marker. Original upstream SSE
+reported the requested model in each leg. All requested low effort; served
+effort was unverified. Each leg capped requests at four and input at 512 KiB,
+with a 30,000-token usage budget that stops later calls; already-started calls
+may finish beyond it. External and Anthropic output was capped at 2,048 tokens.
+
+The fresh Claude subscription leg did not pass: Anthropic returned HTTP 401.
+A one-request diagnostic confirmed an expired OAuth token; no tool ran or
+model identity was returned. The client's sign-in was not changed. Native
+header/body preservation remains covered offline. This beta relieves the Codex
+size refusal; it does not close the remaining shared recovery, native handoff
+or diagnostics work. Stable publication remains the owner's decision after use.
+
+## Plan 187 stream retry candidate, 25 September 2026 AEST
+
+Candidate evidence only: the 0.6.125 stream retry change ran from an isolated,
+uncommitted worktree, never an installed or released router, so none of this
+is release acceptance. Clients: Codex desktop `26.917.62051` with bundled
+`codex-cli 0.155.0-alpha.16.3`, and Claude Code `2.1.223`, installed but not
+exercised by these probes.
+
+Recovery ran the actual Codex app-server against the router with a synthetic
+local HTTPS upstream whose first attempt fails before any answer, driven by
+`plans/handover-2026-09-25/scratch/probe_shared_stream_client.py <worktree>
+[model effort]` in the primary checkout. No call was paid. Before the change:
+one attempt, no router retry, and the client showed `Reconnecting 1/5` and
+exited 1. After it, on both `xiaomi/mimo-v2.6-pro` at xhigh and
+`deepseek/deepseek-v4.1-flash` at max: exactly one router retry, three
+upstream requests (the failed attempt, the retried tool call and the
+tool-result continuation), one client tool execution and the exact expected
+final marker.
+
+One bounded live turn on `xiaomi/mimo-v2.6-pro` at xhigh went through the
+candidate and the actual Codex client with 53 inert tool schemas, driven by
+`plans/handover-2026-09-25/scratch/probe_mimo_live.py`, which runs only with
+`--execute`. Its caps were four calls and 4,096 output tokens per call. It
+passed in two upstream calls (102,930 and 103,459 input bytes, both HTTP 200,
+5,348.1 and 1,278.0 ms) with one tool execution and the exact final marker; no
+retry was needed. The served identity was `xiaomi/mimo-v2.6-pro`; the served
+effort is not separately exposed.
+
+The two probes prove different things. The synthetic run proves recovery from
+an injected failure; the live run proves the real provider completes the
+candidate's tool round trip with the large tool list, and it met no natural
+timeout, so it says nothing about recovering from one. The retry rule reads
+no model name. 32 simultaneous synthetic held attempts retained 8,079,744
+wire bytes, with a `tracemalloc` peak of 8,515,571 bytes: held-state
+allocation only, not the process's total RSS.
+
+## Historical beta acceptance, 24 September 2026 AEST
+
+The saved release record for `v0.6.124-beta-express` is reconciled here and in
+the ledger. It tagged develop `702e101`, built `0.6.124.121`, and was installed
+on this Mac at 17:50 AEST. Stable `v0.6.124-express` later tagged main `7fb2846`
+after PR #317 and main acceptance. These are historical results, not proof of
+the current candidate.
+
+The four recorded cells used Codex desktop `26.917.62051`, bundled CLI
+`0.155.0-alpha.16.3`, and 16 calls within the approved 20-call budget, at low
+effort. Claude Code `2.1.223` was installed but was not exercised.
+
+| Cell | Time (AEST) | Calls | Recorded result |
+| --- | --- | --- | --- |
+| C2 | 17:52 | 4 | Failed: MiMo Flash returned both pair markers; Muse accepted the undeclared custom pair with HTTP 200 but omitted its marker, while its apply-patch pair passed. |
+| C3 | 17:53 | 4 | Passed: the readable DeepSeek child reply survived the GLM parent's switch to Luna, through the existing projection. |
+| C4 | 17:53 | 3 | Passed: Luna completed its tool round trip and the switch to Sol retained history, through the existing reasoning-note projection. Serving identities were unverified. |
+| C5 | 17:57 | 5 | Shape not produced: compaction dropped the child reply, so the successful switched request did not test an encrypted child block. |
+
+The ledger retains the original records verbatim. C3 and C4 are stale for the
+current Claude version; C2 remains failed and C5 remains non-passing. These
+records neither authorize a new history conversion nor establish current
+native replay acceptance.
+
 ## Acceptance matrix ledger, 24 September 2026 AEST
 
 Plan 185's acceptance matrix now has a machine-readable record, so a script
@@ -10,28 +365,30 @@ can tell which cells still hold for the current clients.
 `null` where the run exposed no identity), `calls`, `result` and `notes`. Only
 a `pass` result counts as a pass.
 
-| cell | transition | rows | calls |
+| cell | transition | rows | run calls |
 |---|---|---|---|
 | C1 | external compaction, then switch to subscription | `deepseek/deepseek-v4.1-flash` to `gpt-6-luna` | 4 |
 | C2 | direct OpenRouter acceptance of an undeclared custom pair and an `apply_patch_call` pair | `xiaomi/mimo-v2.6-flash`, `meta/muse-spark-1.3` | 4 |
 | C3 | external parent with a readable external child reply, parent switched to subscription | `z-ai/glm-5.3-flash` to `gpt-6-luna`, child `deepseek/deepseek-v4.1-flash` | 4 |
-| C4 | switch between two subscription models with native reasoning | `gpt-6-luna` to `gpt-6-sol` | 2 |
-| C5 | external parent, subscription child whose reply carries an encrypted block, parent compaction, parent switched to subscription | `deepseek/deepseek-v4.1-flash`, child `gpt-6-luna` | 6 |
+| C4 | switch between two subscription models with native reasoning | `gpt-6-luna` to `gpt-6-sol` | 3 |
+| C5 | external parent, subscription child whose reply carries an encrypted block, parent compaction, parent switched to subscription | `deepseek/deepseek-v4.1-flash`, child `gpt-6-luna` | 5 |
 
-`python3.14 tools/check_acceptance_ledger.py` compares each cell's latest pass
+`python3.14 tools/check_acceptance_ledger.py` compares each cell's latest run
 with the newest clients this page names in the backticked forms Codex desktop
 `X` and Claude Code `X`, the way every gate records them; an unbackticked
 mention, such as a later release an app bundle refers to, does not count. A
 cell is stale when its latest pass ran on an older version of either client,
 because section 7 of `AGENTS.md` treats either upgrade as the trigger for new
-evidence. The check exits 1 while any P1 cell (C1 to C4) is stale or missing,
-and reports C5 without failing on it.
+evidence. The check exits 1 while any P1 cell (C1 to C4) is stale, failed,
+missing or conflicting, and reports C5 without failing on it.
 
-The ledger starts with C1 alone, from the 0.6.122 beta gate below: router
+The ledger started with C1 alone, from the 0.6.122 beta gate below: router
 `0.6.122.118`, Codex desktop `26.917.62051`, Claude Code `2.1.223` (installed,
 not exercised) and 4 calls. That gate's installed-router pair legs sit in C1's
 notes rather than counting as C2, because C2 goes direct to OpenRouter on
-different rows. C2 to C5 have not run, so the check exits 1 until they do.
+different rows. C2 to C5 ran later that day, as the historical record above
+shows. Their original statuses and versions remain distinct from the current
+candidate-bound onboarding record.
 
 `tools/probe_parent_switch.py --cell C3` or `--cell C5` drives the two
 parent-switch cells. The first parent spawns the child and calls `wait_agent`
@@ -88,8 +445,8 @@ outside that sandbox, and live mode refuses to start if the sandbox cannot be
 applied. A call that still went elsewhere would be outside both caps, and the
 probe would stop after the first turn with `client bypassed the probe`.
 
-Limits: no live cell ran here. C2 waits for `tools/probe_wire_shapes.py`
-(Plan 185 step 1).
+Limits: the recorded C2 run failed, and C5 did not produce its target shape.
+The historical passes do not replace current-client acceptance.
 
 ## MiMo V2.6 Pro compaction limit, 24 September 2026 AEST
 
@@ -408,12 +765,14 @@ the item-level key from a `reasoning` item, so the bounded retry never fired
 and the turn was refused.
 
 The repair is retry-only and keeps the #274 gate unchanged (subscription
-OpenAI dialect, HTTP 400, `invalid_encrypted_content`). The compaction item
-becomes the same readable user message `compaction.rewrite_input` already
-produces for external models, built from `compaction_text`: the decoded
-summary, or the fixed opaque note when the blob is not the router's own. A
-payload carrying an encrypted field outside those two sites is left unchanged,
-so an unknown shape is never retried against a request the repair cannot fix.
+OpenAI dialect, HTTP 400, `invalid_encrypted_content`). A router-owned
+non-empty `ocx1:` compaction item becomes the same readable user message
+`external_history.rewrite_input` already produces for external models. Native
+opaque, malformed, or mixed encrypted compaction data is preserved and makes
+the repair ineligible; it is never replaced with a note or retried. A payload
+carrying an encrypted field outside the owned reasoning and structurally valid
+router-summary sites is left unchanged, so an unknown shape is never retried
+against a request the repair cannot fix.
 The classification is the one-level structural count: an item-level
 `encrypted_content` key, or the same key on a block of a one-level `content`
 list. Content nested deeper, or shaped differently, is not classified and is
@@ -2564,3 +2923,20 @@ OpenRouter twin.
 | model | status | date | legs |
 |---|---|---|---|
 | anthropic/claude-opus-5.5 | verified | 2026-09-23 | tool,stream,image,compact,apply_patch |
+
+## DeepSeek streamed tool ID repair, 2026-09-26
+
+Client: Claude Code `2.1.223 (Claude Code)`. Requested model
+`deepseek/deepseek-v4.1-flash`, effort `max`, served identity matched. The
+candidate router was built from this worktree and the probe used synthetic
+files only. `tools/probe_claude_code.py --read-count 2` ran one row and one
+leg with `--max-rows 1 --max-legs 1`, a 300-second timeout, a documented
+synthetic `PROBE_AUTH_TOKEN`, and a hard `--max-budget-usd 1.00` cap. The gate
+required exactly two Read calls and two tool calls, with the second Read in a
+later assistant event after a tool-result boundary; it rejected parallel,
+extra, or errored streams and non-finite or non-positive budgets. It completed
+three turns and two Read calls, returning both synthetic markers in the final
+answer. A first attempt at the same probe with a `0.10` USD cap stopped after
+one turn with `error_max_budget_usd`, before an answer; no retry or extra row
+was attempted. The capped run therefore proves that both earlier Read results
+remain visible to DeepSeek after streamed tool IDs are rewritten.

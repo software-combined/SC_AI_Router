@@ -93,15 +93,15 @@ class ProtocolContractTests(unittest.TestCase):
         self.addCleanup(server.shutdown)
         return server
 
-    def test_messages_quota_429_keeps_retryable_503_shape(self):
-        # The 429 quota/auth split is Responses-only: a Messages 429 with a
-        # quota-coded body keeps today's 503, byte-identical.
+    def test_messages_quota_429_names_credit_in_a_native_final_error(self):
+        # An explicit credit cause is not a temporary rate limit.
         install_fake(self, lambda: FakeUpstream(429, b'{"error": {"code": "insufficient_quota"}}',
                                                 [('Content-Type', 'application/json')]))
         server = self._server()
         response = _post(server.server_port, '/test-token/v1/messages',
                          _messages(), {'Authorization': 'Bearer subscription-secret'})
-        self.assertEqual(response.status, 503)
+        self.assertEqual(response.status, 400)
+        self.assertEqual(json.loads(response.read())['error']['type'], 'invalid_request_error')
 
     def test_messages_402_names_key_credit(self):
         # No separate wording fork: the shared policy names the key on
@@ -117,16 +117,14 @@ class ProtocolContractTests(unittest.TestCase):
         self.assertEqual(body['error']['code'], 'KEY_NO_CREDIT')
         self.assertIn('Contact IT', body['error']['message'])
 
-    def test_messages_429_keeps_retryable_503_shape(self):
-        # Responses pins this in test_handler; Messages must keep the same
-        # transport-level retry contract through the shared relay path.
+    def test_messages_429_uses_native_rate_limit_and_preserves_retry_after(self):
         install_fake(self, lambda: FakeUpstream(429, b'{"error": "slow"}',
                                                 [('Content-Type', 'application/json'),
                                                  ('Retry-After', '7')]))
         server = self._server()
         response = _post(server.server_port, '/test-token/v1/messages',
                          _messages(), {'Authorization': 'Bearer subscription-secret'})
-        self.assertEqual(response.status, 503)
+        self.assertEqual(response.status, 429)
         self.assertEqual(response.getheader('Retry-After'), '7')
         body = json.loads(response.read())
         self.assertEqual(body['error']['code'], 'UPSTREAM_RATE_LIMITED')
@@ -154,7 +152,7 @@ class ProtocolContractTests(unittest.TestCase):
         response = _post(server.server_port, '/test-token/v1/messages',
                          _messages('claude-opus-4-6'),
                          {'Authorization': 'Bearer subscription-secret'})
-        self.assertEqual(response.status, 503)
+        self.assertEqual(response.status, 429)
         body = json.loads(response.read())
         self.assertEqual(body['error']['code'], 'UPSTREAM_RATE_LIMITED')
         self.assertIn('claude-opus-4-6 is rate limited on your Claude subscription',
@@ -199,6 +197,37 @@ class ProtocolContractTests(unittest.TestCase):
                                  {'model': 'z-ai/glm-5.3', 'input': []})
                 self.assertEqual(response.status, 404)
                 response.read()
+                self.assertEqual(recorded, [])
+
+    def test_unsupported_external_protocol_pairs_fail_before_any_send(self):
+        # Plan 188: the pair is judged on the row resolved at ingress, so a
+        # refresh that makes the row servable mid-request cannot turn into a send.
+        from unittest import mock
+        from ai_router import model_refresh, provider_defs
+        from tests.test_request_context import _after_resolution, _generation, _refreshed
+        defs = tuple(provider_defs.ProviderDef(
+            id='acme-' + protocol, label='Acme', kind=provider_defs.EXTERNAL,
+            host='acme.invalid', key=provider_defs.KeySpec('ACME_KEY', 'acme.key'),
+            dialect=provider_defs.DIALECT_OPENAI_COMPATIBLE, **{protocol + '_path': '/v1'})
+            for protocol in (provider_defs.RESPONSES, provider_defs.MESSAGES))
+        every = provider_defs.PROVIDERS + defs
+        self.enterContext(mock.patch.object(provider_defs, 'PROVIDERS', every))
+        self.enterContext(mock.patch.object(provider_defs, 'BY_ID', {d.id: d for d in every}))
+        cases = (('/v1/messages', _messages('acme/responses-only'), 409, 'Codex only'),
+                 ('/responses', {'model': 'acme/messages-only', 'input': []}, 400,
+                  'Claude Code only'))
+        for (path, payload, status, reason), defn in zip(cases, defs):
+            slug = payload['model']
+            with self.subTest(path=path), _generation():
+                model_refresh.apply(_refreshed(slug, provider=defn.id))
+                recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
+                server = self._server()
+                move = lambda: model_refresh.apply(_refreshed(slug, provider='openrouter'))
+                with _after_resolution(move):
+                    response = _post(server.server_port, '/test-token' + path, payload,
+                                     {'Authorization': 'Bearer subscription-secret'})
+                self.assertEqual(response.status, status)
+                self.assertIn(reason, json.loads(response.read())['error']['message'])
                 self.assertEqual(recorded, [])
 
     def test_missing_token_is_rejected_without_upstream_call(self):

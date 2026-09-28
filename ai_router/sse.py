@@ -44,6 +44,27 @@ def blocks(response):
         raise ValueError('Incomplete upstream SSE event')
 
 
+def split_frames(buffer):
+    """Split complete blank-line frames from an incremental byte buffer.
+
+    Returns `(spare, frames)`: complete frames are ready now, while `spare`
+    is the incomplete tail held for the next chunk.
+    """
+    frames, start = [], 0
+    while True:
+        newline = buffer.find(b'\n', start)
+        if newline < 0:
+            break
+        end = newline + 1
+        if buffer[start:end].strip():
+            start = end
+            continue
+        frames.append(buffer[:end])
+        buffer = buffer[end:]
+        start = 0
+    return buffer, frames
+
+
 def replace_data(frame, data):
     """Keep comments, event IDs and event names when replacing JSON data."""
     result, replaced = [], False

@@ -12,10 +12,11 @@ COMPACT_PROMPT = ('You are performing a CONTEXT CHECKPOINT COMPACTION. Create a 
     'critical data or tool results needed to continue. Quote exact values, codes, names and '
     'tool results verbatim so the next model can repeat them exactly. Be concise and structured.')
 import base64
+import json
 import secrets
-from .agent_handoffs import recoverable_agent_message
-from .compaction_result import IncompleteSummary as IncompleteSummary, extract_summary as extract_summary
-from .history_portability import CALL_TYPES as CALL_TYPES, OUTPUT_TYPES as OUTPUT_TYPES, _block_text as _block_text, user_message_item as user_message_item
+import unicodedata
+from .history_items import (block_text, has_encryption_marked_agent_item, reasoning_text,
+                            recoverable_agent_message, user_message_item)
 PREFIX = 'ocx1:'
 TRIGGER_TYPE = 'compaction_trigger'
 SUMMARY_PREFIX = ('Another language model started to solve this problem and '
@@ -26,13 +27,23 @@ COMPACTION_TYPES = {'compaction', 'compaction_summary', 'context_compaction'}
 RETAINED_CHARS = 20000 * 4
 TRANSCRIPT_BUDGET = 24000
 
+def _contains_control(text):
+    return any(unicodedata.category(ch) == 'Cc' and not ch.isspace()
+               for ch in text)
+
+
 def decode_summary(blob):
     if not isinstance(blob, str) or not blob.startswith(PREFIX):
         return None
+    payload = blob[len(PREFIX):]
     try:
-        return base64.b64decode(blob[len(PREFIX):]).decode()
-    except ValueError:
+        raw = base64.b64decode(payload, validate=True)
+        if base64.b64encode(raw).decode() != payload:
+            return None
+        text = raw.decode()
+    except (ValueError, UnicodeDecodeError):
         return None
+    return text if text.strip() and not _contains_control(text) else None
 
 def compaction_text(item):
     text = decode_summary(item.get('encrypted_content'))
@@ -52,6 +63,8 @@ def has_compaction_trigger(items):
 
 
 def encode_summary(summary):
+    if not isinstance(summary, str) or _contains_control(summary):
+        raise ValueError('Compaction summary contains control characters.')
     return PREFIX + base64.b64encode(summary.encode()).decode()
 
 
@@ -98,100 +111,20 @@ def build_compact_v1_output(user_messages, summary):
     selected.reverse()
     return [user_message_item(m) for m in selected] + [user_message_item(SUMMARY_PREFIX + '\n' + summary.strip())]
 
-def rewrite_input(items):
-    """Replace compaction items with visible text; never drop history silently."""
-    if not isinstance(items, list):
-        return items
-    rewritten = []
-    for item in items:
-        if is_compaction_item(item):
-            rewritten.append(user_message_item(compaction_text(item)))
-        else:
-            rewritten.append(item)
-    return rewritten
-# Calls the endpoint accepts, and outputs keyed by call. A fragment missing
-# these fields (interrupted call, orphan output) 400s the whole turn, so the
-# scrub drops fragments before anything is forwarded. A partial call never
-# executed, so the next turn regenerates it if still needed. A standalone
-# output (no call_id) is the app-injected instruction shape, not an orphan,
-# and is never dropped here; providers materialize it before the scrub.
-def _call_complete(item):
-    kind = item.get('type')
-    if not isinstance(item.get('call_id'), str):
-        return False
-    field = {'function_call': 'arguments', 'custom_tool_call': 'input'}.get(kind)
-    if field is not None:
-        return isinstance(item.get(field), str)
-    if kind == 'apply_patch_call':
-        return (item.get('status') in ('in_progress', 'completed')
-                and isinstance(item.get('operation'), dict))
-    return True
-
-
-def scrub_tool_fragments(items):
-    """Drop incomplete tool history; complete pairs pass through untouched."""
-    if not isinstance(items, list):
-        return items
-    calls = {item.get('call_id') for item in items
-             if isinstance(item, dict) and item.get('type') in CALL_TYPES
-             and _call_complete(item)}
-    out = []
-    for item in items:
-        if not isinstance(item, dict):
-            out.append(item)
-            continue
-        kind = item.get('type')
-        if kind in CALL_TYPES and not _call_complete(item):
-            continue
-        if (kind in OUTPUT_TYPES and isinstance(item.get('call_id'), str)
-                and item['call_id'] not in calls):
-            continue
-        out.append(item)
-    return out
-
-
-REASONING_TEXT_BLOCKS = frozenset({'reasoning_text', 'text'})
-
-
-def _reasoning_text(item):
-    """Readable reasoning text; the provider blob value is never read."""
-    parts = []
-    for blocks, restricted in ((item.get('summary'), False), (item.get('content'), True)):
-        if isinstance(blocks, str) and blocks.strip():
-            parts.append(blocks.strip())
-        elif isinstance(blocks, list):
-            for block in blocks:
-                if not isinstance(block, dict):
-                    continue
-                if restricted and block.get('type') not in REASONING_TEXT_BLOCKS:
-                    continue
-                text = block.get('text')
-                if isinstance(text, str) and text.strip():
-                    parts.append(text.strip())
-    return ' '.join(parts)
-
-
-def strip_reasoning_blobs(items):
-    """Strip OpenAI-owned reasoning blobs; keep items that still hold readable text."""
-    if not isinstance(items, list):
-        return items
-    out = []
-    for item in items:
-        if (isinstance(item, dict) and item.get('type') == 'reasoning'
-                and 'encrypted_content' in item):
-            item = {k: v for k, v in item.items() if k != 'encrypted_content'}
-            if not _reasoning_text(item):
-                continue
-        out.append(item)
-    return out
-
 def _item_text(item):
     if not isinstance(item, dict):
         return ''
     kind = item.get('type')
+    if kind == 'tool_search_call':
+        return ('assistant tool search call: ' + json.dumps(
+            item.get('arguments', item.get('query', '')), ensure_ascii=False,
+            default=str)[:2000])
+    if kind == 'tool_search_output':
+        return ('tool search result: ' + json.dumps(
+            item.get('tools', ''), ensure_ascii=False, default=str)[:2000])
     if kind == 'message':
         role = item.get('role', 'user')
-        return f'{role}: {_block_text(item.get("content", ""))}'.strip()
+        return f'{role}: {block_text(item.get("content", ""))}'.strip()
     if kind in ('function_call', 'custom_tool_call', 'apply_patch_call'):
         label = item.get('name', 'apply_patch' if kind == 'apply_patch_call' else '')
         if item.get('namespace'):
@@ -201,13 +134,13 @@ def _item_text(item):
         label = f" {item['name']}" if item.get('name') else ''
         for key in ('output', 'result', 'content', 'text', 'data'):
             if item.get(key):
-                return f'tool result{label}: ' + _block_text(item[key])[:2000]
+                return f'tool result{label}: ' + block_text(item[key])[:2000]
         return ''
     if kind == 'reasoning':
         blob = item.get('encrypted_content')
-        if isinstance(blob, str) and blob:
+        if isinstance(blob, str) and blob.strip():
             return ''  # Real provider blob; opaque content never reaches summaries.
-        text = _reasoning_text(item)
+        text = reasoning_text(item)
         return f'reasoning: {text}'[:2000] if text else ''
     if is_compaction_item(item):
         return compaction_text(item)
@@ -216,33 +149,19 @@ def _item_text(item):
         # retained. Anything encrypted stays out: the preparation guard owns
         # that rejection, and summaries must never launder opaque blocks.
         readable = recoverable_agent_message(item)
-        if readable: item = {**item, 'content': readable}
-        elif has_opaque_agent_item([item]): return ''
+        if readable:
+            item = {**item, 'content': readable}
+        elif has_encryption_marked_agent_item([item]):
+            return ''
         author = item.get('author', 'agent') + (f' to {item["recipient"]}' if item.get('recipient') else '')
-        text = _block_text(item.get('content', '')).strip() + ('\nEncrypted content was withheld from this external model. The result may be incomplete; request a plain-text resend if needed.' if readable else '')
+        text = block_text(item.get('content', '')).strip()
+        if readable:
+            text += ('\nEncrypted content was withheld from this external model. '
+                     'The result may be incomplete; request a plain-text resend if needed.')
         return f'{author}: {text}'.strip()
     return ''
 
 TRUNCATED_NOTE = '[truncated] '
-
-
-def has_opaque_agent_item(items):
-    """True when any agent item carries an unreadable encrypted block."""
-    if not isinstance(items, list):
-        return False
-    for item in items:
-        if not isinstance(item, dict) or item.get('type') != 'agent_message':
-            continue
-        if 'encrypted_content' in item:
-            return True
-        content = item.get('content')
-        blocks = content if isinstance(content, list) else [content]
-        for block in blocks:
-            if not isinstance(block, dict):
-                continue
-            if 'encrypted_content' in block or block.get('type') == 'encrypted_content':
-                return True
-    return False
 
 
 def transcript_for_summary(items):

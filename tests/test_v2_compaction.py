@@ -35,23 +35,35 @@ class CompactTriggerProviderTests(unittest.TestCase):
         provider = ExternalResponsesProvider(provider_defs.OPENROUTER)
         seen = {}
 
-        def fake_summarize(model, key, items):
+        def fake_summarize(_model, _key, items, row=None, context=None,
+                           allowed=None, availability_snapshot=None):
             seen['items'] = items
+            seen['row'] = row
+            seen['context'] = context
+            seen['allowed'] = allowed
+            seen['availability_snapshot'] = availability_snapshot
             return summary
 
         provider.summarize = fake_summarize
+        provider._require_summary_rows = lambda *args: {}
         return provider, seen
 
     def test_trigger_returns_exactly_one_decodable_item(self):
         provider, seen = self._provider()
+        context = SimpleNamespace(catalogue={'snapshot': 'kept'})
+        row = SimpleNamespace(slug='active/model')
         out = provider.compact_trigger('z-ai/glm-5.3-flash', {
             'input': [{'type': 'message', 'role': 'user', 'content': 'do it'},
-                      {'type': 'compaction_trigger'}]}, 'key')
+                      {'type': 'compaction_trigger'}]}, 'key', row=row,
+                             context=context, allowed={'active/model'})
         self.assertEqual(len(out), 1)
         self.assertEqual(out[0]['type'], 'compaction')
         self.assertTrue(out[0]['id'].startswith('cmp_'))
         self.assertEqual(decode_summary(out[0]['encrypted_content']), 'handoff done')
         self.assertNotIn({'type': 'compaction_trigger'}, seen['items'])
+        self.assertIs(seen['row'], row)
+        self.assertIs(seen['context'], context)
+        self.assertEqual(seen['allowed'], {'active/model'})
 
     def test_trigger_without_user_messages_is_409_shape(self):
         provider, _ = self._provider()
@@ -91,6 +103,10 @@ class CompactionCallSelectionTests(unittest.TestCase):
 
 
 class CompactTriggerHandlerTests(unittest.TestCase):
+    def setUp(self):
+        self.enterContext(mock.patch.object(
+            ExternalResponsesProvider, '_require_summary_rows', return_value={}))
+
     def _server(self, **overrides):
         state = _test_state(_auth_file(self))
         state.update(overrides)

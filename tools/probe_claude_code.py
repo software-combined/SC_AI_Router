@@ -25,10 +25,13 @@ Usage:
     python3.14 tools/probe_claude_code.py --candidate z-ai/glm-5.3-flash \
         --deferred
     python3.14 tools/probe_claude_code.py --output results.json --json
+    python3.14 tools/probe_claude_code.py --models deepseek/deepseek-v4.1-flash \
+        --read-count 2 --effort max --max-budget-usd 0.10
 """
 import argparse
 import hashlib
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -40,6 +43,9 @@ from pathlib import Path
 
 DEFAULT_HOME = Path.home() / '.codex' / 'mixed-model-router'
 PROMPT = 'Read the file probe.txt and reply with exactly its contents, nothing else.'
+MULTI_PROMPT = ('Read probe-1.txt first, then read probe-2.txt in a separate '
+                'Read call after the first result arrives. Reply with exactly '
+                'the two file contents separated by one space.')
 # The stub MCP server and its catalogue live with the capture harness, which
 # already owns the shape of a deferred Claude Code request.
 ROOT = Path(__file__).resolve().parents[1]
@@ -63,19 +69,47 @@ def listing(home):
         return [row['id'] for row in json.load(response).get('data', [])]
 
 
-def probe(home, model, deferred=False):
+def _registry_rows(home):
+    try:
+        release = (home / 'current').read_text().strip()
+        path = home / 'releases' / release / 'ai_router' / 'models.json'
+        return json.loads(path.read_text())
+    except (OSError, ValueError, KeyError, TypeError):
+        return []
+
+
+def _expected_model(home, model):
+    """Upstream id behind an advertised alias, or the input when unresolved."""
+    for row in _registry_rows(home):
+        slug = row.get('slug')
+        if not isinstance(slug, str):
+            continue
+        ids = {slug, slug.removeprefix('~'),
+               'claude/scg/' + hashlib.sha256(slug.encode()).hexdigest()}
+        if model in ids:
+            return row.get('upstream_id') or slug
+    return model
+
+
+def probe(home, model, deferred=False, read_count=1, effort=None,
+          max_budget_usd=None, expected_model=None):
     """One synthetic round trip; returns a result record."""
     state = json.loads((home / 'mixed-router-state.json').read_text())
     marker = 'SCGCC_' + hashlib.sha256(
         (model + ('+deferred' if deferred else '')).encode()).hexdigest()[:8].upper()
     work = Path(tempfile.mkdtemp(prefix='scg-cc-probe.'))
     try:
-        (work / 'probe.txt').write_text(marker + '\n')
+        markers = [marker] if read_count == 1 else [marker + '-1', marker + '-2']
+        if read_count == 1:
+            (work / 'probe.txt').write_text(markers[0] + '\n')
+        else:
+            (work / 'probe-1.txt').write_text(markers[0] + '\n')
+            (work / 'probe-2.txt').write_text(markers[1] + '\n')
         env = {'ANTHROPIC_BASE_URL': 'http://127.0.0.1:%s/%s/'
                                      % (state['port'], state['token']),
                'CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY': 'false'}
         servers = {}
-        prompt, allowed = PROMPT, ['Read']
+        prompt, allowed = (PROMPT if read_count == 1 else MULTI_PROMPT), ['Read']
         if deferred:
             # The exact env the installer writes for an attached terminal.
             env.update({'ENABLE_TOOL_SEARCH': 'true',
@@ -94,34 +128,64 @@ def probe(home, model, deferred=False):
         mcp_path.write_text(json.dumps({'mcpServers': servers}))
         os.chmod(settings, 0o600)
         started = time.time()
+        cmd = [CLAUDE_BIN, '-p', prompt, '--model', model]
+        if effort:
+            cmd.extend(['--effort', effort])
+        if max_budget_usd is not None:
+            cmd.extend(['--max-budget-usd', str(max_budget_usd)])
+        cmd.extend([
+            '--strict-mcp-config', '--mcp-config', str(mcp_path),
+            '--allowedTools', *allowed, '--settings', str(settings),
+            '--output-format', 'stream-json' if read_count > 1 else 'json']
+            + (['--verbose'] if read_count > 1 else []))
         try:
             done = subprocess.run(
-                [CLAUDE_BIN, '-p', prompt, '--model', model,
-                 '--strict-mcp-config', '--mcp-config', str(mcp_path),
-                 '--allowedTools', *allowed, '--settings', str(settings),
-                 '--output-format', 'json'],
+                cmd,
                 cwd=str(work), capture_output=True, text=True, timeout=TIMEOUT_S)
         except subprocess.TimeoutExpired:
-            return {'model': model, 'leg': leg_of(deferred), 'pass': False,
+            return {'model': model, 'leg': leg_of(deferred, read_count),
+                    'effort': effort, 'max_budget_usd': max_budget_usd,
+                    'pass': False,
                     'error': 'timeout',
                     'seconds': round(time.time() - started, 1)}
-        report = _report(done.stdout)
+        report = (_stream_report(done.stdout) if read_count > 1
+                  else _report(done.stdout))
         answer = report.get('result') or ''
         # Containment, not an exact echo: a model that reads the file and then
         # says "the contents are: <marker>" has done the job, and several rows
         # narrate their answers. An empty or refused turn still fails here.
-        return {'model': model, 'leg': leg_of(deferred), 'pass': marker in answer,
+        read_paths = sorted(set(report.get('read_paths') or ()))
+        expected_model = expected_model or _expected_model(home, model)
+        identity = _identity(expected_model, report)
+        passed = _accepted(read_count, markers, report, expected_model)
+        if report.get('is_error'):
+            error = report.get('subtype')
+        elif identity == 'mismatched':
+            error = 'served_model_mismatch'
+        else:
+            error = None
+        return {'model': model, 'expected_model': expected_model,
+                'leg': leg_of(deferred, read_count),
+                'effort': effort, 'max_budget_usd': max_budget_usd, 'pass': passed,
                 'turns': report.get('num_turns'),
-                'error': report.get('subtype') if report.get('is_error') else None,
+                'calls': report.get('read_calls', report.get('tool_calls')),
+                'read_paths': read_paths,
+                'sequential_reads': report.get('sequential_reads'),
+                'tool_result_ids_match': report.get('tool_result_ids_match'),
+                'served': report.get('served'),
+                'served_identity': identity,
+                'error': error,
                 'answer': answer[:80],
                 'seconds': round(time.time() - started, 1)}
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
 
-def leg_of(deferred):
+def leg_of(deferred, read_count=1):
     """Report label for one probe leg."""
-    return 'deferred' if deferred else 'read'
+    if deferred:
+        return 'deferred'
+    return 'read' if read_count == 1 else 'read2'
 
 
 def _report(stdout):
@@ -135,9 +199,114 @@ def _report(stdout):
         return {}
 
 
+def _identity(expected_model, report):
+    """Classify provider-reported identity without inventing a match."""
+    served = report.get('served') or []
+    if not served:
+        return 'unverified'
+    return ('matched' if all(item == expected_model for item in served)
+            else 'mismatched')
+
+
+def _accepted(read_count, markers, report, expected_model):
+    """Accept only a non-error answer with the requested Read history."""
+    answer = report.get('result') or ''
+    if (report.get('is_error') or _identity(expected_model, report) == 'mismatched'
+            or not all(item in answer for item in markers)):
+        return False
+    if read_count == 1:
+        return True
+    return (report.get('read_calls') == read_count
+            and report.get('tool_calls') == read_count
+            and report.get('read_paths') == ['probe-1.txt', 'probe-2.txt']
+            and bool(report.get('sequential_reads'))
+            and bool(report.get('tool_result_ids_match')))
+
+
+def _event_content(event):
+    message = event.get('message') if isinstance(event.get('message'), dict) else {}
+    content = message.get('content')
+    return content if isinstance(content, list) else []
+
+
+def _stream_report(stdout):
+    """Result, served ids and Read-call facts from Claude Code stream-json."""
+    served, result = set(), {}
+    calls = read_calls = 0
+    read_paths = []
+    read_steps = []
+    read_ids, result_ids = [], []
+    for step, line in enumerate(stdout.splitlines()):
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if event.get('type') == 'assistant':
+            message = event.get('message') or {}
+            if message.get('model'):
+                served.add(message['model'])
+            for part in message.get('content') or []:
+                if not isinstance(part, dict) or part.get('type') != 'tool_use':
+                    continue
+                calls += 1
+                if part.get('name') != 'Read':
+                    continue
+                read_calls += 1
+                read_ids.append(part.get('id'))
+                inputs = part.get('input') if isinstance(part.get('input'), dict) else {}
+                path = inputs.get('file_path') or inputs.get('path')
+                if path:
+                    name = Path(str(path)).name
+                    read_paths.append(name)
+                    read_steps.append((step, len(result_ids), name))
+        elif event.get('type') == 'user':
+            for part in _event_content(event):
+                if isinstance(part, dict) and part.get('type') == 'tool_result':
+                    result_ids.append(part.get('tool_use_id'))
+        elif event.get('type') == 'result':
+            result = event
+    sequential_reads = any(
+        later[0] > earlier[0] and later[1] > earlier[1]
+        and {earlier[2], later[2]} == {'probe-1.txt', 'probe-2.txt'}
+        for earlier, later in zip(read_steps, read_steps[1:]))
+    tool_result_ids_match = (
+        len(read_ids) == len(result_ids)
+        and all(isinstance(tool_id, str) and tool_id for tool_id in read_ids)
+        and len(set(read_ids)) == len(read_ids)
+        and result_ids == read_ids)
+    result.update(tool_calls=calls, read_calls=read_calls,
+                  read_paths=read_paths, sequential_reads=sequential_reads,
+                  tool_result_ids_match=tool_result_ids_match,
+                  served=sorted(served))
+    return result
+
+
+def client_version():
+    """Claude Code's version line, or None when it cannot be queried."""
+    try:
+        done = subprocess.run([CLAUDE_BIN, '--version'], capture_output=True,
+                              text=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    text = (done.stdout or done.stderr).strip()
+    return text.splitlines()[0] if text else None
+
+
+def _positive_budget(value):
+    """Parse a finite positive dollar cap for the live client."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise argparse.ArgumentTypeError('budget must be a number') from exc
+    if not math.isfinite(number) or number <= 0:
+        raise argparse.ArgumentTypeError('budget must be finite and positive')
+    return number
+
+
 def _summary(row):
     if row['pass']:
-        return '%ss, %s turns' % (row['seconds'], row.get('turns'))
+        return '%ss, %s turns, %s calls' % (
+            row['seconds'], row.get('turns'), row.get('calls'))
     if row.get('error'):
         return '%ss, %s' % (row['seconds'], row['error'])
     return '%ss, answer %r' % (row['seconds'], row.get('answer'))
@@ -157,8 +326,13 @@ def _legs(args, home):
         print('refusing %d legs: one model call chain each, raise --max-legs to '
               'run them' % len(legs), file=sys.stderr)
         raise SystemExit(2)
+    if args.max_budget_usd is not None and len(legs) != 1:
+        print('refusing %d legs: --max-budget-usd is one aggregate cap; run '
+              'budgeted legs separately' % len(legs), file=sys.stderr)
+        raise SystemExit(2)
     for model, deferred in legs:
-        result = probe(home, model, deferred)
+        result = probe(home, model, deferred, args.read_count, args.effort,
+                       args.max_budget_usd)
         results.append(result)
         if not args.json:
             print('%-4s %-10s %-64s %s'
@@ -191,12 +365,24 @@ def main(argv=None):
     parser.add_argument('--deferred', action='store_true',
                         help='add one deferred-tool round trip per row through '
                              'a synthetic %d-tool MCP server' % STUB_TOOLS)
+    parser.add_argument('--read-count', type=int, choices=(1, 2), default=1,
+                        help='Read calls in the synthetic round trip '
+                             '(default: 1; use 2 for multi-turn history proof)')
+    parser.add_argument('--effort', choices=('low', 'medium', 'high', 'xhigh', 'max'),
+                        help='reasoning effort passed to Claude Code')
+    parser.add_argument('--max-budget-usd', type=_positive_budget,
+                        help='hard dollar cap passed to Claude Code '
+                             '(required for --read-count 2)')
     parser.add_argument('--output', type=Path, help='write results JSON here')
     parser.add_argument('--json', action='store_true', help='machine-readable')
     args = parser.parse_args(argv)
 
     if not CLAUDE_BIN:
         raise SystemExit('the claude binary is not on PATH')
+    if args.deferred and args.read_count != 1:
+        parser.error('--deferred supports one Read call; omit it for --read-count 2')
+    if args.read_count > 1 and args.max_budget_usd is None:
+        parser.error('--read-count 2 requires --max-budget-usd')
     if args.candidate:
         with _candidate_home(args.candidate) as scope:
             results = _legs(args, scope.home)
@@ -204,7 +390,10 @@ def main(argv=None):
         results = _legs(args, args.home)
 
     passed = sum(1 for row in results if row['pass'])
-    report = {'passed': passed, 'rows': len(results), 'results': results}
+    report = {'passed': passed, 'rows': len(results),
+              'client': client_version(), 'read_count': args.read_count,
+              'effort': args.effort, 'max_budget_usd': args.max_budget_usd,
+              'results': results}
     if args.output:
         args.output.write_text(json.dumps(report, indent=2) + '\n')
     if args.json:

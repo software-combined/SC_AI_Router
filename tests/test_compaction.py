@@ -1,9 +1,11 @@
 import unittest
 import base64
 from ai_router.compaction import (PREFIX, TRANSCRIPT_BUDGET, build_compact_v1_output,
-    compaction_text, decode_summary, encode_summary, extract_summary, extract_user_messages,
-    has_compaction_trigger, rewrite_input, scrub_tool_fragments,
-    transcript_for_summary, v2_compaction_item, OPAQUE_NOTE)
+    compaction_text, decode_summary, encode_summary, extract_user_messages,
+    has_compaction_trigger, transcript_for_summary, v2_compaction_item, OPAQUE_NOTE)
+from ai_router.compaction_result import extract_summary
+from ai_router.external_history import rewrite_input
+from ai_router.tool_runs import scrub_tool_fragments
 from ai_router.image_items import IMAGE_NOTE, note_images
 
 class CompactionTests(unittest.TestCase):
@@ -234,6 +236,12 @@ class TranscriptBoundaryTests(unittest.TestCase):
             self.assertIn(expected, text)
         # A function call still renders its exact line.
         self.assertIn('assistant tool call send_message: {"text":"hi"}', text.splitlines())
+
+    def test_native_tool_search_call_and_output_survive_summary(self):
+        call = {'type': 'tool_search_call', 'call_id': 'ts1', 'execution': 'client', 'arguments': {'query': 'helper docs', 'limit': 5}}
+        output = {'type': 'tool_search_output', 'call_id': 'ts1', 'execution': 'client', 'tools': [{'type': 'namespace', 'name': 'mcp__synthetic_docs', 'tools': [{'type': 'function', 'name': 'lookup'}]}]}
+        text = transcript_for_summary([{'type': 'message', 'role': 'user', 'content': 'find the helper'}, call, output])
+        self.assertTrue(all(value in text for value in ('assistant tool search call:', 'helper docs', 'tool search result:', 'mcp__synthetic_docs', 'lookup')))
 
 
 class ReasoningAndShapeTests(unittest.TestCase):

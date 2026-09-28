@@ -20,7 +20,7 @@ import os
 import unittest
 from pathlib import Path
 
-from ai_router import provider_defs, wire_shape
+from ai_router import provider_defs, request_context, wire_shape
 from ai_router.providers import ExternalResponsesProvider, SubscriptionProvider
 from tests.harness import isolated_home, stub_credentials
 
@@ -36,19 +36,21 @@ def golden(target, payload):
     """{'wire', 'contract'} for one `<route>:<slug>` target, or {'error'}."""
     route, slug = target.split(':', 1)
     payload = dict(copy.deepcopy(payload), model=slug)
+    context = request_context.resolve(slug, request_context.capture())
     try:
         if route == 'subscription':
             provider = SubscriptionProvider()
             prepared = provider.prepare(slug, '/responses', payload,
-                                        json.dumps(payload).encode(), {}, None)
+                                        json.dumps(payload).encode(), {}, None, context=context)
         else:
             provider = ExternalResponsesProvider(provider_defs.OPENROUTER)
             prepared = provider.prepare(slug, '/responses', payload, b'', {},
-                                        stub_credentials())
+                                        stub_credentials(), context=context)
     except Exception as exc:  # noqa: BLE001 - any refusal is pinned behaviour
         return {'error': f'{type(exc).__name__}: {exc}'}
     wire = json.loads(prepared.body)
-    return {'wire': wire, 'contract': wire_shape.violations(provider.defn.dialect, wire)}
+    observed = getattr(context.row, 'observed_item_types', ())
+    return {'wire': wire, 'contract': wire_shape.violations(provider.defn.dialect, wire, observed)}
 
 
 class ReplayGoldenTests(unittest.TestCase):

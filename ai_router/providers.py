@@ -1,21 +1,17 @@
 """Provider adapters. Each owns model membership, request preparation, upstream target and response adaptation."""
-import http.client
 import json
 import time
-from . import (capabilities, compaction as comp, local_services, agent_handoffs,
-               provider_defs, transport, turn_budget, jev_compaction)
-from .standalone_outputs import materialize_outputs, portable_replay
-from . import subscription_history, context_recovery, subscription_roster
-from .capabilities import CANONICAL_ORDER, check_effort, input_modalities
-from .image_items import note_images
+from . import (availability, compaction as comp, local_services, handoff_response,
+               provider_defs, request_context, transport, turn_budget, jev_compaction)
+from . import outbound, rejected_repair, request_evidence, subscription_roster
+from .compaction_summary import (summary_entries as _summary_entries,
+                                 summarize as _summarize)
 from .errors import PreparationError, SubscriptionRequired, UnknownModel
-from .registry import by_slug, near_miss, upstream_id_for
+from .registry import by_slug, near_miss
 from .events import log_event
 from .discovered import remember
-from .tool_adapter import prepare_tools, snoop_response_identity, stream_events, ToolEvents, SEARCH_NAME
+from .tool_adapter import snoop_response_identity, stream_events, ToolEvents
 
-# Transport leaves live in transport.py (Plan 062); these aliases keep
-# existing importers working until the protocol split completes.
 from .transport import HOP_HEADERS, Prepared, passthrough
 NATIVE_SERVICE_PATHS = {'/alpha/search', '/alpha/notes/v2/thread_hint', '/guardian', '/guardian-classifier'}
 
@@ -23,31 +19,8 @@ NATIVE_SERVICE_PATHS = {'/alpha/search', '/alpha/notes/v2/thread_hint', '/guardi
 def is_native_service(path):
     # Any native path the subscription definitions claim (prefix rule).
     return provider_defs.native_service_path(path)
-SUMMARY_OUTPUT_TOKENS = 4000
-SUMMARY_RETRY_OUTPUT_TOKENS = 8000
-SUMMARY_DEADLINE_S = 120
-
-
-def _summary_budgets(model):
-    entry = by_slug(model) if isinstance(model, str) else None
-    ceiling = getattr(entry, 'max_output_tokens', SUMMARY_OUTPUT_TOKENS)
-    if (isinstance(ceiling, int) and not isinstance(ceiling, bool)
-            and ceiling > SUMMARY_OUTPUT_TOKENS):
-        return (SUMMARY_OUTPUT_TOKENS,
-                min(SUMMARY_RETRY_OUTPUT_TOKENS, ceiling))
-    return (SUMMARY_OUTPUT_TOKENS,)
-
-
-def _passthrough(response):
-    yield from passthrough(response)
-
-
-def reject_opaque_agent_items(items):
-    """Fail closed on unreadable encrypted briefs before any dispatch."""
-    if isinstance(items, list) and any(comp.has_opaque_agent_item([item]) and not agent_handoffs.recoverable_agent_message(item) for item in items):
-        raise PreparationError(
-            'unsupported encrypted agent instructions; '
-            'resend the assignment as plain text')
+# router.py guards compaction with this name; the external stages use the same rule.
+reject_opaque_agent_items = outbound.contain
 
 
 class SubscriptionProvider:
@@ -60,50 +33,41 @@ class SubscriptionProvider:
         self.kind = self.defn.kind
 
     def owns(self, model, path, openai_models, openai_mode='subscription',
-             allowed=None):
+             allowed=None, *, catalogue):
         del allowed  # Subscription rows are never allowlisted.
         if openai_mode == 'none':
             return False
         if is_native_service(path):
             return True
-        entry = by_slug(model) if isinstance(model, str) else None
+        entry = catalogue.get(model) if isinstance(model, str) else None
         if entry is not None:
             return entry.provider == provider_defs.OPENAI.id
         return isinstance(model, str) and (model in openai_models or model in subscription_roster.HELPER_SLUGS)
 
-    def prepare(self, model, path, payload, raw_body, headers, credentials, decoded_len=None):
-        del decoded_len  # Subscription rows keep the provider's own usage.
+    def prepare(self, model, path, payload, raw_body, headers, credentials, decoded_len=None, context=None):
         # The URL path token is the loopback auth; Codex >=0.153.4 omits the
         # subscription Authorization header, so forward client headers unchanged.
         fwd = {k: v for k, v in headers.items() if k.lower() not in HOP_HEADERS}
-        normalized = (subscription_history.normalize(portable_replay(payload, SEARCH_NAME))
-                      if path in ('/responses', '/responses/compact') else payload)
-        if path == '/responses':
-            normalized = context_recovery.normalize(normalized)
-        history_changed = normalized is not payload
-        payload = normalized
-        try:
-            names = set()
-            hinted = False
-            if path == '/responses':
-                names = agent_handoffs.add_plaintext_tools(payload)
-                hinted = agent_handoffs.hint_full_lanes(payload)
-        except ValueError as exc:
-            raise PreparationError(str(exc)) from exc
-        if names or history_changed or hinted:
+        payload, names, changed = outbound.project_subscription(
+            payload, path, catalogue=context.catalogue if context is not None else None)
+        if changed:
             fwd = {k: v for k, v in fwd.items() if k.lower() not in ('content-encoding', 'accept-encoding')}
             fwd['Accept-Encoding'] = 'identity'
             raw_body = json.dumps(payload).encode()
-        return Prepared(self.host, self.defn.path_for(provider_defs.RESPONSES, path),
-                        fwd, raw_body, names, self.name)
+            decoded_len = len(raw_body)  # the only size a rewrite carries
+        return Prepared(self.host, self.defn.path_for(provider_defs.RESPONSES, path), fwd,
+                        raw_body, names, self.name, context=context, decoded_body_bytes=decoded_len)
 
     def adapt(self, response, tool_names, notes=None):
         if tool_names and response.status == 200:
-            yield from agent_handoffs.adapt_response(response, tool_names, notes)
+            yield from handoff_response.adapt_response(response, tool_names, notes)
         elif notes is not None and response.status == 200:
             yield from snoop_response_identity(response, notes)
         else:
-            yield from _passthrough(response)
+            yield from passthrough(response)
+
+    def repair_rejected(self, prepared, described, raw):
+        return rejected_repair.encrypted_content(prepared, described, raw)
 
 
 class ExternalResponsesProvider:
@@ -117,8 +81,8 @@ class ExternalResponsesProvider:
         self.kind = defn.kind
 
     def owns(self, model, path, openai_models, openai_mode='subscription',
-             allowed=None):
-        entry = by_slug(model) if isinstance(model, str) else None
+             allowed=None, *, catalogue):
+        entry = catalogue.get(model) if isinstance(model, str) else None
         if (entry is None or entry.provider != self.defn.id
                 or is_native_service(path)):
             return False
@@ -129,70 +93,19 @@ class ExternalResponsesProvider:
         from . import availability as _availability
         return _availability.permitted(model)
 
-    def prepare(self, model, path, payload, raw_body, headers, credentials, decoded_len=None):
+    def prepare(self, model, path, payload, raw_body, headers, credentials, decoded_len=None, context=None):
         if path not in ('/responses', '/responses/compact'):
             raise PreparationError(f'{self.defn.label} supports responses only')
+        # Every model fact below reads this row: routed, the ingress snapshot (Plan 188).
+        entry = context.row if context is not None else by_slug(model) if isinstance(model, str) else model
         # Before any rewrite: what this client's thread carries. The slim below
         # is invisible upstream, so provider usage alone never moves the trigger.
         carried = turn_budget.carried_tokens(payload, decoded_len) if decoded_len else None
-        # Contain before anything else: an opaque brief must never reach
-        # credential lookup or upstream dispatch, where a child would infer
-        # its assignment from inherited context instead.
-        reject_opaque_agent_items(payload.get('input', []))
-        if path == '/responses':
-            payload = context_recovery.normalize(payload)
-        # Standalone outputs (no call_id) are delegated messages, not orphans.
-        payload['input'] = materialize_outputs(payload.get('input', []))
-        # Scrub before prepare_tools: fragments KeyError its indexing, and
-        # tool_search_output items (released-tool discovery) are never scrubbed.
-        payload['input'] = comp.scrub_tool_fragments(payload.get('input', []))
-        try:
-            aliases = agent_handoffs.add_plaintext_tools(payload)
-            agent_handoffs.hint_full_lanes(payload)
-            tool_names = prepare_tools(payload)
-            tool_names.handoffs = aliases
-            rewritten = comp.strip_reasoning_blobs(comp.rewrite_input(payload.get('input', [])))
-        except ValueError as exc:
-            raise PreparationError(str(exc))
-        keep_images = 'image' in input_modalities(model) if isinstance(model, str) else True
-        entry = by_slug(model) if isinstance(model, str) else model
-        # One expression owns the wire rule: images pass only for an
-        # image-capable row without drop_images; every other row gets the
-        # visible note, including text-only rows with historical images.
-        payload['input'] = (rewritten if keep_images and not getattr(entry, 'drop_images', False)
-                            else note_images(rewritten))
-        reasoning = payload.get('reasoning')
-        try:
-            check_effort(model,
-                         reasoning.get('effort') if isinstance(reasoning, dict) else None)
-        except ValueError as exc:
-            raise PreparationError(str(exc))
-        payload.pop('service_tier', None)
-        # ChatGPT access-program enrolment is not an external-provider option.
-        payload.pop('access_programs', None)
-        if entry is None:
-            # Defence in depth: select()/owns() already refuses a slug that is
-            # not a matching registry row, so this only fires for a direct
-            # prepare() call and never for a routed request.
-            raise PreparationError(f'unknown model: {model}')
-        # The client id is the registry slug; the provider may expect another
-        # id for the same model (Plan 153).
-        payload['model'] = upstream_id_for(entry)
-        if getattr(entry, 'provider_prefs', None):
-            payload['provider'] = dict(entry.provider_prefs)
-        limit = entry.max_output_tokens
+        payload, tool_names = outbound.project_external(
+            payload, path, model, entry, catalogue=context.catalogue if context is not None else None)
+        cap = payload['max_output_tokens']
         window = getattr(entry, 'context_window', 0) or 0
         carried = min(carried, window) if carried and window else carried
-        if window:  # reservation counts against context; keep half for input
-            limit = min(limit, window // 2)
-        # Codex omits the cap and compacts at 90% of context. Its remaining
-        # headroom must fit our default output, not the provider's maximum.
-        default = min(32000, entry.max_output_tokens)
-        if window:
-            default = min(default, window - window * 9 // 10)
-        requested = payload.get('max_output_tokens')
-        cap = min(requested, limit) if requested else default
-        payload['max_output_tokens'] = cap
         # Context size stays the provider's call: a chars-per-token estimate
         # refused long turns the client still had room for.
         headers = dict(self.defn.request_headers)
@@ -201,13 +114,13 @@ class ExternalResponsesProvider:
                         'Accept-Encoding': 'identity'})
         body = json.dumps(payload).encode()
         if len(body) > turn_budget.BODY_BUDGET:
-            stats = turn_budget.fit(payload, turn_budget.BODY_BUDGET, len(body))
+            payload, stats = turn_budget.fit(payload, turn_budget.BODY_BUDGET, len(body))
             if stats:
                 body = json.dumps(payload).encode()
                 log_event('turn_trimmed', model=model, prepared_bytes=len(body), **stats)
         return Prepared(self.host, self.defn.path_for(provider_defs.RESPONSES, '/responses'),
                         headers, body, tool_names, self.name, output_cap=cap,
-                        context_tokens=carried)
+                        context_tokens=carried, context=context, decoded_body_bytes=len(body))
 
     def adapt(self, response, tool_names, notes=None):
         if notes is not None and not tool_names and response.status == 200:
@@ -217,16 +130,50 @@ class ExternalResponsesProvider:
                 yield from stream_events(response, tool_names, notes)
             else:
                 result = json.loads(transport.read_capped(response, transport.MAX_UPSTREAM_BODY))
-                if notes is not None and isinstance(result.get('model'), str):
-                    notes['served_model'] = result['model']
+                request_evidence.observe(notes, result, 'response')
+                if notes is not None and (model := request_evidence.identifier(result.get('model'))):
+                    notes['served_model'] = model
                 adapter = ToolEvents(tool_names, notes)
                 result['output'] = [adapter.item(item) for item in result.get('output', [])]
                 turn_budget.report_usage(result.get('usage'), notes)
                 yield json.dumps(result).encode()
         else:
-            yield from _passthrough(response)
+            yield from passthrough(response)
 
-    def compact(self, model, payload, key):
+    def repair_rejected(self, prepared, described, raw):
+        return rejected_repair.annotation_strip(self.defn, prepared, described, raw)
+
+    def _summary_snapshot(self, key):
+        snap = availability.current()
+        return snap if (snap is not None
+                        and snap.get('key') == availability.key_fingerprint(key)
+                        and snap.get('region') == self.region) else None
+
+    def _jev_enabled(self):
+        return self.region == 'global' and jev_compaction.state() != 'off'
+
+    def _require_summary_rows(self, key, context, allowed):
+        snapshot = self._summary_snapshot(key)
+        if snapshot is None:
+            raise ValueError('Compaction summary models unavailable')
+        entries = _summary_entries(
+            self.defn.id, None if context is None else context.catalogue,
+            allowed, snapshot, by_slug)
+        if not entries:
+            raise ValueError('Compaction summary models unavailable')
+        return snapshot
+
+    def _summary_for_compaction(self, model, key, items, row, context, allowed):
+        summary_snapshot = self._require_summary_rows(key, context, allowed)
+        use_jev = self._jev_enabled()
+        return (
+            (jev_compaction.summary(model, key, items, self.defn, row=row)
+             if use_jev else None)
+            or self.summarize(model, key, items, row, context, allowed,
+                              summary_snapshot)
+        )
+
+    def compact(self, model, payload, key, row=None, context=None, allowed=None):
         try:
             items = payload.get('input', [])
             kinds, shapes = {}, {}
@@ -235,22 +182,25 @@ class ExternalResponsesProvider:
                 kinds[kind] = kinds.get(kind, 0) + 1
                 if isinstance(_item, dict):
                     shapes.setdefault(kind, set()).update(_item.keys())
-            log_event('compact_started', model=model,
+            log_event('compact_started', active_model=model,
                       input_items=len(items) if isinstance(items, list) else -1,
                       item_kinds=kinds,
                       item_keys={k: sorted(v) for k, v in shapes.items()})
             users = comp.extract_user_messages(items)
             if not users:
                 raise ValueError('No user messages to compact')
-            summary = jev_compaction.summary(model, key, items, self.defn) or self.summarize(model, key, items)
-            log_event('compact_summarized', model=model, summary_chars=len(summary))
+            summary = self._summary_for_compaction(
+                model, key, items, row, context, allowed)
+            log_event('compact_summarized', active_model=model,
+                      summary_chars=len(summary))
             output = comp.build_compact_v1_output(users, summary)
             remember(items, summary)
             return output
         except ValueError as exc:
             raise PreparationError(str(exc))
 
-    def compact_trigger(self, model, payload, key):
+    def compact_trigger(self, model, payload, key, row=None, context=None,
+                        allowed=None):
         """Answer a V2 trigger inline with exactly one ocx1 compaction item."""
         try:
             items = [item for item in payload.get('input', [])
@@ -259,78 +209,28 @@ class ExternalResponsesProvider:
             users = comp.extract_user_messages(items)
             if not users:
                 raise ValueError('No user messages to compact')
-            summary = jev_compaction.summary(model, key, items, self.defn) or self.summarize(model, key, items)
-            log_event('compact_triggered', model=model, summary_chars=len(summary))
+            summary = self._summary_for_compaction(
+                model, key, items, row, context, allowed)
+            log_event('compact_triggered', active_model=model,
+                      summary_chars=len(summary))
             remember(items, summary)
             return [comp.v2_compaction_item(summary)]
         except ValueError as exc:
             raise PreparationError(str(exc))
 
-    def summarize(self, model, key, payload_items):
-        transcript = comp.transcript_for_summary(payload_items)
-        prompt = comp.COMPACT_PROMPT + '\n\nConversation:\n' + transcript
-        levels = capabilities.REASONING_LEVELS.get(model)
-        effort = min(levels, key=CANONICAL_ORDER.index) if levels else None
-        entry = by_slug(model) if isinstance(model, str) else None
-        deadline = time.monotonic() + SUMMARY_DEADLINE_S
-        budgets = _summary_budgets(model)
-        for attempt, budget in enumerate(budgets, 1):
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                log_event('compact_summary_attempt', model=model, attempt=attempt,
-                          max_output_tokens=budget, outcome='deadline')
-                raise TimeoutError('Compaction summarizer deadline exceeded')
-            upstream = upstream_id_for(entry) if entry is not None else model
-            body = {'model': upstream, 'input': [comp.user_message_item(prompt)],
-                    'max_output_tokens': budget}
-            if getattr(entry, 'provider_prefs', None):
-                body['provider'] = dict(entry.provider_prefs)
-            if effort:
-                # Never let default high effort burn the whole budget on reasoning.
-                body['reasoning'] = {'effort': effort}
-            conn = None
-            try:
-                req = json.dumps(body).encode()
-                conn = http.client.HTTPSConnection(self.host,
-                                                    timeout=remaining)
-                headers = dict(self.defn.request_headers)
-                headers.update({'Authorization': 'Bearer ' + key,
-                                'Content-Type': 'application/json'})
-                conn.request('POST', self.defn.path_for(
-                    provider_defs.RESPONSES, '/responses'), body=req,
-                    headers=headers)
-                resp = conn.getresponse()
-                try:
-                    data = json.loads(transport.read_capped(resp, transport.MAX_UPSTREAM_BODY))
-                except ValueError:
-                    raise OSError('Summarizer returned invalid JSON')
-                summary = comp.extract_summary(resp.status, data)
-            except comp.IncompleteSummary:
-                if attempt == len(budgets):
-                    log_event('compact_summary_attempt', model=model,
-                              attempt=attempt, max_output_tokens=budget,
-                              outcome='rejected')
-                    raise
-                if time.monotonic() >= deadline:
-                    log_event('compact_summary_attempt', model=model,
-                              attempt=attempt, max_output_tokens=budget,
-                              outcome='deadline')
-                    raise TimeoutError('Compaction summarizer deadline exceeded')
-                log_event('compact_summary_attempt', model=model,
-                          attempt=attempt, max_output_tokens=budget,
-                          outcome='retry')
-                continue
-            except Exception:
-                log_event('compact_summary_attempt', model=model, attempt=attempt,
-                          max_output_tokens=budget, outcome='failed')
-                raise
-            else:
-                log_event('compact_summary_attempt', model=model, attempt=attempt,
-                          max_output_tokens=budget, outcome='completed')
-                return summary
-            finally:
-                if conn is not None:
-                    conn.close()
+    def summarize(self, model, key, payload_items, row=None, context=None,
+                  allowed=None, availability_snapshot=None):
+        """Summarize through the pinned fast rows; `model`/`row` identify the request."""
+        del row
+        snapshot = (self._summary_snapshot(key)
+                    if availability_snapshot is None else availability_snapshot)
+        if snapshot is None:
+            raise ValueError('Compaction summary models unavailable')
+        return _summarize(self, key, payload_items,
+                          catalogue=None if context is None else context.catalogue,
+                          allowed=allowed, active_model=model, lookup=by_slug,
+                          log=log_event, monotonic=time.monotonic,
+                          availability_snapshot=snapshot)
 
 
 class LocalServicesProvider:
@@ -340,12 +240,12 @@ class LocalServicesProvider:
     defn = None
 
     def owns(self, model, path, openai_models, openai_mode='subscription',
-             allowed=None):
-        del allowed  # Native service paths are never allowlisted.
+             allowed=None, *, catalogue):
+        del allowed, catalogue  # Native service paths are never allowlisted.
         return openai_mode == 'none' and is_native_service(path)
 
-    def prepare(self, model, path, payload, raw_body, headers, credentials, decoded_len=None):
-        del decoded_len  # This adapter answers locally; nothing is carried.
+    def prepare(self, model, path, payload, raw_body, headers, credentials, decoded_len=None, context=None):
+        del decoded_len, context  # This adapter answers locally; nothing is carried.
         local_services.answer(path)
         raise AssertionError('unreachable')
 
@@ -364,35 +264,38 @@ def adapters(region='global'):
             + (SubscriptionProvider(), LocalServicesProvider()))
 
 
-def compaction_call(provider, model, path, payload):
+def compaction_call(provider, model, path, payload, row=None, context=None,
+                    allowed=None):
     """Bound local serve for external compact/V2-trigger turns, else None."""
     if provider.kind != provider_defs.EXTERNAL:
         return None
+    row = context.row if context is not None else row
     if path == '/responses/compact':
-        return lambda key: provider.compact(model, payload, key)
-    if (path == '/responses'
-            and comp.has_compaction_trigger(payload.get('input', []))):
-        return lambda key: provider.compact_trigger(model, payload, key)
+        return lambda key: provider.compact(
+            model, payload, key, row, context=context, allowed=allowed)
+    if path == '/responses' and comp.has_compaction_trigger(payload.get('input', [])):
+        return lambda key: provider.compact_trigger(
+            model, payload, key, row, context=context, allowed=allowed)
     return None
 
 
 def select(model, path, openai_models=(), openai_mode='subscription',
-           region='global',
-           allowed=None):
+           region='global', allowed=None, catalogue=None):
     allowset = None if allowed is None else frozenset(allowed)
+    rows = request_context.capture() if catalogue is None else catalogue
     for provider in adapters(region):
         if provider.owns(model, path, openai_models, openai_mode,
-                         allowed=allowset):
+                         allowed=allowset, catalogue=rows):
             return provider
     if openai_mode == 'none' and isinstance(model, str) and model in (openai_models or []):
         raise SubscriptionRequired()
-    entry = by_slug(model) if isinstance(model, str) else None
+    entry = rows.get(model) if isinstance(model, str) else None
     defn = provider_defs.get(entry.provider) if entry is not None else None
     if defn is not None and not defn.serves(provider_defs.RESPONSES):
         raise PreparationError(
             f'{defn.label} models are available to Claude Code only: '
             f'{entry.slug} does not serve the Codex Responses API')
-    guess = near_miss(model)
+    guess = near_miss(model, rows)
     if guess is not None and allowset is not None and guess not in allowset:
         guess = None  # never disclose a slug the portco policy excludes
     raise UnknownModel(model if isinstance(model, str) else None,
