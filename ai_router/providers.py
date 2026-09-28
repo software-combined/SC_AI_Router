@@ -48,7 +48,8 @@ class SubscriptionProvider:
         # The URL path token is the loopback auth; Codex >=0.153.4 omits the
         # subscription Authorization header, so forward client headers unchanged.
         fwd = {k: v for k, v in headers.items() if k.lower() not in HOP_HEADERS}
-        payload, names, changed = outbound.project_subscription(payload, path)
+        payload, names, changed = outbound.project_subscription(
+            payload, path, catalogue=context.catalogue if context is not None else None)
         if changed:
             fwd = {k: v for k, v in fwd.items() if k.lower() not in ('content-encoding', 'accept-encoding')}
             fwd['Accept-Encoding'] = 'identity'
@@ -100,7 +101,8 @@ class ExternalResponsesProvider:
         # Before any rewrite: what this client's thread carries. The slim below
         # is invisible upstream, so provider usage alone never moves the trigger.
         carried = turn_budget.carried_tokens(payload, decoded_len) if decoded_len else None
-        payload, tool_names = outbound.project_external(payload, path, model, entry)
+        payload, tool_names = outbound.project_external(
+            payload, path, model, entry, catalogue=context.catalogue if context is not None else None)
         cap = payload['max_output_tokens']
         window = getattr(entry, 'context_window', 0) or 0
         carried = min(carried, window) if carried and window else carried

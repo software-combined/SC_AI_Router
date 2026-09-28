@@ -3,8 +3,7 @@ from copy import deepcopy
 import json
 import uuid
 
-from . import provider_defs
-from .registry import by_slug
+from . import provider_defs, request_context
 
 NATIVE_NAMESPACE = 'collaboration'
 PLAINTEXT_NAMESPACE = 'collaboration_plaintext'
@@ -15,12 +14,13 @@ LANE_HINT = ('When all subagent lanes are full, close finished agents, '
 
 
 class AliasTools(frozenset):
-    """Advertised names plus the request's response framing, scoped to one call."""
-    def __new__(cls, names, stream=False, spawn_models=None, location='unknown'):
+    """Advertised names, response framing and target catalogue for one request."""
+    def __new__(cls, names, stream=False, spawn_models=None, location='unknown', catalogue=None):
         value = super().__new__(cls, names)
         value.stream = stream
         value.spawn_models = dict(spawn_models or {})
         value.location = location
+        value.catalogue = request_context.capture() if catalogue is None else catalogue
         return value
 
 
@@ -143,7 +143,7 @@ def hint_full_lanes(payload):
     return payload if all(new is old for new, old in zip(hinted, items)) else {**payload, 'input': hinted}
 
 
-def add_plaintext_tools(payload):
+def add_plaintext_tools(payload, catalogue=None):
     """Offer aliases only for native tools present in this request: (payload or a copy, names)."""
     container, input_index = _tool_container(payload)
     tools = container.get('tools', [])
@@ -194,7 +194,7 @@ def add_plaintext_tools(payload):
             items[input_index] = {**container, 'tools': augmented, 'id': ident}
             payload = {**payload, 'input': items}
     return payload, AliasTools(names, payload.get('stream') is True, children,
-                               'classic' if input_index is None else 'lite')
+                               'classic' if input_index is None else 'lite', catalogue=catalogue)
 
 
 def restore_item(item, names):
@@ -259,18 +259,15 @@ def steer_plaintext(item, names):
     spawns = getattr(names, 'spawn_models', {})
     if item.get('name') == 'spawn_agent':
         model = args.get('model')
-        entry = by_slug(model) if isinstance(model, str) else None
-        if entry is None or not provider_defs.is_external(entry.provider):
-            return item
         detail = ('spawn via collaboration_plaintext.spawn_agent '
                   'with fork_turns="none" for externally billed models')
     else:
         target = args.get('target')
         model = _spawn_model(spawns, target)
-        entry = by_slug(model) if isinstance(model, str) else None
-        if entry is None or not provider_defs.is_external(entry.provider):
-            return item
         detail = 'call collaboration_plaintext.' + item['name'] + ' with the same target'
+    entry = getattr(names, 'catalogue', {}).get(model) if isinstance(model, str) else None
+    if entry is None or not provider_defs.is_external(entry.provider):
+        return item
     diagnostic = ('That handoff cannot be delivered readably; ' + detail
                   + ' and resend the message as plain text.')
     return {**item, 'arguments': json.dumps(diagnostic), 'encrypted_function_args': []}
