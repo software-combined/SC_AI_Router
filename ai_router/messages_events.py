@@ -6,7 +6,7 @@ opaque, and the first terminal verdict owns the rest of this response.
 """
 import json
 
-from . import outcome, stream_errors, stream_events as events, transport
+from . import outcome, request_evidence, stream_errors, stream_events as events, transport
 
 STOP_REASONS = {
     'end_turn': outcome.SUCCESS, 'stop_sequence': outcome.SUCCESS,
@@ -64,6 +64,7 @@ class Decoder:
                              self.output, metrics)
         if native == 'message_start':
             message = event.get('message')
+            request_evidence.observe(metrics, message, 'message_start.message')
             self.valid &= (not self.started and _message(message)
                            and message['content'] == [] and message.get('stop_reason') is None)
             self.started = True
@@ -122,5 +123,6 @@ def json_events(chunks, metrics):
         return
     if not _message(message):
         return
+    request_evidence.observe(metrics, message, 'message')
     yield _terminal(b'', 'message', message.get('stop_reason'), True,
                     bool(message['content']), metrics, outcome.STATUS)

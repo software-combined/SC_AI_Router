@@ -8,13 +8,13 @@ from compression import zstd
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from . import (errors, ingress, local_services, model_prompt_page,
                provider_defs, relay, setup, subscription_discovery,
-               subscription_fallback, transport, turn_budget)
+               subscription_fallback, transport, turn_budget, request_evidence)
 from .credentials import Credentials
 from .protocols import select as select_protocol
 from .errors import InvalidSize, PreparationError
 from .image_items import has_images
 from .providers import is_native_service, reject_opaque_agent_items
-from .runtime import MAX_BODY, ROUTER_HOME, log_event
+from .runtime import MAX_BODY, ROUTER_HOME, VERSION, log_event
 
 MAX_INFLIGHT = 32
 # Bounds the client socket: idle pre-auth reads and blocked writes.
@@ -278,13 +278,12 @@ class Handler(BaseHTTPRequestHandler):
                           error_type=type(exc).__name__,
                           location=transport.describe_location(exc))
             return self.error(err)
-        _reasoning = payload.get('reasoning')
         prepare_done = time.monotonic()
-        metrics = {'request_id': context.request_id, 'provider': prepared.provider,
+        metrics = {'request_id': context.request_id, 'provider': prepared.provider, 'router_version': VERSION,
                    'protocol': policy.name,
                    'model': model, 'path': path, 'request_bytes': size,
                    'stream': payload.get('stream') is True,
-                   'reasoning_effort': _reasoning.get('effort') if isinstance(_reasoning, dict) else None,
+                   'reasoning_effort': request_evidence.requested_effort(payload),
                    'max_output_tokens': getattr(prepared, 'output_cap', None),
                    'context_tokens': prepared.context_tokens,
                    'tool_definitions': len(payload.get('tools', [])),

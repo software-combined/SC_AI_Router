@@ -3,7 +3,7 @@ import json
 import time
 from . import (availability, compaction as comp, local_services, handoff_response,
                provider_defs, request_context, transport, turn_budget, jev_compaction)
-from . import outbound, rejected_repair, subscription_roster
+from . import outbound, rejected_repair, request_evidence, subscription_roster
 from .compaction_summary import (summary_entries as _summary_entries,
                                  summarize as _summarize)
 from .errors import PreparationError, SubscriptionRequired, UnknownModel
@@ -130,8 +130,9 @@ class ExternalResponsesProvider:
                 yield from stream_events(response, tool_names, notes)
             else:
                 result = json.loads(transport.read_capped(response, transport.MAX_UPSTREAM_BODY))
-                if notes is not None and isinstance(result.get('model'), str):
-                    notes['served_model'] = result['model']
+                request_evidence.observe(notes, result, 'response')
+                if notes is not None and (model := request_evidence.identifier(result.get('model'))):
+                    notes['served_model'] = model
                 adapter = ToolEvents(tool_names, notes)
                 result['output'] = [adapter.item(item) for item in result.get('output', [])]
                 turn_budget.report_usage(result.get('usage'), notes)
