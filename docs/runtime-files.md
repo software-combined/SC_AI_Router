@@ -79,6 +79,27 @@ sidecar before parsing (Plan 145). Key rotation adds the new public key
 beside the old one, ships, waits one fleet cycle, starts signing with the
 new seed, ships again, then removes the old key.
 
+Claude profile task sharing ships as sibling helpers under `packaging/`:
+`claude_profile_rules.py`, `claude_profile_identity.py`, `claude_profile_hook.py`,
+`claude_profile_history.py`, `claude_profile_records.py`,
+`claude_profile_bundle.py`, `claude_profile_publish.py`,
+`claude_profile_transaction.py` and
+`claude_profile_sync.py`. `claude_desktop_platform.py` supplies native
+lifecycle commands and loads `claude_desktop_policy.py` for read-only switch
+restrictions, while `claude_profile_launch.py` follows the installed
+release pointer for both Open Claude and Switch Claude;
+`claude_switch_launch.py` is retained for older shortcuts. Temporary stages,
+before images and transaction manifests stay inside the local session store
+and are never release members. Private control directories protect backups;
+POSIX attachment permissions stay unchanged so hard-linked originals elsewhere
+are unaffected. Windows checks owner-only access. Recovery metadata includes store-relative paths, session IDs
+and file digests, so it stays private. It contains no session text, credentials
+or exception detail.
+
+The empty `.claude-profile-switch.lock` in the router home coordinates Open and
+Switch through the operating system. Its presence alone does not mean a switch
+is running; the operating system releases the lock when the helper exits.
+
 The installer also places `packaging/router_launch.py` and
 `packaging/update_launch.py` beside the state directory as `router_launch.py`
 and `update_launch.py`, so restarts and scheduled updates follow the pointer

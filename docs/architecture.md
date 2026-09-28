@@ -185,6 +185,11 @@ and the one helper-fallback transition, deciding from `Outcome` and commitment
 facts rather than metrics. Responses routes allow three, two and one sends;
 the fallback gets one fresh route and cannot fall back again. `attempt_ledger`
 reports bounded request, attempt and terminal facts.
+The ledger captures routing facts before the first send. Each response attempt
+also captures its protocol, operation, stream intent, body kind and encoding in
+an immutable `transport.ResponseFormat`, held by `StreamRecord` and replaced on
+replay. Parsing and terminal emission use these facts, so clearing or replacing
+the diagnostic dictionary cannot change repair, replay or finalization.
 `stream_errors.py` owns shared HTTP/SSE context-error classification and applies
 it to external Responses terminal events after tool adaptation. It preserves
 successful frames and records semantic failure separately from the HTTP status.

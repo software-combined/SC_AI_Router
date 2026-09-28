@@ -8,7 +8,7 @@ import json
 import unittest
 from unittest import mock
 
-from ai_router import router as router_mod
+from ai_router import provider_defs, router as router_mod
 from ai_router import sse, transport
 from tests.fakes import FakeUpstream, install_fake
 from tests.harness import (
@@ -202,7 +202,9 @@ class RelayContainmentTests(_ServerFixture):
 class EmitTerminalFailureTests(unittest.TestCase):
     def _frame(self, **metrics):
         buf = io.BytesIO()
-        transport.emit_terminal_failure(buf, dict(metrics, protocol='responses'))
+        transport.emit_terminal_failure(buf, transport.ResponseFormat(
+            provider_defs.RESPONSES, '/v1/responses', metrics.get('stream'),
+            metrics.get('response_kind'), metrics.get('response_encoding')))
         return buf.getvalue()
 
     def test_emits_generic_frame_on_responses_sse(self):
@@ -216,7 +218,8 @@ class EmitTerminalFailureTests(unittest.TestCase):
     def test_silent_for_claude_non_sse_and_unstreamed(self):
         buf = io.BytesIO()
         transport.emit_terminal_failure(
-            buf, {'stream': True, 'response_kind': 'sse', 'protocol': 'messages'})
+            buf, transport.ResponseFormat(provider_defs.MESSAGES, '/v1/messages',
+                                          True, 'sse', None))
         self.assertEqual(buf.getvalue(), b'')
         for metrics in ({'stream': True, 'response_kind': 'json'},
                         {'stream': False, 'response_kind': 'sse'},
@@ -231,22 +234,18 @@ class EmitTerminalFailureTests(unittest.TestCase):
             with self.subTest(error=type(error).__name__):
                 self.assertFalse(transport.emit_terminal_failure(
                     _DeadWriter(error),
-                    {'stream': True, 'response_kind': 'sse',
-                     'response_encoding': 'identity', 'protocol': 'responses'}))
+                    transport.ResponseFormat(provider_defs.RESPONSES, '/v1/responses',
+                                             True, 'sse', 'identity')))
 
-    def test_return_value_tracks_delivery_and_attribution(self):
-        metrics = {'stream': True, 'response_kind': 'sse',
-                   'response_encoding': 'identity', 'protocol': 'responses'}
+    def test_return_value_tracks_delivery(self):
+        response_format = transport.ResponseFormat(provider_defs.RESPONSES, '/v1/responses',
+                                                   True, 'sse', 'identity')
         buf = io.BytesIO()
-        self.assertTrue(transport.emit_terminal_failure(buf, metrics))
+        self.assertTrue(transport.emit_terminal_failure(buf, response_format))
         self.assertTrue(buf.getvalue())
-        self.assertEqual(metrics['terminal_source'], 'router')
 
-        metrics = {'stream': True, 'response_kind': 'sse',
-                   'response_encoding': 'identity', 'protocol': 'responses'}
         self.assertFalse(transport.emit_terminal_failure(
-            _DeadWriter(OSError('gone')), metrics))
-        self.assertNotIn('terminal_source', metrics)
+            _DeadWriter(OSError('gone')), response_format))
 
 
 if __name__ == '__main__':

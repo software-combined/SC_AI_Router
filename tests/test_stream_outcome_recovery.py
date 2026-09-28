@@ -101,7 +101,7 @@ class RawOverflowHintTests(unittest.TestCase):
                           + b' ' + b'x' * sse.MAX_FRAME_BYTES)
         metrics = {'protocol': protocol, 'response_kind': 'sse',
                    'response_encoding': 'identity'}
-        return frame, list(stream_relay._raw_events([frame], metrics))
+        return frame, list(stream_relay._raw_events([frame], metrics, protocol))
 
     def test_protocol_mismatched_overflow_hints_are_not_observed(self):
         for native in ('message_error', 'message_stop'):
@@ -124,7 +124,8 @@ class RawOverflowHintTests(unittest.TestCase):
             'error': {'code': 'overloaded'}}}).encode())
         metrics = {'protocol': provider_defs.RESPONSES, 'response_kind': 'sse',
                    'response_encoding': 'identity'}
-        events = list(stream_relay._raw_events([frame, failed], metrics))
+        events = list(stream_relay._raw_events(
+            [frame, failed], metrics, provider_defs.RESPONSES))
         self.assertEqual(b''.join(event.frame for event in events), frame + failed)
         self.assertTrue(all(event.outcome is None for event in events[:-1]))
         self.assertEqual(events[-1].outcome.category, outcome.TRANSIENT)

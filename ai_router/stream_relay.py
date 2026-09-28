@@ -16,9 +16,10 @@ class StreamRecord:
 
     __slots__ = ('forwarded_bytes', 'content_delta_bytes', 'reasoning_bytes',
                  'hold', 'stream_retry', 'client_terminal', 'delivery_failed',
-                 'outcome', 'normalized', 'replay_blocked')
+                 'outcome', 'normalized', 'replay_blocked', 'response_format')
 
-    def __init__(self):
+    def __init__(self, response_format=None):
+        self.response_format = response_format
         self.forwarded_bytes = 0
         self.content_delta_bytes = 0
         self.reasoning_bytes = 0
@@ -98,8 +99,8 @@ def _raw_classify(data, metrics, decode, decoder):
         return None
 
 
-def _raw_events(chunks, metrics):
-    decoder = messages_events.Decoder() if metrics.get('protocol') == provider_defs.MESSAGES else None
+def _raw_events(chunks, metrics, protocol):
+    decoder = messages_events.Decoder() if protocol == provider_defs.MESSAGES else None
     pending = bytearray()
     emitted_pending = 0
     overflow = False
@@ -152,22 +153,20 @@ def relay_stream(handler, provider, response, prepared, metrics, started,
                        'attempt_evidence': metrics.get('attempt_evidence'),
                        'request_id': metrics.get('request_id'), 'attempt': attempt,
                        'context_tokens': metrics.get('context_tokens')}
-    raw_encoded = metrics['response_encoding'] != 'identity'
+    wire = record.response_format
+    raw_encoded = wire.encoding != 'identity'
     # Native Responses can stream without declaring an SSE content type.
-    streamed = (metrics['response_kind'] == 'sse'
-                or (metrics.get('stream') is True and metrics['response_kind'] == 'other'
-                    and metrics.get('protocol') == provider_defs.RESPONSES))
-    messages_external = (metrics.get('protocol') == provider_defs.MESSAGES
+    streamed = (wire.kind == 'sse' or (wire.stream is True and wire.kind == 'other'
+                                     and wire.protocol == provider_defs.RESPONSES))
+    messages_external = (wire.protocol == provider_defs.MESSAGES
                          and provider.defn.kind == provider_defs.EXTERNAL
-                         and metrics.get('path') == '/v1/messages')
+                         and wire.operation == '/v1/messages')
     normalized = ((messages_external or provider.defn.dialect == provider_defs.DIALECT_OPENROUTER
-                  and metrics.get('protocol') == provider_defs.RESPONSES
-                   ) and metrics['response_kind'] == 'sse'
-                  and metrics['response_encoding'] == 'identity')
+                  and wire.protocol == provider_defs.RESPONSES
+                   ) and wire.kind == 'sse' and not raw_encoded)
     record.normalized = normalized
-    messages_json = (metrics.get('protocol') == provider_defs.MESSAGES
-                     and metrics.get('path') == '/v1/messages'
-                     and metrics['response_kind'] == 'json')
+    messages_json = (wire.protocol == provider_defs.MESSAGES
+                     and wire.operation == '/v1/messages' and wire.kind == 'json')
     terminal_metrics = None
     chunks = (transport.passthrough(response) if raw_encoded
               else provider.adapt(response, prepared.tool_names, attempt_metrics))
@@ -179,11 +178,11 @@ def relay_stream(handler, provider, response, prepared, metrics, started,
     elif normalized:
         frames = stream_errors.events(chunks, attempt_metrics)
     elif streamed:
-        frames = _raw_events(chunks, metrics)
+        frames = _raw_events(chunks, metrics, wire.protocol)
     elif messages_json:
         frames = messages_events.json_events(chunks, metrics)
     else:
-        kind = stream_events.ANSWER if metrics['response_kind'] == 'json' else stream_events.OPAQUE
+        kind = stream_events.ANSWER if wire.kind == 'json' else stream_events.OPAQUE
         frames = (stream_events.StreamEvent(chunk, kind)
                   for chunk in chunks)
     try:
@@ -223,7 +222,7 @@ def relay_stream(handler, provider, response, prepared, metrics, started,
                 record.content_delta_bytes += len(event.frame)
             elif event.kind == stream_events.REASONING:
                 record.reasoning_bytes += len(event.frame)
-        if metrics['response_kind'] == 'json' and not raw_encoded and not messages_json:
+        if wire.kind == 'json' and not raw_encoded and not messages_json:
             # Known non-stream JSON keeps its EOF rule; opaque data proves no outcome.
             record.outcome = outcome.Outcome(outcome.SUCCESS, outcome.STATUS, outcome.UPSTREAM)
     finally:

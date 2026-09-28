@@ -23,7 +23,8 @@ Codex and Claude Code wire protocols on a loopback port. Codex and the
 Claude Code terminal client can use their subscription alongside approved
 models billed to an OpenRouter API key. Claude desktop uses a separate
 gateway profile with the approved OpenRouter models; its native subscription
-picker stays in the signed-in profile.
+picker stays in the signed-in profile. Local task sharing between desktop
+profiles is under development; see the [candidate limits](docs/compatibility.md).
 
 The billing split is strict. Subscription models keep using the client's
 own sign-in, OpenRouter models use a key stored only on your machine, and
@@ -168,7 +169,9 @@ sh bootstrap.sh --channel=beta --choose-clients
 
 For the **Claude desktop app**, quit and reopen Claude after attaching, then
 choose **Code**, a folder and a model. All gateway rows are billed to
-OpenRouter; existing signed-in sessions remain in the native profile. See
+OpenRouter. The candidate **Switch Claude** launcher shares local tasks before
+changing connections. **Open Claude** opens the current connection. Complete
+native task-sharing acceptance remains pending. See
 [desktop setup and limits](docs/claude-code.md#claude-desktop-app).
 
 **Claude Code in the terminal** (preview) is `--clients claude` from the list
