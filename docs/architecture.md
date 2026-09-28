@@ -384,6 +384,13 @@ A private router-local hash binds the account pair so a later sign-in cannot
 inherit the previous account's copied tasks. The coordinator must hold both
 profile locks before creating that binding; this helper does not start a copy.
 
+`claude_profile_publish.py` and `claude_profile_transaction.py` share the record
+and bundle publication contract. They validate file generations before exclusive
+renames and retain originals and journals when competing writes make recovery
+ambiguous. Private control directories protect backups without changing the
+permissions of hard-linked attachments outside the profile. Callers must stop
+Claude, hold both profile locks and provide a private, fully prepared bundle.
+
 ## Distribution (outside the request path)
 
 `infra/` owns the update feed as code (repository-only templates, deployed from a checkout): the certificate stack, the private
