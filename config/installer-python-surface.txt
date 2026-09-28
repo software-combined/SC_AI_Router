@@ -19,6 +19,7 @@ load packaging/bundle.py
 load packaging/claude_config.py
 load packaging/claude_desktop_config.py
 load packaging/claude_desktop_policy.py
+load packaging/claude_desktop_platform.py
 load packaging/claude_desktop_switch.py
 load packaging/claude_profile_rules.py
 load packaging/claude_profile_identity.py
@@ -28,6 +29,7 @@ load packaging/claude_profile_transaction.py
 load packaging/claude_profile_history.py
 load packaging/claude_profile_bundle.py
 load packaging/claude_profile_sync.py
+load packaging/claude_profile_hook.py
 load packaging/codex_config.py
 load packaging/diagnostics.py
 load packaging/feed.py
@@ -52,6 +54,7 @@ load ai_router/clients/roster.py
 load ai_router/winacl.py
 parse packaging/router_launch.py
 parse packaging/claude_switch_launch.py
+parse packaging/claude_profile_launch.py
 parse packaging/runtime_lock.py
 parse packaging/task_launch.py
 parse packaging/update_launch.py

@@ -405,6 +405,14 @@ CLI history takes precedence over an older bundle snapshot. Invalid or missing
 tasks are reported to the switch caller, which must keep the current mode until
 every in-scope task is safe. The coordinator has no app-lifecycle authority.
 
+`claude_desktop_platform.py` owns native app identity, graceful shutdown,
+dialogs and owned shortcuts. It waits for known writers and their children;
+an unknown writer or changed process identity refuses the operation.
+`claude_profile_launch.py` resolves the current installed release and dispatches
+the requested action. `claude_profile_hook.py` owns only its exact SessionStart
+callback entry and captures the focused native account identity asynchronously.
+It never copies history, and uninstall preserves unrelated user hooks.
+
 ## Distribution (outside the request path)
 
 `infra/` owns the update feed as code (repository-only templates, deployed from a checkout): the certificate stack, the private
