@@ -27,6 +27,7 @@ load packaging/claude_profile_publish.py
 load packaging/claude_profile_transaction.py
 load packaging/claude_profile_history.py
 load packaging/claude_profile_bundle.py
+load packaging/claude_profile_sync.py
 load packaging/codex_config.py
 load packaging/diagnostics.py
 load packaging/feed.py

@@ -7,6 +7,7 @@ import stat
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 def fingerprint(root):
@@ -141,3 +142,68 @@ def record(profile_path, store, account, organization, session_id, *,
             artifact.write_text(json.dumps({
                 'message': {'content': transcript}}) + '\n')
     return path
+
+
+def target_only(profile_path, store, account, organization, session_id):
+    return record(profile_path, store, account, organization, session_id,
+                  title='target-only', bundle_files={'outputs/keep.txt': 'keep'})
+
+
+def duplicate(profile_path, store, account, organization, session_id, suffix,
+              *, title, bundle_files=None):
+    return record(profile_path, store, account, organization, session_id,
+                  filename='local_' + suffix + '.json', title=title,
+                  bundle_files=bundle_files)
+
+
+def write_sentinels(profile_path):
+    credential = profile_path / 'creds'
+    credential.mkdir(exist_ok=True)
+    (credential / 'access.key').write_text('synthetic-private-key')
+    settings = profile_path / 'configLibrary'
+    settings.mkdir(exist_ok=True)
+    (settings / 'CLAUDE.md').write_text('synthetic profile setting')
+    (settings / 'configLibrary').write_text('synthetic nested setting')
+
+
+sync = load_helper("claude_profile_sync")
+
+
+class SyncFixture(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name).resolve()
+        policy = mock.patch.object(sync._records._identity._policy, 'managed_connection', return_value=False)
+        policy.start()
+        self.addCleanup(policy.stop)
+        account = mock.patch.object(sync._records._identity, 'subscription', side_effect=subscription_identity)
+        account.start()
+        self.addCleanup(account.stop)
+        self.first = profile(
+            self.root, 'Claude', '12345678-1234-4567-8123-123456789abc', 'abcdefab-1234-4567-8123-123456789abc')
+        self.third = profile(
+            self.root, 'Claude-3p', '87654321-4321-4567-8123-123456789abc', 'fedcbaab-4321-4567-8123-123456789abc')
+        for profile_path in (self.first, self.third):
+            for store in STORES:
+                namespace(
+                    profile_path, store,
+                    json.loads((profile_path / 'config.json').read_text())[
+                        'lastKnownAccountUuid'],
+                    json.loads((profile_path / 'config.json').read_text())[
+                        'lastKnownOrganizationUuid'])
+        self.env = {
+            'XDG_CONFIG_HOME': str(self.root),
+            'CLAUDE_USER_DATA_DIR': str(self.third),
+            'CLAUDE_CONFIG_DIR': str(self.root / 'claude-config'),
+        }
+        self.home = self.root / 'router'
+        self.home.mkdir()
+
+    def sync(self, winner='1p'):
+        with mock.patch.object(sync, 'profile_roots', return_value=(self.first, self.third)):
+            return sync.sync_profiles(self.home, winner, self.env)
+
+    def paths(self, profile_path, store, session_id):
+        groups = sync._records.group_records(profile_path / store)
+        return groups.get(session_id, [])
