@@ -40,6 +40,7 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
 
 def _route(handler, provider, prepared, metrics, has_image, started, ledger, log_event,
            admit):
+    observed = getattr(getattr(prepared.context, 'row', None), 'observed_item_types', ())
     routed = (provider.defn.caches_deterministic_refusals()
               and metrics.get('protocol') == provider_defs.RESPONSES)
     if routed:
@@ -123,21 +124,19 @@ def _route(handler, provider, prepared, metrics, has_image, started, ledger, log
             if described is not None:
                 status, message, code = described
                 if status == 400 and response.status == 402:
-                    # Key funds: a final 400 naming the cause, never a
-                    # Retry-After, never the dead-key window, never cached.
+                    # Key funds: final, never cached or a dead-key window.
                     log_event('upstream_rejected', status=response.status,
                               client_status=status, code='KEY_NO_CREDIT',
                               category='KEY_NO_CREDIT', **metrics)
                     return _error(handler, ledger, errors.key_no_credit(message))
                 if status == 503:
-                    # Transient: retried, never remembered. `Retry-After` is
-                    # inert for Codex but other clients may honour it.
+                    # Transient: never remembered; clients may honour Retry-After.
                     log_event('upstream_unavailable', status=response.status,
                               client_status=status, code=code,
                               parameter=upstream.rejection_parameter(raw),
                               serving_endpoint=upstream.serving_endpoint(raw),
                               category='UPSTREAM_UNAVAILABLE', **metrics,
-                              **wire_shape.fingerprint(prepared.body, provider.defn.dialect))
+                              **wire_shape.fingerprint(prepared.body, provider.defn.dialect, observed))
                     return _error(handler, ledger, errors.upstream_unavailable(message),
                                   retry_after='2')
                 # A cached answer must be one the client treats as final.
@@ -150,7 +149,7 @@ def _route(handler, provider, prepared, metrics, has_image, started, ledger, log
                           parameter=upstream.rejection_parameter(raw),
                           serving_endpoint=upstream.serving_endpoint(raw),
                           category='PROVIDER_REJECTED', **metrics,
-                          **wire_shape.fingerprint(prepared.body, provider.defn.dialect))
+                          **wire_shape.fingerprint(prepared.body, provider.defn.dialect, observed))
                 if status == 400:
                     return _error(handler, ledger, errors.upstream_invalid_request(message))
                 if status == 409:

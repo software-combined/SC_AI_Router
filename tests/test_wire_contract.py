@@ -11,9 +11,11 @@ import json
 import re
 import unittest
 from compression import zstd
+from dataclasses import replace
+from pathlib import Path
 from unittest import mock
 
-from ai_router import compaction, provider_defs, rejected_repair, wire_shape
+from ai_router import compaction, model_refresh, provider_defs, registry, rejected_repair, wire_shape
 
 SUBSCRIPTION = provider_defs.DIALECT_OPENAI
 EXTERNAL = provider_defs.DIALECT_OPENROUTER
@@ -63,9 +65,8 @@ CASES = {
                           _body(_call(), _output())),
     'item.agent_message': ('external', 'violations',
                            _body({'type': 'agent_message', 'content': []}), _body(USER)),
-    # DeepSeek alone took a compaction item as sent.
     'item.unverified_type': ('external', 'warnings', _body(NATIVE_BLOB),
-                             _body(NATIVE_BLOB, model='deepseek/deepseek-v4.1-flash')),
+                             _body(USER)),
     'top_level.forbidden': ('external', 'violations',
                             _body(USER, access_programs={'cyber': True}), _body(USER)),
     'top_level.unknown': ('both', 'warnings', _body(USER, conversation='x'),
@@ -81,6 +82,44 @@ CASES = {
 
 
 class RuleTests(unittest.TestCase):
+    def test_only_the_measured_row_has_the_extra_observed_shapes(self):
+        measured = registry.by_slug('deepseek/deepseek-v4.1-flash')
+        self.assertEqual(set(measured.observed_item_types), registry.OBSERVABLE_ITEM_TYPES)
+        self.assertEqual([row.slug for row in registry.MODELS if row.observed_item_types],
+                         [measured.slug])
+        body = _body(*({'type': kind} for kind in measured.observed_item_types))
+        found = wire_shape.violations(EXTERNAL, body, measured.observed_item_types)
+        self.assertNotIn('item.unverified_type', found['warnings'])
+        shape = wire_shape.fingerprint(json.dumps(body), EXTERNAL, measured.observed_item_types)
+        self.assertNotIn('item.unverified_type', shape.get('contract_warnings', {}))
+        self.assertEqual(wire_shape.violations(EXTERNAL, body)['warnings']['item.unverified_type'], 4)
+        cached = replace(measured, observed_item_types=())
+        self.assertEqual(model_refresh.overlay((measured,), (cached,))[0], measured)
+
+    def test_observed_profile_rejects_unmeasured_names_and_wrong_shapes(self):
+        row = json.loads(Path(registry.__file__).with_name('models.json').read_text())[0]
+        for bad in ('compaction', ['future'], [1], [{}], ['compaction', 'compaction'], None):
+            with self.subTest(value=bad), self.assertRaises(SystemExit):
+                registry.load(json.dumps([{**row, 'observed_item_types': bad}]))
+
+    def test_feed_retargeting_cannot_inherit_the_original_measurement(self):
+        measured = registry.by_slug('deepseek/deepseek-v4.1-flash')
+        for changes in ({'upstream_id': 'deepseek/deepseek-v4-pro-0813'},
+                        {'provider': 'openai'}):
+            with self.subTest(changes=changes):
+                changed = replace(measured, **changes)
+                merged, = model_refresh.overlay((measured,), (changed,))
+                self.assertEqual(merged.observed_item_types, ())
+        equivalent = replace(measured, upstream_id=measured.slug, observed_item_types=())
+        merged, = model_refresh.overlay((measured,), (equivalent,))
+        self.assertEqual(merged.observed_item_types, measured.observed_item_types)
+
+    def test_an_unmeasured_model_does_not_inherit_a_vendor_measurement(self):
+        for model in ('deepseek/deepseek-v4-pro-0813', '~deepseek/future'):
+            with self.subTest(model=model):
+                found = wire_shape.violations(EXTERNAL, _body(NATIVE_BLOB, model=model))
+                self.assertEqual(found['warnings'].get('item.unverified_type'), 1)
+
     def test_every_pairing_rule_maps_to_a_contract_rule(self):
         # A pairing rule added without a mapping would raise inside the
         # refusal log line instead of naming the rule.

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Wire diagnostics use the request's measured model profile. Extra input shapes
+  observed on DeepSeek V4.1 Flash no longer count as verified for its whole
+  model family. Image timeout advice now applies to any request carrying an
+  image. Offline conformance covers every registered model and supported route,
+  including hidden rows, native preservation and recovery boundaries.
 - Request diagnostics retain each attempt's reported model, identity source,
   effort and transport timing, including evidence received before a failure.
   An installed read-only command shows recent request chains and filters missing,

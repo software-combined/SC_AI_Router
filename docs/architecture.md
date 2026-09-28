@@ -62,6 +62,17 @@ identity never attests a later one. These records cannot authorize replay.
 or loading credentials. Request outcomes and each attempt's observed ending
 remain separate when recovery preserves an earlier terminal for the client.
 
+`wire_shape.py` reads measured extra item types from the request's captured row.
+The registry owns that profile; absence means unverified and never changes
+what is forwarded. A model-family prefix cannot grant another row's evidence.
+The route conformance suite enumerates all registry rows and provider-supported
+protocols, including hidden rows. It exercises the real handler and common
+request owners with simulated upstreams, plus discovered and future native
+IDs. Native bytes and auth remain the native provider's contract.
+The policy scan rejects literal model-name comparisons and prefix decisions in
+runtime Python. Only the existing, exact discovery, picker and tracking-alias
+predicates are exempt; preparation and recovery use capability data instead.
+
 Rules:
 
 `agent_handoffs.py` owns collaboration alias schemas and native-name restoration;

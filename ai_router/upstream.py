@@ -351,9 +351,7 @@ def describe_failure(exc, response, info):
     if isinstance(exc, TimeoutError):
         message = (f'{model} did not answer in time and this turn was not sent. '
                    'Retry a shorter turn')
-        # Tilde aliases and pinned ids share the vendor prefix.
-        if (isinstance(model, str) and model.removeprefix('~').startswith('x-ai/')
-                and info.get('has_image')):
+        if info.get('has_image'):
             message += '; retry without the image'
         return 502, message, None
     if isinstance(exc, OSError):
