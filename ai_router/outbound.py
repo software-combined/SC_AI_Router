@@ -28,6 +28,7 @@ class Projection:
     path: str
     model: Any = None  # the client's model id, named in a refusal
     row: Any = None  # the request's captured registry row; never looked up here
+    catalogue: Any = None  # handoff targets use the same captured generation
     handoffs: Any = field(default_factory=set)
     names: Any = None
     wire_names: Any = None
@@ -72,7 +73,7 @@ def scrub_fragments(payload, p):
 
 
 def add_handoff_tools(payload, p):
-    payload, p.handoffs = agent_handoffs.add_plaintext_tools(payload)
+    payload, p.handoffs = agent_handoffs.add_plaintext_tools(payload, p.catalogue)
     return payload
 
 
@@ -178,17 +179,17 @@ def _run(stages, payload, projection):
     return payload
 
 
-def project_external(payload, path, model, row):
+def project_external(payload, path, model, row, catalogue=None):
     """Payload and tool names for an external Responses turn on `row`."""
-    projection = Projection(path, model, row)
+    projection = Projection(path, model, row, catalogue=catalogue)
     return _run(EXTERNAL_STAGES, payload, projection), projection.names
 
 
-def project_subscription(payload, path):
+def project_subscription(payload, path, catalogue=None):
     """Payload, handoff names and whether the client's body must be re-encoded."""
     stages = {'/responses': SUBSCRIPTION_STAGES,
               '/responses/compact': SUBSCRIPTION_REPLAY}.get(path, ())
-    projection = Projection(path)
+    projection = Projection(path, catalogue=catalogue)
     projected = _run(stages, payload, projection)
     changed = projected is not payload
     return projected, projection.handoffs, changed

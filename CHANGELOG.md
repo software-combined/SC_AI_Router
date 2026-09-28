@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Agent handoff validation now retains the request's model list. A model
+  refresh during a response cannot change whether an encrypted assignment
+  needs a plaintext handoff. Spawn, follow-up and message delivery use the
+  same captured list on both Codex tool layouts.
 - External Claude requests can recover once from a temporary stream failure
   before any content or tool action. Thinking, signatures and unknown events
   prohibit replay, including empty thinking removed by compatibility repair.
