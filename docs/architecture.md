@@ -20,7 +20,7 @@ provider table and registry only
   |
 transport (Prepared, hop-header rules, raw stream, header relay) + upstream
 (failure policy) + outcome / attempt_policy (terminal verdicts and sends) +
-stream_errors (classification) + stream_events / stream_attempt (frame kinds,
+stream_errors / messages_events (classification) + stream_events / stream_attempt (frame kinds,
 the uncommitted attempt) + stream_relay (one stream for relay.py): wire and
 failure policy, consumed by the adapters below
   ^
@@ -35,7 +35,7 @@ decisions (typed-decision wire client, imports only provider_defs)
   |
 jev_compaction (opt-in evidence selection, consumes decisions/compaction/tool_runs)
   |
-outbound (each Responses route's ordered stage list over the stages above)
+outbound (pure Responses stages and Messages projections over the stages above)
 + rejected_repair (the Responses adapters' pure rejected-request repair proposals)
   |
 providers (Responses adapters) + claude (Messages adapters)
@@ -97,7 +97,10 @@ switch boundary's run check, the custom-pair call map and Jev's candidate
 pairing keep their own id rules (any truthy id and any later output; the last
 custom call; ambiguous ids pinned), so moving them onto `pairs` would be a
 behaviour change with its own review, not part of the move.
-`outbound.py` owns the outgoing Responses projection (Plan 183 phase 2).
+`outbound.py` owns outgoing Responses and Messages projections (Plans 183/188).
+Messages adapters call named external and subscription entrypoints. External
+alias, billing-header and deferred-tool repairs copy only changed containers;
+native Messages history returns unchanged, preserving the original wire body.
 `EXTERNAL_STAGES` and `SUBSCRIPTION_STAGES` are tuples of named stages that
 run in order over one `Projection`: the path, the client's model id, the
 request's captured row, and what a later stage or the adapter reads back.
@@ -182,8 +185,16 @@ The same Responses observer reads identity-encoded streaming turns whose
 content type is absent or unrecognised, as current native Codex traffic can
 use that representation. It preserves partial frames immediately and requires
 a readable terminal to name the outcome. Unrecognised nonstream data and all
-encoded data stay opaque and unknown; only known identity JSON retains the
-existing nonstream EOF success rule. This adds no native replay permission.
+encoded data stay opaque and unknown. Responses and token-count JSON retain
+their existing EOF rule; Messages JSON needs a readable message and stop reason.
+`messages_events.py` owns both Messages routes' lifecycle observation. A valid
+empty start followed by a final delta and stop distinguishes success, client
+tool use, truncation, server-tool pause, refusal and context exhaustion.
+Unknown endings remain unknown; documented overload errors are transient.
+Signatures, redacted thinking and future events remain opaque. Observation
+never changes bytes, delays native chunks or grants replay authority. Both
+Messages routes retain one send; external recovery and error rendering remain
+separate Plan 188 work requiring actual-client proof.
 `attempt_policy` decides and opens a safe replay. It replaces the uncommitted
 attempt; a failed replay leaves its verdict to reach the client. These leaves
 never dispatch or own credentials.

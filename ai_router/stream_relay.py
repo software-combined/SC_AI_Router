@@ -2,7 +2,7 @@
 import json
 import time
 
-from . import (outcome, provider_defs, sse, stream_attempt, stream_errors,
+from . import (messages_events, outcome, provider_defs, sse, stream_attempt, stream_errors,
                stream_events, transport)
 
 TERMINAL_FIELDS = (
@@ -68,33 +68,28 @@ def streamed_metrics(record):
     }
 
 
-def _raw_terminal(frame, metrics):
+def _raw_terminal(frame, metrics, decoder=None):
     """Classify one complete raw frame as a non-fatal observation."""
-    return _raw_classify(frame, metrics, json.loads)
+    return _raw_classify(frame, metrics, json.loads, decoder)
 
 
-def _raw_hint(data, metrics):
+def _raw_hint(data, metrics, decoder=None):
     """Classify one complete oversized frame from its parsed event."""
     return _raw_classify(
         data, metrics,
-        lambda payload: json.JSONDecoder().raw_decode(payload)[0])
+        json.loads if decoder else lambda payload: json.JSONDecoder().raw_decode(payload)[0], decoder)
 
 
-def _raw_classify(data, metrics, decode):
+def _raw_classify(data, metrics, decode, decoder):
     try:
         payload = b'\n'.join(
             line[5:].lstrip() for line in data.splitlines()
             if line.startswith(b'data:')).strip()
         event = decode(payload.decode())
+        if decoder is not None:
+            return decoder.observe(data, event, metrics)
         lifecycle = stream_events.classify(payload, event)
         native = event.get('type') if isinstance(event, dict) else None
-        if metrics.get('protocol') == provider_defs.MESSAGES:
-            if native == 'message_stop':
-                lifecycle = stream_events.COMPLETED
-            elif native in ('message_error', 'error'):
-                lifecycle = stream_events.FAILURE
-            else:
-                lifecycle = stream_events.ANSWER
         return stream_errors.terminal_event(
             data, lifecycle, native, event, metrics,
             output_seen=False, rewrite=False)
@@ -103,6 +98,7 @@ def _raw_classify(data, metrics, decode):
 
 
 def _raw_events(chunks, metrics):
+    decoder = messages_events.Decoder() if metrics.get('protocol') == provider_defs.MESSAGES else None
     pending = bytearray()
     emitted_pending = 0
     overflow = False
@@ -118,9 +114,9 @@ def _raw_events(chunks, metrics):
         prefix = emitted_pending
         for raw_frame in frames:
             frame = bytes(raw_frame)
-            observed = (_raw_hint(frame, metrics)
+            observed = (_raw_hint(frame, metrics, decoder)
                         if len(frame) > sse.MAX_FRAME_BYTES
-                        else _raw_terminal(frame, metrics))
+                        else _raw_terminal(frame, metrics, decoder))
             if prefix:
                 suffix = frame[prefix:]
                 if suffix:
@@ -164,6 +160,9 @@ def relay_stream(handler, provider, response, prepared, metrics, started,
                   and metrics['response_kind'] == 'sse'
                   and metrics['response_encoding'] == 'identity')
     record.normalized = normalized
+    messages_json = (metrics.get('protocol') == provider_defs.MESSAGES
+                     and metrics.get('path') == '/v1/messages'
+                     and metrics['response_kind'] == 'json')
     terminal_metrics = None
     chunks = (transport.passthrough(response) if raw_encoded
               else provider.adapt(response, prepared.tool_names, attempt_metrics))
@@ -174,6 +173,8 @@ def relay_stream(handler, provider, response, prepared, metrics, started,
         frames = stream_errors.events(chunks, attempt_metrics)
     elif streamed:
         frames = _raw_events(chunks, metrics)
+    elif messages_json:
+        frames = messages_events.json_events(chunks, metrics)
     else:
         kind = stream_events.ANSWER if metrics['response_kind'] == 'json' else stream_events.OPAQUE
         frames = (stream_events.StreamEvent(chunk, kind)
@@ -214,7 +215,7 @@ def relay_stream(handler, provider, response, prepared, metrics, started,
                 record.content_delta_bytes += len(event.frame)
             elif event.kind == stream_events.REASONING:
                 record.reasoning_bytes += len(event.frame)
-        if metrics['response_kind'] == 'json' and not raw_encoded:
+        if metrics['response_kind'] == 'json' and not raw_encoded and not messages_json:
             # Known non-stream JSON keeps its EOF rule; opaque data proves no outcome.
             record.outcome = outcome.Outcome(outcome.SUCCESS, outcome.STATUS, outcome.UPSTREAM)
     finally:

@@ -110,10 +110,10 @@ class RawOverflowHintTests(unittest.TestCase):
                 self.assertEqual(b''.join(event.frame for event in events), frame)
                 self.assertTrue(all(event.outcome is None for event in events))
 
-    def test_messages_stop_hint_is_still_recognized(self):
+    def test_malformed_messages_stop_hint_cannot_supply_a_verdict(self):
         frame, events = self._events('message_stop', provider_defs.MESSAGES)
         self.assertEqual(b''.join(event.frame for event in events), frame)
-        self.assertEqual(events[-1].outcome.category, outcome.SUCCESS)
+        self.assertTrue(all(event.outcome is None for event in events))
 
     def test_payload_text_cannot_synthesize_a_raw_terminal(self):
         frame = sse.frame(json.dumps({
