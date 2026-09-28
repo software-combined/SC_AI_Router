@@ -3,9 +3,11 @@ import contextlib
 import io
 import json
 import os
+import subprocess
 from pathlib import Path
 import tempfile
 import unittest
+from types import SimpleNamespace
 from unittest import mock
 
 from tests.install_fixtures import install_mod
@@ -124,7 +126,7 @@ class DesktopSetupTests(unittest.TestCase):
             args = install_mod.build_parser().parse_args(['--home', str(home), '--desktop'])
             calls = []
 
-            def installed(target, python):
+            def installed(target, python, env=None):
                 self.assertIn('claude-desktop', receipts.read_receipt(target)['clients'])
                 self.assertEqual(desktop.read_entry(desktop.applied_entry_path(profile))
                                  ['inferenceProvider'], 'gateway')
@@ -137,6 +139,37 @@ class DesktopSetupTests(unittest.TestCase):
                     contextlib.redirect_stdout(io.StringIO()):
                 install_mod.do_install(args, _fetch=lambda _: b'{"version":"1.0.0"}')
             self.assertEqual(calls, [(home, '/python3.14')])
+
+    def test_launcher_failures_name_the_action_and_keep_installing(self):
+        desktop = install_mod._desktop_config
+        calls = []
+
+        class FakeSwitchError(Exception):
+            pass
+
+        def exec_module(module):
+            module.SwitchError = FakeSwitchError
+            module.subprocess = SimpleNamespace(
+                SubprocessError=subprocess.SubprocessError)
+
+            def install(_home, _python, action):
+                calls.append(action)
+                if action == 'start':
+                    raise FakeSwitchError('already exists')
+            module.install_launcher = install
+            module._load = lambda _name: SimpleNamespace(install=lambda *args: None)
+
+        spec = SimpleNamespace(loader=SimpleNamespace(exec_module=exec_module))
+        output = io.StringIO()
+        with mock.patch.object(desktop._ilu, 'spec_from_file_location',
+                               return_value=spec), \
+                mock.patch.object(desktop._ilu, 'module_from_spec',
+                                  return_value=SimpleNamespace()), \
+                contextlib.redirect_stdout(output):
+            self.real_install_launcher('/router', '/python')
+        self.assertEqual(calls, ['switch', 'start'])
+        self.assertIn('Open Claude could not be installed', output.getvalue())
+        self.assertNotIn('Switch Claude could not be installed', output.getvalue())
 
     @unix_only
     def test_upgrade_refreshes_existing_desktop_shortcut_and_keeps_subscription_mode(self):
@@ -154,7 +187,7 @@ class DesktopSetupTests(unittest.TestCase):
                              {'deploymentMode': '1p', 'keep': 'native choice'})
             self.assertEqual(install_mod._codex_config.read_receipt(home)
                              ['clients']['claude-desktop'], receipt)
-            self.launcher.assert_called_once_with(home, '/opt/homebrew/bin/python3.14')
+            self.launcher.assert_called_once_with(home, '/opt/homebrew/bin/python3.14', None)
 
     def test_dry_run_with_launcher_interpreter_does_not_write_or_install(self):
         with tempfile.TemporaryDirectory() as tmp:

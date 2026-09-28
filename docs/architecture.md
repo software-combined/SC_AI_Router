@@ -351,10 +351,15 @@ path (`AGENTS.md` section 3).
 `packaging/claude_desktop_config.py` owns desktop attachment and its original
 restore snapshot. A matching owned attachment keeps the user's selected
 subscription or gateway mode on subsequent setup and update runs.
-`claude_desktop_switch.py` owns the macOS switch launcher and changes only
-that mode after Claude exits normally; it never changes attachment or
-credentials. Its stable `claude_switch_launch.py` entry point follows the
-installed release pointer so the app survives updates and release pruning.
+`claude_desktop_switch.py` owns the switch lifecycle. After Claude exits normally,
+it shares the current account's local tasks and changes the mode only when all
+required copies succeed. Open and Switch share one transition lock, held before
+reading the mode through reopening, so overlapping requests cannot use a stale
+source profile. The switch rechecks the attachment, managed policy and stopped
+app before changing the mode. Open Claude leaves histories alone. The stable
+`claude_profile_launch.py` follows the installed release pointer so both actions
+survive updates and release pruning; `claude_switch_launch.py` keeps older
+shortcuts compatible. Setup owns the callback installation and removal.
 
 `claude_profile_rules.py` owns the local-data transfer policy being integrated
 by Plan 169. It keeps conversation payloads intact, excludes separate sign-in
