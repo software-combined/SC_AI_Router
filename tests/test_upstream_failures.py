@@ -17,9 +17,8 @@ class FailureDescriptionTests(unittest.TestCase):
         self.assertIn('Retry a shorter turn', message)
         self.assertNotIn('120', message)
 
-    def test_grok_image_stall_suggests_dropping_the_image(self):
-        # The hint matches the pinned id and any tilde alias of the vendor.
-        for model in ('x-ai/grok-4.7', '~x-ai/grok-latest'):
+    def test_image_stall_suggests_dropping_the_image_for_any_model(self):
+        for model in ('x-ai/grok-4.7', '~x-ai/grok-latest', 'z-ai/glm-5.3'):
             with self.subTest(model=model):
                 status, message, _ = upstream.describe_failure(
                     TimeoutError('timed out'), None,
@@ -30,7 +29,7 @@ class FailureDescriptionTests(unittest.TestCase):
         _, message, _ = upstream.describe_failure(
             TimeoutError('timed out'), None,
             {'model': 'z-ai/glm-5.3', 'provider': 'openrouter',
-             'elapsed_ms': 120001.0, 'timeout_s': 120, 'has_image': True})
+             'elapsed_ms': 120001.0, 'timeout_s': 120, 'has_image': False})
         self.assertNotIn('image', message)
 
     def test_dns_failure_names_the_model_and_leaves_the_host_to_the_log(self):

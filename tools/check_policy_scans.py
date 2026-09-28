@@ -14,6 +14,7 @@ Both scans read files as bytes, matching historical `grep -r` behaviour
 on text and binary files alike. This script necessarily names the
 request-cap pattern, so it excludes its own path from that scan.
 """
+import ast
 import re
 import sys
 from pathlib import Path
@@ -57,6 +58,18 @@ DIALECT_LITERAL_RE = re.compile(
 TABLE_OWNER = 'ai_router/provider_defs.py'
 GITIGNORED = ('plans',)
 WORKFLOWS = ('check.yml', 'release.yml')
+# These exact predicates own discovery aliases and picker billing duplicates.
+# The metadata predicate preserves tracking-alias labels. None is preparation
+# or retry policy, and no whole module is exempt.
+MODEL_ROUTING_EXCEPTIONS = {
+    ('ai_router/claude.py', 'row_alias', "bare.startswith('anthropic/')"),
+    ('ai_router/claude.py', 'family_tier', "alias.startswith('anthropic/claude-')"),
+    ('ai_router/claude.py', 'resolve', "model.startswith('anthropic/')"),
+    ('ai_router/clients/registry.py', '_listed_outside_anthropic',
+     "model.slug.removeprefix('~').startswith('anthropic/')"),
+    ('ai_router/model_metadata.py', 'refresh_display_name', "row['slug'].startswith('~')"),
+}
+MODEL_NAMES = re.compile(r'(?:^|_)(?:model|slug|alias|vendor)(?:_|$)')
 
 SELF = Path(__file__).resolve()
 
@@ -180,11 +193,74 @@ def check_dialect_literals():
     return True
 
 
+def _model_value(node):
+    if isinstance(node, ast.Name):
+        return bool(MODEL_NAMES.search(node.id)) or node.id == 'bare'
+    if isinstance(node, ast.Attribute):
+        return bool(MODEL_NAMES.search(node.attr)) or node.attr == 'upstream_id'
+    if isinstance(node, ast.Subscript):
+        return isinstance(node.slice, ast.Constant) and node.slice.value in (
+            'model', 'slug', 'vendor', 'upstream_id')
+    if isinstance(node, ast.Call):
+        if isinstance(node.func, ast.Name) and node.func.id == 'str' and node.args:
+            return _model_value(node.args[0])
+        if isinstance(node.func, ast.Attribute):
+            if node.func.attr == 'get' and node.args:
+                return isinstance(node.args[0], ast.Constant) and node.args[0].value in (
+                    'model', 'slug', 'vendor', 'upstream_id')
+            if node.func.attr in ('lower', 'casefold', 'strip', 'removeprefix', 'removesuffix'):
+                return _model_value(node.func.value)
+    return False
+
+
+def _name_literal(node):
+    if isinstance(node, ast.Constant):
+        return isinstance(node.value, str) and bool(node.value)
+    return isinstance(node, (ast.Tuple, ast.List, ast.Set)) and any(map(_name_literal, node.elts))
+
+
+def check_model_decisions():
+    """Model names belong to data and routing, never runtime behavior forks."""
+    hits = []
+    for path in _iter_files(('ai_router',)):
+        if path.suffix != '.py':
+            continue
+        rel = path.relative_to(ROOT).as_posix()
+        try:
+            tree = ast.parse(path.read_bytes())
+        except SyntaxError:
+            hits.append(f'{rel}: invalid Python')
+            continue
+        parents = {child: parent for parent in ast.walk(tree) for child in ast.iter_child_nodes(parent)}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Compare):
+                values = [node.left, *node.comparators]
+                named = any((_model_value(a) and _name_literal(b)) or
+                            (_name_literal(a) and _model_value(b))
+                            for a, b in zip(values, values[1:]))
+            else:
+                named = (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                         and node.func.attr in ('startswith', 'endswith')
+                         and _model_value(node.func.value) and any(map(_name_literal, node.args)))
+            if not named:
+                continue
+            owner = parents.get(node)
+            while owner is not None and not isinstance(owner, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                owner = parents.get(owner)
+            if (rel, getattr(owner, 'name', None), ast.unparse(node)) not in MODEL_ROUTING_EXCEPTIONS:
+                hits.append(f'{rel}:{node.lineno}')
+    if hits:
+        print('model-name behavior decision; use captured capability data (Plan 188):')
+        for hit in hits:
+            print(f'  {hit}')
+    return not hits
+
+
 def main():
     # Every scan runs (no short-circuit) so one run reports all failures.
     results = (check_request_cap(), check_secrets(),
                check_publication_identifiers(), check_setup_single_owner(),
-               check_dialect_literals())
+               check_dialect_literals(), check_model_decisions())
     ok = all(results)
     print(f'policy-scans: {"pass" if ok else "FAIL"}')
     return 0 if ok else 1
