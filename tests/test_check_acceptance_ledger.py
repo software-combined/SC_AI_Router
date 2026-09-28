@@ -75,14 +75,25 @@ class StalenessTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn('C1 stale', out)
 
-    def test_the_latest_pass_decides_and_a_later_failure_does_not_count(self):
+    def test_a_later_failure_supersedes_an_earlier_pass(self):
         old = dict(codex='26.915.31945', date='2026-09-20 09:00 AEST')
         runs = [run_of('C1', **old), run_of('C1'), run_of('C2'), run_of('C3'),
                 run_of('C4', **old), run_of('C4', result='fail', date='2026-09-25 09:00 AEST')]
         code, out, _ = check(runs)
         self.assertIn('C1 current', out)
-        self.assertIn('C4 stale: latest pass 2026-09-20 09:00 AEST', out)
+        self.assertIn('C4 failed: latest run 2026-09-25 09:00 AEST', out)
         self.assertEqual(code, 1)
+
+    def test_conflicting_runs_at_the_same_time_fail_closed(self):
+        runs = [run_of(cell) for cell in ('C1', 'C2', 'C3', 'C4')]
+        code, out, _ = check(runs + [run_of('C1', result='fail')])
+        self.assertEqual(code, 1)
+        self.assertIn('C1 conflicting:', out)
+
+    def test_a_current_pass_after_failure_restores_the_cell(self):
+        runs = [run_of(cell) for cell in ('C1', 'C2', 'C3', 'C4')]
+        runs += [run_of('C1', result='fail', date='2026-09-23 09:00 AEST')]
+        self.assertEqual(check(runs)[0], 0)
 
 
 class MalformedInputTests(unittest.TestCase):
