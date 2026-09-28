@@ -418,6 +418,11 @@ every in-scope task is safe. The coordinator has no app-lifecycle authority.
 `claude_desktop_platform.py` owns native app identity, graceful shutdown,
 dialogs and owned shortcuts. It waits for known writers and their children;
 an unknown writer or changed process identity refuses the operation.
+On macOS, bundle discovery uses Spotlight metadata because AppleScript app
+lookup launches a closed app. Browser-owned native messaging hosts do not seed
+the writer set; actual app descendants remain tracked after reparenting.
+Descendant discovery precedes rejection of an otherwise unknown Claude process,
+because Desktop's Code executable can live outside its application bundle.
 `claude_profile_launch.py` resolves the current installed release and dispatches
 the requested action. `claude_profile_hook.py` owns only its exact SessionStart
 callback entry and captures the focused native account identity asynchronously.

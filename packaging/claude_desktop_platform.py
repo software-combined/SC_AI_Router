@@ -122,11 +122,14 @@ def app_identity(platform_name, run=subprocess.run):
             "@{root=$p[0].InstallLocation;exe=$exe;app=$a[0].AppID;"
             "user=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value} | ConvertTo-Json -Compress", run)
     if platform_name == 'darwin':
-        answer = _run(['/usr/bin/osascript', '-e',
-                       'POSIX path of (path to application id "%s")' % BUNDLE_ID], run)
-        if answer.returncode:
+        # AppleScript's app-path lookup launches a closed Claude. Spotlight
+        # resolves the bundle without undoing the stopped-app safety check.
+        answer = _run(['/usr/bin/mdfind',
+                       'kMDItemCFBundleIdentifier == "%s"' % BUNDLE_ID], run)
+        roots = {Path(line) for line in answer.stdout.splitlines() if line}
+        if answer.returncode or len(roots) != 1:
             raise OSError('Claude identity could not be checked')
-        root = Path(answer.stdout.strip())
+        root = roots.pop()
         doc = plistlib.loads((root / 'Contents/Info.plist').read_bytes())
         if doc.get('CFBundleIdentifier') != BUNDLE_ID:
             raise OSError('Claude identity could not be checked')
@@ -188,6 +191,7 @@ def _snapshot(platform_name, identity, run):
 def _writers(rows, identity, seen, platform_name):
     norm = (lambda s: s.replace('\\', '/').casefold()) if platform_name == 'win32' else str
     root, exe = norm(identity['root']).rstrip('/') + '/', norm(identity['exe'])
+    browser_host = root + 'Contents/Helpers/chrome-native-host' if platform_name == 'darwin' else None
     for pid, old in list(seen.items()):
         if pid in rows and rows[pid] != old:
             # Parent changes are expected when a writer outlives the main app.
@@ -195,16 +199,21 @@ def _writers(rows, identity, seen, platform_name):
                 raise OSError('Claude identity changed')
     for pid, row in rows.items():
         path = norm(row['exe'])
-        if path == exe or (platform_name != 'linux' and path.startswith(root)):
+        # Browser-owned native messaging hosts outlive Claude. Actual app
+        # descendants still enter and remain in seen through the walk below.
+        if path == exe or (platform_name != 'linux' and path.startswith(root)
+                           and path != browser_host):
             seen[pid] = row
-        elif path.rsplit('/', 1)[-1].lower() in ('claude', 'claude-desktop', 'claude.exe'):
-            raise OSError('unverified Claude writer')
     while True:
         children = {pid: row for pid, row in rows.items()
                     if row['parent'] in seen and pid not in seen}
         if not children:
             break
         seen.update(children)
+    for pid, row in rows.items():
+        if (pid not in seen and norm(row['exe']).rsplit('/', 1)[-1].lower()
+                in ('claude', 'claude-desktop', 'claude.exe')):
+            raise OSError('unverified Claude writer')
     return bool(set(rows).intersection(seen))
 
 

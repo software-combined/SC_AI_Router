@@ -7,6 +7,9 @@
   files stay in their original profile, and any required copy failure stops the
   switch. Open Claude and ordinary router startup leave histories alone.
   Full native acceptance remains pending; see `docs/compatibility.md`.
+- Checking whether Claude is closed no longer reopens it. Browser integration
+  helpers can remain open, while Claude's own task processes must finish before
+  switching connections.
 - Claude desktop setup uses local AppData for the Windows gateway profile.
   An existing attachment keeps its original restore record and must be detached
   before setup can choose a different profile directory.
