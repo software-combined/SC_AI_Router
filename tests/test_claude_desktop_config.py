@@ -42,6 +42,7 @@ class ProfilePathTests(unittest.TestCase):
     def test_the_default_profile_dir_follows_the_platform(self):
         cases = (
             ('darwin', {}, ('Library', 'Application Support', 'Claude-3p')),
+            ('win32', {'APPDATA': '/roaming', 'LOCALAPPDATA': '/local'}, ('local', 'Claude-3p')),
             ('win32', {'APPDATA': '/appdata'}, ('appdata', 'Claude-3p')),
             # A service account can have no APPDATA, so Windows falls back.
             ('win32', {}, ('AppData', 'Roaming', 'Claude-3p')),
@@ -50,7 +51,7 @@ class ProfilePathTests(unittest.TestCase):
         )
         for platform_name, env, tail in cases:
             with self.subTest(platform=platform_name, env=env):
-                environ = {'XDG_CONFIG_HOME': '', 'APPDATA': '', **env}
+                environ = {'XDG_CONFIG_HOME': '', 'APPDATA': '', 'LOCALAPPDATA': '', **env}
                 got = desktop_config.user_data_dir(environ, platform_name)
                 self.assertEqual(tuple(got.parts[-len(tail):]), tail)
         # CLAUDE_USER_DATA_DIR outranks every platform default.

@@ -369,6 +369,12 @@ local attachment; unreadable or ambiguous settings refuse the switch. Platform
 readers follow the published [managed-policy precedence](https://claude.com/docs/third-party/claude-desktop/mdm).
 The switch check returns a decision; it never writes or logs settings.
 
+`claude_profile_records.py` discovers records within the resolved account and
+store layout. It owns namespace selection, native abbreviated bundle paths and
+source snapshots. It does not guess identity from saved history or write tasks.
+Profile paths follow the saved attachment, so an installer default change cannot
+silently reassign an existing attachment or its restore record.
+
 `claude_profile_identity.py` owns the account boundary for Plan 169. A native
 session callback must match one exact host and CLI task pair. Cached account
 state and the hashed workspace preference detect changes; they cannot select

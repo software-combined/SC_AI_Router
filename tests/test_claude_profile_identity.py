@@ -8,7 +8,8 @@ from unittest import mock
 
 from tests.claude_profile_sync_fixtures import fingerprint, load_helper
 
-identity = load_helper('claude_profile_identity')
+records = load_helper('claude_profile_records')
+identity = records._identity
 ACCOUNT = '12345678-1234-4567-8123-123456789abc'
 ORGANIZATION = 'abcdefab-1234-4567-8123-123456789abc'
 
@@ -39,14 +40,18 @@ class NativeIdentityTests(unittest.TestCase):
         doc.update(fields)
         self.entry.write_text(json.dumps(doc))
 
-    def test_third_party_identity_uses_device_not_cached_subscription_identity(self):
-        self.assertEqual(identity.third_party(self.profile), (ACCOUNT, ORGANIZATION))
+    def test_third_party_namespace_uses_device_not_cached_subscription_identity(self):
+        for store in records.STORES:
+            expected = self.profile / store / ACCOUNT / ORGANIZATION
+            expected.mkdir(parents=True)
+            self.assertEqual(records.resolve_namespace(
+                self.profile / store, self.profile, third_party=True), (expected.parent, expected))
 
     def test_cached_subscription_fields_and_history_are_not_identity_authority(self):
-        for store in ('local-agent-mode-sessions', 'claude-code-sessions'):
+        for store in records.STORES:
             (self.profile / store / ORGANIZATION / ACCOUNT).mkdir(parents=True)
             before = fingerprint(self.profile)
-            self.assertIsNone(identity.subscription(self.profile))
+            self.assertIsNone(records.resolve_namespace(self.profile / store, self.profile))
             self.assertEqual(fingerprint(self.profile), before)
 
     def test_static_gateway_uses_vendor_default_when_org_is_unset(self):

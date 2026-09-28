@@ -293,16 +293,18 @@ run setup again if that configuration has changed. An organization policy
 that prevents subscription sign-in also prevents the shortcut from switching.
 The shortcut currently supports macOS only.
 
-The desktop app (verified against 2.2553.1) keeps first-party and
-third-party mode in separate profiles (`.../Claude` and `.../Claude-3p`).
-The third-party profile sits wherever that platform's Electron build puts
-it: `~/Library/Application Support` on macOS, the roaming AppData directory
-on Windows, and `XDG_CONFIG_HOME` with a `~/.config` fallback on Linux.
-Set `CLAUDE_USER_DATA_DIR` to override all three. Attachment is verified on
-macOS. The Windows and Linux paths follow the app's documented Electron
-layout and are pinned by tests that run on the Linux CI runner; no session
-has been hand-driven on either platform, and the Windows path is not yet
-exercised by a Windows runner.
+The desktop app keeps first-party and third-party mode in separate profiles
+(`.../Claude` and `.../Claude-3p`). The gateway profile uses
+`~/Library/Application Support/Claude-3p` on macOS, `%LOCALAPPDATA%\Claude-3p`
+on Windows, and `XDG_CONFIG_HOME/Claude-3p` with a `~/.config` fallback on Linux.
+The Windows local directory follows Anthropic's current
+[storage guide](https://claude.com/docs/third-party/claude-desktop/data-storage).
+Without `LOCALAPPDATA`, setup retains its Electron AppData fallback.
+`CLAUDE_USER_DATA_DIR` overrides the gateway directory on all three platforms.
+An existing attachment retains its recorded directory: detach it before choosing
+another so setup does not lose its original restore record. Attachment has native
+macOS evidence; Windows and Linux paths have offline tests, with native app
+acceptance still pending.
 Pointing the third-party profile at the loopback router lists every
 approved Messages-compatible registry row. The app filters non-Anthropic
 vendor words from IDs even when a valid `anthropic_family_tier` is present.
