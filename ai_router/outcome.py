@@ -10,7 +10,9 @@ an unreadable error body, an unexpected exception). It is never replayable:
 only `TRANSIENT` is, and only a classifier that recognised the failure
 assigns it.
 """
+import http.client
 from dataclasses import dataclass
+from . import errors
 
 SUCCESS = 'success'
 INCOMPLETE = 'incomplete'
@@ -58,6 +60,42 @@ CLIENT = 'client'
 SOURCES = frozenset((UPSTREAM, ROUTER, CLIENT))
 
 MAX_CODE_CHARS = 64
+
+
+def facts(settled):
+    return {'outcome': None if settled is None else settled.category,
+            **{'outcome_' + field: None if settled is None else getattr(settled, field)
+               for field in ('phase', 'source', 'code', 'output', 'side_effects')}}
+
+
+def raised(exc, sent, response, record, client_abort=False, response_seen=False):
+    """Classify a transport or local exception without reading diagnostic facts."""
+    if client_abort:
+        category, source = CANCELLED, CLIENT
+    elif isinstance(exc, errors.OversizeBusy):
+        category, source = RATE_LIMIT, ROUTER
+    elif isinstance(exc, errors.InvalidSize):
+        category, source = REFUSED, ROUTER
+    elif isinstance(exc, (OSError, http.client.HTTPException)):
+        category, source = TRANSPORT, ROUTER
+    else:
+        category, source = UNKNOWN, ROUTER
+    if sent and record is not None:
+        phase = STREAM
+    elif response is None and not response_seen:
+        phase = SEND
+    else:
+        phase = STATUS
+    output = record is not None and record.content_delta_bytes > 0
+    if isinstance(exc, errors.OversizeBusy):
+        code = 'OVERSIZE_BUSY'
+    elif isinstance(exc, errors.InvalidSize):
+        code = ('BODY_TOO_LARGE' if str(exc) == 'Decoded request is too large'
+                else 'INVALID_REQUEST_SIZE')
+    else:
+        code = type(exc).__name__[:64]
+    return Outcome(category, phase, source, code, output,
+                   side_effects=not isinstance(exc, (errors.OversizeBusy, errors.InvalidSize)))
 
 
 def _causes(error_type, code):

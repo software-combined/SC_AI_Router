@@ -1,5 +1,31 @@
 # Compatibility
 
+## Router 0.6.135 handoff candidate, 28 September 2026 AEST
+
+Real Codex child sessions passed spawn, follow-up, both returned replies and
+parent continuation on two profiles: Classic `gpt-6-luna` at low with
+`xiaomi/mimo-v2.6-pro` at xhigh, and Lite `gpt-6-astra` at low with
+`deepseek/deepseek-v4.1-flash` at low. Each run made six native and two external
+requests, all completed, reporting 27,317 and 26,849 tokens respectively.
+Distinct child-authored receipts and the follow-up target matched the spawned
+child. Requested and provider-reported models matched; served efforts were
+unverified. Native encrypted history remained native; the external child
+received the supported plaintext handoff.
+
+Both used Codex desktop `26.917.62051`, bundled CLI `0.155.0-alpha.16.3`, tree
+`2d1c1ba80b1b78266b1e5604093bfb6fb52e0e14` and runtime fingerprint
+`dbf956a91e65de325fca8997c6ccf247b56df1d3ca2b1383f8fa631abc2ef4a6`.
+Per-run hard caps were eight native and two external sends, 128 KiB input,
+1 MiB response, 4,096 external output tokens per send and 300 seconds.
+The 60,000 reported-token threshold stopped further calls, with possible
+in-flight overshoot; a native output-token cap was unavailable. Temporary
+authentication, client process and router cleanup all passed.
+
+These are source-candidate results, not installed acceptance. Earlier failed
+probe records remain: helper defects prevented several initial runs; one later
+run completed both MiMo calls before a native failure with no retained cause.
+The original intermittent failure's encryption hypothesis remains unproven.
+
 ## Router 0.6.134 Messages recovery candidate, 28 September 2026 AEST
 
 Routed offline regressions reproduce an empty overload reaching Claude
@@ -25,7 +51,7 @@ served effort unverified. Caps were three sends, two paid, 512 KiB per request
 and 2,048 output tokens per send. Zero-paid real-client fixtures also verified
 HTTP refusal, a refused replay and no router replay after partial output.
 Claude's own retries appeared as separate requests and were counted separately.
-This candidate is not published or installed; the original MiMo handoff remains open.
+This candidate was not published or installed; the later handoff result is above.
 
 ## Router 0.6.133 Messages candidate, 28 September 2026 AEST
 

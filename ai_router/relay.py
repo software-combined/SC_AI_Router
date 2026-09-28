@@ -217,8 +217,8 @@ def _route(handler, provider, prepared, metrics, has_image, started, ledger, log
         total_ms = round((time.monotonic() - started) * 1000, 1); location = transport.describe_location(exc)
         # A client that hung up mid-stream is not an upstream fault: its own
         # event, and no terminal frame (the socket is gone).
-        client_abort = (sent and isinstance(exc, (BrokenPipeError, ConnectionResetError))
-                        and 'socketserver.py' in location)
+        client_abort = (sent and isinstance(exc, (BrokenPipeError, ConnectionResetError)) and (
+            (record is not None and record.delivery_failed is exc) or 'socketserver.py' in location))
         response_status = response.status if response is not None else (response_status or metrics.get('upstream_status'))
         raised = attempt_policy.raised(exc, sent, response, record, client_abort,
                                        response_seen=response_status is not None)

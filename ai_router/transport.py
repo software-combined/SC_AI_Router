@@ -8,7 +8,7 @@ import json
 import time
 import traceback
 
-from . import messages_errors, provider_defs
+from . import messages_errors, provider_defs, request_evidence
 from .errors import InvalidSize
 
 
@@ -123,17 +123,20 @@ def post_with_phases(conn, prepared, metrics):
     """
     request_bytes(prepared)
     setup_done = time.monotonic()
+    request_evidence.phase(metrics, 'connect')
     try:
         conn.connect()
     finally:
         connect_done = time.monotonic()
         metrics['connect_ms'] = round((connect_done - setup_done) * 1000, 1)
+    request_evidence.phase(metrics, 'send')
     try:
         conn.request('POST', prepared.path, body=prepared.body,
                      headers=prepared.headers)
     finally:
         send_done = time.monotonic()
         metrics['send_ms'] = round((send_done - connect_done) * 1000, 1)
+    request_evidence.phase(metrics, 'headers')
     try:
         response = conn.getresponse()
     finally:

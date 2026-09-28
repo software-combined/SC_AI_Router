@@ -2,7 +2,7 @@
 import json
 import re
 
-from . import agent_handoffs as handoffs, events, sse, transport
+from . import agent_handoffs as handoffs, events, request_evidence, sse, transport
 
 MAX_CALLS = 32
 MAX_OBSERVATIONS = 3 * MAX_CALLS  # added, done and completed for each call
@@ -159,9 +159,10 @@ def adapt_response(response, names, notes=None):
         if not getattr(names, 'stream', False) and 'text/event-stream' not in response.getheader('Content-Type', ''):
             raw = transport.read_capped(response, transport.MAX_UPSTREAM_BODY)
             result = json.loads(raw)
+            request_evidence.observe(notes, result, 'response')
             wire = _map(result, names, trace, raw, False)
-            if notes is not None and isinstance(result.get('model'), str):
-                notes['served_model'] = result['model']
+            if notes is not None and (model := request_evidence.identifier(result.get('model'))):
+                notes['served_model'] = model
             yield wire
             return
         for frame, data in sse.blocks(sse.lines(transport.passthrough(response))):
@@ -170,10 +171,11 @@ def adapt_response(response, names, notes=None):
                 yield frame
                 continue
             event = json.loads(data)
+            request_evidence.response_event(notes, event)
             wire = _map(event, names, trace, frame, True)
             if event.get('type') == 'response.completed' and notes is not None:
-                model = event.get('response', {}).get('model')
-                if isinstance(model, str):
+                model = request_evidence.identifier(event.get('response', {}).get('model'))
+                if model:
                     notes['served_model'] = model
             yield wire
     finally:

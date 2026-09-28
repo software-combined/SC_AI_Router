@@ -2,9 +2,9 @@ import http.client
 from collections import namedtuple
 from dataclasses import replace
 
-from . import errors, provider_defs, stream_attempt, stream_relay, transport, upstream
-from .outcome import (CANCELLED, CLIENT, RATE_LIMIT, REFUSED, ROUTER, SEND, STATUS, STREAM,
-                      SUCCESS, TRANSPORT, UNKNOWN, UPSTREAM, Outcome)
+from . import provider_defs, request_evidence, stream_attempt, stream_relay, transport, upstream
+from .outcome import (REFUSED, ROUTER, STATUS, STREAM, SUCCESS, UNKNOWN, UPSTREAM, Outcome,
+                      raised, facts as outcome_facts)
 
 INITIAL, REPAIR, STREAM_REPLAY, HELPER_FALLBACK = (
     'initial', 'repair', 'stream_replay', 'helper_fallback')
@@ -37,38 +37,10 @@ def replay_rejection(ledger, settled, record, body):
     return None
 
 
-def raised(exc, sent, response, record, client_abort=False, response_seen=False):
-    if client_abort:
-        category, source = CANCELLED, CLIENT
-    elif isinstance(exc, errors.OversizeBusy):
-        category, source = RATE_LIMIT, ROUTER
-    elif isinstance(exc, errors.InvalidSize):
-        category, source = REFUSED, ROUTER
-    elif isinstance(exc, (OSError, http.client.HTTPException)):
-        category, source = TRANSPORT, ROUTER
-    else:
-        category, source = UNKNOWN, ROUTER
-    if sent and record is not None:
-        phase = STREAM
-    elif response is None and not response_seen:
-        phase = SEND
-    else:
-        phase = STATUS
-    output = record is not None and record.content_delta_bytes > 0
-    if isinstance(exc, errors.OversizeBusy):
-        code = 'OVERSIZE_BUSY'
-    elif isinstance(exc, errors.InvalidSize):
-        code = ('BODY_TOO_LARGE' if str(exc) == 'Decoded request is too large'
-                else 'INVALID_REQUEST_SIZE')
-    else:
-        code = type(exc).__name__[:64]
-    return Outcome(category, phase, source, code, output,
-                   side_effects=not isinstance(exc, (errors.OversizeBusy,
-                                                     errors.InvalidSize)))
-
-
 def settle_delivery(ledger, handler):
     exc = getattr(handler, 'delivery_error', None)
+    if exc is not None and ledger.evidence:
+        ledger.evidence[-1].failed(exc, 'write')
     if exc is None or isinstance(exc, ValueError):
         return ledger.outcome
     current = ledger.outcome
@@ -117,19 +89,21 @@ def cached_refusal(status):
 class Ledger:
     __slots__ = ('request_id', 'operation', 'protocol', 'route', 'opening',
                  'attempts', 'decisions', 'transitions', 'committed', 'outcome',
-                 'terminal_source', '_budget', '_spent', '_owned')
+                 'terminal_source', '_budget', '_spent', '_owned', 'evidence', 'version', 'dialect')
 
     def __init__(self, provider, metrics):
         self.request_id = metrics.get('request_id')
         self.operation = metrics.get('path')
         self.protocol = metrics.get('protocol')
         self.attempts, self.decisions, self._owned = [], [], []
+        self.evidence, self.version = [], metrics.get('router_version')
         self.transitions, self.committed = 0, False
         self.outcome = self.terminal_source = None
         self._enter(provider, INITIAL)
 
     def _enter(self, provider, opening):
         self.route, self.opening = provider.defn.id, opening
+        self.dialect = provider.defn.dialect
         self._budget = budget(provider.defn, self.protocol, opening, self.operation)
         self._spent = dict.fromkeys(self._budget, 0)
 
@@ -142,6 +116,8 @@ class Ledger:
         if rejection is None and not self.permits(reason):
             rejection = 'budget'
         self.decisions.append('%s:%s' % (reason, rejection or 'approved'))
+        if self.evidence:
+            self.evidence[-1]['decision'] = self.decisions[-1]
         return rejection is None
 
     def send(self, prepared, metrics, reason):
@@ -149,10 +125,20 @@ class Ledger:
             raise RuntimeError('attempt budget exhausted')
         self._spent[reason] += 1
         self.attempts.append((len(self.attempts) + 1, self.route, reason))
+        if self.evidence: self.evidence[-1].finish()
+        facts = request_evidence.Attempt(len(self.attempts), reason, prepared, metrics,
+                                        transport.UPSTREAM_TIMEOUT_S)
+        self.evidence.append(facts)
+        metrics['attempt_evidence'] = facts
         conn = http.client.HTTPSConnection(
             prepared.host, timeout=transport.UPSTREAM_TIMEOUT_S)
         self._owned.append(conn)
-        return transport.post_with_phases(conn, prepared, metrics)
+        try:
+            response, headers = transport.post_with_phases(conn, prepared, metrics)
+            return facts.response(response), headers
+        except BaseException as exc:
+            facts.failed(exc)
+            raise
 
     def reopen(self, prepared, metrics, started):
         phases = {key: metrics[key] for key in
@@ -164,7 +150,8 @@ class Ledger:
         if response.status != 200:
             metrics['retry_code'] = 'retry_http_%d' % response.status
             try:
-                transport.read_capped(response, transport.ERROR_BODY_LIMIT)
+                raw = transport.read_capped(response, transport.ERROR_BODY_LIMIT)
+                request_evidence.verdict(metrics, upstream.outcome_of(response.status, raw, self.dialect))
             finally:
                 close = getattr(response, 'close', None)
                 if close is not None:
@@ -202,30 +189,29 @@ class Ledger:
 
     def settle(self, settled):
         self.outcome = settled
+        if self.evidence: self.evidence[-1].verdict(settled)
         return settled
 
     def outcome_facts(self):
-        final = self.outcome
-        return {
-            'outcome': None if final is None else final.category,
-            'outcome_phase': None if final is None else final.phase,
-            'outcome_source': None if final is None else final.source,
-            'outcome_code': None if final is None else final.code,
-            'outcome_output': None if final is None else final.output,
-            'outcome_side_effects': None if final is None else final.side_effects,
-        }
+        return outcome_facts(self.outcome)
 
     def observe(self, record):
         self.committed = self.committed or record.forwarded_bytes > 0
         self.terminal_source = record.client_terminal
+        if self.evidence:
+            if record.delivery_failed: self.evidence[-1].failed(record.delivery_failed, 'write')
+            self.evidence[-1].update(committed=self.evidence[-1]['committed'] or record.forwarded_bytes > 0,
+                                     terminal_source=record.client_terminal)
 
     def mark_committed(self, terminal_source=None):
         """Record that the client received response bytes or headers."""
         self.committed = True
+        if self.evidence: self.evidence[-1]['committed'] = True
         if terminal_source is not None:
             self.terminal_source = terminal_source
 
     def close(self):
+        for facts in self.evidence: facts.finish()
         for conn in self._owned:
             conn.close()
         self._owned.clear()
@@ -233,6 +219,7 @@ class Ledger:
     def facts(self):
         return {
             'request_id': self.request_id, 'operation': self.operation,
+            'router_version': self.version, 'attempt_evidence': self.evidence,
             'protocol': self.protocol, 'route': self.route,
             'sends': len(self.attempts),
             'attempts': [list(attempt) for attempt in self.attempts],

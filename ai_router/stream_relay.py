@@ -2,7 +2,7 @@
 import json
 import time
 
-from . import (messages_events, outcome, provider_defs, sse, stream_attempt, stream_errors,
+from . import (messages_events, outcome, provider_defs, request_evidence, sse, stream_attempt, stream_errors,
                stream_events, transport)
 
 TERMINAL_FIELDS = (
@@ -149,6 +149,7 @@ def relay_stream(handler, provider, response, prepared, metrics, started,
     """Forward one stream; normalized frames may wait for safe replay."""
     # Tool repair logs need request model/context without changing the request.
     attempt_metrics = {'model': metrics.get('model'),
+                       'attempt_evidence': metrics.get('attempt_evidence'),
                        'request_id': metrics.get('request_id'), 'attempt': attempt,
                        'context_tokens': metrics.get('context_tokens')}
     raw_encoded = metrics['response_encoding'] != 'identity'
@@ -194,6 +195,7 @@ def relay_stream(handler, provider, response, prepared, metrics, started,
             held = normalized and not (record.forwarded_bytes or record.replay_blocked) and record.hold.take(event)
             settled_now = event.outcome is not None and record.outcome is None
             if settled_now:
+                request_evidence.verdict(metrics, event.outcome)
                 terminal_metrics = {key: metrics.get(key) for key in TERMINAL_FIELDS}
                 if held:
                     record.outcome = event.outcome

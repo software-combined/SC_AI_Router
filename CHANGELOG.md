@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Request diagnostics retain each attempt's reported model, identity source,
+  effort and transport timing, including evidence received before a failure.
+  An installed read-only command shows recent request chains and filters missing,
+  mismatched or contradictory model reports without making a model call.
+  Client disconnects are identified from the failed response write even when
+  a shortened traceback omits the socket frame.
 - Agent handoff validation now retains the request's model list. A model
   refresh during a response cannot change whether an encrypted assignment
   needs a plaintext handoff. Spawn, follow-up and message delivery use the
