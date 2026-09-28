@@ -369,6 +369,15 @@ local attachment; unreadable or ambiguous settings refuse the switch. Platform
 readers follow the published [managed-policy precedence](https://claude.com/docs/third-party/claude-desktop/mdm).
 The switch check returns a decision; it never writes or logs settings.
 
+`claude_profile_identity.py` owns the account boundary for Plan 169. A native
+session callback must match one exact host and CLI task pair. Cached account
+state and the hashed workspace preference detect changes; they cannot select
+an organization. Authentication values are neither read nor copied. Static
+gateway identity comes from the existing device and local configuration.
+A private router-local hash binds the account pair so a later sign-in cannot
+inherit the previous account's copied tasks. The coordinator must hold both
+profile locks before creating that binding; this helper does not start a copy.
+
 ## Distribution (outside the request path)
 
 `infra/` owns the update feed as code (repository-only templates, deployed from a checkout): the certificate stack, the private
