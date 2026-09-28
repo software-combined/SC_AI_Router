@@ -40,6 +40,7 @@ PACKAGING_FILES = (
     'packaging/updater.py', 'packaging/codex_config.py',
     'packaging/claude_config.py',
     'packaging/claude_desktop_config.py',
+    'packaging/claude_desktop_policy.py',
     'packaging/claude_desktop_switch.py', 'packaging/claude_switch_launch.py',
     'packaging/claude_profile_rules.py',
     'packaging/client_choice.py',

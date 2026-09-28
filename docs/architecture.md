@@ -363,6 +363,12 @@ only the standard library. Callers must supply validated source and destination
 paths and publish through their own transaction; the helper does not select an
 account, change profiles or start synchronization.
 
+`claude_desktop_policy.py` owns the read-only policy check for Plan 169's
+switch path. Organization-managed connection settings take priority over a
+local attachment; unreadable or ambiguous settings refuse the switch. Platform
+readers follow the published [managed-policy precedence](https://claude.com/docs/third-party/claude-desktop/mdm).
+The switch check returns a decision; it never writes or logs settings.
+
 ## Distribution (outside the request path)
 
 `infra/` owns the update feed as code (repository-only templates, deployed from a checkout): the certificate stack, the private
