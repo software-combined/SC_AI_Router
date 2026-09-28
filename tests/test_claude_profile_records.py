@@ -159,6 +159,21 @@ class ProfileRecordsTests(unittest.TestCase):
             self.assertEqual([path.name for path in groups['same']],
                              ['local_one.json', 'local_two.json'])
 
+    def test_actual_selector_uses_stable_equal_copy_not_incoming_filename(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            profile_path = fixtures.profile(
+                tmp, 'Claude', '12345678-1234-4567-8123-123456789abc', 'abcdefab-1234-4567-8123-123456789abc')
+            store = profile_path / 'claude-code-sessions'
+            fixtures.duplicate(profile_path, 'claude-code-sessions',
+                               '12345678-1234-4567-8123-123456789abc', 'abcdefab-1234-4567-8123-123456789abc', 'same',
+                               'one', title='same')
+            fixtures.duplicate(profile_path, 'claude-code-sessions',
+                               '12345678-1234-4567-8123-123456789abc', 'abcdefab-1234-4567-8123-123456789abc', 'same',
+                               'two', title='same')
+            namespace = records.resolve_namespace(store, profile_path)
+            existing, _doc = fixtures.sync._choose(records.group_records(store)['same'], namespace)
+            self.assertEqual(existing.name, 'local_one.json')
+
     def test_first_party_environment_override_is_ignored(self):
         first, _ = records.profile_roots({'XDG_CONFIG_HOME': '/native',
                                          'CLAUDE_FIRST_PARTY_DATA_DIR': '/untrusted'}, 'linux')

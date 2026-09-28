@@ -398,6 +398,13 @@ metadata from native response diagnostics while preserving messages and IDs.
 Repairs to shared CLI transcripts retain a private original and recover through
 a separate journal because those files sit outside the desktop bundle.
 
+`claude_profile_sync.py` coordinates both directions under the two profile locks.
+Only the current account pair participates. The outgoing profile wins conflicts;
+unique bundle artifacts join the union before duplicates are retired. Shared
+CLI history takes precedence over an older bundle snapshot. Invalid or missing
+tasks are reported to the switch caller, which must keep the current mode until
+every in-scope task is safe. The coordinator has no app-lifecycle authority.
+
 ## Distribution (outside the request path)
 
 `infra/` owns the update feed as code (repository-only templates, deployed from a checkout): the certificate stack, the private
