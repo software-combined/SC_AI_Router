@@ -280,10 +280,10 @@ class TerminalWriteTests(unittest.TestCase):
         self.assertIn(b'answer', sent)
         self.assertNotIn(b'overloaded', sent)
         self.assertNotIn(b'UPSTREAM_FAILED', sent)
-        failures = [fields for event, fields in logs if event == 'transport_error']
+        failures = [fields for event, fields in logs if event == 'client_disconnected']
         self.assertIsNone(failures[-1].get('terminal_source'))
         ledger = [fields for event, fields in logs if event == 'attempt_ledger'][-1]
-        self.assertEqual(ledger['outcome'], outcome.TRANSPORT)
+        self.assertEqual(ledger['outcome'], outcome.CANCELLED)
 
 
 class NormalizedLateErrorTests(unittest.TestCase):

@@ -54,6 +54,14 @@ composition: state, credentials, policy) + __main__ (process entry)
 handler's injected `log_event`), and nothing else under `ai_router/` does.
 `tests/test_import_graph.py` is the enforcement, not this page.
 
+`request_evidence.py` observes each ledger-owned send. Protocol parsers retain
+bounded model, effort and endpoint reports with their source; the transport
+observer measures actual reads while preserving bytes. A prior attempt's
+identity never attests a later one. These records cannot authorize replay.
+`inspect_requests.py` reads the existing rotated log without contacting a model
+or loading credentials. Request outcomes and each attempt's observed ending
+remain separate when recovery preserves an earlier terminal for the client.
+
 Rules:
 
 `agent_handoffs.py` owns collaboration alias schemas and native-name restoration;

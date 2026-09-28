@@ -8,7 +8,7 @@ import re
 from copy import deepcopy
 from .capabilities import has_recursive_refs
 from .discovered import recall
-from . import agent_handoffs, sse, tool_aliases, tool_merge, transport, turn_budget
+from . import agent_handoffs, request_evidence, sse, tool_aliases, tool_merge, transport, turn_budget
 from .tool_history import SEARCH_NAME, tool_key
 from .tool_merge import tool_entries
 from .upstream import serving_endpoint
@@ -17,12 +17,13 @@ from .upstream import serving_endpoint
 _OBSERVE_LIMIT = 64 * 1024
 
 
-def _note_identity(payload, notes):
+def _note_identity(payload, notes, source='response'):
     """Record the serving model and endpoint from one parsed payload."""
     if not isinstance(payload, dict):
         return
-    if isinstance(payload.get('model'), str):
-        notes['served_model'] = payload['model']
+    request_evidence.observe(notes, payload, source)
+    if model := request_evidence.identifier(payload.get('model')):
+        notes['served_model'] = model
     endpoint = serving_endpoint(payload)
     if endpoint is not None:
         notes['serving_endpoint'] = endpoint
@@ -239,6 +240,7 @@ class ToolEvents:
         return item
 
     def event(self, event):
+        request_evidence.response_event(self.notes, event)
         self.changed = False
         kind = event.get('type', '')
         if kind in ('response.function_call_arguments.delta', 'response.function_call_arguments.done'):
@@ -250,7 +252,7 @@ class ToolEvents:
             response = event['response']
             response['output'] = [self.item(item) for item in response.get('output', [])]
             if kind == 'response.completed' and self.notes is not None:
-                _note_identity(response, self.notes)
+                _note_identity(response, self.notes, 'response.completed.response')
                 self.changed |= turn_budget.report_usage(response.get('usage'), self.notes)
         return event
 
@@ -305,8 +307,9 @@ def _observe_sse_frame(frame, notes):
                         frame.split(b'\n') if part.startswith(b'data:')).strip()
         if data and data != b'[DONE]':
             event = json.loads(data)
+            request_evidence.response_event(notes, event)
             if event.get('type') == 'response.completed':
-                _note_identity(event.get('response'), notes)
+                _note_identity(event.get('response'), notes, 'response.completed.response')
     except Exception:
         pass  # observation is best-effort; never fail forwarded bytes
 

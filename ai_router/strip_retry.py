@@ -7,7 +7,7 @@ the subscription `invalid_encrypted_content` repair. This module keeps the
 `annotation_retry` log lines; the request's `attempt_policy.Ledger` owns the
 send, its connection and the one-repair budget (Plan 188).
 """
-from . import errors, provider_defs, transport, upstream
+from . import errors, provider_defs, request_evidence, transport, upstream
 from .attempt_policy import REPAIR
 
 
@@ -70,6 +70,8 @@ def maybe_retry_unattributable(described, response, raw, metrics, provider,
         metrics['upstream_status'] = response.status
         retry_raw = (transport.read_capped(response, transport.ERROR_BODY_LIMIT)
                      if response.status >= 400 else None)
+        if retry_raw is not None:
+            request_evidence.verdict(metrics, upstream.outcome_of(response.status, retry_raw, provider.defn.dialect))
     except BaseException as exc:
         log_event('annotation_retry', eligible=True, attempted=True,
                   outcome='transport_error', error_type=type(exc).__name__, **fields)
@@ -90,6 +92,7 @@ def post_with_retry(ledger, prepared, metrics, provider, log_event, admit=None):
     raw = None
     if response.status >= 400:
         raw = transport.read_capped(response, transport.ERROR_BODY_LIMIT)
+        request_evidence.verdict(metrics, upstream.outcome_of(response.status, raw, provider.defn.dialect))
         described = upstream.describe_failure(
             None, {'status': response.status, 'body': raw},
             {'model': metrics.get('model'), 'provider': prepared.provider,

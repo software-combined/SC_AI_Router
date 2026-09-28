@@ -647,17 +647,43 @@ tool names a person no longer reads stay searchable in the log.
 | `usage_reported` | a routed Codex turn carrying tools had its reported input tokens raised to what the thread carries (never lowered); names the provider's figure and the reported one |
 | `wire_contract` | observe only: a prepared Responses body broke a rule learnt from an earlier upstream refusal (the check never changes or blocks the request); names each rule under `violations` or `warnings` with a count, plus up to eight unknown top-level field names (`error_type` instead when the check itself failed); refusal lines carry the same rules, pairing under `pair_problems` and the rest as `contract_violations` and `contract_warnings`; no content |
 
-## Stream identity observation (last-observed, not proof)
+## Request identity and failure evidence
 
-Tool-free responses carry an optional identity observer: bytes forward
-immediately while a bounded copy is retained for a post-EOF parse
-(JSON, only when the whole body fit in 64 KiB) or complete-frame parse
-(SSE, tails over 64 KiB discarded unobserved). Oversized, malformed, or
-compressed-without-identity bodies leave the observation unavailable
-rather than blocking or fabricating one. `/health served_models` is
-therefore last-observed state per alias, never proof of the current
-served model; a new observation overwrites, an unobservable response
-leaves the prior entry intact.
+Resolve the installed release from its `current` pointer, then run the command
+(macOS/Linux shown; use the corresponding router home on Windows):
+
+```sh
+router_home="$HOME/.codex/mixed-model-router"
+cd "$router_home/releases/$(basename "$(cat "$router_home/current")")"
+python3.14 -m ai_router.inspect_requests --minutes 60
+python3.14 -m ai_router.inspect_requests --request-id <request-id> --json
+python3.14 -m ai_router.inspect_requests --model <model-id> --identity mismatch
+```
+
+The command reads completed request chains from the existing four rotated
+logs. It makes no model call and loads no credentials. `--minutes 0` includes
+all retained records; `--limit` accepts 1–100. Identity filters also accept
+`unverified` and `contradictory`. Logs from earlier versions may lack evidence.
+
+Each send records the requested, resolved and upstream IDs separately from
+provider reports, including their header or response-field source. Reports
+survive later read errors, and a retry starts fresh. Missing or unreadable
+identity stays unverified. A mismatch means the reported ID differs literally;
+native aliases or snapshot names may explain it. A provider report is not
+independent proof of the weights executed. `/health served_models` remains a
+last-observed cache and never attests the selected request.
+
+Attempt outcomes describe the observed upstream or transport ending. The
+request outcome also reflects delivery and recovery, which can preserve the
+first terminal after a later attempt fails. Timings name connect, send, headers
+and actual read calls; read wait includes response consumption and must not be
+presented as provider compute time. Age, time since the last upstream data,
+socket timeout, commitment and retry decisions help distinguish failures.
+Write failures are identified separately; a broken client connection is a
+cancellation, while an upstream read failure remains a transport failure.
+Service restart remains separately recorded by `draining`, `exit` and
+`router_started`; an abruptly terminated request may have no final chain.
+Prompts, tool data, credentials and raw error bodies are excluded.
 
 ## Per-user OpenRouter keys (IT issue and revoke)
 
