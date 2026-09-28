@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from ai_router import (outcome, provider_defs, relay, sse, stream_errors,
-                       stream_relay)
+                       stream_relay, transport)
 from tests.fakes import FakeUpstream
 from tests.test_stream_outcome_recovery import (
     _defn, _metrics, _prepared, _provider)
@@ -71,7 +71,8 @@ class ZeroByteObservationTests(unittest.TestCase):
         metrics = {'protocol': provider_defs.RESPONSES,
                    'response_kind': 'sse', 'response_encoding': 'identity',
                    'model': 'm'}
-        record = stream_relay.StreamRecord()
+        record = stream_relay.StreamRecord(transport.ResponseFormat(
+            provider_defs.RESPONSES, '/v1/responses', True, 'sse', 'identity'))
         stream_relay.relay_stream(
             client, provider, object(), SimpleNamespace(tool_names=set()),
             metrics, 0.0, 0.0, record)
@@ -140,7 +141,8 @@ class RawTerminalParityTests(unittest.TestCase):
                                    'response_kind': 'sse',
                                    'response_encoding': 'identity'}
                         with mock.patch.object(sse, 'MAX_FRAME_BYTES', 128):
-                            raw = list(stream_relay._raw_events([frame], metrics))
+                            raw = list(stream_relay._raw_events(
+                                [frame], metrics, provider_defs.RESPONSES))
                         self.assertEqual(b''.join(event.frame for event in raw), frame)
                         terminal = [event for event in raw if event.outcome is not None][-1]
                         self.assertEqual(
@@ -163,7 +165,7 @@ class RawTerminalParityTests(unittest.TestCase):
             with mock.patch.object(stream_relay, '_raw_hint',
                                    wraps=stream_relay._raw_hint) as hint:
                 events = list(stream_relay._raw_events(
-                    (prefix, completion), metrics))
+                    (prefix, completion), metrics, provider_defs.RESPONSES))
         self.assertEqual(b''.join(event.frame for event in events), frame)
         self.assertTrue(all(event.outcome is None for event in events[:-1]))
         self.assertEqual(events[-1].outcome.category, outcome.TRANSIENT)
@@ -179,7 +181,7 @@ class RawTerminalParityTests(unittest.TestCase):
             with mock.patch.object(stream_relay, '_raw_hint',
                                    wraps=stream_relay._raw_hint) as hint:
                 events = list(stream_relay._raw_events(
-                    (first, completion), metrics))
+                    (first, completion), metrics, provider_defs.RESPONSES))
         self.assertEqual(b''.join(event.frame for event in events),
                          first + completion)
         self.assertTrue(all(event.outcome is None for event in events))

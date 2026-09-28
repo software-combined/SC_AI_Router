@@ -42,9 +42,9 @@ def _route(handler, provider, prepared, metrics, has_image, started, ledger, log
            admit):
     observed = getattr(getattr(prepared.context, 'row', None), 'observed_item_types', ())
     routed = (provider.defn.caches_deterministic_refusals()
-              and metrics.get('protocol') == provider_defs.RESPONSES)
+              and ledger.protocol == provider_defs.RESPONSES)
     if routed:
-        cached = upstream.recall_refusal(prepared.provider, metrics.get('model'), prepared.body)
+        cached = upstream.recall_refusal(prepared.provider, ledger.model, prepared.body)
         if cached is not None:
             status, message = cached
             ledger.settle(attempt_policy.cached_refusal(status))
@@ -60,12 +60,12 @@ def _route(handler, provider, prepared, metrics, has_image, started, ledger, log
         if response.status >= 400:
             ledger.settle(upstream.outcome_of(response.status, drained, provider.defn.dialect))
         if (provider.defn.dialect == provider_defs.DIALECT_OPENAI
-                and is_native_service(metrics['path'])
+                and is_native_service(ledger.operation)
                 and response.status in (401, 403)):
-            log_event('native_upstream_rejected', path=metrics['path'],
+            log_event('native_upstream_rejected', path=ledger.operation,
                       upstream_status=response.status)
             try:
-                local_services.answer(metrics['path'])
+                local_services.answer(ledger.operation)
             except local_services.LocalAnswer as exc:
                 return _error(handler, ledger, exc)
         retry_after = upstream.upstream_retry_after(
@@ -78,7 +78,7 @@ def _route(handler, provider, prepared, metrics, has_image, started, ledger, log
         if retry_after is not None:
             category, retry_after = retry_after
             if (category in ('quota', 'auth')
-                    and metrics.get('protocol') == provider_defs.RESPONSES
+                    and ledger.protocol == provider_defs.RESPONSES
                     and provider.defn.opens_key_window_on_auth_failure()):
                 if category == 'auth':
                     if handler.server.credentials.key_rejected(prepared.provider):
@@ -98,15 +98,15 @@ def _route(handler, provider, prepared, metrics, has_image, started, ledger, log
             transport.note_first_data(metrics, headers_done)
             # Context frames are Responses-only; Messages ingress has none.
             if (provider.defn.sends_context_error_frame()
-                    and metrics.get('protocol') == provider_defs.RESPONSES
+                    and ledger.protocol == provider_defs.RESPONSES
                     and upstream.is_context_error(raw)):
-                sent = handler.context_error(metrics['stream'])
-                if sent is True and metrics.get('stream') is True: ledger.mark_committed(stream_errors.TERMINAL_FROM_ROUTER)
+                sent = handler.context_error(ledger.stream)
+                if sent is True and ledger.stream is True: ledger.mark_committed(stream_errors.TERMINAL_FROM_ROUTER)
                 elif sent is not False or getattr(handler, 'response_committed', False): ledger.mark_committed()
                 attempt_policy.settle_delivery(ledger, handler); return sent
             if (provider.defn.opens_key_window_on_auth_failure()
                     and response.status in (401, 403)
-                    and metrics.get('protocol') == provider_defs.RESPONSES
+                    and ledger.protocol == provider_defs.RESPONSES
                     and handler.server.credentials.key_rejected(prepared.provider)):
                 setup.open_key_window(handler.server, handler.server.credentials.home,
                                       prepared.provider)
@@ -117,7 +117,7 @@ def _route(handler, provider, prepared, metrics, has_image, started, ledger, log
             described = upstream.describe_failure(
                 None, {'status': response.status, 'body': raw},
                 {'model': metrics.get('model'), 'provider': prepared.provider,
-                 'protocol': metrics.get('protocol'), 'dialect': provider.defn.dialect,
+                 'protocol': ledger.protocol, 'dialect': provider.defn.dialect,
                  'elapsed_ms': round((time.monotonic() - started) * 1000, 1),
                  'timeout_s': transport.UPSTREAM_TIMEOUT_S, 'has_image': has_image,
                  'routed': routed})
@@ -141,7 +141,7 @@ def _route(handler, provider, prepared, metrics, has_image, started, ledger, log
                                   retry_after='2')
                 # A cached answer must be one the client treats as final.
                 if status == 400 and routed and response.status < 500:
-                    upstream.remember_refusal(prepared.provider, metrics.get('model'),
+                    upstream.remember_refusal(prepared.provider, ledger.model,
                                               refusal_body, message)
                 log_event('upstream_rejected', status=response.status,
                           client_status=status, code=code,
@@ -157,7 +157,7 @@ def _route(handler, provider, prepared, metrics, has_image, started, ledger, log
                 return _error(handler, ledger, errors.upstream_described(message))
             else:
                 handler.send_response(response.status); handler.response_committed = True
-                transport.relay_headers(response, handler.send_header, metrics.get('model'))
+                transport.relay_headers(response, handler.send_header, ledger.model)
                 handler.send_header('Connection', 'close')
                 handler.end_headers()
                 sent = True
@@ -166,16 +166,16 @@ def _route(handler, provider, prepared, metrics, has_image, started, ledger, log
                 handler.close_connection = True
                 return
         metrics['upstream_headers_ms'] = round((time.monotonic() - started) * 1000, 1)
-        metrics['response_kind'], metrics['response_encoding'] = transport.describe_response(response)
-        upstream.validate_response(response, prepared, raw_encoded=metrics['response_encoding'] != 'identity')
+        record = stream_relay.StreamRecord(transport.ResponseFormat.capture(ledger, response))
+        metrics['response_kind'], metrics['response_encoding'] = record.response_format.kind, record.response_format.encoding
+        upstream.validate_response(response, prepared, raw_encoded=record.response_format.encoding != 'identity')
         handler.send_response(response.status); handler.response_committed = True
-        transport.relay_headers(response, handler.send_header, metrics.get('model'))
+        transport.relay_headers(response, handler.send_header, ledger.model)
         handler.send_header('Connection', 'close')
         handler.end_headers()
         ledger.mark_committed()
         sent = True
         # The ledger allows replay only while the client holds no response byte.
-        record = stream_relay.StreamRecord()
         while True:
             stream_relay.relay_stream(handler, provider, response, prepared,
                                       metrics, started, headers_done, record, attempt=len(ledger.attempts))
@@ -192,7 +192,7 @@ def _route(handler, provider, prepared, metrics, has_image, started, ledger, log
             raise OSError('terminal delivery failed')
         if ((ledger.outcome.category == attempt_policy.UNKNOWN or record.outcome is None
              or record.hold.terminal is not None) and record.normalized
-                and record.client_terminal is None and sent and transport.emit_terminal_failure(handler.wfile, metrics)):
+                and record.client_terminal is None and sent and transport.emit_terminal_failure(handler.wfile, record.response_format)):
             record.client_terminal = stream_errors.TERMINAL_FROM_ROUTER
         ledger.observe(record)
         _record_terminal_source(record, metrics)
@@ -203,7 +203,7 @@ def _route(handler, provider, prepared, metrics, has_image, started, ledger, log
                   total_ms=round((time.monotonic() - started) * 1000, 1))
         if metrics.get('served_model'):
             with handler.server.lock:
-                handler.server.served_models[metrics['model']] = metrics['served_model']
+                handler.server.served_models[ledger.model] = metrics['served_model']
     # `admit` refused a repaired body before its send: the client holds no bytes yet.
     except errors.OversizeBusy as exc:
         ledger.settle(attempt_policy.raised(exc, sent, response, record))
@@ -232,7 +232,7 @@ def _route(handler, provider, prepared, metrics, has_image, started, ledger, log
         metrics.update(ledger.outcome_facts())
         terminal_pending = (record is not None and sent and record.normalized and (record.outcome is None or record.hold.terminal is not None) and record.client_terminal is None and not record.delivery_failed and not client_abort)
         if terminal_pending:
-            if transport.emit_terminal_failure(handler.wfile, metrics): record.client_terminal = stream_errors.TERMINAL_FROM_ROUTER
+            if transport.emit_terminal_failure(handler.wfile, record.response_format): record.client_terminal = stream_errors.TERMINAL_FROM_ROUTER
         if record is not None:
             ledger.observe(record)
             _record_terminal_source(record, metrics)

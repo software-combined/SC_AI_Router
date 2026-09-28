@@ -24,7 +24,7 @@ def maybe_retry_unattributable(described, response, raw, metrics, provider,
     # Only a Responses 400 is a repair candidate; the ledger records no
     # decision for any other status.
     candidate = (response.status == 400
-                 and metrics.get('protocol') == provider_defs.RESPONSES)
+                 and ledger.protocol == provider_defs.RESPONSES)
     has_budget = ledger.permits(REPAIR)
     if candidate and has_budget:
         proposal = provider.repair_rejected(prepared, described, raw)
@@ -96,7 +96,7 @@ def post_with_retry(ledger, prepared, metrics, provider, log_event, admit=None):
         described = upstream.describe_failure(
             None, {'status': response.status, 'body': raw},
             {'model': metrics.get('model'), 'provider': prepared.provider,
-             'protocol': metrics.get('protocol'), 'dialect': provider.defn.dialect})
+             'protocol': ledger.protocol, 'dialect': provider.defn.dialect})
         retried = maybe_retry_unattributable(
             described, response, raw, metrics, provider, prepared, ledger, log_event,
             admit)

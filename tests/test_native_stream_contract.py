@@ -6,7 +6,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from ai_router import outcome, provider_defs, router, sse, stream_relay
+from ai_router import outcome, provider_defs, router, sse, stream_relay, transport
 from tests.fakes import FakeUpstream, install_fake
 from tests.harness import auth_file, post, start_server, test_state
 
@@ -116,7 +116,8 @@ class NativeStreamContractTests(unittest.TestCase):
         provider = SimpleNamespace(defn=provider_defs.OPENAI, adapt=chunks)
         metrics = {'protocol': provider_defs.RESPONSES, 'stream': True,
                    'response_kind': 'other', 'response_encoding': 'identity'}
-        record = stream_relay.StreamRecord()
+        record = stream_relay.StreamRecord(transport.ResponseFormat(
+            provider_defs.RESPONSES, '/v1/responses', True, 'other', 'identity'))
         stream_relay.relay_stream(client, provider, None, SimpleNamespace(tool_names=set()),
                                   metrics, 0.0, 0.0, record)
         self.assertEqual(client.wfile.getvalue(), first + last)

@@ -138,7 +138,8 @@ class RawStreamOutcomeTests(unittest.TestCase):
             adapt=lambda *args: iter((frame,)))
         metrics = {'protocol': provider_defs.RESPONSES, 'response_kind': 'sse',
                    'response_encoding': encoding, 'model': 'm'}
-        record = stream_relay.StreamRecord()
+        record = stream_relay.StreamRecord(transport.ResponseFormat(
+            provider_defs.RESPONSES, '/v1/responses', True, 'sse', encoding))
         stream_relay.relay_stream(
             client, provider, io.BytesIO(frame), SimpleNamespace(tool_names=set()), metrics,
             0.0, 0.0, record)
@@ -211,7 +212,7 @@ class RawStreamOutcomeTests(unittest.TestCase):
                            'response_kind': 'sse',
                            'response_encoding': 'identity', 'model': 'm'}
                 events = list(stream_relay._raw_events(
-                    provider.adapt(None, None, None), metrics))
+                    provider.adapt(None, None, None), metrics, provider_defs.RESPONSES))
                 self.assertEqual([bytes(event.frame) for event in events], [first, second])
 
     def test_partial_raw_bytes_are_forwarded_before_the_frame_completes(self):
@@ -219,7 +220,7 @@ class RawStreamOutcomeTests(unittest.TestCase):
         completion = b'\n'
         metrics = {'protocol': provider_defs.RESPONSES, 'response_kind': 'sse',
                    'response_encoding': 'identity', 'model': 'm'}
-        events = stream_relay._raw_events(iter((partial, completion)), metrics)
+        events = stream_relay._raw_events((partial, completion), metrics, provider_defs.RESPONSES)
         first = next(events)
         self.assertEqual(first.frame, partial)
         remainder = list(events)
@@ -238,7 +239,7 @@ class RawStreamOutcomeTests(unittest.TestCase):
     def test_deeply_nested_raw_json_is_forwarded_unchanged(self):
         frame = b'data: ' + b'[' * 2000 + b'1' + b']' * 2000 + b'\n\n'
         metrics = {'protocol': provider_defs.RESPONSES, 'response_kind': 'sse', 'response_encoding': 'identity'}
-        events = list(stream_relay._raw_events([frame], metrics))
+        events = list(stream_relay._raw_events([frame], metrics, provider_defs.RESPONSES))
         self.assertEqual(b''.join(event.frame for event in events), frame)
         self.assertTrue(all(event.outcome is None for event in events))
 
