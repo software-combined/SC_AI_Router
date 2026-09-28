@@ -20,6 +20,22 @@ class DesktopSetupTests(unittest.TestCase):
         self.launcher = launcher.start()
         self.addCleanup(launcher.stop)
 
+    def test_changed_default_preserves_the_original_attachment_until_explicit_detach(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home, old, new = (Path(tmp) / name for name in ('router', 'roaming', 'local'))
+            home.mkdir()
+            desktop, receipts = install_mod._desktop_config, install_mod._codex_config
+            state = {'port': 1, 'token': 'test-token'}
+            entry = desktop.attach(home, state, receipts, data_dir_override=old)
+            before = {p: p.read_bytes() for p in Path(tmp).rglob('*') if p.is_file()}
+            with mock.patch.object(desktop, 'user_data_dir', return_value=new):
+                with self.assertRaisesRegex(SystemExit, 'different profile'):
+                    desktop.attach(home, state, receipts)
+                self.assertFalse(new.exists())
+                self.assertEqual({p: p.read_bytes() for p in Path(tmp).rglob('*') if p.is_file()}, before)
+                self.assertEqual(desktop.attach(home, state, receipts, data_dir_override=old), entry)
+                self.assertEqual({p: p.read_bytes() for p in Path(tmp).rglob('*') if p.is_file()}, before)
+
     def test_repeat_attachment_preserves_subscription_choice_and_original_snapshot(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'router'

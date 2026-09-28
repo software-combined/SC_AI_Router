@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Claude desktop setup uses local AppData for the Windows gateway profile.
+  An existing attachment keeps its original restore record and must be detached
+  before setup can choose a different profile directory.
+
 ## 0.6.139
 
 - Align the Python package version and runtime inventory with the release.

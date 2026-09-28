@@ -59,11 +59,14 @@ def profile_root(env=None, platform_name=None):
 
 
 def user_data_dir(env=None, platform_name=None):
-    """Third-party profile dir, honoring CLAUDE_USER_DATA_DIR when set."""
+    """Third-party profile: explicit override, Windows local data, then Electron."""
     env = os.environ if env is None else env
     override = env.get('CLAUDE_USER_DATA_DIR')
     if override:
         return Path(override).expanduser()
+    platform_name = sys.platform if platform_name is None else platform_name
+    if platform_name == 'win32' and env.get('LOCALAPPDATA'):
+        return Path(env['LOCALAPPDATA']) / PROFILE_DIRNAME
     return profile_root(env, platform_name) / PROFILE_DIRNAME
 
 
@@ -206,6 +209,17 @@ def attach(home, state, receipts, data_dir_override=None, env=None, *, python=No
                          'to attach the Claude desktop gateway')
     data_dir = (Path(data_dir_override) if data_dir_override is not None
                 else user_data_dir(env))
+    existing = receipts.read_receipt(home).get('clients', {}).get(CLIENT_KEY)
+    if existing:
+        try:
+            attached = Path(existing['config_path'])
+            same = (attached.is_absolute() and attached.parent.name == 'configLibrary'
+                    and attached.parent.parent.resolve() == data_dir.resolve())
+        except (KeyError, TypeError, ValueError):
+            same = False
+        if not same:
+            raise SystemExit('Claude is connected using a different profile. '
+                             'Detach that connection before choosing another profile.')
     # Refuse before writing anything: a mode conflict must leave both the
     # entry and the desktop config untouched.
     cfg, cfg_path = read_desktop_config(data_dir)
