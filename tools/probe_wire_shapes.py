@@ -177,7 +177,8 @@ def main(argv=None):
     plan = [(row_entry(slug), shape) for slug in args.model or ROWS for shape in args.shape or SHAPES]
     if not args.live:
         for entry, shape in plan:
-            found = wire_shape.violations(provider_defs.DIALECT_OPENROUTER, shape_body(shape, entry))
+            found = wire_shape.violations(provider_defs.DIALECT_OPENROUTER,
+                                          shape_body(shape, entry), entry.observed_item_types)
             print(json.dumps({'shape': shape, 'row': entry.slug, **found}))
         return 0
     if not 1 <= args.max_calls <= 24 or len(plan) > args.max_calls:

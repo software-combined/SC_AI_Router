@@ -1,5 +1,22 @@
 # Compatibility
 
+## Router 0.6.137 offline conformance, 28 September 2026 AEST
+
+The real-handler matrix covers all 21 registry rows on both supported
+protocols: 42 model/provider/protocol pairs, independent of picker visibility.
+Shared fixtures verify JSON and streaming outcomes, recovery before output,
+no replay after output, credentials, model evidence, capability preparation,
+disabled-route refusal and connection cleanup. Four native IDs, including
+discovered and future IDs, preserve signed history, bytes and authentication;
+encoded replies remain unknown. These are offline checks, not fresh live
+acceptance for every row. Earlier live results below retain their own scope.
+
+The DeepSeek extra-shape measurement now belongs only to the measured
+V4.1 Flash row. A regression reproduced the previous family-wide evidence
+claim on Pro and a future alias before the fix. A feed retargeting a row also
+loses the original target's measurement. The profile changes warnings only
+and never permits dropping or rewriting unmeasured input.
+
 ## Router 0.6.135 handoff candidate, 28 September 2026 AEST
 
 Real Codex child sessions passed spawn, follow-up, both returned replies and
