@@ -92,6 +92,25 @@ class DesktopPlatformTests(unittest.TestCase):
             self.assertFalse(answer)
             self.assertNotIn('kill', str(commands).lower())
 
+    def test_named_claude_descendant_is_verified_before_unknown_writer_refusal(self):
+        for name in ('darwin', 'win32', 'linux'):
+            with self.subTest(platform=name):
+                main, child = self.row(), self.row(11, 10, '/runtime/claude')
+                answer, _ = self.stop(name, [[child, main], [dict(child, parent=1)], []])
+                self.assertTrue(answer)
+
+    def test_macos_browser_host_does_not_block_but_app_descendant_still_does(self):
+        browser = self.row(20, 1, '/apps/Google Chrome.app/Google Chrome')
+        host = self.row(21, 20, self.identity['root'] + '/Contents/Helpers/chrome-native-host')
+        harness = PlatformHarness('darwin', self.identity, [[browser, host]])
+        with mock.patch.object(platform, 'app_identity', return_value=self.identity):
+            self.assertFalse(platform.is_running('darwin', run=harness))
+        owned = dict(host, parent=10)
+        answer, commands = self.stop('darwin', [[self.row(), owned],
+                                               [dict(owned, parent=1)], []])
+        self.assertTrue(answer)
+        self.assertEqual(sum(c[0] == '/bin/ps' for c in commands), 3)
+
     def test_changed_pid_identity_refuses(self):
         for name in ('darwin', 'win32', 'linux'):
             with self.assertRaisesRegex(OSError, 'identity changed'):
@@ -133,8 +152,15 @@ class DesktopPlatformTests(unittest.TestCase):
         (app / 'Contents/MacOS/Claude').touch()
         info = dict(CFBundleIdentifier=platform.BUNDLE_ID, CFBundleExecutable='Claude')
         (app / 'Contents/Info.plist').write_bytes(plistlib.dumps(info))
-        identity = platform.app_identity('darwin', run=lambda *a, **k: result(str(app)))
+        def locate(argv, **kwargs):
+            self.assertEqual(argv[0], '/usr/bin/mdfind')
+            self.assertIn(platform.BUNDLE_ID, argv[1])
+            return result(str(app))
+        identity = platform.app_identity('darwin', run=locate)
         self.assertEqual(identity['exe'], str(app / 'Contents/MacOS/Claude'))
+        for paths in ('', str(app) + '\n/other/Claude.app'):
+            with self.assertRaises(OSError):
+                platform.app_identity('darwin', run=lambda *a, **k: result(paths))
         apps = self.root / 'xdg/applications'
         apps.mkdir(parents=True)
         exe = self.root / 'space ü' / 'claude-desktop'
