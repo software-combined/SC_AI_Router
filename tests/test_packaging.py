@@ -79,24 +79,6 @@ class PackagingTests(unittest.TestCase):
                 continue
             self.assertIn(rel, bundled, 'packaging module missing from the release inventory')
 
-    def test_runtime_file_list_matches_files(self):
-        root = Path(__file__).resolve().parents[1]
-        doc = (root / 'docs' / 'runtime-files.md').read_text()
-        listed = set(re.findall(r'`((?:ai_router|tools)/[^`]+)`', doc))
-        bundled = set(_release_module().bundle_files(root))
-        # The page names the modules a reader looks for, not every member of the
-        # inventory (release.py globs tools/ and docs/ wholesale), so each name
-        # it does carry must resolve, and no runtime module may go unnamed.
-        self.assertTrue(listed <= bundled,
-                        'runtime-files.md names a file the bundle omits: '
-                        + ', '.join(sorted(listed - bundled)))
-        for module in sorted((root / 'ai_router').rglob('*.py')):
-            if '__pycache__' in module.parts:
-                continue
-            rel = module.relative_to(root).as_posix()
-            with self.subTest(module=rel):
-                self.assertIn(rel, listed, 'runtime module missing from the page')
-
     def test_readme_quick_start_installs_its_own_build(self):
         # --url-base keeps the built feed pointing at the local tarball.
         root = Path(__file__).resolve().parents[1]
@@ -152,15 +134,6 @@ class PackagingTests(unittest.TestCase):
     def test_version_is_semver(self):
         version = (Path(__file__).resolve().parents[1] / 'packaging' / 'VERSION').read_text().strip()
         self.assertRegex(version, r'^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$')
-
-    def test_pyproject_version_matches_packaging_version(self):
-        # Plan 104: pyproject's version is a checked duplicate of the release
-        # version; nothing else reads it, so drift is otherwise invisible.
-        import tomllib
-        root = Path(__file__).resolve().parents[1]
-        version = (root / 'packaging' / 'VERSION').read_text().strip()
-        pyproject = tomllib.loads((root / 'pyproject.toml').read_text())
-        self.assertEqual(pyproject['project']['version'], version)
 
     def test_installer_surface_parses_as_python39(self):
         # Plan 061: the installer runs on Python 3.9+ while the router

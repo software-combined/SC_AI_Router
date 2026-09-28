@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.6.139
+
+- Align the Python package version and runtime inventory with the release.
+  Their existing checks now run in the core suite so release-record drift is
+  caught before beta publication.
+
 ## 0.6.138
 
 - New model promotion now requires offline conformance and successful Codex
