@@ -33,7 +33,7 @@ _FINAL_ERROR_TYPES = frozenset((
     'invalid_request', 'refusal', 'moderation', 'insufficient_quota'))
 _TRANSIENT_CODES = frozenset((
     'server_error', 'provider_unavailable', 'provider_overloaded',
-    'timeout', 'server', 'overloaded'))
+    'timeout', 'server', 'overloaded', 'overloaded_error'))
 _RATE_LIMIT_TYPES = frozenset((
     'rate_limit', 'rate_limit_exceeded', 'too_many_requests'))
 _AUTH_TYPES = frozenset((

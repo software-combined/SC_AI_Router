@@ -78,7 +78,10 @@ class RawTerminalOwnershipTests(unittest.TestCase):
         self.assertNotIn('code', metrics)
 
     def test_messages_first_terminal_keeps_ownership(self):
-        stopped = b'data: {"type":"message_stop"}\n\n'
+        stopped = (b'data: {"type":"message_start","message":{"type":"message",'
+                   b'"role":"assistant","content":[],"stop_reason":null}}\n\n'
+                   b'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"}}\n\n'
+                   b'data: {"type":"message_stop"}\n\n')
         failed = b'data: {"type":"message_error","error":{"code":"bad"}}\n\n'
         written, metrics, record = self._raw(stopped + failed, provider_defs.MESSAGES)
         self.assertEqual(written, stopped + failed)

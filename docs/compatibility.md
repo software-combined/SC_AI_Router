@@ -1,5 +1,42 @@
 # Compatibility
 
+## Router 0.6.133 Messages candidate, 28 September 2026 AEST
+
+Synthetic Messages streams reproduced false success after `max_tokens`,
+`refusal` and `model_context_window_exceeded`, as well as a bare stop frame.
+External preparation also changed the original client payload, including
+nested tool definitions and results. Both faults are covered by regression
+tests that failed against the preceding revision.
+
+Both routes now use the same read-only Messages observer and named pure
+outgoing projections. Stream outcomes require a valid start, final delta and
+stop; JSON requires a readable message and stop reason. The mapping follows
+the [Anthropic stop-reason contract](https://platform.claude.com/docs/en/build-with-claude/handling-stop-reasons).
+Unknown and encoded bodies stay unknown. Native bytes, subscription headers,
+external empty-thinking and tool-ID repairs, and the one-send budget remain
+unchanged. External recovery and error rendering are a separate acceptance
+gate; this candidate does not enable them.
+
+Claude Code `2.1.283` passed a real Read-tool round trip on each route against
+the candidate runtime fingerprint
+`47a608971cace08bc279952a1898991808987100d487fdecfd38bdf7abef35c7`.
+Each run made two HTTP 200 calls and executed Read once, with hard caps of two
+calls, 512 KiB input and 2,048 output tokens per call. External requested and
+reported model was `deepseek/deepseek-v4.1-flash` at requested `low` effort;
+served effort was unverified. It reported 1,972 usage tokens. The shared
+observer correctly recorded successful `tool_use` and `end_turn` outcomes.
+
+Native requested `sonnet` at `low`, sent as `claude-sonnet-5`, and returned the
+expected synthetic answer. Its gzip SSE stayed opaque and unknown. Served
+identity, effort and usage remain unverified; the probe's zero usage counter
+means no readable usage was observed. This proves client continuation and
+preservation, not parsed native outcome classification. Codex paths are
+unchanged and retain the preceding candidate evidence. The original MiMo
+handoff defect, external Messages recovery and installed acceptance remain open.
+A subsequent correction only aligns unknown/context failure labels with their
+settled outcomes. Successful and opaque gzip paths are unchanged, so the live
+evidence above is reused; the final source runs the full offline suite again.
+
 ## Router 0.6.132 native stream candidate, 28 September 2026 AEST
 
 The preceding Codex subscription probe completed its tool call, but its

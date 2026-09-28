@@ -25,7 +25,7 @@ def _fresh_tool_id():
 
 
 def strip_billing_header(payload):
-    """Drop the client's billing block; True when the payload changed.
+    """Drop the client's billing block from a copy only when needed.
 
     Claude Code 2.1.223 sends its attribution line as the first `system`
     block so a gateway can bill against it. `anthropic/claude-fable-5.1`
@@ -34,21 +34,22 @@ def strip_billing_header(payload):
     to Anthropic's own billing, which the external route does not use.
     """
     if not isinstance(payload, dict):
-        return False
+        return payload
     system = payload.get('system')
     if not isinstance(system, list):
-        return False
+        return payload
     keep = [block for block in system
             if not (isinstance(block, dict)
                     and isinstance(block.get('text'), str)
                     and block['text'].strip().startswith(BILLING_HEADER))]
     if len(keep) == len(system):
-        return False
+        return payload
+    payload = dict(payload)
     if keep:
         payload['system'] = keep
     else:
         payload.pop('system', None)
-    return True
+    return payload
 
 
 def flatten_deferred_tools(payload):
@@ -63,23 +64,28 @@ def flatten_deferred_tools(payload):
     goes (the released definition is already in the same request's tool
     list, so the model keeps every tool it discovered), and a reference
     block becomes the plain text naming the tool it stood for. The tool_use
-    and tool_result pairing is never broken. True when anything changed.
+    and tool_result pairing is never broken. Only changed containers copy.
     """
     if not isinstance(payload, dict):
-        return False
-    changed = _flatten_tools(payload)
-    for message in payload.get('messages') or []:
-        content = message.get('content') if isinstance(message, dict) else None
-        for block in content if isinstance(content, list) else []:
-            changed |= _plain_reference(block)
-    return changed
-
-
-def _flatten_tools(payload):
-    """Drop the placeholder and the flag; True when the list changed."""
+        return payload
     tools = payload.get('tools')
+    flattened = _flatten_tools(tools)
+    messages = payload.get('messages')
+    projected = _map_changed(messages, _plain_message)
+    if flattened is tools and projected is messages:
+        return payload
+    result = dict(payload)
+    if flattened is not tools:
+        result['tools'] = flattened
+    if projected is not messages:
+        result['messages'] = projected
+    return result
+
+
+def _flatten_tools(tools):
+    """Drop the placeholder and flag, retaining unchanged definitions."""
     if not isinstance(tools, list):
-        return False
+        return tools
     kept, changed = [], False
     for tool in tools:
         if not isinstance(tool, dict):
@@ -90,32 +96,45 @@ def _flatten_tools(payload):
             changed = True
             continue
         if 'defer_loading' in tool:
-            tool.pop('defer_loading')
+            tool = {key: value for key, value in tool.items() if key != 'defer_loading'}
             changed = True
         kept.append(tool)
-    if changed:
-        payload['tools'] = kept
-    return changed
+    return kept if changed else tools
+
+
+def _map_changed(items, project):
+    if not isinstance(items, list):
+        return items
+    result = [project(item) for item in items]
+    return items if all(a is b for a, b in zip(items, result)) else result
+
+
+def _plain_message(message):
+    if not isinstance(message, dict):
+        return message
+    content = message.get('content')
+    projected = _map_changed(content, _plain_reference)
+    return message if projected is content else {**message, 'content': projected}
 
 
 def _plain_reference(block):
-    """Name the tools one reference block stood for; True when it changed."""
+    """Name the tools one reference block stood for, preserving its pairing."""
     if not isinstance(block, dict) or block.get('type') != 'tool_result':
-        return False
+        return block
     inner = block.get('content')
     if not isinstance(inner, list):
-        return False
+        return block
     names = [item.get('tool_name') for item in inner
              if isinstance(item, dict) and item.get('type') == REFERENCE_TYPE]
     if not names:
-        return False
-    block['content'] = [item for item in inner
+        return block
+    content = [item for item in inner
                         if not (isinstance(item, dict)
                                 and item.get('type') == REFERENCE_TYPE)]
-    block['content'].append({'type': 'text',
+    content.append({'type': 'text',
                              'text': 'The search released: %s.'
                                      % ', '.join(str(name) for name in names)})
-    return True
+    return {**block, 'content': content}
 
 
 def shape(chunks):
