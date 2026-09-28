@@ -1,5 +1,6 @@
 """Messages retries stop before any tool, thinking or opaque commitment."""
 import json
+import threading
 import unittest
 from unittest import mock
 
@@ -34,6 +35,16 @@ class MessagesRecoveryTests(unittest.TestCase):
         server = start_server(test_state(auth_file(self)))
         self.addCleanup(server.server_close)
         self.addCleanup(server.shutdown)
+        finished = threading.Event()
+
+        class CompletionHandler(router.Handler):
+            def do_POST(self):
+                try:
+                    super().do_POST()
+                finally:
+                    finished.set()
+
+        server.RequestHandlerClass = CompletionHandler
         with mock.patch.object(router, 'log_event') as logged:
             result = post(server.server_port, '/test-token' + path,
                           {'model': model, 'messages': [],
@@ -41,6 +52,7 @@ class MessagesRecoveryTests(unittest.TestCase):
                            'tools': [CLIENT] if tools is None else tools},
                           {'Authorization': 'Bearer subscription-fixture'})
             wire = result.read()
+            self.assertTrue(finished.wait(2), 'request cleanup did not finish')
         ledgers = [c.kwargs for c in logged.call_args_list if c.args[0] == 'attempt_ledger']
         self.assertEqual(len(ledgers), 1)
         self.assertEqual(server.inflight, 0)
