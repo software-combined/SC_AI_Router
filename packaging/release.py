@@ -41,6 +41,7 @@ PACKAGING_FILES = (
     'packaging/claude_config.py',
     'packaging/claude_desktop_config.py',
     'packaging/claude_desktop_switch.py', 'packaging/claude_switch_launch.py',
+    'packaging/claude_profile_rules.py',
     'packaging/client_choice.py',
     'packaging/client_dialog.py',
     'packaging/diagnostics.py', 'packaging/provider_keys.py',
