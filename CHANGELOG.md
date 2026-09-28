@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Claude Messages outcomes now distinguish successful completion, truncation,
+  refusal and context exhaustion using the final stop reason. Missing or
+  unreadable endings stay unknown. Request preparation also leaves the original
+  client payload unchanged when applying external billing and tool repairs.
+  Native bytes and the existing single-send limit are preserved.
 - Native Responses streams now retain their terminal outcome when the upstream
   omits an SSE content type. Opaque or encoded data no longer counts as answer
   text or becomes a successful model outcome at EOF. Forwarded bytes,

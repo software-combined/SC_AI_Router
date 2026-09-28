@@ -65,19 +65,19 @@ class BillingHeaderTests(unittest.TestCase):
     def test_billing_block_goes_and_the_rest_of_the_prompt_stays(self):
         payload = {'system': [{'type': 'text', 'text': BILLING},
                               {'type': 'text', 'text': 'You are an agent.'}]}
-        self.assertTrue(compat.strip_billing_header(payload))
+        payload = compat.strip_billing_header(payload)
         self.assertEqual(payload['system'],
                          [{'type': 'text', 'text': 'You are an agent.'}])
 
     def test_lone_billing_block_removes_the_key_entirely(self):
         payload = {'system': [{'type': 'text', 'text': BILLING}]}
-        self.assertTrue(compat.strip_billing_header(payload))
+        payload = compat.strip_billing_header(payload)
         self.assertNotIn('system', payload)
 
     def test_a_prompt_that_merely_names_the_field_is_kept(self):
         payload = {'system': [{'type': 'text',
                                'text': 'Explain the x-anthropic-billing-header: field.'}]}
-        self.assertFalse(compat.strip_billing_header(payload))
+        self.assertIs(compat.strip_billing_header(payload), payload)
         self.assertEqual(len(payload['system']), 1)
 
     def test_untouched_shapes_report_no_change(self):
@@ -85,7 +85,7 @@ class BillingHeaderTests(unittest.TestCase):
                         {'system': 'a plain string'},
                         {'system': [{'type': 'text', 'text': 'Be brief.'}]}):
             with self.subTest(payload=payload):
-                self.assertFalse(compat.strip_billing_header(payload))
+                self.assertIs(compat.strip_billing_header(payload), payload)
 
 
 class ThinkingShapeTests(unittest.TestCase):
@@ -153,7 +153,7 @@ class ThinkingShapeTests(unittest.TestCase):
 class DeferredToolTests(unittest.TestCase):
     def test_placeholder_and_flag_go_and_the_released_definition_stays(self):
         payload = {'tools': [SEARCH_TOOL, dict(PLACEHOLDER), dict(RELEASED)]}
-        self.assertTrue(compat.flatten_deferred_tools(payload))
+        payload = compat.flatten_deferred_tools(payload)
         self.assertEqual([tool['name'] for tool in payload['tools']],
                          ['ToolSearch', 'mcp__stubtools__tool_000'])
         self.assertTrue(all('defer_loading' not in tool for tool in payload['tools']))
@@ -165,7 +165,7 @@ class DeferredToolTests(unittest.TestCase):
                                      dict(kept),
                                      {'type': 'tool_reference',
                                       'tool_name': 'mcp__stubtools__tool_000'}])]}]}
-        self.assertTrue(compat.flatten_deferred_tools(payload))
+        payload = compat.flatten_deferred_tools(payload)
         block = payload['messages'][0]['content'][0]
         self.assertEqual(block['tool_use_id'], 'toolu_capture')
         self.assertEqual([item['type'] for item in block['content']],
@@ -175,7 +175,7 @@ class DeferredToolTests(unittest.TestCase):
 
     def test_a_lone_reference_leaves_one_text_block(self):
         payload = {'messages': [{'role': 'user', 'content': [dict(REFERENCE)]}]}
-        self.assertTrue(compat.flatten_deferred_tools(payload))
+        payload = compat.flatten_deferred_tools(payload)
         block = payload['messages'][0]['content'][0]
         self.assertEqual(len(block['content']), 1)
         self.assertEqual(block['content'][0]['type'], 'text')
@@ -183,7 +183,7 @@ class DeferredToolTests(unittest.TestCase):
     def test_a_server_side_search_tool_is_dropped(self):
         payload = {'tools': [{'type': 'tool_search_tool_regex_20251119',
                               'name': 'tool_search'}, SEARCH_TOOL]}
-        self.assertTrue(compat.flatten_deferred_tools(payload))
+        payload = compat.flatten_deferred_tools(payload)
         self.assertEqual([tool['name'] for tool in payload['tools']], ['ToolSearch'])
 
     def test_ordinary_requests_report_no_change(self):
@@ -194,7 +194,7 @@ class DeferredToolTests(unittest.TestCase):
                         {'messages': [{'role': 'user', 'content': [text_result]}]},
                         {'messages': [{'role': 'user', 'content': 'plain'}]}):
             with self.subTest(payload=payload):
-                self.assertFalse(compat.flatten_deferred_tools(payload))
+                self.assertIs(compat.flatten_deferred_tools(payload), payload)
 
 
 class ProviderSurfaceTests(unittest.TestCase):
