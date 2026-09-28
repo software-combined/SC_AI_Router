@@ -49,6 +49,7 @@ are never copied between machines.
 `ai_router/rejected_repair.py`,
 `ai_router/state.py`, `ai_router/wire_shape.py`,
 `ai_router/events.py`,
+`ai_router/request_evidence.py`, `ai_router/inspect_requests.py`,
 `ai_router/protocols/__init__.py`, `ai_router/protocols/responses.py`,
 `ai_router/protocols/messages.py`, `ai_router/models.json`,
 `ai_router/routed_base_instructions.txt`,

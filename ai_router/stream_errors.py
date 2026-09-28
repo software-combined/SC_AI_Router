@@ -1,7 +1,7 @@
 """Normalize external Responses terminal errors without changing success data."""
 import json
 import re
-from . import errors, outcome, sse, stream_events
+from . import errors, outcome, request_evidence, sse, stream_events
 
 _CONTEXT_MESSAGE = re.compile(
     r'The prompt is too long: ([0-9]{1,16}), model maximum context length: ([0-9]{1,16})')
@@ -216,10 +216,10 @@ def terminal_code(kind, failure, event, generic_terminal=False):
 def terminal_event(frame, lifecycle, kind, event, metrics, *,
                    output_seen=False, rewrite=True):
     """Classify one parsed event through the shared terminal policy.
-
     `rewrite=False` keeps a raw provider frame byte-for-byte while retaining
     the same verdict fields a normalized frame would settle.
     """
+    request_evidence.response_event(metrics, event)
     response = event.get('response') if isinstance(event, dict) else None
     terminal_output = bool(
         isinstance(response, dict) and response.get('output'))

@@ -7,7 +7,7 @@ from ai_router import (attempt_policy, errors, ingress, outcome, provider_defs,
                        subscription_fallback)
 from ai_router.transport import Prepared
 from tests import test_subscription_fallback as fallback_suite
-from tests.fakes import install_fake
+from tests.fakes import FakeUpstream, install_fake
 
 EXTERNAL = providers.ExternalResponsesProvider(provider_defs.OPENROUTER)
 SUBSCRIPTION = providers.SubscriptionProvider()
@@ -28,7 +28,7 @@ class LedgerTests(unittest.TestCase):
         ledger = self.ledger()
         with mock.patch.object(attempt_policy.http.client, 'HTTPSConnection', mock.MagicMock()), \
                 mock.patch.object(attempt_policy.transport, 'post_with_phases',
-                                  return_value=(object(), 0)):
+                                  return_value=(FakeUpstream(200, b''), 0)):
             for reason in (attempt_policy.INITIAL, attempt_policy.REPAIR,
                            attempt_policy.STREAM_REPLAY):
                 ledger.send(PREPARED, {}, reason)
@@ -126,7 +126,7 @@ class LedgerTests(unittest.TestCase):
                      'attempts', 'decisions', 'transitions', 'committed',
                      'terminal_source', 'outcome', 'outcome_phase',
                      'outcome_source', 'outcome_code', 'outcome_output',
-                     'outcome_side_effects'})
+                     'outcome_side_effects', 'router_version', 'attempt_evidence'})
                 self.assertTrue(facts['committed'])
                 self.assertEqual(facts['terminal_source'],
                                  record.client_terminal)

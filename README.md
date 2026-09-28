@@ -346,6 +346,9 @@ as the older spelling of `--rollback --to <version>`. If something looks wrong,
   from `mixed-router-state.json` in the router home. Keep that URL private.
 - `python3.14 packaging/install.py --status` reports the installed version,
   service state, feed source, channel and key state without printing secrets.
+- From the installed release directory, `python3.14 -m ai_router.inspect_requests`
+  shows recent request attempts, reported models and failure phases. See the
+  [request evidence filters](docs/operations.md#request-identity-and-failure-evidence).
 - A 400 means the model, payload or local key configuration is invalid. A 409
   means the provider cannot serve the request, for example an unsupported
   reasoning level after a model switch; the message names the allowed levels.
