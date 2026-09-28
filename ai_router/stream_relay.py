@@ -16,7 +16,7 @@ class StreamRecord:
 
     __slots__ = ('forwarded_bytes', 'content_delta_bytes', 'reasoning_bytes',
                  'hold', 'stream_retry', 'client_terminal', 'delivery_failed',
-                 'outcome', 'normalized')
+                 'outcome', 'normalized', 'replay_blocked')
 
     def __init__(self):
         self.forwarded_bytes = 0
@@ -24,6 +24,7 @@ class StreamRecord:
         self.reasoning_bytes = 0
         self.outcome = None
         self.normalized = self.delivery_failed = False
+        self.replay_blocked = False
         # One terminal source survives retries and late generic frames.
         self.client_terminal = None
         self.stream_retry = 0
@@ -155,9 +156,12 @@ def relay_stream(handler, provider, response, prepared, metrics, started,
     streamed = (metrics['response_kind'] == 'sse'
                 or (metrics.get('stream') is True and metrics['response_kind'] == 'other'
                     and metrics.get('protocol') == provider_defs.RESPONSES))
-    normalized = (provider.defn.dialect == provider_defs.DIALECT_OPENROUTER
+    messages_external = (metrics.get('protocol') == provider_defs.MESSAGES
+                         and provider.defn.kind == provider_defs.EXTERNAL
+                         and metrics.get('path') == '/v1/messages')
+    normalized = ((messages_external or provider.defn.dialect == provider_defs.DIALECT_OPENROUTER
                   and metrics.get('protocol') == provider_defs.RESPONSES
-                  and metrics['response_kind'] == 'sse'
+                   ) and metrics['response_kind'] == 'sse'
                   and metrics['response_encoding'] == 'identity')
     record.normalized = normalized
     messages_json = (metrics.get('protocol') == provider_defs.MESSAGES
@@ -169,6 +173,8 @@ def relay_stream(handler, provider, response, prepared, metrics, started,
     if raw_encoded:
         frames = (stream_events.StreamEvent(chunk, stream_events.OPAQUE)
                   for chunk in chunks)
+    elif normalized and messages_external:
+        frames = provider.events(response, metrics)
     elif normalized:
         frames = stream_errors.events(chunks, attempt_metrics)
     elif streamed:
@@ -184,22 +190,22 @@ def relay_stream(handler, provider, response, prepared, metrics, started,
             if 'first_chunk_ms' not in metrics:
                 metrics['first_chunk_ms'] = round((time.monotonic() - started) * 1000, 1)
             transport.note_first_data(metrics, headers_done)
-            held = normalized and not record.forwarded_bytes and record.hold.take(event)
+            record.replay_blocked |= event.commit
+            held = normalized and not (record.forwarded_bytes or record.replay_blocked) and record.hold.take(event)
             settled_now = event.outcome is not None and record.outcome is None
             if settled_now:
                 terminal_metrics = {key: metrics.get(key) for key in TERMINAL_FIELDS}
                 if held:
                     record.outcome = event.outcome
+            if not held and record.hold.frames and not record.flush(handler):
+                raise record.delivery_failed or OSError('held frame delivery failed')
             if not event.frame:
                 if settled_now:
                     record.outcome = event.outcome
                     record.note_source(event)
                 continue
-            # Forwarded bytes commit the attempt and disable replay.
             if held:
                 continue
-            if record.hold.frames and not record.flush(handler):
-                raise record.delivery_failed or OSError('held frame delivery failed')
             try:
                 transport.write_full(handler.wfile, event.frame)
             except (OSError, ValueError) as exc:

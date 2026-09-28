@@ -1,8 +1,8 @@
 """Messages protocol policy (Plan 062). Thin selector over claude.py.
 
-Owns the Claude Code Messages ingress. Bodies stay byte-identical; retry and
-model-header handling keep their existing shared behavior until a client
-contract test or live gate proves a divergence.
+Owns Claude Code Messages ingress. Native bodies stay byte-identical;
+external compatibility, outcome rendering and bounded stream recovery use
+the shared projection and attempt owners.
 
 Plan 155: the name is the constant the definition table exports, and this
 family owns the Anthropic-shaped discovery listing.

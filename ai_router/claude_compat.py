@@ -138,6 +138,13 @@ def _plain_reference(block):
 
 
 def shape(chunks):
+    """The byte-only compatibility API; non-wire commitment facts stay local."""
+    for frame, _ in shaped_frames(chunks):
+        if frame:
+            yield frame
+
+
+def shaped_frames(chunks):
     """Repair streamed Messages shapes before Claude Code sees them.
 
     OpenRouter returns a trailing `thinking` block holding only a
@@ -158,24 +165,25 @@ def shape(chunks):
             if (kind == 'content_block_start'
                     and _nested_type(event, 'content_block') == 'thinking'):
                 index, pending = event.get('index'), [(frame, event)]
+                # The upstream start prohibits replay even when a later
+                # signature-only block is removed from the wire.
+                yield b'', None
                 continue
-            yield frame
+            yield frame, event
             continue
         pending.append((frame, event))
         if (kind == 'content_block_delta'
                 and _nested_type(event, 'delta') == 'thinking_delta'):
-            for held, _ in pending:
-                yield held
+            yield from pending
             pending, index = [], None
         elif kind == 'content_block_stop' and event.get('index') == index:
             # Frames from other open blocks interleave with the empty one and
             # still belong to the answer, so only this index is dropped.
             for held, held_event in pending:
                 if held_event.get('index') != index:
-                    yield held
+                    yield held, held_event
             pending, index = [], None
-    for held, _ in pending:
-        yield held
+    yield from pending
 
 
 def _rewrite_tool_use(frame, event):

@@ -191,10 +191,19 @@ their existing EOF rule; Messages JSON needs a readable message and stop reason.
 empty start followed by a final delta and stop distinguishes success, client
 tool use, truncation, server-tool pause, refusal and context exhaustion.
 Unknown endings remain unknown; documented overload errors are transient.
-Signatures, redacted thinking and future events remain opaque. Observation
-never changes bytes, delays native chunks or grants replay authority. Both
-Messages routes retain one send; external recovery and error rendering remain
-separate Plan 188 work requiring actual-client proof.
+Signatures, redacted thinking and future events remain opaque. Native chunks
+are forwarded immediately and the subscription route keeps one send.
+External Messages generation may hold one validated empty start and one
+failure terminal. The same ledger permits one transient stream replay, only
+with client-owned `input_schema` tools or no tools. Tool, thinking, unknown
+and signature frames commit; the compatibility repair emits an explicit
+replay fence before holding a potentially removable thinking block. That
+fence remains effective even when no wire bytes exist to flush. Setup slots
+are protocol facts on the common event, not names interpreted by the hold.
+Non-stream requests, token counting and HTTP errors gain no retry. `messages_errors.py` renders
+the shared outcome as a native Claude error, including a truthful 5xx status
+for temporary failures. A broken external stream ends with one Messages
+error; native and encoded streams remain untouched.
 `attempt_policy` decides and opens a safe replay. It replaces the uncommitted
 attempt; a failed replay leaves its verdict to reach the client. These leaves
 never dispatch or own credentials.

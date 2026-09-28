@@ -259,7 +259,7 @@ class ClaudeIngressTests(unittest.TestCase):
         self.assertEqual(response.status, 409)
         self.assertEqual(json.loads(response.read())['error']['code'], 'PROVIDER_REJECTED')
 
-    def test_messages_upstream_502_keeps_todays_409(self):
+    def test_messages_upstream_502_keeps_transient_status_and_native_envelope(self):
         body = json.dumps({'error': {'message': 'Provider returned error',
                                      'metadata': {'provider_name': 'Meta'}}}).encode()
         install_fake(self, lambda: FakeUpstream(502, body, []))
@@ -267,8 +267,8 @@ class ClaudeIngressTests(unittest.TestCase):
         response = _post(server.server_port, '/test-token/v1/messages',
                          _messages('z-ai/glm-5.3-flash'),
                          {'Authorization': 'Bearer subscription-secret'})
-        self.assertEqual(response.status, 409)
-        self.assertEqual(json.loads(response.read())['error']['code'], 'PROVIDER_REJECTED')
+        self.assertEqual(response.status, 502)
+        self.assertEqual(json.loads(response.read())['error']['type'], 'api_error')
         self.assertIsNone(response.getheader('Retry-After'))
 
     def test_openrouter_context_error_answers_a_json_error_not_a_responses_frame(self):
@@ -284,7 +284,7 @@ class ClaudeIngressTests(unittest.TestCase):
         response = _post(server.server_port, '/test-token/v1/messages',
                          payload, {'Content-Type': 'application/json'})
         payload = response.read()
-        self.assertEqual(response.status, 409)
+        self.assertEqual(response.status, 400)
         self.assertIn('application/json', response.getheader('Content-Type', ''))
         self.assertNotIn(b'response.failed', payload)
         self.assertNotEqual(payload[:6], b'data: ')

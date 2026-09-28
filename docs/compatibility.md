@@ -1,5 +1,32 @@
 # Compatibility
 
+## Router 0.6.134 Messages recovery candidate, 28 September 2026 AEST
+
+Routed offline regressions reproduce an empty overload reaching Claude
+without recovery and transient HTTP failures reported as deterministic 409
+refusals. External generation now permits one stream replay within the shared
+ledger. Native subscription and token-count requests retain one send; HTTP
+failures gain native error envelopes and correct categories, without an
+additional router retry.
+
+The Messages tool definition follows the [official API contract](https://platform.claude.com/docs/en/api/messages/create):
+client tools declare an object input schema and an omitted, null or custom
+type. Hosted and unknown forms prohibit replay. The common event path retains
+a replay fence for empty thinking removed by compatibility repair. Thinking,
+signatures, tool starts, unknown data and prior client bytes prohibit replay.
+The [native error contract](https://platform.claude.com/docs/en/api/errors)
+supplies the documented API, timeout and overload causes.
+
+Claude Code 2.1.283 passed recovery on frozen tree `42ee164a0e43b2a9376e648127e711c4f42f8365`:
+one injected overload, one router replay, then a normal continuation produced
+exactly two visible message starts, one Read call and the expected answer.
+Both paid calls reported `deepseek/deepseek-v4.1-flash`; requested effort was low,
+served effort unverified. Caps were three sends, two paid, 512 KiB per request
+and 2,048 output tokens per send. Zero-paid real-client fixtures also verified
+HTTP refusal, a refused replay and no router replay after partial output.
+Claude's own retries appeared as separate requests and were counted separately.
+This candidate is not published or installed; the original MiMo handoff remains open.
+
 ## Router 0.6.133 Messages candidate, 28 September 2026 AEST
 
 Synthetic Messages streams reproduced false success after `max_tokens`,

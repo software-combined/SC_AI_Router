@@ -8,7 +8,7 @@ import json
 import time
 import traceback
 
-from . import provider_defs
+from . import messages_errors, provider_defs
 from .errors import InvalidSize
 
 
@@ -193,23 +193,20 @@ def write_full(wfile, data):
 
 
 def emit_terminal_failure(wfile, metrics):
-    """Best-effort mid-stream terminal frame on Responses SSE only.
-
-    The protocol, not the provider name, decides: a Messages stream carries
-    no `response.failed` frame. No-op for non-SSE bodies; a dead socket never
-    raises from the error path. True only when the frame was written.
-    """
+    """Best-effort native terminal on a repairable identity event stream."""
     from .errors import upstream_failed
     if not (metrics.get('stream') is True
             and metrics.get('response_kind') == 'sse'
             and metrics.get('response_encoding') == 'identity'
-            and metrics.get('protocol') == provider_defs.RESPONSES):
+            and metrics.get('protocol') in (provider_defs.RESPONSES, provider_defs.MESSAGES)):
         # Identity only: appending plaintext to an encoded stream would be
         # undecodable for the client.
         return False
-    frame = ('event: response.failed\ndata: ' + json.dumps(
-        {'type': 'response.failed',
-         'response': upstream_failed().body()}) + '\n\n').encode()
+    messages = metrics.get('protocol') == provider_defs.MESSAGES
+    native = 'error' if messages else 'response.failed'
+    body = (messages_errors.render(upstream_failed()).body() if messages else
+            {'type': native, 'response': upstream_failed().body()})
+    frame = ('event: ' + native + '\ndata: ' + json.dumps(body) + '\n\n').encode()
     try:
         write_full(wfile, frame)
     except (OSError, ValueError):

@@ -229,7 +229,8 @@ def terminal_event(frame, lifecycle, kind, event, metrics, *,
             output=output_seen or terminal_output)
             if lifecycle == stream_events.COMPLETED else None)
         return stream_events.StreamEvent(
-            frame, lifecycle, kind, output=terminal_output, outcome=settled)
+            frame, lifecycle, kind, output=terminal_output, outcome=settled, setup_slot=(stream_events.SETUP_ORDER.index(kind)
+                        if lifecycle == stream_events.SETUP else None))
 
     failure = stream_events.failure_for(kind, event)
     context = (kind != 'response.incomplete'

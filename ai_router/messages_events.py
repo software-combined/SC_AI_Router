@@ -50,7 +50,7 @@ class Decoder:
         native = event.get('type') if isinstance(event, dict) else None
         kind = events.OPAQUE
         if self.closed or not isinstance(native, str):
-            return events.StreamEvent(frame, kind)
+            return events.StreamEvent(frame, kind, commit=True)
         if native in ('error', 'message_error'):
             self.closed = True
             # Keep the legacy event name on the wire, while the shared cause
@@ -89,7 +89,17 @@ class Decoder:
                 self.output = True
             elif subtype in ('thinking', 'thinking_delta'):
                 kind = events.REASONING
-        return events.StreamEvent(frame, kind, native)
+        return events.StreamEvent(frame, kind, native,
+                                  setup_slot=0 if kind == events.SETUP else None,
+                                  commit=kind != events.SETUP)
+
+
+def external_events(shaped, metrics):
+    """Use parsed compatibility frames, including its zero-wire replay fence."""
+    decoder = Decoder()
+    for frame, parsed in shaped:
+        yield (events.StreamEvent(b'', events.OPAQUE, commit=True) if parsed is None
+               else decoder.observe(frame, parsed, metrics))
 
 
 def json_events(chunks, metrics):
