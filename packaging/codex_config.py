@@ -350,6 +350,7 @@ def replace_config_block(config_path, block, previous_block=None):
 
 
 RECEIPT_VERSION = 2
+RECEIPT_NAME = 'activation.json'
 
 
 def read_receipt(home):
@@ -383,9 +384,6 @@ def parse_snapshot(text):
     return previous if isinstance(previous, dict) else {}
 
 
-RECEIPT_NAME = 'activation.json'
-
-
 def receipt_path_for(home):
     """The one activation receipt under a router home (single-name owner)."""
     return Path(home) / RECEIPT_NAME
@@ -408,7 +406,7 @@ def write_client_receipt(home, client, entry):
 
 
 def write_receipt(home, config_path, block, rules_receipt, mode, before='',
-                  client='codex', desktop=None):
+                  client='codex', desktop=None, variant=None):
     """Record one client attachment; existing attachments are preserved."""
     entry = {'config_path': str(config_path), 'inserted_block': block,
              'openai_mode': mode,
@@ -417,6 +415,8 @@ def write_receipt(home, config_path, block, rules_receipt, mode, before='',
         # Managed Codex desktop preferences: the values written and the
         # values they replaced, so tools/disable.py can put them back.
         entry['desktop'] = desktop
+    if variant:
+        entry['variant'] = variant  # the Switch Codex block (codex_switch_config)
     if rules_receipt:
         # Legacy installs recorded the managed global-instructions block;
         # install-once starters record nothing, so the key stays absent.

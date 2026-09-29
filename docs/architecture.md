@@ -381,6 +381,20 @@ that mode after Claude exits normally; it never changes attachment or
 credentials. Its stable `claude_switch_launch.py` entry point follows the
 installed release pointer so the app survives updates and release pruning.
 
+`packaging/codex_switch_config.py` owns the three managed Codex blocks. The
+default is `codex_config.build_block` unchanged, so a never-switched install
+and older Codex builds see nothing new. `switched` is root keys only: Codex's
+active provider becomes `scg_router`, which needs no OpenAI sign-in, sends
+`x-scg-codex-route` and reads `routed-models.json`. `switched_back` is the
+default plus `scg_router` with sign-in on, so threads started while switched
+still resume. The Codex receipt entry records the variant (`variant`, absent
+until the first switch), and `client_choice.attach_codex` rebuilds it on
+every install and update. `switch` is the only writer that changes it: the
+config first, then the receipt, with the config put back if the receipt
+write fails. While Codex is switched, `tools/disable.py` (and so a
+service-only install), `--uninstall` and `--rollback` refuse and leave its
+settings as they are.
+
 ## Distribution (outside the request path)
 
 `infra/` owns the update feed as code (repository-only templates, deployed from a checkout): the certificate stack, the private
@@ -423,8 +437,9 @@ them while the child installer retains its own installation lock.
   `clients/` (capability projection, picker visibility); the served
   instruction text and its capped delegation roster live in the
   `model_instructions.py` leaf (Plan 154).
-- Client activation lives in `packaging/codex_config.py`: the Codex block,
-  picker preservation, the seeded startup model, the managed `[desktop]`
+- Client activation lives in `packaging/codex_config.py`: the Codex block
+  (its Switch Codex variants in `codex_switch_config.py`), picker
+  preservation, the seeded startup model, the managed `[desktop]`
   preferences, guidance, and receipts. `--client none` runs the router
   lifecycle without touching client settings; absence of a client
   selection in legacy state means Codex. Subscription policy is per client:

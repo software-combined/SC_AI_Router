@@ -38,7 +38,7 @@ PACKAGING_FILES = (
     'packaging/systemd.py', 'packaging/update_launch.py',
     'packaging/task_launch.py',
     'packaging/updater.py', 'packaging/codex_config.py',
-    'packaging/claude_config.py',
+    'packaging/codex_switch_config.py', 'packaging/claude_config.py',
     'packaging/claude_desktop_config.py',
     'packaging/claude_desktop_switch.py', 'packaging/claude_switch_launch.py',
     'packaging/client_choice.py',

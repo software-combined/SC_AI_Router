@@ -5,18 +5,26 @@ Split from the installer entry point, which sits at its recorded line ceiling
 attachment request has to be honoured here or it silently does nothing until
 the next release. Runs on the installer's Python 3.9: no router imports, and
 every collaborator arrives as an argument. `client_dialog` owns how a person
-is asked; this module owns what the answer attaches, and loads its sibling so
-the entry point keeps loading one module per concern.
+is asked and `codex_switch_config` which Codex block an attach writes; this
+module owns what the answer attaches, and loads both siblings so the entry
+point keeps loading one module per concern.
 """
 import importlib.util
 import os
 import time
 from pathlib import Path
 
-_spec = importlib.util.spec_from_file_location(
-    'router_client_dialog', Path(__file__).resolve().parent / 'client_dialog.py')
-_dialog = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_dialog)
+
+def _load(name):
+    spec = importlib.util.spec_from_file_location(
+        'router_' + name, Path(__file__).resolve().parent / (name + '.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_dialog = _load('client_dialog')
+_switch = _load('codex_switch_config')
 
 _RESTART = {'Codex': 'quit and reopen Codex',
             'Claude Code': 'restart Claude Code',
@@ -24,6 +32,7 @@ _RESTART = {'Codex': 'quit and reopen Codex',
 
 
 maybe_ask = _dialog.maybe_ask
+refuse_switched = _switch.refuse_switched
 
 
 def any_attached(home, receipts):
@@ -53,12 +62,14 @@ def attach_codex(home, state, mode, codex_config, previous=None,
     """Write the Codex provider block and receipt; returns the config path.
 
     Shared with the full install path so a current install and a fresh one
-    write the same block, the same before-image and the same receipt.
+    write the same block, the same before-image and the same receipt. The
+    block is the variant the receipt records, so an update never switches
+    Codex to or from the router's own provider.
     """
     if previous is None:
         previous = codex_config.codex_attachment(home)
     config_path = Path.home() / '.codex' / 'config.toml'
-    block = codex_config.build_block(home, state, mode, static_catalogue)
+    block = _switch.build(home, state, mode, static_catalogue, _switch.recorded(previous))
     # Global instructions are install-once via the setup window's starter
     # choice: this installer never writes, rewrites, or re-enforces them.
     rules_receipt = previous.get('global_instructions')
@@ -71,7 +82,7 @@ def attach_codex(home, state, mode, codex_config, previous=None,
         pass
     block, before, desktop = codex_config.attach_config(config_path, block, previous)
     codex_config.write_receipt(home, config_path, block, rules_receipt, mode, before,
-                               desktop=desktop)
+                               desktop=desktop, variant=previous.get('variant'))
     return config_path
 
 
