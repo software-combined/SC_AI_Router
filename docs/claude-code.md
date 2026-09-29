@@ -271,15 +271,18 @@ model and type your task. No key copying or Developer-menu configuration is
 needed. Attachment also runs when there is no newer router release.
 
 The task-sharing candidate detects the signed-in account and workspace when
-you open a Code task. Setup installs that background callback automatically;
-you do not enter account IDs or choose profile folders. The callback makes no
+you open a Code task. On macOS, setup installs that background callback
+automatically; you do not enter account IDs or choose profile folders. The
+callback exits quietly when the router or its sharing files are gone. It makes no
 model call; its cached identity becomes invalid when the account or workspace changes.
 Native Code continuation has passed in both profiles, but the complete installed
 launcher round trip remains unaccepted. Cowork tasks are not shared in this
 beta. See [candidate verification](compatibility.md) before relying on task sharing.
 
-Candidate desktop setup installs **Open Claude** and **Switch Claude** launchers for
-the current user. **Open Claude** opens the app with the selected connection.
+On macOS, candidate desktop setup installs **Open Claude** and **Switch Claude**
+launchers for the current user. In this beta they, and task sharing, are
+macOS-only: on Windows and Linux setup connects Claude without them until
+native acceptance exists. **Open Claude** opens the app with the selected connection.
 **Switch Claude** asks for confirmation,
 lets Claude exit normally, shares local tasks using the old selection as the
 conflict winner, rechecks settings and that Claude is still closed, changes only
@@ -291,6 +294,9 @@ app launches and router startup leave histories alone. Setup and updates preserv
 A standalone Claude Code terminal installation is not required for the
 desktop app. If the installed router predates these launchers, setup keeps
 Claude connected and asks for a router update before installing them.
+After `install.py --rollback --to` a 0.6 release, **Switch Claude** makes that
+release's plain switch without sharing tasks, **Open Claude** just opens Claude,
+and the session callback stays silent. Reinstall 1.0.0 to restore task sharing.
 
 Every model labelled **OpenRouter** uses the OpenRouter key. In synthetic tests,
 the candidate launchers copy local Claude Code tasks (`claude-code-sessions`)
@@ -382,8 +388,11 @@ on Linux. Windows falls back to Electron's roaming AppData location only
 when `LOCALAPPDATA` is absent. The subscription profile uses roaming AppData.
 Set `CLAUDE_USER_DATA_DIR` to override the third-party profile on all three
 systems. The first-party profile remains at the platform's native location.
-Setup refuses a different profile when an existing attachment still owns its
-restore record; detach that connection before selecting another profile.
+Automatic updates keep using the profile recorded when Claude was attached,
+so an attachment made before Windows moved to `LOCALAPPDATA` keeps updating.
+Running setup with `--desktop` refuses a different profile while an existing
+attachment still owns its restore record; detach that connection before
+selecting another profile.
 The paths are pinned by simulated platform tests. Real task visibility, open and resume
 acceptance remains pending for macOS, Windows and Linux.
 Pointing the third-party profile at the loopback router lists every

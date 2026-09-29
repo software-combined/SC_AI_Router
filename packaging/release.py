@@ -42,7 +42,7 @@ PACKAGING_FILES = (
     'packaging/claude_desktop_config.py',
     'packaging/claude_desktop_policy.py',
     'packaging/claude_desktop_platform.py',
-    'packaging/claude_desktop_switch.py', 'packaging/claude_switch_launch.py',
+    'packaging/claude_desktop_switch.py',
     'packaging/claude_profile_rules.py',
     'packaging/claude_profile_identity.py',
     'packaging/claude_profile_records.py',

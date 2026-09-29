@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest import mock
 
 from tests import claude_profile_sync_fixtures as fixtures
+from tests._platform import requires_posix_perms
 from tests.claude_profile_sync_fixtures import SyncFixture, sync
 
 
@@ -200,6 +201,7 @@ class ProfileSyncSafetyTests(SyncFixture):
         self.assertEqual(paths[0].parent.name, org)
         self.assertFalse(stale.exists())
 
+    @requires_posix_perms
     def test_private_modes_are_not_widened_and_new_bundles_are_private(self):
         source = fixtures.record(
             self.third, 'claude-code-sessions', '87654321-4321-4567-8123-123456789abc',
@@ -224,6 +226,7 @@ class ProfileSyncSafetyTests(SyncFixture):
             self.first, 'claude-code-sessions', 'new-bundle')[0].with_suffix(''))
         self.assertEqual(new_bundle.stat().st_mode & 0o777, 0o700)
 
+    @requires_posix_perms
     def test_inactive_private_mode_is_not_widened_by_active_source(self):
         source = fixtures.record(
             self.first, 'claude-code-sessions', '12345678-1234-4567-8123-123456789abc',

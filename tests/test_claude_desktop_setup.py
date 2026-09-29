@@ -161,8 +161,9 @@ class DesktopSetupTests(unittest.TestCase):
 
         spec = SimpleNamespace(loader=SimpleNamespace(exec_module=exec_module))
         output = io.StringIO()
-        with mock.patch.object(desktop._ilu, 'spec_from_file_location',
-                               return_value=spec), \
+        with mock.patch.object(desktop.sys, 'platform', 'darwin'), \
+                mock.patch.object(desktop._ilu, 'spec_from_file_location',
+                                  return_value=spec), \
                 mock.patch.object(desktop._ilu, 'module_from_spec',
                                   return_value=SimpleNamespace()), \
                 contextlib.redirect_stdout(output):

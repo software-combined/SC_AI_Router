@@ -363,8 +363,11 @@ reading the mode through reopening, so overlapping requests cannot use a stale
 source profile. The switch rechecks the attachment, managed policy and stopped
 app before changing the mode. Open Claude leaves histories alone. The stable
 `claude_profile_launch.py` follows the installed release pointer so both actions
-survive updates and release pruning; `claude_switch_launch.py` keeps older
-shortcuts compatible. Setup owns the callback installation and removal.
+survive updates and release pruning. After a rollback to a release without task
+sharing it runs that release's plain switch, opens Claude for Open Claude and
+keeps the callback silent. Setup rebuilds 0.6 shortcuts and deletes only the
+router's own copy of their home shim. Setup owns the callback installation and
+removal, and installs the launchers and callback on macOS only in this beta.
 
 `claude_profile_rules.py` owns the local-data transfer policy being integrated
 by Plan 169. It keeps conversation payloads intact, excludes separate sign-in
@@ -463,7 +466,9 @@ because Desktop's Code executable can live outside its application bundle.
 `claude_profile_launch.py` resolves the current installed release and dispatches
 the requested action. `claude_profile_hook.py` owns only its exact SessionStart
 callback entry and captures the focused native account identity asynchronously.
-It never copies history, and uninstall preserves unrelated user hooks.
+It never copies history, and uninstall preserves unrelated user hooks. The
+callback runs Python with `-P`, so a file in the session's project folder can
+never stand in for a module it imports.
 
 ## Distribution (outside the request path)
 

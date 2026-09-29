@@ -221,15 +221,15 @@ class SwitchTests(unittest.TestCase):
         self.assertEqual(json.loads(self.config.read_text())['deploymentMode'], '1p')
         self.sync.assert_called_once()
 
-    def test_old_release_is_rejected_before_dispatch(self):
+    def test_open_claude_on_an_old_release_only_opens_the_app(self):
         launcher = switcher._load('claude_profile_launch')
         (self.home / 'current').write_text('old', encoding='utf-8')
         helper = self.home / 'releases/old/packaging/claude_desktop_switch.py'
         helper.parent.mkdir(parents=True)
         helper.write_text('def main(): raise RuntimeError("must not run")', encoding='utf-8')
-        with mock.patch.object(launcher.runpy, 'run_path') as run:
-            with self.assertRaisesRegex(SystemExit, 'Update SCG Router'):
-                launcher.main(['--home', str(self.home), '--action', 'start'])
+        with mock.patch.object(launcher.runpy, 'run_path') as run, mock.patch.object(launcher.subprocess, 'run') as opener:
+            launcher.main(['--home', str(self.home), '--action', 'start'])
+        opener.assert_called_once_with(['/usr/bin/open', '-b', launcher.BUNDLE_ID], check=False)
         run.assert_not_called()
 
     def test_changed_attachment_after_quit_is_not_overwritten(self):
@@ -309,7 +309,7 @@ class SwitchTests(unittest.TestCase):
         self.assertIn("'/python path/python3'", executable.read_text())
         self.assertIn('claude_profile_launch.py', executable.read_text())
         self.assertNotIn('/releases/', executable.read_text())
-        self.assertTrue(executable.stat().st_mode & 0o100)
+        self.assertTrue(switcher.os.name == 'nt' or executable.stat().st_mode & 0o100)
         self.assertEqual((self.home / 'claude_profile_launch.py').read_bytes(),
                          (ROOT / 'packaging' / 'claude_profile_launch.py').read_bytes())
         self.assertEqual(self.run.call_args_list[0].args[0][4], str(switcher.ICON))
