@@ -13,7 +13,7 @@
   "ai_router/tool_adapter.py": 348,
   "ai_router/tool_aliases.py": 279,
   "ai_router/upstream.py": 362,
-  "packaging/codex_config.py": 451,
+  "packaging/codex_config.py": 501,
   "packaging/install.py": 700,
   "packaging/notice.py": 500,
   "packaging/operator_surface.py": 421,
@@ -32,7 +32,7 @@
   "tests/test_ingress_guards.py": 325,
   "tests/test_ingress_shapes.py": 308,
   "tests/test_install.py": 417,
-  "tests/test_install_config.py": 475,
+  "tests/test_install_config.py": 476,
   "tests/test_install_key_window.py": 475,
   "tests/test_install_lifecycle.py": 489,
   "tests/test_key_prompt.py": 387,
@@ -64,5 +64,6 @@
   "tests/test_workflows.py": 303,
   "tools/probe_agent_handoffs.py": 515,
   "tools/probe_codex_runtime.py": 501,
-  "tools/probe_claude_code.py": 408
+  "tools/probe_claude_code.py": 408,
+  "tests/test_codex_preferences.py": 378
 }

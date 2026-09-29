@@ -38,6 +38,9 @@ def main():
     # The managed desktop preferences go back the way the attach found
     # them; a value the owner changed afterwards is left alone.
     updated = codex_config.restore_desktop(updated, entry.get('desktop'))
+    # Owner approvals_reviewer lines removed for uniqueness come back when
+    # still absent.
+    updated = codex_config.restore_reviewer(updated, entry.get('reviewer'))
     # Global instructions are install-once: uninstall leaves them alone.
     temp = config.with_name('config.toml.mixed-router-restore')
     fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
