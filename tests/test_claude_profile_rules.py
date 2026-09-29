@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tests._platform import ON_WINDOWS, assert_owner_only, requires_posix_perms
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location(
@@ -132,7 +133,8 @@ class ProfileRulesTests(unittest.TestCase):
             target.chmod(0o600)
             rules.copy_file(source, target, (None, None, '/source', '/target'), mode=0o644)
             self.assertEqual(target.read_bytes(), raw)
-            self.assertEqual(target.stat().st_mode & 0o777, 0o600)
+            if not ON_WINDOWS:  # Windows keeps no POSIX mode bits.
+                self.assertEqual(target.stat().st_mode & 0o777, 0o600)
             source.write_bytes(b'{"text":"bearer synthetic-token-value"}\n')
             with self.assertRaisesRegex(ValueError, 'credential-like'):
                 rules.copy_file(source, target, ())
@@ -144,8 +146,9 @@ class ProfileRulesTests(unittest.TestCase):
             target = Path(tmp) / 'target.jsonl'
             source.write_text('{"safe":true}\n')
             rules.copy_transcript(source, target, ())
-            self.assertEqual(target.stat().st_mode & 0o777, 0o600)
+            assert_owner_only(self, target)
 
+    @requires_posix_perms
     def test_private_artifact_is_not_widened(self):
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / 'source.json'

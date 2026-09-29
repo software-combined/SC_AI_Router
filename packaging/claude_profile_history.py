@@ -4,6 +4,7 @@ import importlib.util
 import io
 import json
 import os
+import re
 import stat
 import tempfile
 from pathlib import Path
@@ -18,6 +19,8 @@ def _load_publish():
 
 
 _publish = _load_publish()
+# _write_journal's temporary names: '<key>.journal.<random>.tmp', or '.done.'.
+ABANDONED_TEMP = re.compile(r'[0-9a-f]{64}\.(?:journal|done)\.\w+\.tmp')
 
 
 def portable_history(text):
@@ -265,8 +268,21 @@ def _transaction_paths(target, key):
                  ('.journal', '.original', '.stage', '.done'))
 
 
+def _discard_abandoned(target, stem):
+    """A process killed while writing a journal leaves its temporary file, and
+    maybe the staged copy, with no journal to own them. The transcript is only
+    moved once a journal exists, so dropping them lets the next run re-plan."""
+    for item in list(target.parent.iterdir()):
+        rest = item.name[len(stem):] if item.name.startswith(stem) else ''
+        orphan_stage = (len(rest) == 70 and rest.endswith('.stage')
+                        and not _present(target.with_name(stem + rest[:64] + '.journal')))
+        if ABANDONED_TEMP.fullmatch(rest) or orphan_stage:
+            item.unlink()
+
+
 def _recover_transactions(target):
     stem = '.' + target.name + '.history-repair-'
+    _discard_abandoned(target, stem)
     journals, artifacts = [], []
     known = set()
     for item in target.parent.iterdir():

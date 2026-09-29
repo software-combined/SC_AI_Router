@@ -383,8 +383,11 @@ reading the mode through reopening, so overlapping requests cannot use a stale
 source profile. The switch rechecks the attachment, managed policy and stopped
 app before changing the mode. Open Claude leaves histories alone. The stable
 `claude_profile_launch.py` follows the installed release pointer so both actions
-survive updates and release pruning; `claude_switch_launch.py` keeps older
-shortcuts compatible. Setup owns the callback installation and removal.
+survive updates and release pruning. After a rollback to a release without task
+sharing it runs that release's plain switch, opens Claude for Open Claude and
+keeps the callback silent. Setup rebuilds 0.6 shortcuts and deletes only the
+router's own copy of their home shim. Setup owns the callback installation and
+removal, and installs the launchers and callback on macOS only in this beta.
 
 `claude_profile_rules.py` owns the local-data transfer policy being integrated
 by Plan 169. It keeps conversation payloads intact, excludes separate sign-in
@@ -417,8 +420,9 @@ state and the hashed workspace preference detect changes; they cannot select
 an organization. Authentication values are neither read nor copied. Static
 gateway identity comes from the existing device and local configuration.
 A private router-local hash binds the account pair so a later sign-in cannot
-inherit the previous account's copied tasks. The coordinator must hold both
-profile locks before creating that binding; this helper does not start a copy.
+inherit the previous account's copied tasks; the same hash keys the shared-task
+ledger. The coordinator must hold both profile locks before creating that
+binding; this helper does not start a copy.
 
 `claude_profile_publish.py` and `claude_profile_transaction.py` share the record
 and bundle publication contract. They validate file generations before exclusive
@@ -451,7 +455,25 @@ the union before duplicates are retired. Shared CLI history takes precedence
 over an older bundle snapshot. A task with no transcript anywhere, or with
 diverged transcripts, is left unshared and counted. Invalid tasks are reported
 to the switch caller, which must keep the current mode until every in-scope
-task is safe. The coordinator has no app-lifecycle authority.
+task is safe. Before either pass, the ledger retires copies of tasks deleted
+since the last clean sync, and only a clean sync updates what it remembers. The
+coordinator has no app-lifecycle authority.
+
+`claude_profile_ledger.py` keeps a deleted task deleted. After a clean sync it
+records, in a private router-home file, a digest of each copy of every task both
+profiles hold once: record bytes, bundle tree and paths, never titles or
+content. Tasks the sync left unshared or refused are not recorded. Presence
+counts across the whole account, so an organization change never looks like a
+delete. A remembered task missing from exactly one profile has its other copy
+retired to that store's `.claude-profile-control-trash` folder while the copy
+still matches; a changed copy stays and is shared again. Retirement reuses the
+publication pattern: a journal, then exclusive renames of the record and then
+the bundle. The next run undoes an interrupted retirement before deciding again.
+Interrupted transfers are recovered first; an unreadable record or a second
+copy keeps every copy, and a profile that lost every shared task at once, when
+there was more than one, is treated as a reset. Nothing is hard-deleted, and a
+trash entry that cannot be put back safely stays for inspection and fails the
+switch.
 
 `claude_desktop_platform.py` owns native app identity, graceful shutdown,
 dialogs and owned shortcuts. It waits for known writers and their children;
@@ -468,7 +490,9 @@ because Desktop's Code executable can live outside its application bundle.
 `claude_profile_launch.py` resolves the current installed release and dispatches
 the requested action. `claude_profile_hook.py` owns only its exact SessionStart
 callback entry and captures the focused native account identity asynchronously.
-It never copies history, and uninstall preserves unrelated user hooks.
+It never copies history, and uninstall preserves unrelated user hooks. The
+callback runs Python with `-P`, so a file in the session's project folder can
+never stand in for a module it imports.
 
 `packaging/codex_switch_config.py` owns the three managed Codex blocks. The
 default is `codex_config.build_block` unchanged, so a never-switched install
