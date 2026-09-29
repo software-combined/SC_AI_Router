@@ -22,7 +22,7 @@ prompt to it.
 """
 import json
 
-from . import (attempt_policy, errors, provider_defs, request_context,
+from . import (attempt_policy, codex_route, errors, provider_defs, request_context,
                subscription_roster, wire_shape)
 from .image_items import has_images
 from .providers import ExternalResponsesProvider
@@ -92,6 +92,20 @@ class Plan:
             self.credentials, context=target)
 
 
+def working_twin(state, context):
+    """The request's twin slug when this machine may route it, else None."""
+    slug = twin_slug(context.slug, context.catalogue)
+    # Plan 068: the twin is an external row, so the portco allowlist gates
+    # it exactly as it gates a directly requested external row.
+    allowed = state.get('allowed_models')
+    if slug is None or (allowed is not None and slug not in allowed):
+        return None
+    # Key-filtered availability gates the twin like a direct request: the
+    # fallback builds its adapter outright, so the owns() gate never runs.
+    from . import availability as _availability
+    return slug if _availability.permitted(slug) else None
+
+
 def plan(state, prepared, path, payload, raw_body, headers, credentials):
     """Fallback plan for this turn, or None when it is not eligible.
 
@@ -106,18 +120,8 @@ def plan(state, prepared, path, payload, raw_body, headers, credentials):
         return None
     context = prepared.context or request_context.resolve(
         payload.get('model'), request_context.capture())  # a direct call
-    slug = twin_slug(context.slug, context.catalogue)
+    slug = working_twin(state, context)
     if slug is None:
-        return None
-    # Plan 068: the twin is an external row, so the portco allowlist gates
-    # this redispatch exactly as it gates a directly requested external row.
-    allowed = state.get('allowed_models')
-    if allowed is not None and slug not in allowed:
-        return None
-    # Key-filtered availability gates the twin like a direct request: the
-    # fallback builds its adapter outright, so the owns() gate never runs.
-    from . import availability as _availability
-    if not _availability.permitted(slug):
         return None
     region = state.get('openrouter_region', 'global')
     if not provider_defs.valid_region(region):
@@ -131,8 +135,11 @@ def prepare(provider, model, path, payload, raw_body, headers, server, decoded_l
     """provider.prepare plus the refused-turn fallback plan when eligible.
 
     Only Responses adapters own these two paths, so every prepared Responses
-    body also passes the observe-only contract check.
+    body also passes the observe-only contract check. A ChatGPT request on
+    the switched Codex route is answered before anything is prepared.
     """
+    if provider.name == provider_defs.OPENAI.id and codex_route.switched(headers):
+        codex_route.refuse(path, payload, context, working_twin(server.state, context))
     prepared = provider.prepare(model, path, payload, raw_body, headers,
                                 server.credentials, decoded_len=decoded_len,
                                 context=context)

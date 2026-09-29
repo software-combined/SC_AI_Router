@@ -272,6 +272,18 @@ Handoff aliases retain that same catalogue through response adaptation.
 The encrypted spawn and follow-up guard resolves child models from it, so a
 refresh cannot change an in-flight request's decision. Direct helper callers
 without a request context capture once when creating their aliases.
+`codex_route.py` owns the switched Codex route. Switch Codex gives Codex a
+provider entry that needs no OpenAI sign-in and sends `x-scg-codex-route`, so
+that header marks the route; a missing credential cannot, because the normal
+route may carry no Authorization header either. `subscription_fallback.prepare`
+asks it about each request the ChatGPT subscription adapter would serve, before
+anything is prepared or sent. Native service paths get the no-subscription
+answers; every other request gets one final `invalid_prompt` refusal, which
+`ingress.error` sends as a `response.failed` frame when the turn streams. The
+refusal names the twin row only when the portco allowlist, the key's
+availability snapshot and the Codex picker all admit it. Helper turns are
+refused too: the helper fallback moves a turn to its twin only after the
+subscription refuses it, and this route sends nothing to refuse.
 
 1. `provider_defs.py` owns every upstream fact (host, endpoint prefixes, key
    location, model catalogue, key-info endpoint, failure dialect) and imports
