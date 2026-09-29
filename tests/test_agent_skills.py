@@ -135,6 +135,50 @@ class AgentSkillsTest(unittest.TestCase):
         self.assertFalse((root / '.agents').exists())
         self.assertIn('skipped', line)
 
+    def test_a_marketplace_sync_failure_reports_the_cause_and_path(self):
+        root = skills.marketplace_root(self.base)
+        root.mkdir(parents=True)
+        (root / 'someone-elses-file').write_text('keep me')
+        line = skills.sync({'clients': 'codex'}, self.plugins, base=self.base,
+                           run=_Run(), which=_which({'codex'}))
+        self.assertIn('skipped', line)
+        self.assertIn('not router-owned', line)
+        self.assertIn(str(root), line)
+
+    def test_a_refused_registration_reports_the_command_and_error(self):
+        def refuse(command, **kwargs):
+            return SimpleNamespace(returncode=1, stdout='',
+                                   stderr='Error: plugin manifest invalid')
+        line = skills.sync({'clients': 'codex'}, self.plugins, base=self.base,
+                           run=refuse, which=_which({'codex'}))
+        self.assertIn('refused', line)
+        self.assertIn('codex plugin add scg-review@scg-agent-plugins', line)
+        self.assertIn('plugin manifest invalid', line)
+
+    def test_a_registration_exec_error_reports_its_cause(self):
+        def boom(command, **kwargs):
+            raise OSError('codex binary vanished')
+        line = skills.sync({'clients': 'codex'}, self.plugins, base=self.base,
+                           run=boom, which=_which({'codex'}))
+        self.assertIn('OSError', line)
+        self.assertIn('codex binary vanished', line)
+
+    def test_a_refusal_detail_is_collapsed_to_one_bounded_line(self):
+        calls = {'n': 0}
+
+        def refuse(command, **kwargs):
+            calls['n'] += 1
+            if calls['n'] == 1:
+                return SimpleNamespace(returncode=1, stdout='',
+                                       stderr='x' * 500 + '\nsecond line')
+            return SimpleNamespace(returncode=0, stdout='', stderr='')
+
+        line = skills.sync({'clients': 'codex'}, self.plugins, base=self.base,
+                           run=refuse, which=_which({'codex'}))
+        self.assertNotIn('\n', line)
+        self.assertNotIn('second', line)
+        self.assertLess(len(line), 500)
+
     def test_a_superseded_runner_is_preserved_not_deleted(self):
         self.base.mkdir(parents=True)
         runner = self.base / 'updater.py'
