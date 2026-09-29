@@ -95,6 +95,16 @@ def _route(handler, provider, prepared, metrics, has_image, started, ledger, log
                                                  started, admit, ledger=ledger)
         if response.status >= 400:
             raw = drained
+            # An exhausted subscription answers helper turns 401 as well as
+            # 429; the twin answers those too. Ordinary turns fall through
+            # to the raw answer so a sign-in problem stays visible.
+            if (response.status in (401, 403)
+                    and ledger.protocol == provider_defs.RESPONSES
+                    and provider.defn.kind == provider_defs.SUBSCRIPTION
+                    and prepared.fallback is not None):
+                return subscription_fallback.refused(
+                    handler, prepared, None, metrics, started, admit,
+                    ledger=ledger, auth=True)
             transport.note_first_data(metrics, headers_done)
             # Context frames are Responses-only; Messages ingress has none.
             if (provider.defn.sends_context_error_frame()
