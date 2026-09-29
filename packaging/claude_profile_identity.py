@@ -49,7 +49,11 @@ def same_guard(left, right):
 
 
 def bind_profile_accounts(home, first, third):
-    """Do not expose an earlier account's gateway copies after a new sign-in."""
+    """Do not expose an earlier account's gateway copies after a new sign-in.
+
+    Returns the pair's digest when bound (it keys the shared-task ledger),
+    False for a different pair and None while either account is unknown.
+    """
     native, gateway = subscription(first), third_party(third)
     if not native or not gateway:
         return None
@@ -67,8 +71,8 @@ def bind_profile_accounts(home, first, third):
             json.dump({'accounts': digest}, out)
             out.flush()
             os.fsync(out.fileno())
-        return True
-    return saved.get('accounts') == digest
+        return digest
+    return digest if saved.get('accounts') == digest else False
 
 
 def _read_object(path):
