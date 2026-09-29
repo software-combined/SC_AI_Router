@@ -9,6 +9,7 @@ receipt entry recording the pre-attach snapshot, and an exact detach.
 Loaded through the installer's explicit file-import pattern and shipped
 in the release bundle. No runtime/protocol import here.
 """
+import hashlib
 import json
 import os
 import sys
@@ -34,6 +35,8 @@ CREDENTIAL_KIND_VALUE = 'static'
 API_KEY_VALUE = 'router-path-token'
 
 CLIENT_KEY = 'claude-desktop'
+# The only 0.6 Switch Claude shim, which setup copied into the router home.
+OLD_SWITCH_SHIM_SHA256 = '0948115fe1971013cb14dafae2ffadbcf3e95dc16d460b5c68426d740975be5c'
 
 
 PROFILE_DIRNAME = 'Claude-3p'
@@ -59,11 +62,14 @@ def profile_root(env=None, platform_name=None):
 
 
 def user_data_dir(env=None, platform_name=None):
-    """Third-party profile dir, honoring CLAUDE_USER_DATA_DIR when set."""
+    """Third-party profile: explicit override, Windows local data, then Electron."""
     env = os.environ if env is None else env
     override = env.get('CLAUDE_USER_DATA_DIR')
     if override:
         return Path(override).expanduser()
+    platform_name = sys.platform if platform_name is None else platform_name
+    if platform_name == 'win32' and env.get('LOCALAPPDATA'):
+        return Path(env['LOCALAPPDATA']) / PROFILE_DIRNAME
     return profile_root(env, platform_name) / PROFILE_DIRNAME
 
 
@@ -178,18 +184,57 @@ def _owned_snapshot(home, data_dir, state, receipts):
         return None
 
 
-def _install_switch_launcher(home, python):
+def _remove_old_switch_shim(home):
+    """Switch Claude now starts through claude_profile_launch.py; drop only the
+    router's own copy of the 0.6 shim, never a file someone else put there."""
+    shim = Path(home) / 'claude_switch_launch.py'
+    try:
+        if (shim.is_file() and not shim.is_symlink()
+                and hashlib.sha256(shim.read_bytes()).hexdigest() == OLD_SWITCH_SHIM_SHA256):
+            shim.unlink()
+    except OSError:
+        pass
+
+
+def _install_switch_launcher(home, python, env=None):
+    # Switch Claude, Open Claude and task sharing are macOS-only until native
+    # Windows and Linux acceptance exists; their helpers stay in the release.
+    if sys.platform != 'darwin':
+        return
     spec = _ilu.spec_from_file_location(
         'router_desktop_switch', Path(__file__).with_name('claude_desktop_switch.py'))
     switch = _ilu.module_from_spec(spec)
     spec.loader.exec_module(switch)
+    for action, name in (('switch', 'Switch Claude'),
+                         ('start', 'Open Claude')):
+        try:
+            switch.install_launcher(home, python, action=action)
+        except switch.SwitchError as exc:
+            print('Claude connected; %s could not be installed. %s'
+                  % (name, exc))
+        except (OSError, switch.subprocess.SubprocessError):
+            # Attachment still works if one optional native launcher cannot be
+            # built. The other action is still attempted and named on failure.
+            print('Claude connected; %s could not be installed. '
+                  'Run setup again to retry.' % name)
+        else:
+            if action == 'switch':
+                _remove_old_switch_shim(home)
     try:
-        switch.install_launcher(home, python)
-    except switch.SwitchError as exc:
-        print('Claude connected; ' + str(exc))
-    except (OSError, switch.subprocess.SubprocessError):
-        # Attachment still works if the optional native launcher cannot be built.
-        print('Claude connected; Switch Claude could not be installed. Run setup again to retry.')
+        switch._load('claude_profile_hook').install(home, python, env)
+    except (OSError, ValueError, TypeError, SystemExit):
+        print('Claude connected; automatic task sharing needs setup again.')
+
+
+def saved_profile(home, receipts):
+    """The profile the saved attachment uses, so an update keeps following it
+    after a default location change (Windows moved to local AppData)."""
+    entry = receipts.read_receipt(home).get('clients', {}).get(CLIENT_KEY)
+    try:
+        path = Path(entry['config_path'])
+    except (KeyError, TypeError, ValueError):
+        return None
+    return path.parents[1] if path.is_absolute() and path.parent.name == 'configLibrary' else None
 
 
 def attach(home, state, receipts, data_dir_override=None, env=None, *, python=None):
@@ -206,6 +251,17 @@ def attach(home, state, receipts, data_dir_override=None, env=None, *, python=No
                          'to attach the Claude desktop gateway')
     data_dir = (Path(data_dir_override) if data_dir_override is not None
                 else user_data_dir(env))
+    existing = receipts.read_receipt(home).get('clients', {}).get(CLIENT_KEY)
+    if existing:
+        try:
+            attached = Path(existing['config_path'])
+            same = (attached.is_absolute() and attached.parent.name == 'configLibrary'
+                    and attached.parent.parent.resolve() == data_dir.resolve())
+        except (KeyError, TypeError, ValueError):
+            same = False
+        if not same:
+            raise SystemExit('Claude is connected using a different profile. '
+                             'Detach that connection before choosing another profile.')
     # Refuse before writing anything: a mode conflict must leave both the
     # entry and the desktop config untouched.
     cfg, cfg_path = read_desktop_config(data_dir)
@@ -239,7 +295,7 @@ def attach(home, state, receipts, data_dir_override=None, env=None, *, python=No
              'claude_mode': state.get('claude_mode', 'subscription')}
     receipts.write_client_receipt(home, CLIENT_KEY, entry)
     if python is not None:
-        _install_switch_launcher(home, python)
+        _install_switch_launcher(home, python, env)
     return entry_path
 
 
@@ -265,6 +321,11 @@ def attach_current(args, receipts, write_state, *, python=None):
 
 def detach(home, receipts, data_dir_override=None, env=None):
     """Restore desktop settings to pre-attach values; forget the attachment."""
+    spec = _ilu.spec_from_file_location(
+        'router_desktop_hook', Path(__file__).with_name('claude_profile_hook.py'))
+    hook = _ilu.module_from_spec(spec)
+    spec.loader.exec_module(hook)
+    hook.uninstall(home)
     receipt = receipts.read_receipt(home)
     entry = receipt.get('clients', {}).get(CLIENT_KEY, {})
     if data_dir_override is None and not entry:
