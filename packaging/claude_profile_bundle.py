@@ -1,5 +1,6 @@
 """Stage one screened union before publishing or retiring any session copy."""
 import importlib.util
+import json
 import os
 import shutil
 import uuid
@@ -53,6 +54,18 @@ def _files(root, include_skipped=False):
     return entries(root, include_skipped)[0]
 
 
+def _row_ids(path):
+    ids = set()
+    for line in Path(path).read_text(encoding='utf-8').split('\n'):
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(row, dict) and isinstance(row.get('uuid'), str):
+            ids.add(row['uuid'])
+    return ids
+
+
 def stage_union(target_bundle, target_wins, inputs, transcript,
                 source_root=None, target_root=None, transcript_paths=None):
     target_bundle = Path(target_bundle)
@@ -62,7 +75,11 @@ def stage_union(target_bundle, target_wins, inputs, transcript,
         files, directories, bad = entries(item['bundle'])
         unsafe.extend(bad)
         maps.append((files, directories, item['paths']))
-    if transcript is not None:
+    # A transcript already inside a bundle travels at its own path; only the
+    # shared CLI history needs a snapshot copy.
+    if transcript is not None and not any(
+            bundle in transcript.parents
+            for bundle in [target_bundle] + [item['bundle'] for item in inputs]):
         relative = (Path('.claude/projects/session') / transcript.name).as_posix()
         maps.insert(0, ({relative: transcript}, {},
                      transcript_paths or (None, target_bundle, source_root, target_root)))
@@ -73,7 +90,13 @@ def stage_union(target_bundle, target_wins, inputs, transcript,
     files, directories = {}, {}
     for file_map, dir_map, paths in maps:
         for name, source in file_map.items():
-            files.setdefault(name, (source, paths))
+            kept = files.setdefault(name, (source, paths))[0]
+            # The losing copy is deleted at commit, so it must not hold turns
+            # the kept copy lacks. Refuse instead of merging diverged rows.
+            if (kept != source and transcript is not None
+                    and source.name == transcript.name
+                    and _row_ids(source) - _row_ids(kept)):
+                raise ValueError('diverged transcript')
         for name, source in dir_map.items():
             directories.setdefault(name, source)
     if files.keys() & directories.keys():

@@ -9,6 +9,7 @@ from tests.claude_profile_sync_fixtures import SyncFixture, sync
 
 class ProfileSyncSafetyTests(SyncFixture):
     def test_short_bundle_with_mismatched_identity_is_refused_without_losing_artifacts(self):
+        fixtures.share_cowork(self)
         self.sync()  # Establish the persistent synchronization locks before the snapshot.
         store = 'local-agent-mode-sessions'
         identifier = 'local_12345678-1234-4567-8123-123456789abc'
@@ -28,7 +29,7 @@ class ProfileSyncSafetyTests(SyncFixture):
 
     def test_utf8_task_text_survives_a_windows_legacy_locale(self):
         title = 'Caf\u00e9 Fran\u00e7ais'
-        for store in fixtures.STORES:
+        for store in sync.STORES:
             record = fixtures.record(self.third, store, '87654321-4321-4567-8123-123456789abc',
                                      'fedcbaab-4321-4567-8123-123456789abc', 'unicode', cli='unicode-cli')
             doc = json.loads(record.read_bytes())
@@ -49,7 +50,7 @@ class ProfileSyncSafetyTests(SyncFixture):
         with mock.patch.object(Path, 'open', legacy_open):
             report = self.sync()
         self.assertEqual(report['failed'], 0, report)
-        for store in fixtures.STORES:
+        for store in sync.STORES:
             record = self.paths(self.first, store, 'unicode')[0]
             self.assertEqual(json.loads(record.read_bytes())['title'], title)
             transcript = record.with_suffix('') / 'unicode-cli.jsonl'
@@ -62,7 +63,7 @@ class ProfileSyncSafetyTests(SyncFixture):
         self.assertEqual(report['errors'], ['identical-profiles'])
 
     def test_missing_or_invalid_required_transcript_defers_only_that_session(self):
-        for store in fixtures.STORES:
+        for store in sync.STORES:
             for identifier, transcript in (('missing', None), ('corrupt', '{\n'),
                                            ('array', '[]\n')):
                 record = fixtures.record(self.third, store, '87654321-4321-4567-8123-123456789abc', 'fedcbaab-4321-4567-8123-123456789abc',
@@ -74,17 +75,17 @@ class ProfileSyncSafetyTests(SyncFixture):
             fixtures.record(self.third, store, '87654321-4321-4567-8123-123456789abc', 'fedcbaab-4321-4567-8123-123456789abc', 'valid',
                             cli='Exact-Cli-ID', transcript='safe message')
         report = self.sync()
-        self.assertEqual(report['failed'], 6, report)
-        for store in fixtures.STORES:
+        self.assertEqual(report['failed'], 3 * len(sync.STORES), report)
+        for store in sync.STORES:
             for identifier in ('missing', 'corrupt', 'array'):
                 self.assertEqual(self.paths(self.first, store, identifier), [])
                 self.assertEqual(len(self.paths(self.third, store, identifier)), 1)
             copied = self.paths(self.first, store, 'valid')[0]
             self.assertEqual(json.loads(copied.read_text())['cliSessionId'], 'Exact-Cli-ID')
 
-    def test_symlink_nonregular_and_corrupt_sessions_do_not_abort_valid_sessions(self):
+    def test_symlink_and_nonregular_sessions_do_not_abort_valid_sessions(self):
         import os
-        for store in fixtures.STORES:
+        for store in sync.STORES:
             for identifier in ('link', 'fifo', 'corrupt', 'valid'):
                 record = fixtures.record(self.third, store, '87654321-4321-4567-8123-123456789abc', 'fedcbaab-4321-4567-8123-123456789abc',
                                          identifier, bundle_files={'safe.txt': 'safe'})
@@ -96,21 +97,23 @@ class ProfileSyncSafetyTests(SyncFixture):
                 elif identifier == 'corrupt':
                     (bundle / 'data.json').write_text('{')
         report = self.sync()
-        self.assertGreaterEqual(report['failed'], 4, report)
-        for store in fixtures.STORES:
+        self.assertEqual(report['failed'], len(sync.STORES) * (1 + hasattr(os, 'mkfifo')), report)
+        for store in sync.STORES:
             self.assertEqual(len(self.paths(self.first, store, 'valid')), 1)
             self.assertEqual(self.paths(self.first, store, 'link'), [])
-            self.assertEqual(self.paths(self.first, store, 'corrupt'), [])
+            # Malformed JSON output is the user's own file and copies verbatim.
+            copied = self.paths(self.first, store, 'corrupt')[0].with_suffix('')
+            self.assertEqual((copied / 'data.json').read_text(), '{')
             self.assertTrue(self.paths(self.third, store, 'link')[0].with_suffix('').joinpath('unsafe').is_symlink())
 
     def test_unsigned_target_is_pending_without_identity_or_publication(self):
         (self.first / 'config.json').write_text('{"oauthAccount":[]}')
-        for store in fixtures.STORES:
+        for store in sync.STORES:
             fixtures.record(self.third, store, '87654321-4321-4567-8123-123456789abc', 'fedcbaab-4321-4567-8123-123456789abc', 'pending',
                             bundle_files={'result.txt': 'only source copy'})
         before = fixtures.fingerprint(self.first)
         report = self.sync()
-        self.assertEqual(report['pending'], 2, report)
+        self.assertEqual(report['pending'], len(sync.STORES), report)
         self.assertIn('identity-unresolved', report['errors'])
         self.assertEqual(before, tuple(row for row in fixtures.fingerprint(self.first)
                                        if row[0] != '.claude-profile-sync.lock'))

@@ -62,24 +62,24 @@ class ProfileRulesTests(unittest.TestCase):
         self.assertEqual(rules.rewrite_path('/Users/test/N8N', *paths),
                          '/Users/test/N8N')
 
-    def test_jsonl_and_opaque_artifacts_share_content_screening(self):
+    def test_task_files_and_opaque_artifacts_share_content_screening(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source = root / 'source.jsonl'
             source.write_text('{"text":"bearer synthetic-token-value"}\n')
             with self.assertRaisesRegex(ValueError, 'credential-like'):
-                rules.copy_json_file(source, root / 'target.jsonl', ())
+                rules.copy_file(source, root / 'target.jsonl', ())
             opaque = root / 'output.txt'
             opaque.write_text('authorization: synthetic-value')
             with self.assertRaisesRegex(ValueError, 'credential-like'):
                 rules.copy_file(opaque, root / 'copy.txt', ())
 
-    def test_invalid_jsonl_fails_closed(self):
+    def test_invalid_transcript_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / 'source.jsonl'
             source.write_text('not-json\n')
             with self.assertRaisesRegex(ValueError, 'invalid JSONL'):
-                rules.copy_json_file(source, Path(tmp) / 'target.jsonl', ())
+                rules.copy_transcript(source, Path(tmp) / 'target.jsonl', ())
             self.assertFalse((Path(tmp) / 'target.jsonl').exists())
 
     def test_transcript_tool_payload_is_preserved_and_never_silently_redacted(self):
@@ -88,13 +88,13 @@ class ProfileRulesTests(unittest.TestCase):
             message = {'content': [{'type': 'tool_use', 'input': {
                 'accountName': 'example', 'tokens': 42, 'path': '/source/result'}}]}
             source.write_text(json.dumps({'cwd': '/source/work', 'message': message}) + '\n')
-            rules.copy_json_file(source, target, (None, None, '/source', '/target'))
+            rules.copy_transcript(source, target, (None, None, '/source', '/target'))
             copied = json.loads(target.read_text())
             self.assertEqual(copied['message'], message)
             self.assertEqual(copied['cwd'], '/target/work')
             message['content'][0]['input']['password'] = 'synthetic-value'
             source.write_text(json.dumps({'message': message}) + '\n')
-            rules.copy_json_file(source, target, (), conversation=True)
+            rules.copy_file(source, target, (), conversation=True)
             self.assertEqual(json.loads(target.read_text())['message'], message)
 
     def test_transcript_preserves_tool_and_attachment_payloads(self):
@@ -106,8 +106,7 @@ class ProfileRulesTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             source, target = Path(tmp) / 'source.jsonl', Path(tmp) / 'target.jsonl'
             source.write_text(''.join(json.dumps(row) + '\n' for row in rows))
-            rules.copy_json_file(source, target, (None, None, '/source', '/target'),
-                                 conversation=True)
+            rules.copy_transcript(source, target, (None, None, '/source', '/target'))
             self.assertEqual([json.loads(line) for line in target.read_text().split('\n')
                               if line], rows)
 
@@ -119,7 +118,7 @@ class ProfileRulesTests(unittest.TestCase):
             source.write_text(json.dumps(row) + '\n')
             target.write_text('previous')
             with self.assertRaisesRegex(ValueError, 'credential-like'):
-                rules.copy_json_file(source, target, (), conversation=True)
+                rules.copy_transcript(source, target, ())
             self.assertEqual(target.read_text(), 'previous')
 
     def test_audit_log_keeps_exact_bytes_and_still_rejects_credentials(self):
@@ -139,15 +138,15 @@ class ProfileRulesTests(unittest.TestCase):
                 rules.copy_file(source, target, ())
             self.assertEqual(target.read_bytes(), raw)
 
-    def test_private_metadata_keeps_owner_only_mode(self):
+    def test_new_transcript_copy_is_owner_only(self):
         with tempfile.TemporaryDirectory() as tmp:
-            source = Path(tmp) / 'source.json'
-            target = Path(tmp) / 'target.json'
-            source.write_text('{"safe":true}')
-            rules.copy_json_file(source, target, ())
+            source = Path(tmp) / 'source.jsonl'
+            target = Path(tmp) / 'target.jsonl'
+            source.write_text('{"safe":true}\n')
+            rules.copy_transcript(source, target, ())
             self.assertEqual(target.stat().st_mode & 0o777, 0o600)
 
-    def test_rewritten_private_artifact_is_not_widened(self):
+    def test_private_artifact_is_not_widened(self):
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / 'source.json'
             target = Path(tmp) / 'target.json'
@@ -155,7 +154,7 @@ class ProfileRulesTests(unittest.TestCase):
             source.chmod(0o644)
             target.write_text('{"old":true}')
             target.chmod(0o600)
-            rules.copy_json_file(source, target, (), mode=0o644)
+            rules.copy_file(source, target, (), mode=0o644)
             self.assertEqual(target.stat().st_mode & 0o777, 0o600)
 
     def test_nested_control_artifacts_never_transfer(self):
@@ -176,17 +175,18 @@ class ProfileRulesTests(unittest.TestCase):
         self.assertEqual(projected['messages'], [])
         self.assertEqual(projected['metadata'], {})
 
-    def test_array_and_scalar_json_artifacts_are_valid_but_transcripts_are_objects(self):
+    def test_json_task_files_keep_exact_bytes_but_transcript_rows_are_objects(self):
         with tempfile.TemporaryDirectory() as tmp:
             source, target = Path(tmp) / 'data.json', Path(tmp) / 'copy.json'
-            for value in ([], [1, {'messages': []}], 'text', 0, False, None):
-                source.write_text(json.dumps(value))
-                rules.copy_json_file(source, target, ())
-                self.assertEqual(json.loads(target.read_text()), value)
+            for raw in ('[]', '[1, {"messages": []}]', '"text"', '0', 'false', 'null',
+                        '{\n  // a comment\n  "emailAddress": "a@example.invalid"\n}\n'):
+                source.write_text(raw)
+                rules.copy_file(source, target, (None, None, '/source', '/target'))
+                self.assertEqual(target.read_bytes(), source.read_bytes())
             source = source.with_suffix('.jsonl')
             source.write_text('[]\n')
             with self.assertRaises(ValueError):
-                rules.copy_json_file(source, target, ())
+                rules.copy_transcript(source, target, ())
 
     def test_windows_prefix_normalizes_case_and_separators_without_substrings(self):
         paths = ('C:\\Profiles\\Claude-3p\\local_s', 'D:\\Claude\\local_t', None, None)

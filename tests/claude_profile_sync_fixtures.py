@@ -189,6 +189,11 @@ def write_sentinels(profile_path):
 sync = load_helper("claude_profile_sync")
 
 
+def share_cowork(case):
+    """Cowork sharing is off in the beta; keep its dormant layout support tested."""
+    case.enterContext(mock.patch.object(sync, 'STORES', STORES))
+
+
 class SyncFixture(unittest.TestCase):
     def setUp(self):
         temp = tempfile.TemporaryDirectory()

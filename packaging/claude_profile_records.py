@@ -21,7 +21,9 @@ _desktop = _load('router_claude_records_desktop', 'claude_desktop_config.py')
 _rules = _load('router_claude_records_rules', 'claude_profile_rules.py')
 _identity = _load('router_claude_profile_identity', 'claude_profile_identity.py')
 
-STORES = ('local-agent-mode-sessions', 'claude-code-sessions')
+# Only Code tasks are shared in the 1.0.0 beta. Cowork layout support below stays
+# tested; add 'local-agent-mode-sessions' back here to share Cowork tasks again.
+STORES = ('claude-code-sessions',)
 PROFILE_NAMES = {'1p': 'Claude', '3p': 'Claude-3p'}
 RECORD_GLOB = 'local_*.json'
 NATIVE_SESSION = re.compile(r'local_([0-9a-f]{8})-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}')

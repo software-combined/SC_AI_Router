@@ -274,9 +274,9 @@ The task-sharing candidate detects the signed-in account and workspace when
 you open a Code task. Setup installs that background callback automatically;
 you do not enter account IDs or choose profile folders. The callback makes no
 model call; its cached identity becomes invalid when the account or workspace changes.
-Native Code continuation has passed in both profiles, but complete installed
-launcher and Cowork round trips remain unaccepted. See
-[candidate verification](compatibility.md) before relying on task sharing.
+Native Code continuation has passed in both profiles, but the complete installed
+launcher round trip remains unaccepted. Cowork tasks are not shared in this
+beta. See [candidate verification](compatibility.md) before relying on task sharing.
 
 Candidate desktop setup installs **Open Claude** and **Switch Claude** launchers for
 the current user. **Open Claude** opens the app with the selected connection.
@@ -293,10 +293,10 @@ desktop app. If the installed router predates these launchers, setup keeps
 Claude connected and asks for a router update before installing them.
 
 Every model labelled **OpenRouter** uses the OpenRouter key. In synthetic tests,
-the candidate launchers copy local Claude Code and local-agent tasks between
-the `Claude` and `Claude-3p` profiles. This includes both
-`local-agent-mode-sessions` and `claude-code-sessions`, their JSON records and
-their safe bundle files. Cloud conversations are not local session files and
+the candidate launchers copy local Claude Code tasks (`claude-code-sessions`)
+between the `Claude` and `Claude-3p` profiles, with their JSON records and task
+files. Cowork tasks (`local-agent-mode-sessions`) stay in their own profile in
+this beta. Cloud conversations are not local session files and
 are outside this transfer. The desktop adapter's `detach` operation restores
 the original profile settings without removing the router. Full router
 uninstallation also detaches Codex and the terminal client.
@@ -310,8 +310,10 @@ different account stops sharing so it cannot inherit the earlier account's
 gateway copies. Return to the original account to resume sharing.
 When both profiles contain the same session, the profile selected
 before a switch wins conflicting record fields and files. Unique files from
-both bundles remain. A second successful run makes no content or permission
-changes.
+both bundles remain, and task files keep their exact bytes. If the two
+profiles hold different continuations of the same conversation, that task is
+refused and both copies stay as they are. A second successful run makes no
+content or permission changes.
 
 Separate sign-in and credential files, account identity, profile settings, trust state, connector
 settings and caches never cross profiles. A rejected or malformed source
@@ -331,8 +333,9 @@ binding. Existing hooks are preserved, and removing the desktop attachment
 removes only the callback installed by the router. If any required history
 cannot be copied safely, switching stops and the original profile remains
 selected. No transcript is silently discarded or redacted.
-Recorded messages and tool inputs retain their original fields and text,
-including code examples and keys pasted into a conversation. That text can
+Every transcript row keeps all of its fields and text, including checkpoint
+file lists, code examples and keys pasted into a conversation; only paths
+inside the profile folders are relocated. That text can
 reach the selected provider when the task resumes. Separate credential files
 remain excluded, and other copied artifacts still undergo content screening.
 The launcher checks that Claude still uses
