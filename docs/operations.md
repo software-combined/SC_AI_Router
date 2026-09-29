@@ -772,18 +772,19 @@ or `thread_title_reconsideration`. Client 0.154 also puts the read-only app
 tool allowlist it derives from the installed apps and MCP servers on those
 turns, so a helper turn carries tools; they do not make it ineligible.
 When the ChatGPT allowance is exhausted upstream refuses those turns, and
-the client stores a slice of the prompt as the title instead. With
-`openai_helper_fallback` true in
-`mixed-router-state.json` (default off; restart the service to load it), a
-429 on such a turn is answered from the OpenRouter twin row `openai/<slug>`
-and logged as `subscription_fallback`, or as
+the client stores a slice of the prompt as the title instead. The fallback
+is on unless `openai_helper_fallback` is explicitly false in
+`mixed-router-state.json` (restart the service to load a change): a 429 on
+such a turn is answered from the OpenRouter twin row `openai/<slug>`, or
+from the Luna twin `openai/gpt-6-luna` when the requesting slug has no
+twin of its own, and logged as `subscription_fallback`, or as
 `subscription_fallback_unavailable` when the twin cannot be prepared (no
 OpenRouter key, for example), which keeps the existing 503. Every other
 turn keeps that 503 unchanged. A provisioned portco list still gates the
-twin: an excluded `openai/<slug>` row is never used, so the helper path
-stays inside the same allowlist as a directly requested OpenRouter row.
+twin: an excluded twin row is never used, so the helper path stays inside
+the same allowlist as a directly requested OpenRouter row.
 The twin answers the client's own payload, tools included, so the helper
-thread keeps the tools its client granted it. Enabling the flag means the
+thread keeps the tools its client granted it. The fallback means the
 helper prompt reaches OpenRouter and bills that key, and the helper marker
 is a client header: any local process holding the loopback path token can
 present a helper-shaped turn and have its prompt answered - and billed - by
