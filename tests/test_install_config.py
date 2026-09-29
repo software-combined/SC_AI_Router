@@ -84,6 +84,7 @@ class InstallConfigTests(unittest.TestCase):
             self.assertIn('openai_base_url = ', block)
             self.assertNotIn('model_catalog_json', block)
             self.assertNotIn('model_provider', block)
+            self.assertIn('approvals_reviewer = "user"', block)
             state = json.loads((home / 'mixed-router-state.json').read_text())
             self.assertEqual(state.get('openai_mode'), 'subscription')
 
@@ -154,7 +155,7 @@ class InstallConfigTests(unittest.TestCase):
             block = config.read_text()
             self.assertIn('openai_base_url = ', block)
             self.assertNotIn('model_provider', block)
-            self.assertNotIn('approvals_reviewer', block)
+            self.assertIn('approvals_reviewer = "user"', block)
 
     def test_update_plist_carries_home_without_feed_pin(self):
         # --feed is one-shot: it selects this run's source but must not pin
