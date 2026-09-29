@@ -26,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ai_router.agent_handoffs import add_plaintext_tools, restore_event, steer_event
 from ai_router.catalogue import external_entry, subscription_stub
 from ai_router.registry import by_slug
-from tools.appserver_probe import AppServer, AGENT_HANDOFFS, scrub_env
+from tools.appserver_probe import AppServer, AGENT_HANDOFFS, codex_bin, scrub_env
 
 PARENT = 'gpt-6-astra'
 CHILD = 'deepseek/deepseek-v4.1-flash'
@@ -494,7 +494,7 @@ def run(args, probe_type=Probe):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--codex', default='/Applications/ChatGPT.app/Contents/Resources/codex')
+    parser.add_argument('--codex', default=codex_bin())
     parser.add_argument('--wire-mode', choices=('classic', 'lite'), default='lite',
                         help='Offline variant; live always uses installed catalogue metadata.')
     parser.add_argument('--live', action='store_true')

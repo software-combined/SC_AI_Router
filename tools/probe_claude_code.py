@@ -139,8 +139,8 @@ def probe(home, model, deferred=False, read_count=1, effort=None,
             '--output-format', 'stream-json' if read_count > 1 else 'json']
             + (['--verbose'] if read_count > 1 else []))
         try:
-            done = subprocess.run(
-                cmd,
+            done = subprocess.run(  # a parent's ANTHROPIC_BASE_URL outranks --settings
+                cmd, env={**os.environ, **env},
                 cwd=str(work), capture_output=True, text=True, timeout=TIMEOUT_S)
         except subprocess.TimeoutExpired:
             return {'model': model, 'leg': leg_of(deferred, read_count),

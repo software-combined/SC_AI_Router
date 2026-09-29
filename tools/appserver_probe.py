@@ -26,6 +26,18 @@ AMBIENT = 'ambient'
 CONTEXT_BUDGET = 'context_budget'
 AGENT_HANDOFFS = 'agent_handoffs'
 
+# ChatGPT 26.924 (codex-cli 0.158) moved the bundled CLI into codex-cli/bin;
+# earlier builds ship it one level up. CODEX_BIN, when set, always wins.
+BUNDLED_CODEX = ('/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex',
+                 '/Applications/ChatGPT.app/Contents/Resources/codex')
+
+
+def codex_bin(env=None):
+    """The Codex CLI to launch: CODEX_BIN, else the first bundled path present."""
+    env = os.environ if env is None else env
+    return env.get('CODEX_BIN') or next(
+        (path for path in BUNDLED_CODEX if os.path.exists(path)), BUNDLED_CODEX[0])
+
 
 def scrub_env(env, mode, inject=None):
     """Scrub a copy of `env` per `mode`, preserving each probe's behaviour.
