@@ -779,7 +779,10 @@ such a turn is answered from the OpenRouter twin row `openai/<slug>`, or
 from the Luna twin `openai/gpt-6-luna` when the requesting slug has no
 twin of its own, and logged as `subscription_fallback`, or as
 `subscription_fallback_unavailable` when the twin cannot be prepared (no
-OpenRouter key, for example), which keeps the existing 503. Every other
+OpenRouter key, for example), which keeps the existing 503. An exhausted
+subscription also answers helper turns 401; those take the same twin path,
+while ordinary turns keep the raw upstream answer so a sign-in problem
+stays visible. Every other
 turn keeps that 503 unchanged. A provisioned portco list still gates the
 twin: an excluded twin row is never used, so the helper path stays inside
 the same allowlist as a directly requested OpenRouter row.
