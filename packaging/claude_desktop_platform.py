@@ -166,23 +166,25 @@ def _snapshot(platform_name, identity, run):
             "user=$o.Sid;born=$p.CreationDate.ToString('o');exe=$p.ExecutablePath}}});"
             "ConvertTo-Json -InputObject $rows -Compress", run)
     else:
-        command = ['/bin/ps', '-axo', 'pid=,ppid=,uid=,lstart=,comm=']
+        command = ['/bin/ps', '-axo', 'pid=,ppid=,uid=,lstart=,stat=,comm=']
         if platform_name == 'linux':
             command = ['/bin/ps', '-ww', '-u', identity['user'], '-o',
-                       'pid=,ppid=,uid=,lstart=,exe=']
+                       'pid=,ppid=,uid=,lstart=,stat=,exe=']
         answer = _run(command, run)
         if answer.returncode:
             raise OSError('Claude status is unknown')
         rows = []
         for line in answer.stdout.splitlines():
-            parts = line.split(None, 8)
-            if len(parts) != 9:
+            parts = line.split(None, 9)
+            if len(parts) != 10:
                 raise OSError('Claude status is unknown')
-            if platform_name == 'linux' and (not Path(parts[8]).is_absolute()
-                                            or parts[8].endswith(' (deleted)')):
+            if parts[8].startswith('Z'):
+                continue  # Exited and waiting to be reaped, so it can no longer write.
+            if platform_name == 'linux' and (not Path(parts[9]).is_absolute()
+                                            or parts[9].endswith(' (deleted)')):
                 raise OSError('Claude status is unknown')
             rows.append(dict(pid=int(parts[0]), parent=int(parts[1]), user=parts[2],
-                             born=' '.join(parts[3:8]), exe=parts[8]))
+                             born=' '.join(parts[3:8]), exe=parts[9]))
     if not isinstance(rows, list) or any(not r.get('born') or not r.get('exe') for r in rows):
         raise OSError('Claude status is unknown')
     return {r['pid']: r for r in rows if r['user'] == identity['user']}
@@ -192,11 +194,12 @@ def _writers(rows, identity, seen, platform_name):
     norm = (lambda s: s.replace('\\', '/').casefold()) if platform_name == 'win32' else str
     root, exe = norm(identity['root']).rstrip('/') + '/', norm(identity['exe'])
     browser_host = root + 'Contents/Helpers/chrome-native-host' if platform_name == 'darwin' else None
-    for pid, old in list(seen.items()):
-        if pid in rows and rows[pid] != old:
-            # Parent changes are expected when a writer outlives the main app.
-            if any(rows[pid][k] != old[k] for k in ('born', 'exe', 'user')):
-                raise OSError('Claude identity changed')
+    for pid, old in seen.items():
+        # A new parent is expected when a writer outlives the main app, and a new
+        # executable alone is the same process after exec, so both stay tracked.
+        # A new start time or user means the pid now belongs to another process.
+        if pid in rows and any(rows[pid][k] != old[k] for k in ('born', 'user')):
+            raise OSError('Claude identity changed')
     for pid, row in rows.items():
         path = norm(row['exe'])
         # Browser-owned native messaging hosts outlive Claude. Actual app
@@ -246,11 +249,17 @@ def request_stop(platform_name, run=subprocess.run, timeout=65):
         if not confirm('Please quit Claude, then choose Continue.', platform_name, run):
             return False
         argv = None
-    if argv and _run(argv, run, max(0.1, min(30, timeout))).returncode:
-        return False
+    try:
+        if argv and _run(argv, run, max(0.1, min(30, timeout))).returncode:
+            return False
+    except subprocess.TimeoutExpired:
+        pass  # Claude may still close, for example after its own confirmation; the wait decides.
     while True:
-        if not _writers(_snapshot(platform_name, identity, run), identity, seen, platform_name):
-            return True
+        try:
+            if not _writers(_snapshot(platform_name, identity, run), identity, seen, platform_name):
+                return True
+        except (OSError, subprocess.SubprocessError):
+            pass  # Quitting processes can fail a check; only a clean one ends the wait.
         if time.monotonic() >= deadline:
             return False
         time.sleep(min(0.25, max(0, deadline - time.monotonic())))

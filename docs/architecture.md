@@ -456,8 +456,16 @@ trash entry that cannot be put back safely stays for inspection and fails the
 switch.
 
 `claude_desktop_platform.py` owns native app identity, graceful shutdown,
-dialogs and owned shortcuts. It waits for known writers and their children;
-an unknown writer or changed process identity refuses the operation.
+dialogs and owned shortcuts. It waits for known writers and their children. A
+process that execs another program keeps its start time and stays tracked; an
+exited process still waiting for its parent (a zombie) can no longer write, so
+it counts as gone. Before the quit request, an unknown writer or unreadable
+process list refuses the operation, and a refused request ends it at once.
+After a request that was sent, the wait decides the outcome, even when the
+request timed out, because Claude may still close once its own confirmation is
+answered. Processes that are quitting can briefly fail a check,
+so a failed check, including a reused process ID, is retried until the deadline
+and only a clean check ends the wait.
 On macOS, bundle discovery uses Spotlight metadata because AppleScript app
 lookup launches a closed app. Browser-owned native messaging hosts do not seed
 the writer set; actual app descendants remain tracked after reparenting.
