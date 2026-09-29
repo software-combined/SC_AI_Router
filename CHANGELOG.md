@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Refused thread-title helper turns now fall back to the Luna OpenRouter
+  twin unless `openai_helper_fallback` is explicitly false. Slugs with a
+  twin keep the same-model twin; twinless slugs answer from
+  `openai/gpt-6-luna`. Portco allowlist, key-filtered availability and the
+  single-handoff ledger rules still gate every fallback.
+
 - The installer now sets `approvals_reviewer = "user"` in the managed
   Codex block in both subscription and no-subscription mode, so a fresh
   or updated install never falls back to the background reviewer. An
