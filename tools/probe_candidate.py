@@ -3,7 +3,6 @@ import argparse
 from datetime import datetime, timezone
 from functools import partial
 import json
-import os
 from pathlib import Path
 import re
 import signal
@@ -18,10 +17,10 @@ sys.path.insert(0, str(ROOT))
 from ai_router import candidate_evidence as evidence, inspect_requests, provider_defs, registry, transport
 from ai_router.atomic_write import replace_text
 from ai_router.clients.registry import CLIENTS
-from tools import probe_claude_code
+from tools import appserver_probe, probe_claude_code
 
 MAX_CALLS, MAX_INPUT, MAX_OUTPUT = evidence.MAX_PROBE_CALLS, 512 * 1024, 65536
-CODEX = os.environ.get('CODEX_BIN', '/Applications/ChatGPT.app/Contents/Resources/codex')
+CODEX = appserver_probe.codex_bin()
 
 
 class Budget:

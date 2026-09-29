@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ai_router.catalogue import external_entry, subscription_stub
 from ai_router.context_recovery import RECOVERY_GUIDANCE
 from ai_router.registry import by_slug
-from tools.appserver_probe import AGENT_HANDOFFS, AppServer, scrub_env
+from tools.appserver_probe import AGENT_HANDOFFS, AppServer, codex_bin, scrub_env
 from tools.probe_agent_handoffs import message, sse
 from tools.probe_context_budget import Reply
 
@@ -214,7 +214,7 @@ def run(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--codex-bin', default='/Applications/ChatGPT.app/Contents/Resources/codex')
+    parser.add_argument('--codex-bin', default=codex_bin())
     parser.add_argument('--model', default='gpt-5.6-luna')
     parser.add_argument('--live', action='store_true')
     parser.add_argument('--max-live-calls', type=int, default=0)
