@@ -486,12 +486,19 @@ trash entry that cannot be put back safely stays for inspection and fails the
 switch.
 
 `claude_desktop_platform.py` owns native app identity, graceful shutdown,
-dialogs and owned shortcuts. It waits for known writers and their children;
-an unknown writer or changed process identity refuses the operation. Its
-macOS lifecycle helpers take an `app` (bundle id, plus the executable names
-only that app may run) that defaults to Claude; Switch Codex passes the
-ChatGPT app's, which lists no such names, so a running Claude or Codex CLI
-never blocks it.
+dialogs and owned shortcuts. It waits for known writers and their children. A
+process that execs another program keeps its start time and stays tracked; an
+exited process still waiting for its parent (a zombie) can no longer write, so
+it counts as gone. Before the quit request, an unknown writer or unreadable
+process list refuses the operation, and a refused request ends it at once.
+After a request that was sent, the wait decides the outcome, even when the
+request timed out, because Claude may still close once its own confirmation is
+answered. Processes that are quitting can briefly fail a check,
+so a failed check, including a reused process ID, is retried until the deadline
+and only a clean check ends the wait. Its macOS lifecycle helpers take an
+`app` (bundle id, plus the executable names only that app may run) that
+defaults to Claude; Switch Codex passes the ChatGPT app's, which lists no such
+names, so a running Claude or Codex CLI never blocks it.
 On macOS, bundle discovery uses Spotlight metadata because AppleScript app
 lookup launches a closed app. Browser-owned native messaging hosts do not seed
 the writer set; actual app descendants remain tracked after reparenting.
@@ -508,12 +515,14 @@ never stand in for a module it imports.
 default is `codex_config.build_block` unchanged, so a never-switched install
 and older Codex builds see nothing new. `switched` is root keys only: Codex's
 active provider becomes `scg_router`, which needs no OpenAI sign-in, sends
-`x-scg-codex-route` and reads `routed-models.json`. `switched_back` is the
-default plus `scg_router` with sign-in on, so threads started while switched
-still resume. The Codex receipt entry records the variant (`variant`, absent
-until the first switch), and `client_choice.attach_codex` rebuilds it on
-every install and update. `switch` and `restore` are the only writers that
-change it. `switch` writes the config first, then the receipt, with the config
+`x-scg-codex-route` and reads `routed-models.json`, and
+`approvals_reviewer = "user"` stays, as in every managed block, because
+attach moves the owner's own line into the receipt and this route refuses
+ChatGPT's reviewer. `switched_back` is the default plus `scg_router` with
+sign-in on, so threads started while switched still resume. The Codex receipt
+entry records the variant (`variant`, absent until the first switch), and
+`client_choice.attach_codex` rebuilds it on every install and update.
+`switch` and `restore` are the only writers that change it. `switch` writes the config first, then the receipt, with the config
 put back if the receipt write fails; `restore` undoes a switch, putting both
 back. While Codex is switched, `tools/disable.py` (and so a
 service-only install), `--uninstall` and `--rollback` refuse and leave its

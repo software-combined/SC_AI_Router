@@ -47,7 +47,7 @@ class SharedPlatformTests(unittest.TestCase):
                 return result(str(app) if 'com.openai.codex' in argv[1] else '')
             if argv[0] == '/bin/ps':
                 rows = [] if any('to quit' in c[-1] for c in commands) else [
-                    '10 1 %s Mon Sep 28 10:00:00 2026 %s/Contents/MacOS/ChatGPT'
+                    '10 1 %s Mon Sep 28 10:00:00 2026 S %s/Contents/MacOS/ChatGPT'
                     % (os.getuid(), app)]
                 return result('\n'.join(rows))
             return result()

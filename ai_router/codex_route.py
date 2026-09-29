@@ -24,7 +24,8 @@ routed-only list (`routed_models`). The check lives here rather than beside
 the list's writer because the availability sync imports that writer, and the
 check reads availability back: side by side they would import each other.
 """
-from . import availability, errors, local_services, provider_defs, routed_models
+from . import (availability, errors, local_services, provider_defs, routed_models,
+               subscription_roster)
 from .clients import visible_for
 
 HEADER = 'x-scg-codex-route'  # lowercase, as the Switch Codex provider entry sends it
@@ -63,11 +64,14 @@ def refuse(path, payload, context, twin=None):
 
     `twin` is the twin slug this machine may route, already gated by the
     portco allowlist and the key's availability; the answer names it only
-    when the Codex picker lists its row.
+    when it is this model's own twin (never the Luna stand-in that answers
+    helper turns) and the Codex picker lists its row.
     """
     if provider_defs.native_service_path(path):
         local_services.answer(path)
-    row = context.catalogue.get(twin)
+    own = subscription_roster.TWIN_PREFIX + subscription_roster.SUCCESSORS.get(
+        context.slug, context.slug)
+    row = context.catalogue.get(twin) if twin == own else None
     if row is not None and not visible_for(row, 'codex'):
         row = None
     raise Refusal(message(row), payload.get('stream') is True,

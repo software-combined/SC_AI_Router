@@ -296,8 +296,9 @@ lets Claude exit normally, shares local tasks using the old selection as the
 conflict winner, rechecks settings and that Claude is still closed, changes only
 `deploymentMode`, and reopens Claude. A second launcher request is refused until
 the first finishes, so it cannot copy from an outdated selection.
-**Cancel** leaves everything alone. If Claude stays open or you cancel its
-quit prompt, nothing changes. Task sharing runs only when switching; ordinary
+**Cancel** leaves everything alone. If Claude does not finish closing within
+about a minute, or you cancel its quit prompt, nothing changes and Claude
+reopens if it had closed. Task sharing runs only when switching; ordinary
 app launches and router startup leave histories alone. Setup and updates preserve the selected mode.
 A standalone Claude Code terminal installation is not required for the
 desktop app. If the installed router predates these launchers, setup keeps

@@ -8,7 +8,8 @@ writes one of two other variants between the same markers:
 - `switched`, root keys only: the active provider becomes `scg_router`, which
   needs no OpenAI sign-in and marks every request with the route header, and
   the picker reads the routed-only list. `openai_base_url` stays, so threads
-  started on the built-in provider still resume through the router.
+  started on the built-in provider still resume through the router, and
+  approvals stay with the person, as in every managed block.
 - `switched_back`: the default block plus `scg_router` with sign-in required,
   so threads started while switched still resume.
 
@@ -82,6 +83,9 @@ def build(home, state, mode, static_catalogue, variant):
             'model_provider = "%s"\n' % PROVIDER,
             # Forward slashes, as in codex_config: TOML reads backslashes as escapes.
             'model_catalog_json = "%s/%s"\n' % (Path(home).as_posix(), ROUTED_LIST),
+            # Attach moves the owner's own line into the receipt, and this
+            # route refuses the ChatGPT model an automatic reviewer would use.
+            'approvals_reviewer = "user"\n',
             provider + 'false, http_headers = { "%s" = "routed" } }\n' % HEADER,
             _codex.END + '\n'))
     if '[model_providers.%s]' % PROVIDER in block:
@@ -148,10 +152,12 @@ def switch(home, variant):
     block = build(home, state, entry.get('openai_mode'), False, variant)
     block = _codex.preserve_picker_selection(config_path, live, block)
     block = _codex.seed_picker_selection(config_path, live, block)
-    original = _codex.replace_config_block(config_path, block, live)
+    original, removed = _codex.replace_config_block(config_path, block, live)
+    record = dict(entry, inserted_block=block, variant=variant)
+    if removed:  # owner approvals_reviewer lines, recorded as attach_config does
+        record['reviewer'] = {'removed': removed}
     try:
-        _codex.write_client_receipt(
-            home, 'codex', dict(entry, inserted_block=block, variant=variant))
+        _codex.write_client_receipt(home, 'codex', record)
     except BaseException:
         _atomic.replace_text(config_path, original)
         raise
@@ -177,5 +183,7 @@ def restore(home, previous, variant):
     else:
         raise SystemExit(EDITED)
     if live != previous['inserted_block']:
-        _codex.replace_config_block(config_path, previous['inserted_block'], live)
+        _, removed = _codex.replace_config_block(config_path, previous['inserted_block'], live)
+        if removed:
+            previous = dict(previous, reviewer={'removed': removed})
     _codex.write_client_receipt(home, 'codex', previous)

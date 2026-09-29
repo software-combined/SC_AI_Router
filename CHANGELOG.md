@@ -35,6 +35,24 @@
   release's plain switch, Open Claude just opens Claude, and Claude Code sessions
   start normally; reinstall 1.0.0 to share tasks again.
 
+- Helper-turn fallback now also answers subscription 401/403 auth refusals
+  from the twin row. An exhausted login refuses naming turns with 401 as
+  well as 429; the twin answers those under the same gates. Ordinary
+  turns keep the raw upstream answer so a sign-in problem stays visible.
+
+- Refused thread-title helper turns now fall back to the Luna OpenRouter
+  twin unless `openai_helper_fallback` is explicitly false. Slugs with a
+  twin keep the same-model twin; twinless slugs answer from
+  `openai/gpt-6-luna`. Portco allowlist, key-filtered availability and the
+  single-handoff ledger rules still gate every fallback.
+
+- The installer now sets `approvals_reviewer = "user"` in the managed
+  Codex block in both subscription and no-subscription mode, so a fresh
+  or updated install never falls back to the background reviewer. An
+  owner copy of the line outside the block is removed on attach and its
+  exact text is recorded in the activation receipt, so detach puts it
+  back; `approval_policy` stays untouched.
+
 ## 0.6.140
 
 - Repair and stream handling now use captured request and response facts.
