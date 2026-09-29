@@ -234,8 +234,12 @@ request stays at the client's own tool set, and a row is never retried. A row
 passes when the marker comes back in the answer, not only when it is the whole
 answer: some rows narrate it, and that is a finished turn rather than a fault.
 An empty or refused turn still fails. The probe leaves the caller's Claude
-settings alone: it points a disposable settings file at the router and never
-prints the loopback URL. `--deferred` adds the leg an attached client
+settings alone: it names the router in a disposable settings file and in the
+client's own environment, and never prints the loopback URL. The environment
+matters: Claude Code lets its own environment override a settings file, and a
+probe started from a Claude Code session inherits that session's first-party
+`ANTHROPIC_BASE_URL`, which sent every turn to Anthropic on the user's own
+login instead of the router under test. `--deferred` adds the leg an attached client
 actually runs: a synthetic MCP server advertising 700 stub tools, tool search
 on, and one round trip that must come back through the search. `--candidate
 <slug>` boots an isolated router from this working tree for that row and tears

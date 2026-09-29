@@ -50,7 +50,7 @@ from ai_router.history_items import inbound_agent_message
 from ai_router.catalogue import external_entry, subscription_stub
 from ai_router.registry import by_slug
 from ai_router.subscription_history import encrypted_field_count
-from tools.appserver_probe import AGENT_HANDOFFS, AppServer, scrub_env
+from tools.appserver_probe import AGENT_HANDOFFS, AppServer, codex_bin, scrub_env
 from tools.probe_agent_handoffs import Probe, frame_data, message, sse
 
 MARKER = 'SYNTH_PARENT_SWITCH_451'
@@ -364,7 +364,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--cell', choices=sorted(CELLS), required=True)
     parser.add_argument('--parents', help='comma-separated parent sequence replacing the preset')
-    parser.add_argument('--codex', default='/Applications/ChatGPT.app/Contents/Resources/codex')
+    parser.add_argument('--codex', default=codex_bin())
     parser.add_argument('--live', action='store_true')
     parser.add_argument('--max-live-calls', type=int, default=0)
     parser.add_argument('--max-live-tokens', type=int, default=0)
