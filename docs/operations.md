@@ -744,9 +744,12 @@ instead of resetting it. In the config's `[desktop]` table it sets
 instead of queueing, and `enabled-reasoning-efforts`, the client's own list
 with `max` added and `ultra` removed. Ultra is Codex's automatic-delegation
 level and the served catalogue never offers it, so the picker cannot show it
-even if a client default reintroduces it. Detach, `--client none` and
-uninstall put the desktop values back as the attach found them, and a value
-the owner changed afterwards is left alone. A `[desktop]` table or value the
+even if a client default reintroduces it. The managed block also carries
+`approvals_reviewer = "user"` in both modes, so installs never fall back to
+the background reviewer; an owner copy outside the block is removed on
+attach, recorded in the activation receipt, and restored on detach. Detach,
+`--client none` and uninstall put the desktop values back as the attach
+found them, and a value the owner changed afterwards is left alone. A `[desktop]` table or value the
 installer cannot rewrite safely skips that edit with one line of output
 rather than risk a second definition or a mangled value.
 

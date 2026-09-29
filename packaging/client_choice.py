@@ -69,9 +69,10 @@ def attach_codex(home, state, mode, codex_config, previous=None,
         os.chmod(home / f'config-before-{stamp}.toml', 0o600)
     except OSError:
         pass
-    block, before, desktop = codex_config.attach_config(config_path, block, previous)
+    block, before, desktop, reviewer = codex_config.attach_config(
+        config_path, block, previous)
     codex_config.write_receipt(home, config_path, block, rules_receipt, mode, before,
-                               desktop=desktop)
+                               desktop=desktop, reviewer=reviewer)
     return config_path
 
 
