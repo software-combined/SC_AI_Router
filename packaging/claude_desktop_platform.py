@@ -2,7 +2,8 @@
 
 The macOS lifecycle helpers also serve Switch Codex: `app` names the bundle
 to find, quit and reopen, and defaults to Claude, the only app the Windows
-and Linux paths know.
+and Linux paths know. `install_mac_app` builds the owned launcher apps:
+Switch Claude, Open Claude and Switch Codex.
 """
 import collections
 import configparser
@@ -14,6 +15,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -330,3 +332,58 @@ def install_launcher(home, python, action='switch', applications=None,
         return None
     _atomic.replace_text(launch, Path(__file__).with_name('claude_profile_launch.py').read_text(encoding='utf-8'), mode=0o755)
     return path
+
+
+class NotOwned(Exception):
+    """An app already at the target that this router did not build."""
+
+
+def install_mac_app(target, bundle_id, python, home, launcher, extra=(), plist=None,
+                    run=subprocess.run):
+    """Build or refresh the owned macOS app at `target`, staged, then swapped in.
+
+    Its executable runs `python <home>/<launcher> <extra...>`, and `launcher`,
+    a sibling of this module, is copied into the router home first, so the
+    app outlives updates and release pruning. `plist` adds Info.plist keys.
+    An app at `target` with another bundle id raises NotOwned and stays.
+    """
+    target, home = Path(target), Path(home)
+    if target.exists():
+        try:
+            owned = (plistlib.loads((target / 'Contents' / 'Info.plist').read_bytes())
+                     .get('CFBundleIdentifier') == bundle_id)
+        except (OSError, ValueError):
+            owned = False
+        if not owned:
+            raise NotOwned(target.name)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=target.parent) as tmp:
+        staged = Path(tmp) / target.name
+        contents = staged / 'Contents'
+        resources = contents / 'Resources'
+        executable = contents / 'MacOS' / target.stem
+        resources.mkdir(parents=True)
+        executable.parent.mkdir()
+        iconset = Path(tmp) / 'router.iconset'
+        iconset.mkdir()
+        for size, icon_name in ((512, 'icon_512x512.png'), (1024, 'icon_512x512@2x.png')):
+            run(['/usr/bin/sips', '-z', str(size), str(size), str(ICON), '--out',
+                 str(iconset / icon_name)], check=True, capture_output=True, timeout=15)
+        run(['/usr/bin/iconutil', '-c', 'icns', str(iconset), '-o',
+             str(resources / 'router.icns')], check=True, capture_output=True, timeout=15)
+        launch = home / launcher
+        executable.write_text('#!/bin/sh\nexec %s\n' % ' '.join(
+            shlex.quote(str(part)) for part in (python, launch) + tuple(extra)))
+        executable.chmod(0o755)
+        (contents / 'Info.plist').write_bytes(plistlib.dumps({
+            'CFBundleIdentifier': bundle_id, 'CFBundleName': target.stem,
+            'CFBundleExecutable': executable.name, 'CFBundlePackageType': 'APPL',
+            'CFBundleIconFile': 'router.icns', 'LSUIElement': True, **(plist or {}),
+        }))
+        _atomic.replace_text(launch, Path(__file__).with_name(launcher).read_text(encoding='utf-8'))
+        if target.exists():
+            # Only this product's bundle passes the ownership check above.
+            shutil.copytree(staged, target, dirs_exist_ok=True)
+        else:
+            staged.rename(target)
+    return target

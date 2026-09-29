@@ -51,6 +51,12 @@ def main():
         temp.unlink()
         raise SystemExit('Codex settings changed concurrently; retry the restore.')
     os.replace(temp, config)
+    # The Switch Codex app leaves with the attachment (never while switched:
+    # that refused above). The restore already stands, so a stuck app only warns.
+    try:
+        _packaging('codex_switch_app').remove(root)
+    except OSError:
+        print('Switch Codex could not be removed; delete it from Applications.')
     if os.environ.get('ROUTER_RESTORE_ONLY') != '1':
         command = (['systemctl', '--user', 'stop', 'codex-mixed-model-router.service']
                    if sys.platform == 'linux' else

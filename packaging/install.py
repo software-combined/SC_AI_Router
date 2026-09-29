@@ -473,7 +473,7 @@ def do_install(args, _fetch=fetch, _run=None):
         print(f"agent skills: {_skills.sync(state, current_release_dir(home) / 'plugins', run=run)}")
         print(f"installed {latest['version']}; health ok; Claude Code attached")
         return 0
-    _client_choice.attach_codex(home, state, mode, _codex_config, previous_receipt, static_catalogue=args.static_catalogue)
+    _client_choice.attach_codex(home, state, mode, _codex_config, previous_receipt, static_catalogue=args.static_catalogue, python=python)
     # launchd keeps the updater command until the job is reloaded and a
     # scheduled run defers that reload, so pruning its release breaks it.
     prune_releases(home, latest['version'], previous,
