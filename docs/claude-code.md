@@ -239,13 +239,17 @@ client's own environment, and never prints the loopback URL. The environment
 matters: Claude Code lets its own environment override a settings file, and a
 probe started from a Claude Code session inherits that session's first-party
 `ANTHROPIC_BASE_URL`, which sent every turn to Anthropic on the user's own
-login instead of the router under test. `--deferred` adds the leg an attached client
+login instead of the router under test. The client also runs with an empty
+per-run config folder, so none of the owner's instructions, skills, plugins,
+hooks, permissions or login apply, and it sends a synthetic bearer that
+`PROBE_AUTH_TOKEN` can replace. The probe therefore covers routed rows; the
+subscription leg of the AGENTS.md section 7 check runs as a real Claude Code
+session with the owner's own login and settings, started from a terminal
+rather than from inside another Claude Code session. `--deferred` adds the leg an attached client
 actually runs: a synthetic MCP server advertising 700 stub tools, tool search
 on, and one round trip that must come back through the search. `--candidate
 <slug>` boots an isolated router from this working tree for that row and tears
-it down afterwards, so a build can be checked before it is installed, and
-`PROBE_AUTH_TOKEN` supplies a synthetic bearer for a routed row on a host
-whose client login a non-interactive probe cannot read. Pass `--models` to
+it down afterwards, so a build can be checked before it is installed. Pass `--models` to
 narrow it, `--max-rows` to raise the cap, or `--json` for a machine-readable
 report, and set `CLAUDE_BIN` to drive a different client binary. For the
 multi-turn history check, `--read-count 2` makes two sequential synthetic

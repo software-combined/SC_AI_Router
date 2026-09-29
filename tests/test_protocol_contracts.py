@@ -179,7 +179,7 @@ class ProtocolContractTests(unittest.TestCase):
         recorded = install_fake(self, lambda: FakeUpstream(
             200, b'{"id":"msg_1","type":"message","content":[]}', []))
         server = self._server()
-        payload = _messages('anthropic/claude-sonnet-5')
+        payload = _messages('anthropic/claude-sonnet-5.5')
         raw = json.dumps(payload)
         conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
         conn.request('POST', '/test-token/v1/messages', body=raw,

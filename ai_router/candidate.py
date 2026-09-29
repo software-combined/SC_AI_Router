@@ -168,7 +168,9 @@ def run_probe(slug, scope, _run=subprocess.run, row=None):
         proc = _run(cmd, capture_output=True, text=True, timeout=750,
                     env={**os.environ, 'PROBE_AUTH_TOKEN': 'candidate-synthetic'})
         record = candidate_evidence.validate(json.loads(proc.stdout))
-        if proc.returncode:
+        # A failed route explains a failed exit, so each route keeps its own
+        # result; any other failed exit (an interrupted child) certifies none.
+        if proc.returncode and all(route['result'] == 'pass' for route in record['routes']):
             for route in record['routes']:
                 route['result'] = 'fail'
         return record

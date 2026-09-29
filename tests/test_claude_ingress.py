@@ -42,7 +42,7 @@ class ClaudeIngressTests(unittest.TestCase):
     def test_openrouter_slug_reaches_openrouter_with_key_only_and_identical_body(self):
         # Listing visibility never gates routing: the hidden Anthropic row
         # takes the same byte-identical OpenRouter path as a visible slug.
-        for slug in ('z-ai/glm-5.3-flash', 'anthropic/claude-sonnet-5'):
+        for slug in ('z-ai/glm-5.3-flash', 'anthropic/claude-sonnet-5.5'):
             with self.subTest(slug=slug):
                 self._check_openrouter_split(slug)
 
@@ -155,7 +155,7 @@ class ClaudeIngressTests(unittest.TestCase):
         listed = {row['id']: row['display_name'] for row in body['data']}
         self.assertEqual(
             listed[claude_mod.claude_alias('z-ai/glm-5.3-flash')], 'Z.ai: GLM 5.3 Flash \u00b7 OpenRouter')
-        self.assertIn('anthropic/claude-sonnet-5', listed)
+        self.assertIn('anthropic/claude-sonnet-5.5', listed)
 
     def test_models_listing_drops_unlisted_rows_but_still_routes_them(self):
         # The alias path resolves through the import-time BY_SLUG, so patch
@@ -191,7 +191,7 @@ class ClaudeIngressTests(unittest.TestCase):
         tiers = {row['id']: row['anthropic_family_tier'] for row in body['data']}
         self.assertTrue(tiers)
         self.assertTrue(all(t in claude_mod.FAMILY_TIERS for t in tiers.values()))
-        self.assertEqual(tiers['anthropic/claude-sonnet-5'], 'sonnet')
+        self.assertEqual(tiers['anthropic/claude-sonnet-5.5'], 'sonnet')
         self.assertEqual(tiers['anthropic/claude-opus-5.5'], 'opus')
         self.assertEqual(tiers['anthropic/claude-haiku-4.5'], 'haiku')
         self.assertEqual(tiers['anthropic/claude-fable-5.1'], 'fable')
@@ -234,8 +234,8 @@ class ClaudeIngressTests(unittest.TestCase):
             200, b'{"id":"msg_3","type":"message","content":[]}', []))
         server = self._server()
         for alias, slug in (('claude/z-ai/glm-5.3-flash', 'z-ai/glm-5.3-flash'),
-                            ('anthropic/claude-sonnet-5',
-                             'anthropic/claude-sonnet-5')):
+                            ('anthropic/claude-sonnet-5.5',
+                             'anthropic/claude-sonnet-5.5')):
             with self.subTest(alias=alias):
                 recorded.clear()
                 response = _post(server.server_port, '/test-token/v1/messages',
