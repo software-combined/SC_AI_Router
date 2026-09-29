@@ -179,6 +179,20 @@ class AgentSkillsTest(unittest.TestCase):
         self.assertNotIn('second', line)
         self.assertLess(len(line), 500)
 
+    def test_a_refusal_keeps_only_the_first_error_line(self):
+        # Codex 0.153 quotes a bad config value in its cause chain; a
+        # coloured summary must not bring terminal escapes into the log.
+        def refuse(command, **kwargs):
+            return SimpleNamespace(returncode=1, stdout='', stderr=(
+                '\x1b[31mError:\x1b[0m failed to load bootstrap configuration\n'
+                '\nCaused by:\n    invalid type: string "GH_PAT=stand-in-config-value",'
+                ' expected a map\n    in `mcp_servers.github.env`\n'))
+        line = skills.sync({'clients': 'codex'}, self.plugins, base=self.base,
+                           run=refuse, which=_which({'codex'}))
+        self.assertIn('failed to load bootstrap configuration', line)
+        self.assertNotIn('stand-in-config-value', line)
+        self.assertNotIn('\x1b', line)
+
     def test_a_superseded_runner_is_preserved_not_deleted(self):
         self.base.mkdir(parents=True)
         runner = self.base / 'updater.py'
