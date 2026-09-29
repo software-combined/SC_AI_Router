@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ai_router.catalogue import external_entry
 from ai_router.registry import by_slug
 from ai_router import provider_defs, turn_budget, wire_shape
-from tools.appserver_probe import AppServer, CONTEXT_BUDGET, scrub_env
+from tools.appserver_probe import AppServer, CONTEXT_BUDGET, codex_bin, scrub_env
 
 MODEL = 'meta/muse-spark-1.3-contributor'
 MARKER = 'CONTEXT_BUDGET_MARKER_719'
@@ -308,7 +308,7 @@ def run(binary, mode, scenario, home):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--codex-bin', default='/Applications/ChatGPT.app/Contents/Resources/codex')
+    parser.add_argument('--codex-bin', default=codex_bin())
     parser.add_argument('--mode', choices=('both', 'v1', 'v2'), default='both')
     args = parser.parse_args()
     print(subprocess.check_output([args.codex_bin, '--version'], text=True,

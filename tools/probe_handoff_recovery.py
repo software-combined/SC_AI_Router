@@ -10,6 +10,7 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from tools.appserver_probe import codex_bin
 from tools.probe_agent_handoffs import CHILD, MARKERS, PARENT, Probe, message, run, sse
 
 
@@ -96,7 +97,7 @@ class RecoveryProbe(Probe):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--codex', default='/Applications/ChatGPT.app/Contents/Resources/codex')
+    parser.add_argument('--codex', default=codex_bin())
     parser.add_argument('--wire-mode', choices=('classic', 'lite'), default='lite')
     parser.add_argument('--live', action='store_true')
     parser.add_argument('--installed', action='store_true')
