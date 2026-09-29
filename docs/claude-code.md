@@ -326,7 +326,10 @@ shortened native bundle folders keep their layout; new copies use full folders.
 Two sessions claiming one shortened folder are refused without overwriting it.
 Duplicate records
 are consolidated only after their unique bundle files have been preserved.
-The next run recovers interrupted transactions that have a valid journal.
+The next run recovers interrupted transactions that have a valid journal,
+including a committed cleanup that stopped partway. A copied or restored home
+folder, a shared transcript that Claude Code later deleted, or a writer that
+changed a transcript during its repair does not block later switches.
 Ambiguous recovery files remain in place for inspection, and prevent switching.
 
 The target account and organization must be positively identified. When they

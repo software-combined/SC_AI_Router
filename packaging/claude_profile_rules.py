@@ -106,7 +106,8 @@ def skip(path, history=False):
 
     Claude Code names each folder in `.claude/projects` after the task's
     workspace, using letters, digits and dashes, so its words are the user's
-    own (oauth-demo, secret-santa). That folder skips only the word screen.
+    own (oauth-demo, migration-before). That folder skips only the word screen
+    and the dashed -before/-after suffixes; the router's markers use dots.
     """
     parts = Path(path).parts
     if history:
@@ -118,18 +119,19 @@ def skip(path, history=False):
     for index, part in enumerate(parts):
         lower = part.lower()
         normalized = normalized_key(part)
-        words = not (index == workspace_index and WORKSPACE_FOLDER.fullmatch(part))
+        screened = not (index == workspace_index and WORKSPACE_FOLDER.fullmatch(part))
         if (lower in DROP_NAME_PARTS or lower in DROP_FILE_NAMES
                 or lower.endswith(DROP_FILE_SUFFIXES)
                 or lower.endswith(('.backup', '.pending', '.tmp', '.journal',
-                                   '.manifest', '.recovery', '-before', '-after'))
+                                   '.manifest', '.recovery'))
+                or (screened and lower.endswith(('-before', '-after')))
                 or (lower.startswith('receipt') and lower.endswith('.json'))
                 or any(token in lower for token in (
                     '.tmp-', '.before-', '.after-', '.duplicate-backup-',
                     '.recovery-', 'transaction-manifest',
                     'claude-profile-transaction', 'claude-profile-control'))
                 or lower.startswith(('plugin_', 'host-creds-'))
-                or (words and any(token in normalized for token in DROP_NAME_TOKENS))):
+                or (screened and any(token in normalized for token in DROP_NAME_TOKENS))):
             return True
     return False
 

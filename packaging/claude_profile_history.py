@@ -184,11 +184,12 @@ def _validate_done(path, journal, backup, stage, document):
     expected = {'version': 1, 'journal': journal.name,
         'before': document['before'], 'after': document['after'],
         'identity': document['identity'], 'stage_identity': document['stage_identity']}
-    backup_state, _, backup_identity = _snapshot(backup)
+    # The content hash proves the original; a copied or restored home has new
+    # inodes, so file identity is not required once the repair completed.
+    backup_state, _, _ = _snapshot(backup)
     if (state is None or (os.name != 'nt' and state['mode'] != 0o600)
             or json.loads(raw.decode('utf-8')) != expected
-            or _present(stage) or not _private_match(backup_state, document['before'])
-            or backup_identity != document['identity']):
+            or _present(stage) or not _private_match(backup_state, document['before'])):
         raise ValueError('invalid history completion')
 
 
@@ -218,6 +219,12 @@ def _resume(target, journal, backup, stage, done):
         _publish.move_new(target, backup)
         backup_state, _, backup_identity = _snapshot(backup)
         if (not _private_match(backup_state, before) or backup_identity != identity):
+            # A writer changed the file just before the rename. Put it back and
+            # drop this plan so the next run repairs the new content instead.
+            if not _present(target):
+                _publish.move_new(backup, target)
+                for item in (stage, journal):
+                    item.unlink(missing_ok=True)
             raise ValueError('changed history backup')
         target_state = None
     if target_state is not None:
@@ -309,7 +316,8 @@ def repair_file(path):
         return 'repaired'
     before, raw, identity = _snapshot(target)
     if before is None:
-        raise ValueError('missing history source')
+        # Any leftovers are completed repairs of a transcript since deleted.
+        return 'missing'
     try:
         projected = portable_history(raw.decode('utf-8')).encode('utf-8')
     except UnicodeError as exc:

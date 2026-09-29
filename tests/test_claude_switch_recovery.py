@@ -80,6 +80,22 @@ class SwitchRecoveryTests(unittest.TestCase):
             self.switch(Platform(self.events, opens=False), lambda *_args: report(failed=1))
         self.assertEqual((self.mode(), self.events), ('3p', ['confirm', 'stop', 'open']))
 
+    def test_unexpected_error_after_quit_reopens_claude_with_a_plain_message(self):
+        platform = Platform(self.events)
+        platform.is_running = mock.Mock(side_effect=RuntimeError('private profile detail'))
+        with self.assertRaisesRegex(switcher.SwitchError, r'^Claude tasks were not fully shared\. Try again\.$'):
+            self.switch(platform, lambda *_args: report())
+        self.assertEqual((self.mode(), self.events), ('3p', ['confirm', 'stop', 'open']))
+
+    def test_failed_reopen_keeps_a_message_that_already_says_open_claude(self):
+        def select_subscription(*_args):  # The selection changes while tasks are shared.
+            self.config.write_text(json.dumps({'deploymentMode': '1p'}))
+            return report()
+        with self.assertRaisesRegex(switcher.SwitchError,
+                                    r'^Claude settings changed\. Open Claude and try again\.$'):
+            self.switch(Platform(self.events, opens=False), select_subscription)
+        self.assertEqual(self.events, ['confirm', 'stop', 'open'])
+
     def test_unshared_tasks_are_counted_after_a_successful_switch(self):
         for count, message in ((1, '1 saved task could not be shared and stayed where it was.'),
                                (2, '2 saved tasks could not be shared and stayed where they were.')):

@@ -174,6 +174,8 @@ class ProfileRulesTests(unittest.TestCase):
                 ('-Users-me-oauth-demo/' + cli, True, False),
                 ('C--Users-me-token-service/' + cli, True, False),
                 ('.claude/projects/-Users-me-secret-santa/' + cli, False, False),
+                ('-Users-me-migration-before/' + cli, True, False),
+                ('-Users-me-app/rollout-after/' + cli, True, True),  # only the workspace folder
                 ('-Users-me-oauth-demo/' + cli, False, True),  # not a history layout
                 ('-Users-me-app/secrets/' + cli, True, True),  # below the workspace folder
                 ('.claude/projects/oauth-token.json', False, True),  # a file name
