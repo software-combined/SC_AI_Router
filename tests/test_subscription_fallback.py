@@ -2,8 +2,8 @@
 
 Protects the title contract: desktop titles come from helper turns on a
 subscription slug, so an exhausted allowance must either keep the existing
-503 (flag off) or be answered by the registry's OpenRouter twin (flag on),
-and nothing else may be redirected.
+503 (flag explicitly false) or be answered by the registry's OpenRouter
+twin (flag on or missing), and nothing else may be redirected.
 """
 import dataclasses
 import json
@@ -64,9 +64,16 @@ class HelperTurnTests(unittest.TestCase):
         self.assertEqual(by_slug('openai/gpt-6-luna').provider, 'openrouter')
         self.assertEqual(subscription_fallback.twin_slug(HELPER), 'openai/gpt-6-luna')
         self.assertEqual(subscription_fallback.twin_slug('gpt-6-luna'), 'openai/gpt-6-luna')
-        for absent in ('gpt-5.5', 'gpt-5.3-codex-spark', 'openai/gpt-6-luna', None):
-            with self.subTest(model=absent):
-                self.assertIsNone(subscription_fallback.twin_slug(absent))
+        # The Luna twin is its own fallback target; plan() never routes an
+        # already-external slug here, since it requires the subscription row.
+        self.assertEqual(subscription_fallback.twin_slug('openai/gpt-6-luna'),
+                         'openai/gpt-6-luna')
+        self.assertIsNone(subscription_fallback.twin_slug(None))
+
+    def test_twinless_slugs_fall_back_to_the_luna_twin(self):
+        for model in ('gpt-5.5', 'gpt-5.3-codex-spark'):
+            with self.subTest(model=model):
+                self.assertEqual(subscription_fallback.twin_slug(model), 'openai/gpt-6-luna')
 
     def test_only_enabled_helper_turns_with_a_twin_get_a_plan(self):
         base = dict(state={'openai_helper_fallback': True},
@@ -78,12 +85,16 @@ class HelperTurnTests(unittest.TestCase):
         tools = [{'type': 'function', 'name': 'read_file'}]
         self.assertIsNotNone(
             subscription_fallback.plan(**dict(base, payload={'model': HELPER, 'tools': tools})))
-        disqualified = (('state', {}),
-                        ('state', {'openai_helper_fallback': False}),
+        # A missing flag means on; only an explicit false opts out.
+        self.assertIsNotNone(subscription_fallback.plan(**dict(base, state={})))
+        twinless = subscription_fallback.plan(
+            **dict(base, payload={'model': 'gpt-5.5'}))
+        self.assertIsNotNone(twinless)
+        self.assertEqual(twinless.target.slug, 'openai/gpt-6-luna')
+        disqualified = (('state', {'openai_helper_fallback': False}),
                         ('path', '/alpha/search'),
                         ('prepared', SimpleNamespace(provider='openrouter')),
-                        ('headers', {}),
-                        ('payload', {'model': 'gpt-5.5'}))
+                        ('headers', {}))
         # Plan 068: a provisioned portco list gates the redispatch too.
         allowed_twin = {'openai_helper_fallback': True,
                         'allowed_models': ['openai/gpt-6-luna']}
@@ -123,9 +134,17 @@ class RefusedHelperTurnTests(unittest.TestCase):
             'key': 'k', 'region': 'global', 'models': frozenset(models), 'fetched_at': 0}
         self.addCleanup(setattr, availability, '_SNAPSHOT', snap)
 
-    def test_flag_off_keeps_the_existing_503(self):
+    def test_missing_flag_answers_the_helper_turn_from_the_twin_row(self):
         recorded = install_fake(self, self._refusal())
         server = self._server()
+        response = self._turn(server, HEADERS)
+        self.assertEqual(response.status, 200)
+        self.assertEqual(json.loads(response.read())['model'], 'openai/gpt-6-luna')
+        self.assertEqual([call[0] for call in recorded], ['chatgpt.com', 'openrouter.ai'])
+
+    def test_explicit_opt_out_keeps_the_existing_503(self):
+        recorded = install_fake(self, self._refusal())
+        server = self._server(openai_helper_fallback=False)
         response = self._turn(server, HEADERS)
         self.assertEqual(response.status, 503)
         body = json.loads(response.read())
@@ -253,12 +272,25 @@ class RefusedHelperTurnTests(unittest.TestCase):
                     raw_body=b'{}', headers=HEADERS, credentials=object())
         self.assertIsNone(subscription_fallback.plan(**base))
 
-    def test_subscription_slug_without_a_twin_keeps_the_refusal(self):
+    def test_subscription_slug_without_a_twin_answers_from_the_luna_twin(self):
         recorded = install_fake(self, self._refusal())
         server = self._server(openai_helper_fallback=True)
         response = self._turn(server, HEADERS, payload={'model': 'gpt-5.5'})
+        self.assertEqual(response.status, 200)
+        self.assertEqual(json.loads(response.read())['model'], 'openai/gpt-6-luna')
+        self.assertEqual([call[0] for call in recorded], ['chatgpt.com', 'openrouter.ai'])
+
+    def test_missing_luna_twin_keeps_the_refusal(self):
+        from ai_router import registry
+        rows = dict(registry.BY_SLUG)
+        rows.pop('openai/gpt-6-luna')
+        recorded = install_fake(self, self._refusal())
+        with mock.patch.dict('ai_router.registry.BY_SLUG', rows, clear=True):
+            server = self._server(openai_helper_fallback=True)
+            response = self._turn(server, HEADERS, payload={'model': 'gpt-5.5'})
         self.assertEqual(response.status, 503)
-        response.read()
+        self.assertEqual(json.loads(response.read())['error']['code'],
+                         'UPSTREAM_RATE_LIMITED')
         self.assertEqual([call[0] for call in recorded], ['chatgpt.com'])
 
     def test_unpreparable_twin_keeps_the_refusal_and_its_retry_after(self):
