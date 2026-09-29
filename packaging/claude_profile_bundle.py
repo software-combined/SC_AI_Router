@@ -21,6 +21,10 @@ _records = _load('router_bundle_records', 'claude_profile_records.py')
 _history = _load('router_bundle_history', 'claude_profile_history.py')
 
 
+class Unshared(ValueError):
+    """Leave this task where it is: nothing is copied or deleted, and the switch goes on."""
+
+
 def assert_target(path):
     _records.assert_ancestors(path)
     if path.exists() and not path.is_dir():
@@ -92,11 +96,11 @@ def stage_union(target_bundle, target_wins, inputs, transcript,
         for name, source in file_map.items():
             kept = files.setdefault(name, (source, paths))[0]
             # The losing copy is deleted at commit, so it must not hold turns
-            # the kept copy lacks. Refuse instead of merging diverged rows.
+            # the kept copy lacks. Keep both copies instead of merging rows.
             if (kept != source and transcript is not None
                     and source.name == transcript.name
                     and _row_ids(source) - _row_ids(kept)):
-                raise ValueError('diverged transcript')
+                raise Unshared('diverged transcript')
         for name, source in dir_map.items():
             directories.setdefault(name, source)
     if files.keys() & directories.keys():

@@ -86,17 +86,20 @@ class FaithfulCopyTests(SyncFixture):
         self.assertEqual(rows_of(self.snapshot(self.third, '-external-work')), ROWS)
         self.assertFalse(self.snapshot(self.third).exists())
 
-    def test_diverged_transcripts_refuse_the_task_and_keep_both_copies(self):
-        for profile, account, org, turn in ((self.first, A1, O1, 'n1'), (self.third, A3, O3, 'n3')):
-            fixtures.record(profile, CODE, account, org, 'task', cli=CLI, bundle_files={
-                '.claude/projects/session/' + CLI + '.jsonl': text(ROWS + [{
-                    'type': 'user', 'uuid': turn, 'parentUuid': 'c1',
-                    'message': {'role': 'user', 'content': 'turn ' + turn}}])})
-        before = [fixtures.fingerprint(root / CODE) for root in (self.first, self.third)]
+    def test_diverged_transcripts_leave_the_task_unshared_with_both_copies(self):
+        tasks = [fixtures.record(profile, CODE, account, org, 'task', cli=CLI, bundle_files={
+            '.claude/projects/session/' + CLI + '.jsonl': text(ROWS + [{
+                'type': 'user', 'uuid': turn, 'parentUuid': 'c1',
+                'message': {'role': 'user', 'content': 'turn ' + turn}}])})
+            for profile, account, org, turn in ((self.first, A1, O1, 'n1'),
+                                                (self.third, A3, O3, 'n3'))]
+        fixtures.record(self.third, CODE, A3, O3, 'other')
+        before = [(task.read_bytes(), fixtures.fingerprint(task.with_suffix(''))) for task in tasks]
         report = self.sync('1p')
-        self.assertEqual((report['failed'], report['errors']), (1, ['session-refused']), report)
-        self.assertEqual([fixtures.fingerprint(root / CODE) for root in (self.first, self.third)],
-                         before)
+        # One diverged task is left as it is and cannot block other tasks or the switch.
+        self.assertEqual((report['failed'], report['unshared'], report['copied']), (0, 1, 1), report)
+        self.assertEqual([(task.read_bytes(), fixtures.fingerprint(task.with_suffix('')))
+                          for task in tasks], before)
 
     def test_continued_shared_history_is_not_mistaken_for_divergence(self):
         live = Path(self.env['CLAUDE_CONFIG_DIR']) / 'projects/-external-work' / (CLI + '.jsonl')

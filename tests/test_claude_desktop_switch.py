@@ -166,19 +166,19 @@ class SwitchTests(unittest.TestCase):
                 switcher.switch(self.home, run=self.run, sync=self.sync,
                                 profile_env=self.profile_env)
         self.sync.assert_not_called()
-        switcher._platform.open_app.assert_not_called()
+        switcher._platform.open_app.assert_called_once()  # Reopened unchanged.
         self.assertEqual(self.config.read_bytes(), before)
 
-    def test_policy_changed_during_copy_prevents_mode_write_and_reopen(self):
+    def test_policy_changed_during_copy_prevents_mode_write_and_reopens_unchanged(self):
         self.policy.side_effect = [False, False, True]
         before = self.files()
         with self.assertRaisesRegex(switcher.SwitchError, 'organization manages'):
             self.switch()
         self.sync.assert_called_once()
         self.assertEqual(self.files(), before)
-        switcher._platform.open_app.assert_not_called()
+        switcher._platform.open_app.assert_called_once()
 
-    def test_reopened_or_unknown_app_after_copy_prevents_mode_write_and_reopen(self):
+    def test_reopened_or_unknown_app_after_copy_prevents_mode_write(self):
         for status in (True, None, OSError('status unavailable')):
             with self.subTest(status=status):
                 self.run.side_effect = [result('button returned:Continue'), result('stopped'), result()]
@@ -188,7 +188,7 @@ class SwitchTests(unittest.TestCase):
                     with self.assertRaises(switcher.SwitchError):
                         self.switch()
                 self.assertEqual(self.files(), before)
-                switcher._platform.open_app.assert_not_called()
+                self.assertEqual(self.run.call_args.args[0][0], '/usr/bin/open')
 
     def test_parallel_open_and_switch_refuse_through_sync_and_reopen(self):
         other = mock.Mock()
@@ -243,7 +243,7 @@ class SwitchTests(unittest.TestCase):
             self.switch()
         self.assertEqual(json.loads(self.config.read_text()),
                          {'deploymentMode': '1p', 'changed': True})
-        self.assertEqual(self.run.call_count, 2)
+        self.assertEqual((self.run.call_count, self.run.call_args.args[0][0]), (3, '/usr/bin/open'))
 
     def test_missing_or_changed_gateway_refuses_before_quit(self):
         receipt = self.home / 'activation.json'

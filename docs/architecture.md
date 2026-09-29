@@ -368,7 +368,10 @@ shortcuts compatible. Setup owns the callback installation and removal.
 
 `claude_profile_rules.py` owns the local-data transfer policy being integrated
 by Plan 169. It keeps conversation payloads intact, excludes separate sign-in
-and credential files, and relocates only recognized metadata paths. It imports
+and credential files, and relocates only recognized metadata paths. The folder
+Claude Code names after a task's workspace is exempt from the sensitive-word
+name screen, because its words are the user's; router markers, credential file
+names and the content screen still apply there. It imports
 only the standard library. Callers must supply validated source and destination
 paths and publish through their own transaction; the helper does not select an
 account, change profiles or start synchronization.
@@ -407,18 +410,22 @@ Claude, hold both profile locks and provide a private, fully prepared bundle.
 publication. It uses the shared transfer rules and retains unique duplicate
 content before retirement. Task files keep their exact bytes; transcript rows
 keep every field and only relocate profile paths. A losing transcript copy that
-holds rows the kept copy lacks refuses the task, because publication deletes it.
+holds rows the kept copy lacks leaves the task unshared, because publication
+would delete it.
 `claude_profile_history.py` separates foreign request
 metadata from native response diagnostics while preserving messages and IDs.
 Repairs to shared CLI transcripts retain a private original and recover through
 a separate journal because those files sit outside the desktop bundle.
 
 `claude_profile_sync.py` coordinates both directions under the two profile locks.
-Only the current account pair participates. The outgoing profile wins conflicts;
-unique bundle artifacts join the union before duplicates are retired. Shared
-CLI history takes precedence over an older bundle snapshot. Invalid or missing
-tasks are reported to the switch caller, which must keep the current mode until
-every in-scope task is safe. The coordinator has no app-lifecycle authority.
+Only the current account pair participates, and on the subscription side only
+its resolved organization; the gateway's organization is synthetic, so it spans
+the account. The outgoing profile wins conflicts; unique bundle artifacts join
+the union before duplicates are retired. Shared CLI history takes precedence
+over an older bundle snapshot. A task with no transcript anywhere, or with
+diverged transcripts, is left unshared and counted. Invalid tasks are reported
+to the switch caller, which must keep the current mode until every in-scope
+task is safe. The coordinator has no app-lifecycle authority.
 
 `claude_desktop_platform.py` owns native app identity, graceful shutdown,
 dialogs and owned shortcuts. It waits for known writers and their children;
