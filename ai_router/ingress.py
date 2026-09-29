@@ -77,11 +77,13 @@ MAX_LOG_DETAIL = 200
 def error(handler, err, *, log_event, retry_after=None):
     """Log the rejection, then answer it. `detail` is the log's copy of the
     technical reason the plain message leaves out; every refusal, retryable
-    or not, leaves one line here."""
+    or not, leaves one line here. An error marked `stream` reaches a
+    streaming turn as its one `response.failed` frame instead of JSON."""
     prefix = '/' + handler.server.state.get('token', '')
     raw = handler.path
     suffix = raw[len(prefix):] if prefix != '/' and raw.startswith(prefix) else '<unrouted>'
-    fields = {'status': err.status, 'code': err.code,
+    stream = getattr(err, 'stream', False) is True
+    fields = {'status': 200 if stream else err.status, 'code': err.code,
               'path': suffix.split('?')[0][:200]}
     detail = getattr(err, 'detail', None)
     if detail:
@@ -89,6 +91,8 @@ def error(handler, err, *, log_event, retry_after=None):
     if retry_after:
         fields['retry_after'] = retry_after
     log_event('request_rejected', **fields)
+    if stream:
+        return send_failed_stream(handler, err)
     return handler.send_json(err.status, err.body(),
                              {'Retry-After': retry_after} if retry_after else None) is True
 
@@ -136,6 +140,11 @@ def context_error(handler, streaming, *, log_event):
     # Codex recognizes context_length_exceeded inside response.failed;
     # a plain HTTP 400/409 does not mark its context full for recovery.
     log_event('request_rejected', status=200, code=err.code)
+    return send_failed_stream(handler, err)
+
+
+def send_failed_stream(handler, err):
+    """Answer a streaming turn with one `response.failed` frame carrying `err`."""
     body = ('event: response.failed\ndata: ' + json.dumps(
         {'type': 'response.failed', 'response': err.body()}) + '\n\n').encode()
     handler.response_committed = False
