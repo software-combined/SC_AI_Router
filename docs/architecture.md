@@ -560,6 +560,21 @@ ended or the installed ChatGPT app is at or above `FIXED_IN`. The dialog is
 only the offer: its action opens Switch Codex, which asks before it changes
 anything. `APP` is the one place the Switch Codex app's location is named.
 
+`packaging/codex_switch_app.py` owns that app. Every Codex attach and update
+builds or refreshes it on a Mac when Codex is attached in subscription mode
+and either the installed ChatGPT app is at or above `AFFECTED_FROM` or Codex
+is switched right now, so older Codex builds see nothing new. Otherwise it
+removes an app it owns, but never while Codex is switched, because the app is
+the way back. Detach and uninstall remove it through `tools/disable.py`,
+which refuses while switched. The app is ours when its bundle id matches and
+its Info.plist names this router home, so a run for another home (a test's)
+never removes it. It runs `codex_switch_launch.py`, a copy in the router
+home, under the router's own Python, which follows `current` to that
+release's `codex_desktop_switch.py` and names an older release in one plain
+message. `claude_desktop_platform.install_mac_app` builds it and both Claude
+launchers, staged and then swapped in, and refuses an app it does not own. A
+failed build prints one line and never fails an install.
+
 ## Distribution (outside the request path)
 
 `infra/` owns the update feed as code (repository-only templates, deployed from a checkout): the certificate stack, the private

@@ -108,7 +108,10 @@ The installer also places `packaging/router_launch.py` and
 and `update_launch.py`, so restarts and scheduled updates follow the pointer
 without symlinks. Windows Task Scheduler runs those through the packaged
 `packaging/task_launch.py` copied to `task_launch.py`, which routes the
-task's output into `logs/`.
+task's output into `logs/`. On a Mac that gets the Switch Codex app,
+`packaging/codex_switch_launch.py` is copied beside them as
+`codex_switch_launch.py`; the app runs it under the router's Python, so it
+follows the pointer the same way.
 
 ## Codex usage-limit record
 
