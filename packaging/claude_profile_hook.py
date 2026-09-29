@@ -22,6 +22,10 @@ _desktop = _load('claude_desktop_config')
 _config = _load('claude_config')
 _atomic = _load('atomic_write')
 RECEIPT = 'claude-profile-hook-receipt.json'
+# Start the router's launcher only while it exists: after a rollback or an
+# uninstall that kept this entry, every Claude Code session still starts quietly.
+CAPTURE = ("import runpy,sys;from pathlib import Path;p=Path(sys.argv[1]);sys.argv=sys.argv[1:];"
+           "p.is_file() and runpy.run_path(str(p),run_name='__main__')")
 
 
 def _safe(path):
@@ -35,7 +39,9 @@ def install(home, python, env=None):
     receipt_path = home / RECEIPT
     _safe(path)
     _safe(receipt_path)
-    argv = [str(python), str(home / 'claude_profile_launch.py'),
+    # -P keeps the session's folder off sys.path, so no project file can
+    # stand in for pathlib, runpy or any later import (Python 3.11+).
+    argv = [str(python), '-P', '-c', CAPTURE, str(home / 'claude_profile_launch.py'),
             '--home', str(home), '--action', 'capture']
     command = subprocess.list2cmdline(argv) if os.name == 'nt' else shlex.join(argv)
     entry = {'hooks': [{'type': 'command', 'command': command, 'async': True, 'timeout': 5}]}

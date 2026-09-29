@@ -54,7 +54,6 @@ load ai_router/subscription_roster.py
 load ai_router/clients/roster.py
 load ai_router/winacl.py
 parse packaging/router_launch.py
-parse packaging/claude_switch_launch.py
 parse packaging/claude_profile_launch.py
 parse packaging/runtime_lock.py
 parse packaging/task_launch.py

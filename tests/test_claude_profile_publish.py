@@ -191,7 +191,8 @@ class ProfilePublishTests(PairFixture):
                     if os.name != 'nt':
                         self.assertEqual(artifact.stat().st_mode & 0o077, 0)
                         self.assertEqual(artifact.parent.stat().st_mode & 0o077, 0)
-                self.assertEqual(path.stat().st_mode & 0o077, 0)
+                if os.name != 'nt':
+                    self.assertEqual(path.stat().st_mode & 0o077, 0)
             return update(path, phase)
 
         with mock.patch.object(self.publish, 'flush', side_effect=observe), mock.patch.object(
