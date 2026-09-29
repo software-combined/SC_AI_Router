@@ -193,6 +193,19 @@ class AgentSkillsTest(unittest.TestCase):
         self.assertNotIn('stand-in-config-value', line)
         self.assertNotIn('\x1b', line)
 
+    def test_a_refusal_line_survives_a_windows_ansi_pipe(self):
+        # Claude Code 2.1.283 opens refusals with U+2718; a cp1252 pipe refuses it.
+        def refuse(command, **kwargs):
+            return SimpleNamespace(returncode=1, stdout='', stderr=(
+                '\u2718 Failed to install plugin "scg-review@scg-agent-plugins"'))
+        base = Path(self.tmp.name) / '\u0141ukasz' / 'scg-agent-plugins'
+        line = skills.sync({'clients': 'claude'}, self.plugins, base=base,
+                           run=refuse, which=_which({'claude'}))
+        line.encode('cp1252')  # strict: an unescaped character raises here
+        line.encode('ascii')
+        self.assertIn('\\u2718 Failed to install plugin', line)
+        self.assertIn('\\u0141ukasz', line)
+
     def test_a_superseded_runner_is_preserved_not_deleted(self):
         self.base.mkdir(parents=True)
         runner = self.base / 'updater.py'
