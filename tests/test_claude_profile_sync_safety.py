@@ -62,22 +62,25 @@ class ProfileSyncSafetyTests(SyncFixture):
         self.assertEqual(report['failed'], 1)
         self.assertEqual(report['errors'], ['identical-profiles'])
 
-    def test_missing_or_invalid_required_transcript_defers_only_that_session(self):
+    def test_missing_transcript_is_left_unshared_but_an_invalid_one_fails(self):
         for store in sync.STORES:
-            for identifier, transcript in (('missing', None), ('corrupt', '{\n'),
-                                           ('array', '[]\n')):
+            for identifier, folder, transcript in (('missing', '', None), ('corrupt', '', '{\n'),
+                                                   ('array', '', '[]\n'),
+                                                   ('excluded', 'backup/', '{"message": "x"}\n')):
                 record = fixtures.record(self.third, store, '87654321-4321-4567-8123-123456789abc', 'fedcbaab-4321-4567-8123-123456789abc',
                                          identifier, cli='exact-cli-' + identifier)
                 if transcript is not None:
-                    path = record.with_suffix('') / ("exact-cli-" + identifier + '.jsonl')
-                    path.parent.mkdir()
+                    path = record.with_suffix('') / folder / ("exact-cli-" + identifier + '.jsonl')
+                    path.parent.mkdir(parents=True)
                     path.write_text(transcript)
             fixtures.record(self.third, store, '87654321-4321-4567-8123-123456789abc', 'fedcbaab-4321-4567-8123-123456789abc', 'valid',
                             cli='Exact-Cli-ID', transcript='safe message')
-        report = self.sync()
-        self.assertEqual(report['failed'], 3 * len(sync.STORES), report)
+        for _ in range(2):  # Nothing can bring the missing copy back; it never blocks.
+            report = self.sync()
+            self.assertEqual((report['failed'], report['unshared']),
+                             (3 * len(sync.STORES), len(sync.STORES)), report)
         for store in sync.STORES:
-            for identifier in ('missing', 'corrupt', 'array'):
+            for identifier in ('missing', 'corrupt', 'array', 'excluded'):
                 self.assertEqual(self.paths(self.first, store, identifier), [])
                 self.assertEqual(len(self.paths(self.third, store, identifier)), 1)
             copied = self.paths(self.first, store, 'valid')[0]

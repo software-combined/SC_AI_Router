@@ -39,7 +39,8 @@ class ProfileSyncTests(SyncFixture):
         self.assertEqual((report['failed'], report['copied'], report['replaced']), (0, 0, 0))
         self.assertEqual(before, (fixtures.fingerprint(self.first), fixtures.fingerprint(self.third)))
 
-    def test_active_namespace_not_incoming_name_selects_record_and_all_duplicates(self):
+    def test_active_namespace_record_wins_and_other_org_copies_are_untouched(self):
+        other_orgs = {}
         for store in sync.STORES:
             active = fixtures.record(self.first, store, '12345678-1234-4567-8123-123456789abc', 'abcdefab-1234-4567-8123-123456789abc', 'same',
                 filename='local_active.json', title='active', bundle_files={'same.txt': 'active'})
@@ -49,20 +50,21 @@ class ProfileSyncTests(SyncFixture):
             stale = fixtures.record(self.first, store, '12345678-1234-4567-8123-123456789abc', 'stale-org', 'same',
                 filename='local_incoming.json', title='stale', bundle_files={'stale.txt': 'stale'})
             (stale.with_suffix('') / 'empty').mkdir()
+            other_orgs[stale.parent] = fixtures.fingerprint(stale.parent)
             fixtures.record(self.third, store, '87654321-4321-4567-8123-123456789abc', 'fedcbaab-4321-4567-8123-123456789abc', 'same',
                 filename='local_incoming.json', title='inactive', bundle_files={'same.txt': 'inactive'})
         report = self.sync()
         self.assertEqual(report['failed'], 0, report)
+        self.assertEqual({path: fixtures.fingerprint(path) for path in other_orgs}, other_orgs)
         for store in sync.STORES:
             for profile in (self.first, self.third):
-                paths = self.paths(profile, store, 'same')
+                paths = [path for path in self.paths(profile, store, 'same')
+                         if path.parent.name != 'stale-org']
                 self.assertEqual(len(paths), 1)
                 doc = json.loads(paths[0].read_text())
-                self.assertEqual(doc['title'], 'active')
-                self.assertEqual(doc['messages'], [])
+                self.assertEqual((doc['title'], doc['messages']), ('active', []))
                 self.assertEqual((paths[0].with_suffix('') / 'same.txt').read_text(), 'active')
-                self.assertTrue((paths[0].with_suffix('') / 'stale.txt').exists())
-                self.assertTrue((paths[0].with_suffix('') / 'empty').is_dir())
+                self.assertFalse((paths[0].with_suffix('') / 'stale.txt').exists())
 
     def test_tasks_sync_in_both_directions_and_keep_external_paths(self):
         source = fixtures.record(
@@ -137,7 +139,7 @@ class ProfileSyncTests(SyncFixture):
             (target_bundle / 'outputs' / 'inactive.txt').read_text(),
             'inactive')
 
-    def test_active_stale_namespace_bundle_content_wins(self):
+    def test_other_org_copy_is_neither_moved_nor_overwritten(self):
         source = fixtures.record(
             self.third, 'claude-code-sessions', '87654321-4321-4567-8123-123456789abc',
             'fedcbaab-4321-4567-8123-123456789abc', 'namespace-move',
@@ -149,19 +151,13 @@ class ProfileSyncTests(SyncFixture):
             self.first, 'claude-code-sessions', '12345678-1234-4567-8123-123456789abc', 'stale-org',
             'namespace-move', filename='local_target.json', title='active',
             bundle_files={'outputs/result.txt': 'active'})
+        before = fixtures.fingerprint(target_namespace), fixtures.fingerprint(source.parent)
         report = self.sync('1p')
         self.assertEqual(report['failed'], 0, report)
-        paths = self.paths(
-            self.first, 'claude-code-sessions', 'namespace-move')
-        self.assertEqual(len(paths), 1, paths)
-        self.assertEqual(paths[0].parent.name, 'abcdefab-1234-4567-8123-123456789abc')
-        self.assertEqual(
-            (paths[0].with_suffix('') / 'outputs' / 'result.txt').read_text(),
-            'active')
-        self.assertFalse(source.with_name('local_target.json').exists())
-        self.assertFalse(target.exists())
-        self.assertFalse(target_namespace.exists() and any(
-            target_namespace.glob('local_*.json')))
+        self.assertEqual((fixtures.fingerprint(target_namespace),
+                          fixtures.fingerprint(source.parent)), before)
+        self.assertEqual(self.paths(self.first, 'claude-code-sessions', 'namespace-move'),
+                         [target])
 
     def test_excluded_duplicate_is_not_deleted(self):
         account, org = '87654321-4321-4567-8123-123456789abc', 'fedcbaab-4321-4567-8123-123456789abc'

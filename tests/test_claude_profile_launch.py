@@ -104,7 +104,7 @@ class ProfileLaunchTests(unittest.TestCase):
                 write.assert_not_called()
         self.assertEqual(json.loads(self.config.read_text())['deploymentMode'], '3p')
 
-    def test_sync_failure_keeps_old_mode_and_does_not_reopen(self):
+    def test_sync_failure_keeps_old_mode_and_reopens_claude_unchanged(self):
         platform_ops = FakePlatform(self.events)
 
         def failed_sync(_home, _mode, _third, _env):
@@ -117,12 +117,12 @@ class ProfileLaunchTests(unittest.TestCase):
                 switcher.switch(
                     self.home, action='switch', policy_check=lambda: False,
                     sync=failed_sync, platform_ops=platform_ops)
-        self.assertEqual(self.events, ['confirm', 'stop', 'sync'])
+        self.assertEqual(self.events, ['confirm', 'stop', 'sync', 'open'])
         write.assert_not_called()
         self.assertEqual(json.loads(self.config.read_text())['deploymentMode'],
                          '3p')
 
-    def test_partial_pending_sync_prevents_mode_write_and_open(self):
+    def test_partial_pending_sync_prevents_mode_write(self):
         platform_ops = FakePlatform(self.events)
 
         def pending_sync(_home, mode, _third, _env):
@@ -133,7 +133,7 @@ class ProfileLaunchTests(unittest.TestCase):
         with self.assertRaisesRegex(switcher.SwitchError, 'waiting for Claude setup'):
             switcher.switch(self.home, policy_check=lambda: False,
                             sync=pending_sync, platform_ops=platform_ops)
-        self.assertEqual(self.events, ['confirm', 'stop', 'sync:3p'])
+        self.assertEqual(self.events, ['confirm', 'stop', 'sync:3p', 'open'])
         self.assertEqual(json.loads(self.config.read_text())['deploymentMode'], '3p')
 
     def test_initialization_only_open_migrates_nothing(self):
@@ -145,16 +145,17 @@ class ProfileLaunchTests(unittest.TestCase):
         sync.assert_not_called()
         self.assertEqual(self.events, ['open'])
 
-    def test_missing_identity_with_saved_tasks_prevents_switch(self):
+    def test_missing_identity_with_saved_tasks_refuses_before_quitting_the_subscription(self):
         self.initialized.return_value = False
+        self.config.write_text(json.dumps({'deploymentMode': '1p'}))
         fixtures.record(self.profile, 'claude-code-sessions',
                         '87654321-4321-4567-8123-123456789abc',
                         'fedcbaab-4321-4567-8123-123456789abc', 'saved')
-        with self.assertRaisesRegex(switcher.SwitchError, 'setup'):
+        with self.assertRaisesRegex(switcher.SwitchError, 'Open a Code task in Claude'):
             switcher.switch(self.home, policy_check=lambda: False,
                             sync=self.sync, platform_ops=FakePlatform(self.events))
-        self.assertEqual(json.loads(self.config.read_text())['deploymentMode'], '3p')
-        self.assertNotIn('open', self.events)
+        self.assertEqual(json.loads(self.config.read_text())['deploymentMode'], '1p')
+        self.assertEqual(self.events, [])
 
     def test_router_start_does_not_share_tasks(self):
         release = self.home / 'releases/fake'

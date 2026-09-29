@@ -177,18 +177,19 @@ def resolve_namespace(store_root, profile_root, *, third_party=False):
     return namespace.parent, namespace
 
 
-def record_paths(store_root, include_irregular=False, *, account=None):
+def record_paths(store_root, include_irregular=False, *, account=None, org=None):
     store_root = Path(store_root)
     assert_ancestors(store_root)
     if not store_root.is_dir():
         return []
     records = []
-    for account_dir, org in namespace_paths(store_root):
-        if account is not None and account_dir != account:
+    for account_dir, org_dir in namespace_paths(store_root):
+        if ((account is not None and account_dir != account)
+                or (org is not None and org_dir != org)):
             continue
-        containers = [org]
-        if store_root.name == 'local-agent-mode-sessions' and safe_target(org / 'agent', store_root):
-            containers.append(org / 'agent')
+        containers = [org_dir]
+        if store_root.name == 'local-agent-mode-sessions' and safe_target(org_dir / 'agent', store_root):
+            containers.append(org_dir / 'agent')
         records.extend(path for container in containers for path in container.glob(RECORD_GLOB)
                        if include_irregular or (_rules.regular(path) and not path.is_symlink()))
     return sorted(records)
@@ -236,9 +237,9 @@ def session_id(record):
     return value
 
 
-def group_records(store_root, include_irregular=False, *, account=None):
+def group_records(store_root, include_irregular=False, *, account=None, org=None):
     groups = {}
-    for path in record_paths(store_root, include_irregular, account=account):
+    for path in record_paths(store_root, include_irregular, account=account, org=org):
         if path.is_symlink() or not _rules.regular(path):
             continue
         try:

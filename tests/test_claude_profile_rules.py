@@ -168,6 +168,21 @@ class ProfileRulesTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertTrue(rules.skip(Path('.claude/projects/session') / name))
 
+    def test_only_the_workspace_history_folder_skips_the_word_screen(self):
+        cli = 'aaaaaaaa-1111-4222-8333-444444444444.jsonl'
+        for path, history, skipped in (
+                ('-Users-me-oauth-demo/' + cli, True, False),
+                ('C--Users-me-token-service/' + cli, True, False),
+                ('.claude/projects/-Users-me-secret-santa/' + cli, False, False),
+                ('-Users-me-oauth-demo/' + cli, False, True),  # not a history layout
+                ('-Users-me-app/secrets/' + cli, True, True),  # below the workspace folder
+                ('.claude/projects/oauth-token.json', False, True),  # a file name
+                ('-Users-me-app.tmp-0123/' + cli, True, True),  # router stage marker
+                ('.claude-profile-control-0123/' + cli, True, True),
+                ('creds/' + cli, True, True)):
+            with self.subTest(path=path, history=history):
+                self.assertEqual(rules.skip(Path(path), history=history), skipped)
+
     def test_empty_values_are_preserved_and_active_empty_messages_win(self):
         raw = {'sessionId': 'same', 'messages': ['stale']}
         active = {'sessionId': 'same', 'messages': [], 'metadata': {}}

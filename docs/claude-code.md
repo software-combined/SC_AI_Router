@@ -303,17 +303,21 @@ uninstallation also detaches Codex and the terminal client.
 
 Task sharing preserves `sessionId` and `cliSessionId`, keeps workspace paths
 outside the profiles unchanged, and retains tasks that exist in only one
-profile. Only the resolved current account in each profile participates.
-Previous accounts' tasks remain separate, including any unreadable old records.
+profile. Only the resolved current account in each profile participates, and
+in the subscription profile only its current organization. Previous accounts'
+tasks and other organizations' tasks remain separate, including any unreadable
+old records.
 After the first copy, sharing is tied to that pair of accounts. Signing into a
 different account stops sharing so it cannot inherit the earlier account's
 gateway copies. Return to the original account to resume sharing.
 When both profiles contain the same session, the profile selected
 before a switch wins conflicting record fields and files. Unique files from
 both bundles remain, and task files keep their exact bytes. If the two
-profiles hold different continuations of the same conversation, that task is
-refused and both copies stay as they are. A second successful run makes no
-content or permission changes.
+profiles hold different continuations of the same conversation, or a task's
+conversation file no longer exists anywhere, that task is not shared and every
+copy stays as it is. The switch still goes ahead, and Claude then shows how
+many tasks were not shared. A second successful run makes no content or
+permission changes.
 
 Separate sign-in and credential files, account identity, profile settings, trust state, connector
 settings and caches never cross profiles. A rejected or malformed source
@@ -326,13 +330,15 @@ The next run recovers interrupted transactions that have a valid journal.
 Ambiguous recovery files remain in place for inspection, and prevent switching.
 
 The target account and organization must be positively identified. When they
-cannot be resolved, no tasks are shared. **Open Claude** remains available for
-setup, while switching is blocked if either profile contains saved tasks.
-Sign in normally and open a Code task once to establish the automatic
-binding. Existing hooks are preserved, and removing the desktop attachment
-removes only the callback installed by the router. If any required history
-cannot be copied safely, switching stops and the original profile remains
-selected. No transcript is silently discarded or redacted.
+cannot be resolved, no tasks are shared. Switching from OpenRouter to your
+subscription still works and changes only the connection, so you can sign in
+there. Switching away from the subscription while tasks are saved asks you,
+before Claude closes, to open a Code task in Claude first; that establishes
+the automatic binding. Existing hooks are preserved, and removing the desktop
+attachment removes only the callback installed by the router. If any other
+required history cannot be copied safely, switching stops, the original profile
+remains selected and Claude reopens on it. No transcript is silently discarded
+or redacted.
 Every transcript row keeps all of its fields and text, including checkpoint
 file lists, code examples and keys pasted into a conversation; only paths
 inside the profile folders are relocated. That text can

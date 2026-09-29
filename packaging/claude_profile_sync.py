@@ -28,7 +28,7 @@ _stage_union = _bundle.stage_union
 
 
 def _report(failed=0, errors=(), pending=0):
-    return dict(copied=0, replaced=0, unchanged=0, pending=pending,
+    return dict(copied=0, replaced=0, unchanged=0, unshared=0, pending=pending,
                 failed=failed, errors=list(errors))
 
 
@@ -38,13 +38,17 @@ def _transcript(record, bundle, env):
         return None
     if not _rules.safe_filename(cli):
         raise ValueError('required-transcript')
-    config = Path(env.get('CLAUDE_CONFIG_DIR', str(Path.home() / '.claude')))
+    projects = Path(env.get('CLAUDE_CONFIG_DIR', str(Path.home() / '.claude'))) / 'projects'
+    present = False
     # Native continuations append to the shared CLI history; an imported bundle
     # is only a snapshot and otherwise hides every turn since the first copy.
-    for root in (config / 'projects', bundle):
+    for root in (projects, bundle):
         _records.assert_ancestors(root)
         for path in sorted(root.rglob('*.jsonl')) if root.is_dir() else []:
-            if (path.name != cli + '.jsonl' or _rules.skip(path.relative_to(root))
+            if path.name != cli + '.jsonl':
+                continue
+            present = True
+            if (_rules.skip(path.relative_to(root), history=root == projects)
                     or not _records.safe_target(path, root) or not _rules.regular(path)):
                 continue
             try:
@@ -54,6 +58,9 @@ def _transcript(record, bundle, env):
                 return path
             except (OSError, ValueError):
                 continue
+    # With no copy anywhere there is nothing to share and nothing to lose.
+    if not present:
+        raise _bundle.Unshared('missing transcript')
     raise ValueError('required-transcript')
 
 
@@ -89,11 +96,13 @@ def _repair_shared_history(record, env):
 
 
 def _sync_session(source_paths, source_root, target_root, target_store,
-                  namespace, env, target_wins, protected=None, source_namespace=None):
+                  namespace, env, target_wins, protected=None, source_namespace=None,
+                  target_org=None):
     source_store = source_root / target_store.name
     source_record, source_doc = _choose(source_paths, source_namespace)
     identifier = _records.session_id(source_doc)
-    target_paths = _records.group_records(target_store, account=namespace[0]).get(identifier, [])
+    target_paths = _records.group_records(
+        target_store, account=namespace[0], org=target_org).get(identifier, [])
     bundles = {p: _records.bundle_path(p, source_store if p in source_paths else target_store)
                for p in source_paths + target_paths}
     existing, existing_doc = _choose(target_paths, namespace)
@@ -202,9 +211,18 @@ def _sync_direction(source_root, target_root, env, target_wins=False,
         if None in recovery_blocked:
             blocked.add((store, None))
         blocked.update((store, identifier) for identifier in recovery_blocked)
-        source_groups = _records.group_records(source_store, account=source_namespace[0])
-        target_groups = _records.group_records(target_store, account=namespace[0])
-        invalid = len(_records.record_paths(source_store, True, account=source_namespace[0])) - sum(map(len, source_groups.values()))
+        # Subscription organizations are real and separate; the gateway's is
+        # synthetic, so it holds the account's tasks from every organization.
+        source_org = None if source_root == third_party_root else source_namespace[1]
+        target_org = None if target_root == third_party_root else namespace[1]
+        source_groups = _records.group_records(
+            source_store, account=source_namespace[0], org=source_org)
+        target_groups = _records.group_records(target_store, account=namespace[0], org=target_org)
+        # A task another organization holds stays there: never moved or copied in.
+        elsewhere = set(_records.group_records(target_store, account=namespace[0])) - set(target_groups)
+        invalid = len(_records.record_paths(
+            source_store, True, account=source_namespace[0], org=source_org)) - sum(
+                map(len, source_groups.values()))
         report['failed'] += invalid
         report['errors'].extend(['invalid-record'] * invalid)
         if (store, None) in blocked:
@@ -213,22 +231,27 @@ def _sync_direction(source_root, target_root, env, target_wins=False,
         namespace[1].mkdir(parents=True, exist_ok=True)
         for identifier in sorted(set(source_groups) | set(target_groups)):
             key = (store, identifier)
-            if key in blocked:
+            if key in blocked or identifier in elsewhere:
                 continue
             try:
                 if identifier in source_groups:
                     outcome = _sync_session(source_groups[identifier], source_root, target_root,
                                             target_store, namespace, env, target_wins, protected,
-                                            source_namespace)
+                                            source_namespace, target_org)
                 elif target_wins and any(path.parent in (namespace[1], namespace[1] / 'agent')
                                          for path in target_groups[identifier]):
                     # Capture a task created only in the active profile before
                     # the reverse pass shares it for the first time.
                     outcome = _sync_session(target_groups[identifier], target_root, target_root,
                                             target_store, namespace, env, True,
-                                            source_namespace=namespace)
+                                            source_namespace=namespace, target_org=target_org)
                 else:
                     outcome = 'unchanged'
+            except _bundle.Unshared:
+                # Missing everywhere, or continued differently in each profile.
+                blocked.add(key)
+                report['unshared'] += 1
+                continue
             except (OSError, ValueError, TypeError):
                 blocked.add(key)
                 report['failed'] += 1

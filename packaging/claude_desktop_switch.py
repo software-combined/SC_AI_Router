@@ -98,12 +98,33 @@ def _initialized(sync, roots):
         for store in sync.STORES) for index, root in enumerate(roots))
 
 
+def _setup_only(context, current_mode):
+    """True when sharing is not set up yet, so a switch may change only the mode.
+
+    Refuses instead when switching away from the subscription while tasks are saved.
+    """
+    initialization_only = not _initialized(context[0], context[2])
+    # Only the subscription profile can record the sharing binding, so a gateway
+    # user must be able to reach it; a subscription user opens a Code task first.
+    if initialization_only and current_mode == '1p' and any(
+            context[0]._records.record_paths(root / store, include_irregular=True)
+            for root in context[2] for store in context[0].STORES):
+        raise SwitchError('Open a Code task in Claude, then try again.')
+    return initialization_only
+
+
 def _notice(message, platform_ops, run):
     print(message)
     try:
         platform_ops.show_message(message, sys.platform, run=run)
     except (OSError, subprocess.SubprocessError):
         pass
+
+
+def _open(platform_ops, run):
+    answer = platform_ops.open_app(sys.platform, run=run)
+    if getattr(answer, 'returncode', 0) != 0:
+        raise OSError('Claude did not open')
 
 
 def switch(home, *, run=subprocess.run, policy_check=None, action='switch',
@@ -131,23 +152,56 @@ def _run_action(home, *, run, policy_check, action, sync, platform_ops, profile_
     current_mode = before['deploymentMode']
     if action == 'start':
         try:
-            answer = platform_ops.open_app(sys.platform, run=run)
-            if getattr(answer, 'returncode', 0) != 0:
-                raise OSError('Claude did not open')
+            _open(platform_ops, run)
         except (OSError, subprocess.SubprocessError) as exc:
             raise SwitchError('Claude could not open. Open Claude to continue.') from exc
         return current_mode
     mode = '1p' if current_mode == '3p' else '3p'
-    third = config.parent
     try:
-        context = _sync_context(home, third, profile_env)
+        context = _sync_context(home, config.parent, profile_env)
         if policy_check() is not False:
             raise SwitchError('Your organization manages how Claude connects. Contact your administrator.')
+        _setup_only(context, current_mode)  # Refuse while Claude is still open.
         prompt = 'Switch Claude to %s? Claude will restart after sharing your saved tasks.'
         if not platform_ops.confirm(prompt % DESTINATIONS[mode], sys.platform, run=run):
             return None
         if platform_ops.request_stop(sys.platform, run=run) is not True:
             raise SwitchError('Claude stayed open. Finish your work and try again.')
+    except (OSError, ValueError, subprocess.SubprocessError, SystemExit) as exc:
+        raise SwitchError('Claude settings or status could not be checked. Try again.') from exc
+    try:
+        initialization_only, unshared = _share_and_select(
+            home, config, current_mode, mode, run=run, policy_check=policy_check,
+            sync=sync, platform_ops=platform_ops, profile_env=profile_env)
+    except SwitchError as exc:
+        # Claude has quit. Reopen it unchanged so a refusal never leaves it closed.
+        try:
+            _open(platform_ops, run)
+        except (OSError, subprocess.SubprocessError):
+            if 'Open Claude' not in str(exc):
+                raise SwitchError('%s Open Claude to continue.' % exc) from exc
+        raise
+    try:
+        _open(platform_ops, run)
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise SwitchError('Claude is ready in %s. Open Claude to continue.'
+                          % DESTINATIONS[mode]) from exc
+    if initialization_only:
+        _notice('Claude opened for setup only. No tasks were shared. Finish '
+                'signing in and open a Code task before switching again.',
+                platform_ops, run)
+    elif unshared:
+        _notice('%d saved %s could not be shared and stayed where %s.' % (
+            unshared, 'task' if unshared == 1 else 'tasks',
+            'it was' if unshared == 1 else 'they were'), platform_ops, run)
+    return mode
+
+
+def _share_and_select(home, config, current_mode, mode, *, run, policy_check, sync,
+                      platform_ops, profile_env):
+    """With Claude closed, share tasks and recheck every guard before saving the mode."""
+    third = config.parent
+    try:
         if platform_ops.is_running(sys.platform, run=run) is not False:
             raise SwitchError('Claude stayed open. Finish your work and try again.')
         current_config, current = attached_profile(home)
@@ -160,12 +214,8 @@ def _run_action(home, *, run, policy_check, action, sync, platform_ops, profile_
     except (OSError, ValueError, subprocess.SubprocessError, SystemExit) as exc:
         raise SwitchError('Claude settings or status could not be checked. Try again.') from exc
     try:
-        initialization_only = not _initialized(context[0], context[2])
-        if initialization_only and any(
-                context[0]._records.record_paths(root / store, include_irregular=True)
-                for root in context[2] for store in context[0].STORES):
-            raise SwitchError('Claude task sharing needs setup before switching. '
-                              'Open Claude and finish signing in first.')
+        # Checked again now that Claude has quit; the answer decides what runs.
+        initialization_only = _setup_only(context, current_mode)
         report = ({'failed': 0, 'pending': 0} if initialization_only else
                   (sync if sync is not None else _sync_profiles)(
                       home, current_mode, third, profile_env))
@@ -200,18 +250,8 @@ def _run_action(home, *, run, policy_check, action, sync, platform_ops, profile_
         _desktop.write_json(config, current)
     except OSError as exc:
         raise SwitchError('Claude settings could not be saved. Try again.') from exc
-    try:
-        answer = platform_ops.open_app(sys.platform, run=run)
-        if getattr(answer, 'returncode', 0) != 0:
-            raise OSError('Claude did not open')
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise SwitchError('Claude is ready in %s. Open Claude to continue.'
-                          % DESTINATIONS[mode]) from exc
-    if initialization_only:
-        _notice('Claude opened for setup only. No tasks were shared. Finish '
-                'signing in and open a Code task before switching again.',
-                platform_ops, run)
-    return mode
+    unshared = report.get('unshared', 0)
+    return initialization_only, unshared if type(unshared) is int and unshared > 0 else 0
 
 
 def install_launcher(home, python, *, action='switch', applications=None,

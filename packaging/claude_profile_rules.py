@@ -47,6 +47,7 @@ DROP_FILE_NAMES = frozenset(name.lower() for name in {
     'settings.json', 'managed-settings.json', 'permissions.json', 'trust.json',
 })
 DROP_FILE_SUFFIXES = ('.key', '.pem', '.p12', '.pfx')
+WORKSPACE_FOLDER = re.compile(r'[A-Za-z0-9-]+')
 CREDENTIAL_CONTENT_PATTERNS = tuple(re.compile(pattern.encode(), re.I) for pattern in (
     r'-----BEGIN [A-Z ]*PRIVATE KEY-----',
     r'\b(?:authorization|proxy-authorization)\s*:',
@@ -100,10 +101,24 @@ def safe_filename(value):
             and not any(char in value for char in '*?[]'))
 
 
-def skip(path):
-    for part in Path(path).parts:
+def skip(path, history=False):
+    """True for a name that never transfers; `history` means relative to `projects`.
+
+    Claude Code names each folder in `.claude/projects` after the task's
+    workspace, using letters, digits and dashes, so its words are the user's
+    own (oauth-demo, secret-santa). That folder skips only the word screen.
+    """
+    parts = Path(path).parts
+    if history:
+        workspace_index = 0
+    elif [part.lower() for part in parts[:2]] == ['.claude', 'projects']:
+        workspace_index = 2
+    else:
+        workspace_index = None
+    for index, part in enumerate(parts):
         lower = part.lower()
         normalized = normalized_key(part)
+        words = not (index == workspace_index and WORKSPACE_FOLDER.fullmatch(part))
         if (lower in DROP_NAME_PARTS or lower in DROP_FILE_NAMES
                 or lower.endswith(DROP_FILE_SUFFIXES)
                 or lower.endswith(('.backup', '.pending', '.tmp', '.journal',
@@ -114,7 +129,7 @@ def skip(path):
                     '.recovery-', 'transaction-manifest',
                     'claude-profile-transaction', 'claude-profile-control'))
                 or lower.startswith(('plugin_', 'host-creds-'))
-                or any(token in normalized for token in DROP_NAME_TOKENS)):
+                or (words and any(token in normalized for token in DROP_NAME_TOKENS))):
             return True
     return False
 
