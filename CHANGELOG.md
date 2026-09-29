@@ -16,9 +16,10 @@
 - Switching from OpenRouter back to your Claude subscription no longer waits for
   task sharing to be set up. Switching away from the subscription with saved
   tasks first asks you to open a Code task in Claude, before Claude closes.
-- Checking whether Claude is closed no longer reopens it. Browser integration
-  helpers can remain open, while Claude's own task processes must finish before
-  switching connections.
+- Switch Claude waits for Claude's own task processes to finish before it
+  switches; browser helpers can stay open. If a switch is interrupted, or your
+  home folder was copied or restored, the next switch finishes or undoes the
+  earlier one instead of refusing every later switch.
 - Claude desktop setup uses local AppData for the Windows gateway profile.
   An existing attachment keeps its original restore record and must be detached
   before setup can choose a different profile directory.

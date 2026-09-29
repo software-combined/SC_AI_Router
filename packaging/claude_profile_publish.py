@@ -3,8 +3,10 @@ import ctypes
 import hashlib
 import importlib.util
 import json
+import operator
 import os
 import re
+import shutil
 import stat
 import sys
 import tempfile
@@ -325,18 +327,16 @@ def update_pair_manifest(path, phase):
     return _write_payload(path.parent, path.name, doc)
 
 
+def within(value, expected):
+    """Equal, or all that is left of a before-image tree whose cleanup stopped."""
+    return value == expected or (isinstance(value, list) and isinstance(expected, list)
+                                 and all(row in expected for row in value))
+
+
 def delete_checked(path, expected, kind):
-    if state(path, kind) != expected:
+    if not within(state(path, kind), expected):
         raise ValueError('transaction backup changed')
-    if kind == 'tree':
-        for child in sorted(path.rglob('*'), reverse=True):
-            if child.is_dir():
-                child.rmdir()
-            else:
-                child.unlink()
-        path.rmdir()
-    else:
-        path.unlink()
+    shutil.rmtree(path) if kind == 'tree' else path.unlink()
 
 
 def publish_pair(manifest, record_text):
@@ -381,7 +381,8 @@ def verify_committed(root, doc, paths):
             raise ValueError('transaction duplicate recreated')
         if expected is not None and not backup.exists() and doc['phase'] != 'committed':
             raise ValueError('transaction backup missing')
-        if backup.exists() and state(backup, kind) != private_state(expected):
+        same = within if doc['phase'] == 'committed' else operator.eq  # Resumable cleanup.
+        if backup.exists() and not same(state(backup, kind), private_state(expected)):
             raise ValueError('transaction backup changed')
 
 

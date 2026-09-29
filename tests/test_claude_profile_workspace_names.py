@@ -10,7 +10,7 @@ CODE = 'claude-code-sessions'
 CLI = '11111111-2222-4333-8444-555555555555'
 ROWS = [{'type': 'user', 'uuid': 'u1', 'message': {'role': 'user', 'content': 'hi'}}]
 NAMES = ('accounts-payable', 'email-templates', 'password-manager', 'oauth-demo',
-         'token-service', 'secret-santa')
+         'token-service', 'secret-santa', 'migration-before', 'rollout-after')
 
 
 def text(rows):
@@ -56,6 +56,7 @@ class WorkspaceNameTests(SyncFixture):
                                ('creds/' + CLI + '.jsonl', False),
                                ('secrets/' + CLI + '.jsonl', False),
                                ('.claude/projects/-Users-me-app/tokens/' + CLI + '.jsonl', False),
+                               ('.claude/projects/-Users-me-app/task-before/' + CLI + '.jsonl', False),
                                ('.claude/projects/-Users-me-app.tmp-0123/' + CLI + '.jsonl', False)):
             with self.subTest(relative=relative):
                 self.setUp()

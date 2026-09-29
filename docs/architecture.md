@@ -390,8 +390,9 @@ shortcuts compatible. Setup owns the callback installation and removal.
 by Plan 169. It keeps conversation payloads intact, excludes separate sign-in
 and credential files, and relocates only recognized metadata paths. The folder
 Claude Code names after a task's workspace is exempt from the sensitive-word
-name screen, because its words are the user's; router markers, credential file
-names and the content screen still apply there. It imports
+name screen and the dashed -before/-after suffix rule, because its words are
+the user's; router markers, credential file names and the content screen still
+apply there. It imports
 only the standard library. Callers must supply validated source and destination
 paths and publish through their own transaction; the helper does not select an
 account, change profiles or start synchronization.
@@ -422,9 +423,11 @@ profile locks before creating that binding; this helper does not start a copy.
 `claude_profile_publish.py` and `claude_profile_transaction.py` share the record
 and bundle publication contract. They validate file generations before exclusive
 renames and retain originals and journals when competing writes make recovery
-ambiguous. Private control directories protect backups without changing the
-permissions of hard-linked attachments outside the profile. Callers must stop
-Claude, hold both profile locks and provide a private, fully prepared bundle.
+ambiguous. Committed cleanup accepts a partly deleted before-image, so an
+interrupted cleanup finishes on the next run. Private control directories
+protect backups without changing the permissions of hard-linked attachments
+outside the profile. Callers must stop Claude, hold both profile locks and
+provide a private, fully prepared bundle.
 
 `claude_profile_bundle.py` assembles the complete admitted bundle union before
 publication. It uses the shared transfer rules and retains unique duplicate
@@ -435,7 +438,10 @@ would delete it.
 `claude_profile_history.py` separates foreign request
 metadata from native response diagnostics while preserving messages and IDs.
 Repairs to shared CLI transcripts retain a private original and recover through
-a separate journal because those files sit outside the desktop bundle.
+a separate journal because those files sit outside the desktop bundle. A
+completed repair's original is checked by content, not file identity, so a
+copied home still validates; a writer that races the rename gets its file back
+and the next run repairs the new content.
 
 `claude_profile_sync.py` coordinates both directions under the two profile locks.
 Only the current account pair participates, and on the subscription side only

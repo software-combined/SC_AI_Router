@@ -173,14 +173,16 @@ def _run_action(home, *, run, policy_check, action, sync, platform_ops, profile_
         initialization_only, unshared = _share_and_select(
             home, config, current_mode, mode, run=run, policy_check=policy_check,
             sync=sync, platform_ops=platform_ops, profile_env=profile_env)
-    except SwitchError as exc:
-        # Claude has quit. Reopen it unchanged so a refusal never leaves it closed.
+    except Exception as exc:
+        # Claude has quit. Reopen it unchanged so a refusal or error never leaves it closed.
+        message = (str(exc) if isinstance(exc, SwitchError)
+                   else 'Claude tasks were not fully shared. Try again.')
         try:
             _open(platform_ops, run)
         except (OSError, subprocess.SubprocessError):
-            if 'Open Claude' not in str(exc):
-                raise SwitchError('%s Open Claude to continue.' % exc) from exc
-        raise
+            if 'Open Claude' not in message:
+                message += ' Open Claude to continue.'
+        raise SwitchError(message) from exc
     try:
         _open(platform_ops, run)
     except (OSError, subprocess.SubprocessError) as exc:
