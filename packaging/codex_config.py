@@ -60,7 +60,8 @@ def build_block(home, state, mode, static_catalogue=False):
                 + END + '\n')
     return (BEGIN + '\n'
             f'openai_base_url = "{url}"\n'
-            + (catalog_line if static_catalogue else '') + END + '\n')
+            + (catalog_line if static_catalogue else '')
+            + 'approvals_reviewer = "user"\n' + END + '\n')
 
 
 def _read_text(path):
@@ -200,6 +201,26 @@ def restore_desktop(text, record):
     return '\n'.join(lines) + '\n' if text.endswith('\n') else '\n'.join(lines)
 
 
+def restore_reviewer(text, record):
+    """Re-add owner `approvals_reviewer` lines removed at attach.
+
+    Lines land before the first table header, so they come back as the
+    root keys they were; appending would nest them under a surviving
+    trailing table. They are added only when no `approvals_reviewer`
+    remains, so a line the owner re-added while attached is never
+    duplicated. A missing or empty record leaves the text unchanged.
+    """
+    removed = (record or {}).get('removed') or []
+    if not removed or 'approvals_reviewer' in text:
+        return text
+    lines = text.splitlines()
+    at = next((index for index, line in enumerate(lines)
+               if line.strip().startswith('[')), len(lines))
+    lines[at:at] = removed
+    joined = '\n'.join(lines)
+    return joined + '\n' if text.endswith('\n') or not text else joined
+
+
 def seed_picker_selection(config_path, previous_block, block):
     """Seed the default model into a fresh managed block, install-once.
 
@@ -264,13 +285,15 @@ def attach_config(config_path, block, previous=None):
 
     `previous` is the codex attachment in the receipt; its desktop record
     keeps the owner's original values across updates. Returns (block,
-    before, desktop) for the receipt.
+    before, desktop, reviewer) for the receipt, where reviewer holds the
+    owner `approvals_reviewer` lines this attach removed, or the carried
+    record when an update removed none.
     """
     recorded = (previous or {}).get('inserted_block')
     previous_block = live_block(_read_text(config_path), recorded)
     block = preserve_picker_selection(config_path, previous_block, block)
     block = seed_picker_selection(config_path, previous_block, block)
-    before = replace_config_block(config_path, block, previous_block)
+    before, removed = replace_config_block(config_path, block, previous_block)
     current = _read_text(config_path)
     carried = ((previous or {}).get('desktop') or {}).get('previous')
     updated, desktop = desktop_preferences(current, carried)
@@ -278,7 +301,9 @@ def attach_config(config_path, block, previous=None):
         _replace_text(config_path, updated)
     elif not desktop:
         print('Codex [desktop] preferences skipped: table ambiguous or repeated')
-    return block, before, desktop
+    reviewer = ({'removed': removed} if removed
+                else (previous or {}).get('reviewer'))
+    return block, before, desktop, reviewer
 
 
 def default_mode(config_path=None):
@@ -327,7 +352,12 @@ def preserve_picker_selection(config_path, previous_block, block):
 
 
 def replace_config_block(config_path, block, previous_block=None):
-    """Insert or replace the marked block; refuse hand-edited markers."""
+    """Insert or replace the marked block; refuse hand-edited markers.
+
+    Returns (before, removed): the prior config text and the owner
+    `approvals_reviewer` lines dropped for uniqueness, so the receipt can
+    restore them on detach.
+    """
     config_path = Path(config_path)
     before = config_path.read_text() if config_path.exists() else ''
     if previous_block and previous_block in before:
@@ -338,6 +368,22 @@ def replace_config_block(config_path, block, previous_block=None):
         raise SystemExit('config block was edited by hand; run tools/disable.py first')
     else:
         after = block + '\n' + before
+    removed = []
+    # Keep the managed line unique by dropping owner copies on either side
+    # of the block; a second root-level definition would break the config.
+    # The receipt records the removed lines so detach can restore them.
+    if 'approvals_reviewer' in block:
+        def _is_reviewer(line):
+            return (line.split('=', 1)[0].strip().strip('"\'')
+                    == 'approvals_reviewer')
+
+        def _without_reviewer(text):
+            return ''.join(line for line in text.splitlines(keepends=True)
+                           if not _is_reviewer(line))
+        head, _, tail = after.partition(block)
+        removed = [line for line in (head + tail).splitlines()
+                   if _is_reviewer(line)]
+        after = _without_reviewer(head) + block + _without_reviewer(tail)
     home = config_path.parent
     if not config_path.exists():
         home.mkdir(parents=True, exist_ok=True)
@@ -346,7 +392,7 @@ def replace_config_block(config_path, block, previous_block=None):
         os.chmod(config_path, 0o600)
     except OSError:
         pass
-    return before
+    return before, removed
 
 
 RECEIPT_VERSION = 2
@@ -408,7 +454,7 @@ def write_client_receipt(home, client, entry):
 
 
 def write_receipt(home, config_path, block, rules_receipt, mode, before='',
-                  client='codex', desktop=None):
+                  client='codex', desktop=None, reviewer=None):
     """Record one client attachment; existing attachments are preserved."""
     entry = {'config_path': str(config_path), 'inserted_block': block,
              'openai_mode': mode,
@@ -417,6 +463,10 @@ def write_receipt(home, config_path, block, rules_receipt, mode, before='',
         # Managed Codex desktop preferences: the values written and the
         # values they replaced, so tools/disable.py can put them back.
         entry['desktop'] = desktop
+    if reviewer:
+        # Owner approvals_reviewer lines removed for uniqueness, restored
+        # by tools/disable.py when still absent.
+        entry['reviewer'] = reviewer
     if rules_receipt:
         # Legacy installs recorded the managed global-instructions block;
         # install-once starters record nothing, so the key stays absent.

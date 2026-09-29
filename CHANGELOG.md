@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- The installer now sets `approvals_reviewer = "user"` in the managed
+  Codex block in both subscription and no-subscription mode, so a fresh
+  or updated install never falls back to the background reviewer. An
+  owner copy of the line outside the block is removed on attach and its
+  exact text is recorded in the activation receipt, so detach puts it
+  back; `approval_policy` stays untouched.
+
 ## 0.6.140
 
 - Repair and stream handling now use captured request and response facts.
