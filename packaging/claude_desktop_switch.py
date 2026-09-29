@@ -123,6 +123,16 @@ def _open(platform_ops, run):
         raise OSError('Claude did not open')
 
 
+def _reopened(message, platform_ops, run):
+    """Reopen Claude, which may have quit, so a refusal never leaves it closed."""
+    try:
+        _open(platform_ops, run)
+    except (OSError, subprocess.SubprocessError):
+        if 'Open Claude' not in message:
+            message += ' Open Claude to continue.'
+    return SwitchError(message)
+
+
 def switch(home, *, run=subprocess.run, policy_check=None, action='switch',
            sync=None, platform_ops=None, profile_env=None):
     """Open Claude normally, or share saved tasks before switching profiles."""
@@ -162,7 +172,9 @@ def _run_action(home, *, run, policy_check, action, sync, platform_ops, profile_
         if not platform_ops.confirm(prompt % DESTINATIONS[mode], sys.platform, run=run):
             return None
         if platform_ops.request_stop(sys.platform, run=run) is not True:
-            raise SwitchError('Claude stayed open. Finish your work and try again.')
+            # Claude may have partly quit, so reopen it before refusing.
+            raise _reopened('Claude did not close in time. Finish your work and try again.',
+                            platform_ops, run)
     except (OSError, ValueError, subprocess.SubprocessError, SystemExit) as exc:
         raise SwitchError('Claude settings or status could not be checked. Try again.') from exc
     try:
@@ -173,12 +185,7 @@ def _run_action(home, *, run, policy_check, action, sync, platform_ops, profile_
         # Claude has quit. Reopen it unchanged so a refusal or error never leaves it closed.
         message = (str(exc) if isinstance(exc, SwitchError)
                    else 'Claude tasks were not fully shared. Try again.')
-        try:
-            _open(platform_ops, run)
-        except (OSError, subprocess.SubprocessError):
-            if 'Open Claude' not in message:
-                message += ' Open Claude to continue.'
-        raise SwitchError(message) from exc
+        raise _reopened(message, platform_ops, run) from exc
     try:
         _open(platform_ops, run)
     except (OSError, subprocess.SubprocessError) as exc:

@@ -14,11 +14,11 @@ carry tools. Tools do not disqualify a turn here: the twin is prepared from
 the client's own payload, tools included, the same way a directly requested
 external row is.
 
-With the `openai_helper_fallback` state flag on, the router answers those
-helper turns from the registry's external twin row (`openai/<slug>`) and
-relays that response. Ordinary turns keep today's refusal. The flag is off
-by default: the fallback bills that provider's key and sends the helper
-prompt to it.
+The router answers those helper turns from the registry's external
+twin row (`openai/<slug>`), or the Luna twin when the requesting slug has
+no twin of its own, and relays that response. Ordinary turns keep today's
+refusal. The fallback is on unless `openai_helper_fallback` is explicitly
+false: it bills that provider's key and sends the helper prompt to it.
 """
 import json
 
@@ -33,6 +33,7 @@ HELPER_SOURCES = frozenset({'thread_title', 'thread_description',
 METADATA_HEADER = 'x-codex-turn-metadata'
 MAX_METADATA_BYTES = 8192
 TWIN_PREFIX = subscription_roster.TWIN_PREFIX
+LUNA_TWIN = 'openai/gpt-6-luna'
 
 
 def helper_turn(headers):
@@ -50,19 +51,27 @@ def helper_turn(headers):
     return isinstance(source, str) and source in HELPER_SOURCES
 
 
+def _twin_entry(rows, slug):
+    """External Responses twin entry for `slug`, else None."""
+    entry = rows.get(slug)
+    if entry is None or not provider_defs.is_external(entry.provider):
+        return None
+    defn = provider_defs.get(entry.provider)
+    return entry if defn.serves(provider_defs.RESPONSES) else None
+
+
 def twin_slug(model, catalogue=None):
     """Registry slug of the external twin for a subscription slug, else None.
 
+    The same-model twin wins; the Luna twin answers slugs without one.
     `catalogue` is the request's captured generation; None reads the live one."""
     if not isinstance(model, str):
         return None
     successor = subscription_roster.SUCCESSORS.get(model, model)
     rows = request_context.capture() if catalogue is None else catalogue
-    entry = rows.get(TWIN_PREFIX + successor)
-    if entry is None or not provider_defs.is_external(entry.provider):
-        return None
-    defn = provider_defs.get(entry.provider)
-    return entry.slug if defn.serves(provider_defs.RESPONSES) else None
+    entry = (_twin_entry(rows, TWIN_PREFIX + successor)
+             or _twin_entry(rows, LUNA_TWIN))
+    return entry.slug if entry is not None else None
 
 
 class Plan:
@@ -112,7 +121,7 @@ def plan(state, prepared, path, payload, raw_body, headers, credentials):
     Only Responses turns the subscription owns that a helper thread source
     marks qualify; tools do not disqualify one.
     """
-    if not state.get('openai_helper_fallback') or path != '/responses':
+    if state.get('openai_helper_fallback') is False or path != '/responses':
         return None
     if prepared.provider != provider_defs.OPENAI.id:
         return None
@@ -196,17 +205,38 @@ def _answer_refusal(handler, ledger, refusal, retry_after):
     attempt_policy.settle_delivery(ledger, handler)
 
 
-def refused(handler, prepared, retry_after, metrics, started, admit=None, *, ledger, body=None):
+def auth_refusal_message(prepared, metrics):
+    """Answer text for an auth-refused turn: whose login failed, and what to do.
+
+    Fixed wording from the provider's own definition, never upstream prose.
+    Used only when a helper turn's twin cannot be prepared; ordinary turns
+    keep the raw upstream answer so a sign-in problem stays visible.
+    """
+    defn = provider_defs.get(prepared.provider)
+    label = None if defn is None else defn.subscription_label
+    if label is None:
+        return errors.upstream_rate_limited().message
+    model = metrics.get('model')
+    model = model if isinstance(model, str) and model else 'This model'
+    return (f'{model} could not be authorised on your {label}; the turn was not served. '
+            'Sign in again shortly, or select a routed model instead.')
+
+
+def refused(handler, prepared, retry_after, metrics, started, admit=None, *, ledger,
+            body=None, auth=False):
     """Answer a refused turn, else name the planned twin route that answers it.
 
     Returns the twin's `attempt_policy.Route` once `ledger` has moved to it,
     else None after sending the retryable 503. The ledger allows one route
     change per request, so a twin can never fall back again. `admit` sizes the
     twin with the refused body still held, before its send. `body` is the
-    429's own error body, read only for the usage-limit record.
+    429's own error body, read only for the usage-limit record. `auth` answers
+    the no-twin cases with the sign-in wording instead of the rate-limit wording.
     """
     usage_episodes.record(handler, prepared, body)
-    refusal = errors.upstream_rate_limited(refusal_message(prepared, metrics))
+    message = (auth_refusal_message(prepared, metrics) if auth
+               else refusal_message(prepared, metrics))
+    refusal = errors.upstream_rate_limited(message)
     fallback = prepared.fallback
     if fallback is None or not ledger.permits(attempt_policy.HELPER_FALLBACK):
         ledger.decide(attempt_policy.HELPER_FALLBACK,

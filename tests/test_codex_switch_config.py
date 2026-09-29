@@ -28,6 +28,8 @@ STATE = {'port': 4321, 'token': 'tok'}
 URL = 'http://127.0.0.1:4321/tok/backend-api/codex'
 BEGIN, END = '# BEGIN local mixed model picker\n', '# END local mixed model picker\n'
 SEEDED = 'model = "deepseek/deepseek-v4.1-flash"\nmodel_reasoning_effort = "max"\n'
+# The managed approvals reviewer the default block carries (develop #347).
+REVIEWER = 'approvals_reviewer = "user"\n'
 PROVIDER = {'name': 'SC router', 'base_url': URL, 'wire_api': 'responses'}
 OWNER = ('\nowner_setting = 1\n[model_providers.other]\nname = "x"\n'
          '[desktop]\nfollowUpQueueMode = "steer"\n')
@@ -37,9 +39,11 @@ class VariantBlockTests(unittest.TestCase):
     def test_default_is_todays_block_byte_for_byte(self):
         # Never-switched installs and older Codex builds must see no change.
         cases = {
-            ('subscription', False): BEGIN + f'openai_base_url = "{URL}"\n' + END,
+            ('subscription', False): (BEGIN + f'openai_base_url = "{URL}"\n'
+                                      + REVIEWER + END),
             ('subscription', True): (BEGIN + f'openai_base_url = "{URL}"\n'
-                                     'model_catalog_json = "/r/mixed-models.json"\n' + END),
+                                     'model_catalog_json = "/r/mixed-models.json"\n'
+                                     + REVIEWER + END),
             ('none', False): (BEGIN + 'model_provider = "scg_router"\n'
                               'model_catalog_json = "/r/mixed-models.json"\n'
                               'approvals_reviewer = "user"\n[model_providers.scg_router]\n'
@@ -52,15 +56,15 @@ class VariantBlockTests(unittest.TestCase):
 
     def test_each_variant_is_valid_toml_with_exactly_its_keys(self):
         want = {
-            'default': {'openai_base_url': URL},
+            'default': {'openai_base_url': URL, 'approvals_reviewer': 'user'},
             'switched': {
                 'openai_base_url': URL, 'model_provider': 'scg_router',
-                'model_catalog_json': '/r/routed-models.json',
+                'model_catalog_json': '/r/routed-models.json', 'approvals_reviewer': 'user',
                 'model_providers': {'scg_router': dict(
                     PROVIDER, requires_openai_auth=False,
                     http_headers={'x-scg-codex-route': 'routed'})}},
             'switched_back': {
-                'openai_base_url': URL,
+                'openai_base_url': URL, 'approvals_reviewer': 'user',
                 'model_providers': {'scg_router': dict(PROVIDER, requires_openai_auth=True)}},
         }
         for variant, keys in want.items():
@@ -131,8 +135,26 @@ class SwitchFlowTests(unittest.TestCase):
             entry = _entry(home)
             self.assertNotIn('variant', entry)
             self.assertEqual(entry['inserted_block'],
-                             BEGIN + f'openai_base_url = "{url}"\n' + SEEDED + END)
+                             BEGIN + f'openai_base_url = "{url}"\n' + REVIEWER + SEEDED + END)
             self.assertTrue(config.read_text().startswith(entry['inserted_block']))
+
+    def test_every_variant_keeps_one_reviewer_line_and_the_owners_for_detach(self):
+        # Attach moves the owner's own line into the receipt, so each block
+        # must carry the managed one: no line at all could leave Codex on an
+        # automatic reviewer the switched route refuses.
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Path(tmp) / 'fakehome' / '.codex' / 'config.toml'
+            config.parent.mkdir(parents=True)
+            config.write_text('approvals_reviewer = "auto_review"\n')
+            home, config = self._attached(tmp)
+            moved = {'removed': ['approvals_reviewer = "auto_review"']}
+            for variant in ('switched', 'switched_back', 'switched'):
+                with self.subTest(variant=variant):
+                    switch.switch(home, variant)
+                    lines = [line for line in config.read_text().splitlines()
+                             if line.startswith('approvals_reviewer')]
+                    self.assertEqual(lines, ['approvals_reviewer = "user"'])
+                    self.assertEqual(_entry(home)['reviewer'], moved)
 
     def test_updates_keep_switched_and_switched_back(self):
         with tempfile.TemporaryDirectory() as tmp:
