@@ -21,6 +21,7 @@ load packaging/claude_desktop_config.py
 load packaging/claude_desktop_switch.py
 load packaging/codex_config.py
 load packaging/codex_switch_config.py
+load packaging/codex_switch_offer.py
 load packaging/diagnostics.py
 load packaging/feed.py
 load packaging/feed_verify.py

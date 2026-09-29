@@ -126,3 +126,20 @@ deletes it when an episode ends, so a reader compares the times itself. A
 missing, unreadable or malformed file means no episode, which is what
 `usage_episodes.current(home)` returns as None. A failed write is logged as
 `usage_episode_failed` and never changes the answer the client gets.
+
+The updater remembers which Switch Codex offers it has made in
+`codex-switch-offers.json` beside it, for the latest episode only:
+
+```json
+{
+  "seen_at": "2026-09-29T05:12:33+00:00",
+  "offered": ["switch", "back"]
+}
+```
+
+`seen_at` names the episode, and a new episode starts with no offers made.
+`switch` is the offer to move Codex to OpenRouter models; `back` is the offer
+to return to the ChatGPT subscription. The offer is written before its dialog
+appears and is owner-only (0600). A home that cannot be written therefore
+shows no dialog rather than the same one every minute, and a dialog that
+cannot be drawn is taken back off the list so a later pass offers it again.
