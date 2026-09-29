@@ -83,11 +83,10 @@ class SwitchTests(unittest.TestCase):
                 self.assertEqual(self.run.call_args.args[0],
                                  ['/usr/bin/open', '-b', switcher.BUNDLE_ID])
 
-    def test_cancel_quit_failure_and_timeout_never_write_or_reopen(self):
+    def test_cancel_and_check_timeout_before_quit_never_write_or_reopen(self):
+        # request_stop raises only before its quit request; later outcomes: test_claude_switch_recovery.
         cases = ([result(returncode=1)],
-                 [result('button returned:Continue'), result(returncode=1)],
-                 [result('button returned:Continue'), result('running')],
-                 [result('button returned:Continue'), subprocess.TimeoutExpired('osascript', 65)])
+                 [result('button returned:Continue'), subprocess.TimeoutExpired('ps', 5)])
         for answers in cases:
             with self.subTest(answers=answers):
                 before = self.files()

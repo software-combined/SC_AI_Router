@@ -36,13 +36,13 @@ class PlatformHarness:
         script = argv[-1]
         if argv[0] == '/bin/ps' or 'Get-CimInstance Win32_Process' in script:
             rows = next(self.snapshots)
+            if isinstance(rows, Exception):
+                raise rows  # The probe itself failed or timed out.
             if self.name == 'win32':
                 assert 'GetOwnerSid' in script and 'CreationDate' in script
                 return result(json.dumps(rows))
-            if self.name == 'linux' and script.endswith('comm='):
-                rows = [dict(r, exe=Path(r['exe']).name) for r in rows]
-            return result('\n'.join('%s %s %s %s %s' % (
-                r['pid'], r['parent'], r['user'], r['born'], r['exe']) for r in rows))
+            return result('\n'.join('%s %s %s %s %s %s' % (
+                r['pid'], r['parent'], r['user'], r['born'], r.get('state', 'S'), r['exe']) for r in rows))
         if argv[0] == '/usr/bin/osascript' and script.endswith(' to quit'):
             return result()
         if 'CloseMainWindow()' in script:
@@ -71,7 +71,8 @@ class DesktopPlatformTests(unittest.TestCase):
     def stop(self, name, snapshots, timeout=1):
         harness = PlatformHarness(name, self.identity, snapshots)
         with mock.patch.object(platform, 'app_identity', return_value=self.identity), \
-                mock.patch.object(platform.time, 'sleep'):
+                mock.patch.object(platform.time, 'sleep'), \
+                mock.patch.object(platform.time, 'monotonic', return_value=0):  # Only timeout=0 expires.
             answer = platform.request_stop(name, run=harness, timeout=timeout)
         return answer, harness.commands
 
@@ -111,10 +112,27 @@ class DesktopPlatformTests(unittest.TestCase):
         self.assertTrue(answer)
         self.assertEqual(sum(c[0] == '/bin/ps' for c in commands), 3)
 
-    def test_changed_pid_identity_refuses(self):
+    def test_reused_pid_after_quit_keeps_waiting_until_the_deadline(self):
+        other = self.row(born='Mon Sep 28 10:00:01 2026', exe='/usr/bin/other')  # Same pid, new process.
         for name in ('darwin', 'win32', 'linux'):
-            with self.assertRaisesRegex(OSError, 'identity changed'):
-                self.stop(name, [[self.row()], [self.row(born='Mon Sep 28 10:00:01 2026')]])
+            self.assertIs(self.stop(name, [[self.row()], [other]], timeout=0)[0], False, name)
+
+    def test_seen_descendant_that_exits_as_a_zombie_counts_as_gone(self):
+        main, child = self.row(), self.row(11, 10, '/tools/session-writer')
+        for name, shown in (('darwin', '<defunct>'), ('linux', '-')):  # As ps shows it until reaped.
+            zombie = dict(child, parent=1, state='Z', exe=shown)
+            self.assertIs(self.stop(name, [[main, child], [zombie]], timeout=0)[0], True, name)
+
+    def test_descendant_that_execs_is_waited_for_with_its_children(self):
+        proc, tool = self.row(11, 10), self.row(12, 11, '/tools/git')  # Forked with Claude's executable.
+        for name in ('darwin', 'win32', 'linux'):
+            answer, commands = self.stop(name, [[proc], [dict(proc, exe='/bin/sh'), tool], [dict(tool, parent=1)], []])
+            self.assertEqual((answer, len(commands)), (True, 5), name)  # Quit request, four probes.
+
+    def test_failed_probe_after_quit_is_retried(self):
+        for name in ('darwin', 'win32', 'linux'):
+            snapshots = [[self.row()], OSError('probe failed'), subprocess.TimeoutExpired('ps', 5), []]
+            self.assertIs(self.stop(name, snapshots)[0], True, name)
 
     def test_linux_unknown_executable_refuses_before_quit_prompt(self):
         for exe in ('-', self.identity['exe'] + ' (deleted)'):
