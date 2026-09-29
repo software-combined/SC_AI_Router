@@ -292,6 +292,16 @@ list and a stale one offers models the key cannot use. `codex_route.ready`
 answers whether Switch Codex may use it, reading "current" through
 `availability.effective_ids`; it sits in `codex_route` because `availability`
 imports the writer, so a check beside it would import `availability` back.
+`usage_episodes.py` owns `codex-usage-limit.json`, the record of ChatGPT
+usage-limit episodes the Switch Codex offer reads. `subscription_fallback.refused`
+answers every ChatGPT 429, so it hands each one over with the drained error
+body. Only the refusal Codex itself reads as a spent allowance counts
+(`error.type` `usage_limit_reached`, per `codex-rs/codex-api/src/api_bridge.rs`),
+and only from Codex desktop, recognised by the `(Codex Desktop; <version>)`
+User-Agent suffix its app-server adds. The module imports leaves plus
+`upstream.parse_payload`, keeps three fields and nothing from the request, and
+swallows its own failures, so the client's answer never changes. The format
+is in [runtime files](runtime-files.md#codex-usage-limit-record).
 
 1. `provider_defs.py` owns every upstream fact (host, endpoint prefixes, key
    location, model catalogue, key-info endpoint, failure dialect) and imports
