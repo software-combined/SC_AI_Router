@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.claude_profile_sync_fixtures import load_helper
+from tests._platform import requires_posix_perms
 
 policy = load_helper('claude_desktop_policy')
 
@@ -158,6 +159,7 @@ class DesktopPolicyTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             policy.managed_macos((machine, user))
 
+    @requires_posix_perms
     def test_linux_requires_root_owned_regular_file_and_protected_directory(self):
         directory = self.root / 'managed'
         directory.mkdir(mode=0o755)

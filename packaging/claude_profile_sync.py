@@ -21,6 +21,7 @@ _bundle = _load('router_sync_bundle', 'claude_profile_bundle.py')
 _transaction = _load('router_sync_transaction', 'claude_profile_transaction.py')
 _service = _load('router_sync_service', 'service.py')
 _history = _load('router_sync_history', 'claude_profile_history.py')
+_ledger = _load('router_sync_ledger', 'claude_profile_ledger.py')
 STORES = _records.STORES
 PROFILE_NAMES = _records.PROFILE_NAMES
 profile_roots = _records.profile_roots
@@ -28,7 +29,7 @@ _stage_union = _bundle.stage_union
 
 
 def _report(failed=0, errors=(), pending=0):
-    return dict(copied=0, replaced=0, unchanged=0, unshared=0, pending=pending,
+    return dict(copied=0, replaced=0, unchanged=0, unshared=0, retired=0, pending=pending,
                 failed=failed, errors=list(errors))
 
 
@@ -277,6 +278,24 @@ def _store_snapshot(root):
     return result
 
 
+def _scopes(first, third):
+    """Each store's (store folder, account folder) in both profiles, once resolved."""
+    scopes = []
+    for store in STORES:
+        sides = []
+        for root in (first, third):
+            try:
+                namespace = _records.resolve_namespace(
+                    root / store, root, third_party=root == third)
+            except (OSError, ValueError):
+                namespace = None
+            if namespace is not None:
+                sides.append((root / store, namespace[0]))
+        if len(sides) == 2:
+            scopes.append(tuple(sides))
+    return scopes
+
+
 def sync_profiles(home, winner, env=None):
     """Synchronize both profiles using the verified current active profile."""
     if winner not in PROFILE_NAMES:
@@ -300,10 +319,15 @@ def sync_profiles(home, winner, env=None):
             if not locks.enter_context(_service.install_lock(root, '.claude-profile-sync.lock')):
                 return _report(1, ['profile-busy'])
         try:
-            if _records._identity.bind_profile_accounts(home, first, third) is False:
+            accounts = _records._identity.bind_profile_accounts(home, first, third)
+            if accounts is False:
                 return _report(pending=1, errors=['account-binding-changed'])
         except (OSError, ValueError, TypeError):
             return _report(1, ['account-binding-refused'])
+        # Retire the other copy of a task deleted since the last clean sync
+        # before either pass can copy it back.
+        scopes = _scopes(first, third)
+        retired, retire_errors = _ledger.retire_deleted(home, accounts, scopes)
         inactive = roots['3p' if winner == '1p' else '1p']
         protected = _store_snapshot(inactive)
         first_pass, blocked = _sync_direction(inactive, roots[winner], env, target_wins=True,
@@ -311,6 +335,12 @@ def sync_profiles(home, winner, env=None):
         second_pass, _ = _sync_direction(roots[winner], inactive, env,
                                          blocked=blocked, protected=protected,
                                          third_party_root=third)
-    result = {key: first_pass[key] + second_pass[key] for key in first_pass if key != 'errors'}
-    result['errors'] = first_pass['errors'] + second_pass['errors']
+        result = {key: first_pass[key] + second_pass[key] for key in first_pass if key != 'errors'}
+        result['errors'] = retire_errors + first_pass['errors'] + second_pass['errors']
+        result['failed'] += len(retire_errors)
+        result['retired'] = retired
+        # Remember what both profiles now hold only after a clean sync; tasks
+        # left unshared or refused stay out, so they are never retired.
+        if not result['failed'] and not result['pending']:
+            _ledger.record_shared(home, accounts, scopes, blocked)
     return result

@@ -9,6 +9,7 @@ receipt entry recording the pre-attach snapshot, and an exact detach.
 Loaded through the installer's explicit file-import pattern and shipped
 in the release bundle. No runtime/protocol import here.
 """
+import hashlib
 import json
 import os
 import sys
@@ -34,6 +35,8 @@ CREDENTIAL_KIND_VALUE = 'static'
 API_KEY_VALUE = 'router-path-token'
 
 CLIENT_KEY = 'claude-desktop'
+# The only 0.6 Switch Claude shim, which setup copied into the router home.
+OLD_SWITCH_SHIM_SHA256 = '0948115fe1971013cb14dafae2ffadbcf3e95dc16d460b5c68426d740975be5c'
 
 
 PROFILE_DIRNAME = 'Claude-3p'
@@ -181,7 +184,23 @@ def _owned_snapshot(home, data_dir, state, receipts):
         return None
 
 
+def _remove_old_switch_shim(home):
+    """Switch Claude now starts through claude_profile_launch.py; drop only the
+    router's own copy of the 0.6 shim, never a file someone else put there."""
+    shim = Path(home) / 'claude_switch_launch.py'
+    try:
+        if (shim.is_file() and not shim.is_symlink()
+                and hashlib.sha256(shim.read_bytes()).hexdigest() == OLD_SWITCH_SHIM_SHA256):
+            shim.unlink()
+    except OSError:
+        pass
+
+
 def _install_switch_launcher(home, python, env=None):
+    # Switch Claude, Open Claude and task sharing are macOS-only until native
+    # Windows and Linux acceptance exists; their helpers stay in the release.
+    if sys.platform != 'darwin':
+        return
     spec = _ilu.spec_from_file_location(
         'router_desktop_switch', Path(__file__).with_name('claude_desktop_switch.py'))
     switch = _ilu.module_from_spec(spec)
@@ -198,10 +217,24 @@ def _install_switch_launcher(home, python, env=None):
             # built. The other action is still attempted and named on failure.
             print('Claude connected; %s could not be installed. '
                   'Run setup again to retry.' % name)
+        else:
+            if action == 'switch':
+                _remove_old_switch_shim(home)
     try:
         switch._load('claude_profile_hook').install(home, python, env)
     except (OSError, ValueError, TypeError, SystemExit):
         print('Claude connected; automatic task sharing needs setup again.')
+
+
+def saved_profile(home, receipts):
+    """The profile the saved attachment uses, so an update keeps following it
+    after a default location change (Windows moved to local AppData)."""
+    entry = receipts.read_receipt(home).get('clients', {}).get(CLIENT_KEY)
+    try:
+        path = Path(entry['config_path'])
+    except (KeyError, TypeError, ValueError):
+        return None
+    return path.parents[1] if path.is_absolute() and path.parent.name == 'configLibrary' else None
 
 
 def attach(home, state, receipts, data_dir_override=None, env=None, *, python=None):

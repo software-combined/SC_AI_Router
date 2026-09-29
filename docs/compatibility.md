@@ -17,8 +17,8 @@ journals retain original and competing generations when recovery is ambiguous.
 | Platform | Observed native evidence | Remaining acceptance |
 |---|---|---|
 | macOS | Claude 2.9939.2 Code task opened and continued in Gateway, then continued under its original subscription account after a transcript metadata repair. Automatic identity capture and one new Cowork response passed. | Complete installed-launcher round trip and latest-message convergence; Cowork sharing waits for a later release |
-| Windows | No native host available | Native app, shortcut, policy and task round trip |
-| Linux | No native desktop host available | Native app, desktop entry, policy and task round trip |
+| Windows | No native host available | Launchers and task sharing stay off in this beta; native app, shortcut, policy and task round trip before enabling them |
+| Linux | No native desktop host available | Launchers and task sharing stay off in this beta; native app, desktop entry, policy and task round trip before enabling them |
 
 The macOS results are earlier controlled, per-session experiments. They do not
 prove a complete switch or the final candidate. The installed switch test is

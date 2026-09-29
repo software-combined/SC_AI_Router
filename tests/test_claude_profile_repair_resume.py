@@ -83,3 +83,23 @@ class HistoryRepairTests(SyncFixture):
         self.assertEqual(sorted(p.name for p in live.parent.iterdir()), [live.name])
         self.assertSwitches()
         self.assertIn('late', live.read_text())
+
+    def test_journal_half_written_by_a_killed_process_does_not_block(self):
+        live = self.task()
+        stem = '.' + live.name + '.history-repair-' + 'a' * 64
+        (live.parent / (stem + '.journal.k3x9q1ab.tmp')).write_text('{')
+        (live.parent / (stem + '.stage')).write_text('staged before the journal')
+        self.assertSwitches()
+        self.assertFalse([p.name for p in live.parent.iterdir() if p.name.startswith(stem)])
+
+    def test_completion_record_half_written_by_a_killed_process_does_not_block(self):
+        live, history = self.task(), fixtures.sync._history
+
+        def killed(path, journal, document):
+            path.with_name(path.name + '.x1y2z3ab.tmp').write_text('{')
+            raise OSError('killed while writing')
+
+        with mock.patch.object(history, '_write_done', side_effect=killed):
+            self.assertEqual(self.sync('1p')['failed'], 1)
+        self.assertSwitches()
+        self.assertFalse([p.name for p in live.parent.iterdir() if p.name.endswith('.tmp')])

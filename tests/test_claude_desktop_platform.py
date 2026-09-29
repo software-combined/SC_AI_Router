@@ -146,6 +146,7 @@ class DesktopPlatformTests(unittest.TestCase):
             'disableDeploymentModeChooser': True}))
         self.assertTrue(platform.policy_disabled('darwin', profile=library.parent))
 
+    @unittest.skipIf(os.name == 'nt', 'macOS and Linux identity records a POSIX user ID')
     def test_native_identity_uses_bundle_and_desktop_entries(self):
         app = self.root / 'Claude.app'
         (app / 'Contents/MacOS').mkdir(parents=True)
@@ -206,6 +207,7 @@ class DesktopPlatformTests(unittest.TestCase):
                 with self.assertRaises(platform.subprocess.CalledProcessError):
                     platform.open_app(name, run=lambda *a, **k: result(returncode=1))
 
+    @unittest.skipIf(os.name == 'nt', 'Windows forbids the quote this Linux path escapes')
     def test_linux_launcher_round_trips_desktop_argument_escaping_and_ownership(self):
         home = self.root / 'router ü " % $ ` \\ '
         home.mkdir()

@@ -84,12 +84,13 @@ Claude profile task sharing ships as sibling helpers under `packaging/`:
 `claude_profile_rules.py`, `claude_profile_identity.py`, `claude_profile_hook.py`,
 `claude_profile_history.py`, `claude_profile_records.py`,
 `claude_profile_bundle.py`, `claude_profile_publish.py`,
-`claude_profile_transaction.py` and
+`claude_profile_transaction.py`, `claude_profile_ledger.py` and
 `claude_profile_sync.py`. `claude_desktop_platform.py` supplies native
 lifecycle commands and loads `claude_desktop_policy.py` for read-only switch
 restrictions, while `claude_profile_launch.py` follows the installed
-release pointer for both Open Claude and Switch Claude;
-`claude_switch_launch.py` is retained for older shortcuts. Temporary stages,
+release pointer for both Open Claude and Switch Claude; setup deletes the
+router's own `claude_switch_launch.py` home copy once it rebuilds a 0.6
+shortcut. Temporary stages,
 before images and transaction manifests stay inside the local session store
 and are never release members. Private control directories protect backups;
 POSIX attachment permissions stay unchanged so hard-linked originals elsewhere
