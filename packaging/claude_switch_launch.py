@@ -1,25 +1,19 @@
-"""Stable Switch Claude app entry point; follow the installed release pointer."""
-import runpy
-import sys
+"""Compatibility entry point for older Switch Claude shortcuts."""
+import importlib.util
 from pathlib import Path
 
 
-def helper_path(home):
-    try:
-        name = (home / 'current').read_text().strip().split('/')[-1]
-    except OSError:
-        raise SystemExit('SCG Router needs setup again before switching Claude.')
-    helper = home / 'releases' / name / 'packaging' / 'claude_desktop_switch.py'
-    if not name or not helper.is_file():
-        raise SystemExit('This SCG Router version does not include Switch Claude.')
-    return helper
+def _stable():
+    path = Path(__file__).with_name('claude_profile_launch.py')
+    spec = importlib.util.spec_from_file_location('claude_profile_launch', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
-def main():
-    home = Path(__file__).resolve().parent
-    helper = helper_path(home)
-    sys.argv = [str(helper), '--home', str(home)]
-    runpy.run_path(str(helper), run_name='__main__')
+_launch = _stable()
+helper_path = _launch.helper_path
+main = _launch.main
 
 
 if __name__ == '__main__':

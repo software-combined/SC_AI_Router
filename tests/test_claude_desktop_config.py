@@ -25,8 +25,8 @@ def _profile(tmp, entry=None, mode=None):
     data_dir = Path(tmp) / 'Claude-3p'
     (data_dir / 'configLibrary').mkdir(parents=True)
     (data_dir / 'configLibrary' / '_meta.json').write_text(json.dumps(
-        {'appliedId': 'abc', 'entries': [{'id': 'abc', 'name': 'Default'}]}))
-    (data_dir / 'configLibrary' / 'abc.json').write_text(
+        {'appliedId': '11111111-2222-4333-8444-555555555555', 'entries': [{'id': '11111111-2222-4333-8444-555555555555', 'name': 'Default'}]}))
+    (data_dir / 'configLibrary' / '11111111-2222-4333-8444-555555555555.json').write_text(
         json.dumps(entry if entry is not None else {}))
     if mode is not None:
         (data_dir / 'claude_desktop_config.json').write_text(
@@ -35,22 +35,23 @@ def _profile(tmp, entry=None, mode=None):
 
 
 def _entry(data_dir):
-    return json.loads((data_dir / 'configLibrary' / 'abc.json').read_text())
+    return json.loads((data_dir / 'configLibrary' / '11111111-2222-4333-8444-555555555555.json').read_text())
 
 
 class ProfilePathTests(unittest.TestCase):
     def test_the_default_profile_dir_follows_the_platform(self):
         cases = (
             ('darwin', {}, ('Library', 'Application Support', 'Claude-3p')),
+            ('win32', {'APPDATA': '/roaming', 'LOCALAPPDATA': '/local'}, ('local', 'Claude-3p')),
+            # Roaming AppData is the fallback when LOCALAPPDATA is absent.
             ('win32', {'APPDATA': '/appdata'}, ('appdata', 'Claude-3p')),
-            # A service account can have no APPDATA, so Windows falls back.
             ('win32', {}, ('AppData', 'Roaming', 'Claude-3p')),
             ('linux', {'XDG_CONFIG_HOME': '/xdg'}, ('xdg', 'Claude-3p')),
             ('linux', {}, ('.config', 'Claude-3p')),
         )
         for platform_name, env, tail in cases:
             with self.subTest(platform=platform_name, env=env):
-                environ = {'XDG_CONFIG_HOME': '', 'APPDATA': '', **env}
+                environ = {'XDG_CONFIG_HOME': '', 'APPDATA': '', 'LOCALAPPDATA': '', **env}
                 got = desktop_config.user_data_dir(environ, platform_name)
                 self.assertEqual(tuple(got.parts[-len(tail):]), tail)
         # CLAUDE_USER_DATA_DIR outranks every platform default.
@@ -64,7 +65,7 @@ class DesktopMergeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             data_dir = _profile(tmp, {'keep': 'me'})
             doc, changed, previous = desktop_config.merge_entry(
-                _state(), data_dir / 'configLibrary' / 'abc.json')
+                _state(), data_dir / 'configLibrary' / '11111111-2222-4333-8444-555555555555.json')
             self.assertTrue(changed)
             self.assertEqual(doc['keep'], 'me')
             self.assertEqual(doc['inferenceProvider'], 'gateway')
@@ -77,7 +78,7 @@ class DesktopMergeTests(unittest.TestCase):
     def test_rerun_is_stable_and_reports_unchanged(self):
         with tempfile.TemporaryDirectory() as tmp:
             data_dir = _profile(tmp)
-            path = data_dir / 'configLibrary' / 'abc.json'
+            path = data_dir / 'configLibrary' / '11111111-2222-4333-8444-555555555555.json'
             doc, _, _ = desktop_config.merge_entry(_state(), path)
             desktop_config.write_json(path, doc)
             doc2, changed2, _ = desktop_config.merge_entry(_state(), path)
@@ -90,8 +91,8 @@ class DesktopMergeTests(unittest.TestCase):
             data_dir = _profile(tmp, {'inferenceProvider': 'other'})
             with self.assertRaisesRegex(SystemExit, 'managed outside'):
                 desktop_config.merge_entry(
-                    _state(), data_dir / 'configLibrary' / 'abc.json')
-            self.assertNotIn('127.0.0.1', (data_dir / 'configLibrary' / 'abc.json').read_text())
+                    _state(), data_dir / 'configLibrary' / '11111111-2222-4333-8444-555555555555.json')
+            self.assertNotIn('127.0.0.1', (data_dir / 'configLibrary' / '11111111-2222-4333-8444-555555555555.json').read_text())
 
     def test_conflicting_mode_refuses_without_writing(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -100,7 +101,7 @@ class DesktopMergeTests(unittest.TestCase):
             data_dir = _profile(tmp, mode='1p')
             with self.assertRaisesRegex(SystemExit, 'deploymentMode'):
                 desktop_config.attach(home, _state(), install_mod._codex_config, data_dir_override=data_dir)
-            self.assertNotIn('127.0.0.1', (data_dir / 'configLibrary' / 'abc.json').read_text())
+            self.assertNotIn('127.0.0.1', (data_dir / 'configLibrary' / '11111111-2222-4333-8444-555555555555.json').read_text())
 
     def test_incomplete_library_metadata_refuses(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -118,7 +119,7 @@ class DesktopMergeTests(unittest.TestCase):
             home.mkdir()
             data_dir = _profile(tmp)
             desktop_config.attach(home, _state(), install_mod._codex_config, data_dir_override=data_dir)
-            path = data_dir / 'configLibrary' / 'abc.json'
+            path = data_dir / 'configLibrary' / '11111111-2222-4333-8444-555555555555.json'
             doc = json.loads(path.read_text())
             doc['inferenceProvider'] = 'hand-edited'
             path.write_text(json.dumps(doc))
@@ -134,7 +135,7 @@ class DesktopMergeTests(unittest.TestCase):
             home.mkdir()
             data_dir = _profile(tmp)
             out = desktop_config.attach(home, _state(), install_mod._codex_config, data_dir_override=data_dir)
-            self.assertEqual(out, data_dir / 'configLibrary' / 'abc.json')
+            self.assertEqual(out, data_dir / 'configLibrary' / '11111111-2222-4333-8444-555555555555.json')
             self.assertIn('127.0.0.1:1/test-token',
                           _entry(data_dir)['inferenceGatewayBaseUrl'])
             self.assertEqual(
@@ -218,7 +219,7 @@ class DesktopMergeTests(unittest.TestCase):
             data_dir = _profile(tmp)
             with mock.patch.dict(os.environ, {'CLAUDE_USER_DATA_DIR': str(data_dir)}):
                 out = desktop_config.attach(home, _state(), install_mod._codex_config)
-            self.assertEqual(out, data_dir / 'configLibrary' / 'abc.json')
+            self.assertEqual(out, data_dir / 'configLibrary' / '11111111-2222-4333-8444-555555555555.json')
             with mock.patch.dict(os.environ, {'CLAUDE_USER_DATA_DIR': str(data_dir)}):
                 desktop_config.detach(home, install_mod._codex_config)
             self.assertEqual(_entry(data_dir), {})
@@ -247,11 +248,11 @@ class DesktopMergeTests(unittest.TestCase):
             data_dir = _profile(tmp)
             desktop_config.attach(home, _state(), install_mod._codex_config,
                                   data_dir_override=data_dir)
-            before = (data_dir / 'configLibrary' / 'abc.json').read_text()
+            before = (data_dir / 'configLibrary' / '11111111-2222-4333-8444-555555555555.json').read_text()
             path = Path(tmp) / 'settings.json'
             path.write_text(json.dumps({'env': {}}))
             install_mod.detach_claude(home, settings_path=path)
-            self.assertEqual((data_dir / 'configLibrary' / 'abc.json').read_text(), before)
+            self.assertEqual((data_dir / 'configLibrary' / '11111111-2222-4333-8444-555555555555.json').read_text(), before)
 
     def test_extra_desktop_keys_survive_attach_and_detach(self):
         with tempfile.TemporaryDirectory() as tmp:

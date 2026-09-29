@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+- Switch Claude now copies your current account's local Claude Code tasks, with
+  their full conversations and files, to the other connection before switching.
+  Only tasks from the organization you are signed in to are shared; tasks in
+  your other organizations stay where they are. Cowork tasks are not shared in
+  this beta and stay where they are. Sign-in files never move. A task whose
+  conversation is missing, or was continued differently on each connection, is
+  left as it is with both copies kept; Claude still switches and then says how
+  many tasks were not shared. Any other copy problem keeps Claude on its current
+  connection, and Claude reopens there if it had already closed. Open Claude and
+  router startup leave tasks alone. Full native acceptance remains pending; see
+  `docs/compatibility.md`.
+- Switching from OpenRouter back to your Claude subscription no longer waits for
+  task sharing to be set up. Switching away from the subscription with saved
+  tasks first asks you to open a Code task in Claude, before Claude closes.
+- Checking whether Claude is closed no longer reopens it. Browser integration
+  helpers can remain open, while Claude's own task processes must finish before
+  switching connections.
+- Claude desktop setup uses local AppData for the Windows gateway profile.
+  An existing attachment keeps its original restore record and must be detached
+  before setup can choose a different profile directory.
+
 ## 0.6.140
 
 - Repair and stream handling now use captured request and response facts.
