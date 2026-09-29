@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Helper-turn fallback now also answers subscription 401/403 auth refusals
+  from the twin row. An exhausted login refuses naming turns with 401 as
+  well as 429; the twin answers those under the same gates. Ordinary
+  turns keep the raw upstream answer so a sign-in problem stays visible.
+
 - Refused thread-title helper turns now fall back to the Luna OpenRouter
   twin unless `openai_helper_fallback` is explicitly false. Slugs with a
   twin keep the same-model twin; twinless slugs answer from

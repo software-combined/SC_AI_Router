@@ -198,15 +198,36 @@ def _answer_refusal(handler, ledger, refusal, retry_after):
     attempt_policy.settle_delivery(ledger, handler)
 
 
-def refused(handler, prepared, retry_after, metrics, started, admit=None, *, ledger):
+def auth_refusal_message(prepared, metrics):
+    """Answer text for an auth-refused turn: whose login failed, and what to do.
+
+    Fixed wording from the provider's own definition, never upstream prose.
+    Used only when a helper turn's twin cannot be prepared; ordinary turns
+    keep the raw upstream answer so a sign-in problem stays visible.
+    """
+    defn = provider_defs.get(prepared.provider)
+    label = None if defn is None else defn.subscription_label
+    if label is None:
+        return errors.upstream_rate_limited().message
+    model = metrics.get('model')
+    model = model if isinstance(model, str) and model else 'This model'
+    return (f'{model} could not be authorised on your {label}; the turn was not served. '
+            'Sign in again shortly, or select a routed model instead.')
+
+
+def refused(handler, prepared, retry_after, metrics, started, admit=None, *, ledger,
+            auth=False):
     """Answer a refused turn, else name the planned twin route that answers it.
 
     Returns the twin's `attempt_policy.Route` once `ledger` has moved to it,
     else None after sending the retryable 503. The ledger allows one route
     change per request, so a twin can never fall back again. `admit` sizes the
-    twin with the refused body still held, before its send.
+    twin with the refused body still held, before its send. `auth` answers the
+    no-twin cases with the sign-in wording instead of the rate-limit wording.
     """
-    refusal = errors.upstream_rate_limited(refusal_message(prepared, metrics))
+    message = (auth_refusal_message(prepared, metrics) if auth
+               else refusal_message(prepared, metrics))
+    refusal = errors.upstream_rate_limited(message)
     fallback = prepared.fallback
     if fallback is None or not ledger.permits(attempt_policy.HELPER_FALLBACK):
         ledger.decide(attempt_policy.HELPER_FALLBACK,
