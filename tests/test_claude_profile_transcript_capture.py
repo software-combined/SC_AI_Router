@@ -3,14 +3,14 @@ import json
 from pathlib import Path
 
 from tests import claude_profile_sync_fixtures as fixtures
-from tests.claude_profile_sync_fixtures import SyncFixture
+from tests.claude_profile_sync_fixtures import SyncFixture, sync
 
 
 class TranscriptCaptureTests(SyncFixture):
     def test_complete_conversations_copy_in_both_directions_without_login_files(self):
         for active, source in (('1p', self.first), ('3p', self.third)):
             identity = json.loads((source / 'config.json').read_text())
-            for store in fixtures.STORES:
+            for store in sync.STORES:
                 identifier = active + '-' + store
                 cli = 'cli-' + identifier
                 text = ('Example: password: synthetic-value\nAuthorization: Bearer example-token'

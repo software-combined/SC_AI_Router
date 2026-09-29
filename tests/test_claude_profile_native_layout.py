@@ -15,6 +15,10 @@ IDENTIFIER = 'local_12345678-1234-4567-8123-123456789abc'
 
 
 class NativeLayoutTests(SyncFixture):
+    def setUp(self):
+        super().setUp()
+        fixtures.share_cowork(self)
+
     def record(self, profile, title, *, short=True, org=None):
         config = json.loads((profile / 'config.json').read_bytes())
         record = fixtures.record(profile, STORE, config['lastKnownAccountUuid'],
@@ -46,6 +50,7 @@ class NativeLayoutTests(SyncFixture):
                 stale, stale_bundle = self.record(self.third, 'stale', org='stale-org')
                 for profile in (self.first, self.third):
                     fixtures.write_sentinels(profile)
+                artifact = (first_bundle / 'artifact.json').read_bytes()
                 report = self.sync('1p')
                 self.assertEqual((report['failed'], report['pending']), (0, 0), report)
                 for record, bundle in ((first, first_bundle), (third, third_bundle)):
@@ -56,8 +61,8 @@ class NativeLayoutTests(SyncFixture):
                     self.assertEqual((bundle / 'conflict.txt').read_text(), 'active')
                     for title in ('active', 'inactive', 'stale'):
                         self.assertEqual((bundle / (title + '.txt')).read_text(), title)
-                    self.assertEqual(json.loads((bundle / 'artifact.json').read_bytes()),
-                                     {'path': str(bundle / 'result.txt')})
+                    # Task files keep the active copy's exact bytes.
+                    self.assertEqual((bundle / 'artifact.json').read_bytes(), artifact)
                     self.assertNotIn('creds', [path.name for path in bundle.rglob('*')])
                 self.assertFalse(stale.exists())
                 self.assertFalse(stale_bundle.exists())

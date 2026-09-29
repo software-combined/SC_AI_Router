@@ -2,11 +2,14 @@
 
 ## Unreleased
 
-- The Claude task-sharing candidate copies the current account's complete local
-  conversations and task bundles when switching connections. Separate sign-in
-  files stay in their original profile, and any required copy failure stops the
-  switch. Open Claude and ordinary router startup leave histories alone.
-  Full native acceptance remains pending; see `docs/compatibility.md`.
+- Switch Claude now copies your current account's local Claude Code tasks, with
+  their full conversations and files, to the other connection before switching.
+  Cowork tasks are not shared in this beta and stay where they are. Sign-in files
+  never move. If a task cannot be copied safely, for example because both
+  connections continued the same conversation differently, Claude stays on its
+  current connection and both copies are kept. Open Claude and router startup
+  leave tasks alone. Full native acceptance remains pending; see
+  `docs/compatibility.md`.
 - Checking whether Claude is closed no longer reopens it. Browser integration
   helpers can remain open, while Claude's own task processes must finish before
   switching connections.

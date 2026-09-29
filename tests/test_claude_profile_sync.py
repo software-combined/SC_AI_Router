@@ -2,11 +2,12 @@
 import json
 
 from tests import claude_profile_sync_fixtures as fixtures
-from tests.claude_profile_sync_fixtures import SyncFixture
+from tests.claude_profile_sync_fixtures import SyncFixture, sync
 
 
 class ProfileSyncTests(SyncFixture):
     def test_agent_subdirectory_round_trip_preserves_layout_and_active_outputs(self):
+        fixtures.share_cowork(self)
         store = 'local-agent-mode-sessions'
         for profile, account, org, title in (
                 (self.first, '12345678-1234-4567-8123-123456789abc', 'abcdefab-1234-4567-8123-123456789abc', 'active'),
@@ -39,7 +40,7 @@ class ProfileSyncTests(SyncFixture):
         self.assertEqual(before, (fixtures.fingerprint(self.first), fixtures.fingerprint(self.third)))
 
     def test_active_namespace_not_incoming_name_selects_record_and_all_duplicates(self):
-        for store in fixtures.STORES:
+        for store in sync.STORES:
             active = fixtures.record(self.first, store, '12345678-1234-4567-8123-123456789abc', 'abcdefab-1234-4567-8123-123456789abc', 'same',
                 filename='local_active.json', title='active', bundle_files={'same.txt': 'active'})
             doc = json.loads(active.read_text())
@@ -52,7 +53,7 @@ class ProfileSyncTests(SyncFixture):
                 filename='local_incoming.json', title='inactive', bundle_files={'same.txt': 'inactive'})
         report = self.sync()
         self.assertEqual(report['failed'], 0, report)
-        for store in fixtures.STORES:
+        for store in sync.STORES:
             for profile in (self.first, self.third):
                 paths = self.paths(profile, store, 'same')
                 self.assertEqual(len(paths), 1)
@@ -63,7 +64,7 @@ class ProfileSyncTests(SyncFixture):
                 self.assertTrue((paths[0].with_suffix('') / 'stale.txt').exists())
                 self.assertTrue((paths[0].with_suffix('') / 'empty').is_dir())
 
-    def test_both_stores_sync_in_both_directions_and_keep_external_paths(self):
+    def test_tasks_sync_in_both_directions_and_keep_external_paths(self):
         source = fixtures.record(
             self.third, 'claude-code-sessions', '87654321-4321-4567-8123-123456789abc',
             'fedcbaab-4321-4567-8123-123456789abc', 'source-code', cli='cli-source',
@@ -72,16 +73,14 @@ class ProfileSyncTests(SyncFixture):
                 'outputs/unique.txt': 'unique',
             }, transcript='hello')
         fixtures.target_only(
-            self.first, 'local-agent-mode-sessions', '12345678-1234-4567-8123-123456789abc',
+            self.first, 'claude-code-sessions', '12345678-1234-4567-8123-123456789abc',
             'abcdefab-1234-4567-8123-123456789abc', 'target-local')
         report = self.sync()
         self.assertEqual(report['failed'], 0, report)
         for profile_path in (self.first, self.third):
-            for store, identifier in (
-                    ('claude-code-sessions', 'source-code'),
-                    ('local-agent-mode-sessions', 'target-local')):
-                paths = self.paths(profile_path, store, identifier)
-                self.assertEqual(len(paths), 1, (profile_path, store, paths))
+            for identifier in ('source-code', 'target-local'):
+                paths = self.paths(profile_path, 'claude-code-sessions', identifier)
+                self.assertEqual(len(paths), 1, (profile_path, identifier, paths))
                 doc = json.loads(paths[0].read_text())
                 self.assertEqual(doc['sessionId'], identifier)
                 if identifier == 'source-code':
@@ -203,7 +202,7 @@ class ProfileSyncTests(SyncFixture):
         before_third = fixtures.fingerprint(self.third / 'creds')
         before_first = fixtures.fingerprint(self.first / 'creds')
         source = fixtures.record(
-            self.third, 'local-agent-mode-sessions', '87654321-4321-4567-8123-123456789abc',
+            self.third, 'claude-code-sessions', '87654321-4321-4567-8123-123456789abc',
             'fedcbaab-4321-4567-8123-123456789abc', 'safe-session',
             title='safe title',
             local_secret='synthetic-target-local-value',
@@ -212,7 +211,7 @@ class ProfileSyncTests(SyncFixture):
         source_doc['emailAddress'] = 'source@example.invalid'
         source.write_text(json.dumps(source_doc))
         report = self.sync()
-        self.assertEqual(report['failed'], 0, report)
+        self.assertEqual((report['failed'], report['copied']), (0, 1), report)
         self.assertEqual(fixtures.fingerprint(self.third / 'creds'),
                          before_third)
         self.assertEqual(fixtures.fingerprint(self.first / 'creds'),

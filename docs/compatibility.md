@@ -3,9 +3,10 @@
 ## Claude profile task sharing candidate, 29 September 2026 AEST
 
 Version 0.6.141 is a development candidate. **Switch Claude** shares local Code
-and local-agent tasks before changing connections; **Open Claude** and ordinary
-router startup leave histories alone. Complete installed-launcher acceptance
-remains pending. No router release is authorized by this work.
+tasks before changing connections; Cowork tasks stay in their own profile in
+this beta. **Open Claude** and ordinary router startup leave histories alone.
+Complete installed-launcher acceptance remains pending. No router release is
+authorized by this work.
 
 The candidate preserves complete conversations, session IDs and external
 workspace paths. Separate login, credential and profile-control files remain
@@ -15,7 +16,7 @@ journals retain original and competing generations when recovery is ambiguous.
 
 | Platform | Observed native evidence | Remaining acceptance |
 |---|---|---|
-| macOS | Claude 2.9939.2 Code task opened and continued in Gateway, then continued under its original subscription account after a transcript metadata repair. Automatic identity capture and one new Cowork response passed. | Complete installed-launcher round trip, latest-message convergence and Cowork transfer/resume |
+| macOS | Claude 2.9939.2 Code task opened and continued in Gateway, then continued under its original subscription account after a transcript metadata repair. Automatic identity capture and one new Cowork response passed. | Complete installed-launcher round trip and latest-message convergence; Cowork sharing waits for a later release |
 | Windows | No native host available | Native app, shortcut, policy and task round trip |
 | Linux | No native desktop host available | Native app, desktop entry, policy and task round trip |
 
@@ -41,8 +42,8 @@ as a native response diagnostic. The same class of failure has a public
 [first-hand report](https://github.com/anthropics/claude-code/issues/58427).
 The candidate keeps message IDs and content intact, retains a private original,
 and moves foreign request metadata to `providerRequestId`. Native acceptance
-must verify this behavior through the installed switch. Cowork audit bytes
-remain exact; its signing key is excluded and native continuation remains open.
+must verify this behavior through the installed switch. Cowork sharing is off
+for this beta, so its audit log and signing key are not copied at all.
 
 ## Router 0.6.138 onboarding candidate, 28 September 2026 AEST
 

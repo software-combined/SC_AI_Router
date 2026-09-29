@@ -206,12 +206,12 @@ class ProfileLaunchTests(unittest.TestCase):
                 cli='cli-shared', transcript='synthetic history',
                 bundle_files={'outputs/result.txt': result,
                               'outputs/' + title + '.txt': title})
-        fixtures.record(
-            first, 'local-agent-mode-sessions', '12345678-1234-4567-8123-123456789abc',
-            'abcdefab-1234-4567-8123-123456789abc', 'first-only')
-        third_only = fixtures.record(
-            third, 'local-agent-mode-sessions', '87654321-4321-4567-8123-123456789abc',
-            'fedcbaab-4321-4567-8123-123456789abc', 'third-only')
+        cowork = 'local-agent-mode-sessions'
+        fixtures.record(first, cowork, '12345678-1234-4567-8123-123456789abc',
+                        'abcdefab-1234-4567-8123-123456789abc', 'first-only')
+        fixtures.record(third, cowork, '87654321-4321-4567-8123-123456789abc',
+                        'fedcbaab-4321-4567-8123-123456789abc', 'third-only')
+        cowork_before = [fixtures.fingerprint(path / cowork) for path in (first, third)]
         release = self.home / 'releases/fixture/packaging'
         inventory = fixtures.load_helper('release').bundle_files(ROOT)
         archive = self.root / 'release.tar'
@@ -248,20 +248,13 @@ class ProfileLaunchTests(unittest.TestCase):
             before_busy = fixtures.fingerprint(first), fixtures.fingerprint(third)
             dispatch('switch', '1p', code=1)
             self.assertEqual((fixtures.fingerprint(first), fixtures.fingerprint(third)), before_busy)
+        # Cowork tasks are not shared in the beta and stay exactly as they were.
+        self.assertEqual([fixtures.fingerprint(path / cowork) for path in (first, third)],
+                         cowork_before)
         for profile_path in (first, third):
-            for store in fixtures.STORES:
-                records = sync_groups(profile_path / store)
-                expected = (('shared',) if store == 'claude-code-sessions'
-                            else ('first-only', 'third-only'))
-                for identifier in expected:
-                    paths = records.get(identifier, [])
-                    self.assertEqual(
-                        len(paths), 1, (profile_path, store, identifier))
-                    self.assertEqual(
-                        json.loads(paths[0].read_text())['sessionId'],
-                        identifier)
-            shared_path = sync_groups(
-                profile_path / 'claude-code-sessions')['shared'][0]
+            paths = sync_groups(profile_path / 'claude-code-sessions').get('shared', [])
+            self.assertEqual(len(paths), 1, profile_path)
+            shared_path = paths[0]
             self.assertEqual(
                 json.loads(shared_path.read_text())['title'], 'third')
             self.assertEqual(json.loads(shared_path.read_text())['cliSessionId'], 'cli-shared')
@@ -270,7 +263,6 @@ class ProfileLaunchTests(unittest.TestCase):
                  'result.txt').read_text(), 'third-result')
             for name in ('first', 'third'):
                 self.assertEqual((shared_path.with_suffix('') / 'outputs' / (name + '.txt')).read_text(), name)
-        self.assertTrue(third_only.exists())
         for profile_path in (first, third):
             self.assertEqual(
                 fixtures.fingerprint(profile_path / 'creds'),

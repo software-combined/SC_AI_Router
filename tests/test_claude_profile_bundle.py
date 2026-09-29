@@ -48,14 +48,15 @@ class ProfileBundleTests(PairFixture):
         self.assertTrue((self.bundle / 'unique.txt').exists())
         self.assertTrue((self.bundle / 'empty').is_dir())
 
-    def test_duplicate_retirement_compares_cleaned_rewritten_content(self):
+    def test_duplicate_task_files_join_the_union_with_exact_bytes(self):
         duplicate = self.duplicate()
-        (duplicate.with_suffix('') / 'unique.json').write_text(json.dumps({
-            'accountName': 'do not transfer', 'emailAddress': 'synthetic@example.invalid',
-            'path': str(duplicate.with_suffix('') / 'unique.txt'), 'messages': []}))
+        unique = duplicate.with_suffix('') / 'unique.json'
+        unique.write_text(json.dumps({
+            'accountName': 'task data', 'emailAddress': 'synthetic@example.invalid',
+            'path': str(duplicate.with_suffix('') / 'unique.txt'), 'messages': []}, indent=2))
+        raw = unique.read_bytes()
         self.assertEqual(self.consolidate(), 1)
-        doc = json.loads((self.bundle / 'unique.json').read_text())
-        self.assertEqual(doc, {'path': str(self.bundle / 'unique.txt'), 'messages': []})
+        self.assertEqual((self.bundle / 'unique.json').read_bytes(), raw)
         self.assertFalse(duplicate.exists())
 
     def test_same_path_active_content_wins_and_shape_conflict_preserves_originals(self):

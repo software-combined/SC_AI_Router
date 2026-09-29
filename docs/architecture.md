@@ -381,7 +381,9 @@ The switch check returns a decision; it never writes or logs settings.
 
 `claude_profile_records.py` discovers records within the resolved account and
 store layout. It owns namespace selection, native abbreviated bundle paths and
-source snapshots. It does not guess identity from saved history or write tasks.
+source snapshots. Its `STORES` list is the only switch for which stores are
+shared; the 1.0.0 beta shares the Code store and leaves Cowork untouched.
+It does not guess identity from saved history or write tasks.
 Profile paths follow the saved attachment, so an installer default change cannot
 silently reassign an existing attachment or its restore record.
 
@@ -403,7 +405,10 @@ Claude, hold both profile locks and provide a private, fully prepared bundle.
 
 `claude_profile_bundle.py` assembles the complete admitted bundle union before
 publication. It uses the shared transfer rules and retains unique duplicate
-content before retirement. `claude_profile_history.py` separates foreign request
+content before retirement. Task files keep their exact bytes; transcript rows
+keep every field and only relocate profile paths. A losing transcript copy that
+holds rows the kept copy lacks refuses the task, because publication deletes it.
+`claude_profile_history.py` separates foreign request
 metadata from native response diagnostics while preserving messages and IDs.
 Repairs to shared CLI transcripts retain a private original and recover through
 a separate journal because those files sit outside the desktop bundle.

@@ -173,8 +173,6 @@ def rewrite(value, paths):
     if isinstance(value, dict):
         out = {}
         for name, item in value.items():
-            if local_key(name):
-                continue
             if (name in PATH_KEYS and isinstance(item, str)
                     and len(paths or ()) == 4):
                 out[name] = rewrite_path(item, *paths)
@@ -202,9 +200,7 @@ def assert_clean_file(source):
     assert_clean_bytes(path.read_bytes(), source)
 
 
-def write_screened_text(target, output, source, mode=None, *, conversation=False):
-    if not conversation:
-        assert_clean_bytes(output.encode(), source)
+def _write_text(target, output, mode=None):
     target = Path(target)
     if target.exists():
         existing = target.stat().st_mode & 0o777
@@ -265,12 +261,13 @@ def project_record(raw, paths, existing=None, target_wins=False,
     return json.dumps(_merge_local(existing, merged), sort_keys=True)
 
 
-def transcript_row(doc, paths=()):
+def transcript_row(doc, paths=(), keep=False):
     # Message and tool payloads are conversation data, not profile settings.
     # Keep pasted keys too; only separate application credentials are excluded.
+    # A transcript row (keep=True) loses no key; only relocated paths change.
     payloads = CONVERSATION_KEYS
-    result = rewrite(clean({key: value for key, value in doc.items()
-                            if key not in payloads}), paths)
+    body = {key: value for key, value in doc.items() if key not in payloads}
+    result = rewrite(body if keep else clean(body), paths)
     result.update({key: doc[key] for key in payloads if key in doc})
     return result
 
@@ -280,45 +277,38 @@ def assert_clean_record(doc):
     assert_clean_bytes(json.dumps(metadata, sort_keys=True).encode(), 'record')
 
 
-def copy_json_file(source, target, paths, mode=None, *, conversation=False):
-    text = Path(source).read_text(encoding='utf-8')
-    if Path(source).suffix.lower() == '.jsonl':
-        lines = []
-        for line in io.StringIO(text):
-            if not line.strip():
-                lines.append(line)
-                continue
-            try:
-                doc = json.loads(line)
-            except ValueError as exc:
-                raise ValueError('invalid JSONL: %s' % source) from exc
-            if not isinstance(doc, dict):
-                raise ValueError('JSONL row is not an object: %s' % source)
-            projected = transcript_row(doc, paths)
-            if conversation:
-                assert_clean_record(projected)
-            lines.append(json.dumps(projected, sort_keys=True) + '\n')
-        write_screened_text(target, ''.join(lines), source, mode, conversation=conversation)
-        return
-    try:
-        doc = json.loads(text)
-    except ValueError as exc:
-        raise ValueError('invalid JSON: %s' % source) from exc
-    write_screened_text(target, json.dumps(rewrite(clean(doc), paths),
-                                           sort_keys=True), source, mode)
+def copy_transcript(source, target, paths, mode=None):
+    """Copy every row; rows without a relocated path keep their exact text."""
+    lines = []
+    for line in io.StringIO(Path(source).read_text(encoding='utf-8')):
+        if not line.strip():
+            lines.append(line)
+            continue
+        try:
+            doc = json.loads(line)
+        except ValueError as exc:
+            raise ValueError('invalid JSONL: %s' % source) from exc
+        if not isinstance(doc, dict):
+            raise ValueError('JSONL row is not an object: %s' % source)
+        projected = transcript_row(doc, paths, keep=True)
+        # Checkpoint entries are keyed by the user's file names, such as
+        # config/secret, and are conversation data rather than credentials.
+        assert_clean_record({key: value for key, value in projected.items()
+                             if key != 'snapshot'})
+        lines.append(line if projected == doc
+                     else json.dumps(projected, ensure_ascii=False) + '\n')
+    _write_text(target, ''.join(lines), mode)
 
 
 def copy_file(source, target, paths, mode=None, *, conversation=False):
     source, target = Path(source), Path(target)
     target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if conversation:
+        copy_transcript(source, target, paths, mode)
+        return
     existing_mode = (target.stat().st_mode & 0o777
                      if target.exists() else None)
-    # Cowork audit entries are integrity-chained; even formatting is immutable.
-    if source.suffix.lower() in ('.json', '.jsonl') and source.name != 'audit.jsonl':
-        copy_json_file(source, target, paths, mode, conversation=conversation)
-        return
-    if source.name == 'audit.jsonl' and mode is None:
-        mode = 0o600
+    # Task files, including integrity-chained audit logs, keep their exact bytes.
     assert_clean_file(source)
     shutil.copy2(source, target)
     if mode is not None:
