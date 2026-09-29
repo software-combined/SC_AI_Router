@@ -23,7 +23,7 @@ prompt to it.
 import json
 
 from . import (attempt_policy, codex_route, errors, provider_defs, request_context,
-               subscription_roster, wire_shape)
+               subscription_roster, usage_episodes, wire_shape)
 from .image_items import has_images
 from .providers import ExternalResponsesProvider
 from .events import log_event
@@ -196,14 +196,16 @@ def _answer_refusal(handler, ledger, refusal, retry_after):
     attempt_policy.settle_delivery(ledger, handler)
 
 
-def refused(handler, prepared, retry_after, metrics, started, admit=None, *, ledger):
+def refused(handler, prepared, retry_after, metrics, started, admit=None, *, ledger, body=None):
     """Answer a refused turn, else name the planned twin route that answers it.
 
     Returns the twin's `attempt_policy.Route` once `ledger` has moved to it,
     else None after sending the retryable 503. The ledger allows one route
     change per request, so a twin can never fall back again. `admit` sizes the
-    twin with the refused body still held, before its send.
+    twin with the refused body still held, before its send. `body` is the
+    429's own error body, read only for the usage-limit record.
     """
+    usage_episodes.record(handler, prepared, body)
     refusal = errors.upstream_rate_limited(refusal_message(prepared, metrics))
     fallback = prepared.fallback
     if fallback is None or not ledger.permits(attempt_policy.HELPER_FALLBACK):
