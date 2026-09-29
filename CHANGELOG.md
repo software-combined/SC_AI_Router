@@ -7,6 +7,39 @@
   registration, so a broken but fail-soft delivery is diagnosable from the
   install log instead of showing only an exception type or a refusal count.
 
+- Switch Claude now copies your current account's local Claude Code tasks, with
+  their full conversations and files, to the other connection before switching.
+  Only tasks from the organization you are signed in to are shared; tasks in
+  your other organizations stay where they are. Cowork tasks are not shared in
+  this beta and stay where they are. Sign-in files never move. A task whose
+  conversation is missing, or was continued differently on each connection, is
+  left as it is with both copies kept; Claude still switches and then says how
+  many tasks were not shared. Any other copy problem keeps Claude on its current
+  connection, and Claude reopens there if it had already closed. Open Claude and
+  router startup leave tasks alone. Full native acceptance remains pending; see
+  `docs/compatibility.md`.
+- A Claude Code task you delete no longer comes back after Switch Claude. Its
+  copy on the other connection is moved to a hidden trash folder,
+  `claude-code-sessions/.claude-profile-control-trash` inside that connection's
+  Claude folder, and is never erased. A copy that changed since the last switch
+  is kept and shared again. When a connection loses every one of several shared
+  tasks at once, for example after signing out, they are shared back instead.
+- Switching from OpenRouter back to your Claude subscription no longer waits for
+  task sharing to be set up. Switching away from the subscription with saved
+  tasks first asks you to open a Code task in Claude, before Claude closes.
+- Switch Claude waits for Claude's own task processes to finish before it
+  switches; browser helpers can stay open. If a switch is interrupted, or your
+  home folder was copied or restored, the next switch finishes or undoes the
+  earlier one instead of refusing every later switch.
+- On Windows, new Claude desktop setups use the gateway profile in local
+  AppData. An earlier attachment keeps its original profile, and automatic
+  updates keep using it.
+- Switch Claude, Open Claude and task sharing are macOS-only in this beta. On
+  Windows and Linux, setup connects Claude without them until they have been
+  tested there. After rolling back to a 0.6 release, Switch Claude uses that
+  release's plain switch, Open Claude just opens Claude, and Claude Code sessions
+  start normally; reinstall 1.0.0 to share tasks again.
+
 - Helper-turn fallback now also answers subscription 401/403 auth refusals
   from the twin row. An exhausted login refuses naming turns with 401 as
   well as 429; the twin answers those under the same gates. Ordinary

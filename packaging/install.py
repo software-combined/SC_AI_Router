@@ -462,8 +462,8 @@ def do_install(args, _fetch=fetch, _run=None):
         raise SystemExit('claude_mode is none: re-run with --claude-mode subscription '
                          'to attach Claude Code, or select --clients codex')
     if clients in ('claude', 'both'): attach_claude(home, state, python=python)
-    if args.desktop or _codex_config.read_receipt(home).get('clients', {}).get('claude-desktop'):
-        _desktop_config.attach(home, state, _codex_config, python=python)
+    saved = None if args.desktop else _desktop_config.saved_profile(home, _codex_config)
+    if args.desktop or saved: _desktop_config.attach(home, state, _codex_config, saved, python=python)
     # Only explicit service-only installation or uninstall drops attachments.
     if clients == 'claude':
         # Claude-only: the shared service is up; Codex settings untouched.
