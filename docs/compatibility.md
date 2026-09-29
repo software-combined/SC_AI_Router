@@ -1,5 +1,50 @@
 # Compatibility
 
+## Claude profile task sharing candidate, 29 September 2026 AEST
+
+Version 0.6.141 is a development candidate. **Switch Claude** shares local Code
+tasks before changing connections; Cowork tasks stay in their own profile in
+this beta. **Open Claude** and ordinary router startup leave histories alone.
+Complete installed-launcher acceptance remains pending. No router release is
+authorized by this work.
+
+The candidate preserves complete conversations, session IDs and external
+workspace paths. Separate login, credential and profile-control files remain
+excluded. Only the resolved current account participates; older accounts' tasks
+remain separate. Any required copy failure prevents the mode change. Private
+journals retain original and competing generations when recovery is ambiguous.
+
+| Platform | Observed native evidence | Remaining acceptance |
+|---|---|---|
+| macOS | Claude 2.9939.2 Code task opened and continued in Gateway, then continued under its original subscription account after a transcript metadata repair. Automatic identity capture and one new Cowork response passed. | Complete installed-launcher round trip and latest-message convergence; Cowork sharing waits for a later release |
+| Windows | No native host available | Native app, shortcut, policy and task round trip |
+| Linux | No native desktop host available | Native app, desktop entry, policy and task round trip |
+
+The macOS results are earlier controlled, per-session experiments. They do not
+prove a complete switch or the final candidate. The installed switch test is
+reserved for a fresh user green light; no quit, restart, hook installation or
+live profile changes may happen before that approval. Offline fixtures cover
+the platform boundaries and copy/recovery contracts, including abrupt process
+exit and competing writes. Python 3.9 installer checks are separate from the
+Python 3.14 router suite. Simulated platform results are not native acceptance.
+
+Anthropic's [session guide](https://code.claude.com/docs/en/agent-sdk/sessions#resume-across-hosts)
+describes transferring local transcripts for resumption. Its [Desktop data
+guide](https://claude.com/docs/third-party/claude-desktop/data-storage) describes
+the local stores. This candidate works with those local files and the
+[SessionStart hook](https://code.claude.com/docs/en/hooks), leaving authentication
+with Claude. It uses no private service endpoint, token transfer, vendor-code
+patch or audit-integrity bypass. These boundaries do not establish Anthropic
+endorsement or a complete Desktop/Cowork portability guarantee.
+
+The earlier Code continuation probe exposed a foreign response ID being rejected
+as a native response diagnostic. The same class of failure has a public
+[first-hand report](https://github.com/anthropics/claude-code/issues/58427).
+The candidate keeps message IDs and content intact, retains a private original,
+and moves foreign request metadata to `providerRequestId`. Native acceptance
+must verify this behavior through the installed switch. Cowork sharing is off
+for this beta, so its audit log and signing key are not copied at all.
+
 ## Router 0.6.138 onboarding candidate, 28 September 2026 AEST
 
 At 17:01 AEST the bounded onboarding probe passed on the real clients, using
