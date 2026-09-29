@@ -455,7 +455,11 @@ task is safe. The coordinator has no app-lifecycle authority.
 
 `claude_desktop_platform.py` owns native app identity, graceful shutdown,
 dialogs and owned shortcuts. It waits for known writers and their children;
-an unknown writer or changed process identity refuses the operation.
+an unknown writer or changed process identity refuses the operation. Its
+macOS lifecycle helpers take an `app` (bundle id, plus the executable names
+only that app may run) that defaults to Claude; Switch Codex passes the
+ChatGPT app's, which lists no such names, so a running Claude or Codex CLI
+never blocks it.
 On macOS, bundle discovery uses Spotlight metadata because AppleScript app
 lookup launches a closed app. Browser-owned native messaging hosts do not seed
 the writer set; actual app descendants remain tracked after reparenting.
@@ -474,11 +478,41 @@ active provider becomes `scg_router`, which needs no OpenAI sign-in, sends
 default plus `scg_router` with sign-in on, so threads started while switched
 still resume. The Codex receipt entry records the variant (`variant`, absent
 until the first switch), and `client_choice.attach_codex` rebuilds it on
-every install and update. `switch` is the only writer that changes it: the
-config first, then the receipt, with the config put back if the receipt
-write fails. While Codex is switched, `tools/disable.py` (and so a
+every install and update. `switch` and `restore` are the only writers that
+change it. `switch` writes the config first, then the receipt, with the config
+put back if the receipt write fails; `restore` undoes a switch, putting both
+back. While Codex is switched, `tools/disable.py` (and so a
 service-only install), `--uninstall` and `--rollback` refuse and leave its
 settings as they are.
+
+`packaging/codex_desktop_switch.py` is the Switch Codex flow, macOS only. It
+moves an attached install to the other variant, holding the installer lock
+throughout, and a hand-edited block refuses before anything is asked.
+
+`switched` is strict. It needs `codex_route.ready`, a subscription install
+(no-subscription mode already runs without sign-in), exactly one ChatGPT app
+(Codex) with its bundled CLI wherever Spotlight finds it, and a graceful
+quit. It then writes a pending marker, calls `codex_switch_config.switch` and
+proves the result with `codex_config_proof`: that CLI, started as an app
+server on `~/.codex`, must load the config and report no managed
+`model_provider` and no account. Any doubt refuses before the dialog; a failed
+proof puts back the previous receipt entry and the block exactly as
+config.toml held it, the owner's latest model pick included, through
+`codex_switch_config.restore`, and reopens the app.
+
+Switching back is the only way out of `switched`, since detach, uninstall and
+rollback refuse while switched, so it depends on nothing it can lose. It runs
+no proof: it only returns to the install's own block plus the provider entry.
+With exactly one app found it quits the app and reopens it after; a quit that
+fails still refuses, since the person can close the app and retry. With the
+app missing or not identifiable (two copies, a Spotlight failure), the dialog
+asks the person to quit it first and the closing message to open it again.
+
+A switch that refused before writing needs no undo, and any refusal after the
+quit reopens the app unchanged. A marker left by a run that stopped halfway is
+kept when its switch was written and needs no proof or proves; anything else
+is rolled back before the next run does anything else, so a way back cut
+short before its writes is simply offered again.
 
 ## Distribution (outside the request path)
 
