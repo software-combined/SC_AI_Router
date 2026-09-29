@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- SCG plugin delivery now reports the cause of a marketplace-synchronisation
+  failure and the command and client error for each refused plugin
+  registration, so a broken but fail-soft delivery is diagnosable from the
+  install log instead of showing only an exception type or a refusal count.
+
 - Helper-turn fallback now also answers subscription 401/403 auth refusals
   from the twin row. An exhausted login refuses naming turns with 401 as
   well as 429; the twin answers those under the same gates. Ordinary

@@ -104,26 +104,44 @@ def _commands(client, root, names):
     return []
 
 
+def _one_line(value, limit=200):
+    """Collapse a message or command output to one bounded single line."""
+    collapsed = ' '.join(str(value).split()) if value else ''
+    return collapsed[:limit]
+
+
 def register(client, root, names, run=subprocess.run, which=shutil.which):
     """Register the local marketplace and install each plugin, tolerantly.
 
     Both clients are idempotent about an existing marketplace and an installed
     plugin, so a non-zero exit is counted rather than raised: a client that
-    refuses one plugin must not cost the others or the router install.
+    refuses one plugin must not cost the others or the router install. Each
+    refusal keeps the command and the client's own error line, so the install
+    log names the failure instead of only counting it.
     """
     if which(client) is None:
         return f'{client}: not installed', 1
     refused = 0
+    failures = []
     for command in _commands(client, root, names):
+        label = _one_line(' '.join(command))
         try:
             done = run(command, capture_output=True, text=True, timeout=180)
-        except (OSError, subprocess.SubprocessError):
+        except (OSError, subprocess.SubprocessError) as exc:
             refused += 1
+            failures.append(f'{label}: {type(exc).__name__}: {_one_line(exc)}')
             continue
         if done.returncode != 0:
             refused += 1
-    return (f'{client}: {len(names)} plugin(s)'
-            + (f', {refused} refused' if refused else ''), refused)
+            detail = _one_line(done.stderr) or _one_line(done.stdout)
+            failures.append(f'{label}: exit {done.returncode}'
+                            + (f': {detail}' if detail else ''))
+    line = f'{client}: {len(names)} plugin(s)'
+    if refused:
+        line += f', {refused} refused'
+        if failures:
+            line += ' [' + '; '.join(failures) + ']'
+    return line, refused
 
 
 def retire_git_updater(base=None, run=subprocess.run, which=shutil.which):
@@ -173,5 +191,8 @@ def sync(state, plugins_dir, base=None, run=subprocess.run, which=shutil.which):
             notes.append('git updater: kept (no client accepted)')
         return '; '.join(n for n in notes if n)
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
-        # A skills failure never fails the router install.
-        return f'skipped ({type(exc).__name__})'
+        # A skills failure never fails the router install. Keep one line, but
+        # carry the cause and the marketplace path so a wedged or partial
+        # marketplace is diagnosable from the install log alone.
+        detail = _one_line(exc) or type(exc).__name__
+        return f'skipped ({type(exc).__name__}: {detail}) at {marketplace_root(base)}'
