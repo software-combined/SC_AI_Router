@@ -548,6 +548,18 @@ kept when its switch was written and needs no proof or proves; anything else
 is rolled back before the next run does anything else, so a way back cut
 short before its writes is simply offered again.
 
+`packaging/codex_switch_offer.py` owns the automatic offers. The updater
+calls it after every pass that holds the update lock, the minute Express job
+included, and swallows anything it raises. It reads the router's
+`codex-usage-limit.json` itself, because the router's reader needs Python
+3.14, so its parsing and five-hour rule are copies that a test pins to
+`ai_router/usage_episodes.py`. On macOS, for a Codex install in subscription
+mode that has `APP`, it offers Switch Codex once per episode from an affected
+desktop build, and the way back once Codex is switched and the episode has
+ended or the installed ChatGPT app is at or above `FIXED_IN`. The dialog is
+only the offer: its action opens Switch Codex, which asks before it changes
+anything. `APP` is the one place the Switch Codex app's location is named.
+
 ## Distribution (outside the request path)
 
 `infra/` owns the update feed as code (repository-only templates, deployed from a checkout): the certificate stack, the private
