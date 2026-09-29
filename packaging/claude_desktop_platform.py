@@ -1,4 +1,10 @@
-"""Native Claude identity, graceful lifecycle, dialogs and owned shortcuts."""
+"""Native Claude identity, graceful lifecycle, dialogs and owned shortcuts.
+
+The macOS lifecycle helpers also serve Switch Codex: `app` names the bundle
+to find, quit and reopen, and defaults to Claude, the only app the Windows
+and Linux paths know.
+"""
+import collections
 import configparser
 import importlib.util
 import json
@@ -25,6 +31,10 @@ TITLE = 'SCG Router'
 ICON = Path(__file__).parent / 'assets' / 'router-icon.png'
 BUNDLE_ID = 'com.anthropic.claudefordesktop'
 APP_DESKTOP_ID = BUNDLE_ID
+# `writers`: executable names that must belong to the verified app, since a
+# stray copy could write the same profile while the switch runs.
+App = collections.namedtuple('App', 'bundle_id writers')
+CLAUDE = App(BUNDLE_ID, ('claude', 'claude-desktop', 'claude.exe'))
 
 
 def dialog_script(message, confirm=False):
@@ -106,7 +116,9 @@ def _json_command(script, run):
         raise OSError('Claude identity could not be checked') from exc
 
 
-def app_identity(platform_name, run=subprocess.run):
+def app_identity(platform_name, run=subprocess.run, app=CLAUDE):
+    if app != CLAUDE and platform_name != 'darwin':
+        raise OSError('only the Mac knows this app')
     if platform_name == 'win32':
         return _json_command(
             "$a=@(Get-StartApps | Where-Object {$_.Name -eq 'Claude'});"
@@ -125,13 +137,13 @@ def app_identity(platform_name, run=subprocess.run):
         # AppleScript's app-path lookup launches a closed Claude. Spotlight
         # resolves the bundle without undoing the stopped-app safety check.
         answer = _run(['/usr/bin/mdfind',
-                       'kMDItemCFBundleIdentifier == "%s"' % BUNDLE_ID], run)
+                       'kMDItemCFBundleIdentifier == "%s"' % app.bundle_id], run)
         roots = {Path(line) for line in answer.stdout.splitlines() if line}
         if answer.returncode or len(roots) != 1:
             raise OSError('Claude identity could not be checked')
         root = roots.pop()
         doc = plistlib.loads((root / 'Contents/Info.plist').read_bytes())
-        if doc.get('CFBundleIdentifier') != BUNDLE_ID:
+        if doc.get('CFBundleIdentifier') != app.bundle_id:
             raise OSError('Claude identity could not be checked')
         exe = root / 'Contents/MacOS' / doc['CFBundleExecutable']
     else:
@@ -188,7 +200,7 @@ def _snapshot(platform_name, identity, run):
     return {r['pid']: r for r in rows if r['user'] == identity['user']}
 
 
-def _writers(rows, identity, seen, platform_name):
+def _writers(rows, identity, seen, platform_name, names=CLAUDE.writers):
     norm = (lambda s: s.replace('\\', '/').casefold()) if platform_name == 'win32' else str
     root, exe = norm(identity['root']).rstrip('/') + '/', norm(identity['exe'])
     browser_host = root + 'Contents/Helpers/chrome-native-host' if platform_name == 'darwin' else None
@@ -211,25 +223,26 @@ def _writers(rows, identity, seen, platform_name):
             break
         seen.update(children)
     for pid, row in rows.items():
-        if (pid not in seen and norm(row['exe']).rsplit('/', 1)[-1].lower()
-                in ('claude', 'claude-desktop', 'claude.exe')):
+        if pid not in seen and norm(row['exe']).rsplit('/', 1)[-1].lower() in names:
             raise OSError('unverified Claude writer')
     return bool(set(rows).intersection(seen))
 
 
-def is_running(platform_name, run=subprocess.run):
-    identity = app_identity(platform_name, run)
-    return _writers(_snapshot(platform_name, identity, run), identity, {}, platform_name)
+def is_running(platform_name, run=subprocess.run, app=CLAUDE):
+    identity = app_identity(platform_name, run, app=app)
+    return _writers(_snapshot(platform_name, identity, run), identity, {}, platform_name,
+                    app.writers)
 
 
-def request_stop(platform_name, run=subprocess.run, timeout=65):
-    identity = app_identity(platform_name, run)
+def request_stop(platform_name, run=subprocess.run, timeout=65, app=CLAUDE):
+    identity = app_identity(platform_name, run, app=app)
     seen = {}
-    if not _writers(_snapshot(platform_name, identity, run), identity, seen, platform_name):
+    if not _writers(_snapshot(platform_name, identity, run), identity, seen, platform_name,
+                    app.writers):
         return True
     deadline = time.monotonic() + max(0, timeout)
     if platform_name == 'darwin':
-        argv = ['/usr/bin/osascript', '-e', 'tell application id "%s" to quit' % BUNDLE_ID]
+        argv = ['/usr/bin/osascript', '-e', 'tell application id "%s" to quit' % app.bundle_id]
     elif platform_name == 'win32':
         roots = [str(pid) for pid, row in seen.items() if row['exe'] == identity['exe']]
         births = ';'.join('%s=%s' % (pid, _ps(seen[int(pid)]['born'])) for pid in roots)
@@ -249,15 +262,16 @@ def request_stop(platform_name, run=subprocess.run, timeout=65):
     if argv and _run(argv, run, max(0.1, min(30, timeout))).returncode:
         return False
     while True:
-        if not _writers(_snapshot(platform_name, identity, run), identity, seen, platform_name):
+        if not _writers(_snapshot(platform_name, identity, run), identity, seen, platform_name,
+                        app.writers):
             return True
         if time.monotonic() >= deadline:
             return False
         time.sleep(min(0.25, max(0, deadline - time.monotonic())))
 
 
-def open_app(platform_name, run=subprocess.run):
-    identity = app_identity(platform_name, run)
+def open_app(platform_name, run=subprocess.run, app=CLAUDE):
+    identity = app_identity(platform_name, run, app=app)
     if platform_name == 'darwin':
         argv = ['/usr/bin/open', identity['root']]
     elif platform_name == 'win32':

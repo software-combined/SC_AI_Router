@@ -15,11 +15,11 @@ writes one of two other variants between the same markers:
 The Codex receipt entry records the variant beside the block it describes
 (`variant`, absent until the first switch) and every attach rebuilds the
 recorded one: an update never switches Codex either way, and a never-switched
-install keeps today's default block byte for byte. `current` and `switch` are
-the Switch Codex API. Detach, uninstall and rollback refuse while Codex is
-switched: Switch Codex moves Codex back to the ChatGPT subscription first, so
-neither detach nor uninstall does that silently, and an older release may
-have no way to switch back.
+install keeps today's default block byte for byte. `current`, `switch` and
+`restore` are the Switch Codex API. Detach, uninstall and rollback refuse
+while Codex is switched: Switch Codex moves Codex back to the ChatGPT
+subscription first, so neither detach nor uninstall does that silently, and
+an older release may have no way to switch back.
 
 Python 3.9-safe, stdlib only and inert on import: the installer, the remover
 and Switch Codex load it by path.
@@ -111,6 +111,19 @@ def refuse_switched(home):
         raise SystemExit(SWITCHED_REFUSAL)
 
 
+def managed_block(entry):
+    """The managed block as config.toml holds it now, latest model pick included.
+
+    A block edited by hand, missing or doubled refuses, as `switch` does.
+    """
+    config_path = Path(entry['config_path'])
+    text = config_path.read_text() if config_path.exists() else ''
+    live = _codex.live_block(text, entry['inserted_block'])
+    if text.count(live) != 1:
+        raise SystemExit(EDITED)
+    return live
+
+
 def switch(home, variant):
     """Rewrite Codex's managed block as `variant` and record it in the receipt.
 
@@ -129,10 +142,7 @@ def switch(home, variant):
         raise SystemExit(NOT_CONNECTED)
     recorded(entry)  # refuses a variant this release does not know
     config_path = Path(entry['config_path'])
-    before = config_path.read_text() if config_path.exists() else ''
-    live = _codex.live_block(before, entry['inserted_block'])
-    if before.count(live) != 1:
-        raise SystemExit(EDITED)
+    live = managed_block(entry)
     state = json.loads((Path(home) / 'mixed-router-state.json').read_text())
     # Updates never pass --static-catalogue, so neither does a switch.
     block = build(home, state, entry.get('openai_mode'), False, variant)
@@ -145,3 +155,27 @@ def switch(home, variant):
     except BaseException:
         _atomic.replace_text(config_path, original)
         raise
+
+
+def restore(home, previous, variant):
+    """Undo `switch(home, variant)`: the block and entry go back to `previous`.
+
+    `previous` is the Codex receipt entry from before the switch. The switch
+    may have written neither file, only config.toml, or both, so the block
+    between the markers may be the old one, the recorded one or the one the
+    switch builds; anything else is a hand edit and refuses, as `switch` does.
+    """
+    config_path = Path(previous['config_path'])
+    text = config_path.read_text() if config_path.exists() else ''
+    state = json.loads((Path(home) / 'mixed-router-state.json').read_text())
+    for block in (previous['inserted_block'],
+                  _codex.codex_attachment(home).get('inserted_block'),
+                  build(home, state, previous.get('openai_mode'), False, variant)):
+        live = _codex.live_block(text, block)
+        if live and text.count(live) == 1:
+            break
+    else:
+        raise SystemExit(EDITED)
+    if live != previous['inserted_block']:
+        _codex.replace_config_block(config_path, previous['inserted_block'], live)
+    _codex.write_client_receipt(home, 'codex', previous)
