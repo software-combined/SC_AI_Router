@@ -104,15 +104,26 @@ def _commands(client, root, names):
     return []
 
 
+def _ascii(text):
+    """Escape what ASCII cannot hold.
+
+    The installer prints the skills line, and on Windows that stdout can be a
+    pipe in the ANSI code page: one character it cannot encode, such as a
+    client's glyph or a non-ASCII home path, would fail the install.
+    """
+    return text.encode('ascii', 'backslashreplace').decode('ascii')
+
+
 def _one_line(value, limit=200):
     """The first non-blank line of a message or command output, bounded.
 
     Only the first line: a client's cause chain below it can quote a config
-    value, keys included. Control characters never reach the log.
+    value, keys included. Control characters never reach the log, and the
+    bound applies after ASCII escaping.
     """
     first = next((s for s in str(value or '').splitlines() if s.strip()), '')
     text = ''.join(c if c.isprintable() else ' ' for c in first)
-    return ' '.join(text.split())[:limit]
+    return _ascii(' '.join(text.split()))[:limit]
 
 
 def register(client, root, names, run=subprocess.run, which=shutil.which):
@@ -194,10 +205,11 @@ def sync(state, plugins_dir, base=None, run=subprocess.run, which=shutil.which):
             notes.append(retire_git_updater(base=base, run=run, which=which))
         else:
             notes.append('git updater: kept (no client accepted)')
-        return '; '.join(n for n in notes if n)
+        summary = '; '.join(n for n in notes if n)
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
         # A skills failure never fails the router install. Keep one line, but
         # carry the cause and the marketplace path so a wedged or partial
         # marketplace is diagnosable from the install log alone.
         detail = _one_line(exc) or type(exc).__name__
-        return f'skipped ({type(exc).__name__}: {detail}) at {marketplace_root(base)}'
+        summary = f'skipped ({type(exc).__name__}: {detail}) at {marketplace_root(base)}'
+    return _ascii(summary)
