@@ -51,6 +51,7 @@ PACKAGING_FILES = (
     'packaging/claude_profile_history.py',
     'packaging/claude_profile_bundle.py',
     'packaging/claude_profile_sync.py',
+    'packaging/claude_profile_ledger.py',
     'packaging/claude_profile_hook.py',
     'packaging/claude_profile_launch.py',
     'packaging/client_choice.py',

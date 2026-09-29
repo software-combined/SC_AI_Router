@@ -83,7 +83,7 @@ Claude profile task sharing ships as sibling helpers under `packaging/`:
 `claude_profile_rules.py`, `claude_profile_identity.py`, `claude_profile_hook.py`,
 `claude_profile_history.py`, `claude_profile_records.py`,
 `claude_profile_bundle.py`, `claude_profile_publish.py`,
-`claude_profile_transaction.py` and
+`claude_profile_transaction.py`, `claude_profile_ledger.py` and
 `claude_profile_sync.py`. `claude_desktop_platform.py` supplies native
 lifecycle commands and loads `claude_desktop_policy.py` for read-only switch
 restrictions, while `claude_profile_launch.py` follows the installed

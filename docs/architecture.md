@@ -397,8 +397,9 @@ state and the hashed workspace preference detect changes; they cannot select
 an organization. Authentication values are neither read nor copied. Static
 gateway identity comes from the existing device and local configuration.
 A private router-local hash binds the account pair so a later sign-in cannot
-inherit the previous account's copied tasks. The coordinator must hold both
-profile locks before creating that binding; this helper does not start a copy.
+inherit the previous account's copied tasks; the same hash keys the shared-task
+ledger. The coordinator must hold both profile locks before creating that
+binding; this helper does not start a copy.
 
 `claude_profile_publish.py` and `claude_profile_transaction.py` share the record
 and bundle publication contract. They validate file generations before exclusive
@@ -431,7 +432,25 @@ the union before duplicates are retired. Shared CLI history takes precedence
 over an older bundle snapshot. A task with no transcript anywhere, or with
 diverged transcripts, is left unshared and counted. Invalid tasks are reported
 to the switch caller, which must keep the current mode until every in-scope
-task is safe. The coordinator has no app-lifecycle authority.
+task is safe. Before either pass, the ledger retires copies of tasks deleted
+since the last clean sync, and only a clean sync updates what it remembers. The
+coordinator has no app-lifecycle authority.
+
+`claude_profile_ledger.py` keeps a deleted task deleted. After a clean sync it
+records, in a private router-home file, a digest of each copy of every task both
+profiles hold once: record bytes, bundle tree and paths, never titles or
+content. Tasks the sync left unshared or refused are not recorded. Presence
+counts across the whole account, so an organization change never looks like a
+delete. A remembered task missing from exactly one profile has its other copy
+retired to that store's `.claude-profile-control-trash` folder while the copy
+still matches; a changed copy stays and is shared again. Retirement reuses the
+publication pattern: a journal, then exclusive renames of the record and then
+the bundle. The next run undoes an interrupted retirement before deciding again.
+Interrupted transfers are recovered first; an unreadable record or a second
+copy keeps every copy, and a profile that lost every shared task at once, when
+there was more than one, is treated as a reset. Nothing is hard-deleted, and a
+trash entry that cannot be put back safely stays for inspection and fails the
+switch.
 
 `claude_desktop_platform.py` owns native app identity, graceful shutdown,
 dialogs and owned shortcuts. It waits for known writers and their children;

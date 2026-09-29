@@ -117,12 +117,14 @@ class BindingTests(unittest.TestCase):
         gateway = self.profile / 'gateway'
         with mock.patch.object(identity, 'subscription', return_value=(ACCOUNT, ORG)) as native, \
                 mock.patch.object(identity, 'third_party', return_value=(CLI, ORG)) as third:
-            self.assertTrue(identity.bind_profile_accounts(home, self.profile, gateway))
+            bound = identity.bind_profile_accounts(home, self.profile, gateway)
             path = home / '.claude-profile-control-accounts.json'
             before = path.read_bytes(), path.stat().st_mtime_ns
+            # The digest keys the shared-task ledger, so it is the saved value.
+            self.assertEqual(bound, json.loads(before[0])['accounts'])
             self.assertNotIn(ACCOUNT.encode(), before[0])
             self.assertNotIn(CLI.encode(), before[0])
-            self.assertTrue(identity.bind_profile_accounts(home, self.profile, gateway))
+            self.assertEqual(identity.bind_profile_accounts(home, self.profile, gateway), bound)
             native.return_value = (CLI, ORG)
             self.assertFalse(identity.bind_profile_accounts(home, self.profile, gateway))
             native.return_value = (ACCOUNT, ORG)

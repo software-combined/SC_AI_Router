@@ -13,6 +13,12 @@
   connection, and Claude reopens there if it had already closed. Open Claude and
   router startup leave tasks alone. Full native acceptance remains pending; see
   `docs/compatibility.md`.
+- A Claude Code task you delete no longer comes back after Switch Claude. Its
+  copy on the other connection is moved to a hidden trash folder,
+  `claude-code-sessions/.claude-profile-control-trash` inside that connection's
+  Claude folder, and is never erased. A copy that changed since the last switch
+  is kept and shared again. When a connection loses every one of several shared
+  tasks at once, for example after signing out, they are shared back instead.
 - Switching from OpenRouter back to your Claude subscription no longer waits for
   task sharing to be set up. Switching away from the subscription with saved
   tasks first asks you to open a Code task in Claude, before Claude closes.

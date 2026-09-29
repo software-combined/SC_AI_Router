@@ -319,6 +319,25 @@ copy stays as it is. The switch still goes ahead, and Claude then shows how
 many tasks were not shared. A second successful run makes no content or
 permission changes.
 
+A task you delete stays deleted. After each successful share, the router notes
+which tasks both profiles hold, in a private file in its own folder that keeps
+task IDs and fingerprints but no titles or conversation text. When one of those
+tasks is later missing from one profile, it was deleted there, so the next
+switch moves the other profile's copy to a trash folder instead of copying it
+back. Nothing is erased. The copy goes to the hidden
+`.claude-profile-control-trash` folder inside that profile's
+`claude-code-sessions` folder, for example
+`~/Library/Application Support/Claude-3p/claude-code-sessions/.claude-profile-control-trash`
+on macOS. Each entry there keeps the task's record, its files and a
+`retire.json` note of where they came from, so a task can be moved back by
+hand while Claude is closed. A copy that changed since the last switch is kept
+and shared again, so an edit wins over a delete. If a profile loses all of
+its shared tasks at once, and it had more than one, for example after signing
+out or resetting Claude, the router treats it as a reset rather than
+deletions: nothing goes to the trash, and the tasks are shared back as before. A trash
+entry that cannot be finished or undone safely stays where it is and prevents
+switching.
+
 Separate sign-in and credential files, account identity, profile settings, trust state, connector
 settings and caches never cross profiles. A rejected or malformed source
 record fails by itself and leaves the source data in place. Existing full and
