@@ -1,4 +1,4 @@
-"""The switched Codex route: its header, and the local answer on it.
+"""The switched Codex route: its header, the local answer on it, and readiness.
 
 Codex desktop 26.917.51856 and later disables Send for every model once the
 ChatGPT allowance runs out, but only while its active provider needs OpenAI
@@ -18,8 +18,13 @@ version retries either form, and 0.153.1 shows the 400's whole body.
 
 Helper turns get the same refusal. The helper fallback moves a turn to its
 twin only after the subscription refuses it, and this route sends nothing.
+
+`ready` is what Switch Codex asks before it points Codex's picker at the
+routed-only list (`routed_models`). The check lives here rather than beside
+the list's writer because the availability sync imports that writer, and the
+check reads availability back: side by side they would import each other.
 """
-from . import errors, local_services, provider_defs
+from . import availability, errors, local_services, provider_defs, routed_models
 from .clients import visible_for
 
 HEADER = 'x-scg-codex-route'  # lowercase, as the Switch Codex provider entry sends it
@@ -67,3 +72,17 @@ def refuse(path, payload, context, twin=None):
         row = None
     raise Refusal(message(row), payload.get('stream') is True,
                   f'switched Codex route: {context.slug}, twin {row.slug if row else None}')
+
+
+def ready(home):
+    """True when the routed-only list has rows the key's current snapshot allows.
+
+    "Current" is the id set the picker merge reads (`availability.effective_ids`
+    for the installed key and region). A list that still names a model that
+    snapshot no longer allows fails until the next sync rewrites it.
+    """
+    allowed = availability.effective_ids(
+        home, availability.current_key(home), availability.current_region(home))
+    listed = routed_models.rows(home)
+    return bool(listed) and allowed is not None and all(
+        row.get('slug') in allowed for row in listed)

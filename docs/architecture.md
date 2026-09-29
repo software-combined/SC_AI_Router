@@ -284,6 +284,14 @@ refusal names the twin row only when the portco allowlist, the key's
 availability snapshot and the Codex picker all admit it. Helper turns are
 refused too: the helper fallback moves a turn to its twin only after the
 subscription refuses it, and this route sends nothing to refuse.
+`routed_models.py` owns `routed-models.json`, the picker Switch Codex points
+Codex at: the rows no-subscription mode shows, under the mixed list's key and
+portco filters. `availability.sync_catalogue` rewrites it after the mixed list,
+never empty and never without a live snapshot, since Codex rejects an empty
+list and a stale one offers models the key cannot use. `codex_route.ready`
+answers whether Switch Codex may use it, reading "current" through
+`availability.effective_ids`; it sits in `codex_route` because `availability`
+imports the writer, so a check beside it would import `availability` back.
 
 1. `provider_defs.py` owns every upstream fact (host, endpoint prefixes, key
    location, model catalogue, key-info endpoint, failure dialect) and imports
