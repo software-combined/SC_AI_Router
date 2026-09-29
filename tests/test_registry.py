@@ -259,7 +259,7 @@ class RegistryTests(unittest.TestCase):
         self.assertEqual({m.slug for m in MODELS if m.provider == 'openrouter' and
                           not visible_for(m, 'codex')}, unlisted)
         self.assertEqual({m.slug for m in MODELS if m.provider == 'openrouter' and
-                          not visible_for(m, 'claude')}, unlisted | {'anthropic/claude-sonnet-5', 'anthropic/claude-fable-5.1', 'anthropic/claude-haiku-4.5', 'anthropic/claude-opus-5.5'})
+                          not visible_for(m, 'claude')}, unlisted | {'anthropic/claude-sonnet-5.5', 'anthropic/claude-fable-5.1', 'anthropic/claude-haiku-4.5', 'anthropic/claude-opus-5.5'})
 
     def test_visibility_keeps_subscription_and_other_vendor_rows(self):
         openai_sub = Model(slug='gpt-6-astra', provider='openai', display_name='G',
@@ -269,7 +269,7 @@ class RegistryTests(unittest.TestCase):
         self.assertTrue(visible_for(by_slug('moonshotai/kimi-k3'), 'codex'))
         self.assertTrue(visible_for(by_slug('moonshotai/kimi-k3'), 'claude'))
         self.assertTrue(visible_for(by_slug('openai/gpt-6-astra'), 'claude'))
-        self.assertTrue(visible_for(by_slug('anthropic/claude-sonnet-5'), 'codex'))
+        self.assertTrue(visible_for(by_slug('anthropic/claude-sonnet-5.5'), 'codex'))
 
     def test_visibility_tilde_and_plain_prefixes_both_hide(self):
         # The roster pins exact ids; the tilde normalization branch is kept
