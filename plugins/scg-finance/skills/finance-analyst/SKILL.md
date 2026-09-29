@@ -181,6 +181,6 @@ Works in Codex and Claude Code: the method, runbooks and output standards are
 client-agnostic, and connected-system reads go through whichever MCP or
 connector tools the active client exposes.
 
-When installing, pulling or updating this skill for use, complete
-[automatic-update setup](references/updates.md) on macOS, Linux or Windows:
-configure the native shared schedule, run it and verify installed versions.
+This skill ships with the SCG router, which delivers and refreshes it; see
+[automatic updates](references/updates.md). There is no per-plugin updater or
+schedule to configure.

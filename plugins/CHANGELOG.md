@@ -1,5 +1,16 @@
 # Changelog
 
+## scg-review 0.4.16, scg-subagents 0.5.15, scg-prototypes 0.1.3, scg-finance 0.1.2 and scg-documentation 0.1.3 — 2026-09-30
+
+- Align the shared update guide and every skill with the router-managed
+  delivery model (Plan 179). The router carries the plugin trees, materialises
+  a router-owned local marketplace and registers it with the attached clients,
+  so the skills arrive and refresh with the router; there is no per-plugin
+  updater and no native schedule to configure. The obsolete
+  `scripts/updater.py`/`scripts/scheduling.py` setup steps are removed, since a
+  shipped plugin no longer carries them. Wording only; delivery behaviour is
+  unchanged.
+
 ## scg-review 0.4.15 - 2026-09-26
 
 - Rewrite the pre-commit-review skill as a ten-step checklist that less
