@@ -105,9 +105,14 @@ def _commands(client, root, names):
 
 
 def _one_line(value, limit=200):
-    """Collapse a message or command output to one bounded single line."""
-    collapsed = ' '.join(str(value).split()) if value else ''
-    return collapsed[:limit]
+    """The first non-blank line of a message or command output, bounded.
+
+    Only the first line: a client's cause chain below it can quote a config
+    value, keys included. Control characters never reach the log.
+    """
+    first = next((s for s in str(value or '').splitlines() if s.strip()), '')
+    text = ''.join(c if c.isprintable() else ' ' for c in first)
+    return ' '.join(text.split())[:limit]
 
 
 def register(client, root, names, run=subprocess.run, which=shutil.which):
