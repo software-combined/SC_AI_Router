@@ -2,7 +2,7 @@
 
 ## Claude profile task sharing candidate, 29 September 2026 AEST
 
-Version 0.6.141 is a development candidate. **Switch Claude** shares local Code
+Version 0.6.144 is a development candidate. **Switch Claude** shares local Code
 tasks before changing connections; Cowork tasks stay in their own profile in
 this beta. **Open Claude** and ordinary router startup leave histories alone.
 Complete installed-launcher acceptance remains pending. No router release is
