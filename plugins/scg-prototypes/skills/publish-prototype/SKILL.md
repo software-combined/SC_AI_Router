@@ -56,8 +56,6 @@ Other commands: `list` shows every published prototype with its status, and
 
 ## Updates
 
-When installing, pulling or updating this skill for use, complete
-[automatic-update setup](references/updates.md) on macOS, Linux or Windows:
-configure the native shared schedule, run it and verify installed versions.
-This is part of installation, not an optional follow-up. Respect explicit
-read-only scope and preserve custom schedules when reporting setup blockers.
+This skill ships with the SCG router, which delivers and refreshes it; see
+[automatic updates](references/updates.md). There is no per-plugin updater or
+schedule to configure. Respect explicit read-only scope.

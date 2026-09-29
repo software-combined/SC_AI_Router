@@ -5,10 +5,9 @@ description: Run the required staged-diff review (a simplification pass, a secre
 
 # Pre-Commit Review
 
-When installing or updating this plugin for use, complete the shared
-[automatic-update setup](../../references/updates.md) on macOS, Linux or Windows.
-Verify the native schedule and an update run; a pull alone is not setup.
-Respect explicit read-only scope. Ordinary reviews reuse the existing schedule.
+These skills ship with the SCG router, which delivers and refreshes them; see
+[automatic updates](../../references/updates.md). There is no per-plugin updater
+to configure. Respect explicit read-only scope.
 
 This skill is the gate before every commit. You, the main agent, prepare the staged change, run a simplification pass, scan for secrets, run the required checks once, have three read-only reviewer subagents inspect the exact staged tree, decide on their findings, and record one approval for that tree. The shared Git hook refuses a commit without that approval. If this process does not run, the task is incomplete and you must not commit.
 

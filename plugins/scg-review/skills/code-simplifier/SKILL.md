@@ -5,10 +5,9 @@ description: Code simplification pass that improves clarity, consistency, and ma
 
 # Code Simplifier
 
-For installation or updates of this bundled skill, complete the plugin's
-[automatic-update setup](../../references/updates.md) on macOS, Linux or Windows.
-Agents must verify the schedule and an update run; a pull alone is not setup.
-Respect explicit read-only scope; ordinary tasks reuse the existing schedule.
+This bundled skill ships with the SCG router, which delivers and refreshes it;
+see [automatic updates](../../references/updates.md). There is no per-plugin
+updater to configure. Respect explicit read-only scope.
 
 Delegate using the active runtime's entry under [models and runtimes](../pre-commit-review/SKILL.md#models-and-runtimes) in the pre-commit review skill. Apply its availability and identity-recording rules, and let an explicit applicable host/project model policy take precedence. Use a Codex executor subagent, or the installed `code-simplifier` agent in Claude Code or OpenCode; do not maintain a second model table here.
 

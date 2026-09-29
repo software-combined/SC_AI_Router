@@ -41,6 +41,5 @@ The deliverable cites its sources (document paths, register entries), marks
 anything unverified, and stays inside the approved scope. Verify material
 claims yourself before acting on them.
 
-When installing or updating this plugin for use, complete the shared
-[automatic-update setup](../optimal-subagents/references/updates.md) on macOS,
-Linux or Windows.
+This plugin ships with the SCG router, which delivers and refreshes it; see
+[automatic updates](../optimal-subagents/references/updates.md).
