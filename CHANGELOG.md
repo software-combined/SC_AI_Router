@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.0.0
+
 - SCG plugins now reach Claude Code and Codex through the router. The router's
   plugin folder now includes the marketplace file Claude Code reads, so Claude
   Code installs the plugins instead of refusing the folder. When Codex still
