@@ -15,6 +15,7 @@ the installer loads or runs on its own interpreter is installer scope, so a
 change to `ai_router/winacl.py` or `tools/disable.py` cannot skip the native
 checks.
 """
+import os
 import sys
 from pathlib import Path
 
@@ -148,6 +149,36 @@ INSTALLER_TESTS = (
 )
 
 
+# Switch Claude and task sharing are macOS-only in this beta and stay off on
+# Windows (docs/compatibility.md). Their suites rely on POSIX file semantics,
+# such as fsync on a read-only handle, so they run on the macOS job only.
+MACOS_ONLY_TESTS = frozenset((
+    'tests.test_claude_desktop_switch',
+    'tests.test_claude_profile_account_scope',
+    'tests.test_claude_profile_bundle',
+    'tests.test_claude_profile_faithful_copy',
+    'tests.test_claude_profile_history',
+    'tests.test_claude_profile_launch',
+    'tests.test_claude_profile_ledger',
+    'tests.test_claude_profile_native_layout',
+    'tests.test_claude_profile_org_scope',
+    'tests.test_claude_profile_publish',
+    'tests.test_claude_profile_recovery',
+    'tests.test_claude_profile_repair_resume',
+    'tests.test_claude_profile_rules',
+    'tests.test_claude_profile_sync',
+    'tests.test_claude_profile_sync_deletions',
+    'tests.test_claude_profile_sync_safety',
+    'tests.test_claude_profile_transcript_capture',
+    'tests.test_claude_profile_workspace_names',
+))
+
+
+def installer_tests(windows=os.name == 'nt'):
+    """The native job's test modules; Windows leaves out the macOS-only suites."""
+    return [name for name in INSTALLER_TESTS if not (windows and name in MACOS_ONLY_TESTS)]
+
+
 def installer_scope(paths):
     """True when any changed path can affect the installer or its tests."""
     return any(path.startswith(INSTALLER_PATHS) for path in paths)
@@ -155,7 +186,7 @@ def installer_scope(paths):
 
 def main(argv):
     if '--installer-tests' in argv:
-        print(' '.join(INSTALLER_TESTS))
+        print(' '.join(installer_tests()))
         return 0
     if '--installer' in argv:
         paths = [line.strip() for line in sys.stdin if line.strip()]
