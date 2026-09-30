@@ -467,7 +467,9 @@ The router is the delivery channel. Its release bundle carries the plugin
 trees, and each install or scheduled update that lands a new release
 materialises a router-owned local marketplace and registers it with the
 attached clients, so on a router host the plugins arrive and refresh with the
-router and need no Git account, GitHub access or marketplace command. Once
+router and need no Git account, GitHub access or marketplace command. On Windows,
+updates also find Codex in the app's own CLI directories under `%LOCALAPPDATA%`,
+even when those directories are missing from the scheduled job's PATH. Once
 Codex runs from that copy, the same pass retires any earlier Git-backed plugin
 runner it recognises, with its macOS LaunchAgent or Linux systemd timer, since
 that runner only ever refreshes Codex. A refused Linux scheduler operation

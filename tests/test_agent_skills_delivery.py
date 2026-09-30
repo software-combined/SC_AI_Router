@@ -241,15 +241,19 @@ class DeliveryTest(unittest.TestCase):
     def test_windows_search_adds_no_drive_root_folder(self):
         # On Windows /opt/homebrew/bin and /usr/local/bin would mean C:\opt\... and
         # C:\usr\..., which any local account can create and plant a codex.exe in.
+        # The Codex app's own CLI directory is added instead, because that is
+        # where an app install keeps codex.exe and never puts it on PATH.
         home_bin = str(Path.home() / '.local' / 'bin')
-        posix_extra = [home_bin, '/opt/homebrew/bin', '/usr/local/bin']
+        local = self.tmp / 'Local'
+        build = local / 'OpenAI' / 'Codex' / 'bin' / '0ddb895c950eaeba'
+        build.mkdir(parents=True)
+        (build / 'codex.exe').write_bytes(b'')
         for name, sep, path, extra in (
-                ('nt', ';', r'C:\Windows\System32;C:\Windows', [home_bin]),
-                ('posix', ':', LAUNCHD_PATH, posix_extra)):
-            with self.subTest(os_name=name), patch.object(skills.os, 'name', name), \
-                    patch.object(skills.os, 'pathsep', sep), \
-                    patch.dict(os.environ, {'PATH': path}):
-                self.assertEqual(skills.client_path(), sep.join([path, *extra]))
+                ('nt', ';', r'C:\Windows\System32;C:\Windows', [home_bin, str(build)]),
+                ('posix', ':', LAUNCHD_PATH, [home_bin, '/opt/homebrew/bin', '/usr/local/bin'])):
+            with self.subTest(os_name=name), patch.object(skills.os, 'pathsep', sep), \
+                    patch.dict(os.environ, {'PATH': path, 'LOCALAPPDATA': str(local)}):
+                self.assertEqual(skills.client_path(os_name=name), sep.join([path, *extra]))
 
     def test_the_current_git_updater_is_retired_not_left_in_place(self):
         # The Git marketplace installs this exact file as the shared runner, and
@@ -291,7 +295,6 @@ class DeliveryTest(unittest.TestCase):
                 self.assertNotIn('retired', line)
                 self.assertEqual((self.base / 'updater.py').read_bytes(), current)
                 self.assertNotIn('launchctl', [call[0] for call in run.calls])
-
 
 if __name__ == '__main__':
     unittest.main()

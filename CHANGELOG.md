@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 1.0.4
+
+- The Windows router finds an app-installed Codex again, so the SCG plugins
+  reach it on a scheduled update. The Codex app keeps its own CLI under
+  `%LOCALAPPDATA%` and never puts that directory on the updater's PATH, so the
+  plugin refresh reported Codex as not installed; the router looks there too.
+
 - The router now retires the old Git-based SCG plugin updater only once Codex
   accepts the router's copy of the plugins. That updater only ever refreshes
   Codex, but any client's success used to retire it. So a Claude Code success
