@@ -47,19 +47,47 @@ def shared_base(home=None):
     return (Path(home) if home else Path.home()).joinpath(*SHARED)
 
 
-def client_path():
+def _windows_codex_dirs(environ=None):
+    """The Windows Codex app's own CLI directories, newest build first.
+
+    The Codex app stages its CLI under
+    ``%LOCALAPPDATA%\\OpenAI\\Codex\\bin\\<build>`` and injects that directory
+    into the children it starts, so Codex itself never needs it on the machine
+    PATH. A scheduled updater inherits neither, so an app-installed Codex was
+    reported as not installed and its plugins never refreshed. Read-only and
+    best effort: a missing or unreadable tree is no directories.
+    """
+    local = (os.environ if environ is None else environ).get('LOCALAPPDATA')
+    if not local:
+        return ()
+    base = Path(local) / 'OpenAI' / 'Codex' / 'bin'
+    try:
+        builds = sorted((p for p in base.iterdir() if p.is_dir()),
+                        key=lambda p: p.stat().st_mtime, reverse=True)
+    except OSError:
+        return ()
+    return tuple(str(p) for p in builds)
+
+
+def client_path(environ=None, os_name=None):
     """PATH for the client CLIs: this process's, plus the usual install dirs.
 
     A scheduled update inherits launchd's /usr/bin:/bin:/usr/sbin:/sbin, and a
     systemd user timer's PATH also omits ~/.local/bin, so clients there were
     logged as not installed. The child gets the same PATH: codex is a
     `#!/usr/bin/env node` script, and its node usually sits beside it.
+
+    On Windows the Codex app keeps its CLI under %LOCALAPPDATA% and leaves it
+    off the scheduled job's PATH, so that directory is added there too.
     """
     # ponytail: fixed common dirs; a client under a version manager (nvm, fnm)
     # still needs its bin dir on the scheduled job's PATH.
-    dirs = [d for d in os.environ.get('PATH', '').split(os.pathsep) if d]
+    env = os.environ if environ is None else environ
+    dirs = [d for d in env.get('PATH', '').split(os.pathsep) if d]
     extra = (str(Path.home() / '.local' / 'bin'),)
-    if os.name != 'nt':
+    if (os.name if os_name is None else os_name) == 'nt':
+        extra += _windows_codex_dirs(env)
+    else:
         # Admin-owned on macOS and Linux. On Windows they would be drive-root
         # folders any local account can create, so a planted client could run.
         extra += ('/opt/homebrew/bin', '/usr/local/bin')
