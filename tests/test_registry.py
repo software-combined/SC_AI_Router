@@ -316,7 +316,7 @@ class RegistryTests(unittest.TestCase):
     def test_codex_picker_lists_openai_twins_without_include_twins(self):
         twins = {m.slug for m in models_for(MODELS, 'codex')
                  if m.slug.startswith('openai/')}
-        self.assertEqual(twins, {'openai/gpt-6-astra', 'openai/gpt-6-sol',
+        self.assertEqual(twins, {'openai/gpt-6-astra', 'openai/gpt-6.1-sol',
                                  'openai/gpt-5.6-terra', 'openai/gpt-6-luna'})
 
 if __name__ == '__main__':
