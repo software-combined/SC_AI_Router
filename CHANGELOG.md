@@ -7,7 +7,8 @@
   usage limit. The new Switch Codex app in your Applications folder moves Codex
   to OpenRouter models, and back. It asks first, quits and reopens the ChatGPT
   app, and checks that Codex loads the new settings before it keeps a switch to
-  OpenRouter models.
+  OpenRouter models. If the ChatGPT app does not close, Switch Codex reopens it
+  and asks you to quit it yourself and try again.
 - SCG Router offers Switch Codex once when your ChatGPT subscription reaches its
   usage limit, and offers the way back once when the limit resets.
 - While Codex is switched, only OpenRouter models are listed, and a model that
@@ -19,7 +20,8 @@
   "Failed to archive conversation", a ChatGPT app (Codex) issue, so switch back
   to archive it. Conversation titles are not generated.
 - If Claude does not close in time, Switch Claude reopens it and asks you to try
-  again.
+  again. Crash-reporter helpers, which can keep running for days after an app
+  update, no longer hold up Switch Claude or Switch Codex.
 - Switch Codex, like Switch Claude, is macOS-only in this beta.
 - Claude Sonnet 5.5 replaces Claude Sonnet 5 in the OpenRouter model list.
 
