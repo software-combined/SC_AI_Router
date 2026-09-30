@@ -272,6 +272,36 @@ Handoff aliases retain that same catalogue through response adaptation.
 The encrypted spawn and follow-up guard resolves child models from it, so a
 refresh cannot change an in-flight request's decision. Direct helper callers
 without a request context capture once when creating their aliases.
+`codex_route.py` owns the switched Codex route. Switch Codex gives Codex a
+provider entry that needs no OpenAI sign-in and sends `x-scg-codex-route`, so
+that header marks the route; a missing credential cannot, because the normal
+route may carry no Authorization header either. `subscription_fallback.prepare`
+asks it about each request the ChatGPT subscription adapter would serve, before
+anything is prepared or sent. Native service paths get the no-subscription
+answers; every other request gets one final `invalid_prompt` refusal, which
+`ingress.error` sends as a `response.failed` frame when the turn streams. The
+refusal names the twin row only when the portco allowlist, the key's
+availability snapshot and the Codex picker all admit it. Helper turns are
+refused too: the helper fallback moves a turn to its twin only after the
+subscription refuses it, and this route sends nothing to refuse.
+`routed_models.py` owns `routed-models.json`, the picker Switch Codex points
+Codex at: the rows no-subscription mode shows, under the mixed list's key and
+portco filters. `availability.sync_catalogue` rewrites it after the mixed list,
+never empty and never without a live snapshot, since Codex rejects an empty
+list and a stale one offers models the key cannot use. `codex_route.ready`
+answers whether Switch Codex may use it, reading "current" through
+`availability.effective_ids`; it sits in `codex_route` because `availability`
+imports the writer, so a check beside it would import `availability` back.
+`usage_episodes.py` owns `codex-usage-limit.json`, the record of ChatGPT
+usage-limit episodes the Switch Codex offer reads. `subscription_fallback.refused`
+answers every ChatGPT 429, so it hands each one over with the drained error
+body. Only the refusal Codex itself reads as a spent allowance counts
+(`error.type` `usage_limit_reached`, per `codex-rs/codex-api/src/api_bridge.rs`),
+and only from Codex desktop, recognised by the `(Codex Desktop; <version>)`
+User-Agent suffix its app-server adds. The module imports leaves plus
+`upstream.parse_payload`, keeps three fields and nothing from the request, and
+swallows its own failures, so the client's answer never changes. The format
+is in [runtime files](runtime-files.md#codex-usage-limit-record).
 
 1. `provider_defs.py` owns every upstream fact (host, endpoint prefixes, key
    location, model catalogue, key-info endpoint, failure dialect) and imports
@@ -465,10 +495,15 @@ After a request that was sent, the wait decides the outcome, even when the
 request timed out, because Claude may still close once its own confirmation is
 answered. Processes that are quitting can briefly fail a check,
 so a failed check, including a reused process ID, is retried until the deadline
-and only a clean check ends the wait.
+and only a clean check ends the wait. Its macOS lifecycle helpers take an
+`app` (bundle id, plus the executable names only that app may run) that
+defaults to Claude; Switch Codex passes the ChatGPT app's, which lists no such
+names, so a running Claude or Codex CLI never blocks it.
 On macOS, bundle discovery uses Spotlight metadata because AppleScript app
 lookup launches a closed app. Browser-owned native messaging hosts do not seed
-the writer set; actual app descendants remain tracked after reparenting.
+the writer set, and crash reporters (any `crashpad_handler`) never join it:
+they write only crash reports and can outlive an app update by days. Actual
+app descendants remain tracked after reparenting.
 Descendant discovery precedes rejection of an otherwise unknown Claude process,
 because Desktop's Code executable can live outside its application bundle.
 `claude_profile_launch.py` resolves the current installed release and dispatches
@@ -477,6 +512,81 @@ callback entry and captures the focused native account identity asynchronously.
 It never copies history, and uninstall preserves unrelated user hooks. The
 callback runs Python with `-P`, so a file in the session's project folder can
 never stand in for a module it imports.
+
+`packaging/codex_switch_config.py` owns the three managed Codex blocks. The
+default is `codex_config.build_block` unchanged, so a never-switched install
+and older Codex builds see nothing new. `switched` is root keys only: Codex's
+active provider becomes `scg_router`, which needs no OpenAI sign-in, sends
+`x-scg-codex-route` and reads `routed-models.json`, and
+`approvals_reviewer = "user"` stays, as in every managed block, because
+attach moves the owner's own line into the receipt and this route refuses
+ChatGPT's reviewer. `switched_back` is the default plus `scg_router` with
+sign-in on, so threads started while switched still resume. The Codex receipt
+entry records the variant (`variant`, absent until the first switch), and
+`client_choice.attach_codex` rebuilds it on every install and update.
+`switch` and `restore` are the only writers that change it. `switch` writes the config first, then the receipt, with the config
+put back if the receipt write fails; `restore` undoes a switch, putting both
+back. While Codex is switched, `tools/disable.py` (and so a
+service-only install), `--uninstall` and `--rollback` refuse and leave its
+settings as they are.
+
+`packaging/codex_desktop_switch.py` is the Switch Codex flow, macOS only. It
+moves an attached install to the other variant, holding the installer lock
+throughout, and a hand-edited block refuses before anything is asked. Each
+run appends one line to `logs/codex-switch.log` (docs/runtime-files.md).
+
+`switched` is strict. It needs `codex_route.ready`, a subscription install
+(no-subscription mode already runs without sign-in), exactly one ChatGPT app
+(Codex) with its bundled CLI wherever Spotlight finds it, and a graceful
+quit. It then writes a pending marker, calls `codex_switch_config.switch` and
+proves the result with `codex_config_proof`: that CLI, started as an app
+server on `~/.codex`, must load the config and report no managed
+`model_provider` and no account. Any doubt refuses before the dialog; a failed
+proof puts back the previous receipt entry and the block exactly as
+config.toml held it, the owner's latest model pick included, through
+`codex_switch_config.restore`, and reopens the app.
+
+Switching back is the only way out of `switched`, since detach, uninstall and
+rollback refuse while switched, so it depends on nothing it can lose. It runs
+no proof: it only returns to the install's own block plus the provider entry.
+With exactly one app found it quits the app and reopens it after; if the app
+does not close, it is reopened and the switch still refuses, since the person
+can quit it and retry. With the app missing or not identifiable (two copies,
+a Spotlight failure), the dialog asks the person to quit it first and the
+closing message to open it again.
+
+A switch that refused before writing needs no undo, and any refusal after the
+quit reopens the app unchanged. A marker left by a run that stopped halfway is
+kept when its switch was written and needs no proof or proves; anything else
+is rolled back before the next run does anything else, so a way back cut
+short before its writes is simply offered again.
+
+`packaging/codex_switch_offer.py` owns the automatic offers. The updater
+calls it after every pass that holds the update lock, the minute Express job
+included, and swallows anything it raises. It reads the router's
+`codex-usage-limit.json` itself, because the router's reader needs Python
+3.14, so its parsing and five-hour rule are copies that a test pins to
+`ai_router/usage_episodes.py`. On macOS, for a Codex install in subscription
+mode that has `APP`, it offers Switch Codex once per episode from an affected
+desktop build, and the way back once Codex is switched and the episode has
+ended or the installed ChatGPT app is at or above `FIXED_IN`. The dialog is
+only the offer: its action opens Switch Codex, which asks before it changes
+anything. `APP` is the one place the Switch Codex app's location is named.
+
+`packaging/codex_switch_app.py` owns that app. Every Codex attach and update
+builds or refreshes it on a Mac when Codex is attached in subscription mode
+and either the installed ChatGPT app is at or above `AFFECTED_FROM` or Codex
+is switched right now, so older Codex builds see nothing new. Otherwise it
+removes an app it owns, but never while Codex is switched, because the app is
+the way back. Detach and uninstall remove it through `tools/disable.py`,
+which refuses while switched. The app is ours when its bundle id matches and
+its Info.plist names this router home, so a run for another home (a test's)
+never removes it. It runs `codex_switch_launch.py`, a copy in the router
+home, under the router's own Python, which follows `current` to that
+release's `codex_desktop_switch.py` and names an older release in one plain
+message. `claude_desktop_platform.install_mac_app` builds it and both Claude
+launchers, staged and then swapped in, and refuses an app it does not own. A
+failed build prints one line and never fails an install.
 
 ## Distribution (outside the request path)
 
@@ -520,8 +630,9 @@ them while the child installer retains its own installation lock.
   `clients/` (capability projection, picker visibility); the served
   instruction text and its capped delegation roster live in the
   `model_instructions.py` leaf (Plan 154).
-- Client activation lives in `packaging/codex_config.py`: the Codex block,
-  picker preservation, the seeded startup model, the managed `[desktop]`
+- Client activation lives in `packaging/codex_config.py`: the Codex block
+  (its Switch Codex variants in `codex_switch_config.py`), picker
+  preservation, the seeded startup model, the managed `[desktop]`
   preferences, guidance, and receipts. `--client none` runs the router
   lifecycle without touching client settings; absence of a client
   selection in legacy state means Codex. Subscription policy is per client:

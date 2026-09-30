@@ -156,6 +156,20 @@ def _announce_new_models(home, state, _urlopen=None):
         pass  # a dialog or loopback failure must not disturb the update
 
 
+def _offer_codex_switch(home):
+    """Offer Switch Codex, or the way back, once per ChatGPT usage-limit episode.
+
+    Runs after every pass, the minute Express job included, because the
+    allowance can run out between regular checks. An offer never blocks,
+    delays or fails an update, so every error stops here.
+    """
+    try:
+        _svc.load('router_codex_switch_offer',
+                  Path(__file__).resolve().parent / 'codex_switch_offer.py').offer(home)
+    except (Exception, SystemExit):
+        pass
+
+
 # Installer-owned seams; rebound via bind() after file-based load.
 newer = _default_newer
 verify_sha256 = _default_verify
@@ -469,7 +483,10 @@ def do_update(args, _fetch=None, _read_feed=None, _sleep=None, _announce=None):
         with _svc.install_lock(home, 'update.lock') as held:
             if not held:
                 return 0
-            return _apply_update(args, home, sleep, _fetch, _read_feed, _announce)
+            try:
+                return _apply_update(args, home, sleep, _fetch, _read_feed, _announce)
+            finally:
+                _offer_codex_switch(home)
     except UpdateError as exc:
         _record_pass(home, error=exc.error_code)
         raise

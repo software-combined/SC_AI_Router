@@ -45,10 +45,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ai_router import catalogue, subscription_fallback, upstream
 from ai_router.providers import ExternalResponsesProvider
 from ai_router.registry import by_slug
+from tools.appserver_probe import codex_bin
 from tools.probe_context_budget import MODEL, Client, Reply, message
 
 CAPTURED = Path(__file__).resolve().parents[1] / 'tests' / 'fixtures' / 'replay' / 'captured'
-CODEX_BIN = '/Applications/ChatGPT.app/Contents/Resources/codex'
+CODEX_BIN = codex_bin()
 EXTERNAL = 'deepseek/deepseek-v4.1-flash'
 NATIVE = 'gpt-6-astra'
 DESCRIPTION_CHARS = 80

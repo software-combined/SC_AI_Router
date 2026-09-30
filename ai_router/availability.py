@@ -26,7 +26,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from . import snapshot_store
+from . import routed_models, snapshot_store
 
 LOG = logging.getLogger('codex_router')
 REFRESH_INTERVAL_S = 300
@@ -144,6 +144,7 @@ def sync_catalogue(home, available):
         _portco, _department, _allowed = _policy.load(home)
         _catalogue.merge_file(Path(home) / 'mixed-models.json',
                               allowed=_allowed, available=available)
+        routed_models.sync(home, available, _allowed)  # Switch Codex's picker file
     except Exception:  # noqa: BLE001 - picker sync must never break refresh
         LOG.info(json.dumps({'event': 'models_catalogue_sync_failed'}))
 

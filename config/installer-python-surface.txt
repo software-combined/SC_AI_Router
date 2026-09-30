@@ -32,6 +32,11 @@ load packaging/claude_profile_sync.py
 load packaging/claude_profile_ledger.py
 load packaging/claude_profile_hook.py
 load packaging/codex_config.py
+load packaging/codex_switch_config.py
+load packaging/codex_desktop_switch.py
+load packaging/codex_config_proof.py
+load packaging/codex_switch_offer.py
+load packaging/codex_switch_app.py
 load packaging/diagnostics.py
 load packaging/feed.py
 load packaging/feed_verify.py
@@ -55,6 +60,7 @@ load ai_router/clients/roster.py
 load ai_router/winacl.py
 parse packaging/router_launch.py
 parse packaging/claude_profile_launch.py
+parse packaging/codex_switch_launch.py
 parse packaging/runtime_lock.py
 parse packaging/task_launch.py
 parse packaging/update_launch.py

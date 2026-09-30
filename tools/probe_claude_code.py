@@ -15,9 +15,9 @@ The unit suite stays offline. This is invoked separately, makes one model call
 per row plus its tool round trip, and never retries a row.
 
 `CLAUDE_BIN` overrides the client binary; the acceptance test uses it to swap
-in a scripted fake. `PROBE_AUTH_TOKEN` supplies a synthetic bearer for a
-routed row on a host whose client login a non-interactive probe cannot read;
-the router bills the deployment's own key for those rows either way.
+in a scripted fake. The client runs in an empty config folder, so none of the
+owner's setup or login applies; it sends a synthetic bearer that
+`PROBE_AUTH_TOKEN` can replace. Routed rows bill the deployment's own key.
 
 Usage:
     python3.14 tools/probe_claude_code.py --home ~/.codex/mixed-model-router
@@ -119,9 +119,9 @@ def probe(home, model, deferred=False, read_count=1, effort=None,
                 'args': [str(STUB_MCP), '--tools', str(STUB_TOOLS)]}}
             prompt = DEFERRED_PROMPT % (STUB_TOOL, STUB_TOOL, marker)
             allowed = ['Read', 'ToolSearch', STUB_TOOL]
-        token = os.environ.get('PROBE_AUTH_TOKEN')
-        if token:
-            env['ANTHROPIC_AUTH_TOKEN'] = token
+        # Empty config dir: none of the owner's setup, and no login, so a synthetic bearer.
+        env.update(CLAUDE_CONFIG_DIR=tempfile.mkdtemp(prefix='config.', dir=work),
+                   ANTHROPIC_AUTH_TOKEN=os.environ.get('PROBE_AUTH_TOKEN') or 'probe-synthetic')
         settings = work / 'settings.json'
         settings.write_text(json.dumps({'env': env}))
         mcp_path = work / 'mcp.json'
@@ -139,8 +139,8 @@ def probe(home, model, deferred=False, read_count=1, effort=None,
             '--output-format', 'stream-json' if read_count > 1 else 'json']
             + (['--verbose'] if read_count > 1 else []))
         try:
-            done = subprocess.run(
-                cmd,
+            done = subprocess.run(  # a parent's ANTHROPIC_BASE_URL outranks --settings
+                cmd, env={**os.environ, **env},
                 cwd=str(work), capture_output=True, text=True, timeout=TIMEOUT_S)
         except subprocess.TimeoutExpired:
             return {'model': model, 'leg': leg_of(deferred, read_count),

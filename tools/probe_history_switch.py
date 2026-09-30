@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ai_router import catalogue, outbound, provider_defs, upstream
 from ai_router.history_portability import portable_history
 from ai_router.registry import by_slug
+from tools.appserver_probe import codex_bin
 from tools.probe_context_budget import Client, Reply, MODEL, contract_failure, message
 
 EXTERNAL = 'deepseek/deepseek-v4.1-flash'
@@ -171,7 +172,7 @@ def run(binary, scenario, home):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--codex-bin', default='/Applications/ChatGPT.app/Contents/Resources/codex')
+    parser.add_argument('--codex-bin', default=codex_bin())
     args = parser.parse_args()
     print(subprocess.check_output([args.codex_bin, '--version'], text=True).strip(), flush=True)
     for scenario in ('switch', 'invalid', 'transient'):

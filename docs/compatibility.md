@@ -1,12 +1,88 @@
 # Compatibility
 
+## Router 1.0.0, 30 September 2026 AEST
+
+Codex desktop `26.924.22138` (build `11645`) bundles `codex-cli
+0.158.0-alpha.2.1`; it was updated from `26.917.62051`, so AGENTS.md section 7
+calls for all four legs. Claude Code is `2.1.283`, unchanged since 28
+September. The Codex legs ran at 12:32 AEST from an export of
+`7d38698` against the installed candidate `1.0.0.1`, and the Claude Code legs
+at 15:30 AEST against the installed candidate `1.0.0.2`, on macOS 26.5.1 with
+synthetic data and no retries of their own.
+
+| Route | Requested model / effort | Served | Calls | Result |
+| --- | --- | --- | --- | --- |
+| Codex, OpenRouter | `deepseek/deepseek-v4.1-flash` / low | `deepseek/deepseek-v4.1-flash` | 2 | Tool round trip passed |
+| Codex, ChatGPT subscription | `gpt-6-luna` / low | not served | 5, all refused | Blocked by the ChatGPT usage limit |
+| Claude Code, OpenRouter | `deepseek/deepseek-v4.1-flash` / low | not exposed | 2 | Read round trip passed |
+| Claude Code, subscription | `sonnet` / low | not reached | 0 | Blocked: this Mac's Claude Code sign-in had expired |
+
+The Claude Code OpenRouter leg ran `tools/probe_claude_code.py` and returned
+its marker in two turns. The router log shows both `/v1/messages` calls at low
+effort with status 200. A first run inherited the calling session's
+`CLAUDE_CODE_EFFORT_LEVEL=max`, so the client sent max although low was
+requested; the rerun without it is the one recorded here. The subscription leg
+ran as a real Claude Code session with the owner's own settings and login, and
+stopped before any model call: "OAuth session expired and could not be
+refreshed". The owner chose to publish 1.0.0 without the two blocked legs.
+Both run again after the reset and a fresh Claude Code sign-in.
+
+The OpenRouter leg used a fresh `--codex-home` and returned `userMessage`,
+`reasoning`, `dynamicToolCall`, `reasoning` and `agentMessage`. The
+subscription leg ran on the live home and could not pass: this Mac's ChatGPT
+allowance is used up until 4 October 07:55 AEDT, which is the state Switch
+Codex exists for. The router answered each attempt with its plain 503, "rate
+limited on your ChatGPT subscription; the turn was not served", and retried
+nothing itself; the five attempts are Codex's own reconnects. Rerun this leg
+after the reset. The last passing Codex subscription leg ran on 28 September,
+on `26.917.62051`.
+
+### Switch Codex on this Mac
+
+On candidate `1.0.0.2` (`a493b086`), the owner's round trip between 14:14 and
+14:18 AEST logged six Switch Codex runs in `logs/codex-switch.log`, alternating
+`switched_back` and `switched`, every one `done`, ending switched. Each run quit
+and reopened the ChatGPT app by itself. The installer kept the switched block on
+the upgrade from `1.0.0.1`. The OpenRouter list then had `openai/gpt-6.1-sol`
+and neither `openai/gpt-6-sol` nor `openai/gpt-5.6-terra`, and the subscription
+GPT-6 Sol and GPT-5.6 Terra stayed listed. An `openai/gpt-6.1-sol` leg at high
+effort through the same candidate passed its tool round trip (2 calls, served
+exactly; the provider does not report the served effort).
+Not yet shown live: that Codex still asks before a command while switched (the
+switched block sets `approvals_reviewer = "user"`, and offline tests pin it),
+and that archiving, which fails while switched (below), works again after
+switching back (inferred: the switched-back provider signs in to ChatGPT again).
+
+Switch Claude's installed round trip on this Mac remains pending. The owner
+will run it after this release.
+
+The released commit adds two things on top of the tested candidate: the plugin
+delivery merge (#355), and `96426f44`, which keeps the Windows client and Python
+searches out of drive-root folders. Both are covered offline (2825 tests with
+the installer suite), not by this Mac's live test.
+
+Before the fix in `f2277c16`, every switch waited 65 seconds and refused as
+"stayed open", and the app did not reopen. Two `browser_crashpad_handler`
+processes from app version `153.0.8010.53`, orphaned since 24 September, sat
+under the app bundle, and the quit wait counted every process there. The quit
+wait now skips crash reporters in both Switch Codex and Switch Claude. One later
+refusal happened while the main app was still running, with no quit handling
+in the app's log;
+its cause is unknown because Switch Codex kept no log then. Each run now
+writes `logs/codex-switch.log`.
+
+Archiving a conversation still fails while Codex is switched ("Failed to
+archive conversation"). The app's worktree-cleanup step needs a ChatGPT account
+that the switched provider does not sign in with. It is a ChatGPT app issue,
+and a report for OpenAI has been drafted.
+
 ## Claude profile task sharing candidate, 29 September 2026 AEST
 
-Version 0.6.144 is a development candidate. **Switch Claude** shares local Code
-tasks before changing connections; Cowork tasks stay in their own profile in
-this beta. **Open Claude** and ordinary router startup leave histories alone.
-Complete installed-launcher acceptance remains pending. No router release is
-authorized by this work.
+This ships in router 1.0.0. **Switch Claude** shares local Code tasks before
+changing connections; Cowork tasks stay in their own profile in this beta.
+**Open Claude** and ordinary router startup leave histories alone. Complete
+installed-launcher acceptance remains pending; the owner runs it after the
+release.
 
 The candidate preserves complete conversations, session IDs and external
 workspace paths. Separate login, credential and profile-control files remain

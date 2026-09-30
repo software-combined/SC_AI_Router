@@ -5,18 +5,28 @@ Split from the installer entry point, which sits at its recorded line ceiling
 attachment request has to be honoured here or it silently does nothing until
 the next release. Runs on the installer's Python 3.9: no router imports, and
 every collaborator arrives as an argument. `client_dialog` owns how a person
-is asked; this module owns what the answer attaches, and loads its sibling so
-the entry point keeps loading one module per concern.
+is asked, `codex_switch_config` which Codex block an attach writes and
+`codex_switch_app` whether the Switch Codex app goes with it; this module
+owns what the answer attaches, and loads those siblings so the entry point
+keeps loading one module per concern.
 """
 import importlib.util
 import os
 import time
 from pathlib import Path
 
-_spec = importlib.util.spec_from_file_location(
-    'router_client_dialog', Path(__file__).resolve().parent / 'client_dialog.py')
-_dialog = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_dialog)
+
+def _load(name):
+    spec = importlib.util.spec_from_file_location(
+        'router_' + name, Path(__file__).resolve().parent / (name + '.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_dialog = _load('client_dialog')
+_switch = _load('codex_switch_config')
+_app = _load('codex_switch_app')
 
 _RESTART = {'Codex': 'quit and reopen Codex',
             'Claude Code': 'restart Claude Code',
@@ -24,6 +34,7 @@ _RESTART = {'Codex': 'quit and reopen Codex',
 
 
 maybe_ask = _dialog.maybe_ask
+refuse_switched = _switch.refuse_switched
 
 
 def any_attached(home, receipts):
@@ -49,16 +60,19 @@ def _connected(names):
 
 
 def attach_codex(home, state, mode, codex_config, previous=None,
-                 static_catalogue=False):
+                 static_catalogue=False, python=None):
     """Write the Codex provider block and receipt; returns the config path.
 
     Shared with the full install path so a current install and a fresh one
-    write the same block, the same before-image and the same receipt.
+    write the same block, the same before-image and the same receipt. The
+    block is the variant the receipt records, so an update never switches
+    Codex to or from the router's own provider. Given the router's `python`,
+    the Switch Codex app is then built, refreshed or removed to match.
     """
     if previous is None:
         previous = codex_config.codex_attachment(home)
     config_path = Path.home() / '.codex' / 'config.toml'
-    block = codex_config.build_block(home, state, mode, static_catalogue)
+    block = _switch.build(home, state, mode, static_catalogue, _switch.recorded(previous))
     # Global instructions are install-once via the setup window's starter
     # choice: this installer never writes, rewrites, or re-enforces them.
     rules_receipt = previous.get('global_instructions')
@@ -72,7 +86,10 @@ def attach_codex(home, state, mode, codex_config, previous=None,
     block, before, desktop, reviewer = codex_config.attach_config(
         config_path, block, previous)
     codex_config.write_receipt(home, config_path, block, rules_receipt, mode, before,
-                               desktop=desktop, reviewer=reviewer)
+                               desktop=desktop, variant=previous.get('variant'),
+                               reviewer=reviewer)
+    if python:
+        _app.sync(home, python)
     return config_path
 
 
@@ -126,7 +143,7 @@ def attach_current(args, home, *, codex, desktop, claude, write_state, resolve,
     names = []
     if clients in ('codex', 'both'):
         attach_codex(home, state, mode, codex,
-                     static_catalogue=args.static_catalogue)
+                     static_catalogue=args.static_catalogue, python=python)
         names.append('Codex')
     if clients in ('claude', 'both'):
         claude(home, state, python=python)
