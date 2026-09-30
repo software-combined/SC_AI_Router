@@ -228,15 +228,39 @@ class DeliveryTest(unittest.TestCase):
     def test_windows_search_adds_no_drive_root_folder(self):
         # On Windows /opt/homebrew/bin and /usr/local/bin would mean C:\opt\... and
         # C:\usr\..., which any local account can create and plant a codex.exe in.
+        # The Codex app's own CLI directory is added instead, because that is
+        # where an app install keeps codex.exe and never puts it on PATH.
         home_bin = str(Path.home() / '.local' / 'bin')
-        posix_extra = [home_bin, '/opt/homebrew/bin', '/usr/local/bin']
+        local = self.tmp / 'Local'
+        build = local / 'OpenAI' / 'Codex' / 'bin' / '0ddb895c950eaeba'
+        build.mkdir(parents=True)
+        (build / 'codex.exe').write_bytes(b'')
         for name, sep, path, extra in (
-                ('nt', ';', r'C:\Windows\System32;C:\Windows', [home_bin]),
-                ('posix', ':', LAUNCHD_PATH, posix_extra)):
+                ('nt', ';', r'C:\Windows\System32;C:\Windows', [home_bin, str(build)]),
+                ('posix', ':', LAUNCHD_PATH, [home_bin, '/opt/homebrew/bin', '/usr/local/bin'])):
             with self.subTest(os_name=name), patch.object(skills.os, 'name', name), \
                     patch.object(skills.os, 'pathsep', sep), \
-                    patch.dict(os.environ, {'PATH': path}):
+                    patch.dict(os.environ, {'PATH': path, 'LOCALAPPDATA': str(local)}):
                 self.assertEqual(skills.client_path(), sep.join([path, *extra]))
+
+    def test_windows_search_prefers_the_newest_codex_build(self):
+        # The app keeps one directory per build, so the newest one is current.
+        local = self.tmp / 'Local'
+        base = local / 'OpenAI' / 'Codex' / 'bin'
+        old, new = base / 'aaa', base / 'zzz'
+        for index, build in enumerate((old, new)):
+            build.mkdir(parents=True)
+            os.utime(build, (1_000 + index, 1_000 + index))
+        found = skills.client_path({'PATH': r'C:\Windows', 'LOCALAPPDATA': str(local)},
+                                   os_name='nt')
+        self.assertEqual(found.split(os.pathsep)[1:],
+                         [str(Path.home() / '.local' / 'bin'), str(new), str(old)])
+
+    def test_windows_search_without_a_codex_tree_adds_nothing(self):
+        home_bin = str(Path.home() / '.local' / 'bin')
+        found = skills.client_path({'PATH': r'C:\Windows', 'LOCALAPPDATA': str(self.tmp)},
+                                   os_name='nt')
+        self.assertEqual(found, r'C:\Windows' + os.pathsep + home_bin)
 
 
 if __name__ == '__main__':

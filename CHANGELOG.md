@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- The Windows router finds an app-installed Codex again, so the SCG plugins
+  reach it on a scheduled update. The Codex app keeps its own CLI under
+  `%LOCALAPPDATA%` and never puts that directory on the updater's PATH, so the
+  plugin refresh reported Codex as not installed; the router looks there too.
+
 ## 1.0.2
 
 - Installing without a ChatGPT subscription no longer changes Codex settings
