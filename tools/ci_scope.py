@@ -145,6 +145,7 @@ INSTALLER_TESTS = (
     'tests.test_update_announce',
     'tests.test_update_channel',
     'tests.test_windows_acl',
+    'tests.test_windows_agent_skills',
     'tests.test_windows_backend',
     'tests.test_windows_portability',
 )
