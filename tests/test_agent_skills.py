@@ -42,7 +42,7 @@ class _Run:
 
 
 def _which(present):
-    return lambda name: ('/usr/bin/' + name) if name in present else None
+    return lambda name, path=None: ('/usr/bin/' + name) if name in present else None
 
 
 class AgentSkillsTest(unittest.TestCase):
@@ -109,7 +109,7 @@ class AgentSkillsTest(unittest.TestCase):
                          ['scg-finance', 'scg-review'])
         self.assertTrue((root / 'plugins/scg-review/skills/scg-review/SKILL.md').is_file())
         self.assertIn('codex', line)
-        self.assertEqual(run.calls[0][:4], ['codex', 'plugin', 'marketplace', 'add'])
+        self.assertIn(['/usr/bin/codex', 'plugin', 'marketplace', 'add', str(root)], run.calls)
 
     def test_service_only_host_writes_nothing_and_calls_no_client(self):
         run = _Run()
@@ -123,7 +123,7 @@ class AgentSkillsTest(unittest.TestCase):
         run = _Run()
         skills.sync({'clients': 'codex'}, self.plugins, base=self.base,
                     run=run, which=_which({'codex', 'claude'}))
-        self.assertEqual([c[0] for c in run.calls], ['codex'] * len(run.calls))
+        self.assertEqual({c[0] for c in run.calls}, {'/usr/bin/codex'})
 
     def test_a_foreign_directory_is_left_exactly_as_it_is(self):
         root = skills.marketplace_root(self.base)
@@ -133,6 +133,7 @@ class AgentSkillsTest(unittest.TestCase):
                            run=_Run(), which=_which({'codex'}))
         self.assertEqual((root / 'someone-elses-file').read_text(), 'keep me')
         self.assertFalse((root / '.agents').exists())
+        self.assertFalse((root / skills.MARKER).exists())
         self.assertIn('skipped', line)
 
     def test_a_marketplace_sync_failure_reports_the_cause_and_path(self):
@@ -164,17 +165,15 @@ class AgentSkillsTest(unittest.TestCase):
         self.assertIn('codex binary vanished', line)
 
     def test_a_refusal_detail_is_collapsed_to_one_bounded_line(self):
-        calls = {'n': 0}
-
         def refuse(command, **kwargs):
-            calls['n'] += 1
-            if calls['n'] == 1:
+            if command[2:4] == ['marketplace', 'add']:
                 return SimpleNamespace(returncode=1, stdout='',
                                        stderr='x' * 500 + '\nsecond line')
             return SimpleNamespace(returncode=0, stdout='', stderr='')
 
         line = skills.sync({'clients': 'codex'}, self.plugins, base=self.base,
                            run=refuse, which=_which({'codex'}))
+        self.assertIn('1 refused', line)
         self.assertNotIn('\n', line)
         self.assertNotIn('second', line)
         self.assertLess(len(line), 500)
