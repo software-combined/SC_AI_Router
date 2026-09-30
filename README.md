@@ -182,6 +182,39 @@ either one overrides the subscription sign-in. The full walkthrough, including
 the manual alternative and how to check it worked, is in
 [docs/claude-code.md](docs/claude-code.md#setup).
 
+### Switch Codex
+
+From version 26.917.51856, the ChatGPT app (Codex) stops sending messages once
+your ChatGPT subscription reaches its usage limit, even for OpenRouter models.
+Switch Codex works around this. It moves Codex to OpenRouter models until the
+limit resets, then back to your ChatGPT subscription. Like Switch Claude,
+Switch Codex is macOS-only in this beta. SCG Router adds Switch Codex to your
+Applications folder when Codex uses your ChatGPT subscription and your ChatGPT
+app is affected.
+
+When the limit is reached, SCG Router offers to switch once. Choose **Open
+Switch Codex**, or open Switch Codex from your Applications folder at any time.
+Switch Codex asks before it changes anything, then quits and reopens the
+ChatGPT app. It keeps the switch only after Codex has loaded the new settings,
+so a switch that fails changes nothing.
+
+When the limit resets, SCG Router offers the way back once. Choose **Open
+Switch Codex** again, or open it yourself. Switching back does not depend on
+the ChatGPT app: if Switch Codex cannot check the app, it asks you to quit the
+app first and to open it again afterwards.
+
+While Codex is switched:
+
+- only OpenRouter models are listed, and they are billed to OpenRouter;
+- a model that needs your ChatGPT subscription answers with a short message
+  that says what to pick instead;
+- Codex still asks you before it runs a command that needs approval;
+- conversations you start while switched still open after you switch back.
+
+Two things do not work while Codex is switched. Archiving a conversation fails
+with "Failed to archive conversation", a ChatGPT app (Codex) issue, so switch
+back to archive it. Conversation titles are not generated.
+
 ## Models and billing
 
 Switch models mid-thread from the picker. The thread keeps its text history and
