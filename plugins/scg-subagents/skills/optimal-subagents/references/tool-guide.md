@@ -9,15 +9,22 @@ For externally billed recipients, use `collaboration_plaintext.spawn_agent`,
 when the router exposes them. Use `fork_turns="none"` for external children:
 encrypted inherited history cannot be translated. Keep using the plaintext
 namespace on later turns even if saved calls appear under `collaboration`;
-Codex executes those aliases under their native names. Native OpenAI recipients
-keep the original encrypted `collaboration` tools. If the required plaintext
+Codex executes those aliases under their native names. Choose by the recipient's
+provider route, not the model vendor or the parent's model. GPT through OpenRouter
+is external even when the parent uses GPT. Native parents keep encrypted
+`collaboration` handoffs to native subscription recipients. External parents
+produce readable calls; their adapter marks even canonical `collaboration`
+calls as plaintext, including calls to native recipients. If the required plaintext
 surface is unavailable, apply the transport-failure policy; an encrypted
 message containing a file path is not a readable fallback.
 
 ## Parent: launch and brief
 
-`spawn_agent` takes `task_name`, `message`, optional `fork_turns`, `model`, and
-`reasoning_effort`. Task names use lowercase letters, digits and underscores.
+The API makes `fork_turns`, `model` and `reasoning_effort` optional, but the parent
+must pass model and effort explicitly for every fresh or partial-history child.
+Omitting them can select configured defaults instead of the intended model;
+writing "inherit GPT" or a model name in `message` does not select it.
+Task names use lowercase letters, digits and underscores.
 Store the returned agent id and canonical task name, not just your chosen label.
 Send this external-model example through `collaboration_plaintext.spawn_agent`:
 
@@ -43,7 +50,8 @@ when the router catalogue has more models. Check the installed route; omission
 from descriptive text alone is not proof of rejection. A schema enum or actual
 runtime prohibition still applies. Do not edit the router to force availability.
 
-Full-history forks (`fork_turns` omitted or `"all"`) inherit parent model/effort
+Choose a full-history native fork deliberately, only when inheritance is wanted
+and verified in the active runtime. Full-history forks (`fork_turns` omitted or `"all"`) inherit parent model/effort
 and do not accept overrides in this runtime. For an explicit native model use
 `"none"` or a supported positive number string such as `"3"`; external children
 require `"none"`. Give a no-history child
@@ -128,11 +136,16 @@ errors before research children started; that is a transport limitation, not a
 benchmark or proof that the selected model lacks tools. Do not bypass exact-model
 review gates by switching runtimes or fabricating review results.
 
-If the handoff error requests `collaboration_plaintext`, use that exact tool
-with a fresh readable assignment and the same intended recipient. Do not repeat
-the rejected encrypted call or reinterpret ciphertext as text. If the corrected
-call also fails, stop that delivery path and report the error under the bounded
-fallback policy; a completed turn without an assistant reply is not success.
+An unsafe handoff refusal says nothing about model or provider availability.
+It does not justify replacing an exact OpenRouter reviewer with a native model.
+The router may end the parent turn with a terminal error before executing the
+bad call; it cannot create a recoverable Codex tool result or decrypt the brief.
+On the next user turn, correct the handoff once through the indicated
+`collaboration_plaintext` tool with a fresh readable assignment and the same
+intended model, effort and recipient. Do not replay the encrypted call or
+reinterpret ciphertext as text. If the correction fails, report the exact
+delivery blocker and preserve the work. A completed turn without an assistant
+reply is not success.
 
 Codex app `create_thread`, `send_message_to_thread`, `read_thread` and
 `wait_threads` manage separate user-visible tasks, not child agents. Create one

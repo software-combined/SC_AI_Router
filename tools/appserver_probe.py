@@ -72,6 +72,39 @@ def scrub_env(env, mode, inject=None):
     raise ValueError('unknown scrub mode: ' + str(mode))
 
 
+def failure_shape(event, failure):
+    """Keep client failure provenance without message text or private URLs."""
+    params = event.get('params', {})
+    details = '\n'.join(str(failure.get(key, '')) for key in
+                        ('message', 'additionalDetails', 'additional_details')) if isinstance(failure, dict) else ''
+    causes = (('Incomplete response returned, reason: max_output_tokens', 'output_cap'),
+              ('failed to parse ResponseCompleted', 'completion_schema'),
+              ('stream closed before response.completed', 'missing_completion'),
+              ('idle timeout waiting for SSE', 'idle_timeout'))
+    code = failure.get('codexErrorInfo') if isinstance(failure, dict) else None
+    if isinstance(code, dict):
+        stream = code.get('responseStreamDisconnected')
+        status = stream.get('httpStatusCode') if isinstance(stream, dict) else None
+        code = {'responseStreamDisconnected': {'httpStatusCode': status if type(status) is int else None}} if stream is not None else 'other'
+    elif not isinstance(code, str) or code not in ('invalidPrompt', 'invalidRequest', 'contextWindowExceeded'):
+        code = 'other'
+    return {'event': event.get('method'), 'code': code,
+            'thread': params.get('threadId'), 'turn': params.get('turnId'),
+            'will_retry': params.get('willRetry'),
+            'cause': next((label for text, label in causes if text in details), 'unclassified')}
+
+
+def request_failure_shape(row):
+    """The bounded fields needed to distinguish incomplete upstream responses."""
+    reason = row.get('upstream_reason')
+    code = row.get('code')
+    return {'status': row.get('status') if type(row.get('status')) is int else None,
+            'code': code if code in ('UPSTREAM_INCOMPLETE', 'UPSTREAM_RESPONSE_FAILED', 'UPSTREAM_ERROR') else 'other',
+            'terminal': row.get('terminal_event') if row.get('terminal_event') in
+                        ('response.completed', 'response.incomplete', 'response.failed', 'error') else 'other',
+            'reason': reason if reason in ('max_output_tokens', 'interrupted', 'content_filter') else 'other'}
+
+
 class AppServer:
     """A Codex app-server child reached over JSON-RPC on stdio."""
 

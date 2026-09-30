@@ -12,6 +12,8 @@ LANE_HINT_NAMES = frozenset(('spawn_agent', 'close_agent'))
 LANE_HINT = ('When all subagent lanes are full, close finished agents, '
              'or all of them if needed, then retry spawn.')
 
+READABLE_MESSAGE = 'The complete readable assignment or message. Do not encrypt it.'
+
 
 class AliasTools(frozenset):
     """Advertised names, response framing and target catalogue for one request."""
@@ -93,6 +95,21 @@ def _tool_container(payload):
     return matches[0] if matches else (payload, None)
 
 
+def readable_handoff_tool(tool, namespace):
+    """Copy a complete canonical message schema for external upstreams."""
+    if (namespace != NATIVE_NAMESPACE or tool.get('type') != 'function'
+            or tool.get('name') not in HANDOFF_TOOLS):
+        return tool
+    message = tool.get('parameters', {}).get('properties', {}).get('message')
+    if not isinstance(message, dict) or message.get('type') != 'string':
+        return tool  # Discovery may complete a declaration stub later.
+    if message.get('encrypted') is False and message.get('description') == READABLE_MESSAGE:
+        return tool
+    parameters = deepcopy(tool['parameters'])
+    parameters['properties']['message'].update(encrypted=False, description=READABLE_MESSAGE)
+    return {**tool, 'parameters': parameters}
+
+
 def _hint_tool(tool):
     """`tool`, or a copy with LANE_HINT appended once to spawn/close; walks namespaces."""
     if not isinstance(tool, dict):
@@ -148,34 +165,40 @@ def add_plaintext_tools(payload, catalogue=None):
     container, input_index = _tool_container(payload)
     tools = container.get('tools', [])
     aliases = []
+    described = []
     for namespace in tools:
         if namespace.get('type') != 'namespace' or namespace.get('name') != NATIVE_NAMESPACE:
             continue
         for tool in namespace.get('tools', []):
             if tool.get('type') != 'function' or tool.get('name') not in HANDOFF_TOOLS:
+                described.append(tool)
                 continue
-            alias = deepcopy(tool)
+            guidance = (
+                'Choose by the recipient provider route. Native subscription GPT uses collaboration. '
+                'External recipients, including GPT through OpenRouter, require collaboration_plaintext.'
+                + tool['name'] + ' for every assignment and follow-up, even when saved calls use native names.')
+            if tool['name'] == 'spawn_agent':
+                guidance += (' Pass model and reasoning_effort explicitly for fresh or partial-history children. '
+                             'Choose full native history inheritance deliberately. '
+                             'External children require fork_turns="none"; encrypted history cannot be translated.')
+            tool = {**tool, 'description': tool.get('description', '') + '\n' + guidance}
+            described.append(tool)
+            alias = {**readable_handoff_tool(tool, NATIVE_NAMESPACE)}
             message = alias.get('parameters', {}).get('properties', {}).get('message')
             if not isinstance(message, dict) or message.get('type') != 'string':
                 raise ValueError('unsupported native collaboration message schema')
-            message['encrypted'] = False
-            message['description'] = 'The complete readable assignment or message. Do not encrypt it.'
             alias['description'] = (
                 'PLAINTEXT HANDOFF: use collaboration_plaintext.' + tool['name']
                 + ' for externally billed agents. '
                 + tool.get('description', '') +
-                '\nPlaintext handoff for mixed-provider agents. Use this variant '
-                'for externally billed recipients and keep using it for their '
-                'follow-ups. '
-                'Use the original collaboration tool for encrypted native handoffs. '
-                'Start mixed-provider children with fork_turns="none" when spawning; '
-                'encrypted inherited history cannot be translated.')
+                '\nSend the complete readable message. Do not encrypt it.')
             aliases.append(alias)
     names = {tool['name'] for tool in aliases}
     children = spawn_models(payload.get('input', []))
     if len(names) != len(aliases):
         raise ValueError('duplicate native collaboration tool')
     if aliases:
+        tools = [{**ns, 'tools': described} if ns.get('name') == NATIVE_NAMESPACE else ns for ns in tools]
         augmented = [*tools, {'type': 'namespace', 'name': PLAINTEXT_NAMESPACE,
             'description': ('Use this namespace for every initial assignment and follow-up '
                 'to externally billed agents. Previous calls may appear under '

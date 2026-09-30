@@ -1,9 +1,6 @@
-"""Isolated native-client handoff proof; live mode requires an explicit call cap.
-
-Children are scripted sinks. --live sends only the synthetic parent to the
-installed router, testing real schema acceptance and canonical replay.
-No request content, ciphertext, credentials or private URLs are printed.
-"""
+"""Isolated Codex handoff proof; live modes require an explicit call cap.
+Synthetic tasks and scripted children unless --live-children. No request content,
+ciphertext, credentials or private URLs are printed."""
 import argparse
 from compression import zstd
 import io
@@ -27,7 +24,7 @@ from ai_router.agent_handoffs import add_plaintext_tools
 from ai_router import handoff_response
 from ai_router.catalogue import external_entry, subscription_stub
 from ai_router.registry import by_slug
-from tools.appserver_probe import AppServer, AGENT_HANDOFFS, codex_bin, scrub_env
+from tools.appserver_probe import AppServer, AGENT_HANDOFFS, codex_bin, failure_shape, request_failure_shape, scrub_env
 
 PARENT = 'gpt-6-astra'
 CHILD = 'deepseek/deepseek-v4.1-flash'
@@ -69,7 +66,7 @@ class Probe:
         self.lock = threading.Lock()
         self.facts = {'markers': [], 'encrypted_child': False,
                       'canonical_replay': False, 'alias_emitted': False, 'calls': [], 'child_shapes': [],
-                      'tool_failures': [], 'replies': []}
+                      'tool_failures': [], 'replies': [], 'retry_events': 0, 'request_failures': []}
         self.errors = []
         self.upstream = None
         if live:
@@ -123,7 +120,6 @@ class Probe:
                     safe = 'tool_output_reported_failure'
                     if safe not in self.facts['tool_failures']:
                         self.facts['tool_failures'].append(safe)
-        # Collaboration tools only; the turn log is structural, no payload.
         offered = body.get('tools', []) if isinstance(body.get('tools'), list) else []
         self.facts.setdefault('turns', []).append({
             'model': body.get('model'),
@@ -230,6 +226,8 @@ def run(args, probe_type=Probe):
     if getattr(args, 'child', CHILD) == getattr(args, 'parent', PARENT):
         raise ValueError('--parent and --child must name different rows')
     probe = probe_type(args.live, args.max_live_calls, args.live_children)
+    probe.facts.setdefault('client_version', subprocess.run([args.codex, '--version'], check=True,
+        capture_output=True, text=True, timeout=10).stdout.strip())
     class Handler(BaseHTTPRequestHandler):
         protocol_version = 'HTTP/1.1'
 
@@ -237,8 +235,10 @@ def run(args, probe_type=Probe):
             pass
 
         def do_GET(self):
-            # Match the router's unsupported route (404) so Codex falls back.
-            self.send_response(404)
+            # Match production: 426 switches Codex directly to HTTP/SSE.
+            upgrade = self.path.split('?', 1)[0] == '/v1/responses' and self.headers.get('Upgrade', '').lower() == 'websocket'
+            probe.facts['websocket_fallbacks'] = probe.facts.get('websocket_fallbacks', 0) + upgrade
+            self.send_response(426 if upgrade else 404)
             self.send_header('Content-Length', '0')
             self.send_header('Connection', 'close')
             self.end_headers()
@@ -264,7 +264,7 @@ def run(args, probe_type=Probe):
                 reason = str(exc) if str(exc) in known else 'protocol_or_transport_failure'
                 probe.errors.append({'type': type(exc).__name__, 'status': getattr(exc, 'code', None), 'reason': reason})
                 result = b'{"error":{"message":"synthetic handoff probe failed"}}'
-                self.send_response(409 if isinstance(exc, ValueError) else 502)
+                self.send_response(400 if isinstance(exc, ValueError) else 502)
                 self.send_header('Content-Type', 'application/json')
             self.send_header('Content-Length', str(len(result)))
             self.end_headers()
@@ -283,7 +283,9 @@ def run(args, probe_type=Probe):
             class Events(logging.Handler):
                 def emit(self, record):
                     row = json.loads(record.getMessage())
-                    if row.get('event') in ('transport_error', 'request_rejected', 'preparation_error'):
+                    if row.get('event') == 'request_failed':
+                        probe.facts['request_failures'].append(request_failure_shape(row))
+                    elif row.get('event') in ('transport_error', 'request_rejected', 'preparation_error'):
                         probe.errors.append({key: row.get(key) for key in
                             ('event', 'status', 'code', 'error_type', 'location')})
             LOG.addHandler(Events())
@@ -300,24 +302,27 @@ def run(args, probe_type=Probe):
         threading.Thread(target=server.serve_forever, daemon=True).start()
         child = external_entry(by_slug(CHILD))
         child['prefer_websockets'] = False
-        if args.live:
+        rows = getattr(probe, 'catalogue_rows', None)
+        if args.live and rows is None:
             installed = json.loads((Path.home() / '.codex/mixed-model-router'
                                     / 'mixed-models.json').read_text())
             rows = {m['slug']: m for m in installed['models']}
+        if rows is not None:
             if PARENT not in rows:
                 raise SystemExit(f'live catalogue has no parent row: {PARENT}')
             parent = dict(rows[PARENT])
-            native = dict(rows['gpt-5.6-sol'])
+            child = dict(rows.get(CHILD, child))
+            native = dict(rows[getattr(probe, 'native_model', 'gpt-5.6-sol')])
         else:
             parent = (subscription_stub(PARENT) if PARENT.startswith('gpt-')
                       else external_entry(by_slug(PARENT)))
             parent['use_responses_lite'] = args.wire_mode == 'lite'
             parent['multi_agent_version'] = 'v2'
-            native = dict(parent, slug='gpt-5.6-sol')
+            native = dict(parent, slug=getattr(probe, 'native_model', 'gpt-5.6-sol'))
         probe.facts['parent_wire_mode'] = 'lite' if parent['use_responses_lite'] else 'classic'
-        probe.facts['child_effort'] = 'max'
+        probe.facts['child_effort'] = getattr(probe, 'child_effort', 'max')
         catalog = root / 'catalog.json'
-        catalog.write_text(json.dumps({'models': [parent, child, native]}))
+        catalog.write_text(json.dumps({'models': list({m['slug']: m for m in (parent, child, native)}.values())}))
         if args.live:
             auth = root / 'auth.json'
             auth.touch(mode=0o600)
@@ -340,7 +345,7 @@ def run(args, probe_type=Probe):
         for key, value in config.items():
             command.extend(['-c', key + '=' + json.dumps(value)])
         env = scrub_env(os.environ, AGENT_HANDOFFS, inject={'CODEX_HOME': temp})
-        deadline = time.monotonic() + (600 if args.live else 40)
+        deadline = time.monotonic() + (getattr(probe, 'timeout', 600) if args.live else 40)
         sequence = 0
         def record_failure(event):
             # Probe policy: every dequeued event is scanned for failures and
@@ -352,8 +357,8 @@ def run(args, probe_type=Probe):
             if failure:
                 if hasattr(probe, 'negotiation_failure') and probe.negotiation_failure(event, failure):
                     return
-                safe = {'event': event.get('method'),
-                        'code': failure.get('codexErrorInfo') if isinstance(failure, dict) else None}
+                probe.facts['retry_events'] += event.get('method') == 'error' and params.get('willRetry') is True
+                safe = failure_shape(event, failure)
                 if safe not in probe.facts['tool_failures']:
                     probe.facts['tool_failures'].append(safe)
         # Piped stderr drained silently, plain terminate, ambient-adjacent
@@ -382,7 +387,7 @@ def run(args, probe_type=Probe):
             thread = rpc('thread/start', {'model': PARENT, 'modelProvider': provider,
                 'cwd': temp, 'ephemeral': not args.lifecycle, 'approvalPolicy': 'never', 'sandbox': 'read-only',
                 'baseInstructions': 'Synthetic collaboration protocol test. No files or external tools.',
-                'developerInstructions': 'Use only the collaboration tools requested by the user.'})['thread']['id']
+                'developerInstructions': getattr(probe, 'instructions', 'Use only the collaboration tools requested by the user.')})['thread']['id']
             prompts = [
                 f'Use collaboration_plaintext.spawn_agent once to create plain on {CHILD}, '
                 f'fork_turns none, reasoning_effort max, message "Reply exactly {MARKERS[0]}". Then finish this turn.',
@@ -402,7 +407,7 @@ def run(args, probe_type=Probe):
             def turn(prompt_text):
                 answer = []
                 rpc('turn/start', {'threadId': thread, 'input': [{'type': 'text', 'text': prompt_text,
-                    'text_elements': []}], 'effort': 'low'})
+                    'text_elements': []}], 'effort': getattr(probe, 'parent_effort', 'low')})
                 while True:
                     event = next_event()
                     if event.get('method') == 'item/completed' and event.get('params', {}).get('threadId') == thread:
@@ -419,8 +424,7 @@ def run(args, probe_type=Probe):
                 answer = turn(prompt_text)
                 if probe.required_final and probe.required_final not in answer:
                     raise ValueError('parent did not finish after handoff recovery')
-            # A non-native parent drives the plaintext path only (leg F).
-            expected_replies = (
+            expected_replies = getattr(probe, 'expected_replies', None) or (
                 {'SYNTH_NATIVE_CONTROL'} if args.native_only
                 else set(ALL_MARKERS) if PARENT.startswith('gpt-')
                 else set(MARKERS))
@@ -429,8 +433,6 @@ def run(args, probe_type=Probe):
                 if args.live_children and expected_replies <= set(probe.facts['replies']):
                     break
                 try:
-                    # Raw dequeue-and-discard, exactly as before: the
-                    # failure-recording hook must not see settle events.
                     server_process.events.get(timeout=.1)
                 except queue.Empty:
                     pass
@@ -500,8 +502,6 @@ if __name__ == '__main__':
     parser.add_argument('--native-only', action='store_true')
     parser.add_argument('--lifecycle', action='store_true')
     parser.add_argument('--max-live-calls', type=int, default=0)
-    # Any routed row may be the child: leg F is that row's own evidence leg, so
-    # the roster owns the list; a parent may be a client-native subscription id.
     parser.add_argument('--parent', default=PARENT, help='Parent row slug for leg F.')
     parser.add_argument('--child', default=CHILD, help='Child row slug for leg F.')
     arguments = parser.parse_args()

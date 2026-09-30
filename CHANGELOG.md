@@ -7,6 +7,13 @@
   valid tool arguments into a string that triggers a parser error. Native
   encrypted handoffs and earlier valid tool calls remain intact.
 
+- Codex subagent tools now explain that the parent selects the model and effort
+  explicitly, and chooses the handoff by the recipient's provider route. GPT
+  through OpenRouter needs the plaintext tools for both initial and later
+  assignments, even when the parent uses GPT. The bundled SCG review and
+  subagent skills include the same guidance and one bounded delivery correction.
+  The installer leaves subagent defaults under the user's control.
+
 ## 1.0.4
 
 - The Windows router finds an app-installed Codex again, so the SCG plugins
