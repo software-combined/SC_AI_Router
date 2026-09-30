@@ -20,6 +20,67 @@ spec.loader.exec_module(scheduling)
 @unittest.skipUnless(os.environ.get('GITHUB_ACTIONS') == 'true' and
                      os.environ.get('SCG_TEST_NATIVE_SCHEDULER') == '1', 'disposable CI runners only')
 class NativeSchedulingTest(unittest.TestCase):
+    @unittest.skipUnless(sys.platform == 'linux', 'systemd retirement is Linux-only')
+    def test_router_retires_both_timers_and_clears_their_failed_services(self):
+        spec = importlib.util.spec_from_file_location(
+            'native_router_skills', ROOT / 'packaging/agent_skills.py')
+        skills = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(skills)
+        config = Path.home() / '.config'
+        units = config / 'systemd/user'
+        names = skills.GIT_UPDATER_UNITS
+        for name in names:
+            for kind in ('.timer', '.service'):
+                self.assertFalse((units / (name + kind)).exists())
+                self.assertFalse((units / (name + kind + '.migrated.0')).exists())
+        with tempfile.TemporaryDirectory(prefix='SCG retire test ') as tmp:
+            home = Path(tmp)
+            legacy = home / 'legacy.py'
+            legacy.write_text("raise SystemExit(1)\n")
+            digest = hashlib.sha256(legacy.read_bytes()).hexdigest()
+            try:
+                for moved in (False, True):
+                    with self.subTest(already_moved=moved), \
+                            patch.object(Path, 'home', return_value=home), \
+                            patch.dict(os.environ, {'XDG_CONFIG_HOME': str(config)}), \
+                            patch.object(skills, 'LEGACY_RUNNERS', (digest,)):
+                        base = home / ('moved' if moved else 'fresh')
+                        for plugin, name in zip(('scg-review', 'scg-subagents'), names):
+                            scheduling.install_linux(sys.executable, legacy, plugin, base)
+                            result = scheduling.run(['systemctl', '--user', 'start', name + '.service'])
+                            self.assertNotEqual(result.returncode, 0)
+                            self.assertEqual(scheduling.run(
+                                ['systemctl', '--user', 'is-failed', name + '.service']).stdout.strip(),
+                                'failed')
+                        originals = {name + kind: (units / (name + kind)).read_bytes()
+                                     for name in names for kind in ('.timer', '.service')}
+                        if moved:
+                            (base / 'updater.py').rename(base / 'updater.py.migrated.0')
+                        self.assertIn('retired', skills.retire_git_updater(base))
+                        self.assertEqual((base / 'updater.py.migrated.0').read_bytes(), legacy.read_bytes())
+                        for unit, content in originals.items():
+                            self.assertFalse((units / unit).exists())
+                            saved = units / (unit + '.migrated.0')
+                            self.assertEqual(saved.read_bytes(), content)
+                            self.assertNotEqual(scheduling.run(
+                                ['systemctl', '--user', 'is-active', unit]).returncode, 0)
+                            self.assertNotEqual(scheduling.run(
+                                ['systemctl', '--user', 'is-failed', unit]).stdout.strip(), 'failed')
+                            if unit.endswith('.timer'):
+                                self.assertNotEqual(scheduling.run(
+                                    ['systemctl', '--user', 'is-enabled', unit]).returncode, 0)
+                            saved.unlink()
+            finally:
+                for name in names:
+                    scheduling.run(['systemctl', '--user', 'disable', '--now', name + '.timer'])
+                    scheduling.run(['systemctl', '--user', 'stop', name + '.service'])
+                    scheduling.run(['systemctl', '--user', 'reset-failed',
+                                    name + '.timer', name + '.service'])
+                    for kind in ('.timer', '.service'):
+                        (units / (name + kind)).unlink(missing_ok=True)
+                        (units / (name + kind + '.migrated.0')).unlink(missing_ok=True)
+                scheduling.run(['systemctl', '--user', 'daemon-reload'])
+
     def test_migration_leaves_one_shared_schedule_that_updates_both_plugins(self):
         real_home = Path.home()
         with tempfile.TemporaryDirectory(prefix='SCG update test ') as tmp:
