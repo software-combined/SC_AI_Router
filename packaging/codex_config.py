@@ -53,10 +53,10 @@ def build_block(home, state, mode, static_catalogue=False):
                 'model_provider = "scg_router"\n'
                 + catalog_line +
                 'approvals_reviewer = "user"\n'
-                '[model_providers.scg_router]\n'
-                'name = "SC router"\n'
-                f'base_url = "{url}"\n'
-                'wire_api = "responses"\n'
+                # Dotted keys, not a [table]: owner keys after END stay root.
+                'model_providers.scg_router.name = "SC router"\n'
+                f'model_providers.scg_router.base_url = "{url}"\n'
+                'model_providers.scg_router.wire_api = "responses"\n'
                 + END + '\n')
     return (BEGIN + '\n'
             f'openai_base_url = "{url}"\n'
@@ -101,10 +101,14 @@ def _desktop_table(lines):
     return heads[0], (rest[0] if rest else len(lines)), False
 
 
+def _key(line):
+    """The key one assignment line sets, unquoted."""
+    return line.split('=', 1)[0].strip().strip('"\'')
+
+
 def _key_line(lines, start, end, key):
     """Line index of one key inside a table; 'duplicate' when repeated."""
-    hits = [index for index in range(start + 1, end)
-            if lines[index].split('=', 1)[0].strip().strip('"\'') == key]
+    hits = [index for index in range(start + 1, end) if _key(lines[index]) == key]
     if len(hits) > 1:
         return 'duplicate'
     return hits[0] if hits else None
@@ -202,20 +206,20 @@ def restore_desktop(text, record):
 
 
 def restore_reviewer(text, record):
-    """Re-add owner `approvals_reviewer` lines removed at attach.
+    """Re-add the owner root lines removed at attach (the receipt's reviewer record).
 
-    Lines land before the first table header, so they come back as the
-    root keys they were; appending would nest them under a surviving
-    trailing table. They are added only when no `approvals_reviewer`
-    remains, so a line the owner re-added while attached is never
-    duplicated. A missing or empty record leaves the text unchanged.
+    Lines land before the first table header, so they come back as root keys
+    (appending would nest them under a trailing table): one per key, the
+    latest recorded, never over a key already at root.
     """
-    removed = (record or {}).get('removed') or []
-    if not removed or 'approvals_reviewer' in text:
-        return text
     lines = text.splitlines()
     at = next((index for index, line in enumerate(lines)
                if line.strip().startswith('[')), len(lines))
+    present = {_key(line) for line in lines[:at] if '=' in line}
+    latest = {_key(line): line for line in (record or {}).get('removed') or []}
+    removed = [line for key, line in latest.items() if key not in present]
+    if not removed:
+        return text
     lines[at:at] = removed
     joined = '\n'.join(lines)
     return joined + '\n' if text.endswith('\n') or not text else joined
@@ -232,9 +236,7 @@ def seed_picker_selection(config_path, previous_block, block):
     text = _read_text(config_path)
     if previous_block:
         text = text.replace(previous_block, '', 1)
-    if any(line.split('=', 1)[0].strip().strip('"\'') in
-           ('model', 'model_reasoning_effort')
-           for line in text.splitlines() if '=' in line):
+    if any(_key(line) in PICK_KEYS for line in text.splitlines() if '=' in line):
         return block
     return _insert_root_lines(block, [_render('model', DEFAULT_MODEL),
                                       _render('model_reasoning_effort',
@@ -255,7 +257,7 @@ def _picks(text):
     """
     picks = {}
     for line in text.splitlines():
-        key = line.split('=', 1)[0].strip().strip('"\'')
+        key = _key(line)
         if '=' not in line or key not in PICK_KEYS:
             continue
         picks[key] = line
@@ -285,9 +287,8 @@ def attach_config(config_path, block, previous=None):
 
     `previous` is the codex attachment in the receipt; its desktop record
     keeps the owner's original values across updates. Returns (block,
-    before, desktop, reviewer) for the receipt, where reviewer holds the
-    owner `approvals_reviewer` lines this attach removed, or the carried
-    record when an update removed none.
+    before, desktop, reviewer) for the receipt, where reviewer holds every
+    owner root line an attach has removed, carried across updates.
     """
     recorded = (previous or {}).get('inserted_block')
     previous_block = live_block(_read_text(config_path), recorded)
@@ -301,8 +302,8 @@ def attach_config(config_path, block, previous=None):
         _replace_text(config_path, updated)
     elif not desktop:
         print('Codex [desktop] preferences skipped: table ambiguous or repeated')
-    reviewer = ({'removed': removed} if removed
-                else (previous or {}).get('reviewer'))
+    kept = (((previous or {}).get('reviewer')) or {}).get('removed') or []
+    reviewer = {'removed': kept + removed} if removed else (previous or {}).get('reviewer')
     return block, before, desktop, reviewer
 
 
@@ -354,9 +355,8 @@ def preserve_picker_selection(config_path, previous_block, block):
 def replace_config_block(config_path, block, previous_block=None):
     """Insert or replace the marked block; refuse hand-edited markers.
 
-    Returns (before, removed): the prior config text and the owner
-    `approvals_reviewer` lines dropped for uniqueness, so the receipt can
-    restore them on detach.
+    Returns (before, removed): the prior config text and the owner root
+    lines dropped for uniqueness, so the receipt can restore them on detach.
     """
     config_path = Path(config_path)
     before = config_path.read_text() if config_path.exists() else ''
@@ -368,22 +368,22 @@ def replace_config_block(config_path, block, previous_block=None):
         raise SystemExit('config block was edited by hand; run tools/disable.py first')
     else:
         after = block + '\n' + before
+    # A second root definition of a block key makes the config unreadable, so owner
+    # root copies are dropped for detach to restore; owner table lines stay.
+    owned = {_key(line) for line in block.splitlines() if '=' in line}
+    head, _, tail = after.partition(block)
     removed = []
-    # Keep the managed line unique by dropping owner copies on either side
-    # of the block; a second root-level definition would break the config.
-    # The receipt records the removed lines so detach can restore them.
-    if 'approvals_reviewer' in block:
-        def _is_reviewer(line):
-            return (line.split('=', 1)[0].strip().strip('"\'')
-                    == 'approvals_reviewer')
 
-        def _without_reviewer(text):
-            return ''.join(line for line in text.splitlines(keepends=True)
-                           if not _is_reviewer(line))
-        head, _, tail = after.partition(block)
-        removed = [line for line in (head + tail).splitlines()
-                   if _is_reviewer(line)]
-        after = _without_reviewer(head) + block + _without_reviewer(tail)
+    def _root_unique(text):
+        kept, rooted = [], True
+        for line in text.splitlines(keepends=True):
+            rooted = rooted and not line.strip().startswith('[')
+            if rooted and '=' in line and _key(line) in owned:
+                removed.append(line.rstrip('\r\n'))
+            else:
+                kept.append(line)
+        return ''.join(kept)
+    after = _root_unique(head) + block + _root_unique(tail)
     home = config_path.parent
     if not config_path.exists():
         home.mkdir(parents=True, exist_ok=True)
@@ -464,8 +464,8 @@ def write_receipt(home, config_path, block, rules_receipt, mode, before='',
     if variant:
         entry['variant'] = variant  # the Switch Codex block (codex_switch_config)
     if reviewer:
-        # Owner approvals_reviewer lines removed for uniqueness, restored
-        # by tools/disable.py when still absent.
+        # Owner root lines set aside because the block sets the same key,
+        # restored by tools/disable.py one per key.
         entry['reviewer'] = reviewer
     if rules_receipt:
         # Legacy installs recorded the managed global-instructions block;

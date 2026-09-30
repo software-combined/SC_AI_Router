@@ -746,8 +746,11 @@ with `max` added and `ultra` removed. Ultra is Codex's automatic-delegation
 level and the served catalogue never offers it, so the picker cannot show it
 even if a client default reintroduces it. The managed block also carries
 `approvals_reviewer = "user"` in both modes, so installs never fall back to
-the background reviewer; an owner copy outside the block is removed on
-attach, recorded in the activation receipt, and restored on detach. Detach,
+the background reviewer. An owner root line that sets any key the block
+sets (`approvals_reviewer`, or `model_provider` in no-subscription mode) is
+set aside on attach, recorded in the activation receipt's `reviewer`
+record, and restored on detach, one line per key; a key inside an owner
+table, such as a profile's own `model_provider`, is never touched. Detach,
 `--client none` and uninstall put the desktop values back as the attach
 found them, and a value the owner changed afterwards is left alone. A `[desktop]` table or value the
 installer cannot rewrite safely skips that edit with one line of output
