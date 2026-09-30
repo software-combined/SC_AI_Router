@@ -17,7 +17,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 
 def _load(name, filename):
@@ -194,7 +194,7 @@ def _snapshot(platform_name, identity, run):
                 raise OSError('Claude status is unknown')
             if parts[8].startswith('Z'):
                 continue  # Exited and waiting to be reaped, so it can no longer write.
-            if platform_name == 'linux' and (not Path(parts[9]).is_absolute()
+            if platform_name == 'linux' and (not PurePosixPath(parts[9]).is_absolute()
                                             or parts[9].endswith(' (deleted)')):
                 raise OSError('Claude status is unknown')
             rows.append(dict(pid=int(parts[0]), parent=int(parts[1]), user=parts[2],
