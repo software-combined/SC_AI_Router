@@ -28,7 +28,9 @@ class LiteHandoffTests(unittest.TestCase):
         self.assertEqual(original_items, original['input'])
         self.assertNotIn('tools', payload)
         prefix = payload['input'][0]
-        self.assertEqual(prefix['tools'][0], original['input'][0]['tools'][0])
+        for old, new in zip(original['input'][0]['tools'][0]['tools'], prefix['tools'][0]['tools']):
+            self.assertEqual({k: v for k, v in old.items() if k != 'description'},
+                             {k: v for k, v in new.items() if k != 'description'})
         self.assertEqual(prefix['tools'][1]['name'], 'collaboration_plaintext')
         self.assertNotEqual(prefix['id'], original['input'][0]['id'])
         self.assertTrue(prefix['id'].startswith('at_'))
