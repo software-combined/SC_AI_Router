@@ -95,6 +95,7 @@ INSTALLER_TESTS = (
     'tests.test_install',
     'tests.test_install_catalogue',
     'tests.test_install_config',
+    'tests.test_install_owner_keys',
     'tests.test_install_key_window',
     'tests.test_install_lifecycle',
     'tests.test_install_state',

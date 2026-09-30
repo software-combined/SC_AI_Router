@@ -1,5 +1,25 @@
 # Compatibility
 
+## Router 1.0.2 release candidate, 30 September 2026 AEST
+
+Both fixes were reported on Brent's Linux installation. The no-subscription
+configuration had also been loaded by his Codex CLI `0.159.0` before PR #359.
+On this Mac, Codex desktop's bundled CLI remains `0.158.0-alpha.2.1`, unchanged
+from the 1.0.0 checks below. Its real `config/read` and `config/batchWrite`
+accepted the new dotted provider keys in a disposable home. Changing the model
+and effort preserved `model_provider = "scg_router"` and the owner's root
+`approval_policy = "never"`. This made zero inference calls and changed no live
+client settings.
+
+The native Linux scheduler check now creates both legacy timers, deliberately
+fails their services, then runs the router's retirement path. It checks disabled
+timers, stopped services, cleared failures and byte-identical renamed files,
+both with the old runner present and after an earlier router moved it aside.
+This test runs only on disposable Linux CI runners, not this Mac or Brent's
+machine. A CI pass does not establish that his installed router has updated.
+The unchanged inference paths retain the 1.0.0 evidence and its two blocked
+subscription checks below; these fixes do not close those checks.
+
 ## Router 1.0.0, 30 September 2026 AEST
 
 Codex desktop `26.924.22138` (build `11645`) bundles `codex-cli
