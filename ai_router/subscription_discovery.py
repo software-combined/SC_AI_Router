@@ -147,7 +147,8 @@ def _fallback_snapshot(server, identity):
 
 def request_models(server, headers, query=''):
     """Live subscription membership for one request identity."""
-    version = _client_version(query)
+    version = _client_version(query) or next(
+        (value[:80] for key, value in headers.items() if key.lower() == 'version'), '')
     identity = _identity(headers, version)
     routing = _routing_identity(headers)
     auth = _auth_identity(headers)
