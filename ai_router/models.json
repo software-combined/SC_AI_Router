@@ -343,37 +343,6 @@
     "tier": "verified"
   },
   {
-    "slug": "openai/gpt-5.6-terra",
-    "provider": "openrouter",
-    "display_name": "OpenAI: GPT-5.6 Terra \u00b7 OpenRouter",
-    "vendor": "OpenAI",
-    "reasoning": [
-      "low",
-      "medium",
-      "high",
-      "xhigh",
-      "max"
-    ],
-    "default_reasoning": "low",
-    "modalities": [
-      "text",
-      "image"
-    ],
-    "excluded_efforts": [],
-    "schema_mode": "native",
-    "history_mode": "native",
-    "max_tools": null,
-    "drop_images": false,
-    "context_window": 1050000,
-    "priority": 111,
-    "max_output_tokens": 128000,
-    "reasoning_summary": "none",
-    "apply_patch": "freeform",
-    "experimental_tools": [],
-    "web_search": true,
-    "tier": "verified"
-  },
-  {
     "slug": "openai/gpt-6-astra",
     "provider": "openrouter",
     "display_name": "OpenAI: GPT-6 Astra \u00b7 OpenRouter",

@@ -106,6 +106,9 @@ class SwitchedRouteTests(unittest.TestCase):
         generic = codex_route.message()
         turn = {'model': 'gpt-6-astra', 'input': []}
         self.assertEqual(self._refusal({'model': 'gpt-5.5', 'input': []}), generic)
+        # GPT-5.6 Terra has no OpenRouter row any more, so nothing is named.
+        self.assertEqual(self._refusal({'model': 'gpt-5.6-terra', 'input': []},
+                                       openai_models=['gpt-6-astra', 'gpt-5.6-terra']), generic)
         self.assertEqual(self._refusal(turn, allowed_models=['deepseek/deepseek-v4.1-flash']),
                          generic)
         unlisted = dataclasses.replace(by_slug(TWIN), listed=False)

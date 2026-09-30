@@ -29,6 +29,8 @@
   longer receives Claude Code's PDF page argument, so a model that fills every
   advertised argument reads the file once instead of retrying a blank page
   range.
+- The OpenRouter picker no longer offers GPT-5.6 Terra. GPT-5.6 Terra on your
+  ChatGPT subscription is unchanged.
 
 - SCG plugin delivery now reports the cause of a marketplace-synchronisation
   failure and the command and client error for each refused plugin
