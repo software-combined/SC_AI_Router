@@ -34,7 +34,7 @@ Do them in this order. Each section below says exactly what to run.
 
 Read the bundled [reviewer routing policy](../../references/reviews.md) before every review. It sets the model and fixed effort for each pass, any authorised fallbacks, and escalation. It is an unchanged copy of the canonical optimal-subagents policy. Exact user or project model/effort requirements take precedence over it.
 
-- **Codex:** the policy currently requires `xiaomi/mimo-v2.6-pro` at `xhigh` for every pass, with no model fallback. If that route is unavailable, the pass is `❌ Block`; do not substitute another model or effort. Use the bundled [code-simplifier](../code-simplifier/SKILL.md) for Pass 1 and the active subagent tools for the three lanes.
+- **Codex:** the policy currently requires `openai/gpt-6.1-sol` at `high` (GPT-6.1 Sol through OpenRouter) for every pass, with no model fallback. If that route is unavailable, the pass is `❌ Block`; do not substitute another model or effort. Use the bundled [code-simplifier](../code-simplifier/SKILL.md) for Pass 1 and the active subagent tools for the three lanes.
 - **Claude Code:** use the installed adapter agents `code-simplifier`, `review-correctness`, `review-quality` and `review-adversarial`, with the Claude models configured in them. Do not route these passes to router models. This plugin does not install those agents.
 - **Other runtimes:** use only a verified installed adapter that implements this procedure.
 
@@ -191,7 +191,7 @@ Then record the approval under `~/.cache/scg-agent-git-hooks/reviews/`:
 ```
 
 - `✅ All Clear` maps to `--decision ALL_CLEAR` and `📝 Proceed With Notes` maps to `--decision PROCEED_WITH_NOTES`. Never record approval for `❌ Block`.
-- Each `--pass` value is `<requested-model>@<requested-variant-or-unavailable>::<returned-model-or-unverified>@<returned-variant-or-unverified-or-unavailable>`. For example, `--pass quality=xiaomi/mimo-v2.6-pro@xhigh::xiaomi/mimo-v2.6-pro@xhigh`, or `--pass quality=xiaomi/mimo-v2.6-pro@xhigh::unverified@unverified` when the runtime does not echo its serving identity. A returned side of `unverified` is expected in that case and never blocks approval.
+- Each `--pass` value is `<requested-model>@<requested-variant-or-unavailable>::<returned-model-or-unverified>@<returned-variant-or-unverified-or-unavailable>`. For example, `--pass quality=openai/gpt-6.1-sol@high::openai/gpt-6.1-sol@high`, or `--pass quality=openai/gpt-6.1-sol@high::unverified@unverified` when the runtime does not echo its serving identity. A returned side of `unverified` is expected in that case and never blocks approval.
 - Never invent a value, and never record approval without a genuine three-lane review having run. Self-attesting the review is a bypass of the gate, not a review.
 
 Commit with `<type>: <short summary>`, where type is `feat`, `fix`, `refactor`, `test`, `chore` or `docs`, matching the shared commit-msg hook.

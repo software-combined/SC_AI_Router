@@ -12,9 +12,9 @@ optimal-subagents skill.
 ## Defaults and authorized availability fallbacks
 
 Local user policy override: all pre-commit passes use
-`xiaomi/mimo-v2.6-pro` at `xhigh`. This exact model and effort requirement
-overrides the table below and has no model fallback. If that route is
-unavailable, the affected pass is `BLOCK`.
+`openai/gpt-6.1-sol` at `high`, which is GPT-6.1 Sol through OpenRouter.
+This exact model and effort requirement overrides the table below and has no
+model fallback. If that route is unavailable, the affected pass is `BLOCK`.
 
 These are provisional, evidence-based choices from the September 12, 2026 evidence.
 Public benchmarks do not directly measure code-review defect recall. Validate
@@ -34,10 +34,10 @@ changes inspection depth and required evidence, not automatically the model bill
 
 | Pass | Required model, fixed effort | Ordered fallback models, fixed effort |
 | --- | --- | --- |
-| Simplification | `xiaomi/mimo-v2.6-pro` at `xhigh` | None |
-| Correctness | `xiaomi/mimo-v2.6-pro` at `xhigh` | None |
-| Quality | `xiaomi/mimo-v2.6-pro` at `xhigh` | None |
-| Adversarial | `xiaomi/mimo-v2.6-pro` at `xhigh` | None |
+| Simplification | `openai/gpt-6.1-sol` at `high` | None |
+| Correctness | `openai/gpt-6.1-sol` at `high` | None |
+| Quality | `openai/gpt-6.1-sol` at `high` | None |
+| Adversarial | `openai/gpt-6.1-sol` at `high` | None |
 
 Resolve the selected model's actual tool identifier from the active catalogue.
 For example, GPT-5.6 Sol may be exposed as `gpt-5.6-sol`; that is an identifier
