@@ -205,11 +205,11 @@ def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False,
     """Merge registry OpenRouter entries into one client catalogue.
 
     Emits models_for(client) rows only; see _visible_rows for the
-    allowlist and key filters. Roster stubs repair fresh files; routing
-    never consults this filter.
+    allowlist and key filters. Static roster stubs follow local retirement;
+    live subscription rows keep the ids OpenAI advertises.
     """
-    roster = replace_successors(roster)
     native = {row['slug']: row for row in subscription_rows}
+    roster = roster if native else replace_successors(roster)
     visible, hidden_rows = _visible_rows(client, allowed, include_twins,
                                          available=available)
     instructions = instructions_for(visible, client)
@@ -246,12 +246,12 @@ def merge(catalog, roster=(), client='codex', allowed=None, include_twins=False,
             row['supported_reasoning_levels'] = fresh['supported_reasoning_levels']
     for model in visible:
         entries[model.slug] = external_entry(model, instructions)
-    for slug in RETIRED_SUBSCRIPTION_SLUGS:
+    for slug in RETIRED_SUBSCRIPTION_SLUGS - native.keys():
         entries.pop(slug, None)
     for slug in roster:
         # A roster stub repairs a fresh file only, never a hidden row.
-        if (slug not in entries and slug not in RETIRED_SUBSCRIPTION_SLUGS
-                and slug not in hidden):
+        if slug not in entries and slug not in hidden and (
+                slug in native or slug not in RETIRED_SUBSCRIPTION_SLUGS):
             stub = subscription_stub(slug, sub_instructions)
             entries[slug] = (managed_entry(native[slug], None, stub)
                              if slug in native else stub)

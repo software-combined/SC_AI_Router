@@ -1,5 +1,65 @@
 # Compatibility
 
+## Subscription picker parity candidate, 30 September 2026 AEST
+
+Codex desktop was updated to `26.928.21956` (build `12404`), with bundled
+CLI `0.159.2`. The owner confirmed subscription GPT-6.1 Sol was visible after
+the restart. The same account's native catalogue omitted it for client
+`0.158.0` but advertised it for `0.159.0`; no version override is part of
+the fix. The standalone Claude Code CLI is `2.1.283`; the signed-in desktop
+Code profile runs its bundled `2.1.284` CLI.
+
+The installed router `1.0.2.133` independently removed two still-advertised
+visible models, `gpt-5.6-sol` and `gpt-5.6-luna`, and the upstream-hidden
+`gpt-reserve`. An isolated candidate from this source passed
+`tools/probe_model_discovery.py` through the real `0.159.2` client: all eight
+visible subscription models and all 20 external models were listed. The
+check required the two restored models and both routes for GPT-6.1 Sol,
+made zero inference calls and did not change the installed router.
+
+Live validated subscription rows now bypass static retirement and successor
+migration. OpenAI still controls their visibility and metadata; saved fallback
+lists retain their existing migration rules. Offline regressions cover the
+restored membership, hidden Reserve metadata, native routing, external
+allowlists and separate billing routes.
+
+The owner then reported `UNKNOWN_MODEL` when starting a subscription Sol 6.1
+chat. A real-client diagnostic showed that `0.159.2` sends `version: 0.159.2`
+on inference requests, without a `client_version` query parameter. The router
+ignored that header. An offline regression reproduced the resulting refusal
+when old and new client catalogues coexist for one account. Request routing
+now uses the version header when the query omits it, preserving explicit query
+precedence and account isolation. The diagnostic stopped before inference;
+the installed process's private cache contents were not inspected.
+
+The four post-upgrade client/provider checks then completed with synthetic
+data. Codex and the external Claude leg used an isolated candidate router;
+the native Claude leg used the owner's signed-in desktop Code profile.
+
+| Client / route | Requested model / effort | Upstream calls | Result |
+| --- | --- | --- | --- |
+| Codex `0.159.2`, OpenRouter | `deepseek/deepseek-v4.1-flash` / low | 2 | Tool round trip passed |
+| Codex `0.159.2`, ChatGPT | `gpt-6.1-sol` / low | 2 | Tool round trip passed |
+| Claude Code `2.1.284`, OpenRouter | `deepseek/deepseek-v4.1-flash` / low | 2 | Read round trip passed |
+| Claude Code `2.1.284`, subscription | Sonnet 5.5 / low | Not exposed; one visible turn | Exact synthetic reply passed |
+
+Serving model and effort were not independently exposed by these checks.
+The Codex external leg allowed at most three calls; the Claude external leg
+used the existing 12-call guard plus the client's USD 0.25 budget. Both
+bounded each request to 512 KiB input and 65,536 output tokens. The earlier
+Claude `2.1.283` external check also passed; it was repeated only to cover
+the desktop profile's newer binary.
+
+The first native Codex attempt was refused because the endpoint does not
+accept `max_output_tokens`. The owner then approved one short native check
+in each client, without retries. Codex completed under a two-call guard,
+512 KiB input limit and 90-second deadline, with no output-token cap. Claude
+completed in a fresh desktop Code session at low effort with no tools or
+delegation. Its desktop session used the already signed-in profile because
+the separate terminal login was unavailable; neither check changed credentials
+or router connection settings. These results supersede the blocked native checks below for
+the tested clients, but do not establish installed-router acceptance.
+
 ## Router 1.0.2 release candidate, 30 September 2026 AEST
 
 Both fixes were reported on Brent's Linux installation. The no-subscription
