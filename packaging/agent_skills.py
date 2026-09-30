@@ -19,6 +19,13 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import importlib.util as _ilu
+_spec = _ilu.spec_from_file_location(
+    'router_agent_skills_atomic_write',
+    Path(__file__).resolve().parent / 'atomic_write.py')
+_atomic_write = _ilu.module_from_spec(_spec)
+_spec.loader.exec_module(_atomic_write)
+
 MARKETPLACE = 'scg-agent-plugins'
 MARKER = '.router-owned'
 SHARED = ('.local', 'share', 'scg-agent-plugins')
@@ -53,11 +60,30 @@ def plugin_names(plugins_dir):
                   if (p / '.codex-plugin' / 'plugin.json').is_file())
 
 
+def _claim(root):
+    """Claim the marketplace root before writing any content, atomically.
+
+    Ownership must be established before the first content byte, so an
+    interrupted first materialisation still carries the marker and the next
+    run repairs it instead of refusing a tree it can no longer prove it
+    created. The shared atomic writer leaves no temp behind when the write
+    fails; a hard kill between its write and rename is the one residue the
+    presence-based guard would still refuse.
+    """
+    marker = root / MARKER
+    if marker.exists():
+        return
+    _atomic_write.replace_text(
+        marker, 'Plan 179: written by the router installer\n')
+
+
 def write_marketplace(root, plugins_dir):
     """Materialise the local marketplace. Returns the plugin names written.
 
     The router owns this directory. A non-empty root without our marker was
     written by something else, so it is left exactly as it is and refused.
+    An absent or empty root is adopted, and ownership is claimed before any
+    content is written so a partial first materialisation stays recoverable.
     """
     root = Path(root)
     names = plugin_names(plugins_dir)
@@ -65,6 +91,8 @@ def write_marketplace(root, plugins_dir):
         return []
     if root.exists() and not (root / MARKER).exists() and any(root.iterdir()):
         raise ValueError('marketplace root is not router-owned; left untouched')
+    root.mkdir(parents=True, exist_ok=True)
+    _claim(root)
     manifest = root / '.agents' / 'plugins' / 'marketplace.json'
     manifest.parent.mkdir(parents=True, exist_ok=True)
     # Stage each plugin, then swap it in. The manifest lands last, so an
@@ -79,7 +107,6 @@ def write_marketplace(root, plugins_dir):
         if target.exists():
             shutil.rmtree(target)
         os.replace(staging, target)
-    (root / MARKER).write_text('Plan 179: written by the router installer\n')
     manifest.write_text(json.dumps(
         {'name': MARKETPLACE, 'interface': {'displayName': 'Scg Agent Plugins'},
          'plugins': [_entry(n) for n in names]}, indent=2) + '\n')

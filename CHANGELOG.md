@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- An interrupted first delivery of the agent-skills marketplace no longer
+  wedges later updates. The router now claims the marketplace directory before
+  it writes any content, so a partial first materialisation is recognised as
+  its own and the next delivery repairs it. A non-empty directory the router
+  did not create is still refused and left exactly as it is.
 - Switch Claude now copies your current account's local Claude Code tasks, with
   their full conversations and files, to the other connection before switching.
   Only tasks from the organization you are signed in to are shared; tasks in

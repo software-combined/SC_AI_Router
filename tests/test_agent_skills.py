@@ -133,6 +133,7 @@ class AgentSkillsTest(unittest.TestCase):
                            run=_Run(), which=_which({'codex'}))
         self.assertEqual((root / 'someone-elses-file').read_text(), 'keep me')
         self.assertFalse((root / '.agents').exists())
+        self.assertFalse((root / skills.MARKER).exists())
         self.assertIn('skipped', line)
 
     def test_a_superseded_runner_is_preserved_not_deleted(self):
@@ -193,6 +194,75 @@ class AgentSkillsTest(unittest.TestCase):
         self.assertFalse((root / '.agents/plugins/marketplace.json').exists())
         self.assertEqual(
             (root / 'plugins/scg-review/skills/scg-review/SKILL.md').read_text(), good)
+
+    def test_the_marker_is_written_before_the_first_plugin_copy(self):
+        # The claim must precede content, so a first materialisation that dies
+        # on the very first copy still leaves a recognisable router-owned root.
+        real = skills.shutil.copytree
+
+        def flaky(src, dst, *a, **k):
+            raise OSError('disk full')
+
+        skills.shutil.copytree = flaky
+        self.addCleanup(setattr, skills.shutil, 'copytree', real)
+        skills.sync({'clients': 'codex'}, self.plugins, base=self.base,
+                    run=_Run(), which=_which({'codex'}))
+        root = skills.marketplace_root(self.base)
+        self.assertTrue((root / skills.MARKER).exists())
+        self.assertFalse((root / 'plugins').exists())
+
+    def test_a_claim_that_fails_after_writing_leaves_no_temp(self):
+        # A claim that fails must leave no residue in the root, or the stray
+        # temp would make the root non-empty and unmarked and wedge every
+        # later run. The shared writer owns the cleanup; this pins the
+        # observable contract that the root stays adoptable and converges.
+        def boom(*a, **k):
+            raise OSError('sharing violation')
+
+        real = skills._atomic_write.replace_text
+        skills._atomic_write.replace_text = boom
+        self.addCleanup(setattr, skills._atomic_write, 'replace_text', real)
+        line = skills.sync({'clients': 'codex'}, self.plugins, base=self.base,
+                           run=_Run(), which=_which({'codex'}))
+        self.assertIn('skipped', line)
+        root = skills.marketplace_root(self.base)
+        self.assertFalse((root / skills.MARKER).exists())
+        self.assertEqual(list(root.iterdir()), [])
+        skills._atomic_write.replace_text = real
+        line = skills.sync({'clients': 'codex'}, self.plugins, base=self.base,
+                           run=_Run(), which=_which({'codex'}))
+        self.assertTrue((root / skills.MARKER).exists())
+        self.assertTrue((root / '.agents/plugins/marketplace.json').is_file())
+
+    def test_an_interrupted_first_materialisation_is_claimed_and_repairs(self):
+        # A first materialisation from an absent root dies part way through the
+        # copy loop, before the manifest is written.
+        calls = {'n': 0}
+        real = skills.shutil.copytree
+
+        def flaky(src, dst, *a, **k):
+            calls['n'] += 1
+            if calls['n'] == 2:
+                raise OSError('disk full')
+            return real(src, dst, *a, **k)
+
+        skills.shutil.copytree = flaky
+        self.addCleanup(setattr, skills.shutil, 'copytree', real)
+        line = skills.sync({'clients': 'codex'}, self.plugins, base=self.base,
+                           run=_Run(), which=_which({'codex'}))
+        self.assertIn('skipped', line)
+        root = skills.marketplace_root(self.base)
+        # The partial tree carries the marker but no manifest.
+        self.assertTrue((root / skills.MARKER).exists())
+        self.assertFalse((root / '.agents/plugins/marketplace.json').exists())
+        # The next delivery converges instead of refusing a tree it created.
+        line = skills.sync({'clients': 'codex'}, self.plugins, base=self.base,
+                           run=_Run(), which=_which({'codex'}))
+        manifest = json.loads((root / '.agents/plugins/marketplace.json').read_text())
+        self.assertEqual([e['name'] for e in manifest['plugins']],
+                         ['scg-finance', 'scg-review'])
+        self.assertTrue((root / 'plugins/scg-review/skills/scg-review/SKILL.md').is_file())
+        self.assertIn('codex', line)
 
     def test_the_git_fallback_is_kept_when_no_client_accepts(self):
         self.base.mkdir(parents=True)
