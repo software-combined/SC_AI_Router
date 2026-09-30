@@ -25,8 +25,11 @@ MARKER = '.router-owned'
 SHARED = ('.local', 'share', 'scg-agent-plugins')
 GIT_UPDATER_LABEL = 'com.softwarecombined.agent-plugins.update'
 # Superseded plugin runners the router retires. Content-verified, never name-based:
-# every plugins/*/scripts/updater.py that reached main, oldest first.
+# every git updater the plugins released, and one reviewed pre-release, oldest first.
 LEGACY_RUNNERS = (
+    '704f610e262921e29040bf8848a20bc33968a59fd649b06aabd638e1f4bd4b56',
+    '8c06a8a7305e9b2d3344b66830834f07653acb9641c5035b769110e8ff353232',
+    '67819b4e806f76024a388cb2f697aeb4ba300c727f82b60eb10b7de7cea2f6ee',
     '4ded20ea2db5a42c4641ccdbb2845e3f21513644a2d01d5acfa787e77ed9f83a',
     'bd06fc556d4640f4dc4206209dd17fc41d4fcfd4904dc63d337ce55b9a88708b',
     'f8bdfa551bca125ec8c5826a86b017814feefbd45dadb30fa7536d1562392a79',
@@ -364,12 +367,14 @@ def sync(state, plugins_dir, base=None, run=subprocess.run, which=shutil.which):
             return 'bundle carries none'
         results = [register(c, root, names, run=run, which=which) for c in clients]
         notes = [line for line, _ in results]
-        # Retire the git fallback only once the router's own channel works:
-        # retiring it behind a failed registration would freeze updates twice.
-        if any(refused == 0 for _, refused in results):
-            notes.append(retire_git_updater(base=base, run=run, which=which))
-        else:
-            notes.append('git updater: kept (no client accepted)')
+        # The git updater only ever refreshes Codex, so retire it only once
+        # Codex runs from the router's copy: retiring it behind a failed or
+        # absent Codex registration would freeze Codex's plugin updates.
+        if 'codex' in clients:
+            if results[clients.index('codex')][1] == 0:
+                notes.append(retire_git_updater(base=base, run=run, which=which))
+            else:
+                notes.append('git updater: kept (Codex did not accept)')
         summary = '; '.join(n for n in notes if n)
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
         # A skills failure never fails the router install. Keep one line, but
