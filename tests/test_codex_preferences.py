@@ -178,6 +178,23 @@ class InstallerPreferenceTests(unittest.TestCase):
             receipt = json.loads((home / 'activation.json').read_text())
             self.assertIn('desktop', receipt['clients']['codex'])
 
+    def test_install_sets_the_reviewer_and_leaves_policy_alone(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            text = self._install(tmp, Path(tmp) / 'home').read_text()
+            self.assertEqual(text.count('approvals_reviewer'), 1)
+            self.assertIn('approvals_reviewer = "user"', text)
+            self.assertNotIn('approval_policy', text)
+
+    def test_an_owner_reviewer_value_is_replaced_not_duplicated(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config_dir = Path(tmp) / 'fakehome' / '.codex'
+            config_dir.mkdir(parents=True)
+            (config_dir / 'config.toml').write_text(
+                'approvals_reviewer = "auto_review"\n')
+            text = self._install(tmp, Path(tmp) / 'home').read_text()
+            self.assertEqual(text.count('approvals_reviewer'), 1)
+            self.assertIn('approvals_reviewer = "user"', text)
+
     def test_an_existing_model_choice_is_kept_and_never_duplicated(self):
         with tempfile.TemporaryDirectory() as tmp:
             config_dir = Path(tmp) / 'fakehome' / '.codex'
@@ -201,6 +218,7 @@ class InstallerPreferenceTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             text = config.read_text()
             self.assertNotIn('# BEGIN local mixed model picker', text)
+            self.assertNotIn('approvals_reviewer', text)
             self.assertNotIn('followUpQueueMode', text)
             self.assertNotIn('enabled-reasoning-efforts', text)
 
@@ -256,6 +274,104 @@ class InstallerPreferenceTests(unittest.TestCase):
             text = config.read_text()
             self.assertEqual(text.count('model = '), 1)
             self.assertIn('model = "meta/muse-spark-1.3"', text)
+
+    def test_an_owner_copy_before_the_block_is_removed_on_update(self):
+        # A reviewer line above the managed block would be a second root
+        # definition once the block carries the managed line; the update
+        # must drop it so the config still parses.
+        import tomllib
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            config = self._install(tmp, home, '1.0.0')
+            config.write_text('approvals_reviewer = "auto_review"\n'
+                              + config.read_text())
+            text = self._install(tmp, home, '1.0.1').read_text()
+            self.assertEqual(text.count('approvals_reviewer'), 1)
+            self.assertIn('approvals_reviewer = "user"', text)
+            tomllib.loads(text)
+
+    def test_detach_restores_an_owner_reviewer_line(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config_dir = Path(tmp) / 'fakehome' / '.codex'
+            config_dir.mkdir(parents=True)
+            (config_dir / 'config.toml').write_text(
+                'approvals_reviewer = "auto_review"\n')
+            home = Path(tmp) / 'home'
+            config = self._install(tmp, home, '1.0.0')
+            self.assertIn('approvals_reviewer = "user"',
+                          config.read_text())
+            env = {**os.environ, 'ROUTER_HOME': str(home),
+                   'ROUTER_RESTORE_ONLY': '1'}
+            result = subprocess.run(
+                [sys.executable, str(_ROOT / 'tools' / 'disable.py')],
+                capture_output=True, text=True, env=env)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            text = config.read_text()
+            self.assertEqual(text.count('approvals_reviewer'), 1)
+            self.assertIn('approvals_reviewer = "auto_review"', text)
+
+    def test_an_update_preserves_the_owner_reviewer_for_detach(self):
+        # An update that removes no new line must carry the original
+        # record forward, so a later detach still restores it.
+        with tempfile.TemporaryDirectory() as tmp:
+            config_dir = Path(tmp) / 'fakehome' / '.codex'
+            config_dir.mkdir(parents=True)
+            (config_dir / 'config.toml').write_text(
+                'approvals_reviewer = "auto_review"\n')
+            home = Path(tmp) / 'home'
+            self._install(tmp, home, '1.0.0')
+            config = self._install(tmp, home, '1.0.1')
+            env = {**os.environ, 'ROUTER_HOME': str(home),
+                   'ROUTER_RESTORE_ONLY': '1'}
+            result = subprocess.run(
+                [sys.executable, str(_ROOT / 'tools' / 'disable.py')],
+                capture_output=True, text=True, env=env)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            text = config.read_text()
+            self.assertEqual(text.count('approvals_reviewer'), 1)
+            self.assertIn('approvals_reviewer = "auto_review"', text)
+
+    def test_detach_restores_the_owner_line_at_root_scope(self):
+        # A surviving trailing table must not capture the restored line:
+        # it comes back as the root key it was, parsed by tomllib.
+        import tomllib
+        with tempfile.TemporaryDirectory() as tmp:
+            config_dir = Path(tmp) / 'fakehome' / '.codex'
+            config_dir.mkdir(parents=True)
+            (config_dir / 'config.toml').write_text(
+                'approvals_reviewer = "auto_review"\n'
+                '[desktop]\nappearanceTheme = "dark"\n')
+            home = Path(tmp) / 'home'
+            self._install(tmp, home, '1.0.0')
+            env = {**os.environ, 'ROUTER_HOME': str(home),
+                   'ROUTER_RESTORE_ONLY': '1'}
+            result = subprocess.run(
+                [sys.executable, str(_ROOT / 'tools' / 'disable.py')],
+                capture_output=True, text=True, env=env)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            text = (config_dir / 'config.toml').read_text()
+            doc = tomllib.loads(text)
+            self.assertEqual(doc.get('approvals_reviewer'), 'auto_review')
+            self.assertNotIn('approvals_reviewer',
+                             doc.get('desktop', {}))
+
+    def test_an_update_adds_the_reviewer_line_once(self):
+        # Installs from before the line existed converge on update: the
+        # rewritten block carries it, with no second definition.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            config = self._install(tmp, home, '1.0.0')
+            config.write_text(config.read_text().replace(
+                'approvals_reviewer = "user"\n', ''))
+            receipt_path = home / 'activation.json'
+            receipt = json.loads(receipt_path.read_text())
+            receipt['clients']['codex']['inserted_block'] = (
+                receipt['clients']['codex']['inserted_block'].replace(
+                    'approvals_reviewer = "user"\n', ''))
+            receipt_path.write_text(json.dumps(receipt))
+            text = self._install(tmp, home, '1.0.1').read_text()
+            self.assertEqual(text.count('approvals_reviewer'), 1)
+            self.assertIn('approvals_reviewer = "user"', text)
 
 
 if __name__ == '__main__':

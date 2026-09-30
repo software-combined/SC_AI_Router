@@ -102,7 +102,9 @@ class SurfaceContractTests(unittest.TestCase):
                          'packaging/task_launch.py'):
             self.assertIn(('parse', launcher), entries)
         for loaded in ('packaging/install.py', 'packaging/operator_surface.py',
-                       'packaging/claude_desktop_config.py', 'ai_router/winacl.py'):
+                       'packaging/claude_desktop_config.py',
+                       'packaging/claude_profile_publish.py',
+                       'ai_router/winacl.py'):
             self.assertIn(('load', loaded), entries)
 
     def test_surface_entries_are_unique_and_exist(self):

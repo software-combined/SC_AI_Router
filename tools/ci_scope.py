@@ -15,6 +15,7 @@ the installer loads or runs on its own interpreter is installer scope, so a
 change to `ai_router/winacl.py` or `tools/disable.py` cannot skip the native
 checks.
 """
+import os
 import sys
 from pathlib import Path
 
@@ -40,6 +41,36 @@ INSTALLER_PATHS = (
     'tests/install_fixtures.py',
     'tests/test_bootstrap.py',
     'tests/test_ci_scope.py',
+    'tests/claude_profile_sync_fixtures.py',
+    'tests/test_claude_desktop_policy.py',
+    'tests/test_claude_desktop_config.py',
+    'tests/test_claude_desktop_setup.py',
+    'tests/test_claude_desktop_switch.py',
+    'tests/test_claude_profile_launch.py',
+    'tests/test_popup_style.py',
+    'tests/test_claude_desktop_platform.py',
+    'tests/test_claude_profile_hook.py',
+    'tests/test_claude_profile_identity.py',
+    'tests/test_claude_profile_records.py',
+    'tests/test_claude_profile_publish.py',
+    'tests/test_claude_profile_recovery.py',
+    'tests/test_claude_profile_ledger.py',
+    'tests/test_claude_profile_sync_deletions.py',
+    'tests/test_claude_profile_history.py',
+    'tests/test_claude_profile_bundle.py',
+    'tests/test_claude_profile_sync.py',
+    'tests/test_claude_profile_sync_safety.py',
+    'tests/test_claude_profile_native_layout.py',
+    'tests/test_claude_profile_transcript_capture.py',
+    'tests/test_claude_profile_account_scope.py',
+    'tests/test_claude_profile_binding.py',
+    'tests/test_claude_profile_rules.py',
+    'tests/test_claude_profile_faithful_copy.py',
+    'tests/test_claude_profile_org_scope.py',
+    'tests/test_claude_switch_recovery.py',
+    'tests/test_claude_profile_workspace_names.py',
+    'tests/test_claude_profile_repair_resume.py',
+    'tests/test_claude_desktop_upgrade_paths.py',
     'tests/test_install',
     'tests/test_installer_python39.py',
     'tests/test_interpreter_resolution.py',
@@ -69,6 +100,35 @@ INSTALLER_TESTS = (
     'tests.test_install_state',
     'tests.test_bootstrap',
     'tests.test_ci_scope',
+    'tests.test_claude_desktop_policy',
+    'tests.test_claude_desktop_config',
+    'tests.test_claude_desktop_setup',
+    'tests.test_claude_desktop_switch',
+    'tests.test_claude_profile_launch',
+    'tests.test_popup_style',
+    'tests.test_claude_desktop_platform',
+    'tests.test_claude_profile_hook',
+    'tests.test_claude_profile_identity',
+    'tests.test_claude_profile_records',
+    'tests.test_claude_profile_publish',
+    'tests.test_claude_profile_recovery',
+    'tests.test_claude_profile_ledger',
+    'tests.test_claude_profile_sync_deletions',
+    'tests.test_claude_profile_history',
+    'tests.test_claude_profile_bundle',
+    'tests.test_claude_profile_sync',
+    'tests.test_claude_profile_sync_safety',
+    'tests.test_claude_profile_native_layout',
+    'tests.test_claude_profile_transcript_capture',
+    'tests.test_claude_profile_account_scope',
+    'tests.test_claude_profile_binding',
+    'tests.test_claude_profile_rules',
+    'tests.test_claude_profile_faithful_copy',
+    'tests.test_claude_profile_org_scope',
+    'tests.test_claude_switch_recovery',
+    'tests.test_claude_profile_workspace_names',
+    'tests.test_claude_profile_repair_resume',
+    'tests.test_claude_desktop_upgrade_paths',
     'tests.test_installer_python39',
     'tests.test_interpreter_resolution',
     'tests.test_key_prompt',
@@ -89,6 +149,36 @@ INSTALLER_TESTS = (
 )
 
 
+# Switch Claude and task sharing are macOS-only in this beta and stay off on
+# Windows (docs/compatibility.md). Their suites rely on POSIX file semantics,
+# such as fsync on a read-only handle, so they run on the macOS job only.
+MACOS_ONLY_TESTS = frozenset((
+    'tests.test_claude_desktop_switch',
+    'tests.test_claude_profile_account_scope',
+    'tests.test_claude_profile_bundle',
+    'tests.test_claude_profile_faithful_copy',
+    'tests.test_claude_profile_history',
+    'tests.test_claude_profile_launch',
+    'tests.test_claude_profile_ledger',
+    'tests.test_claude_profile_native_layout',
+    'tests.test_claude_profile_org_scope',
+    'tests.test_claude_profile_publish',
+    'tests.test_claude_profile_recovery',
+    'tests.test_claude_profile_repair_resume',
+    'tests.test_claude_profile_rules',
+    'tests.test_claude_profile_sync',
+    'tests.test_claude_profile_sync_deletions',
+    'tests.test_claude_profile_sync_safety',
+    'tests.test_claude_profile_transcript_capture',
+    'tests.test_claude_profile_workspace_names',
+))
+
+
+def installer_tests(windows=os.name == 'nt'):
+    """The native job's test modules; Windows leaves out the macOS-only suites."""
+    return [name for name in INSTALLER_TESTS if not (windows and name in MACOS_ONLY_TESTS)]
+
+
 def installer_scope(paths):
     """True when any changed path can affect the installer or its tests."""
     return any(path.startswith(INSTALLER_PATHS) for path in paths)
@@ -96,7 +186,7 @@ def installer_scope(paths):
 
 def main(argv):
     if '--installer-tests' in argv:
-        print(' '.join(INSTALLER_TESTS))
+        print(' '.join(installer_tests()))
         return 0
     if '--installer' in argv:
         paths = [line.strip() for line in sys.stdin if line.strip()]

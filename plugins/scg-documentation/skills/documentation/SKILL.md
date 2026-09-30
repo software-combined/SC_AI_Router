@@ -428,6 +428,6 @@ Write a beginner-friendly technical article about [CONCEPT].
 
 ## Automatic Updates
 
-When installing, pulling or updating this skill for use, complete
-[automatic-update setup](references/updates.md) on macOS, Linux or Windows:
-configure the native shared schedule, run it and verify installed versions.
+This skill ships with the SCG router, which delivers and refreshes it; see
+[automatic updates](references/updates.md). There is no per-plugin updater or
+schedule to configure.

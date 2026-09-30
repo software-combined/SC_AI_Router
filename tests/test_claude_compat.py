@@ -150,6 +150,22 @@ class ThinkingShapeTests(unittest.TestCase):
         self.assertNotIn(b'call_0', shaped)
 
 
+
+class ReadSchemaTests(unittest.TestCase):
+    def test_text_read_hides_the_pdf_page_argument(self):
+        payload = {'tools': [{'name': 'Read', 'input_schema': {
+            'type': 'object', 'properties': {'file_path': {'type': 'string'},
+                                             'pages': {'type': 'string'}}}}]}
+        payload = compat.omit_text_read_pages(payload)
+        self.assertEqual(list(payload['tools'][0]['input_schema']['properties']),
+                         ['file_path'])
+
+    def test_other_tools_and_schemas_stay_unchanged(self):
+        payload = {'tools': [{'name': 'Search', 'input_schema': {
+            'type': 'object', 'properties': {'pages': {'type': 'string'}}}}]}
+        self.assertIs(compat.omit_text_read_pages(payload), payload)
+
+
 class DeferredToolTests(unittest.TestCase):
     def test_placeholder_and_flag_go_and_the_released_definition_stays(self):
         payload = {'tools': [SEARCH_TOOL, dict(PLACEHOLDER), dict(RELEASED)]}

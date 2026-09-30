@@ -14,12 +14,12 @@ except ImportError:  # run as a script: the sibling module is on sys.path
     from probe_media import red_png, silent_wav
 
 try:
-    from tools.appserver_probe import AppServer, scrub_env, AGENT_HANDOFFS
+    from tools.appserver_probe import AppServer, codex_bin, scrub_env, AGENT_HANDOFFS
 except ImportError:  # run as a script: the sibling module is on sys.path
-    from appserver_probe import AppServer, scrub_env, AGENT_HANDOFFS
+    from appserver_probe import AppServer, codex_bin, scrub_env, AGENT_HANDOFFS
 
 ROOT = Path(__file__).resolve().parent
-CODEX_BIN = os.environ.get('CODEX_BIN', '/Applications/ChatGPT.app/Contents/Resources/codex')
+CODEX_BIN = codex_bin()
 
 def _flag_value(name):
     return sys.argv[sys.argv.index(name) + 1] if name in sys.argv else None

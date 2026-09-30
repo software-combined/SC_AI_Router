@@ -128,6 +128,5 @@ the router's key file, so brief it the way you would brief a contractor at your
 desk. Claude Code prices unknown models as if they were Claude, so the runner
 leaves out its cost figure; OpenRouter's usage page is the record of spend.
 
-When installing or updating this plugin for use, complete the shared
-[automatic-update setup](../optimal-subagents/references/updates.md) on macOS,
-Linux or Windows.
+This plugin ships with the SCG router, which delivers and refreshes it; see
+[automatic updates](../optimal-subagents/references/updates.md).

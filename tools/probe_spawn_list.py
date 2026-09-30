@@ -23,11 +23,11 @@ from pathlib import Path
 from compression import zstd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from tools.appserver_probe import AppServer
+from tools.appserver_probe import AppServer, codex_bin
 
 ZSTD_MAGIC = b'\x28\xb5\x2f\xfd'
 INSTALLED_CATALOGUE = Path.home() / '.codex/mixed-model-router/mixed-models.json'
-CODEX_BIN = '/Applications/ChatGPT.app/Contents/Resources/codex'
+CODEX_BIN = codex_bin()
 
 
 class _Sink(BaseHTTPRequestHandler):

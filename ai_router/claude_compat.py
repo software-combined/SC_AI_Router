@@ -52,6 +52,33 @@ def strip_billing_header(payload):
     return payload
 
 
+READ_TOOL = 'Read'
+READ_PDF_ARGUMENT = 'pages'
+
+
+def omit_text_read_pages(payload):
+    """Hide Read's PDF page argument from a model that fills it for text files."""
+    if not isinstance(payload, dict):
+        return payload
+    tools = payload.get('tools')
+    changed = _map_changed(tools, _without_text_pages)
+    return payload if changed is tools else {**payload, 'tools': changed}
+
+
+def _without_text_pages(tool):
+    if not isinstance(tool, dict) or tool.get('name') != READ_TOOL:
+        return tool
+    schema = tool.get('input_schema')
+    if not isinstance(schema, dict):
+        return tool
+    properties = schema.get('properties')
+    if not isinstance(properties, dict) or READ_PDF_ARGUMENT not in properties:
+        return tool
+    properties = {key: value for key, value in properties.items()
+                  if key != READ_PDF_ARGUMENT}
+    return {**tool, 'input_schema': {**schema, 'properties': properties}}
+
+
 def flatten_deferred_tools(payload):
     """Serve Claude Code's deferred tool search to an upstream without it.
 

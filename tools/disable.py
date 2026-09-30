@@ -13,11 +13,11 @@ import sys
 from pathlib import Path
 
 
-def _codex_config():
-    """The activation adapter that owns the managed Codex settings."""
+def _packaging(name):
+    """One installer module (the Codex activation adapter or its switch blocks)."""
     spec = _ilu.spec_from_file_location(
-        'router_codex_config',
-        Path(__file__).resolve().parents[1] / 'packaging' / 'codex_config.py')
+        'router_' + name,
+        Path(__file__).resolve().parents[1] / 'packaging' / (name + '.py'))
     module = _ilu.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -28,9 +28,13 @@ def main():
     receipt = json.loads((root / 'activation.json').read_text())
     clients = receipt.get('clients', {})
     entry = clients.get('codex', receipt)
+    # A switched Codex runs on the router's own provider: Switch Codex moves
+    # it back to the ChatGPT subscription first, so a detach never does that
+    # silently.
+    _packaging('codex_switch_config').refuse_switched(root)
     config = Path(entry['config_path'])
     before = config.read_text()
-    codex_config = _codex_config()
+    codex_config = _packaging('codex_config')
     block = codex_config.live_block(before, entry['inserted_block'])
     if before.count(block) != 1:
         raise SystemExit('Router settings changed; leaving configuration untouched for manual review.')
@@ -38,6 +42,9 @@ def main():
     # The managed desktop preferences go back the way the attach found
     # them; a value the owner changed afterwards is left alone.
     updated = codex_config.restore_desktop(updated, entry.get('desktop'))
+    # Owner approvals_reviewer lines removed for uniqueness come back when
+    # still absent.
+    updated = codex_config.restore_reviewer(updated, entry.get('reviewer'))
     # Global instructions are install-once: uninstall leaves them alone.
     temp = config.with_name('config.toml.mixed-router-restore')
     fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -47,6 +54,12 @@ def main():
         temp.unlink()
         raise SystemExit('Codex settings changed concurrently; retry the restore.')
     os.replace(temp, config)
+    # The Switch Codex app leaves with the attachment (never while switched:
+    # that refused above). The restore already stands, so a stuck app only warns.
+    try:
+        _packaging('codex_switch_app').remove(root)
+    except OSError:
+        print('Switch Codex could not be removed; delete it from Applications.')
     if os.environ.get('ROUTER_RESTORE_ONLY') != '1':
         command = (['systemctl', '--user', 'stop', 'codex-mixed-model-router.service']
                    if sys.platform == 'linux' else

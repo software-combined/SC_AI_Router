@@ -154,20 +154,24 @@ must produce conforming rows; the registry naming test enforces it.
 ## 9. Agent plugins
 
 This repo also hosts the `scg-agent-plugins` marketplace (`scg-review`,
-`scg-subagents`, `scg-prototypes`, `scg-finance`). Author under
-`plugins/<name>`; installed plugin caches are delivery copies. The root
+`scg-subagents`, `scg-prototypes`, `scg-finance`, `scg-documentation`). Author
+under `plugins/<name>`; installed plugin caches are delivery copies. The root
 `scg-openrouter` plugin stays outside the marketplace. Keep the marketplace
-name and plugin names stable; release via `develop` to `main`, consumers
-track branch `main`.
+name and plugin names stable; release via `develop` to `main`, and let the
+router carry them (Plan 179) so a consumer needs no Git account or marketplace
+command.
 
 - Every plugin works in Codex and Claude Code: ship both `.codex-plugin`
   and `.claude-plugin` manifests at the same version, keep skill content
   client-agnostic, and read system state through whichever MCP or connector
   tools the active client exposes.
-- Every plugin ships automatic updates: bundle the shared `updater.py` and
-  `scheduling.py` byte-identical, link every skill to the shared update
-  guide, and support macOS, Linux and Windows through the one shared native
-  schedule. A pull alone is never setup.
+- The router is the delivery channel (Plan 179): its release bundle carries
+  the plugin trees, and each install or scheduled update that lands a new
+  release materialises a router-owned local marketplace and registers it with
+  the attached clients, so a shipped plugin carries no updater of its own.
+  Keep the retained `scripts/updater.py` and `scheduling.py` byte-identical
+  across the plugins (tests pin it); the release bundle withholds them. Link
+  every skill to the shared update guide.
 - Release a plugin by bumping both manifests' version and adding a
   `plugins/CHANGELOG.md` entry; validate with the plugin-creator validator
   and the plugin test modules.

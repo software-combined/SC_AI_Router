@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
-from ai_router import candidate, registry
+from ai_router import candidate, candidate_evidence, registry
 from ai_router.credentials import opencode_auth_path
 from tests.candidate_fixtures import proof
 
@@ -70,6 +70,13 @@ class VerifySequenceTests(unittest.TestCase):
             stdout=json.dumps(record), returncode=1)
         failed = candidate.run_probe('m/x', scope, _run=run)
         self.assertTrue(all(r['result'] == 'fail' for r in failed['routes']))
+        # A failed Claude Code route explains the exit, so the Codex pass stays
+        # recorded (it read as a failure twice on 29 Sep) and promotion stays blocked.
+        record['routes'][1]['result'] = 'fail'
+        run = lambda cmd, **kwargs: SimpleNamespace(stdout=json.dumps(record), returncode=1)
+        kept = candidate.run_probe('m/x', scope, _run=run)
+        self.assertEqual([r['result'] for r in kept['routes']], ['pass', 'fail'])
+        self.assertTrue(candidate_evidence.problems(registry.MODELS[0], kept))
         scope = SimpleNamespace(home=Path('/tmp/scope-x'), catalog=Path('/tmp/c'))
         seen = []
 
