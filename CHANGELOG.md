@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- The router now retires the old Git-based SCG plugin updater only once Codex
+  accepts the router's copy of the plugins. That updater only ever refreshes
+  Codex, but any client's success used to retire it. So a Claude Code success
+  alone could retire it while Codex still took its plugins from Git, for
+  example when the router serves only Claude Code or an update cannot find
+  Codex, and Codex's plugins then stopped updating. The router also
+  recognises the three earliest versions of that updater, so a host still
+  running one of them has it retired too.
+
 ## 1.0.3
 
 - Codex now keeps every subscription model OpenAI still advertises, including

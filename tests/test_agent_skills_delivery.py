@@ -4,7 +4,11 @@ Four gaps kept hosts on their old skills: Claude Code reads a manifest the
 router never wrote, Codex refuses to re-point a marketplace name it already
 holds from the old Git source, a scheduled job's PATH hides both CLIs and the
 node behind codex's `#!/usr/bin/env node`, and a first copy cut short left a
-folder without the ownership marker, which every later run refused.
+folder without the ownership marker, which every later run refused. The
+router also recognised only one earlier git updater and left the rest in
+place, so one still scheduled failed its Git source check daily once Codex
+moved to the router's copy. Recognising them all must not retire one that
+still serves Codex from Git.
 """
 import importlib.util
 import json
@@ -16,10 +20,18 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
-_spec = importlib.util.spec_from_file_location(
-    'router_agent_skills_delivery', ROOT / 'packaging' / 'agent_skills.py')
-skills = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(skills)
+RUNNER = ROOT / 'plugins' / 'scg-review' / 'scripts' / 'updater.py'
+
+
+def _load(name, path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+skills = _load('router_agent_skills_delivery', ROOT / 'packaging' / 'agent_skills.py')
+updater = _load('plugin_updater_delivery', RUNNER)
 
 LAUNCHD_PATH = '/usr/bin:/bin:/usr/sbin:/sbin'  # what launchd gives the update job
 REMOVE = ['codex', 'plugin', 'marketplace', 'remove', 'scg-agent-plugins']
@@ -69,6 +81,7 @@ class DeliveryTest(unittest.TestCase):
         self.tmp = Path(tmp.name)
         self.home = self.tmp / 'home'
         self.enterContext(patch.object(Path, 'home', return_value=self.home))
+        self.enterContext(patch.dict(os.environ, {'XDG_CONFIG_HOME': ''}))
         self.base = self.tmp / 'scg-agent-plugins'
         self.root = skills.marketplace_root(self.base)
         self.plugins = self.tmp / 'release-plugins'
@@ -237,6 +250,47 @@ class DeliveryTest(unittest.TestCase):
                     patch.object(skills.os, 'pathsep', sep), \
                     patch.dict(os.environ, {'PATH': path}):
                 self.assertEqual(skills.client_path(), sep.join([path, *extra]))
+
+    def test_the_current_git_updater_is_retired_not_left_in_place(self):
+        # The Git marketplace installs this exact file as the shared runner, and
+        # every plugin carries the same copy. A change to it needs its hash in
+        # LEGACY_RUNNERS. A Windows checkout may carry CRLF; the hashes are of
+        # the committed LF file.
+        current = RUNNER.read_bytes().replace(b'\r\n', b'\n')
+        self.base.mkdir(parents=True)
+        (self.base / 'updater.py').write_bytes(current)
+        line = skills.retire_git_updater(base=self.base, run=_Client(),
+                                         which=lambda name: None)
+        self.assertEqual(line, 'git updater: retired to updater.py.migrated.0')
+        self.assertEqual((self.base / 'updater.py.migrated.0').read_bytes(), current)
+
+    def test_every_earlier_git_updater_is_still_recognised(self):
+        # Pinned so this runs on shallow checkouts: the updaters released at
+        # 2801694 and 36bb1c0. The plugin updater's own list holds the others.
+        pinned = {'f8bdfa551bca125ec8c5826a86b017814feefbd45dadb30fa7536d1562392a79',
+                  'b909d5c4c529310bb33373bdaaf22695ccaa20651ec688a011cedfc358c41fdd'}
+        known = next(digests for label, _, digests, _ in updater.LEGACY
+                     if label == skills.GIT_UPDATER_LABEL)
+        self.assertLessEqual(pinned | set(known), set(skills.LEGACY_RUNNERS))
+
+    def test_the_git_updater_stays_until_codex_itself_moves(self):
+        # It only ever refreshes Codex. On a Claude-only host, or when a
+        # scheduled update cannot find codex, Codex still takes its plugins
+        # from Git, so a Claude success alone must leave it scheduled.
+        current = RUNNER.read_bytes().replace(b'\r\n', b'\n')
+        for clients, which in (
+                ('claude', _found),
+                ('both', lambda name, path=None: None if name == 'codex' else name)):
+            with self.subTest(clients=clients):
+                self.base.mkdir(parents=True, exist_ok=True)
+                (self.base / 'updater.py').write_bytes(current)
+                run = _Client()
+                line = skills.sync({'clients': clients}, self.plugins, base=self.base,
+                                   run=run, which=which)
+                self.assertIn('claude: 2 plugin(s)', line)
+                self.assertNotIn('retired', line)
+                self.assertEqual((self.base / 'updater.py').read_bytes(), current)
+                self.assertNotIn('launchctl', [call[0] for call in run.calls])
 
 
 if __name__ == '__main__':
