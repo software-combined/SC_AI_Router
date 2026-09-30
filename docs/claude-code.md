@@ -175,7 +175,10 @@ hand-edited conflict instead of overwriting it.
   Code collapses duplicate IDs and keeps only one earlier `tool_result`, which
   makes later reads look empty. The same repair applies to top-level tool calls
   in non-streaming JSON; nested tool-shaped input and unknown fields stay
-  unchanged.
+  unchanged. The external route also hides Read's `pages` argument.
+  Claude Code rejects a blank page range on an ordinary text file, and models
+  that fill every advertised argument otherwise retry the same read. PDF page
+  ranges stay available on the subscription route.
   The `system` block carrying
   the client's own `x-anthropic-billing-header` line is dropped, because
   `anthropic/claude-fable-5.1` refuses any turn that carries it with HTTP
