@@ -168,3 +168,22 @@ to return to the ChatGPT subscription. The offer is written before its dialog
 appears and is owner-only (0600). A home that cannot be written therefore
 shows no dialog rather than the same one every minute, and a dialog that
 cannot be drawn is taken back off the list so a later pass offers it again.
+
+## Switch Codex run log
+
+Each Switch Codex run appends one JSON line to `logs/codex-switch.log`, so a
+switch that refused can be diagnosed afterwards:
+
+```json
+{"at": "2026-09-30T12:31:05+10:00", "to": "switched", "open": ["ChatGPT", "browser_crashpad_handler"], "result": "The ChatGPT app (Codex) did not close. Quit it from the ChatGPT menu, close any Codex sessions in Terminal, then open Switch Codex again."}
+```
+
+`at` is the local time with its offset. `to` is the variant the run aimed
+for, `switched` or `switched_back`, or `null` when it refused before choosing
+one. `result` is `done`, `cancelled` or the message the person saw, which
+never holds paths, settings, addresses or keys. `open` appears only when the
+app did not close: the sorted file names of the executables still running
+from the app bundle, never their paths or arguments, or `null` when the
+process list could not be read. A line that cannot be
+written never stops a switch, and the file ages out a month after its last
+write, like the other logs.

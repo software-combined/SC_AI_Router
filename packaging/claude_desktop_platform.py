@@ -214,7 +214,9 @@ def _writers(rows, identity, seen, platform_name, names=CLAUDE.writers):
         # A new start time or user means the pid now belongs to another process.
         if pid in rows and any(rows[pid][k] != old[k] for k in ('born', 'user')):
             raise OSError('Claude identity changed')
-    for pid, row in rows.items():
+    # Crash reporters write only crash reports and can outlive an app update by days.
+    live = {p: r for p, r in rows.items() if 'crashpad_handler' not in norm(r['exe']).rsplit('/', 1)[-1]}
+    for pid, row in live.items():
         path = norm(row['exe'])
         # Browser-owned native messaging hosts outlive Claude. Actual app
         # descendants still enter and remain in seen through the walk below.
@@ -222,7 +224,7 @@ def _writers(rows, identity, seen, platform_name, names=CLAUDE.writers):
                            and path != browser_host):
             seen[pid] = row
     while True:
-        children = {pid: row for pid, row in rows.items()
+        children = {pid: row for pid, row in live.items()
                     if row['parent'] in seen and pid not in seen}
         if not children:
             break

@@ -15,13 +15,14 @@ Switching back is the only way out of `switched`, since detach, uninstall and
 rollback refuse while switched, so it depends on nothing it can lose. It runs
 no proof: it only returns to the install's own block plus the provider entry.
 With exactly one app found it quits and reopens it; otherwise the person
-quits the app first and opens it again after. A quit that fails still refuses,
-since the person can close the app and try again.
+quits the app first and opens it again after. A quit that fails reopens the
+app and still refuses, since the person can quit it and try again.
 
 A marker left by a run that stopped halfway is kept when its switch was
 written and needs no proof or proves, and rolled back otherwise, on the next
 run. Any refusal after the quit reopens the app unchanged. The installer owns
-attachment; this helper never creates or removes one.
+attachment; this helper never creates or removes one. Each run appends one
+line to `logs/codex-switch.log` (docs/runtime-files.md).
 """
 import argparse
 import importlib.util
@@ -29,6 +30,7 @@ import json
 import os
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 
@@ -61,8 +63,8 @@ NOTHING_TO_SWITCH = ('The ChatGPT app (Codex) already uses OpenRouter models wit
                      'ChatGPT subscription, so there is nothing to switch.')
 NOT_READY = ('SCG Router is still checking which OpenRouter models your key can use. '
              'Try again in a few minutes.')
-STAYED_OPEN = ('The ChatGPT app (Codex) stayed open. Finish your work, close any Codex '
-               'sessions in Terminal, and try again.')
+STAYED_OPEN = ('The ChatGPT app (Codex) did not close. Quit it from the ChatGPT menu, close '
+               'any Codex sessions in Terminal, then open Switch Codex again.')
 NOT_PROVEN = 'The ChatGPT app (Codex) could not use the new settings, so nothing changed.'
 NO_APP = ('Switch Codex could not check the ChatGPT app (Codex). Make sure one '
           'up-to-date copy is installed, then try again.')
@@ -80,19 +82,25 @@ class SwitchError(Exception):
 
 def switch(home, *, run=subprocess.run, platform_ops=None, prove=None, ready=None):
     """Move Codex to the other variant; returns it, or None when cancelled."""
-    if sys.platform != 'darwin':
-        raise SwitchError(MAC_ONLY)
-    home = Path(home)
-    # The installer's lock: an update rewrites the same config and receipt.
-    with _service.install_lock(home) as held:
-        if not held:
-            raise SwitchError(BUSY)
-        return _switch(home, run, _platform if platform_ops is None else platform_ops,
-                       _proof.prove if prove is None else prove,
-                       _route_ready if ready is None else ready)
+    home, record = Path(home), {'to': None}
+    try:
+        if sys.platform != 'darwin':
+            raise SwitchError(MAC_ONLY)
+        # The installer's lock: an update rewrites the same config and receipt.
+        with _service.install_lock(home) as held:
+            if not held:
+                raise SwitchError(BUSY)
+            target = _switch(home, run, _platform if platform_ops is None else platform_ops,
+                             _proof.prove if prove is None else prove,
+                             _route_ready if ready is None else ready, record)
+    except Exception as exc:
+        _log(home, record, str(exc) if isinstance(exc, SwitchError) else FAILED)
+        raise
+    _log(home, record, 'done' if target else 'cancelled')
+    return target
 
 
-def _switch(home, run, ops, prove, ready):
+def _switch(home, run, ops, prove, ready, record):
     root = _app_root(ops, run)
     _recover(home, prove, root)
     try:
@@ -104,7 +112,7 @@ def _switch(home, run, ops, prove, ready):
         raise SwitchError(_blocks.EDITED) from exc
     if current is None:
         raise SwitchError(_blocks.NOT_CONNECTED)
-    target = SWITCHED_BACK if current == SWITCHED else SWITCHED
+    target = record['to'] = SWITCHED_BACK if current == SWITCHED else SWITCHED
     if target == SWITCHED:
         if entry.get('openai_mode') == 'none':
             raise SwitchError(NOTHING_TO_SWITCH)
@@ -125,6 +133,11 @@ def _switch(home, run, ops, prove, ready):
             if target == SWITCHED:
                 raise SwitchError(FAILED) from exc
         if closed is False:
+            record['open'] = _running(root, run)  # before the reopen starts it again
+            try:
+                _open(ops, run)  # a refusal never leaves it closed; a running app is only shown
+            except (OSError, subprocess.SubprocessError):
+                pass
             raise SwitchError(STAYED_OPEN)
     try:
         _apply(home, entry, target, prove, root)
@@ -235,6 +248,29 @@ def _open(ops, run):
     answer = ops.open_app('darwin', run=run, app=CODEX)
     if getattr(answer, 'returncode', 0) != 0:
         raise OSError('the app did not open')
+
+
+def _running(root, run):
+    """Basenames, never paths or arguments, of what still runs from the app bundle."""
+    try:
+        answer = run(['/bin/ps', '-axo', 'comm='], capture_output=True, text=True, timeout=5)
+        prefix = str(root).rstrip('/') + '/'  # on macOS, comm is the full executable path
+        return sorted(Path(line).name for line in answer.stdout.splitlines()
+                      if line.startswith(prefix))
+    except Exception:
+        return None
+
+
+def _log(home, record, result):
+    """Append this run's line to logs/codex-switch.log; a failed write changes nothing."""
+    try:
+        line = {'at': datetime.now().astimezone().isoformat(timespec='seconds'),
+                **record, 'result': result}
+        (home / 'logs').mkdir(exist_ok=True)
+        with open(home / 'logs' / 'codex-switch.log', 'a', encoding='utf-8') as stream:
+            stream.write(json.dumps(line) + '\n')
+    except Exception:
+        pass
 
 
 def _route_ready(home):

@@ -148,7 +148,7 @@ class SwitchFlowTests(unittest.TestCase):
                 app = self.fake(stops=stops)
                 with self.assertRaisesRegex(switcher.SwitchError, re.escape(message)):
                     self.run_switch(app)
-                self.assertNotIn('open', [call[0] for call in app.calls])
+                self.assertEqual([c[0] for c in app.calls].count('open'), stops is False)
         self.assertEqual((self.config.read_text(),
                           (self.home / 'activation.json').read_text()), before)
         self.assertEqual(self.proofs, [])
@@ -200,7 +200,7 @@ class SwitchFlowTests(unittest.TestCase):
                 self.assertEqual(app.calls[-1], ('notice', switcher.BACK_OPEN_AGAIN))
         # A quit that fails still refuses: the person can close the app and retry.
         blocks.switch(self.home, 'switched')
-        with self.assertRaisesRegex(switcher.SwitchError, 'stayed open'):
+        with self.assertRaisesRegex(switcher.SwitchError, 'did not close'):
             self.run_switch(self.fake(stops=False))
         self.attach('none')
         blocks.switch(self.home, 'switched')

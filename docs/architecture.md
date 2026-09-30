@@ -501,7 +501,9 @@ defaults to Claude; Switch Codex passes the ChatGPT app's, which lists no such
 names, so a running Claude or Codex CLI never blocks it.
 On macOS, bundle discovery uses Spotlight metadata because AppleScript app
 lookup launches a closed app. Browser-owned native messaging hosts do not seed
-the writer set; actual app descendants remain tracked after reparenting.
+the writer set, and crash reporters (any `crashpad_handler`) never join it:
+they write only crash reports and can outlive an app update by days. Actual
+app descendants remain tracked after reparenting.
 Descendant discovery precedes rejection of an otherwise unknown Claude process,
 because Desktop's Code executable can live outside its application bundle.
 `claude_profile_launch.py` resolves the current installed release and dispatches
@@ -530,7 +532,8 @@ settings as they are.
 
 `packaging/codex_desktop_switch.py` is the Switch Codex flow, macOS only. It
 moves an attached install to the other variant, holding the installer lock
-throughout, and a hand-edited block refuses before anything is asked.
+throughout, and a hand-edited block refuses before anything is asked. Each
+run appends one line to `logs/codex-switch.log` (docs/runtime-files.md).
 
 `switched` is strict. It needs `codex_route.ready`, a subscription install
 (no-subscription mode already runs without sign-in), exactly one ChatGPT app
@@ -546,10 +549,11 @@ config.toml held it, the owner's latest model pick included, through
 Switching back is the only way out of `switched`, since detach, uninstall and
 rollback refuse while switched, so it depends on nothing it can lose. It runs
 no proof: it only returns to the install's own block plus the provider entry.
-With exactly one app found it quits the app and reopens it after; a quit that
-fails still refuses, since the person can close the app and retry. With the
-app missing or not identifiable (two copies, a Spotlight failure), the dialog
-asks the person to quit it first and the closing message to open it again.
+With exactly one app found it quits the app and reopens it after; if the app
+does not close, it is reopened and the switch still refuses, since the person
+can quit it and retry. With the app missing or not identifiable (two copies,
+a Spotlight failure), the dialog asks the person to quit it first and the
+closing message to open it again.
 
 A switch that refused before writing needs no undo, and any refusal after the
 quit reopens the app unchanged. A marker left by a run that stopped halfway is
