@@ -46,9 +46,9 @@ class VariantBlockTests(unittest.TestCase):
                                      + REVIEWER + END),
             ('none', False): (BEGIN + 'model_provider = "scg_router"\n'
                               'model_catalog_json = "/r/mixed-models.json"\n'
-                              'approvals_reviewer = "user"\n[model_providers.scg_router]\n'
-                              f'name = "SC router"\nbase_url = "{URL}"\n'
-                              'wire_api = "responses"\n' + END),
+                              'approvals_reviewer = "user"\nmodel_providers.scg_router.'
+                              f'name = "SC router"\nmodel_providers.scg_router.base_url = "{URL}"\n'
+                              'model_providers.scg_router.wire_api = "responses"\n' + END),
         }
         for (mode, static), want in cases.items():
             with self.subTest(mode=mode, static=static):

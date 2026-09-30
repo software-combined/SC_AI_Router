@@ -11,6 +11,7 @@ import json
 import os
 import plistlib
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -88,21 +89,20 @@ class InstallConfigTests(unittest.TestCase):
             state = json.loads((home / 'mixed-router-state.json').read_text())
             self.assertEqual(state.get('openai_mode'), 'subscription')
 
-    def test_none_mode_block_keeps_root_keys_out_of_provider_table(self):
+    def test_none_mode_block_keeps_owner_root_keys_at_root(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
+            owner = Path(tmp) / 'fakehome' / '.codex' / 'config.toml'
+            owner.parent.mkdir(parents=True)
+            owner.write_text('approval_policy = "never"\n[desktop]\n')
             config, _, _, _ = _install(self, tmp, home, '1.0.0', '--openai-mode', 'none')
             block = config.read_text()
-            provider_at = block.index('model_provider = "scg_router"')
-            catalog_at = block.index('model_catalog_json = ')
-            table_at = block.index('[model_providers.scg_router]')
-            self.assertLess(provider_at, table_at)
-            self.assertLess(catalog_at, table_at)
-            self.assertNotIn('env_key', block)
-            self.assertNotIn('ROUTER_OPENROUTER_KEY_', block)
+            doc = tomllib.loads(block)
+            self.assertEqual((doc['approval_policy'], doc['model_provider'],
+                              doc['approvals_reviewer']), ('never', 'scg_router', 'user'))
+            self.assertEqual(sorted(doc['model_providers']['scg_router']),
+                             ['base_url', 'name', 'wire_api'])
             self.assertNotIn('openai_base_url', block)
-            approvals_at = block.index('approvals_reviewer = "user"')
-            self.assertLess(approvals_at, table_at)
             state = json.loads((home / 'mixed-router-state.json').read_text())
             self.assertIn(f"/{state['token']}/backend-api/codex", block)
             self.assertEqual(state.get('openai_mode'), 'none')

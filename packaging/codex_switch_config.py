@@ -88,7 +88,7 @@ def build(home, state, mode, static_catalogue, variant):
             'approvals_reviewer = "user"\n',
             provider + 'false, http_headers = { "%s" = "routed" } }\n' % HEADER,
             _codex.END + '\n'))
-    if '[model_providers.%s]' % PROVIDER in block:
+    if 'model_providers.%s.' % PROVIDER in block:
         # The no-subscription block already defines the provider, sign-in off;
         # a second definition would make the whole file unreadable.
         return block
@@ -154,8 +154,9 @@ def switch(home, variant):
     block = _codex.seed_picker_selection(config_path, live, block)
     original, removed = _codex.replace_config_block(config_path, block, live)
     record = dict(entry, inserted_block=block, variant=variant)
-    if removed:  # owner approvals_reviewer lines, recorded as attach_config does
-        record['reviewer'] = {'removed': removed}
+    if removed:  # owner root lines, kept with earlier ones as attach_config does
+        kept = (entry.get('reviewer') or {}).get('removed') or []
+        record['reviewer'] = {'removed': kept + removed}
     try:
         _codex.write_client_receipt(home, 'codex', record)
     except BaseException:
@@ -182,8 +183,16 @@ def restore(home, previous, variant):
             break
     else:
         raise SystemExit(EDITED)
+    kept = (previous.get('reviewer') or {}).get('removed') or []
+    # Owner root lines the switch set aside go back with the old block;
+    # restore_reviewer skips any key that block sets itself.
+    moved = [line for line in ((_codex.codex_attachment(home).get('reviewer') or {})
+                               .get('removed') or []) if line not in kept]
     if live != previous['inserted_block']:
         _, removed = _codex.replace_config_block(config_path, previous['inserted_block'], live)
         if removed:
-            previous = dict(previous, reviewer={'removed': removed})
+            previous = dict(previous, reviewer={'removed': kept + removed})
+    if moved:
+        text = config_path.read_text()
+        _atomic.replace_text(config_path, _codex.restore_reviewer(text, {'removed': moved}))
     _codex.write_client_receipt(home, 'codex', previous)

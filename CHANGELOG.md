@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Installing without a ChatGPT subscription no longer changes Codex settings
+  written just below the router's lines. The router's provider settings used
+  to open a section of their own, so an owner setting such as
+  `approval_policy` that followed them was read as part of that section and
+  ignored by Codex. The next update puts those settings back in effect.
+  An owner line that sets one of the router's own settings, such as your own
+  `model_provider`, is set aside while the router is attached instead of
+  making the configuration unreadable, and uninstalling puts it back.
+
 ## 1.0.0
 
 - SCG plugins now reach Claude Code and Codex through the router. The router's
