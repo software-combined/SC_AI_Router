@@ -266,7 +266,7 @@ class CatalogueFlagTests(unittest.TestCase):
         for model in models_for(MODELS, 'claude'):
             if model.provider == 'openrouter':
                 self.assertIn(model.slug, claude_slugs)
-        self.assertTrue({'openai/gpt-6-astra', 'openai/gpt-6-sol',
+        self.assertTrue({'openai/gpt-6-astra', 'openai/gpt-6.1-sol',
                          'openai/gpt-6-luna', 'openai/gpt-5.6-terra'} <= codex_slugs)
         self.assertFalse(claude_slugs & {'anthropic/claude-sonnet-5.5',
                                          'anthropic/claude-fable-5.1',
@@ -300,7 +300,7 @@ class CatalogueFlagTests(unittest.TestCase):
 
 
 class CatalogueTwinsTests(unittest.TestCase):
-    TWINS = ('openai/gpt-6-astra', 'openai/gpt-6-sol',
+    TWINS = ('openai/gpt-6-astra', 'openai/gpt-6.1-sol',
              'openai/gpt-5.6-terra', 'openai/gpt-6-luna')
 
     def test_none_mode_merge_lists_twins_without_subscription_stubs(self):

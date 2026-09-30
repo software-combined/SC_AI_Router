@@ -200,6 +200,7 @@ def project_messages_external(payload, model, upstream):
     if isinstance(payload, dict) and isinstance(model, str) and upstream != model:
         payload = {**payload, 'model': upstream}
     payload = claude_compat.strip_billing_header(payload)
+    payload = claude_compat.omit_text_read_pages(payload)
     return claude_compat.flatten_deferred_tools(payload)
 
 
