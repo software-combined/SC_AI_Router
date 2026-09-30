@@ -476,6 +476,9 @@ codex plugin marketplace add software-combined/SC_AI_Router --ref main
 codex plugin add scg-review@scg-agent-plugins
 ```
 
+Installing the router later moves that Codex registration to the router's own
+copy. A plugin you turned off in Codex or Claude Code stays off.
+
 Plugin releases ride `plugin.json` versions plus `plugins/CHANGELOG.md`,
 separate from the router tag train (`packaging/VERSION` never moves for a
 plugin-only change). See `AGENTS.md` section 9 for the plugin rules.
