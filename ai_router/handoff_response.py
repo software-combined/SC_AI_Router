@@ -2,7 +2,7 @@
 import json
 import re
 
-from . import agent_handoffs as handoffs, events, request_evidence, sse, transport
+from . import agent_handoffs as handoffs, errors, events, request_evidence, sse, transport
 
 MAX_CALLS = 32
 MAX_OBSERVATIONS = 3 * MAX_CALLS  # added, done and completed for each call
@@ -83,14 +83,14 @@ class Trace:
             consistent = bool(keys)
         return ordinal + 1, call, consistent
 
-    def observe(self, before, restored, client, size, rejected=False):
+    def observe(self, before, restored, client, size, rejected=False, guard_rejected=False):
         self.offset += size
         try:
-            self._observe(before, restored, client, rejected)
+            self._observe(before, restored, client, rejected, guard_rejected)
         except Exception:
             self._limit()
 
-    def _observe(self, before, restored, client, rejected):
+    def _observe(self, before, restored, client, rejected, guard_rejected):
         phase, original = _items(before)
         _, middle = _items(restored)
         _, final = _items(client)
@@ -121,8 +121,8 @@ class Trace:
                        upstream=upstream, restored=_shape(mid) if isinstance(mid, dict) else None,
                        client=_shape(end) if isinstance(end, dict) else None,
                        restoration_rejected=rejected,
-                       guard_rejected=mid is not None and end is not mid,
-                       frame_end_offset=None if rejected else self.offset)
+                       guard_rejected=guard_rejected,
+                       frame_end_offset=None if rejected or guard_rejected else self.offset)
 
     def finish(self):
         for ordinal, call in enumerate(self.calls, 1):
@@ -141,14 +141,18 @@ def _map(document, names, trace, original, stream):
     try:
         restored = (handoffs.restore_event(document, names) if stream
                     else handoffs.restore_response(document, names))
-    except ValueError:
+    except errors.ResponseRejected:
         trace.observe(document, None, None, 0, rejected=True)
         raise
-    client = (handoffs.steer_event(restored, names) if stream
-              else handoffs.steer_response(restored, names))
-    wire = (sse.replace_data(original, json.dumps(client).encode()) if stream
-            else json.dumps(client).encode()) if client is not document else original
-    trace.observe(document, restored, client, len(wire))
+    try:
+        for item in _items(restored)[1]:
+            handoffs.validate_handoff(item, names)
+    except errors.ResponseRejected:
+        trace.observe(document, restored, None, 0, guard_rejected=True)
+        raise
+    wire = (sse.replace_data(original, json.dumps(restored).encode()) if stream
+            else json.dumps(restored).encode()) if restored is not document else original
+    trace.observe(document, restored, restored, len(wire))
     return wire
 
 

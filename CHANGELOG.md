@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Unreadable subagent handoffs now stop before Codex executes them, with a clear
+  instruction to start a new turn using plaintext. The router no longer turns
+  valid tool arguments into a string that triggers a parser error. Native
+  encrypted handoffs and earlier valid tool calls remain intact.
+
 ## 1.0.4
 
 - The Windows router finds an app-installed Codex again, so the SCG plugins

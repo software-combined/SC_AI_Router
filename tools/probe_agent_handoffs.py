@@ -23,7 +23,8 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from ai_router.agent_handoffs import add_plaintext_tools, restore_event, steer_event
+from ai_router.agent_handoffs import add_plaintext_tools
+from ai_router import handoff_response
 from ai_router.catalogue import external_entry, subscription_stub
 from ai_router.registry import by_slug
 from tools.appserver_probe import AppServer, AGENT_HANDOFFS, codex_bin, scrub_env
@@ -59,7 +60,6 @@ def sse(items, ident):
 class Probe:
     required_final = None
     live_prompts = None
-    expected_recovered = ()
 
     def __init__(self, live, call_limit, live_children=False):
         self.live, self.call_limit = live, call_limit
@@ -169,9 +169,6 @@ class Probe:
                 if item.get('encrypted_function_args') == []:
                     self.alias_call_ids.add(item.get('call_id'))
                     self.facts['alias_emitted'] = True
-                if item.get('type') == 'function_call_output':
-                    if isinstance(item.get('output'), str) and 'collaboration_plaintext' in item.get('output'):
-                        self.facts.setdefault('steers', []).append(item.get('call_id'))
                 if body.get('model') != PARENT and item.get('type') == 'message':
                     text = ''.join(b.get('text', '') for b in item.get('content', []))
                     for marker in ALL_MARKERS:
@@ -185,11 +182,9 @@ class Probe:
             raw = self.forward(body, headers)
         else:
             raw = self.scripted(body, ordinal)
-        frames = []
         for frame in raw.replace(b'\r\n', b'\n').split(b'\n\n'):
             data = frame_data(frame)
             if not data or data == b'[DONE]':
-                frames.append(frame)
                 continue
             event = json.loads(data)
             if event.get('type') == 'response.output_item.done':
@@ -201,14 +196,12 @@ class Probe:
                         'name': item.get('name'),
                         'encrypted_fields': 'absent' if fields == 'absent' else ('empty' if fields == [] else 'nonempty'),
                         'model': arguments.get('model'), 'fork_turns': arguments.get('fork_turns')})
-            restored = steer_event(restore_event(event, aliases), aliases)
-            if restored is not event:
-                self.facts['alias_emitted'] = True
-                if isinstance(restored.get('item'), dict):
-                    self.alias_call_ids.add(restored['item'].get('call_id'))
-                frame = b'data: ' + json.dumps(restored).encode()
-            frames.append(frame)
-        return b'\n\n'.join(frames)
+                if item.get('namespace') == 'collaboration_plaintext':
+                    self.facts['alias_emitted'] = True
+                    self.alias_call_ids.add(item.get('call_id'))
+        source = io.BytesIO(raw)
+        source.getheader = lambda name, default='': 'text/event-stream'
+        return b''.join(handoff_response.adapt_response(source, aliases))
 
     def forward(self, body, headers, path='/responses'):
         with self.lock:
@@ -357,6 +350,8 @@ def run(args, probe_type=Probe):
             if event.get('method') == 'turn/completed' and params.get('turn', {}).get('status') == 'failed':
                 failure = params['turn'].get('error')
             if failure:
+                if hasattr(probe, 'negotiation_failure') and probe.negotiation_failure(event, failure):
+                    return
                 safe = {'event': event.get('method'),
                         'code': failure.get('codexErrorInfo') if isinstance(failure, dict) else None}
                 if safe not in probe.facts['tool_failures']:
@@ -402,7 +397,7 @@ def run(args, probe_type=Probe):
                 'Without tools, reply SYNTH_REPLAY_TWO.'] if args.live else ['Synthetic test.']
             if args.native_only:
                 prompts = prompts[-2:]
-            if args.live and probe.live_prompts:
+            if probe.live_prompts:
                 prompts = probe.live_prompts
             def turn(prompt_text):
                 answer = []
@@ -415,7 +410,8 @@ def run(args, probe_type=Probe):
                         if item.get('type') == 'agentMessage':
                             answer.append(item.get('text', ''))
                     if event.get('method') == 'turn/completed' and event.get('params', {}).get('threadId') == thread:
-                        if event['params']['turn']['status'] != 'completed':
+                        if (event['params']['turn']['status'] != 'completed'
+                                and not getattr(probe, 'expected_parent_failure', False)):
                             raise ValueError('synthetic parent turn failed')
                         break
                 return '\n'.join(answer)
@@ -465,10 +461,11 @@ def run(args, probe_type=Probe):
                     if not all(marker in answer for marker in MARKERS):
                         raise ValueError('post-compaction marker recall failed')
                 probe.facts['compaction_and_two_turns'] = True
+            verified = probe.verify() if hasattr(probe, 'verify') else None
             print(json.dumps({'live_parent': args.live, 'scripted_children': not args.live_children,
                 'live_calls': probe.live_calls, **probe.facts, 'errors': probe.errors}), flush=True)
-            if set(probe.expected_recovered) - set(probe.facts.get('recovered_tools', [])):
-                return 1
+            if verified is not None:
+                return 0 if verified else 1
             if args.native_only:
                 return 0 if (probe.facts['encrypted_child'] and not probe.errors
                     and (not args.live_children or expected_replies <= set(probe.facts['replies']))) else 1

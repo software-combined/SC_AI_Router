@@ -3,7 +3,7 @@ from copy import deepcopy
 import json
 import uuid
 
-from . import provider_defs, request_context
+from . import errors, provider_defs, request_context
 
 NATIVE_NAMESPACE = 'collaboration'
 PLAINTEXT_NAMESPACE = 'collaboration_plaintext'
@@ -197,14 +197,20 @@ def add_plaintext_tools(payload, catalogue=None):
                                'classic' if input_index is None else 'lite', catalogue=catalogue)
 
 
+def _plaintext_rejected(reason):
+    return errors.ResponseRejected(400, 'invalid_prompt',
+        'This handoff was blocked before delivery. Start a new turn and use an advertised '
+        'collaboration_plaintext tool with a readable message. Do not resend the encrypted call.', reason)
+
+
 def restore_item(item, names):
     """Return a native call; only an advertised alias can signal plaintext."""
     if item.get('namespace') != PLAINTEXT_NAMESPACE:
         return item
     if item.get('type') != 'function_call' or item.get('name') not in names:
-        raise ValueError('unadvertised plaintext collaboration call')
+        raise _plaintext_rejected('HANDOFF_ALIAS_UNADVERTISED')
     if 'encrypted_function_args' in item and item['encrypted_function_args'] != []:
-        raise ValueError('encrypted plaintext collaboration call')
+        raise _plaintext_rejected('HANDOFF_ALIAS_ENCRYPTED')
     return {**item, 'namespace': NATIVE_NAMESPACE, 'encrypted_function_args': []}
 
 
@@ -231,7 +237,7 @@ def external_plaintext_call(item, names):
             or item.get('name') not in HANDOFF_TOOLS or item.get('name') not in names):
         return item
     if item.get('encrypted_function_args', []) != []:
-        raise ValueError('unsupported encrypted external handoff')
+        raise _plaintext_rejected('HANDOFF_EXTERNAL_ENCRYPTED')
     return {**item, 'encrypted_function_args': []}
 
 
@@ -245,56 +251,30 @@ def restore_response(response, names):
     return response
 
 
-def steer_plaintext(item, names):
-    """Steer only unreadable external handoffs through native validation.
-    Native encrypted handoffs and unknown targets remain untouched. The
-    diagnostic contains no assignment, ciphertext or target."""
-    if item.get('type') != 'function_call':
-        return item
+def validate_handoff(item, names):
+    """Reject a known unreadable recipient before Codex can execute the call.
+
+    Routing uses the request's captured provider metadata, never model names.
+    Only an explicit plaintext signal establishes readability on this route.
+    """
+    if not isinstance(item, dict) or item.get('type') != 'function_call':
+        return
     if item.get('namespace') != NATIVE_NAMESPACE or item.get('name') not in HANDOFF_TOOLS:
-        return item
+        return
     if item.get('encrypted_function_args', 'absent') == []:
-        return item  # alias-originated plaintext, already readable
+        return
     args = _arguments(item)
     spawns = getattr(names, 'spawn_models', {})
     if item.get('name') == 'spawn_agent':
         model = args.get('model')
-        detail = ('spawn via collaboration_plaintext.spawn_agent '
-                  'with fork_turns="none" for externally billed models')
     else:
         target = args.get('target')
         model = _spawn_model(spawns, target)
-        detail = 'call collaboration_plaintext.' + item['name'] + ' with the same target'
     entry = getattr(names, 'catalogue', {}).get(model) if isinstance(model, str) else None
     if entry is None or not provider_defs.is_external(entry.provider):
-        return item
-    diagnostic = ('That handoff cannot be delivered readably; ' + detail
-                  + ' and resend the message as plain text.')
-    return {**item, 'arguments': json.dumps(diagnostic), 'encrypted_function_args': []}
-
-
-def steer_response(response, names):
-    output = response.get('output')
-    if not isinstance(output, list):
-        return response
-    steered = [steer_plaintext(item, names) if isinstance(item, dict) else item
-               for item in output]
-    if any(a is not b for a, b in zip(output, steered)):
-        return {**response, 'output': steered}
-    return response
-
-
-def steer_event(event, names):
-    mapped = event
-    if event.get('type') in ('response.output_item.added', 'response.output_item.done'):
-        item = event.get('item')
-        if isinstance(item, dict):
-            steered = steer_plaintext(item, names)
-            if steered is not item:
-                mapped = {**mapped, 'item': steered}
-    response = event.get('response')
-    if isinstance(response, dict):
-        steered = steer_response(response, names)
-        if steered is not response:
-            mapped = {**mapped, 'response': steered}
-    return mapped
+        return
+    extra = ' and fork_turns="none"' if item['name'] == 'spawn_agent' else ' and the same target'
+    raise errors.ResponseRejected(400, 'invalid_prompt',
+        'This handoff was blocked before delivery. Start a new turn and use '
+        'collaboration_plaintext.' + item['name'] + ' with a readable message' + extra
+        + '. Do not resend the encrypted call.', 'HANDOFF_REQUIRES_PLAINTEXT')
