@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- On Linux, the router now switches off the old SCG plugin updater once it
+  delivers the plugins itself. Before, the old updater's daily timer kept
+  running and failed every day, which also marked the desktop session's
+  services as degraded. The router also recognises every released version of
+  that updater, and switches off a timer an earlier router left running after
+  it had already moved the old updater aside. The old files are kept, renamed,
+  rather than deleted.
+
 ## 1.0.0
 
 - SCG plugins now reach Claude Code and Codex through the router. The router's
