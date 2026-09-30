@@ -50,7 +50,8 @@ class WindowsClientPathTest(unittest.TestCase):
         executable.write_bytes(b'')
         self.assertIsNone(shutil.which('codex', path=self.path))
         found = shutil.which('codex', path=skills.client_path(self.env))
-        self.assertEqual(found, str(executable))
+        self.assertIsNotNone(found)
+        self.assertEqual(Path(found), executable)
 
 
 if __name__ == '__main__':
