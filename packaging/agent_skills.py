@@ -15,6 +15,7 @@ records one line, and continues.
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -28,11 +29,31 @@ LEGACY_RUNNERS = (
     'bd06fc556d4640f4dc4206209dd17fc41d4fcfd4904dc63d337ce55b9a88708b',
 )
 ENTRY_POLICY = {'installation': 'AVAILABLE', 'authentication': 'ON_INSTALL'}
+# The Git homes this marketplace had before the router carried it, matched
+# lowercased. Only a Codex registration from one of these is ours to replace.
+OLD_CODEX_SOURCE = re.compile(
+    r'(https://github\.com/|git@github\.com:)software-combined/'
+    r'(sc_ai_router|sc_unlimited_ai|sc_openrouter_adapter|sc_agent_plugins)(\.git)?/?')
 
 
 def shared_base(home=None):
     """The SCG plugin directory the git updater already uses."""
     return (Path(home) if home else Path.home()).joinpath(*SHARED)
+
+
+def client_path():
+    """PATH for the client CLIs: this process's, plus the usual install dirs.
+
+    A scheduled update inherits launchd's /usr/bin:/bin:/usr/sbin:/sbin, and a
+    systemd user timer's PATH also omits ~/.local/bin, so clients there were
+    logged as not installed. The child gets the same PATH: codex is a
+    `#!/usr/bin/env node` script, and its node usually sits beside it.
+    """
+    # ponytail: fixed common dirs; a client under a version manager (nvm, fnm)
+    # still needs its bin dir on the scheduled job's PATH.
+    dirs = [d for d in os.environ.get('PATH', '').split(os.pathsep) if d]
+    extra = (str(Path.home() / '.local' / 'bin'), '/opt/homebrew/bin', '/usr/local/bin')
+    return os.pathsep.join(dirs + [d for d in extra if d not in dirs])
 
 
 def marketplace_root(base=None):
@@ -65,10 +86,17 @@ def write_marketplace(root, plugins_dir):
         return []
     if root.exists() and not (root / MARKER).exists() and any(root.iterdir()):
         raise ValueError('marketplace root is not router-owned; left untouched')
+    # Claim the root before any content, so a first copy cut short still
+    # carries the marker and the next run repairs it instead of refusing it.
+    # Only the marker's presence counts, so a plain write leaves no gap.
+    root.mkdir(parents=True, exist_ok=True)
+    (root / MARKER).write_text('Plan 179: written by the router installer\n')
     manifest = root / '.agents' / 'plugins' / 'marketplace.json'
+    claude = root / '.claude-plugin' / 'marketplace.json'
     manifest.parent.mkdir(parents=True, exist_ok=True)
-    # Stage each plugin, then swap it in. The manifest lands last, so an
-    # interrupted copy never leaves a client reading a tree that the manifest
+    claude.parent.mkdir(parents=True, exist_ok=True)
+    # Stage each plugin, then swap it in. The manifests land last, so an
+    # interrupted copy never leaves a client reading a tree that a manifest
     # already advertises.
     for name in names:
         target = root / 'plugins' / name
@@ -79,10 +107,14 @@ def write_marketplace(root, plugins_dir):
         if target.exists():
             shutil.rmtree(target)
         os.replace(staging, target)
-    (root / MARKER).write_text('Plan 179: written by the router installer\n')
     manifest.write_text(json.dumps(
         {'name': MARKETPLACE, 'interface': {'displayName': 'Scg Agent Plugins'},
          'plugins': [_entry(n) for n in names]}, indent=2) + '\n')
+    # Claude Code reads only its own manifest, and requires an owner there.
+    claude.write_text(json.dumps(
+        {'name': MARKETPLACE, 'owner': {'name': 'Software Combined'},
+         'plugins': [{'name': n, 'source': './plugins/' + n} for n in names]},
+        indent=2) + '\n')
     return names
 
 
@@ -126,6 +158,55 @@ def _one_line(value, limit=200):
     return _ascii(' '.join(text.split()))[:limit]
 
 
+def _client_json(call, command):
+    """A client's `--json` answer, or None when it cannot give one."""
+    try:
+        return json.loads(call(command).stdout)
+    except (OSError, subprocess.SubprocessError, ValueError, TypeError):
+        return None
+
+
+def _old_codex_source(call):
+    """True when Codex holds this marketplace name from an old Git home.
+
+    Codex refuses to add the router's copy under a name it already holds from
+    another source, and its `plugin add` then keeps installing the stale Git
+    snapshot. Removing that registration keeps each plugin's enabled setting
+    and cache, so the add that follows re-points the same plugins. Any source
+    this cannot positively identify is left alone.
+    """
+    listing = _client_json(call, ['codex', 'plugin', 'marketplace', 'list', '--json'])
+    try:
+        for entry in listing['marketplaces']:
+            if entry.get('name') == MARKETPLACE:
+                source = entry['marketplaceSource']
+                return (source['sourceType'] == 'git' and
+                        OLD_CODEX_SOURCE.fullmatch(source['source'].lower()) is not None)
+    except (LookupError, TypeError, AttributeError):
+        pass
+    return False
+
+
+def _switched_off(client, call):
+    """Plugin ids a person turned off in this client.
+
+    Both clients' install commands turn a plugin back on, so running them on
+    every router update undid that choice. These plugins are skipped instead,
+    and refresh on the first update after they are turned back on.
+    """
+    try:
+        if client == 'codex':
+            entries = _client_json(call, ['codex', 'plugin', 'list', '--marketplace',
+                                          MARKETPLACE, '--json'])['installed']
+            key = 'pluginId'
+        else:
+            entries = _client_json(call, ['claude', 'plugin', 'list', '--json'])
+            key = 'id'
+        return {entry[key] for entry in entries if entry.get('enabled') is False}
+    except (LookupError, TypeError, AttributeError):
+        return set()
+
+
 def register(client, root, names, run=subprocess.run, which=shutil.which):
     """Register the local marketplace and install each plugin, tolerantly.
 
@@ -135,14 +216,31 @@ def register(client, root, names, run=subprocess.run, which=shutil.which):
     refusal keeps the command and the client's own error line, so the install
     log names the failure instead of only counting it.
     """
-    if which(client) is None:
+    path = client_path()
+    executable = which(client, path=path)
+    if executable is None:
         return f'{client}: not installed', 1
+    env = dict(os.environ, PATH=path)
+
+    def call(command):
+        # The resolved path, not the bare name: on Windows an npm client is
+        # `codex.cmd`, which `which` finds but CreateProcess cannot start.
+        return run([executable, *command[1:]], capture_output=True, text=True,
+                   timeout=180, env=env)
+
+    # Read before any change: removing the old Codex source hides its plugins.
+    disabled = _switched_off(client, call)
+    off = {n for n in names if f'{n}@{MARKETPLACE}' in disabled}
+    commands = _commands(client, root, [n for n in names if n not in off])
+    if client == 'codex' and _old_codex_source(call):
+        commands.insert(0, ['codex', 'plugin', 'marketplace', 'remove', MARKETPLACE])
     refused = 0
     failures = []
-    for command in _commands(client, root, names):
+    moved = False
+    for command in commands:
         label = _one_line(' '.join(command))
         try:
-            done = run(command, capture_output=True, text=True, timeout=180)
+            done = call(command)
         except (OSError, subprocess.SubprocessError) as exc:
             refused += 1
             failures.append(f'{label}: {type(exc).__name__}: {_one_line(exc)}')
@@ -152,7 +250,13 @@ def register(client, root, names, run=subprocess.run, which=shutil.which):
             detail = _one_line(done.stderr) or _one_line(done.stdout)
             failures.append(f'{label}: exit {done.returncode}'
                             + (f': {detail}' if detail else ''))
+        elif command[2:4] == ['marketplace', 'remove']:
+            moved = True
     line = f'{client}: {len(names)} plugin(s)'
+    if off:
+        line += f', {len(off)} left disabled'
+    if moved:
+        line += ', old Git source removed'
     if refused:
         line += f', {refused} refused'
         if failures:

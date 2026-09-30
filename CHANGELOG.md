@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- SCG plugins now reach Claude Code and Codex through the router. The router's
+  plugin folder now includes the marketplace file Claude Code reads, so Claude
+  Code installs the plugins instead of refusing the folder. When Codex still
+  had the plugins registered from the Git repository, the installer moves that
+  registration to the router's copy; before, Codex kept installing older
+  plugins from Git. Automatic updates now find `codex` and `claude` in
+  `~/.local/bin`, `/opt/homebrew/bin` or `/usr/local/bin`, so plugins refresh
+  on scheduled updates as well as manual installs. A plugin you turned off in
+  Codex or Claude Code now stays off; every install used to turn it back on.
+  On Windows, a client installed through npm (`codex.cmd`) now runs from the
+  path it was found at; before, every plugin command failed. A first plugin
+  delivery that was cut short no longer blocks every later one.
+
 - The OpenRouter picker now offers GPT-6.1 Sol in place of GPT-6 Sol. An
   upgrade drops the older row instead of showing both. A text-file Read no
   longer receives Claude Code's PDF page argument, so a model that fills every
