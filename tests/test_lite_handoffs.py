@@ -68,7 +68,7 @@ class LiteHandoffTests(unittest.TestCase):
                 handoffs.add_plaintext_tools(payload)
             self.assertEqual(payload, original)
 
-    def test_provider_restores_aliases_and_steers_external_spawns_on_both_frames(self):
+    def test_provider_restores_aliases_and_preserves_native_spawns_on_both_frames(self):
         provider = SubscriptionProvider()
         for streaming in (False, True):
             payload = lite()
@@ -80,9 +80,7 @@ class LiteHandoffTests(unittest.TestCase):
             self.assertEqual(prepared.headers['Accept-Encoding'], 'identity')
             native = alias_call(namespace='collaboration', name='spawn_agent',
                 arguments=json.dumps({'model': 'gpt-6-sol', 'message': 'opaque-control'}))
-            external = {**native, 'arguments': json.dumps({
-                'model': 'deepseek/deepseek-v4.1-flash', 'message': 'opaque-control'})}
-            output = {'output': [alias_call(), native, external]}
+            output = {'output': [alias_call(), native]}
             event = {'type': 'response.completed', 'response': output}
             encoded = json.dumps(event if streaming else output).encode()
             wire = b'data: ' + encoded + b'\n\n' if streaming else encoded
@@ -94,10 +92,6 @@ class LiteHandoffTests(unittest.TestCase):
             self.assertEqual(items[0], {**alias_call(), 'namespace': 'collaboration',
                                        'encrypted_function_args': []})
             self.assertEqual(items[1], native)
-            self.assertEqual(items[2]['type'], 'function_call')
-            self.assertEqual(items[2]['call_id'], external['call_id'])
-            self.assertIsInstance(json.loads(items[2]['arguments']), str)
-            self.assertNotIn('opaque-control', items[2]['arguments'])
 
     def test_lite_without_handoff_keeps_compressed_bytes(self):
         payload = lite([])
