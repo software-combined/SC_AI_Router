@@ -42,8 +42,8 @@ comparable price. Contributor permits prompts/outputs to improve Meta products p
 | `moonshotai/kimi-k3` | `max` | 2.3027 / 11.5502 | UI specialist and strongest LCR in this measured set; comparatively expensive output and weak terminal v4 score. |
 | `openai/gpt-5.6-luna` | `max` | 0.2 / 1.2 | Cheap general candidate for bounded work; Good PDF/LCR for price. |
 | `openai/gpt-5.6-sol` | `max` | 2 / 10 | Balanced harder coding/automation candidate; refreshed reference price. |
-| `openai/gpt-5.6-terra` | `max` | 2 / 12 | General worker when suitable; often loses value to Sol at this snapshot. |
 | `openai/gpt-6-astra` | `max` | 10 / 50 | Strongest measured terminal score and WebDev ceiling here; use focused high-consequence reasoning, mindful of API price. |
+| `openai/gpt-6.1-sol` | `high` | Unverified | Exact pre-commit reviewer requirement set by the owner; no independent benchmark row found. Not a general-work pick. |
 | `qwen/qwen3.8-max-0902` | `xhigh` | 2 / 6 | Exact Arena UI evidence, preliminary and overlapping Kimi/Opus intervals. AA undated row is a proxy and excluded from AA frontiers. |
 | `x-ai/grok-4.7` | `xhigh` | 1.6 / 4.8 | Automation/document alternative; no blanket cost advantage. Search capability requires tool/route verification. |
 | `z-ai/glm-5.3-flash` | `max` | 0.075 / 0.25 | Lowest token-price general starting point; discounted rate, so refresh. Local task qualification still needed. |
@@ -51,7 +51,7 @@ comparable price. Contributor permits prompts/outputs to improve Meta products p
 | `gpt-5.5` | `xhigh` | 5 / 30 | Legacy compatibility/reproduction; no automatic advantage over newer models. |
 | `gpt-5.4-mini` | `xhigh` | 0.75 / 4.5 | Lightweight legacy option; weak current terminal score; verify runtime availability. |
 | `gpt-5.3-codex-spark` | `xhigh` | Unverified | Latency-oriented candidate; no exact independent benchmark row found. Do not invent a ranking. |
-| `xiaomi/mimo-v2.6-pro` | `xhigh` | Unverified | Exact pre-commit reviewer requirement; no independent benchmark row found. |
+| `xiaomi/mimo-v2.6-pro` | `xhigh` | Unverified | No independent benchmark row found. |
 
 ## Comparable benchmark evidence
 
@@ -78,7 +78,6 @@ v4.3 suite result; its absent cost/task already excludes it from that frontier.
 | [kimi-k3 / max](https://artificialanalysis.ai/models/kimi-k3) | 43.78 | 2.00 | 12.63 | 58.27 | 22.00 | 88.67 | 1492.58 |
 | [gpt-5.6-luna / max](https://artificialanalysis.ai/models/gpt-5-6-luna) | 37.50 | 0.18 | 11.62 | 50.21 | 24.00 | 83.67 | 1339.38 |
 | [gpt-5.6-sol / max](https://artificialanalysis.ai/models/gpt-5-6-sol) | 47.06 | 1.99 | 39.90 | 60.08 | 27.20 | 84.00 | 1475.00 |
-| [gpt-5.6-terra / max](https://artificialanalysis.ai/models/gpt-5-6-terra) | 42.25 | 1.40 | 35.35 | 59.65 | 24.00 | 83.00 | 1330.00 |
 | [gpt-6-astra / max](https://artificialanalysis.ai/models/gpt-6-astra) | 52.81 | 3.26 | 59.09 | 68.49 | 31.00 | 80.67 | 1562.01 |
 | [PROXY qwen3.8-max-0902 / not specified](https://artificialanalysis.ai/models/qwen3-8-max) | 40.30 | 2.67 | 18.69 | 49.23 | 20.20 | 78.33 | 1387.89 |
 | [grok-4.6 / high](https://artificialanalysis.ai/models/grok-4-6) | 44.41 | 1.86 | 21.21 | 66.68 | 17.00 | 80.33 | 1534.13 |
@@ -90,10 +89,12 @@ v4.3 suite result; its absent cost/task already excludes it from that frontier.
 | [gpt-5.4-mini / xhigh](https://artificialanalysis.ai/models/gpt-5-4-mini) | 24.58 | 0.41 | 2.02 | 26.20 | 13.40 | 77.00 | 719.24 |
 | gpt-5.3-codex-spark / not specified | — | — | — | — | — | — | — |
 
-The prescribed level is the highest supported plain reasoning level. Astra,
-Sol and Terra use `max`; `ultra` adds automatic delegation and is excluded from
-bounded child assignments. Haiku supports only `none`; this is not an omitted
-setting. Gemini uses `high`; Qwen 0902, Grok and Contributor use `xhigh`.
+The prescribed level is the highest supported plain reasoning level, except
+GPT-6.1 Sol at `high`, which is the owner's exact pre-commit reviewer setting.
+Astra and GPT-5.6 Sol use `max`; `ultra` adds automatic delegation and is
+excluded from bounded child assignments. Haiku supports only `none`; this is
+not an omitted setting. Gemini uses `high`; Qwen 0902, Grok and Contributor use
+`xhigh`.
 
 The benchmark table retains measurements at other or unspecified efforts for
 transparency. They do not certify the prescribed configuration: in particular,
