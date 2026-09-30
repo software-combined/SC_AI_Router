@@ -250,6 +250,29 @@ class PortableOrderTests(unittest.TestCase):
         self.assertEqual(seen[-1][0], sys.executable)
         self.assertIn(('python3.14', '-c'), seen)
 
+    def test_windows_never_runs_a_drive_less_candidate(self):
+        # On Windows /usr/... and /opt/... are drive-root folders any local
+        # account can create, so a python3.14 planted there must never run.
+        posix = ['/usr/bin/python3.14', '/usr/local/bin/python3.14',
+                 '/opt/homebrew/bin/python3.14', '/opt/homebrew/bin/python3']
+        exe = r'C:\Python314\python.exe'
+        for platform, want in (('win32', ['python3.14', exe, 'py']),
+                               ('darwin', ['python3.14'] + posix + [exe])):
+            tried = []
+
+            def fake_run(cmd, **kwargs):
+                tried.append(cmd[0])
+                planted = platform == 'win32' and cmd[0] in posix  # answers as 3.14
+                return SimpleNamespace(returncode=0 if planted else 1,
+                                       stdout=f'3 14\n{cmd[0]}\n', stderr='')
+
+            with self.subTest(platform=platform), mock.patch.object(svc, 'run', fake_run), \
+                    mock.patch.object(sys, 'platform', platform), \
+                    mock.patch.object(sys, 'executable', exe), \
+                    mock.patch.object(svc.shutil, 'which', lambda name: None):
+                self.assertIsNone(svc.find_python())
+                self.assertEqual(tried, want)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -8,12 +8,15 @@
   had the plugins registered from the Git repository, the installer moves that
   registration to the router's copy; before, Codex kept installing older
   plugins from Git. Automatic updates now find `codex` and `claude` in
-  `~/.local/bin`, `/opt/homebrew/bin` or `/usr/local/bin`, so plugins refresh
-  on scheduled updates as well as manual installs. A plugin you turned off in
-  Codex or Claude Code now stays off; every install used to turn it back on.
-  On Windows, a client installed through npm (`codex.cmd`) now runs from the
-  path it was found at; before, every plugin command failed. A first plugin
-  delivery that was cut short no longer blocks every later one.
+  `~/.local/bin`, and on macOS and Linux also in `/opt/homebrew/bin` or
+  `/usr/local/bin`, so plugins refresh on scheduled updates as well as manual
+  installs. A plugin you turned off in Codex or Claude Code now stays off;
+  every install used to turn it back on. On Windows, a client installed
+  through npm (`codex.cmd`) now runs from the path it was found at; before,
+  every plugin command failed. A first plugin delivery that was cut short no
+  longer blocks every later one.
+- On Windows, the installer no longer looks for Python in drive-root folders
+  such as `C:\usr` or `C:\opt`, which any account on the computer can create.
 
 - Switch Codex (macOS): the ChatGPT app (Codex) 26.917.51856 and later stops
   sending messages for every model once your ChatGPT subscription reaches its

@@ -225,6 +225,19 @@ class DeliveryTest(unittest.TestCase):
         self.assertIn(f'claude plugin marketplace add {self.root}', calls)
         self.assertIn('claude plugin install scg-finance@scg-agent-plugins', calls)
 
+    def test_windows_search_adds_no_drive_root_folder(self):
+        # On Windows /opt/homebrew/bin and /usr/local/bin would mean C:\opt\... and
+        # C:\usr\..., which any local account can create and plant a codex.exe in.
+        home_bin = str(Path.home() / '.local' / 'bin')
+        posix_extra = [home_bin, '/opt/homebrew/bin', '/usr/local/bin']
+        for name, sep, path, extra in (
+                ('nt', ';', r'C:\Windows\System32;C:\Windows', [home_bin]),
+                ('posix', ':', LAUNCHD_PATH, posix_extra)):
+            with self.subTest(os_name=name), patch.object(skills.os, 'name', name), \
+                    patch.object(skills.os, 'pathsep', sep), \
+                    patch.dict(os.environ, {'PATH': path}):
+                self.assertEqual(skills.client_path(), sep.join([path, *extra]))
+
 
 if __name__ == '__main__':
     unittest.main()
