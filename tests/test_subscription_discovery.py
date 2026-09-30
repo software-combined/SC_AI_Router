@@ -31,7 +31,7 @@ class SubscriptionCatalogueTests(unittest.TestCase):
         ]})
         roster = subscription_catalogue.effective_roster(
             ['gpt-5.6-luna'], [row['slug'] for row in rows])
-        self.assertEqual(roster, ('gpt-new',))
+        self.assertEqual(roster, ('gpt-new', 'gpt-5.6-luna'))
 
     def test_configured_order_wins_for_models_the_server_still_advertises(self):
         roster = subscription_catalogue.effective_roster(

@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 1.0.3
+
+- Codex now keeps every subscription model OpenAI still advertises, including
+  older models that the router had removed from its static list. Models OpenAI
+  hides stay hidden, and subscription and OpenRouter billing remain separate.
+  Updating the router does not replace updating Codex: OpenAI can offer a
+  different model list to an older client.
+- After a Codex upgrade, starting a chat now uses the model list for the
+  current client version. Previously, cached lists from both versions could
+  make a newly advertised model appear in the picker but fail as unavailable.
+
 ## 1.0.2
 
 - Installing without a ChatGPT subscription no longer changes Codex settings
