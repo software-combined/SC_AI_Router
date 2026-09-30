@@ -467,12 +467,13 @@ The router is the delivery channel. Its release bundle carries the plugin
 trees, and each install or scheduled update that lands a new release
 materialises a router-owned local marketplace and registers it with the
 attached clients, so on a router host the plugins arrive and refresh with the
-router and need no Git account, GitHub access or marketplace command. The same
-pass retires any earlier Git-backed plugin runner it recognises, with its
-macOS LaunchAgent or Linux systemd timer. A refused Linux scheduler operation
+router and need no Git account, GitHub access or marketplace command. Once
+Codex runs from that copy, the same pass retires any earlier Git-backed plugin
+runner it recognises, with its macOS LaunchAgent or Linux systemd timer, since
+that runner only ever refreshes Codex. A refused Linux scheduler operation
 keeps the old files and reports retirement as pending, so a later install can
-retry. A host without
-the router can still install the plugins from the Git marketplace:
+retry. A host without the router can still install the plugins from the Git
+marketplace:
 
 ```sh
 codex plugin marketplace add software-combined/SC_AI_Router --ref main
