@@ -67,7 +67,7 @@ RETIRED_SLUGS = {'~anthropic/claude-sonnet-latest', '~anthropic/claude-fable-lat
                  '~anthropic/claude-haiku-latest', '~anthropic/claude-opus-latest',
                  '~google/gemini-flash-latest', '~google/gemini-pro-latest',
                  '~x-ai/grok-latest', 'x-ai/grok-4.6', 'anthropic/claude-opus-5',
-                 'openai/gpt-5.6-sol', 'openai/gpt-5.6-luna',
+                 'openai/gpt-5.6-sol', 'openai/gpt-6-sol', 'openai/gpt-5.6-luna',
                  'deepseek/deepseek-v4-pro', 'deepseek/deepseek-v4-flash',
                  'deepseek/deepseek-v4-flash-0731',
                  '~deepseek/deepseek-v4-flash-latest',
