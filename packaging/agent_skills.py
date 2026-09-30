@@ -52,7 +52,11 @@ def client_path():
     # ponytail: fixed common dirs; a client under a version manager (nvm, fnm)
     # still needs its bin dir on the scheduled job's PATH.
     dirs = [d for d in os.environ.get('PATH', '').split(os.pathsep) if d]
-    extra = (str(Path.home() / '.local' / 'bin'), '/opt/homebrew/bin', '/usr/local/bin')
+    extra = (str(Path.home() / '.local' / 'bin'),)
+    if os.name != 'nt':
+        # Admin-owned on macOS and Linux. On Windows they would be drive-root
+        # folders any local account can create, so a planted client could run.
+        extra += ('/opt/homebrew/bin', '/usr/local/bin')
     return os.pathsep.join(dirs + [d for d in extra if d not in dirs])
 
 

@@ -43,6 +43,8 @@ are never copied between machines.
 `ai_router/clients/__init__.py`, `ai_router/clients/codex.py`,
 `ai_router/clients/registry.py`, `ai_router/clients/roster.py`,
 `ai_router/transport.py`, `ai_router/subscription_fallback.py`,
+`ai_router/codex_route.py`, `ai_router/routed_models.py`,
+`ai_router/usage_episodes.py`,
 `ai_router/subscription_history.py`, `ai_router/context_recovery.py`,
 `ai_router/provider_defs.py`, `ai_router/upstream.py`, `ai_router/ingress.py`,
 `ai_router/relay.py`, `ai_router/tool_merge.py`, `ai_router/atomic_write.py`,
@@ -106,4 +108,82 @@ The installer also places `packaging/router_launch.py` and
 and `update_launch.py`, so restarts and scheduled updates follow the pointer
 without symlinks. Windows Task Scheduler runs those through the packaged
 `packaging/task_launch.py` copied to `task_launch.py`, which routes the
-task's output into `logs/`.
+task's output into `logs/`. On a Mac that gets the Switch Codex app,
+`packaging/codex_switch_launch.py` is copied beside them as
+`codex_switch_launch.py`; the app runs it under the router's Python, so it
+follows the pointer the same way.
+
+## Codex usage-limit record
+
+The router writes `codex-usage-limit.json` in its home when ChatGPT refuses a
+Codex desktop request because the allowance has run out. It is machine state
+like the catalogues: never bundled, never copied, and it holds nothing from
+the request. It is the contract for the Switch Codex offer, so a reader may
+parse the JSON directly, including packaging code on Python 3.9.
+
+```json
+{
+  "seen_at": "2026-09-29T05:12:33+00:00",
+  "resets_at": "2026-09-29T10:12:33+00:00",
+  "client_version": "26.924.22138"
+}
+```
+
+`seen_at` is when the episode started, in UTC with a `+00:00` offset, which
+Python 3.9's `datetime.fromisoformat` reads. `resets_at` is when ChatGPT said
+the allowance returns, in the same form, or `null` when it named no reset or
+named one in the past or more than 31 days out. `client_version` is the Codex
+desktop version from the request's User-Agent, digits and dots only, or
+`null`.
+
+Only one refusal counts: a ChatGPT subscription 429 whose body names
+`error.type` `usage_limit_reached`, which is how Codex itself recognises a
+spent allowance, from a request whose User-Agent carries the desktop's
+`(Codex Desktop; <version>)` suffix. Other 429s are plain rate limits to
+Codex; they and requests from the Codex CLI (`codex-tui`) never write the
+file.
+
+One episode is one limit period. It ends at `resets_at`, or five hours after
+`seen_at` when `resets_at` is `null`. A refusal before then keeps `seen_at` and
+`client_version` and can only change `resets_at`; a refusal after it starts a
+new episode. The file is replaced atomically and is owner-only (0600). Nothing
+deletes it when an episode ends, so a reader compares the times itself. A
+missing, unreadable or malformed file means no episode, which is what
+`usage_episodes.current(home)` returns as None. A failed write is logged as
+`usage_episode_failed` and never changes the answer the client gets.
+
+The updater remembers which Switch Codex offers it has made in
+`codex-switch-offers.json` beside it, for the latest episode only:
+
+```json
+{
+  "seen_at": "2026-09-29T05:12:33+00:00",
+  "offered": ["switch", "back"]
+}
+```
+
+`seen_at` names the episode, and a new episode starts with no offers made.
+`switch` is the offer to move Codex to OpenRouter models; `back` is the offer
+to return to the ChatGPT subscription. The offer is written before its dialog
+appears and is owner-only (0600). A home that cannot be written therefore
+shows no dialog rather than the same one every minute, and a dialog that
+cannot be drawn is taken back off the list so a later pass offers it again.
+
+## Switch Codex run log
+
+Each Switch Codex run appends one JSON line to `logs/codex-switch.log`, so a
+switch that refused can be diagnosed afterwards:
+
+```json
+{"at": "2026-09-30T12:31:05+10:00", "to": "switched", "open": ["ChatGPT", "browser_crashpad_handler"], "result": "The ChatGPT app (Codex) did not close. Quit it from the ChatGPT menu, close any Codex sessions in Terminal, then open Switch Codex again."}
+```
+
+`at` is the local time with its offset. `to` is the variant the run aimed
+for, `switched` or `switched_back`, or `null` when it refused before choosing
+one. `result` is `done`, `cancelled` or the message the person saw, which
+never holds paths, settings, addresses or keys. `open` appears only when the
+app did not close: the sorted file names of the executables still running
+from the app bundle, never their paths or arguments, or `null` when the
+process list could not be read. A line that cannot be
+written never stops a switch, and the file ages out a month after its last
+write, like the other logs.

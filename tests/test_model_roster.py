@@ -9,7 +9,7 @@ from ai_router.providers import ExternalResponsesProvider, PreparationError, sel
 from ai_router.registry import MODELS, by_slug
 
 PINNED_CLAUDE = ('anthropic/claude-fable-5.1', 'anthropic/claude-haiku-4.5',
-                 'anthropic/claude-opus-5.5', 'anthropic/claude-sonnet-5')
+                 'anthropic/claude-opus-5.5', 'anthropic/claude-sonnet-5.5')
 RETIRED_LATEST = ('~anthropic/claude-sonnet-latest', '~anthropic/claude-fable-latest',
                   '~anthropic/claude-haiku-latest', '~anthropic/claude-opus-latest',
                   '~google/gemini-flash-latest', '~google/gemini-pro-latest',
@@ -27,6 +27,12 @@ RETIRED_DEEPSEEK = ('deepseek/deepseek-v4-pro', 'deepseek/deepseek-v4-flash',
 # superseded pin retires the way a superseded alias does.
 PINNED_GROK = 'x-ai/grok-4.7'
 RETIRED_GROK = 'x-ai/grok-4.6'
+# Sonnet follows the same rule: 5.5 replaces 5 by exact id.
+PINNED_SONNET = 'anthropic/claude-sonnet-5.5'
+RETIRED_SONNET = 'anthropic/claude-sonnet-5'
+# Terra leaves the OpenRouter picker with no replacement; the ChatGPT
+# subscription row keeps its place.
+RETIRED_TERRA, SUBSCRIPTION_TERRA = 'openai/gpt-5.6-terra', 'gpt-5.6-terra'
 
 
 class ModelRosterTests(unittest.TestCase):
@@ -96,6 +102,28 @@ class ModelRosterTests(unittest.TestCase):
         merged = {m['slug'] for m in merge({'models': [{'slug': RETIRED_GROK}]})['models']}
         self.assertNotIn(RETIRED_GROK, merged)
         self.assertIn(PINNED_GROK, merged)
+
+    def test_superseded_pinned_sonnet_id_retires_on_upgrade(self):
+        # A picker file that still lists Sonnet 5 drops it at the next merge,
+        # and the verified 5.5 row takes its place under the naming rule.
+        sonnet = by_slug(PINNED_SONNET)
+        self.assertEqual((sonnet.tier, sonnet.listed), ('verified', True))
+        self.assertEqual(sonnet.display_name, 'Anthropic: Claude Sonnet 5.5 · OpenRouter')
+        self.assertIsNone(by_slug(RETIRED_SONNET))
+        self.assertIn(RETIRED_SONNET, RETIRED_SLUGS)
+        merged = {m['slug'] for m in merge({'models': [{'slug': RETIRED_SONNET}]})['models']}
+        self.assertNotIn(RETIRED_SONNET, merged)
+        self.assertIn(PINNED_SONNET, merged)
+
+    def test_retired_openrouter_terra_drops_on_upgrade_and_the_subscription_row_stays(self):
+        # A picker file that still lists the OpenRouter row drops it at the next
+        # merge; the subscription row of the same name is untouched.
+        self.assertIsNone(by_slug(RETIRED_TERRA))
+        self.assertIn(RETIRED_TERRA, RETIRED_SLUGS)
+        stale = {'models': [{'slug': RETIRED_TERRA}, {'slug': SUBSCRIPTION_TERRA}]}
+        merged = {m['slug'] for m in merge(stale)['models']}
+        self.assertNotIn(RETIRED_TERRA, merged)
+        self.assertIn(SUBSCRIPTION_TERRA, merged)
 
     def test_claude_without_effort_control_survives_refresh_and_prepares_none(self):
         slug = 'anthropic/claude-haiku-4.5'

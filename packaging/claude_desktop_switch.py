@@ -8,12 +8,8 @@ import argparse
 import importlib.util
 import json
 import os
-import plistlib
-import shlex
-import shutil
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 
@@ -279,49 +275,12 @@ def install_launcher(home, python, *, action='switch', applications=None,
     name = 'Open Claude' if action == 'start' else 'Switch Claude'
     launcher_id = LAUNCHER_ID + ('.open' if action == 'start' else '')
     applications = Path(applications) if applications else Path.home() / 'Applications'
-    target = applications / (name + '.app')
-    info = target / 'Contents' / 'Info.plist'
-    if target.exists():
-        try:
-            owned = (plistlib.loads(info.read_bytes()).get('CFBundleIdentifier')
-                     == launcher_id)
-        except (OSError, ValueError):
-            owned = False
-        if not owned:
-            raise SwitchError(name + ' already exists. Contact your administrator.')
-    applications.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(dir=applications) as tmp:
-        staged = Path(tmp) / (name + '.app')
-        contents = staged / 'Contents'
-        resources = contents / 'Resources'
-        executable = contents / 'MacOS' / name
-        resources.mkdir(parents=True)
-        executable.parent.mkdir()
-        iconset = Path(tmp) / 'router.iconset'
-        iconset.mkdir()
-        for size, icon_name in ((512, 'icon_512x512.png'), (1024, 'icon_512x512@2x.png')):
-            run(['/usr/bin/sips', '-z', str(size), str(size), str(ICON), '--out',
-                 str(iconset / icon_name)], check=True, capture_output=True, timeout=15)
-        run(['/usr/bin/iconutil', '-c', 'icns', str(iconset), '-o',
-             str(resources / 'router.icns')], check=True, capture_output=True, timeout=15)
-        launch = home / 'claude_profile_launch.py'
-        executable.write_text(
-            '#!/bin/sh\nexec %s %s --action %s\n'
-            % (shlex.quote(str(python)), shlex.quote(str(launch)), action))
-        executable.chmod(0o755)
-        (contents / 'Info.plist').write_bytes(plistlib.dumps({
-            'CFBundleIdentifier': launcher_id, 'CFBundleName': name,
-            'CFBundleExecutable': executable.name, 'CFBundlePackageType': 'APPL',
-            'CFBundleIconFile': 'router.icns', 'LSUIElement': True,
-        }))
-        _desktop.atomic_write.replace_text(
-            launch, Path(__file__).with_name('claude_profile_launch.py').read_text(encoding='utf-8'))
-        if target.exists():
-            # Only this product's bundle passes the ownership check above.
-            shutil.copytree(staged, target, dirs_exist_ok=True)
-        else:
-            staged.rename(target)
-    return target
+    try:
+        return _platform.install_mac_app(
+            applications / (name + '.app'), launcher_id, python, home,
+            'claude_profile_launch.py', ('--action', action), run=run)
+    except _platform.NotOwned as exc:
+        raise SwitchError(name + ' already exists. Contact your administrator.') from exc
 
 
 def main(argv=None):

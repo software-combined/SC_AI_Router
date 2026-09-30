@@ -187,7 +187,7 @@ def _restore_owned_config(home):
 
 
 def do_rollback(args):
-    _sync_seams()
+    _sync_seams(); _client_choice.refuse_switched(Path(args.home).expanduser())  # older releases may lack Switch Codex
     return _bundle.do_rollback(
         args, platform_backend=platform_backend, restart_router=restart_router,
         wait_version=wait_version, current_version=current_version,
@@ -473,7 +473,7 @@ def do_install(args, _fetch=fetch, _run=None):
         print(f"agent skills: {_skills.sync(state, current_release_dir(home) / 'plugins', run=run)}")
         print(f"installed {latest['version']}; health ok; Claude Code attached")
         return 0
-    _client_choice.attach_codex(home, state, mode, _codex_config, previous_receipt, static_catalogue=args.static_catalogue)
+    _client_choice.attach_codex(home, state, mode, _codex_config, previous_receipt, static_catalogue=args.static_catalogue, python=python)
     # launchd keeps the updater command until the job is reloaded and a
     # scheduled run defers that reload, so pruning its release breaks it.
     prune_releases(home, latest['version'], previous,
@@ -553,8 +553,8 @@ def do_uninstall(args):
     attached = _codex_config.codex_attachment(home)
     if (attached == {}
             and (_codex_config.BEGIN in configured or _codex_config.END in configured)):
-        raise SystemExit('managed Codex block present without a receipt; '
-                         'run tools/disable.py first')
+        raise SystemExit('managed Codex block present without a receipt; run tools/disable.py first')
+    _client_choice.refuse_switched(home)  # also before anything changes: switch back first
     release = current_release_dir(home)
     detach_claude(home)  # sweep first: each surface no-ops without its claim
     if release is not None and attached == {} and not _codex_config.read_receipt(home).get('clients', {}):

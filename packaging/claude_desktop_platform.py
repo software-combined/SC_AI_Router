@@ -1,4 +1,11 @@
-"""Native Claude identity, graceful lifecycle, dialogs and owned shortcuts."""
+"""Native Claude identity, graceful lifecycle, dialogs and owned shortcuts.
+
+The macOS lifecycle helpers also serve Switch Codex: `app` names the bundle
+to find, quit and reopen, and defaults to Claude, the only app the Windows
+and Linux paths know. `install_mac_app` builds the owned launcher apps:
+Switch Claude, Open Claude and Switch Codex.
+"""
+import collections
 import configparser
 import importlib.util
 import json
@@ -8,6 +15,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -25,6 +33,10 @@ TITLE = 'SCG Router'
 ICON = Path(__file__).parent / 'assets' / 'router-icon.png'
 BUNDLE_ID = 'com.anthropic.claudefordesktop'
 APP_DESKTOP_ID = BUNDLE_ID
+# `writers`: executable names that must belong to the verified app, since a
+# stray copy could write the same profile while the switch runs.
+App = collections.namedtuple('App', 'bundle_id writers')
+CLAUDE = App(BUNDLE_ID, ('claude', 'claude-desktop', 'claude.exe'))
 
 
 def dialog_script(message, confirm=False):
@@ -106,7 +118,9 @@ def _json_command(script, run):
         raise OSError('Claude identity could not be checked') from exc
 
 
-def app_identity(platform_name, run=subprocess.run):
+def app_identity(platform_name, run=subprocess.run, app=CLAUDE):
+    if app != CLAUDE and platform_name != 'darwin':
+        raise OSError('only the Mac knows this app')
     if platform_name == 'win32':
         return _json_command(
             "$a=@(Get-StartApps | Where-Object {$_.Name -eq 'Claude'});"
@@ -125,13 +139,13 @@ def app_identity(platform_name, run=subprocess.run):
         # AppleScript's app-path lookup launches a closed Claude. Spotlight
         # resolves the bundle without undoing the stopped-app safety check.
         answer = _run(['/usr/bin/mdfind',
-                       'kMDItemCFBundleIdentifier == "%s"' % BUNDLE_ID], run)
+                       'kMDItemCFBundleIdentifier == "%s"' % app.bundle_id], run)
         roots = {Path(line) for line in answer.stdout.splitlines() if line}
         if answer.returncode or len(roots) != 1:
             raise OSError('Claude identity could not be checked')
         root = roots.pop()
         doc = plistlib.loads((root / 'Contents/Info.plist').read_bytes())
-        if doc.get('CFBundleIdentifier') != BUNDLE_ID:
+        if doc.get('CFBundleIdentifier') != app.bundle_id:
             raise OSError('Claude identity could not be checked')
         exe = root / 'Contents/MacOS' / doc['CFBundleExecutable']
     else:
@@ -190,7 +204,7 @@ def _snapshot(platform_name, identity, run):
     return {r['pid']: r for r in rows if r['user'] == identity['user']}
 
 
-def _writers(rows, identity, seen, platform_name):
+def _writers(rows, identity, seen, platform_name, names=CLAUDE.writers):
     norm = (lambda s: s.replace('\\', '/').casefold()) if platform_name == 'win32' else str
     root, exe = norm(identity['root']).rstrip('/') + '/', norm(identity['exe'])
     browser_host = root + 'Contents/Helpers/chrome-native-host' if platform_name == 'darwin' else None
@@ -200,7 +214,9 @@ def _writers(rows, identity, seen, platform_name):
         # A new start time or user means the pid now belongs to another process.
         if pid in rows and any(rows[pid][k] != old[k] for k in ('born', 'user')):
             raise OSError('Claude identity changed')
-    for pid, row in rows.items():
+    # Crash reporters write only crash reports and can outlive an app update by days.
+    live = {p: r for p, r in rows.items() if 'crashpad_handler' not in norm(r['exe']).rsplit('/', 1)[-1]}
+    for pid, row in live.items():
         path = norm(row['exe'])
         # Browser-owned native messaging hosts outlive Claude. Actual app
         # descendants still enter and remain in seen through the walk below.
@@ -208,31 +224,32 @@ def _writers(rows, identity, seen, platform_name):
                            and path != browser_host):
             seen[pid] = row
     while True:
-        children = {pid: row for pid, row in rows.items()
+        children = {pid: row for pid, row in live.items()
                     if row['parent'] in seen and pid not in seen}
         if not children:
             break
         seen.update(children)
     for pid, row in rows.items():
-        if (pid not in seen and norm(row['exe']).rsplit('/', 1)[-1].lower()
-                in ('claude', 'claude-desktop', 'claude.exe')):
+        if pid not in seen and norm(row['exe']).rsplit('/', 1)[-1].lower() in names:
             raise OSError('unverified Claude writer')
     return bool(set(rows).intersection(seen))
 
 
-def is_running(platform_name, run=subprocess.run):
-    identity = app_identity(platform_name, run)
-    return _writers(_snapshot(platform_name, identity, run), identity, {}, platform_name)
+def is_running(platform_name, run=subprocess.run, app=CLAUDE):
+    identity = app_identity(platform_name, run, app=app)
+    return _writers(_snapshot(platform_name, identity, run), identity, {}, platform_name,
+                    app.writers)
 
 
-def request_stop(platform_name, run=subprocess.run, timeout=65):
-    identity = app_identity(platform_name, run)
+def request_stop(platform_name, run=subprocess.run, timeout=65, app=CLAUDE):
+    identity = app_identity(platform_name, run, app=app)
     seen = {}
-    if not _writers(_snapshot(platform_name, identity, run), identity, seen, platform_name):
+    if not _writers(_snapshot(platform_name, identity, run), identity, seen, platform_name,
+                    app.writers):
         return True
     deadline = time.monotonic() + max(0, timeout)
     if platform_name == 'darwin':
-        argv = ['/usr/bin/osascript', '-e', 'tell application id "%s" to quit' % BUNDLE_ID]
+        argv = ['/usr/bin/osascript', '-e', 'tell application id "%s" to quit' % app.bundle_id]
     elif platform_name == 'win32':
         roots = [str(pid) for pid, row in seen.items() if row['exe'] == identity['exe']]
         births = ';'.join('%s=%s' % (pid, _ps(seen[int(pid)]['born'])) for pid in roots)
@@ -256,7 +273,8 @@ def request_stop(platform_name, run=subprocess.run, timeout=65):
         pass  # Claude may still close, for example after its own confirmation; the wait decides.
     while True:
         try:
-            if not _writers(_snapshot(platform_name, identity, run), identity, seen, platform_name):
+            if not _writers(_snapshot(platform_name, identity, run), identity, seen,
+                            platform_name, app.writers):
                 return True
         except (OSError, subprocess.SubprocessError):
             pass  # Quitting processes can fail a check; only a clean one ends the wait.
@@ -265,8 +283,8 @@ def request_stop(platform_name, run=subprocess.run, timeout=65):
         time.sleep(min(0.25, max(0, deadline - time.monotonic())))
 
 
-def open_app(platform_name, run=subprocess.run):
-    identity = app_identity(platform_name, run)
+def open_app(platform_name, run=subprocess.run, app=CLAUDE):
+    identity = app_identity(platform_name, run, app=app)
     if platform_name == 'darwin':
         argv = ['/usr/bin/open', identity['root']]
     elif platform_name == 'win32':
@@ -325,3 +343,58 @@ def install_launcher(home, python, action='switch', applications=None,
         return None
     _atomic.replace_text(launch, Path(__file__).with_name('claude_profile_launch.py').read_text(encoding='utf-8'), mode=0o755)
     return path
+
+
+class NotOwned(Exception):
+    """An app already at the target that this router did not build."""
+
+
+def install_mac_app(target, bundle_id, python, home, launcher, extra=(), plist=None,
+                    run=subprocess.run):
+    """Build or refresh the owned macOS app at `target`, staged, then swapped in.
+
+    Its executable runs `python <home>/<launcher> <extra...>`, and `launcher`,
+    a sibling of this module, is copied into the router home first, so the
+    app outlives updates and release pruning. `plist` adds Info.plist keys.
+    An app at `target` with another bundle id raises NotOwned and stays.
+    """
+    target, home = Path(target), Path(home)
+    if target.exists():
+        try:
+            owned = (plistlib.loads((target / 'Contents' / 'Info.plist').read_bytes())
+                     .get('CFBundleIdentifier') == bundle_id)
+        except (OSError, ValueError):
+            owned = False
+        if not owned:
+            raise NotOwned(target.name)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=target.parent) as tmp:
+        staged = Path(tmp) / target.name
+        contents = staged / 'Contents'
+        resources = contents / 'Resources'
+        executable = contents / 'MacOS' / target.stem
+        resources.mkdir(parents=True)
+        executable.parent.mkdir()
+        iconset = Path(tmp) / 'router.iconset'
+        iconset.mkdir()
+        for size, icon_name in ((512, 'icon_512x512.png'), (1024, 'icon_512x512@2x.png')):
+            run(['/usr/bin/sips', '-z', str(size), str(size), str(ICON), '--out',
+                 str(iconset / icon_name)], check=True, capture_output=True, timeout=15)
+        run(['/usr/bin/iconutil', '-c', 'icns', str(iconset), '-o',
+             str(resources / 'router.icns')], check=True, capture_output=True, timeout=15)
+        launch = home / launcher
+        executable.write_text('#!/bin/sh\nexec %s\n' % ' '.join(
+            shlex.quote(str(part)) for part in (python, launch) + tuple(extra)))
+        executable.chmod(0o755)
+        (contents / 'Info.plist').write_bytes(plistlib.dumps({
+            'CFBundleIdentifier': bundle_id, 'CFBundleName': target.stem,
+            'CFBundleExecutable': executable.name, 'CFBundlePackageType': 'APPL',
+            'CFBundleIconFile': 'router.icns', 'LSUIElement': True, **(plist or {}),
+        }))
+        _atomic.replace_text(launch, Path(__file__).with_name(launcher).read_text(encoding='utf-8'))
+        if target.exists():
+            # Only this product's bundle passes the ownership check above.
+            shutil.copytree(staged, target, dirs_exist_ok=True)
+        else:
+            staged.rename(target)
+    return target

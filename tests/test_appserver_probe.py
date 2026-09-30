@@ -14,8 +14,10 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 from tests._platform import unix_only
-from tools.appserver_probe import AGENT_HANDOFFS, AMBIENT, CONTEXT_BUDGET, AppServer, scrub_env
+from tools.appserver_probe import (AGENT_HANDOFFS, AMBIENT, BUNDLED_CODEX, CONTEXT_BUDGET,
+                                   AppServer, codex_bin, scrub_env)
 from tools.probe_spawn_list import declared_tools, expected_overrides, spawn_override_models
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -266,6 +268,23 @@ class SpawnListCaptureTests(unittest.TestCase):
                 {'slug': 'e', 'visibility': 'list', 'multi_agent_version': 'v2'},
                 {'slug': 'f', 'visibility': 'list', 'multi_agent_version': 'v2'}]
         self.assertEqual(expected_overrides(rows), ['a', 'b', 'c', 'd', 'e'])
+
+
+class CodexBinaryTests(unittest.TestCase):
+    """ChatGPT 26.924 moved the bundled CLI; every probe had pinned the old path."""
+
+    def test_the_override_wins_then_the_newest_bundle_layout(self):
+        new, old = BUNDLED_CODEX
+        for present, env, expected in (({new, old}, {'CODEX_BIN': '/opt/codex'}, '/opt/codex'),
+                                       ({new, old}, {}, new), ({old}, {}, old), (set(), {}, new)):
+            with self.subTest(present=sorted(present), env=env), mock.patch(
+                    'tools.appserver_probe.os.path.exists', side_effect=present.__contains__):
+                self.assertEqual(codex_bin(env), expected)
+
+    def test_only_the_shared_resolver_names_a_bundled_cli_path(self):
+        for path in sorted((ROOT / 'tools').glob('*.py')):
+            if path.name != 'appserver_probe.py':
+                self.assertNotIn('Contents/Resources/codex', path.read_text(), path.name)
 
 
 if __name__ == '__main__':

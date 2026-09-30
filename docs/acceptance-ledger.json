@@ -187,6 +187,485 @@
   },
 {
   "kind": "model_routes_v1",
+  "observed_at": "2026-09-29T05:29:26.496161+00:00",
+  "model": "anthropic/claude-sonnet-5.5",
+  "provider": "openrouter",
+  "capability_fingerprint": "2e212ff07874fb247509f022e83ed8ba5262053e906d6eca07c88c4634932bca",
+  "runtime_fingerprint": "59eb6c417f808e078139816af0197fa766151990ea09c916aeb60c1768164f4e",
+  "router_version": "0.6.140",
+  "router_revision": "e474ca75c7a431c029edd39b7fc4e399feffdbed",
+  "routes": [
+    {
+      "protocol": "responses",
+      "client": "codex",
+      "client_version": "0.158.0-alpha.2.1",
+      "requested_effort": "low",
+      "served_models": [
+        {
+          "value": "anthropic/claude-sonnet-5.5",
+          "source": "response.created.response.model"
+        },
+        {
+          "value": "anthropic/claude-sonnet-5.5",
+          "source": "response.in_progress.response.model"
+        },
+        {
+          "value": "anthropic/claude-sonnet-5.5",
+          "source": "response.completed.response.model"
+        },
+        {
+          "value": "anthropic/claude-sonnet-5.5",
+          "source": "response.created.response.model"
+        },
+        {
+          "value": "anthropic/claude-sonnet-5.5",
+          "source": "response.in_progress.response.model"
+        },
+        {
+          "value": "anthropic/claude-sonnet-5.5",
+          "source": "response.completed.response.model"
+        },
+        {
+          "value": "anthropic/claude-sonnet-5.5",
+          "source": "response.created.response.model"
+        },
+        {
+          "value": "anthropic/claude-sonnet-5.5",
+          "source": "response.in_progress.response.model"
+        },
+        {
+          "value": "anthropic/claude-sonnet-5.5",
+          "source": "response.completed.response.model"
+        }
+      ],
+      "served_efforts": [
+        {
+          "value": "low",
+          "source": "response.created.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.in_progress.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.completed.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.created.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.in_progress.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.completed.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.created.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.in_progress.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.completed.response.reasoning.effort"
+        }
+      ],
+      "calls": 4,
+      "conformance": "pass",
+      "result": "fail"
+    },
+    {
+      "protocol": "messages",
+      "client": "claude",
+      "client_version": "2.1.283",
+      "requested_effort": "low",
+      "served_models": [],
+      "served_efforts": [],
+      "calls": 0,
+      "conformance": "pass",
+      "result": "fail"
+    }
+  ]
+},
+{
+  "kind": "model_routes_v1",
+  "observed_at": "2026-09-29T06:34:48.390166+00:00",
+  "model": "anthropic/claude-sonnet-5.5",
+  "provider": "openrouter",
+  "capability_fingerprint": "2e212ff07874fb247509f022e83ed8ba5262053e906d6eca07c88c4634932bca",
+  "runtime_fingerprint": "59eb6c417f808e078139816af0197fa766151990ea09c916aeb60c1768164f4e",
+  "router_version": "0.6.140",
+  "router_revision": "366f1019f20cbe67e26775bceaf2c29d95fcbf9a",
+  "routes": [
+    {
+      "protocol": "responses",
+      "client": "codex",
+      "client_version": "0.158.0-alpha.2.1",
+      "requested_effort": "low",
+      "served_models": [
+        {
+          "value": "anthropic/claude-sonnet-5.5",
+          "source": "response.created.response.model"
+        },
+        {
+          "value": "anthropic/claude-sonnet-5.5",
+          "source": "response.in_progress.response.model"
+        },
+        {
+          "value": "anthropic/claude-sonnet-5.5",
+          "source": "response.completed.response.model"
+        },
+        {
+          "value": "anthropic/claude-sonnet-5.5",
+          "source": "response.created.response.model"
+        },
+        {
+          "value": "anthropic/claude-sonnet-5.5",
+          "source": "response.in_progress.response.model"
+        },
+        {
+          "value": "anthropic/claude-sonnet-5.5",
+          "source": "response.completed.response.model"
+        },
+        {
+          "value": "anthropic/claude-sonnet-5.5",
+          "source": "response.created.response.model"
+        },
+        {
+          "value": "anthropic/claude-sonnet-5.5",
+          "source": "response.in_progress.response.model"
+        },
+        {
+          "value": "anthropic/claude-sonnet-5.5",
+          "source": "response.completed.response.model"
+        }
+      ],
+      "served_efforts": [
+        {
+          "value": "low",
+          "source": "response.created.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.in_progress.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.completed.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.created.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.in_progress.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.completed.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.created.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.in_progress.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.completed.response.reasoning.effort"
+        }
+      ],
+      "calls": 4,
+      "conformance": "pass",
+      "result": "fail"
+    },
+    {
+      "protocol": "messages",
+      "client": "claude",
+      "client_version": "2.1.283",
+      "requested_effort": "low",
+      "served_models": [
+        {
+          "value": "anthropic/claude-sonnet-5.5",
+          "source": "message_start.message.model"
+        },
+        {
+          "value": "anthropic/claude-sonnet-5.5",
+          "source": "message_start.message.model"
+        },
+        {
+          "value": "anthropic/claude-sonnet-5.5",
+          "source": "message_start.message.model"
+        },
+        {
+          "value": "anthropic/claude-sonnet-5.5",
+          "source": "message_start.message.model"
+        }
+      ],
+      "served_efforts": [],
+      "calls": 4,
+      "conformance": "pass",
+      "result": "fail"
+    }
+  ]
+},
+{
+  "kind": "model_routes_v1",
+  "observed_at": "2026-09-29T06:43:03.738323+00:00",
+  "model": "anthropic/claude-sonnet-5.5",
+  "provider": "openrouter",
+  "capability_fingerprint": "2e212ff07874fb247509f022e83ed8ba5262053e906d6eca07c88c4634932bca",
+  "runtime_fingerprint": "115ca86a51e3022f6265e13fa0a8efb379da30d0ed304ba75fa098011065d1f4",
+  "router_version": "0.6.140",
+  "router_revision": "366f1019f20cbe67e26775bceaf2c29d95fcbf9a",
+  "routes": [
+    {
+      "protocol": "responses",
+      "client": "codex",
+      "client_version": "0.158.0-alpha.2.1",
+      "requested_effort": "low",
+      "served_models": [
+        {
+          "value": "anthropic/claude-sonnet-5.5",
+          "source": "response.created.response.model"
+        },
+        {
+          "value": "anthropic/claude-sonnet-5.5",
+          "source": "response.in_progress.response.model"
+        },
+        {
+          "value": "anthropic/claude-sonnet-5.5",
+          "source": "response.completed.response.model"
+        },
+        {
+          "value": "anthropic/claude-sonnet-5.5",
+          "source": "response.created.response.model"
+        },
+        {
+          "value": "anthropic/claude-sonnet-5.5",
+          "source": "response.in_progress.response.model"
+        },
+        {
+          "value": "anthropic/claude-sonnet-5.5",
+          "source": "response.completed.response.model"
+        },
+        {
+          "value": "anthropic/claude-sonnet-5.5",
+          "source": "response.created.response.model"
+        },
+        {
+          "value": "anthropic/claude-sonnet-5.5",
+          "source": "response.in_progress.response.model"
+        },
+        {
+          "value": "anthropic/claude-sonnet-5.5",
+          "source": "response.completed.response.model"
+        }
+      ],
+      "served_efforts": [
+        {
+          "value": "low",
+          "source": "response.created.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.in_progress.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.completed.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.created.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.in_progress.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.completed.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.created.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.in_progress.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.completed.response.reasoning.effort"
+        }
+      ],
+      "calls": 4,
+      "conformance": "pass",
+      "result": "pass"
+    },
+    {
+      "protocol": "messages",
+      "client": "claude",
+      "client_version": "2.1.283",
+      "requested_effort": "low",
+      "served_models": [
+        {
+          "value": "anthropic/claude-sonnet-5.5",
+          "source": "message_start.message.model"
+        },
+        {
+          "value": "anthropic/claude-sonnet-5.5",
+          "source": "message_start.message.model"
+        },
+        {
+          "value": "anthropic/claude-sonnet-5.5",
+          "source": "message_start.message.model"
+        }
+      ],
+      "served_efforts": [],
+      "calls": 3,
+      "conformance": "pass",
+      "result": "pass"
+    }
+  ]
+},
+{
+  "kind": "model_routes_v1",
+  "observed_at": "2026-09-29T23:53:46.852903+00:00",
+  "model": "openai/gpt-6.1-sol",
+  "provider": "openrouter",
+  "capability_fingerprint": "d80413ebdd1e9181c4a3507c56e34d2fcc3dd46632eee03f532430225eab02fc",
+  "runtime_fingerprint": "6603ad8a277b30866ae89e09353da9a6b28fa109e759679df8e9dc6885d51d93",
+  "router_version": "0.6.144",
+  "router_revision": "9201460b65e38683bd515b2b216a503264e9ebfd",
+  "routes": [
+    {
+      "protocol": "responses",
+      "client": "codex",
+      "client_version": "0.158.0-alpha.2.1",
+      "requested_effort": "low",
+      "served_models": [
+        {
+          "value": "openai/gpt-6.1-sol",
+          "source": "response.created.response.model"
+        },
+        {
+          "value": "openai/gpt-6.1-sol",
+          "source": "response.in_progress.response.model"
+        },
+        {
+          "value": "openai/gpt-6.1-sol",
+          "source": "response.completed.response.model"
+        },
+        {
+          "value": "openai/gpt-6.1-sol",
+          "source": "response.created.response.model"
+        },
+        {
+          "value": "openai/gpt-6.1-sol",
+          "source": "response.in_progress.response.model"
+        },
+        {
+          "value": "openai/gpt-6.1-sol",
+          "source": "response.completed.response.model"
+        },
+        {
+          "value": "openai/gpt-6.1-sol",
+          "source": "response.created.response.model"
+        },
+        {
+          "value": "openai/gpt-6.1-sol",
+          "source": "response.in_progress.response.model"
+        },
+        {
+          "value": "openai/gpt-6.1-sol",
+          "source": "response.completed.response.model"
+        }
+      ],
+      "served_efforts": [
+        {
+          "value": "low",
+          "source": "response.created.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.in_progress.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.completed.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.created.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.in_progress.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.completed.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.created.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.in_progress.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.completed.response.reasoning.effort"
+        }
+      ],
+      "calls": 3,
+      "conformance": "pass",
+      "result": "fail"
+    },
+    {
+      "protocol": "messages",
+      "client": "claude",
+      "client_version": "2.1.283",
+      "requested_effort": "low",
+      "served_models": [
+        {
+          "value": "openai/gpt-6.1-sol",
+          "source": "message_start.message.model"
+        },
+        {
+          "value": "openai/gpt-6.1-sol",
+          "source": "message_start.message.model"
+        },
+        {
+          "value": "openai/gpt-6.1-sol",
+          "source": "message_start.message.model"
+        },
+        {
+          "value": "openai/gpt-6.1-sol",
+          "source": "message_start.message.model"
+        }
+      ],
+      "served_efforts": [],
+      "calls": 4,
+      "conformance": "pass",
+      "result": "fail"
+    }
+  ]
+},
+{
+  "kind": "model_routes_v1",
   "observed_at": "2026-09-30T00:50:09.807148+00:00",
   "model": "openai/gpt-6.1-sol",
   "provider": "openrouter",

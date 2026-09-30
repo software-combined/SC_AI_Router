@@ -71,7 +71,7 @@ class HelperTurnTests(unittest.TestCase):
         self.assertIsNone(subscription_fallback.twin_slug(None))
 
     def test_twinless_slugs_fall_back_to_the_luna_twin(self):
-        for model in ('gpt-5.5', 'gpt-5.3-codex-spark'):
+        for model in ('gpt-5.5', 'gpt-5.3-codex-spark', 'gpt-5.6-terra', 'gpt-6-sol'):
             with self.subTest(model=model):
                 self.assertEqual(subscription_fallback.twin_slug(model), 'openai/gpt-6-luna')
 

@@ -93,7 +93,7 @@ reads `<home>/model-policy.json` alone; the flag never widens it.
 
 The current roster pins exact ids from the
 [OpenRouter model list](https://openrouter.ai/api/v1/models): Claude Opus 5.5,
-Sonnet 5, Fable 5.1 and Haiku 4.5; Gemini 3.8 Flash and Gemini 3.1 Pro
+Sonnet 5.5, Fable 5.1 and Haiku 4.5; Gemini 3.8 Flash and Gemini 3.1 Pro
 Preview; Grok 4.7; the Xiaomi MiMo 2.6 Pro and Flash rows; and the DeepSeek
 V4.1 Flash (newest Flash, image-capable) and V4 Pro 0813 (newest Pro,
 text-only) rows. The router does not follow

@@ -92,7 +92,7 @@ def _route(handler, provider, prepared, metrics, has_image, started, ledger, log
                     f'The {provider_defs.label_for(prepared.provider)} account has no '
                     'remaining credit; check the provider billing settings'))
             return subscription_fallback.refused(handler, prepared, retry_after, metrics,
-                                                 started, admit, ledger=ledger)
+                                                 started, admit, ledger=ledger, body=drained)
         if response.status >= 400:
             raw = drained
             # An exhausted subscription answers helper turns 401 as well as
