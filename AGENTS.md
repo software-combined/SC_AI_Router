@@ -166,12 +166,12 @@ command.
   client-agnostic, and read system state through whichever MCP or connector
   tools the active client exposes.
 - The router is the delivery channel (Plan 179): its release bundle carries
-  the plugin trees, and every install and scheduled update materialises a
-  router-owned local marketplace and registers it with the attached clients,
-  so a shipped plugin carries no updater of its own. Keep the retained
-  `scripts/updater.py` and `scheduling.py` byte-identical across the plugins
-  (tests pin it); the release bundle withholds them. Link every skill to the
-  shared update guide.
+  the plugin trees, and each install or scheduled update that lands a new
+  release materialises a router-owned local marketplace and registers it with
+  the attached clients, so a shipped plugin carries no updater of its own.
+  Keep the retained `scripts/updater.py` and `scheduling.py` byte-identical
+  across the plugins (tests pin it); the release bundle withholds them. Link
+  every skill to the shared update guide.
 - Release a plugin by bumping both manifests' version and adding a
   `plugins/CHANGELOG.md` entry; validate with the plugin-creator validator
   and the plugin test modules.

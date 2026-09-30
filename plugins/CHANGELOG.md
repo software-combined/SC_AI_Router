@@ -1,6 +1,6 @@
 # Changelog
 
-## scg-review 0.4.16, scg-subagents 0.5.15, scg-prototypes 0.1.3, scg-finance 0.1.2 and scg-documentation 0.1.3 — 2026-09-30
+## scg-review 0.4.16, scg-subagents 0.5.15, scg-prototypes 0.1.3, scg-finance 0.1.2 and scg-documentation 0.1.3 - 2026-09-30
 
 - Align the shared update guide and every skill with the router-managed
   delivery model (Plan 179). The router carries the plugin trees, materialises

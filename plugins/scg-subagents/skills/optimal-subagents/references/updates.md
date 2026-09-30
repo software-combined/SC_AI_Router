@@ -17,8 +17,13 @@ separate plugin updater and no per-plugin schedule to configure.
   the attached Codex and/or Claude Code client.
 - It installs each plugin from that marketplace. A refused registration is
   recorded and skipped; it never fails the router install or the other plugins.
-- The same pass retires any earlier Git-backed plugin runner it recognises,
-  preserving its files beside it as `*.migrated.<n>`.
+- Once a client accepts the registration, the same pass retires any earlier
+  Git-backed plugin runner it recognises, preserving its files beside it as
+  `*.migrated.<n>`. On macOS it also stops that runner's schedule. On Linux
+  and Windows the schedule stays registered and fails without its runner, so
+  disable it. On Linux, run
+  `systemctl --user disable --now scg-agent-plugins-update.timer`. On Windows,
+  disable the `SCGReviewUpdate-<user-SID>` task in Task Scheduler.
 - Every router release re-runs the installer, so a new skill or a plugin change
   arrives with the next router update.
 
