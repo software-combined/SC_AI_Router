@@ -91,7 +91,6 @@ efforts are unchanged; supporting studies often used other/undisclosed efforts.
 | Kimi K3 | `max` | 2.303 / 11.550 | Hard lab/reproduction candidate; strongest matched Fireworks result, but government/operator evidence shows major autonomous limits. |
 | GPT-5.6 Luna | `max` | 0.20 / 1.20 | Bounded support; promising harness-specific IDOR results, insufficient evidence for final security acceptance. |
 | GPT-5.6 Sol | `max` | 2 / 10 | Balanced defensive lead; standard access differs from approved Daybreak access. |
-| GPT-5.6 Terra | `max` | 2 / 12 | IDOR evidence supports defensive use, but no advantage over Sol established here. |
 | GPT-6 Astra | `max` | 10 / 50 | High-consequence defensive reasoning; unsafeguarded benchmark scores do not prove production pentest completion. |
 | Qwen3.8 Max 0902 | `xhigh` | 2 / 6 | Candidate only; undated Qwen cyber rows cannot be assigned to this snapshot. |
 | Grok 4.7 | `xhigh` | 1.6 / 4.8 | Source-review alternative; the repeatability and pooled-finding numbers in [the cyber evidence ledger](cybersecurity-evidence.md) were measured on 4.6 and are unmeasured for 4.7. No basis to call either version the best pentester. |
