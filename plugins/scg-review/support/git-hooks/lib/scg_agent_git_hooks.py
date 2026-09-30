@@ -220,7 +220,10 @@ def chain_local_hook(hook_name: str, extra_args: list[str]) -> int:
         return 0
     env = dict(os.environ)
     env["SCG_AGENT_GIT_HOOK_CHAINED"] = "1"
-    proc = subprocess.run([str(hook_path), *extra_args], env=env)
+    # Git for Windows runs hooks through its own shell; a repository hook is
+    # normally a shell script, which CreateProcess cannot exec directly.
+    command = ["sh", str(hook_path)] if os.name == "nt" else [str(hook_path)]
+    proc = subprocess.run([*command, *extra_args], env=env)
     return proc.returncode
 
 

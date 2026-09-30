@@ -1,5 +1,32 @@
 # Changelog
 
+## scg-review 0.4.18 - 2026-10-01
+
+- Run the SCG pre-commit review gate on native Windows. `setup.py check` and
+  `install` no longer refuse the platform, so Windows gets the same
+  staged-tree receipt gate, commit-msg check and hook provisioning as macOS
+  and Linux, through the one shared adapter.
+- The hook helper runs on an interpreter recorded in `config.json` as an
+  absolute path. Windows defaults to the Python runtime shipped by the router
+  (`%USERPROFILE%\.codex\mixed-model-router\runtime\python\python.exe`, or
+  `ROUTER_HOME` when set) and never searches PATH: a missing runtime blocks
+  setup rather than falling back. macOS and Linux keep the historical
+  `python3` when the setting is absent, so an existing installation and its
+  config bytes are unchanged. An explicit `interpreter` must be absolute and
+  is probed before anything is written.
+- The Git-for-Windows Bash shims read that interpreter, so `pre-commit`,
+  `commit-msg` and `bin/scg-review-state` work on Windows. A repository hook
+  is chained through the shell Git for Windows already provides, because
+  CreateProcess cannot exec a shell script directly.
+- The adapter's end-to-end tests now run on `windows-latest` as well as Linux.
+  Only the two `/bin/sh` scanner-stub tests stay POSIX-only; the portability
+  module covers the scanner on both.
+- Refresh the installed adapter before the next review. `setup.py check`
+  compares every installed file with the bundled bytes, so copy the files it
+  names (`pre-commit`, `commit-msg`, `bin/scg-review-state` and
+  `lib/scg_agent_git_hooks.py`) and re-run the check. Keep `config.json`, the
+  repository's `core.hooksPath` and the review receipts as they are.
+
 ## scg-review 0.4.17 and scg-subagents 0.5.16 - 2026-09-30
 
 - At the owner's request, every pre-commit review pass in Codex now requires

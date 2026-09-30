@@ -1,3 +1,11 @@
+"""End-to-end coverage for the shared hook adapter's receipt gate.
+
+The gate, approve and status paths run on every platform. Path.home() reads
+USERPROFILE on Windows, so the harness overrides both that and HOME. The
+scanner tests drive a /bin/sh stub, which CreateProcess cannot exec on
+Windows, so those two are POSIX-only; the portability module covers the
+scanner on both platforms.
+"""
 from __future__ import annotations
 
 import hashlib
@@ -49,7 +57,8 @@ class ReviewGateTest(unittest.TestCase):
 
     @property
     def env(self) -> dict[str, str]:
-        return {**os.environ, "HOME": str(self.home)}
+        # Path.home() reads USERPROFILE on Windows and HOME elsewhere.
+        return {**os.environ, "HOME": str(self.home), "USERPROFILE": str(self.home)}
 
     def git(self, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
@@ -197,6 +206,7 @@ class ReviewGateTest(unittest.TestCase):
         }
         config_path.write_text(json.dumps(config))
 
+    @unittest.skipIf(os.name == "nt", "drives a /bin/sh scanner stub")
     def test_scan_passes_with_pinned_clean_scanner(self) -> None:
         scanner = self.write_fake_scanner()
         self.pin_scanner(scanner)
@@ -210,6 +220,7 @@ class ReviewGateTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("must define a gitleaks pin", result.stderr)
 
+    @unittest.skipIf(os.name == "nt", "drives a /bin/sh scanner stub")
     def test_scan_blocks_on_drift_external_config_and_leaks(self) -> None:
         scanner = self.write_fake_scanner()
         self.pin_scanner(scanner)
