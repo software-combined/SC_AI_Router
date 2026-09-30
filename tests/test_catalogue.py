@@ -230,9 +230,9 @@ class CatalogueFlagTests(unittest.TestCase):
         merged = merge({'models': [stale]}, client='codex')
         self.assertIn('openai/gpt-6-astra',
                       {m['slug'] for m in merged['models']})
-        hid = dict(external_entry(by_slug('anthropic/claude-sonnet-5')),
+        hid = dict(external_entry(by_slug('anthropic/claude-sonnet-5.5')),
                    description='stale-install')
-        self.assertNotIn('anthropic/claude-sonnet-5',
+        self.assertNotIn('anthropic/claude-sonnet-5.5',
                          {m['slug'] for m in merge({'models': [hid]},
                                                    client='claude')['models']})
 
@@ -248,7 +248,7 @@ class CatalogueFlagTests(unittest.TestCase):
                              {m['slug'] for m in merged['models']})
 
     def test_check_rejects_hidden_rows_left_in_catalogue(self):
-        stale = dict(external_entry(by_slug('anthropic/claude-sonnet-5')),
+        stale = dict(external_entry(by_slug('anthropic/claude-sonnet-5.5')),
                      description='stale-install')
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'stale.json'
@@ -266,14 +266,15 @@ class CatalogueFlagTests(unittest.TestCase):
         for model in models_for(MODELS, 'claude'):
             if model.provider == 'openrouter':
                 self.assertIn(model.slug, claude_slugs)
-        self.assertTrue({'openai/gpt-6-astra', 'openai/gpt-6-sol',
-                         'openai/gpt-6-luna', 'openai/gpt-5.6-terra'} <= codex_slugs)
-        self.assertFalse(claude_slugs & {'anthropic/claude-sonnet-5',
+        self.assertTrue({'openai/gpt-6-astra', 'openai/gpt-6.1-sol',
+                         'openai/gpt-6-luna'} <= codex_slugs)
+        self.assertNotIn('openai/gpt-5.6-terra', codex_slugs)  # retired from the picker
+        self.assertFalse(claude_slugs & {'anthropic/claude-sonnet-5.5',
                                          'anthropic/claude-fable-5.1',
                                          'anthropic/claude-haiku-4.5',
                                          'anthropic/claude-opus-5.5'})
         self.assertIn('openai/gpt-6-astra', claude_slugs)
-        self.assertIn('anthropic/claude-sonnet-5', codex_slugs)
+        self.assertIn('anthropic/claude-sonnet-5.5', codex_slugs)
         with tempfile.TemporaryDirectory() as tmp:
             for client, merged in (('codex', codex), ('claude', claude)):
                 path = Path(tmp) / f'{client}.json'
@@ -282,7 +283,7 @@ class CatalogueFlagTests(unittest.TestCase):
 
     def test_client_flag_round_trip_on_cli(self):
         with tempfile.TemporaryDirectory() as tmp:
-            for client, other_row in (('codex', 'anthropic/claude-sonnet-5'),
+            for client, other_row in (('codex', 'anthropic/claude-sonnet-5.5'),
                                       ('claude', 'openai/gpt-6-astra')):
                 target = Path(tmp) / f'{client}.json'
                 proc = subprocess.run(
@@ -300,8 +301,7 @@ class CatalogueFlagTests(unittest.TestCase):
 
 
 class CatalogueTwinsTests(unittest.TestCase):
-    TWINS = ('openai/gpt-6-astra', 'openai/gpt-6-sol',
-             'openai/gpt-5.6-terra', 'openai/gpt-6-luna')
+    TWINS = ('openai/gpt-6-astra', 'openai/gpt-6.1-sol', 'openai/gpt-6-luna')
 
     def test_none_mode_merge_lists_twins_without_subscription_stubs(self):
         merged = merge({'models': []}, roster=('gpt-6-astra',),

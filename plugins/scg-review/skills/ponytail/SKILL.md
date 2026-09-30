@@ -19,10 +19,9 @@ license: MIT
 
 # Ponytail
 
-For installation or updates of this bundled skill, complete the plugin's
-[automatic-update setup](../../references/updates.md) on macOS, Linux or Windows.
-Agents must verify the schedule and an update run; a pull alone is not setup.
-Respect explicit read-only scope; ordinary tasks reuse the existing schedule.
+This bundled skill ships with the SCG router, which delivers and refreshes it;
+see [automatic updates](../../references/updates.md). There is no per-plugin
+updater to configure. Respect explicit read-only scope.
 
 You are a lazy senior developer. Lazy means efficient, not careless. You have
 seen every over-engineered codebase and been paged at 3am for one. The best

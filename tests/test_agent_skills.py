@@ -42,7 +42,7 @@ class _Run:
 
 
 def _which(present):
-    return lambda name: ('/usr/bin/' + name) if name in present else None
+    return lambda name, path=None: ('/usr/bin/' + name) if name in present else None
 
 
 class AgentSkillsTest(unittest.TestCase):
@@ -109,7 +109,7 @@ class AgentSkillsTest(unittest.TestCase):
                          ['scg-finance', 'scg-review'])
         self.assertTrue((root / 'plugins/scg-review/skills/scg-review/SKILL.md').is_file())
         self.assertIn('codex', line)
-        self.assertEqual(run.calls[0][:4], ['codex', 'plugin', 'marketplace', 'add'])
+        self.assertIn(['/usr/bin/codex', 'plugin', 'marketplace', 'add', str(root)], run.calls)
 
     def test_service_only_host_writes_nothing_and_calls_no_client(self):
         run = _Run()
@@ -123,7 +123,7 @@ class AgentSkillsTest(unittest.TestCase):
         run = _Run()
         skills.sync({'clients': 'codex'}, self.plugins, base=self.base,
                     run=run, which=_which({'codex', 'claude'}))
-        self.assertEqual([c[0] for c in run.calls], ['codex'] * len(run.calls))
+        self.assertEqual({c[0] for c in run.calls}, {'/usr/bin/codex'})
 
     def test_a_foreign_directory_is_left_exactly_as_it_is(self):
         root = skills.marketplace_root(self.base)
@@ -133,7 +133,77 @@ class AgentSkillsTest(unittest.TestCase):
                            run=_Run(), which=_which({'codex'}))
         self.assertEqual((root / 'someone-elses-file').read_text(), 'keep me')
         self.assertFalse((root / '.agents').exists())
+        self.assertFalse((root / skills.MARKER).exists())
         self.assertIn('skipped', line)
+
+    def test_a_marketplace_sync_failure_reports_the_cause_and_path(self):
+        root = skills.marketplace_root(self.base)
+        root.mkdir(parents=True)
+        (root / 'someone-elses-file').write_text('keep me')
+        line = skills.sync({'clients': 'codex'}, self.plugins, base=self.base,
+                           run=_Run(), which=_which({'codex'}))
+        self.assertIn('skipped', line)
+        self.assertIn('not router-owned', line)
+        self.assertIn(str(root), line)
+
+    def test_a_refused_registration_reports_the_command_and_error(self):
+        def refuse(command, **kwargs):
+            return SimpleNamespace(returncode=1, stdout='',
+                                   stderr='Error: plugin manifest invalid')
+        line = skills.sync({'clients': 'codex'}, self.plugins, base=self.base,
+                           run=refuse, which=_which({'codex'}))
+        self.assertIn('refused', line)
+        self.assertIn('codex plugin add scg-review@scg-agent-plugins', line)
+        self.assertIn('plugin manifest invalid', line)
+
+    def test_a_registration_exec_error_reports_its_cause(self):
+        def boom(command, **kwargs):
+            raise OSError('codex binary vanished')
+        line = skills.sync({'clients': 'codex'}, self.plugins, base=self.base,
+                           run=boom, which=_which({'codex'}))
+        self.assertIn('OSError', line)
+        self.assertIn('codex binary vanished', line)
+
+    def test_a_refusal_detail_is_collapsed_to_one_bounded_line(self):
+        def refuse(command, **kwargs):
+            if command[2:4] == ['marketplace', 'add']:
+                return SimpleNamespace(returncode=1, stdout='',
+                                       stderr='x' * 500 + '\nsecond line')
+            return SimpleNamespace(returncode=0, stdout='', stderr='')
+
+        line = skills.sync({'clients': 'codex'}, self.plugins, base=self.base,
+                           run=refuse, which=_which({'codex'}))
+        self.assertIn('1 refused', line)
+        self.assertNotIn('\n', line)
+        self.assertNotIn('second', line)
+        self.assertLess(len(line), 500)
+
+    def test_a_refusal_keeps_only_the_first_error_line(self):
+        # Codex 0.153 quotes a bad config value in its cause chain; a
+        # coloured summary must not bring terminal escapes into the log.
+        def refuse(command, **kwargs):
+            return SimpleNamespace(returncode=1, stdout='', stderr=(
+                '\x1b[31mError:\x1b[0m failed to load bootstrap configuration\n'
+                '\nCaused by:\n    invalid type: string "GH_PAT=stand-in-config-value",'
+                ' expected a map\n    in `mcp_servers.github.env`\n'))
+        line = skills.sync({'clients': 'codex'}, self.plugins, base=self.base,
+                           run=refuse, which=_which({'codex'}))
+        self.assertIn('failed to load bootstrap configuration', line)
+        self.assertNotIn('stand-in-config-value', line)
+        self.assertNotIn('\x1b', line)
+
+    def test_a_refusal_line_survives_a_windows_ansi_pipe(self):
+        # Claude Code 2.1.283 opens refusals with U+2718; a cp1252 pipe refuses it.
+        def refuse(command, **kwargs):
+            return SimpleNamespace(returncode=1, stdout='', stderr=(
+                '\u2718 Failed to install plugin "scg-review@scg-agent-plugins"'))
+        base = Path(self.tmp.name) / '\u0141ukasz' / 'scg-agent-plugins'
+        line = skills.sync({'clients': 'claude'}, self.plugins, base=base,
+                           run=refuse, which=_which({'claude'}))
+        line.encode('cp1252')  # strict: an unescaped character raises here
+        line.encode('ascii')
+        self.assertIn('\\u2718 Failed to install plugin', line)
+        self.assertIn('\\u0141ukasz', line)
 
     def test_a_superseded_runner_is_preserved_not_deleted(self):
         self.base.mkdir(parents=True)

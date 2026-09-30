@@ -272,6 +272,36 @@ Handoff aliases retain that same catalogue through response adaptation.
 The encrypted spawn and follow-up guard resolves child models from it, so a
 refresh cannot change an in-flight request's decision. Direct helper callers
 without a request context capture once when creating their aliases.
+`codex_route.py` owns the switched Codex route. Switch Codex gives Codex a
+provider entry that needs no OpenAI sign-in and sends `x-scg-codex-route`, so
+that header marks the route; a missing credential cannot, because the normal
+route may carry no Authorization header either. `subscription_fallback.prepare`
+asks it about each request the ChatGPT subscription adapter would serve, before
+anything is prepared or sent. Native service paths get the no-subscription
+answers; every other request gets one final `invalid_prompt` refusal, which
+`ingress.error` sends as a `response.failed` frame when the turn streams. The
+refusal names the twin row only when the portco allowlist, the key's
+availability snapshot and the Codex picker all admit it. Helper turns are
+refused too: the helper fallback moves a turn to its twin only after the
+subscription refuses it, and this route sends nothing to refuse.
+`routed_models.py` owns `routed-models.json`, the picker Switch Codex points
+Codex at: the rows no-subscription mode shows, under the mixed list's key and
+portco filters. `availability.sync_catalogue` rewrites it after the mixed list,
+never empty and never without a live snapshot, since Codex rejects an empty
+list and a stale one offers models the key cannot use. `codex_route.ready`
+answers whether Switch Codex may use it, reading "current" through
+`availability.effective_ids`; it sits in `codex_route` because `availability`
+imports the writer, so a check beside it would import `availability` back.
+`usage_episodes.py` owns `codex-usage-limit.json`, the record of ChatGPT
+usage-limit episodes the Switch Codex offer reads. `subscription_fallback.refused`
+answers every ChatGPT 429, so it hands each one over with the drained error
+body. Only the refusal Codex itself reads as a spent allowance counts
+(`error.type` `usage_limit_reached`, per `codex-rs/codex-api/src/api_bridge.rs`),
+and only from Codex desktop, recognised by the `(Codex Desktop; <version>)`
+User-Agent suffix its app-server adds. The module imports leaves plus
+`upstream.parse_payload`, keeps three fields and nothing from the request, and
+swallows its own failures, so the client's answer never changes. The format
+is in [runtime files](runtime-files.md#codex-usage-limit-record).
 
 1. `provider_defs.py` owns every upstream fact (host, endpoint prefixes, key
    location, model catalogue, key-info endpoint, failure dialect) and imports
@@ -356,10 +386,207 @@ path (`AGENTS.md` section 3).
 `packaging/claude_desktop_config.py` owns desktop attachment and its original
 restore snapshot. A matching owned attachment keeps the user's selected
 subscription or gateway mode on subsequent setup and update runs.
-`claude_desktop_switch.py` owns the macOS switch launcher and changes only
-that mode after Claude exits normally; it never changes attachment or
-credentials. Its stable `claude_switch_launch.py` entry point follows the
-installed release pointer so the app survives updates and release pruning.
+`claude_desktop_switch.py` owns the switch lifecycle. After Claude exits normally,
+it shares the current account's local tasks and changes the mode only when all
+required copies succeed. Open and Switch share one transition lock, held before
+reading the mode through reopening, so overlapping requests cannot use a stale
+source profile. The switch rechecks the attachment, managed policy and stopped
+app before changing the mode. Open Claude leaves histories alone. The stable
+`claude_profile_launch.py` follows the installed release pointer so both actions
+survive updates and release pruning. After a rollback to a release without task
+sharing it runs that release's plain switch, opens Claude for Open Claude and
+keeps the callback silent. Setup rebuilds 0.6 shortcuts and deletes only the
+router's own copy of their home shim. Setup owns the callback installation and
+removal, and installs the launchers and callback on macOS only in this beta.
+
+`claude_profile_rules.py` owns the local-data transfer policy being integrated
+by Plan 169. It keeps conversation payloads intact, excludes separate sign-in
+and credential files, and relocates only recognized metadata paths. The folder
+Claude Code names after a task's workspace is exempt from the sensitive-word
+name screen and the dashed -before/-after suffix rule, because its words are
+the user's; router markers, credential file names and the content screen still
+apply there. It imports
+only the standard library. Callers must supply validated source and destination
+paths and publish through their own transaction; the helper does not select an
+account, change profiles or start synchronization.
+
+`claude_desktop_policy.py` owns the read-only policy check for Plan 169's
+switch path. Organization-managed connection settings take priority over a
+local attachment; unreadable or ambiguous settings refuse the switch. Platform
+readers follow the published [managed-policy precedence](https://claude.com/docs/third-party/claude-desktop/mdm).
+The switch check returns a decision; it never writes or logs settings.
+
+`claude_profile_records.py` discovers records within the resolved account and
+store layout. It owns namespace selection, native abbreviated bundle paths and
+source snapshots. Its `STORES` list is the only switch for which stores are
+shared; the 1.0.0 beta shares the Code store and leaves Cowork untouched.
+It does not guess identity from saved history or write tasks.
+Profile paths follow the saved attachment, so an installer default change cannot
+silently reassign an existing attachment or its restore record.
+
+`claude_profile_identity.py` owns the account boundary for Plan 169. A native
+session callback must match one exact host and CLI task pair. Cached account
+state and the hashed workspace preference detect changes; they cannot select
+an organization. Authentication values are neither read nor copied. Static
+gateway identity comes from the existing device and local configuration.
+A private router-local hash binds the account pair so a later sign-in cannot
+inherit the previous account's copied tasks; the same hash keys the shared-task
+ledger. The coordinator must hold both profile locks before creating that
+binding; this helper does not start a copy.
+
+`claude_profile_publish.py` and `claude_profile_transaction.py` share the record
+and bundle publication contract. They validate file generations before exclusive
+renames and retain originals and journals when competing writes make recovery
+ambiguous. Committed cleanup accepts a partly deleted before-image, so an
+interrupted cleanup finishes on the next run. Private control directories
+protect backups without changing the permissions of hard-linked attachments
+outside the profile. Callers must stop Claude, hold both profile locks and
+provide a private, fully prepared bundle.
+
+`claude_profile_bundle.py` assembles the complete admitted bundle union before
+publication. It uses the shared transfer rules and retains unique duplicate
+content before retirement. Task files keep their exact bytes; transcript rows
+keep every field and only relocate profile paths. A losing transcript copy that
+holds rows the kept copy lacks leaves the task unshared, because publication
+would delete it.
+`claude_profile_history.py` separates foreign request
+metadata from native response diagnostics while preserving messages and IDs.
+Repairs to shared CLI transcripts retain a private original and recover through
+a separate journal because those files sit outside the desktop bundle. A
+completed repair's original is checked by content, not file identity, so a
+copied home still validates; a writer that races the rename gets its file back
+and the next run repairs the new content.
+
+`claude_profile_sync.py` coordinates both directions under the two profile locks.
+Only the current account pair participates, and on the subscription side only
+its resolved organization; the gateway's organization is synthetic, so it spans
+the account. The outgoing profile wins conflicts; unique bundle artifacts join
+the union before duplicates are retired. Shared CLI history takes precedence
+over an older bundle snapshot. A task with no transcript anywhere, or with
+diverged transcripts, is left unshared and counted. Invalid tasks are reported
+to the switch caller, which must keep the current mode until every in-scope
+task is safe. Before either pass, the ledger retires copies of tasks deleted
+since the last clean sync, and only a clean sync updates what it remembers. The
+coordinator has no app-lifecycle authority.
+
+`claude_profile_ledger.py` keeps a deleted task deleted. After a clean sync it
+records, in a private router-home file, a digest of each copy of every task both
+profiles hold once: record bytes, bundle tree and paths, never titles or
+content. Tasks the sync left unshared or refused are not recorded. Presence
+counts across the whole account, so an organization change never looks like a
+delete. A remembered task missing from exactly one profile has its other copy
+retired to that store's `.claude-profile-control-trash` folder while the copy
+still matches; a changed copy stays and is shared again. Retirement reuses the
+publication pattern: a journal, then exclusive renames of the record and then
+the bundle. The next run undoes an interrupted retirement before deciding again.
+Interrupted transfers are recovered first; an unreadable record or a second
+copy keeps every copy, and a profile that lost every shared task at once, when
+there was more than one, is treated as a reset. Nothing is hard-deleted, and a
+trash entry that cannot be put back safely stays for inspection and fails the
+switch.
+
+`claude_desktop_platform.py` owns native app identity, graceful shutdown,
+dialogs and owned shortcuts. It waits for known writers and their children. A
+process that execs another program keeps its start time and stays tracked; an
+exited process still waiting for its parent (a zombie) can no longer write, so
+it counts as gone. Before the quit request, an unknown writer or unreadable
+process list refuses the operation, and a refused request ends it at once.
+After a request that was sent, the wait decides the outcome, even when the
+request timed out, because Claude may still close once its own confirmation is
+answered. Processes that are quitting can briefly fail a check,
+so a failed check, including a reused process ID, is retried until the deadline
+and only a clean check ends the wait. Its macOS lifecycle helpers take an
+`app` (bundle id, plus the executable names only that app may run) that
+defaults to Claude; Switch Codex passes the ChatGPT app's, which lists no such
+names, so a running Claude or Codex CLI never blocks it.
+On macOS, bundle discovery uses Spotlight metadata because AppleScript app
+lookup launches a closed app. Browser-owned native messaging hosts do not seed
+the writer set, and crash reporters (any `crashpad_handler`) never join it:
+they write only crash reports and can outlive an app update by days. Actual
+app descendants remain tracked after reparenting.
+Descendant discovery precedes rejection of an otherwise unknown Claude process,
+because Desktop's Code executable can live outside its application bundle.
+`claude_profile_launch.py` resolves the current installed release and dispatches
+the requested action. `claude_profile_hook.py` owns only its exact SessionStart
+callback entry and captures the focused native account identity asynchronously.
+It never copies history, and uninstall preserves unrelated user hooks. The
+callback runs Python with `-P`, so a file in the session's project folder can
+never stand in for a module it imports.
+
+`packaging/codex_switch_config.py` owns the three managed Codex blocks. The
+default is `codex_config.build_block` unchanged, so a never-switched install
+and older Codex builds see nothing new. `switched` is root keys only: Codex's
+active provider becomes `scg_router`, which needs no OpenAI sign-in, sends
+`x-scg-codex-route` and reads `routed-models.json`, and
+`approvals_reviewer = "user"` stays, as in every managed block, because
+attach moves the owner's own line into the receipt and this route refuses
+ChatGPT's reviewer. `switched_back` is the default plus `scg_router` with
+sign-in on, so threads started while switched still resume. The Codex receipt
+entry records the variant (`variant`, absent until the first switch), and
+`client_choice.attach_codex` rebuilds it on every install and update.
+`switch` and `restore` are the only writers that change it. `switch` writes the config first, then the receipt, with the config
+put back if the receipt write fails; `restore` undoes a switch, putting both
+back. While Codex is switched, `tools/disable.py` (and so a
+service-only install), `--uninstall` and `--rollback` refuse and leave its
+settings as they are.
+
+`packaging/codex_desktop_switch.py` is the Switch Codex flow, macOS only. It
+moves an attached install to the other variant, holding the installer lock
+throughout, and a hand-edited block refuses before anything is asked. Each
+run appends one line to `logs/codex-switch.log` (docs/runtime-files.md).
+
+`switched` is strict. It needs `codex_route.ready`, a subscription install
+(no-subscription mode already runs without sign-in), exactly one ChatGPT app
+(Codex) with its bundled CLI wherever Spotlight finds it, and a graceful
+quit. It then writes a pending marker, calls `codex_switch_config.switch` and
+proves the result with `codex_config_proof`: that CLI, started as an app
+server on `~/.codex`, must load the config and report no managed
+`model_provider` and no account. Any doubt refuses before the dialog; a failed
+proof puts back the previous receipt entry and the block exactly as
+config.toml held it, the owner's latest model pick included, through
+`codex_switch_config.restore`, and reopens the app.
+
+Switching back is the only way out of `switched`, since detach, uninstall and
+rollback refuse while switched, so it depends on nothing it can lose. It runs
+no proof: it only returns to the install's own block plus the provider entry.
+With exactly one app found it quits the app and reopens it after; if the app
+does not close, it is reopened and the switch still refuses, since the person
+can quit it and retry. With the app missing or not identifiable (two copies,
+a Spotlight failure), the dialog asks the person to quit it first and the
+closing message to open it again.
+
+A switch that refused before writing needs no undo, and any refusal after the
+quit reopens the app unchanged. A marker left by a run that stopped halfway is
+kept when its switch was written and needs no proof or proves; anything else
+is rolled back before the next run does anything else, so a way back cut
+short before its writes is simply offered again.
+
+`packaging/codex_switch_offer.py` owns the automatic offers. The updater
+calls it after every pass that holds the update lock, the minute Express job
+included, and swallows anything it raises. It reads the router's
+`codex-usage-limit.json` itself, because the router's reader needs Python
+3.14, so its parsing and five-hour rule are copies that a test pins to
+`ai_router/usage_episodes.py`. On macOS, for a Codex install in subscription
+mode that has `APP`, it offers Switch Codex once per episode from an affected
+desktop build, and the way back once Codex is switched and the episode has
+ended or the installed ChatGPT app is at or above `FIXED_IN`. The dialog is
+only the offer: its action opens Switch Codex, which asks before it changes
+anything. `APP` is the one place the Switch Codex app's location is named.
+
+`packaging/codex_switch_app.py` owns that app. Every Codex attach and update
+builds or refreshes it on a Mac when Codex is attached in subscription mode
+and either the installed ChatGPT app is at or above `AFFECTED_FROM` or Codex
+is switched right now, so older Codex builds see nothing new. Otherwise it
+removes an app it owns, but never while Codex is switched, because the app is
+the way back. Detach and uninstall remove it through `tools/disable.py`,
+which refuses while switched. The app is ours when its bundle id matches and
+its Info.plist names this router home, so a run for another home (a test's)
+never removes it. It runs `codex_switch_launch.py`, a copy in the router
+home, under the router's own Python, which follows `current` to that
+release's `codex_desktop_switch.py` and names an older release in one plain
+message. `claude_desktop_platform.install_mac_app` builds it and both Claude
+launchers, staged and then swapped in, and refuses an app it does not own. A
+failed build prints one line and never fails an install.
 
 ## Distribution (outside the request path)
 
@@ -403,8 +630,9 @@ them while the child installer retains its own installation lock.
   `clients/` (capability projection, picker visibility); the served
   instruction text and its capped delegation roster live in the
   `model_instructions.py` leaf (Plan 154).
-- Client activation lives in `packaging/codex_config.py`: the Codex block,
-  picker preservation, the seeded startup model, the managed `[desktop]`
+- Client activation lives in `packaging/codex_config.py`: the Codex block
+  (its Switch Codex variants in `codex_switch_config.py`), picker
+  preservation, the seeded startup model, the managed `[desktop]`
   preferences, guidance, and receipts. `--client none` runs the router
   lifecycle without touching client settings; absence of a client
   selection in legacy state means Codex. Subscription policy is per client:

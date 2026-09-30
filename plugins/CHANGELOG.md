@@ -1,5 +1,29 @@
 # Changelog
 
+## scg-review 0.4.17 and scg-subagents 0.5.16 - 2026-09-30
+
+- At the owner's request, every pre-commit review pass in Codex now requires
+  GPT-6.1 Sol through OpenRouter, `openai/gpt-6.1-sol`, at `high`, replacing
+  `xiaomi/mimo-v2.6-pro` at `xhigh`. The requirement stays exact: there is no
+  fallback model, and an unavailable route blocks the pass. Claude Code keeps
+  its installed adapter agents and their configured Claude models.
+- Drop GPT-5.6 Terra (`openai/gpt-5.6-terra`) from the model-selection
+  catalogue, its benchmark and evidence rows, and the security selection table,
+  to match the router dropping that OpenRouter model. The guide no longer
+  steers subagents to Terra; the Codex subscription `gpt-5.6-terra` itself is
+  unaffected.
+
+## scg-review 0.4.16, scg-subagents 0.5.15, scg-prototypes 0.1.3, scg-finance 0.1.2 and scg-documentation 0.1.3 - 2026-09-30
+
+- Align the shared update guide and every skill with the router-managed
+  delivery model (Plan 179). The router carries the plugin trees, materialises
+  a router-owned local marketplace and registers it with the attached clients,
+  so the skills arrive and refresh with the router; there is no per-plugin
+  updater and no native schedule to configure. The obsolete
+  `scripts/updater.py`/`scripts/scheduling.py` setup steps are removed, since a
+  shipped plugin no longer carries them. Wording only; delivery behaviour is
+  unchanged.
+
 ## scg-review 0.4.15 - 2026-09-26
 
 - Rewrite the pre-commit-review skill as a ten-step checklist that less

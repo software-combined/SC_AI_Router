@@ -175,7 +175,10 @@ hand-edited conflict instead of overwriting it.
   Code collapses duplicate IDs and keeps only one earlier `tool_result`, which
   makes later reads look empty. The same repair applies to top-level tool calls
   in non-streaming JSON; nested tool-shaped input and unknown fields stay
-  unchanged.
+  unchanged. The external route also hides Read's `pages` argument.
+  Claude Code rejects a blank page range on an ordinary text file, and models
+  that fill every advertised argument otherwise retry the same read. PDF page
+  ranges stay available on the subscription route.
   The `system` block carrying
   the client's own `x-anthropic-billing-header` line is dropped, because
   `anthropic/claude-fable-5.1` refuses any turn that carries it with HTTP
@@ -234,14 +237,22 @@ request stays at the client's own tool set, and a row is never retried. A row
 passes when the marker comes back in the answer, not only when it is the whole
 answer: some rows narrate it, and that is a finished turn rather than a fault.
 An empty or refused turn still fails. The probe leaves the caller's Claude
-settings alone: it points a disposable settings file at the router and never
-prints the loopback URL. `--deferred` adds the leg an attached client
+settings alone: it names the router in a disposable settings file and in the
+client's own environment, and never prints the loopback URL. The environment
+matters: Claude Code lets its own environment override a settings file, and a
+probe started from a Claude Code session inherits that session's first-party
+`ANTHROPIC_BASE_URL`, which sent every turn to Anthropic on the user's own
+login instead of the router under test. The client also runs with an empty
+per-run config folder, so none of the owner's instructions, skills, plugins,
+hooks, permissions or login apply, and it sends a synthetic bearer that
+`PROBE_AUTH_TOKEN` can replace. The probe therefore covers routed rows; the
+subscription leg of the AGENTS.md section 7 check runs as a real Claude Code
+session with the owner's own login and settings, started from a terminal
+rather than from inside another Claude Code session. `--deferred` adds the leg an attached client
 actually runs: a synthetic MCP server advertising 700 stub tools, tool search
 on, and one round trip that must come back through the search. `--candidate
 <slug>` boots an isolated router from this working tree for that row and tears
-it down afterwards, so a build can be checked before it is installed, and
-`PROBE_AUTH_TOKEN` supplies a synthetic bearer for a routed row on a host
-whose client login a non-interactive probe cannot read. Pass `--models` to
+it down afterwards, so a build can be checked before it is installed. Pass `--models` to
 narrow it, `--max-rows` to raise the cap, or `--json` for a machine-readable
 report, and set `CLAUDE_BIN` to drive a different client binary. For the
 multi-turn history check, `--read-count 2` makes two sequential synthetic
@@ -270,39 +281,132 @@ Quit and reopen Claude, choose **Code**, select your folder, then choose a
 model and type your task. No key copying or Developer-menu configuration is
 needed. Attachment also runs when there is no newer router release.
 
-On macOS, desktop setup also installs **Switch Claude** in your user's
-Applications folder. Open it from Spotlight or Finder to switch between your
-Claude subscription and OpenRouter. It names the destination and restarts
-Claude after you choose **Switch**. **Cancel** leaves the current selection
-alone. If Claude stays open or you cancel its quit prompt, nothing changes.
-Setup and updates preserve the selected mode. A standalone Claude Code
-terminal installation is not required for the desktop app.
-If the installed router predates the shortcut, setup keeps Claude connected
-and asks for a router update before adding **Switch Claude**.
+The task-sharing candidate detects the signed-in account and workspace when
+you open a Code task. On macOS, setup installs that background callback
+automatically; you do not enter account IDs or choose profile folders. The
+callback exits quietly when the router or its sharing files are gone. It makes no
+model call; its cached identity becomes invalid when the account or workspace changes.
+Native Code continuation has passed in both profiles, but the complete installed
+launcher round trip remains unaccepted. Cowork tasks are not shared in this
+beta. See [candidate verification](compatibility.md) before relying on task sharing.
 
-Every model labelled **OpenRouter** uses the OpenRouter key. The gateway
-profile has its own sessions; your signed-in Claude profile and its existing
-sessions remain separate. The desktop adapter's `detach` operation restores
+On macOS, candidate desktop setup installs **Open Claude** and **Switch Claude**
+launchers for the current user. In this beta they, and task sharing, are
+macOS-only: on Windows and Linux setup connects Claude without them until
+native acceptance exists. **Open Claude** opens the app with the selected connection.
+**Switch Claude** asks for confirmation,
+lets Claude exit normally, shares local tasks using the old selection as the
+conflict winner, rechecks settings and that Claude is still closed, changes only
+`deploymentMode`, and reopens Claude. A second launcher request is refused until
+the first finishes, so it cannot copy from an outdated selection.
+**Cancel** leaves everything alone. If Claude does not finish closing within
+about a minute, or you cancel its quit prompt, nothing changes and Claude
+reopens if it had closed. Task sharing runs only when switching; ordinary
+app launches and router startup leave histories alone. Setup and updates preserve the selected mode.
+A standalone Claude Code terminal installation is not required for the
+desktop app. If the installed router predates these launchers, setup keeps
+Claude connected and asks for a router update before installing them.
+After `install.py --rollback --to` a 0.6 release, **Switch Claude** makes that
+release's plain switch without sharing tasks, **Open Claude** just opens Claude,
+and the session callback stays silent. Reinstall 1.0.0 to restore task sharing.
+
+Every model labelled **OpenRouter** uses the OpenRouter key. In synthetic tests,
+the candidate launchers copy local Claude Code tasks (`claude-code-sessions`)
+between the `Claude` and `Claude-3p` profiles, with their JSON records and task
+files. Cowork tasks (`local-agent-mode-sessions`) stay in their own profile in
+this beta. Cloud conversations are not local session files and
+are outside this transfer. The desktop adapter's `detach` operation restores
 the original profile settings without removing the router. Full router
 uninstallation also detaches Codex and the terminal client.
 
-Switching keeps each profile's conversations and settings in place. It does
-not sign out, move conversations, detach the router or change Codex. The
-shortcut checks that Claude still uses this router's saved configuration;
-run setup again if that configuration has changed. An organization policy
-that prevents subscription sign-in also prevents the shortcut from switching.
-The shortcut currently supports macOS only.
+Task sharing preserves `sessionId` and `cliSessionId`, keeps workspace paths
+outside the profiles unchanged, and retains tasks that exist in only one
+profile. Only the resolved current account in each profile participates, and
+in the subscription profile only its current organization. Previous accounts'
+tasks and other organizations' tasks remain separate, including any unreadable
+old records.
+After the first copy, sharing is tied to that pair of accounts. Signing into a
+different account stops sharing so it cannot inherit the earlier account's
+gateway copies. Return to the original account to resume sharing.
+When both profiles contain the same session, the profile selected
+before a switch wins conflicting record fields and files. Unique files from
+both bundles remain, and task files keep their exact bytes. If the two
+profiles hold different continuations of the same conversation, or a task's
+conversation file no longer exists anywhere, that task is not shared and every
+copy stays as it is. The switch still goes ahead, and Claude then shows how
+many tasks were not shared. A second successful run makes no content or
+permission changes.
 
-The desktop app (verified against 2.2553.1) keeps first-party and
+A task you delete stays deleted. After each successful share, the router notes
+which tasks both profiles hold, in a private file in its own folder that keeps
+task IDs and fingerprints but no titles or conversation text. When one of those
+tasks is later missing from one profile, it was deleted there, so the next
+switch moves the other profile's copy to a trash folder instead of copying it
+back. Nothing is erased. The copy goes to the hidden
+`.claude-profile-control-trash` folder inside that profile's
+`claude-code-sessions` folder, for example
+`~/Library/Application Support/Claude-3p/claude-code-sessions/.claude-profile-control-trash`
+on macOS. Each entry there keeps the task's record, its files and a
+`retire.json` note of where they came from, so a task can be moved back by
+hand while Claude is closed. A copy that changed since the last switch is kept
+and shared again, so an edit wins over a delete. If a profile loses all of
+its shared tasks at once, and it had more than one, for example after signing
+out or resetting Claude, the router treats it as a reset rather than
+deletions: nothing goes to the trash, and the tasks are shared back as before. A trash
+entry that cannot be finished or undone safely stays where it is and prevents
+switching.
+
+Separate sign-in and credential files, account identity, profile settings, trust state, connector
+settings and caches never cross profiles. A rejected or malformed source
+record fails by itself and leaves the source data in place. Existing full and
+shortened native bundle folders keep their layout; new copies use full folders.
+Two sessions claiming one shortened folder are refused without overwriting it.
+Duplicate records
+are consolidated only after their unique bundle files have been preserved.
+The next run recovers interrupted transactions that have a valid journal,
+including a committed cleanup that stopped partway. A copied or restored home
+folder, a shared transcript that Claude Code later deleted, or a writer that
+changed a transcript during its repair does not block later switches.
+Ambiguous recovery files remain in place for inspection, and prevent switching.
+
+The target account and organization must be positively identified. When they
+cannot be resolved, no tasks are shared. Switching from OpenRouter to your
+subscription still works and changes only the connection, so you can sign in
+there. Switching away from the subscription while tasks are saved asks you,
+before Claude closes, to open a Code task in Claude first; that establishes
+the automatic binding. Existing hooks are preserved, and removing the desktop
+attachment removes only the callback installed by the router. If any other
+required history cannot be copied safely, switching stops, the original profile
+remains selected and Claude reopens on it. No transcript is silently discarded
+or redacted.
+Every transcript row keeps all of its fields and text, including checkpoint
+file lists, code examples and keys pasted into a conversation; only paths
+inside the profile folders are relocated. That text can
+reach the selected provider when the task resumes. Separate credential files
+remain excluded, and other copied artifacts still undergo content screening.
+The launcher checks that Claude still uses
+this router's saved configuration; run setup again if that configuration has
+changed. An organization policy that prevents subscription sign-in also
+prevents a mode switch. The launcher checks the selected local configuration
+and the platform's managed source before and after Claude quits. Managed
+connection overrides and unreadable policy refuse switching. Update, lifecycle
+and proxy policy alone can coexist with the locally controlled connection.
+
+The desktop app (observed in the 2.9939.2 native probes) keeps first-party and
 third-party mode in separate profiles (`.../Claude` and `.../Claude-3p`).
-The third-party profile sits wherever that platform's Electron build puts
-it: `~/Library/Application Support` on macOS, the roaming AppData directory
-on Windows, and `XDG_CONFIG_HOME` with a `~/.config` fallback on Linux.
-Set `CLAUDE_USER_DATA_DIR` to override all three. Attachment is verified on
-macOS. The Windows and Linux paths follow the app's documented Electron
-layout and are pinned by tests that run on the Linux CI runner; no session
-has been hand-driven on either platform, and the Windows path is not yet
-exercised by a Windows runner.
+The third-party profile uses `~/Library/Application Support` on macOS,
+`LOCALAPPDATA` on Windows, and `XDG_CONFIG_HOME` with a `~/.config` fallback
+on Linux. Windows falls back to Electron's roaming AppData location only
+when `LOCALAPPDATA` is absent. The subscription profile uses roaming AppData.
+Set `CLAUDE_USER_DATA_DIR` to override the third-party profile on all three
+systems. The first-party profile remains at the platform's native location.
+Automatic updates keep using the profile recorded when Claude was attached,
+so an attachment made before Windows moved to `LOCALAPPDATA` keeps updating.
+Running setup with `--desktop` refuses a different profile while an existing
+attachment still owns its restore record; detach that connection before
+selecting another profile.
+The paths are pinned by simulated platform tests. Real task visibility, open and resume
+acceptance remains pending for macOS, Windows and Linux.
 Pointing the third-party profile at the loopback router lists every
 approved Messages-compatible registry row. The app filters non-Anthropic
 vendor words from IDs even when a valid `anthropic_family_tier` is present.

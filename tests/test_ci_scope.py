@@ -85,6 +85,16 @@ class InstallerScopeTests(unittest.TestCase):
             with self.subTest(module=module):
                 self.assertTrue((ROOT / (module.replace('.', '/') + '.py')).is_file())
 
+    def test_windows_leaves_out_only_the_macos_only_suites(self):
+        # Switch Claude and task sharing are off on Windows; the macOS job runs them.
+        module = scope_module()
+        macos_only = module.MACOS_ONLY_TESTS
+        self.assertLessEqual(macos_only, set(module.INSTALLER_TESTS))
+        self.assertEqual(module.installer_tests(windows=False), list(module.INSTALLER_TESTS))
+        self.assertEqual(module.installer_tests(windows=True),
+                         [name for name in module.INSTALLER_TESTS if name not in macos_only])
+        self.assertIn('tests.test_claude_desktop_platform', module.installer_tests(windows=True))
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -11,7 +11,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from ai_router import errors, ingress, subscription_fallback, upstream
+from ai_router import codex_route, errors, ingress, subscription_fallback, upstream
+from ai_router.registry import by_slug
 from tests.fakes import FakeUpstream, install_fake
 from tests.harness import (
     auth_file as _auth_file,
@@ -47,7 +48,8 @@ def _catalogue_text():
 
 
 def _dynamic_text():
-    """The dynamic producers: provider failures and a refused subscription."""
+    """The dynamic producers: provider failures, a refused subscription and
+    a ChatGPT turn on the switched Codex route, with and without a twin."""
     inner = ('{"code": "invalid-argument", "error": "Failed to start sampling: '
              '[invalid_client_tool_schema] probe__echo: root must be an object type"}')
     rejected = json.dumps({'error': {'message': 'Provider returned error',
@@ -64,7 +66,8 @@ def _dynamic_text():
              upstream.describe_failure(OSError('no route to host'), None, info)[1],
              subscription_fallback.refusal_message(SimpleNamespace(provider='openrouter'), {}),
              subscription_fallback.refusal_message(SimpleNamespace(provider='openai'),
-                                                   {'model': 'gpt-6-astra'})]
+                                                   {'model': 'gpt-6-astra'}),
+             codex_route.message(), codex_route.message(by_slug('openai/gpt-6-astra'))]
     return texts
 
 

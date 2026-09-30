@@ -70,8 +70,9 @@ installed pre-commit review policy.
 **One effort per model:** use the single prescribed level in the catalogue table,
 normally the highest supported plain reasoning level. Do not lower effort to
 save cost; choose a cheaper capable model instead, unless the user overrides it.
-Astra, Sol and Terra use `max`: the catalogue's `ultra` adds automatic delegation,
-so it is outside this bounded-child policy. Never invent unsupported `max`.
+Astra and GPT-5.6 Sol use `max`: the catalogue's `ultra` adds automatic
+delegation, so it is outside this bounded-child policy. Never invent
+unsupported `max`.
 
 **Muse policy:** standard 1.3 uses `max`. Treat its `xhigh` evidence as a similar
 practical tier, per user preference, while preserving the separate measurements.
@@ -137,10 +138,6 @@ The bundled [evidence snapshot](references/model-evidence.json) is dated public
 research. [pareto.py](scripts/pareto.py) computes reproducible candidate sets;
 it does not make network calls or infer missing model scores.
 
-When installing, pulling or updating this skill for use, complete
-[automatic-update setup](references/updates.md) on macOS, Linux or Windows:
-configure the native shared schedule, run it and verify installed versions.
-This is part of installation, not an optional follow-up. Respect explicit
-read-only scope and preserve custom schedules when reporting setup blockers.
-A pull alone does not enable updates; an already verified working schedule
-does not need reinstalling for each ordinary task.
+This skill ships with the SCG router, which delivers and refreshes it; see
+[automatic updates](references/updates.md). There is no per-plugin updater or
+schedule to configure. Respect explicit read-only scope.
