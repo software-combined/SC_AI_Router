@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+## 1.0.4
+
+- The Windows router finds an app-installed Codex again, so the SCG plugins
+  reach it on a scheduled update. The Codex app keeps its own CLI under
+  `%LOCALAPPDATA%` and never puts that directory on the updater's PATH, so the
+  plugin refresh reported Codex as not installed; the router looks there too.
+
+- The router now retires the old Git-based SCG plugin updater only once Codex
+  accepts the router's copy of the plugins. That updater only ever refreshes
+  Codex, but any client's success used to retire it. So a Claude Code success
+  alone could retire it while Codex still took its plugins from Git, for
+  example when the router serves only Claude Code or an update cannot find
+  Codex, and Codex's plugins then stopped updating. The router also
+  recognises the three earliest versions of that updater, so a host still
+  running one of them has it retired too.
+
+## 1.0.3
+
+- Codex now keeps every subscription model OpenAI still advertises, including
+  older models that the router had removed from its static list. Models OpenAI
+  hides stay hidden, and subscription and OpenRouter billing remain separate.
+  Updating the router does not replace updating Codex: OpenAI can offer a
+  different model list to an older client.
+- After a Codex upgrade, starting a chat now uses the model list for the
+  current client version. Previously, cached lists from both versions could
+  make a newly advertised model appear in the picker but fail as unavailable.
+
 ## 1.0.2
 
 - Installing without a ChatGPT subscription no longer changes Codex settings

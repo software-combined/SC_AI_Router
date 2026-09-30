@@ -25,8 +25,11 @@ MARKER = '.router-owned'
 SHARED = ('.local', 'share', 'scg-agent-plugins')
 GIT_UPDATER_LABEL = 'com.softwarecombined.agent-plugins.update'
 # Superseded plugin runners the router retires. Content-verified, never name-based:
-# every plugins/*/scripts/updater.py that reached main, oldest first.
+# every git updater the plugins released, and one reviewed pre-release, oldest first.
 LEGACY_RUNNERS = (
+    '704f610e262921e29040bf8848a20bc33968a59fd649b06aabd638e1f4bd4b56',
+    '8c06a8a7305e9b2d3344b66830834f07653acb9641c5035b769110e8ff353232',
+    '67819b4e806f76024a388cb2f697aeb4ba300c727f82b60eb10b7de7cea2f6ee',
     '4ded20ea2db5a42c4641ccdbb2845e3f21513644a2d01d5acfa787e77ed9f83a',
     'bd06fc556d4640f4dc4206209dd17fc41d4fcfd4904dc63d337ce55b9a88708b',
     'f8bdfa551bca125ec8c5826a86b017814feefbd45dadb30fa7536d1562392a79',
@@ -47,19 +50,47 @@ def shared_base(home=None):
     return (Path(home) if home else Path.home()).joinpath(*SHARED)
 
 
-def client_path():
+def _windows_codex_dirs(environ=None):
+    """The Windows Codex app's own CLI directories, newest build first.
+
+    The Codex app stages its CLI under
+    ``%LOCALAPPDATA%\\OpenAI\\Codex\\bin\\<build>`` and injects that directory
+    into the children it starts, so Codex itself never needs it on the machine
+    PATH. A scheduled updater inherits neither, so an app-installed Codex was
+    reported as not installed and its plugins never refreshed. Read-only and
+    best effort: a missing or unreadable tree is no directories.
+    """
+    local = (os.environ if environ is None else environ).get('LOCALAPPDATA')
+    if not local:
+        return ()
+    base = Path(local) / 'OpenAI' / 'Codex' / 'bin'
+    try:
+        builds = sorted((p for p in base.iterdir() if p.is_dir()),
+                        key=lambda p: p.stat().st_mtime, reverse=True)
+    except OSError:
+        return ()
+    return tuple(str(p) for p in builds)
+
+
+def client_path(environ=None, os_name=None):
     """PATH for the client CLIs: this process's, plus the usual install dirs.
 
     A scheduled update inherits launchd's /usr/bin:/bin:/usr/sbin:/sbin, and a
     systemd user timer's PATH also omits ~/.local/bin, so clients there were
     logged as not installed. The child gets the same PATH: codex is a
     `#!/usr/bin/env node` script, and its node usually sits beside it.
+
+    On Windows the Codex app keeps its CLI under %LOCALAPPDATA% and leaves it
+    off the scheduled job's PATH, so that directory is added there too.
     """
     # ponytail: fixed common dirs; a client under a version manager (nvm, fnm)
     # still needs its bin dir on the scheduled job's PATH.
-    dirs = [d for d in os.environ.get('PATH', '').split(os.pathsep) if d]
+    env = os.environ if environ is None else environ
+    dirs = [d for d in env.get('PATH', '').split(os.pathsep) if d]
     extra = (str(Path.home() / '.local' / 'bin'),)
-    if os.name != 'nt':
+    if (os.name if os_name is None else os_name) == 'nt':
+        extra += _windows_codex_dirs(env)
+    else:
         # Admin-owned on macOS and Linux. On Windows they would be drive-root
         # folders any local account can create, so a planted client could run.
         extra += ('/opt/homebrew/bin', '/usr/local/bin')
@@ -364,12 +395,14 @@ def sync(state, plugins_dir, base=None, run=subprocess.run, which=shutil.which):
             return 'bundle carries none'
         results = [register(c, root, names, run=run, which=which) for c in clients]
         notes = [line for line, _ in results]
-        # Retire the git fallback only once the router's own channel works:
-        # retiring it behind a failed registration would freeze updates twice.
-        if any(refused == 0 for _, refused in results):
-            notes.append(retire_git_updater(base=base, run=run, which=which))
-        else:
-            notes.append('git updater: kept (no client accepted)')
+        # The git updater only ever refreshes Codex, so retire it only once
+        # Codex runs from the router's copy: retiring it behind a failed or
+        # absent Codex registration would freeze Codex's plugin updates.
+        if 'codex' in clients:
+            if results[clients.index('codex')][1] == 0:
+                notes.append(retire_git_updater(base=base, run=run, which=which))
+            else:
+                notes.append('git updater: kept (Codex did not accept)')
         summary = '; '.join(n for n in notes if n)
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
         # A skills failure never fails the router install. Keep one line, but

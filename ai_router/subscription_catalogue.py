@@ -107,8 +107,7 @@ def effective_roster(configured, discovered=None):
     if discovered is None:
         return preferred
     available = tuple(dict.fromkeys(
-        slug for slug in discovered
-        if isinstance(slug, str) and slug not in RETIRED))
+        slug for slug in discovered if isinstance(slug, str)))
     wanted = set(available)
     return tuple(dict.fromkeys(
         [slug for slug in preferred if slug in wanted] + list(available)))
