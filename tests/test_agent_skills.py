@@ -109,7 +109,8 @@ class AgentSkillsTest(unittest.TestCase):
                          ['scg-finance', 'scg-review'])
         self.assertTrue((root / 'plugins/scg-review/skills/scg-review/SKILL.md').is_file())
         self.assertIn('codex', line)
-        self.assertEqual(run.calls[0][:4], ['codex', 'plugin', 'marketplace', 'add'])
+        self.assertEqual(run.calls[0],
+                         ['/usr/bin/codex', 'plugin', 'marketplace', 'add', str(root)])
 
     def test_service_only_host_writes_nothing_and_calls_no_client(self):
         run = _Run()
@@ -123,7 +124,19 @@ class AgentSkillsTest(unittest.TestCase):
         run = _Run()
         skills.sync({'clients': 'codex'}, self.plugins, base=self.base,
                     run=run, which=_which({'codex', 'claude'}))
-        self.assertEqual([c[0] for c in run.calls], ['codex'] * len(run.calls))
+        self.assertEqual({c[0] for c in run.calls}, {'/usr/bin/codex'})
+
+    def test_the_client_runs_by_the_resolved_path_not_the_bare_name(self):
+        # A Windows client installed through npm is codex.cmd: which() finds
+        # it, but CreateProcess cannot start the bare name. Every command must
+        # run the path which() resolved, so the found client is the one invoked.
+        run = _Run()
+        which = lambda name: ('C:\\node\\codex.cmd' if name == 'codex' else None)
+        skills.sync({'clients': 'codex'}, self.plugins, base=self.base,
+                    run=run, which=which)
+        self.assertTrue(run.calls)
+        self.assertEqual([c[0] for c in run.calls],
+                         ['C:\\node\\codex.cmd'] * len(run.calls))
 
     def test_a_foreign_directory_is_left_exactly_as_it_is(self):
         root = skills.marketplace_root(self.base)

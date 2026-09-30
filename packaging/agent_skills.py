@@ -134,15 +134,21 @@ def register(client, root, names, run=subprocess.run, which=shutil.which):
     refuses one plugin must not cost the others or the router install. Each
     refusal keeps the command and the client's own error line, so the install
     log names the failure instead of only counting it.
+
+    Run the path `which` resolved, not the bare name. On Windows a client
+    installed through npm is `codex.cmd`: `which` finds it, but `CreateProcess`
+    resolves a bare name to an `.exe` only, so the bare name is not runnable.
     """
-    if which(client) is None:
+    executable = which(client)
+    if executable is None:
         return f'{client}: not installed', 1
     refused = 0
     failures = []
     for command in _commands(client, root, names):
         label = _one_line(' '.join(command))
         try:
-            done = run(command, capture_output=True, text=True, timeout=180)
+            done = run([executable, *command[1:]], capture_output=True, text=True,
+                       timeout=180)
         except (OSError, subprocess.SubprocessError) as exc:
             refused += 1
             failures.append(f'{label}: {type(exc).__name__}: {_one_line(exc)}')

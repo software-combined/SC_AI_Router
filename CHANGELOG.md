@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- On Windows, SCG plugin delivery now runs each client from the path it was
+  found at instead of its bare name, so an npm-installed `codex.cmd` shim
+  registers the plugins instead of failing every command.
+
 - The OpenRouter picker now offers GPT-6.1 Sol in place of GPT-6 Sol. An
   upgrade drops the older row instead of showing both. A text-file Read no
   longer receives Claude Code's PDF page argument, so a model that fills every
