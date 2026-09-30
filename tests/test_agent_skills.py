@@ -51,6 +51,7 @@ class AgentSkillsTest(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.home = Path(self.tmp.name) / 'home'
         self.enterContext(patch.object(Path, 'home', return_value=self.home))
+        self.enterContext(patch.dict('os.environ', {'XDG_CONFIG_HOME': ''}))
         self.plist = (self.home / 'Library' / 'LaunchAgents' /
                       (skills.GIT_UPDATER_LABEL + '.plist'))
         self.plist.parent.mkdir(parents=True)
