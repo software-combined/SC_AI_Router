@@ -24,10 +24,16 @@ MARKETPLACE = 'scg-agent-plugins'
 MARKER = '.router-owned'
 SHARED = ('.local', 'share', 'scg-agent-plugins')
 GIT_UPDATER_LABEL = 'com.softwarecombined.agent-plugins.update'
-# Superseded plugin runners the router retires. Content-verified, never name-based.
+# Superseded plugin runners the router retires. Content-verified, never name-based:
+# every plugins/*/scripts/updater.py that reached main, oldest first.
 LEGACY_RUNNERS = (
+    '4ded20ea2db5a42c4641ccdbb2845e3f21513644a2d01d5acfa787e77ed9f83a',
     'bd06fc556d4640f4dc4206209dd17fc41d4fcfd4904dc63d337ce55b9a88708b',
+    'f8bdfa551bca125ec8c5826a86b017814feefbd45dadb30fa7536d1562392a79',
+    'b909d5c4c529310bb33373bdaaf22695ccaa20651ec688a011cedfc358c41fdd',
 )
+# The systemd user units the runner's scheduling.py installed on Linux.
+GIT_UPDATER_UNITS = ('scg-agent-plugins-update', 'scg-subagents-update')
 ENTRY_POLICY = {'installation': 'AVAILABLE', 'authentication': 'ON_INSTALL'}
 # The Git homes this marketplace had before the router carried it, matched
 # lowercased. Only a Codex registration from one of these is ours to replace.
@@ -271,28 +277,59 @@ def register(client, root, names, run=subprocess.run, which=shutil.which):
 def retire_git_updater(base=None, run=subprocess.run, which=shutil.which):
     """Retire the git-backed plugin runner the router now replaces.
 
-    Preserve, never delete: the runner moves to the next free `.migrated.<n>`
-    and its LaunchAgent is unloaded. An unrecognised runner is left alone,
-    because only a content-verified predecessor is ours to retire.
+    Preserve, never delete: the runner moves to the next free `.migrated.<n>`,
+    its LaunchAgent is unloaded, and on Linux its systemd timer is disabled
+    and both units move aside the same way; left enabled, the timer would
+    fail every day against the moved runner. Routers before 1.0.2 moved a
+    Linux runner but left its units enabled, so units beside an already
+    moved, content-verified runner are retired too. An unrecognised runner
+    is left alone, because only a content-verified predecessor is ours.
     """
     base = Path(base or shared_base())
     runner = base / 'updater.py'
-    if not runner.is_file():
-        return ''
-    if hashlib.sha256(runner.read_bytes()).hexdigest() not in LEGACY_RUNNERS:
-        return 'git updater: unrecognised, left in place'
-    if which('launchctl'):
-        run(['launchctl', 'bootout',
-             f'gui/{os.getuid()}/{GIT_UPDATER_LABEL}'],
+    units = Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config') / 'systemd' / 'user'
+    timers = [name + '.timer' for name in GIT_UPDATER_UNITS
+              if (units / (name + '.timer')).is_file()]
+    if runner.is_file():
+        if _digest(runner) not in LEGACY_RUNNERS:
+            return 'git updater: unrecognised, left in place'
+        index = 0
+        while (base / f'updater.py.migrated.{index}').exists():
+            index += 1
+        line = f'git updater: retired to updater.py.migrated.{index}'
+    else:
+        moved = [int(path.name.rsplit('.', 1)[1])
+                 for path in base.glob('updater.py.migrated.*')
+                 if path.name.rsplit('.', 1)[1].isdigit()
+                 and _digest(path) in LEGACY_RUNNERS]
+        if not (timers and moved):
+            return ''
+        index = max(moved)
+        line = f'git updater: Linux schedule retired beside updater.py.migrated.{index}'
+    systemctl = bool(timers) and which('systemctl')
+    if systemctl:
+        run(['systemctl', '--user', 'disable', '--now', *timers],
             capture_output=True, text=True)
-    index = 0
-    while (base / f'updater.py.migrated.{index}').exists():
-        index += 1
-    runner.rename(base / f'updater.py.migrated.{index}')
-    plist = Path.home() / 'Library' / 'LaunchAgents' / (GIT_UPDATER_LABEL + '.plist')
-    if plist.is_file():
-        plist.rename(plist.with_name(plist.name + f'.migrated.{index}'))
-    return f'git updater: retired to updater.py.migrated.{index}'
+    if runner.is_file():
+        if which('launchctl'):
+            run(['launchctl', 'bootout',
+                 f'gui/{os.getuid()}/{GIT_UPDATER_LABEL}'],
+                capture_output=True, text=True)
+        runner.rename(base / f'updater.py.migrated.{index}')
+        plist = Path.home() / 'Library' / 'LaunchAgents' / (GIT_UPDATER_LABEL + '.plist')
+        if plist.is_file():
+            plist.rename(plist.with_name(plist.name + f'.migrated.{index}'))
+    for unit in (units / (name + kind) for name in GIT_UPDATER_UNITS
+                 for kind in ('.timer', '.service')):
+        if unit.is_file():
+            unit.rename(unit.with_name(unit.name + f'.migrated.{index}'))
+    if systemctl:
+        run(['systemctl', '--user', 'daemon-reload'], capture_output=True, text=True)
+    return line
+
+
+def _digest(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def sync(state, plugins_dir, base=None, run=subprocess.run, which=shutil.which):
