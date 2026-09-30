@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- SCG plugin delivery now reports the cause of a marketplace-synchronisation
+  failure and the command and client error for each refused plugin
+  registration, so a broken but fail-soft delivery is diagnosable from the
+  install log instead of showing only an exception type or a refusal count.
+
 - Switch Claude now copies your current account's local Claude Code tasks, with
   their full conversations and files, to the other connection before switching.
   Only tasks from the organization you are signed in to are shared; tasks in
