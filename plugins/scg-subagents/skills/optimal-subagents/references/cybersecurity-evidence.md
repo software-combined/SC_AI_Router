@@ -76,7 +76,7 @@ reports guided-prompt precision/recall of .880/.250 for Sol and .684/.226 for
 Kimi K3. Kimi's weaker precision increases analyst triage cost. In Semgrep's
 own harness, Sol and Luna had near-equal F1 (.617/.616), while Kimi scored .400.
 That makes Luna worth testing for bounded triage within an effective harness,
-not a proven standalone security lead. Terra also had measured IDOR results.
+not a proven standalone security lead.
 The vulnerability class is narrow, efforts vary, and the vendor's own harness
 is part of the result. Do not transfer older GLM/Opus rows to our newer versions
 or infer full pentest performance from these figures.
