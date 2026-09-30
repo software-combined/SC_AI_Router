@@ -426,8 +426,17 @@ target `develop`, and user-visible changes update `CHANGELOG.md` and
 
 This repo also hosts the private `scg-agent-plugins` marketplace:
 `scg-review` (pre-commit review), `scg-subagents` (subagent coordination),
-`scg-prototypes` (prototype publishing) and `scg-finance` (finance analysis).
-Every plugin works in Codex and Claude Code and ships automatic updates.
+`scg-prototypes` (prototype publishing), `scg-finance` (finance analysis) and
+`scg-documentation` (technical writing). Every plugin works in Codex and Claude
+Code.
+
+The router is the delivery channel. Its release bundle carries the plugin
+trees, and each install or scheduled update that lands a new release
+materialises a router-owned local marketplace and registers it with the
+attached clients, so on a router host the plugins arrive and refresh with the
+router and need no Git account, GitHub access or marketplace command. The same
+pass retires any earlier Git-backed plugin runner it recognises. A host without
+the router can still install the plugins from the Git marketplace:
 
 ```sh
 codex plugin marketplace add software-combined/SC_AI_Router --ref main
