@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- The OpenRouter picker now offers GPT-6.1 Sol in place of GPT-6 Sol. An
+  upgrade drops the older row instead of showing both. A text-file Read no
+  longer receives Claude Code's PDF page argument, so a model that fills every
+  advertised argument reads the file once instead of retrying a blank page
+  range.
+
 - SCG plugin delivery now reports the cause of a marketplace-synchronisation
   failure and the command and client error for each refused plugin
   registration, so a broken but fail-soft delivery is diagnosable from the
