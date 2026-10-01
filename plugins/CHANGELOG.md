@@ -1,5 +1,20 @@
 # Changelog
 
+## scg-review 0.4.19 and scg-subagents 0.5.18 (2026-10-01)
+
+- Every Codex review pass now has automatic availability fallbacks. OpenRouter
+  Sol remains preferred at high; Flash and GLM provide the lane-specific cheaper
+  alternatives at max, followed by native Sol at high. Astra is excluded.
+- Check key-scoped availability and supported effort before spending a call.
+  Skip remaining OpenRouter candidates after a shared provider failure; a shared
+  Codex handoff failure stops dispatch. Limit each pass to two fallback dispatches
+  and retain blocking findings through substitutions and adjudication.
+- Qualify the cheaper models on role-specific synthetic defects and clean controls:
+  six completed paired-case calls plus one incomplete call, US$0.012934 total,
+  within the 12-call, 4,096-output-token and US$5 pilot caps. Full staged-file
+  coverage, independent lanes, secret scanning, tests and exact-tree approval
+  remain required. The Windows hook and receipt format are unchanged.
+
 ## scg-review 0.4.18 and scg-subagents 0.5.17 - 2026-10-01
 
 - The parent now explicitly selects each fresh or partial-history child's model

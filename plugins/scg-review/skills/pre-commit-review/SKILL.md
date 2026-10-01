@@ -34,11 +34,11 @@ Do them in this order. Each section below says exactly what to run.
 
 Read the bundled [reviewer routing policy](../../references/reviews.md) before every review. It sets the model and fixed effort for each pass, any authorised fallbacks, and escalation. It is an unchanged copy of the canonical optimal-subagents policy. Exact user or project model/effort requirements take precedence over it.
 
-- **Codex:** the policy currently requires `openai/gpt-6.1-sol` at `high` (GPT-6.1 Sol through OpenRouter) for every pass, with no model fallback. If that route is unavailable, the pass is `❌ Block`; do not substitute another model or effort. Use the bundled [code-simplifier](../code-simplifier/SKILL.md) for Pass 1 and the active subagent tools for the three lanes.
+- **Codex:** prefer `openai/gpt-6.1-sol` at `high` (GPT-6.1 Sol through OpenRouter) for every pass. Apply the bundled policy's ordered fallbacks automatically, checking effective access and supported effort before dispatch. Use the bundled [code-simplifier](../code-simplifier/SKILL.md) for Pass 1 and the active subagent tools for the three lanes.
 - **Claude Code:** use the installed adapter agents `code-simplifier`, `review-correctness`, `review-quality` and `review-adversarial`, with the Claude models configured in them. Do not route these passes to router models. This plugin does not install those agents.
 - **Other runtimes:** use only a verified installed adapter that implements this procedure.
 
-When a policy has a listed eligible fallback and the preferred model is unavailable, use that fallback and record the substitution. When it requires an exact model or lists none, the pass is `❌ Block`. A required pass is also `❌ Block` when no permitted model can complete it. Never switch runtimes, accounts or data constraints, or weaken a gate, to get around a requirement. Confirm access through actual review calls: an accepted dispatch is not a completed review. See [provider access and identity rules](../../references/reviewer-models.md).
+When a policy has a listed eligible fallback and the preferred model is unavailable, use that fallback and record the substitution. Fallbacks are enabled for every pass unless the current user explicitly forbids substitution or an applicable instruction requires an exact route. Follow the policy's two-fallback dispatch limit and shared-failure rules. A required pass is `❌ Block` when no permitted model can complete it. Never switch runtimes, accounts or data constraints, or weaken a gate, to get around a requirement. Confirm access through actual review calls: an accepted dispatch is not a completed review. See [provider access and identity rules](../../references/reviewer-models.md).
 
 Record each pass's requested and returned model and effort in your notes. Missing served identity is `unverified`; a known mismatch invalidates that pass. Fallbacks never remove staged-tree coverage, lane independence or the need for a genuine review.
 
@@ -46,9 +46,11 @@ Use the **elevated-risk profile** when the staged change, or a directly relevant
 
 ### Codex: select the model and readable handoff
 
-For Pass 1 and each review lane, call `collaboration_plaintext.spawn_agent`
-directly with explicit model and effort and `fork_turns="none"`. The current
-policy's correctness-lane dispatch is:
+For Pass 1 and each review lane, select the first eligible route from the policy.
+Call the recipient's handoff tool directly with explicit model and effort and
+`fork_turns="none"`: `collaboration_plaintext.spawn_agent` for OpenRouter,
+or `collaboration.spawn_agent` for native Sol. A preferred correctness-lane
+dispatch is:
 
 ```json
 {
@@ -60,22 +62,20 @@ policy's correctness-lane dispatch is:
 }
 ```
 
-Use the same selection for the other passes, changing the task name and brief.
+Set model and effort to the selected route for each pass, including fallbacks.
 Pass 1 receives the code-simplifier assignment; the lanes receive Step 7's brief.
 A model label in the message does not select the model. Do not omit tool arguments
 or rely on installation-wide subagent defaults.
 
 Transport follows the recipient's provider route. GPT through OpenRouter needs
 plaintext even when the parent uses GPT. The native subscription id `gpt-6.1-sol`
-is a different route from `openai/gpt-6.1-sol`; it is not an automatic fallback.
-Native subscription recipients use the original collaboration tools only when
-the effective review policy or an explicit owner exception permits that route.
+is a different route from `openai/gpt-6.1-sol` and is an authorized fallback in
+the policy. Native subscription recipients use the original collaboration tools.
 Use `collaboration_plaintext.send_message` and `collaboration_plaintext.followup_task`
 for later assignments to the OpenRouter child, even if saved history shows native
 tool names. Codex executes the plaintext aliases under those native names.
 
-An unsafe handoff refusal is not model or provider unavailability and does not
-justify asking to replace the required OpenRouter reviewer with a native model.
+An unsafe handoff refusal is not model or provider unavailability.
 It can end the parent turn before the bad call executes. On the next user turn,
 correct it once with the indicated plaintext tool and a complete readable brief,
 keeping the same model and effort. Do not replay the encrypted call. If the
