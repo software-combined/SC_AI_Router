@@ -40,8 +40,9 @@ changes inspection depth and required evidence, not automatically the model bill
 | Adversarial | `openai/gpt-6.1-sol` at `high` | None |
 
 Resolve the selected model's actual tool identifier from the active catalogue.
-For example, GPT-5.6 Sol may be exposed as `gpt-5.6-sol`; that is an identifier
-alias, not a different cost/quality tier. Verify the accepted request and record
+`openai/gpt-6.1-sol` is the OpenRouter route; `gpt-6.1-sol` is the native
+subscription route. They are not interchangeable identifiers under an exact
+provider requirement. Verify the accepted request and record
 served identity when available. Never claim an unavailable effort was used.
 
 Fallbacks in this table are authorized by this policy when a preferred model is
@@ -77,12 +78,10 @@ and put the actually requested successful-pass identity in the hook receipt.
 ## Escalate for evidence, not ceremony
 
 A returned answer that fails the acceptance check is not model unavailability.
-Request a focused correction or reassign the difficult issue to a stronger model
-only when concrete unresolved reasoning warrants the additional cost. Standard
-Muse at `max` is the first reasoning/synthesis escalation; Sol at `max` is useful
-for difficult code/tool debugging. Astra at `max` is a last targeted option when
-those cannot resolve a material high-consequence issue. Contributor is not an
-automatic reviewer fallback because its data-use and evidence gaps differ.
+Request a focused correction only when concrete unresolved reasoning warrants
+it. Corrections and escalations retain the exact model and effort above.
+A different model or provider needs an explicit owner exception; the general
+model-selection guide does not override the review policy.
 
 A no-findings review, model age or a general benchmark rank alone is not a reason
 for another paid pass. Escalation never waives full staged-file coverage,
@@ -92,14 +91,22 @@ approval. No allowed model can complete a mandatory pass means `BLOCK`.
 ## Runtime scope
 
 Begin each review assignment message with the actual requested model, effort,
-pass/role and task context, for example: "GLM 5.3 Flash Max — Pre-commit review
-Pass 1 (code simplification) for plan 147." Include the same first line in any
+pass/role and task context, for example: "GPT-6.1 Sol High: pre-commit review
+Pass 1 (code simplification) for the handoff fix." Include the same first line in any
 file-based brief and update it for a fallback or follow-up assignment. Use a
 real task name when no plan number exists. This makes the request traceable
 from the message; it does not prove the served identity recorded separately.
 
 Codex packaging and its active collaboration tools are the supported path.
-Use the actual schema for explicit model/effort selection and a compatible fork
-mode. Other runtimes need their own verified installed adapter and identifiers;
+For every Codex pass, use `collaboration_plaintext.spawn_agent`, explicit
+`model="openai/gpt-6.1-sol"`, `reasoning_effort="high"` and `fork_turns="none"`.
+Keep using `collaboration_plaintext.send_message` and
+`collaboration_plaintext.followup_task` for that recipient. Native saved tool
+names do not change its provider route. An unsafe handoff refusal may end the
+parent turn. Correct it once on the next user turn with a readable plaintext
+brief and the same model and effort. It is not evidence of an OpenRouter outage
+or grounds to request native reviewers. The router cannot create a recoverable
+tool result, and an encrypted message containing a file path cannot repair it.
+Other runtimes need their own verified installed adapter and identifiers;
 this document does not install or certify Claude Code/OpenCode integrations.
 Do not switch runtimes to work around an unavailable required pass.

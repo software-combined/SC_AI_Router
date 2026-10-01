@@ -74,16 +74,16 @@ def prepare_tools(payload, row):
     plus the kind map and wire-name map `tool_history` reads next.
     """
     names = tool_aliases.ToolNames()
-    # OpenAI reads discovered definitions from tool_search_output history. Other
-    # providers require those released tools in the ordinary request tool list.
-    released = []
+    # Lite declarations are pageable; only discovered tools are mandatory.
+    released, initial = [], list(payload.get('tools', []))
     for item in payload.get('input', []) if isinstance(payload.get('input'), list) else []:
         if item.get('type') == 'tool_search_output':
             released.extend(deepcopy(item.get('tools', [])))
+        elif item.get('type') == 'additional_tools' and item.get('role') == 'developer':
+            initial.extend(item.get('tools', []))
     released.extend(recall(payload.get('input', [])))
-    released_keys = {tool_merge.key_of(tool, namespace)
-                     for tool, namespace in tool_entries(released)}
-    entries = [(dict(tool), namespace) for tool, namespace in tool_entries(payload.get('tools', []))]
+    released_keys = {tool_merge.key_of(t, ns) for t, ns in tool_entries(released)}
+    entries = [(dict(tool), namespace) for tool, namespace in tool_entries(initial)]
     declared = {}
     for tool, namespace in entries:
         declared.setdefault(tool_merge.key_of(tool, namespace), tool)
@@ -97,6 +97,8 @@ def prepare_tools(payload, row):
         tool = dict(tool)
         entries.append((tool, namespace))
         declared[key] = tool
+    entries = [(agent_handoffs.readable_handoff_tool(tool, namespace), namespace)
+               for tool, namespace in entries]
     for tool, namespace in entries:
         if tool.get('type') == 'tool_search':
             tool.pop('execution', None)
@@ -177,7 +179,8 @@ class ToolEvents:
 
     def _plaintext(self, item):
         aliases = getattr(self.names, 'handoffs', ())
-        restored = agent_handoffs.external_plaintext_call(item, aliases)
+        restored = agent_handoffs.restore_item(item, aliases)
+        restored = agent_handoffs.external_plaintext_call(restored, getattr(aliases, 'readable', aliases))
         self.changed |= restored is not item
         return restored
 

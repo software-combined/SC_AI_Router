@@ -205,11 +205,12 @@ def write_full(wfile, data):
     wfile.flush()
 
 
-def emit_terminal_failure(wfile, response_format):
+def emit_terminal_failure(wfile, response_format, error=None):
     """Best-effort native terminal on a repairable identity event stream."""
     from .errors import upstream_failed
     if not (response_format.stream is True
-            and response_format.kind == 'sse'
+            and (response_format.kind == 'sse' or error is not None
+                 and response_format.kind == 'other' and response_format.protocol == provider_defs.RESPONSES)
             and response_format.encoding == 'identity'
             and response_format.protocol in (provider_defs.RESPONSES, provider_defs.MESSAGES)):
         # Identity only: appending plaintext to an encoded stream would be
@@ -217,8 +218,9 @@ def emit_terminal_failure(wfile, response_format):
         return False
     messages = response_format.protocol == provider_defs.MESSAGES
     native = 'error' if messages else 'response.failed'
-    body = (messages_errors.render(upstream_failed()).body() if messages else
-            {'type': native, 'response': upstream_failed().body()})
+    error = error or upstream_failed()
+    body = (messages_errors.render(error).body() if messages else
+            {'type': native, 'response': error.body()})
     frame = ('event: ' + native + '\ndata: ' + json.dumps(body) + '\n\n').encode()
     try:
         write_full(wfile, frame)
