@@ -21,6 +21,10 @@
   subagent skills include the same guidance and one bounded delivery correction.
   The installer leaves subagent defaults under the user's control.
 
+- Add a read-only Linux check for the selected Codex or Claude desktop package
+  and its bundled Electron package version. Linux switching remains unavailable
+  pending later lifecycle work and native acceptance.
+
 ## 1.0.4
 
 - The Windows router finds an app-installed Codex again, so the SCG plugins

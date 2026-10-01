@@ -6,7 +6,6 @@ and Linux paths know. `install_mac_app` builds the owned launcher apps:
 Switch Claude, Open Claude and Switch Codex.
 """
 import collections
-import configparser
 import importlib.util
 import json
 import os
@@ -29,6 +28,7 @@ def _load(name, filename):
 
 _atomic = _load('router_claude_desktop_atomic', 'atomic_write.py')
 _policy = _load('router_claude_desktop_policy', 'claude_desktop_policy.py')
+_linux_identity = _load('router_claude_desktop_linux', 'desktop_linux.py')
 TITLE = 'SCG Router'
 ICON = Path(__file__).parent / 'assets' / 'router-icon.png'
 BUNDLE_ID = 'com.anthropic.claudefordesktop'
@@ -119,6 +119,13 @@ def _json_command(script, run):
 
 
 def app_identity(platform_name, run=subprocess.run, app=CLAUDE):
+    if platform_name == 'linux':
+        if app == CLAUDE:
+            return _linux_identity.app_identity('claude')
+        if (getattr(app, 'bundle_id', None) == 'com.openai.codex'
+                and getattr(app, 'writers', None) == ()):
+            return _linux_identity.app_identity('codex')
+        raise OSError('only a known desktop app can be checked')
     if app != CLAUDE and platform_name != 'darwin':
         raise OSError('only the Mac knows this app')
     if platform_name == 'win32':
@@ -149,20 +156,7 @@ def app_identity(platform_name, run=subprocess.run, app=CLAUDE):
             raise OSError('Claude identity could not be checked')
         exe = root / 'Contents/MacOS' / doc['CFBundleExecutable']
     else:
-        data = os.environ.get('XDG_DATA_HOME') or str(Path.home() / '.local/share')
-        dirs = [data] + (os.environ.get('XDG_DATA_DIRS') or '/usr/local/share:/usr/share').split(':')
-        entries = [Path(d) / 'applications' / (APP_DESKTOP_ID + '.desktop') for d in dirs]
-        entry = next((p for p in entries if p.is_file()), None)
-        if entry is None:
-            raise OSError('Claude identity could not be checked')
-        doc = configparser.ConfigParser(interpolation=None)
-        doc.read(entry, encoding='utf-8')
-        args = shlex.split(doc['Desktop Entry']['Exec'])
-        exe = Path(args[0])
-        if not exe.is_absolute() or exe.name.lower() not in ('claude', 'claude-desktop'):
-            raise OSError('Claude desktop executable is unknown')
-        exe = exe.resolve(strict=True)
-        root = exe.parent
+        raise OSError('desktop identity is unsupported on this platform')
     if not exe.is_file() or not root.is_absolute():
         raise OSError('Claude identity could not be checked')
     return dict(root=str(root), exe=str(exe), user=str(os.getuid()))

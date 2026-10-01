@@ -498,6 +498,12 @@ switch.
 
 `claude_desktop_platform.py` owns native app identity, graceful shutdown,
 dialogs and owned shortcuts. It waits for known writers and their children. A
+Linux identity check delegates to `desktop_linux.py`, which selects one XDG
+desktop entry, resolves its supported command shape, and validates the matching
+Electron `resources/app.asar` package metadata. It reads only `package.json`
+from the archive and never launches the desktop command or wrapper. Linux
+switching stays unavailable until lifecycle support and native acceptance are
+complete. A
 process that execs another program keeps its start time and stays tracked; an
 exited process still waiting for its parent (a zombie) can no longer write, so
 it counts as gone. Before the quit request, an unknown writer or unreadable
