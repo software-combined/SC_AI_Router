@@ -1,5 +1,17 @@
 # Changelog
 
+## scg-ponytail 0.1.0 and scg-review 0.5.0 (2026-10-01)
+
+- Add the dedicated Ponytail plugin for Codex and Claude Code, with one
+  shared skill adapted from Ponytail 4.10.0. Preserve the supplied simplicity,
+  correctness and safety guidance, MIT licence and maintenance evaluation.
+- Remove the older Ponytail copy from SCG Review. The simplifier and every
+  review lane now read the installed `scg-ponytail:ponytail` skill at the path
+  resolved by the active client. A missing, disabled or unreadable dependency
+  blocks review; model routing, secret scanning and exact-tree approval remain.
+- Deliver the new plugin through the existing SCG marketplace and router
+  update path. Install Ponytail before updating Review when migrating a host.
+
 ## scg-review 0.4.20 and scg-subagents 0.5.19 - 2026-10-01
 
 - Codex agents no longer pick handoff tools by the recipient's provider. When

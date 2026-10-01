@@ -17,6 +17,38 @@ spec.loader.exec_module(setup)
 
 
 class PluginTest(unittest.TestCase):
+    def test_ponytail_replaces_the_review_copy_and_installs_first_in_both_clients(self):
+        from tests.test_agent_skills_delivery import _Client, _found, skills
+
+        with tempfile.TemporaryDirectory() as temporary:
+            self.enterContext(patch.object(Path, 'home', return_value=Path(temporary) / 'home'))
+            self.enterContext(patch.dict(os.environ, {'XDG_CONFIG_HOME': ''}))
+            root = skills.marketplace_root(Path(temporary))
+            old = root / 'plugins/scg-review/skills/ponytail/SKILL.md'
+            old.parent.mkdir(parents=True)
+            old.write_text('previous bundled skill')
+            (root / skills.MARKER).write_text('router-owned fixture')
+            names = skills.write_marketplace(root, ROOT / 'plugins')
+            self.assertIn('scg-ponytail', names)
+            self.assertFalse(old.exists())
+            source = ROOT / 'plugins/scg-ponytail/skills/ponytail/SKILL.md'
+            delivered = root / 'plugins/scg-ponytail/skills/ponytail/SKILL.md'
+            self.assertEqual(delivered.read_bytes(), source.read_bytes())
+            self.assertEqual(list((root / 'plugins').glob('*/skills/ponytail/SKILL.md')),
+                             [delivered])
+            for client, verb, manifest in (
+                    ('codex', 'add', '.agents/plugins/marketplace.json'),
+                    ('claude', 'install', '.claude-plugin/marketplace.json')):
+                with self.subTest(client=client):
+                    entries = json.loads((root / manifest).read_text())['plugins']
+                    self.assertEqual([p['name'] for p in entries].count('scg-ponytail'), 1)
+                    run = _Client()
+                    _, refused = skills.register(client, root, names, run=run, which=_found)
+                    self.assertEqual(refused, 0)
+                    ponytail = [client, 'plugin', verb, 'scg-ponytail@scg-agent-plugins']
+                    review = [client, 'plugin', verb, 'scg-review@scg-agent-plugins']
+                    self.assertLess(run.calls.index(ponytail), run.calls.index(review))
+
     def test_marketplace_and_bundled_skills_resolve_inside_package(self):
         marketplace = json.loads(
             (ROOT / ".agents/plugins/marketplace.json").read_text(encoding="utf-8"))
@@ -28,8 +60,9 @@ class PluginTest(unittest.TestCase):
         self.assertEqual(entry["name"], manifest["name"])
         self.assertEqual(manifest["repository"], "https://github.com/software-combined/SC_AI_Router")
         self.assertRegex(manifest["version"], r"^\d+\.\d+\.\d+(?:\+[A-Za-z0-9.-]+)?$")
-        for skill in ("pre-commit-review", "code-simplifier", "ponytail", "review-setup"):
+        for skill in ("pre-commit-review", "code-simplifier", "review-setup"):
             self.assertTrue((PLUGIN / "skills" / skill / "SKILL.md").is_file())
+        self.assertFalse((PLUGIN / "skills/ponytail").exists())
         for markdown in (PLUGIN / "skills").glob("*/SKILL.md"):
             for target in re.findall(r"\]\(([^)]+)\)", markdown.read_text(encoding="utf-8")):
                 path = target.split("#")[0]
