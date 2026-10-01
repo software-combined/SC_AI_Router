@@ -90,6 +90,17 @@ Rules:
 records bounded structural provenance through the shared event logger. Its
 per-response call ordinals retain upstream ids only until that response closes.
 Observation never grants plaintext authority or changes a handoff decision.
+Unreadable or unadvertised handoffs raise a typed response refusal before an
+executable completed item is released. `relay.py` returns HTTP 400 before JSON
+headers or one terminal `invalid_prompt` event on an open stream. It never
+replays the parent request or invents a tool result. Earlier valid calls remain
+released. `tool_adapter.py` promotes developer Lite declarations through its
+existing tool map. External projection copies canonical handoff message schemas
+as readable in Classic, Lite and discovered declarations, including recalled
+schemas. Its effective tool map after paging controls which restored calls
+receive the plaintext signal. Alias authority stays separate from canonical
+readability. Native subscription schemas keep their encryption
+contract, and a changed Lite prefix receives a stable content-based identity.
 `sse.py` owns shared event framing without provider-specific argument rewriting.
 `standalone_outputs.py` owns app-injected output projection. External requests
 project readable peer messages and standalone outputs into matched tool results.
@@ -269,7 +280,7 @@ native id with no registry row resolves with `row=None` and goes out as the
 client spelled it. `request_started` and the final record share the
 `request_id`. It is a random id, not derived from request content.
 Handoff aliases retain that same catalogue through response adaptation.
-The encrypted spawn and follow-up guard resolves child models from it, so a
+The encrypted spawn, send and follow-up guard resolves child models from it, so a
 refresh cannot change an in-flight request's decision. Direct helper callers
 without a request context capture once when creating their aliases.
 `codex_route.py` owns the switched Codex route. Switch Codex gives Codex a

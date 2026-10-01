@@ -1,7 +1,18 @@
 # Changelog
 
-## scg-review 0.4.18 - 2026-10-01
+## scg-review 0.4.18 and scg-subagents 0.5.17 - 2026-10-01
 
+- The parent now explicitly selects each fresh or partial-history child's model
+  and effort. Full native history inheritance is a deliberate choice, and a
+  model label in a brief never selects a serving model.
+- Codex pre-commit guidance gives the complete plaintext dispatch for
+  `openai/gpt-6.1-sol` at `high` with `fork_turns="none"`, including later
+  assignments. GPT through OpenRouter is an external recipient even when the
+  parent uses GPT. Native subscription GPT is a different provider route.
+- An unsafe handoff refusal can end the parent turn. Correct it once on the
+  next user turn through plaintext with the same model and effort; it does not
+  show an OpenRouter outage or justify requesting native reviewers. An encrypted
+  file path cannot repair delivery. Review lanes and approval gates stay unchanged.
 - Run the SCG pre-commit review gate on native Windows. `setup.py check` and
   `install` no longer refuse the platform, so Windows gets the same
   staged-tree receipt gate, commit-msg check and hook provisioning as macOS

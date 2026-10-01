@@ -1,11 +1,12 @@
 """A rejected handoff must explain its wire authority without exposing content."""
+from contextlib import nullcontext
 import io
 import json
 import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from ai_router import (agent_handoffs, events, handoff_response, provider_defs,
+from ai_router import (agent_handoffs, errors, events, handoff_response, provider_defs,
                        providers, sse, stream_relay, transport)
 from tests.test_agent_handoff_providers import Response
 
@@ -29,43 +30,42 @@ def frame(item, phase='done'):
 
 
 class HandoffObservationTests(unittest.TestCase):
-    def adapt(self, wire, names=None, notes=None, content_type='text/event-stream'):
-        rows = []
+    def adapt(self, wire, names=None, notes=None, content_type='text/event-stream', rejected=False):
+        rows, chunks = [], []
         names = names or agent_handoffs.AliasTools({'spawn_agent'}, stream=True)
         with mock.patch.object(events.LOG, 'info', side_effect=lambda row: rows.append(json.loads(row))):
-            result = b''.join(providers.SubscriptionProvider().adapt(
-                Response(wire, content_type), names, notes))
-        return result, rows
+            with self.assertRaises(errors.ResponseRejected) if rejected else nullcontext():
+                chunks.extend(providers.SubscriptionProvider().adapt(
+                    Response(wire, content_type), names, notes))
+        return b''.join(chunks), rows
 
     def test_rejected_native_handoff_records_original_authority(self):
-        rows = []
         names = agent_handoffs.AliasTools({'spawn_agent'}, stream=True)
         notes = {'request_id': REQUEST, 'attempt': 2}
-        with mock.patch.object(events.LOG, 'info', side_effect=lambda row: rows.append(json.loads(row))):
-            wire = b''.join(providers.SubscriptionProvider().adapt(
-                Response(frame(call()), 'text/event-stream'), names, notes))
+        wire, rows = self.adapt(frame(call()), names, notes, rejected=True)
         rejected = [row for row in rows if row.get('event') == 'handoff_observed']
         self.assertEqual(len(rejected), 1)
         row = rejected[0]
         self.assertEqual((row['request_id'], row['attempt']), (REQUEST, 2))
         self.assertEqual(row['upstream'], {'namespace': 'native', 'marker': 'nonempty', 'arguments': 'object'})
         self.assertTrue(row['guard_rejected'])
-        self.assertEqual(row['client'], {'namespace': 'native', 'marker': 'empty', 'arguments': 'string'})
-        self.assertEqual(row['frame_end_offset'], len(wire))
+        self.assertIsNone(row['client'])
+        self.assertIsNone(row['frame_end_offset'])
         self.assertNotIn('SYNTH_SECRET', json.dumps(rows))
-        self.assertIn(b'That handoff cannot be delivered readably', wire)
+        self.assertEqual(wire, b'')
 
     def test_changed_envelope_does_not_inherit_plaintext_authority(self):
         added = call('collaboration_plaintext', None)
         added['arguments'] = ''
         done = call('collaboration', None)
-        wire, rows = self.adapt(frame(added, 'added') + frame(done))
+        wire, rows = self.adapt(frame(added, 'added') + frame(done), rejected=True)
         seen = [row for row in rows if row['event'] == 'handoff_observed']
         self.assertEqual([row['call_ordinal'] for row in seen], [1, 1])
         self.assertEqual([row['guard_rejected'] for row in seen], [False, True])
         self.assertEqual([row['envelope_changed'] for row in seen], [False, True])
         self.assertTrue(all(row['identity_consistent'] for row in seen))
-        self.assertEqual(seen[-1]['frame_end_offset'], len(wire))
+        self.assertIsNone(seen[-1]['frame_end_offset'])
+        self.assertNotIn(b'output_item.done', wire)
         self.assertEqual(rows[-1]['missing_envelopes'], ['completed'])
         self.assertNotIn('SYNTH_SECRET', json.dumps(rows))
 
@@ -136,18 +136,17 @@ class HandoffObservationTests(unittest.TestCase):
         self.assertEqual(rows[-1]['missing_envelopes'], [])
         self.assertEqual(notes['served_model'], 'gpt-6-luna')
 
-    def test_observer_failure_cannot_change_native_response(self):
+    def test_observer_failure_cannot_disable_rejection(self):
         raw = frame(call())
-        expected, _ = self.adapt(raw)
         with mock.patch.object(events.LOG, 'info', side_effect=ValueError('SYNTH_SECRET_LOG')):
-            actual = b''.join(providers.SubscriptionProvider().adapt(
-                Response(raw, 'text/event-stream'), agent_handoffs.AliasTools({'spawn_agent'})))
-        self.assertEqual(actual, expected)
+            with self.assertRaises(errors.ResponseRejected):
+                list(providers.SubscriptionProvider().adapt(
+                    Response(raw, 'text/event-stream'), agent_handoffs.AliasTools({'spawn_agent'})))
 
     def test_alias_with_encrypted_marker_still_refuses_before_delivery(self):
         rows = []
         with mock.patch.object(events.LOG, 'info', side_effect=lambda row: rows.append(json.loads(row))):
-            with self.assertRaisesRegex(ValueError, 'encrypted plaintext'):
+            with self.assertRaises(errors.ResponseRejected):
                 list(providers.SubscriptionProvider().adapt(
                     Response(frame(call('collaboration_plaintext')), 'text/event-stream'),
                     agent_handoffs.AliasTools({'spawn_agent'})))
@@ -160,7 +159,7 @@ class HandoffObservationTests(unittest.TestCase):
         rows = []
         with mock.patch.object(events.LOG, 'info', side_effect=lambda row: rows.append(json.loads(row))):
             iterator = providers.SubscriptionProvider().adapt(
-                Response(frame(call(), 'added') + frame(call()), 'text/event-stream'), names)
+                Response(frame({**call(), 'arguments': ''}, 'added') + frame(call()), 'text/event-stream'), names)
             next(iterator)
             iterator.close()
         self.assertEqual(rows[-1]['missing_envelopes'], ['completed', 'done'])
@@ -176,7 +175,8 @@ class HandoffObservationTests(unittest.TestCase):
             agent_handoffs.AliasTools({'spawn_agent'}), {'request_id': second_id, 'attempt': 3})
         rows = []
         with mock.patch.object(events.LOG, 'info', side_effect=lambda row: rows.append(json.loads(row))):
-            next(first)
+            with self.assertRaises(errors.ResponseRejected):
+                next(first)
             next(second)
             first.close()
             second.close()
@@ -204,7 +204,7 @@ class HandoffObservationTests(unittest.TestCase):
                     def relay():
                         stream_relay.relay_stream(
                             SimpleNamespace(wfile=writer), providers.SubscriptionProvider(),
-                            Response(frame(call()), 'text/event-stream'),
+                            Response(frame(call('collaboration_plaintext', None)), 'text/event-stream'),
                             SimpleNamespace(tool_names=agent_handoffs.AliasTools({'spawn_agent'})),
                             metrics, 0.0, 0.0, record, attempt=3)
                     if broken:

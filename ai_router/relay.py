@@ -1,13 +1,4 @@
-"""Upstream relay loop: response streaming and failure policy (Plan 128).
-
-`log_event` is injected by the handler so a test patching
-`ai_router.router.log_event` keeps seeing this module's events; always call
-the injected object, never a fresh import.
-
-One `attempt_policy.Ledger` owns every send of the request (Plan 188): `relay`
-walks the routes (the requested one, then at most one helper fallback twin)
-and `_route` is one route's send, failure policy and stream.
-"""
+"""Relay routes through one send ledger; use the handler's injected log_event."""
 import http.client
 import json
 import time
@@ -106,7 +97,6 @@ def _route(handler, provider, prepared, metrics, has_image, started, ledger, log
                     handler, prepared, None, metrics, started, admit,
                     ledger=ledger, auth=True)
             transport.note_first_data(metrics, headers_done)
-            # Context frames are Responses-only; Messages ingress has none.
             if (provider.defn.sends_context_error_frame()
                     and ledger.protocol == provider_defs.RESPONSES
                     and upstream.is_context_error(raw)):
@@ -134,13 +124,11 @@ def _route(handler, provider, prepared, metrics, has_image, started, ledger, log
             if described is not None:
                 status, message, code = described
                 if status == 400 and response.status == 402:
-                    # Key funds: final, never cached or a dead-key window.
                     log_event('upstream_rejected', status=response.status,
                               client_status=status, code='KEY_NO_CREDIT',
                               category='KEY_NO_CREDIT', **metrics)
                     return _error(handler, ledger, errors.key_no_credit(message))
                 if status == 503:
-                    # Transient: never remembered; clients may honour Retry-After.
                     log_event('upstream_unavailable', status=response.status,
                               client_status=status, code=code,
                               parameter=upstream.rejection_parameter(raw),
@@ -179,21 +167,21 @@ def _route(handler, provider, prepared, metrics, has_image, started, ledger, log
         record = stream_relay.StreamRecord(transport.ResponseFormat.capture(ledger, response))
         metrics['response_kind'], metrics['response_encoding'] = record.response_format.kind, record.response_format.encoding
         upstream.validate_response(response, prepared, raw_encoded=record.response_format.encoding != 'identity')
-        handler.send_response(response.status); handler.response_committed = True
-        transport.relay_headers(response, handler.send_header, ledger.model)
-        handler.send_header('Connection', 'close')
-        handler.end_headers()
-        ledger.mark_committed()
-        sent = True
-        # The ledger allows replay only while the client holds no response byte.
+        def commit_response():
+            nonlocal sent
+            if sent: return
+            handler.send_response(response.status); handler.response_committed = True
+            transport.relay_headers(response, handler.send_header, ledger.model)
+            handler.send_header('Connection', 'close'); handler.end_headers()
+            ledger.mark_committed(); sent = True
         while True:
             stream_relay.relay_stream(handler, provider, response, prepared,
-                                      metrics, started, headers_done, record, attempt=len(ledger.attempts))
+                                      metrics, started, headers_done, record, attempt=len(ledger.attempts),
+                                      on_ready=commit_response)
             if not ledger.replay(record, prepared.body):
                 break
             response, headers_done = attempt_policy.replay_stream(
                 ledger, record, prepared, metrics, started, log_event)
-        # Flush held frames before attributing the stream's first write.
         if record.flush(handler):
             transport.note_first_write(metrics, headers_done)
         elif record.delivery_failed:
@@ -214,7 +202,19 @@ def _route(handler, provider, prepared, metrics, has_image, started, ledger, log
         if metrics.get('served_model'):
             with handler.server.lock:
                 handler.server.served_models[ledger.model] = metrics['served_model']
-    # `admit` refused a repaired body before its send: the client holds no bytes yet.
+    except errors.ResponseRejected as exc:
+        record.outcome = attempt_policy.Outcome(attempt_policy.REFUSED,
+            attempt_policy.STREAM if sent else attempt_policy.STATUS, attempt_policy.ROUTER,
+            exc.code, output=bool(record.content_delta_bytes), side_effects=bool(record.forwarded_bytes))
+        ledger.settle(record.outcome)
+        if not sent:
+            _error(handler, ledger, exc)
+        elif transport.emit_terminal_failure(handler.wfile, record.response_format, exc):
+            record.client_terminal = stream_errors.TERMINAL_FROM_ROUTER
+        ledger.observe(record)
+        metrics.update(stream_relay.streamed_metrics(record), **ledger.outcome_facts())
+        _record_terminal_source(record, metrics)
+        log_event('request_failed', status=response.status if sent else exc.status, **metrics, code=exc.code)
     except errors.OversizeBusy as exc:
         ledger.settle(attempt_policy.raised(exc, sent, response, record))
         _error(handler, ledger, errors.oversize_busy(), retry_after='2')

@@ -44,6 +44,45 @@ Record each pass's requested and returned model and effort in your notes. Missin
 
 Use the **elevated-risk profile** when the staged change, or a directly relevant context file, touches auth, security, money, destructive data, migrations, concurrency or deployment. You decide the profile in step 2 and state it in every brief. It deepens inspection and the evidence required for the whole review; it does not by itself require a more expensive model.
 
+### Codex: select the model and readable handoff
+
+For Pass 1 and each review lane, call `collaboration_plaintext.spawn_agent`
+directly with explicit model and effort and `fork_turns="none"`. The current
+policy's correctness-lane dispatch is:
+
+```json
+{
+  "task_name": "review_correctness",
+  "fork_turns": "none",
+  "model": "openai/gpt-6.1-sol",
+  "reasoning_effort": "high",
+  "message": "GPT-6.1 Sol High: pre-commit review, correctness lane. Replace this message with the complete Step 7 brief, including the worktree, reviewed tree, staged files and context."
+}
+```
+
+Use the same selection for the other passes, changing the task name and brief.
+Pass 1 receives the code-simplifier assignment; the lanes receive Step 7's brief.
+A model label in the message does not select the model. Do not omit tool arguments
+or rely on installation-wide subagent defaults.
+
+Transport follows the recipient's provider route. GPT through OpenRouter needs
+plaintext even when the parent uses GPT. The native subscription id `gpt-6.1-sol`
+is a different route from `openai/gpt-6.1-sol`; it is not an automatic fallback.
+Native subscription recipients use the original collaboration tools only when
+the effective review policy or an explicit owner exception permits that route.
+Use `collaboration_plaintext.send_message` and `collaboration_plaintext.followup_task`
+for later assignments to the OpenRouter child, even if saved history shows native
+tool names. Codex executes the plaintext aliases under those native names.
+
+An unsafe handoff refusal is not model or provider unavailability and does not
+justify asking to replace the required OpenRouter reviewer with a native model.
+It can end the parent turn before the bad call executes. On the next user turn,
+correct it once with the indicated plaintext tool and a complete readable brief,
+keeping the same model and effort. Do not replay the encrypted call. If the
+correction fails or the plaintext tool is unavailable, report the exact delivery
+blocker as `❌ Block` and preserve the work. The router cannot invent a recoverable
+tool result; an encrypted message containing a file path cannot repair delivery.
+
 ## Step 1: Setup check
 
 Find the repo root and branch, and read the root and nested `AGENTS.md` files that govern the staged files. Then run this with the installed plugin root, which is two folders above this skill's folder:
@@ -138,7 +177,7 @@ Reply in the lane report format from the lane guide, then stop.
 
 If delivery goes wrong:
 
-- A child that misses the brief or starts unrelated work is stopped, not sent the full review again. As a fallback, write the same brief to a non-secret temporary Markdown file and tell the subagent to read that absolute path first; if only task labels arrive, put the file name in the label too. This changes the transport only, never the models, pass order or approval rules. Never replace a lane with a top-level task or a self-written review.
+- A child that misses the brief or starts unrelated work is stopped, not sent the full review again. As a fallback, write the same brief to a non-secret temporary Markdown file and deliver its absolute path through the recipient's readable handoff tool; the file path cannot repair encrypted delivery to OpenRouter. If only task labels arrive, put the file name in the label too. This changes the transport only, never the models, pass order or approval rules. Never replace a lane with a top-level task or a self-written review.
 - A short acknowledgement, a task name or an accepted spawn is not review evidence. A report must cover the full staged diff and every staged file in full, including an index or README file beyond its changed hunk. When a report conflicts with what the child actually did, verify the missing inspection before accepting it. Do not add delivery probes or extra approval questions to ordinary successful reviews.
 - Use a distinct brief for each pass and each changed tree. Reject a result that repeats an old tree's review; start a fresh subagent with the new brief.
 - If file handoff also fails, report the exact error, apply the policy's bounded fallbacks where eligible, and preserve the work if no permitted pass can run. Do not repeat unbounded review calls.

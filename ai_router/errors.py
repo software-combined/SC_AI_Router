@@ -1,9 +1,4 @@
-"""One catalog for every defined router failure.
-
-Callers select a case, never invent wording; no key, token, path or request
-content enters a message or a log line. Status and code stay the wire
-contract, the message is plain language, and detail rides the log line.
-"""
+"""Defined router failures; messages never contain request content or credentials."""
 from .redaction import redact  # noqa: F401 (re-exported: errors.redact)
 
 ROUTER_TYPE = 'router_error'
@@ -26,6 +21,10 @@ class RouterError(Exception):
     def body(self):
         return {'error': {'message': self.message, 'type': ROUTER_TYPE,
                           'code': self.code}}
+
+
+class ResponseRejected(RouterError):
+    """A response policy refusal, before the rejected output becomes executable."""
 
 
 class PreparationError(ValueError):
