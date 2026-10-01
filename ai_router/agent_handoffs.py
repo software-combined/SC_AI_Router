@@ -1,28 +1,43 @@
-"""Plaintext aliases for native collaboration; Codex still executes every tool."""
+"""Readable collaboration handoffs on mixed installs; Codex still executes every tool.
+
+Codex delivers a spawn, send or follow-up as plaintext only when the call's
+`encrypted_function_args` marker is `[]`; anything else reaches the child
+encrypted, which only the native backend can read. Where an external child can
+exist, every brief is declared readable: external routes rewrite the canonical
+tools, while native routes, whose backend requires the canonical message to stay
+encrypted, offer readable copies in their own namespace in place of them. Each
+call returns to its canonical name with the marker. An install without an
+external key keeps the stock encrypted contract.
+"""
 from copy import deepcopy
 import json
+import re
 import uuid
 
 from . import errors, provider_defs, request_context
 
 NATIVE_NAMESPACE = 'collaboration'
 PLAINTEXT_NAMESPACE = 'collaboration_plaintext'
+PLAINTEXT_DESCRIPTION = 'Start subagents and send them messages or follow-up tasks as readable text.'
 HANDOFF_TOOLS = frozenset(('spawn_agent', 'send_message', 'followup_task'))
 LANE_HINT_NAMES = frozenset(('spawn_agent', 'close_agent'))
 LANE_HINT = ('When all subagent lanes are full, close finished agents, '
              'or all of them if needed, then retry spawn.')
+SPAWN_HINT = ('Pass model and reasoning_effort explicitly for a fresh child; '
+              'a child on an externally billed model needs fork_turns="none".')
 READABLE_MESSAGE = 'The complete readable assignment or message. Do not encrypt it.'
+# Backend handoff ciphertext: matched all 568 saved encrypted messages (Sep 2026).
+CIPHERTEXT = re.compile(r'gAAAA[A-Za-z0-9_-]{40,}={0,2}')
 
 
-class AliasTools(frozenset):
-    """Alias authority, canonical readability and captured metadata for one request."""
-    def __new__(cls, names, stream=False, spawn_models=None, location='unknown', catalogue=None, readable=()):
+class ReadableHandoffs(frozenset):
+    """Handoff tools one request declares readable, plus the facts its response checks read."""
+    def __new__(cls, names=(), stream=False, spawn_models=None, location='unknown', catalogue=None):
         value = super().__new__(cls, names)
         value.stream = stream
         value.spawn_models = dict(spawn_models or {})
         value.location = location
         value.catalogue = request_context.capture() if catalogue is None else catalogue
-        value.readable = frozenset(readable)
         return value
 
 
@@ -59,11 +74,8 @@ def spawn_models(items):
     if not isinstance(items, list):
         return models
     for item in items:
-        if not isinstance(item, dict) or item.get('type') != 'function_call':
-            continue
-        if item.get('namespace') not in (NATIVE_NAMESPACE, PLAINTEXT_NAMESPACE):
-            continue
-        if item.get('name') != 'spawn_agent':
+        if (not isinstance(item, dict) or item.get('type') != 'function_call'
+                or item.get('namespace') != NATIVE_NAMESPACE or item.get('name') != 'spawn_agent'):
             continue
         args = _arguments(item)
         task, model = args.get('task_name'), args.get('model')
@@ -72,31 +84,8 @@ def spawn_models(items):
     return models
 
 
-def _tool_container(payload):
-    """Find one native declaration, including the client's Lite prefix."""
-    containers = [(payload, None)]
-    items = payload.get('input', [])
-    containers.extend((item, index) for index, item in enumerate(items if isinstance(items, list) else [])
-                      if isinstance(item, dict) and item.get('type') == 'additional_tools'
-                      and item.get('role') == 'developer')
-    matches = []
-    for container, index in containers:
-        tools = container.get('tools', [])
-        if index is not None and (not isinstance(tools, list)
-                                  or any(not isinstance(t, dict) for t in tools)):
-            raise ValueError('unsupported tool declaration shape')
-        for tool in tools:
-            if tool.get('name') == PLAINTEXT_NAMESPACE:
-                raise ValueError('plaintext collaboration namespace collision')
-            if tool.get('type') == 'namespace' and tool.get('name') == NATIVE_NAMESPACE:
-                matches.append((container, index))
-    if len(matches) > 1:
-        raise ValueError('duplicate native collaboration namespace')
-    return matches[0] if matches else (payload, None)
-
-
 def readable_handoff_tool(tool, namespace):
-    """Copy a complete canonical message schema for external upstreams."""
+    """Copy a complete canonical message schema as readable."""
     if (namespace != NATIVE_NAMESPACE or tool.get('type') != 'function'
             or tool.get('name') not in HANDOFF_TOOLS):
         return tool
@@ -111,7 +100,7 @@ def readable_handoff_tool(tool, namespace):
 
 
 def _hint_tool(tool, namespace=None, plaintext=False):
-    """`tool`, or a copy with LANE_HINT appended once to spawn/close; walks namespaces."""
+    """`tool`, or a copy with its hints appended once to spawn/close; walks namespaces."""
     if not isinstance(tool, dict):
         return tool
     if tool.get('type') == 'namespace':
@@ -124,10 +113,13 @@ def _hint_tool(tool, namespace=None, plaintext=False):
         tool = readable_handoff_tool(tool, namespace)
     if tool.get('type') != 'function' or tool.get('name') not in LANE_HINT_NAMES:
         return tool
+    spawn = plaintext and namespace == NATIVE_NAMESPACE and tool['name'] == 'spawn_agent'
     text = tool.get('description') or ''
-    if LANE_HINT in text:
+    missing = [hint for hint in ((LANE_HINT, SPAWN_HINT) if spawn else (LANE_HINT,))
+               if hint not in text]
+    if not missing:
         return tool
-    return {**tool, 'description': (text + '\n' if text else '') + LANE_HINT}
+    return {**tool, 'description': '\n'.join(([text] if text else []) + missing)}
 
 
 def _hint_tools(tools, namespace=None, plaintext=False):
@@ -135,145 +127,155 @@ def _hint_tools(tools, namespace=None, plaintext=False):
     return tools if all(new is old for new, old in zip(hinted, tools)) else hinted
 
 
-def _hint_item(item, plaintext=False):
+def _handoff(tool):
+    return isinstance(tool, dict) and tool.get('name') in HANDOFF_TOOLS
+
+
+def _alias_tools(tools):
+    """Move canonical handoffs, readable, into a plaintext namespace after their own.
+
+    The native backend refuses a canonical handoff unless its message stays
+    `encrypted: true`, so the readable copies need their own namespace. Other
+    collaboration tools stay put, and an emptied namespace is dropped.
+    """
+    moved, changed = [], False
+    for tool in tools:
+        children = (tool.get('tools') if isinstance(tool, dict) and tool.get('type') == 'namespace'
+                    and tool.get('name') == NATIVE_NAMESPACE else None)
+        if not isinstance(children, list) or not any(map(_handoff, children)):
+            moved.append(tool)
+            continue
+        changed = True
+        kept = [child for child in children if not _handoff(child)]
+        moved += [{**tool, 'tools': kept}] if kept else []
+        # Each alias is its canonical tool's readable form, hints included.
+        moved.append({'type': 'namespace', 'name': PLAINTEXT_NAMESPACE,
+                      'description': PLAINTEXT_DESCRIPTION,
+                      'tools': [_hint_tool(child, NATIVE_NAMESPACE, True)
+                                for child in children if _handoff(child)]})
+    return moved if changed else tools
+
+
+def _container(tools, plaintext=False, alias=False):
+    hinted = _hint_tools(tools, plaintext=plaintext)
+    return _alias_tools(hinted) if alias else hinted
+
+
+def _hint_item(item, plaintext=False, alias=False):
     """A discovery result or Lite prefix with hinted tools; a changed prefix gets a new ID."""
     tools = item.get('tools') if isinstance(item, dict) else None
     lite = tools is not None and item.get('type') == 'additional_tools' and item.get('role') == 'developer'
     if not isinstance(tools, list) or not (lite or item.get('type') == 'tool_search_output'):
         return item
-    hinted = _hint_tools(tools, plaintext=plaintext)
+    hinted = _container(tools, plaintext, alias)
     if hinted is tools or not lite:
         return item if hinted is tools else {**item, 'tools': hinted}
+    # Codex hashes prefix payloads into IDs; changed tools need a new, stable
+    # identity too. Never modify the client's saved prefix.
     identity = json.dumps([item.get('id'), hinted], sort_keys=True)
     return {**item, 'tools': hinted,
             'id': 'at_' + str(uuid.uuid5(uuid.NAMESPACE_URL, 'scg-lane-hint:' + identity))}
 
 
-def hint_full_lanes(payload, *, plaintext=False):
-    """Copy declaration hints and, for external routes, readable message schemas."""
+def hint_full_lanes(payload, *, plaintext=False, alias=False):
+    """Copy declaration hints; `plaintext` makes canonical handoff messages readable
+    and `alias` moves the handoffs, readable, into the plaintext namespace."""
     tools = payload.get('tools')
-    hinted = _hint_tools(tools, plaintext=plaintext) if isinstance(tools, list) else tools
+    hinted = _container(tools, plaintext, alias) if isinstance(tools, list) else tools
     if hinted is not tools:
         payload = {**payload, 'tools': hinted}
     items = payload.get('input')
     if not isinstance(items, list):
         return payload
-    hinted = [_hint_item(item, plaintext) for item in items]
+    hinted = [_hint_item(item, plaintext, alias) for item in items]
     return payload if all(new is old for new, old in zip(hinted, items)) else {**payload, 'input': hinted}
 
 
-def add_plaintext_tools(payload, catalogue=None):
-    """Offer aliases only for native tools present in this request: (payload or a copy, names)."""
-    container, input_index = _tool_container(payload)
-    tools = container.get('tools', [])
-    aliases = []
-    described = []
-    for namespace in tools:
-        if namespace.get('type') != 'namespace' or namespace.get('name') != NATIVE_NAMESPACE:
-            continue
-        for tool in namespace.get('tools', []):
-            if tool.get('type') != 'function' or tool.get('name') not in HANDOFF_TOOLS:
-                described.append(tool)
-                continue
-            guidance = (
-                'Choose by the recipient provider route. Native subscription GPT uses collaboration. '
-                'External recipients, including GPT through OpenRouter, require collaboration_plaintext.'
-                + tool['name'] + ' for every assignment and follow-up, even when saved calls use native names.')
-            if tool['name'] == 'spawn_agent':
-                guidance += (' Pass model and reasoning_effort explicitly for fresh or partial-history children. '
-                             'Choose full native history inheritance deliberately. '
-                             'External children require fork_turns="none"; encrypted history cannot be translated.')
-            tool = {**tool, 'description': tool.get('description', '') + '\n' + guidance}
-            described.append(tool)
-            alias = {**readable_handoff_tool(tool, NATIVE_NAMESPACE)}
-            message = alias.get('parameters', {}).get('properties', {}).get('message')
-            if not isinstance(message, dict) or message.get('type') != 'string':
-                raise ValueError('unsupported native collaboration message schema')
-            alias['description'] = (
-                'PLAINTEXT HANDOFF: use collaboration_plaintext.' + tool['name']
-                + ' for externally billed agents. '
-                + tool.get('description', '') +
-                '\nSend the complete readable message. Do not encrypt it.')
-            aliases.append(alias)
-    names = {tool['name'] for tool in aliases}
-    children = spawn_models(payload.get('input', []))
-    if len(names) != len(aliases):
-        raise ValueError('duplicate native collaboration tool')
-    if aliases:
-        tools = [{**ns, 'tools': described} if ns.get('name') == NATIVE_NAMESPACE else ns for ns in tools]
-        augmented = [*tools, {'type': 'namespace', 'name': PLAINTEXT_NAMESPACE,
-            'description': ('Use this namespace for every initial assignment and follow-up '
-                'to externally billed agents. Previous calls may appear under '
-                'collaboration in '
-                'history because Codex executes the native tool; that does not change '
-                'the need to choose collaboration_plaintext for the next message.'),
-            'tools': aliases}]
-        if input_index is None:
-            payload = {**payload, 'tools': augmented}
-        else:
-            # Codex hashes prefix payloads into IDs; changed tools need a new,
-            # stable identity too. Never modify the client's saved prefix.
-            identity = json.dumps([container.get('id'), augmented], sort_keys=True)
-            ident = 'at_' + str(uuid.uuid5(uuid.NAMESPACE_URL, 'scg-plaintext:' + identity))
-            items = list(payload['input'])
-            items[input_index] = {**container, 'tools': augmented, 'id': ident}
-            payload = {**payload, 'input': items}
-    return payload, AliasTools(names, payload.get('stream') is True, children,
-                               'classic' if input_index is None else 'lite', catalogue=catalogue)
+def _collaboration(payload):
+    """(location, tools) for each collaboration namespace a request declares."""
+    containers = [('classic', payload.get('tools'))]
+    items = payload.get('input')
+    for item in items if isinstance(items, list) else ():
+        if isinstance(item, dict) and item.get('type') == 'tool_search_output':
+            containers.append(('discovered', item.get('tools')))
+        elif (isinstance(item, dict) and item.get('type') == 'additional_tools'
+                and item.get('role') == 'developer'):
+            containers.append(('lite', item.get('tools')))
+    for location, tools in containers:
+        for tool in tools if isinstance(tools, list) else ():
+            if (isinstance(tool, dict) and tool.get('type') == 'namespace' and isinstance(tool.get('tools'), list)
+                    and tool.get('name') in (NATIVE_NAMESPACE, PLAINTEXT_NAMESPACE)):
+                yield location, tool['tools']
 
 
-def _plaintext_rejected(reason):
-    return errors.ResponseRejected(400, 'invalid_prompt',
-        'This handoff was blocked before delivery. Start a new turn and use an advertised '
-        'collaboration_plaintext tool with a readable message. Do not resend the encrypted call.', reason)
+def readable_names(payload):
+    """Handoff tools `payload` declares readable wherever it declares them."""
+    readable, opaque = set(), set()
+    for _, tools in _collaboration(payload):
+        for tool in tools:
+            if (isinstance(tool, dict) and tool.get('type') == 'function'
+                    and tool.get('name') in HANDOFF_TOOLS):
+                message = tool.get('parameters', {}).get('properties', {}).get('message')
+                if isinstance(message, dict):
+                    (readable if message.get('encrypted') is False else opaque).add(tool['name'])
+    return readable - opaque  # One encrypted declaration keeps the stock contract.
 
 
-def restore_item(item, names):
-    """Return a native call; only an advertised alias can signal plaintext."""
-    if item.get('namespace') != PLAINTEXT_NAMESPACE:
+def handoff_facts(payload, names, catalogue=None):
+    """The response checks' view of one request: readable names plus captured facts."""
+    location = next((where for where, _ in _collaboration(payload)), 'unknown')
+    return ReadableHandoffs(names, payload.get('stream') is True,
+                            spawn_models(payload.get('input')), location, catalogue)
+
+
+def native_handoffs(payload, readable, catalogue=None):
+    """(payload or a copy, ReadableHandoffs) for one native Responses request.
+
+    `readable` follows the install, never the recipient: where an external
+    child can exist, every brief is declared readable in the plaintext
+    namespace. Otherwise only the lane hints change and the empty set leaves
+    the response as the backend sent it.
+    """
+    payload = hint_full_lanes(payload, alias=readable)
+    return payload, handoff_facts(payload, readable_names(payload) if readable else (), catalogue)
+
+
+def message_shape(item):
+    """'absent', 'readable', 'ciphertext' or 'other'; a classification, never content."""
+    message = _arguments(item).get('message')  # Unparseable arguments fail in Codex first.
+    if message is None:
+        return 'absent'
+    if not isinstance(message, str):
+        return 'other'
+    return 'ciphertext' if CIPHERTEXT.fullmatch(message) else 'readable'
+
+
+def mark_readable(item, names):
+    """A call to a readable handoff declaration as Codex executes it in plaintext.
+
+    An alias call returns to its canonical name with the marker. A canonical
+    call gains the marker unless its message is ciphertext, which stays
+    unmarked for the guard. The marker only restates this request's readable
+    declaration: ciphertext under an alias, or an upstream encryption marker,
+    is refused rather than relabelled.
+    """
+    if (not isinstance(item, dict) or item.get('type') != 'function_call'
+            or item.get('name') not in names):
         return item
-    if item.get('type') != 'function_call' or item.get('name') not in names:
-        raise _plaintext_rejected('HANDOFF_ALIAS_UNADVERTISED')
-    if 'encrypted_function_args' in item and item['encrypted_function_args'] != []:
-        raise _plaintext_rejected('HANDOFF_ALIAS_ENCRYPTED')
-    return {**item, 'namespace': NATIVE_NAMESPACE, 'encrypted_function_args': []}
-
-
-def restore_event(event, names):
-    """Map only Responses item envelopes; unrelated native events are untouched."""
-    mapped = event
-    if event.get('type') in ('response.output_item.added', 'response.output_item.done'):
-        item = event.get('item')
-        if isinstance(item, dict):
-            restored = restore_item(item, names)
-            if restored is not item:
-                mapped = {**mapped, 'item': restored}
-    response = event.get('response')
-    if isinstance(response, dict):
-        restored = restore_response(response, names)
-        if restored is not response:
-            mapped = {**mapped, 'response': restored}
-    return mapped
-
-
-def external_plaintext_call(item, names):
-    """External upstreams emit plaintext; keep advertised native calls executable."""
-    if (item.get('type') != 'function_call' or item.get('namespace') != NATIVE_NAMESPACE
-            or item.get('name') not in HANDOFF_TOOLS or item.get('name') not in names):
+    namespace, marker = item.get('namespace'), item.get('encrypted_function_args', [])
+    alias = namespace == PLAINTEXT_NAMESPACE
+    if not alias and namespace != NATIVE_NAMESPACE:
         return item
-    if item.get('encrypted_function_args', []) != []:
-        raise _plaintext_rejected('HANDOFF_EXTERNAL_ENCRYPTED')
+    if marker != [] or (alias and message_shape(item) == 'ciphertext'):
+        raise errors.ResponseRejected(400, 'invalid_prompt',
+            'This subagent handoff was blocked before delivery because its message came '
+            'back encrypted instead of readable. Send your request again.',
+            'HANDOFF_READABLE_ENCRYPTED')
+    if alias:
+        return {**item, 'namespace': NATIVE_NAMESPACE, 'encrypted_function_args': []}
+    if 'encrypted_function_args' in item or message_shape(item) not in ('absent', 'readable'):
+        return item
     return {**item, 'encrypted_function_args': []}
-
-
-def restore_response(response, names):
-    output = response.get('output')
-    if not isinstance(output, list):
-        return response
-    restored = [restore_item(item, names) for item in output]
-    if any(a is not b for a, b in zip(output, restored)):
-        return {**response, 'output': restored}
-    return response
 
 
 def validate_handoff(item, names):
@@ -298,8 +300,9 @@ def validate_handoff(item, names):
     entry = getattr(names, 'catalogue', {}).get(model) if isinstance(model, str) else None
     if entry is None or not provider_defs.is_external(entry.provider):
         return
-    extra = ' and fork_turns="none"' if item['name'] == 'spawn_agent' else ' and the same target'
     raise errors.ResponseRejected(400, 'invalid_prompt',
-        'This handoff was blocked before delivery. Start a new turn and use '
-        'collaboration_plaintext.' + item['name'] + ' with a readable message' + extra
-        + '. Do not resend the encrypted call.', 'HANDOFF_REQUIRES_PLAINTEXT')
+        "This subagent handoff was blocked before delivery: the subagent's model cannot "
+        'read an encrypted message. Choose a ' + provider_defs.OPENAI.subscription_label
+        + ' model for that subagent, or make sure your '
+        + provider_defs.label_for(provider_defs.DEFAULT_EXTERNAL)
+        + ' key is set up, then send your request again.', 'HANDOFF_REQUIRES_PLAINTEXT')

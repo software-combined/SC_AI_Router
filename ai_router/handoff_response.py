@@ -1,4 +1,4 @@
-"""Native handoff adaptation with bounded, content-free wire provenance."""
+"""Native handoff marking with bounded, content-free wire provenance."""
 import json
 import re
 
@@ -9,7 +9,7 @@ MAX_OBSERVATIONS = 3 * MAX_CALLS  # added, done and completed for each call
 
 
 def _shape(item):
-    namespace = {'collaboration': 'native', 'collaboration_plaintext': 'plaintext'}.get(
+    namespace = {handoffs.NATIVE_NAMESPACE: 'native', handoffs.PLAINTEXT_NAMESPACE: 'plaintext'}.get(
         item.get('namespace'), 'other')
     marker = item.get('encrypted_function_args')
     marker = ('absent' if 'encrypted_function_args' not in item else 'empty' if marker == []
@@ -83,16 +83,15 @@ class Trace:
             consistent = bool(keys)
         return ordinal + 1, call, consistent
 
-    def observe(self, before, restored, client, size, rejected=False, guard_rejected=False):
+    def observe(self, before, client, size, marker_rejected=False, guard_rejected=False):
         self.offset += size
         try:
-            self._observe(before, restored, client, rejected, guard_rejected)
+            self._observe(before, client, marker_rejected, guard_rejected)
         except Exception:
             self._limit()
 
-    def _observe(self, before, restored, client, rejected, guard_rejected):
+    def _observe(self, before, client, marker_rejected, guard_rejected):
         phase, original = _items(before)
-        _, middle = _items(restored)
         _, final = _items(client)
         for index, item in enumerate(original):
             if (not isinstance(item, dict) or item.get('type') != 'function_call'
@@ -111,18 +110,15 @@ class Trace:
             if call['first'] is None:
                 call['first'] = state
             call['changed'] |= call['first'] != state
-            mid = middle[index] if index < len(middle) else None
             end = final[index] if index < len(final) else None
-            self._emit('handoff_observed', call_ordinal=ordinal, phase=phase,
-                       tool=item['name'], alias_advertised=item['name'] in self.names,
+            self._emit('handoff_observed', call_ordinal=ordinal, phase=phase, tool=item['name'],
                        declaration=getattr(self.names, 'location', 'unknown'),
-                       schema_mode='plaintext' if item['name'] in self.names else 'unadvertised',
+                       schema_mode='readable' if item['name'] in self.names else 'native',
+                       message_shape=handoffs.message_shape(item),
                        identity_consistent=consistent, envelope_changed=call['changed'],
-                       upstream=upstream, restored=_shape(mid) if isinstance(mid, dict) else None,
-                       client=_shape(end) if isinstance(end, dict) else None,
-                       restoration_rejected=rejected,
-                       guard_rejected=guard_rejected,
-                       frame_end_offset=None if rejected or guard_rejected else self.offset)
+                       upstream=upstream, client=_shape(end) if isinstance(end, dict) else None,
+                       marker_rejected=marker_rejected, guard_rejected=guard_rejected,
+                       frame_end_offset=None if marker_rejected or guard_rejected else self.offset)
 
     def finish(self):
         for ordinal, call in enumerate(self.calls, 1):
@@ -137,22 +133,44 @@ class Trace:
         self.identities.clear()
 
 
+def _mark_output(response, names):
+    output = response.get('output')
+    if not isinstance(output, list):
+        return response
+    marked = [handoffs.mark_readable(item, names) for item in output]
+    return response if all(a is b for a, b in zip(output, marked)) else {**response, 'output': marked}
+
+
+def _mark(document, names, stream):
+    """Mark readable calls in one event or JSON body; an unchanged document keeps its bytes."""
+    if not stream:
+        return _mark_output(document, names)
+    marked = document
+    if document.get('type') in ('response.output_item.added', 'response.output_item.done'):
+        item = document.get('item')
+        if isinstance(item, dict) and (new := handoffs.mark_readable(item, names)) is not item:
+            marked = {**marked, 'item': new}
+    response = document.get('response')
+    if isinstance(response, dict) and (new := _mark_output(response, names)) is not response:
+        marked = {**marked, 'response': new}
+    return marked
+
+
 def _map(document, names, trace, original, stream):
     try:
-        restored = (handoffs.restore_event(document, names) if stream
-                    else handoffs.restore_response(document, names))
+        marked = _mark(document, names, stream)
     except errors.ResponseRejected:
-        trace.observe(document, None, None, 0, rejected=True)
+        trace.observe(document, None, 0, marker_rejected=True)
         raise
     try:
-        for item in _items(restored)[1]:
+        for item in _items(marked)[1]:
             handoffs.validate_handoff(item, names)
     except errors.ResponseRejected:
-        trace.observe(document, restored, None, 0, guard_rejected=True)
+        trace.observe(document, None, 0, guard_rejected=True)
         raise
-    wire = (sse.replace_data(original, json.dumps(restored).encode()) if stream
-            else json.dumps(restored).encode()) if restored is not document else original
-    trace.observe(document, restored, restored, len(wire))
+    wire = (sse.replace_data(original, json.dumps(marked).encode()) if stream
+            else json.dumps(marked).encode()) if marked is not document else original
+    trace.observe(document, marked, len(wire))
     return wire
 
 

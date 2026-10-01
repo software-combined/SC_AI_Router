@@ -1,4 +1,9 @@
-"""A refresh cannot change the encryption guard for an in-flight handoff."""
+"""A refresh cannot change the encryption guard for an in-flight handoff.
+
+Readability follows the install's key, so these calls carry backend ciphertext
+with no marker: they stay unmarked and the guard decides from the request's
+captured catalogue.
+"""
 import contextlib
 import json
 import unittest
@@ -7,7 +12,7 @@ from unittest import mock
 from ai_router import model_refresh, registry, request_context
 from tests.fakes import FakeUpstream, install_fake
 from tests.harness import auth_file, post, start_server, test_state
-from tests.test_agent_handoffs import native_tools, spawn_history
+from tests.test_agent_handoffs import CIPHERTEXT, native_tools, spawn_history
 from tests.test_request_context import _after_resolution, _generation, _poison
 
 CHILD = 'xiaomi/mimo-v2.6-pro'
@@ -26,8 +31,7 @@ class HandoffRequestContextTests(unittest.TestCase):
         calls = [{'type': 'function_call', 'namespace': 'collaboration', 'name': name,
                   'id': 'fc_' + name, 'call_id': 'call_' + name,
                   'arguments': json.dumps({'model': CHILD, 'task_name': 'plain',
-                                            'target': '/root/plain', 'message': 'SYNTHETIC'}),
-                  'encrypted_function_args': ['message']}
+                                            'target': '/root/plain', 'message': CIPHERTEXT})}
                  for name in ('spawn_agent', 'followup_task', 'send_message')]
         output = {'output': calls, 'status': 'completed'}
         raw = (b'data: ' + json.dumps({'type': 'response.completed', 'response': output}).encode()
@@ -55,7 +59,7 @@ class HandoffRequestContextTests(unittest.TestCase):
         body, received, _, status = result
         self.assertEqual(body['error']['code'], 'invalid_prompt')
         self.assertIn(status, (200, 400))
-        self.assertNotIn(b'SYNTHETIC', received)
+        self.assertNotIn(CIPHERTEXT.encode(), received)
         self.assertNotIn('output', body)
 
     def test_refresh_changes_only_the_next_handoff_request(self):

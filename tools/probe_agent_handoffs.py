@@ -20,7 +20,7 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from ai_router.agent_handoffs import add_plaintext_tools
+from ai_router.agent_handoffs import native_handoffs
 from ai_router import handoff_response
 from ai_router.catalogue import external_entry, subscription_stub
 from ai_router.registry import by_slug
@@ -61,10 +61,10 @@ class Probe:
         self.live, self.call_limit = live, call_limit
         self.live_children = live_children
         self.live_calls = self.parent_calls = 0
-        self.alias_call_ids = set()
+        self.readable_call_ids = set()
         self.lock = threading.Lock()
         self.facts = {'markers': [], 'encrypted_child': False,
-                      'canonical_replay': False, 'alias_emitted': False, 'calls': [], 'child_shapes': [],
+                      'canonical_replay': False, 'readable_emitted': False, 'calls': [], 'child_shapes': [],
                       'tool_failures': [], 'replies': [], 'retry_events': 0, 'request_failures': []}
         self.errors = []
         self.upstream = None
@@ -104,7 +104,7 @@ class Probe:
         if step >= len(calls):
             return sse([message('SYNTH_DONE', str(ordinal))], str(ordinal))
         name, arguments = calls[step]
-        item = {'type': 'function_call', 'namespace': 'collaboration_plaintext' if step < 4 else 'collaboration',
+        item = {'type': 'function_call', 'namespace': 'collaboration',
                 'name': name, 'id': 'fc_' + str(ordinal), 'call_id': 'call_' + str(ordinal),
                 'arguments': json.dumps(arguments)}
         return sse([item], str(ordinal))
@@ -112,7 +112,7 @@ class Probe:
     def record_input_facts(self, body):
         for item in body.get('input', []):
             if item.get('type') == 'function_call' and item.get('namespace') == 'collaboration':
-                self.facts['canonical_replay'] |= item.get('call_id') in self.alias_call_ids
+                self.facts['canonical_replay'] |= item.get('call_id') in self.readable_call_ids
             if item.get('type') == 'function_call_output':
                 output = item.get('output')
                 if isinstance(output, str) and ('error' in output.lower() or 'failed' in output.lower()):
@@ -165,17 +165,17 @@ class Probe:
                         'target': call_args.get('target'), 'task': call_args.get('task_name'),
                         'child_model': call_args.get('model')})
                 if item.get('encrypted_function_args') == []:
-                    self.alias_call_ids.add(item.get('call_id'))
-                    self.facts['alias_emitted'] = True
+                    self.readable_call_ids.add(item.get('call_id'))
+                    self.facts['readable_emitted'] = True
                 if body.get('model') != PARENT and item.get('type') == 'message':
                     text = ''.join(b.get('text', '') for b in item.get('content', []))
                     for marker in ALL_MARKERS:
                         if marker in text and marker not in self.facts['replies']:
                             self.facts['replies'].append(marker)
             return raw
-        body, aliases = add_plaintext_tools(body)
-        if body.get('model') == PARENT and not aliases:
-            raise ValueError('parent collaboration aliases were not advertised')
+        body, readable = native_handoffs(body, True)  # A mixed install: every brief readable.
+        if body.get('model') == PARENT and not readable:
+            raise ValueError('parent handoffs were not declared readable')
         if self.live and body.get('model') == PARENT:
             raw = self.forward(body, headers)
         else:
@@ -194,12 +194,12 @@ class Probe:
                         'name': item.get('name'),
                         'encrypted_fields': 'absent' if fields == 'absent' else ('empty' if fields == [] else 'nonempty'),
                         'model': arguments.get('model'), 'fork_turns': arguments.get('fork_turns')})
-                if item.get('namespace') == 'collaboration_plaintext':
-                    self.facts['alias_emitted'] = True
-                    self.alias_call_ids.add(item.get('call_id'))
+                if item.get('namespace') == 'collaboration' and item.get('name') in readable:
+                    self.facts['readable_emitted'] = True
+                    self.readable_call_ids.add(item.get('call_id'))
         source = io.BytesIO(raw)
         source.getheader = lambda name, default='': 'text/event-stream'
-        return b''.join(handoff_response.adapt_response(source, aliases))
+        return b''.join(handoff_response.adapt_response(source, readable))
 
     def forward(self, body, headers, path='/responses'):
         with self.lock:
@@ -261,8 +261,7 @@ def run(args, probe_type=Probe):
                 self.send_header('Content-Type', 'application/json' if self.path.endswith('/compact') else 'text/event-stream')
             except Exception as exc:
                 known = ('live call limit reached', 'unexpected live response encoding',
-                         'plaintext child received opaque content', 'encrypted plaintext collaboration call',
-                         'unadvertised plaintext collaboration call')
+                         'plaintext child received opaque content')
                 reason = str(exc) if str(exc) in known else 'protocol_or_transport_failure'
                 probe.errors.append({'type': type(exc).__name__, 'status': getattr(exc, 'code', None), 'reason': reason})
                 result = b'{"error":{"message":"synthetic handoff probe failed"}}'
@@ -303,6 +302,7 @@ def run(args, probe_type=Probe):
         server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
         server.ordinal = 0
         threading.Thread(target=server.serve_forever, daemon=True).start()
+        cwd = getattr(probe, 'stock_client', lambda home: None)(root) or temp  # A seeded home keeps Codex's own setup.
         entry = by_slug(CHILD)
         child = external_entry(entry) if entry else subscription_stub(CHILD)
         child['prefer_websockets'] = False
@@ -326,17 +326,17 @@ def run(args, probe_type=Probe):
         probe.facts['parent_wire_mode'] = 'lite' if parent['use_responses_lite'] else 'classic'
         probe.facts['child_effort'] = getattr(probe, 'child_effort', 'max')
         catalog = root / 'catalog.json'
-        catalog.write_text(json.dumps({'models': list({m['slug']: m for m in (parent, child, native)}.values())}))
+        catalog.write_text(json.dumps({'models': list({m['slug']: m for m in (*(rows.values() if cwd != temp else ()), parent, child, native)}.values())}))
         if args.live:
             auth = root / 'auth.json'
             auth.touch(mode=0o600)
             shutil.copyfile(Path.home() / '.codex/auth.json', auth)
         provider = 'openai' if args.live else 'probe'
-        config = {'model_provider': provider, 'model_catalog_json': str(catalog),
-            'project_doc_max_bytes': 0, 'approval_policy': 'never', 'sandbox_mode': 'read-only',
+        config = {'model_provider': provider, 'model_catalog_json': str(catalog), 'approval_policy': 'never',
+            'sandbox_mode': 'read-only'} | ({} if cwd != temp else {'project_doc_max_bytes': 0,
             'features.multi_agent': True, 'features.multi_agent_v2': True,
             'features.apps': False, 'features.memories': False, 'features.code_mode': False,
-            'features.shell_tool': False, 'web_search': 'disabled'}
+            'features.shell_tool': False, 'web_search': 'disabled'})
         base = f'http://127.0.0.1:{server.server_port}/v1'
         if args.live:
             config['openai_base_url'] = base
@@ -366,7 +366,7 @@ def run(args, probe_type=Probe):
                 safe = failure_shape(event, failure)
                 if safe not in probe.facts['tool_failures']:
                     probe.facts['tool_failures'].append(safe)
-        server_process = AppServer(command, cwd=temp, env=env, stderr=subprocess.PIPE,
+        server_process = AppServer(command, cwd=cwd, env=env, stderr=subprocess.PIPE,
                                    on_event=record_failure)
         def next_event():
             return server_process.next_event(deadline=deadline)
@@ -385,20 +385,20 @@ def run(args, probe_type=Probe):
                               'capabilities': {'experimentalApi': True}})
             server_process.send({'method': 'initialized', 'params': {}})
             thread = rpc('thread/start', {'model': PARENT, 'modelProvider': provider,
-                'cwd': temp, 'ephemeral': not (args.lifecycle or getattr(probe, 'persist', False)), 'approvalPolicy': 'never', 'sandbox': 'read-only',
-                'baseInstructions': 'Synthetic collaboration protocol test. No files or external tools.',
-                'developerInstructions': getattr(probe, 'instructions', 'Use only the collaboration tools requested by the user.')})['thread']['id']
+                'cwd': cwd, 'ephemeral': not (args.lifecycle or getattr(probe, 'persist', False)), 'approvalPolicy': 'never',
+                'sandbox': 'read-only'} | ({} if cwd != temp else {'baseInstructions': 'Synthetic collaboration protocol test. No files or external tools.',
+                'developerInstructions': getattr(probe, 'instructions', 'Use only the collaboration tools requested by the user.')}))['thread']['id']
             probe.parent_thread_id = thread
             prompts = [
-                f'Use collaboration_plaintext.spawn_agent once to create plain on {CHILD}, '
+                f'Use collaboration.spawn_agent once to create plain on {CHILD}, '
                 f'fork_turns none, reasoning_effort max, message "Reply exactly {MARKERS[0]}". Then finish this turn.',
-                'The plain child uses OpenRouter. Call collaboration_plaintext.followup_task '
+                'The plain child uses OpenRouter. Call collaboration.followup_task '
                 f'once with target plain, message "Reply exactly {MARKERS[1]}". Then finish this turn.',
-                'The plain child uses OpenRouter. Call collaboration_plaintext.send_message '
+                'The plain child uses OpenRouter. Call collaboration.send_message '
                 f'once with target plain, message "Reply exactly {MARKERS[2]}". Then finish this turn.',
-                'Wake the plain OpenRouter child using collaboration_plaintext.followup_task '
+                'Wake the plain OpenRouter child using collaboration.followup_task '
                 'once with target plain and message "Reply with every SYNTH_066 marker from your assignments". Then finish.',
-                'Use original collaboration.spawn_agent once to create native on gpt-5.6-sol, '
+                'Use collaboration.spawn_agent once to create native on gpt-5.6-sol, '
                 'fork_turns none, message "Reply exactly SYNTH_NATIVE_CONTROL". Then finish this turn.',
                 'Without tools, reply SYNTH_REPLAY_TWO.'] if args.live else ['Synthetic test.']
             if args.native_only:
@@ -423,7 +423,7 @@ def run(args, probe_type=Probe):
                 return '\n'.join(answer)
             for index, prompt_text in enumerate(prompts):
                 if index and getattr(probe, 'persist', False):
-                    rpc('thread/resume', {'threadId': thread, 'model': PARENT, 'modelProvider': provider, 'cwd': temp})
+                    rpc('thread/resume', {'threadId': thread, 'model': PARENT, 'modelProvider': provider, 'cwd': cwd})
                 answer = turn(prompt_text)
                 if probe.required_final and probe.required_final not in answer:
                     raise ValueError('parent did not finish after handoff recovery')
@@ -451,7 +451,7 @@ def run(args, probe_type=Probe):
                 turn('Without tools, reply SYNTH_AFTER_ROUTER_RESTART.')
                 probe.facts['router_restart'] = True
                 rpc('thread/resume', {'threadId': thread, 'model': PARENT,
-                    'modelProvider': provider, 'cwd': temp})
+                    'modelProvider': provider, 'cwd': cwd})
                 turn('Without tools, reply SYNTH_AFTER_RESUME.')
                 probe.facts['resume'] = True
                 rpc('thread/compact/start', {'threadId': thread})
@@ -472,10 +472,10 @@ def run(args, probe_type=Probe):
             if verified is not None:
                 return 0 if verified else 1
             if args.native_only:
-                return 0 if (probe.facts['encrypted_child'] and not probe.errors
+                return 0 if (not probe.facts['encrypted_child'] and not probe.errors
                     and (not args.live_children or expected_replies <= set(probe.facts['replies']))) else 1
-            if (probe.errors or not probe.facts['alias_emitted']
-                    or (PARENT.startswith('gpt-') and not probe.facts['encrypted_child'])
+            if (probe.errors or not probe.facts['readable_emitted']
+                    or probe.facts['encrypted_child']
                     or not probe.facts['canonical_replay']):
                 return 1
             if args.live_children and not expected_replies <= set(probe.facts['replies']):

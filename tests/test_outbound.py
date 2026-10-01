@@ -17,14 +17,13 @@ class StageOrderTests(unittest.TestCase):
     def test_external_stage_order(self):
         self.assertEqual(_names(outbound.EXTERNAL_STAGES), [
             'refuse_opaque_briefs', 'recover_context', 'materialize_standalone',
-            'scrub_fragments', 'add_handoff_tools', 'declare_tools',
+            'scrub_fragments', 'declare_tools',
             'rewrite_history', 'compaction_text', 'strip_reasoning', 'note_media',
             'check_effort', 'drop_native_fields', 'upstream_model', 'output_cap'])
 
     def test_subscription_stage_order(self):
         self.assertEqual(_names(outbound.SUBSCRIPTION_STAGES), [
-            'replay_boundary', 'replay_reasoning', 'recover_context',
-            'add_handoff_tools', 'hint_lanes'])
+            'replay_boundary', 'replay_reasoning', 'recover_context', 'hint_handoffs'])
         self.assertEqual(outbound.SUBSCRIPTION_STAGES[:2], outbound.SUBSCRIPTION_REPLAY)
 
     def test_stage_modules_hold_no_registry_lookup(self):

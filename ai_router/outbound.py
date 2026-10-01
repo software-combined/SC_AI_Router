@@ -29,6 +29,7 @@ class Projection:
     model: Any = None  # the client's model id, named in a refusal
     row: Any = None  # the request's captured registry row; never looked up here
     catalogue: Any = None  # handoff targets use the same captured generation
+    readable: bool = False  # native briefs: an external child can exist on this install
     handoffs: Any = field(default_factory=set)
     names: Any = None
     wire_names: Any = None
@@ -72,26 +73,20 @@ def scrub_fragments(payload, p):
     return _set(payload, 'input', tool_runs.scrub_tool_fragments(payload.get('input', [])))
 
 
-def add_handoff_tools(payload, p):
-    payload, p.handoffs = agent_handoffs.add_plaintext_tools(payload, p.catalogue)
+def hint_handoffs(payload, p):
+    payload, p.handoffs = agent_handoffs.native_handoffs(payload, p.readable, p.catalogue)
     return payload
-
-
-def hint_lanes(payload, p):
-    return agent_handoffs.hint_full_lanes(payload)
 
 
 def declare_tools(payload, p):
     payload = agent_handoffs.hint_full_lanes(payload, plaintext=True)
     tools, p.names, p.wire_names = prepare_tools(payload, p.row)
-    declared = {(entry['namespace'], entry['name']) for entry in p.names.values()
-                if isinstance(entry, dict) and entry['name'] in agent_handoffs.HANDOFF_TOOLS}
-    aliases = p.handoffs
-    p.names.handoffs = agent_handoffs.AliasTools(
-        [name for namespace, name in declared if namespace == agent_handoffs.PLAINTEXT_NAMESPACE],
-        getattr(aliases, 'stream', False), getattr(aliases, 'spawn_models', None),
-        getattr(aliases, 'location', 'unknown'), getattr(aliases, 'catalogue', p.catalogue),
-        readable=[name for namespace, name in declared if namespace == agent_handoffs.NATIVE_NAMESPACE])
+    # External upstreams never encrypt; the effective map after paging decides
+    # which calls may carry the plaintext marker.
+    readable = {entry['name'] for entry in p.names.values() if isinstance(entry, dict)
+                and entry['namespace'] == agent_handoffs.NATIVE_NAMESPACE
+                and entry['name'] in agent_handoffs.HANDOFF_TOOLS}
+    p.names.handoffs = agent_handoffs.handoff_facts(payload, readable, p.catalogue)
     return {**payload, 'tools': tools}
 
 
@@ -168,12 +163,11 @@ def replay_reasoning(payload, p):
 
 EXTERNAL_STAGES = (
     refuse_opaque_briefs, recover_context, materialize_standalone, scrub_fragments,
-    add_handoff_tools, declare_tools, rewrite_history, compaction_text,
-    strip_reasoning, note_media, check_effort, drop_native_fields, upstream_model,
-    output_cap)
+    declare_tools, rewrite_history, compaction_text, strip_reasoning, note_media,
+    check_effort, drop_native_fields, upstream_model, output_cap)
 # A compaction request replays history but is offered no tools.
 SUBSCRIPTION_REPLAY = (replay_boundary, replay_reasoning)
-SUBSCRIPTION_STAGES = SUBSCRIPTION_REPLAY + (recover_context, add_handoff_tools, hint_lanes)
+SUBSCRIPTION_STAGES = SUBSCRIPTION_REPLAY + (recover_context, hint_handoffs)
 
 
 def _run(stages, payload, projection):
@@ -193,11 +187,15 @@ def project_external(payload, path, model, row, catalogue=None):
     return _run(EXTERNAL_STAGES, payload, projection), projection.names
 
 
-def project_subscription(payload, path, catalogue=None):
-    """Payload, handoff names and whether the client's body must be re-encoded."""
+def project_subscription(payload, path, catalogue=None, readable=False):
+    """Payload, handoff names and whether the client's body must be re-encoded.
+
+    `readable` is the adapter's answer to whether this install can reach an
+    external child; only then does a native brief need to be readable.
+    """
     stages = {'/responses': SUBSCRIPTION_STAGES,
               '/responses/compact': SUBSCRIPTION_REPLAY}.get(path, ())
-    projection = Projection(path, catalogue=catalogue)
+    projection = Projection(path, catalogue=catalogue, readable=readable)
     projected = _run(stages, payload, projection)
     changed = projected is not payload
     return projected, projection.handoffs, changed

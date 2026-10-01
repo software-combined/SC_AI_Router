@@ -1,4 +1,4 @@
-"""The parent selects a child and a provider-compatible, readable handoff."""
+"""The parent selects a child explicitly; every handoff uses the canonical tools."""
 from copy import deepcopy
 import json
 from pathlib import Path
@@ -12,30 +12,34 @@ from ai_router import agent_handoffs
 from tests.test_agent_handoffs import native_tools
 from tests.test_codex_preferences import codex_config
 from tests.test_lite_handoffs import lite
+from tests.test_plugin_router_workers import worker
 
 ROOT = Path(__file__).resolve().parents[1]
+SUBAGENTS = ROOT / 'plugins/scg-subagents/skills/optimal-subagents'
+CODEX_GUIDANCE = (ROOT / 'plugins/scg-review/skills/pre-commit-review/SKILL.md',
+                  ROOT / 'plugins/scg-review/references/reviews.md',
+                  SUBAGENTS / 'SKILL.md', SUBAGENTS / 'references/tool-guide.md')
+OFFERED_TOOLS_RULE = (
+    '`collaboration_plaintext` handoff tools are offered, use them for every subagent '
+    'assignment, message and follow-up, whatever the recipient. Otherwise use the '
+    '`collaboration` tools.')
 
 
 class SelectionGuidanceTests(unittest.TestCase):
-    def test_both_wire_shapes_explain_selection_and_recipient_route(self):
+    def test_both_wire_shapes_explain_explicit_selection_without_a_choice_of_tools(self):
         for payload in ({'tools': native_tools('spawn_agent', 'send_message', 'followup_task')}, lite()):
             original = deepcopy(payload)
-            prepared, _ = agent_handoffs.add_plaintext_tools(payload)
-            tools = prepared.get('tools', prepared.get('input', [{}])[0].get('tools'))
-            native, aliases = tools
-            for namespace in (native, aliases):
-                for tool in namespace['tools']:
-                    description = tool['description']
-                    self.assertIn('recipient', description)
-                    self.assertIn('GPT through OpenRouter', description)
-                    self.assertIn('collaboration_plaintext.' + tool['name'], description)
-                    if tool['name'] == 'spawn_agent':
-                        self.assertIn('model and reasoning_effort explicitly', description)
-                        self.assertIn('fork_turns="none"', description)
+            prepared, _ = agent_handoffs.native_handoffs(payload, True)
             self.assertEqual(payload, original)
-            for old, new in zip(original.get('tools', original.get('input', [{}])[0].get('tools'))[0]['tools'], native['tools']):
-                self.assertEqual({k: v for k, v in old.items() if k != 'description'},
-                                 {k: v for k, v in new.items() if k != 'description'})
+            (namespace,) = prepared.get('tools', prepared.get('input', [{}])[0].get('tools'))
+            self.assertEqual(namespace['name'], 'collaboration_plaintext')
+            for tool in namespace['tools']:
+                description = tool['description']
+                if tool['name'] == 'spawn_agent':
+                    self.assertIn('model and reasoning_effort explicitly', description)
+                    self.assertIn('fork_turns="none"', description)
+                else:
+                    self.assertEqual(description, 'Native operation.')
 
     def test_review_example_selects_exact_policy_route_and_fresh_context(self):
         path = ROOT / 'plugins/scg-review/skills/pre-commit-review/SKILL.md'
@@ -44,9 +48,32 @@ class SelectionGuidanceTests(unittest.TestCase):
         self.assertEqual(dispatch['model'], 'openai/gpt-6.1-sol')
         self.assertEqual(dispatch['reasoning_effort'], 'high')
         self.assertEqual(dispatch['fork_turns'], 'none')
-        self.assertIn('collaboration_plaintext.spawn_agent', text)
-        self.assertIn('collaboration_plaintext.followup_task', text)
-        self.assertIn('encrypted message containing a file path', text)
+
+    def test_codex_guidance_picks_handoff_tools_by_what_is_offered(self):
+        # Native GPT parents may see only the plaintext tools and older routers offer
+        # both, so no document may pick tools by the recipient or retry next turn.
+        for path in CODEX_GUIDANCE:
+            with self.subTest(path=str(path.relative_to(ROOT))):
+                prose = ' '.join(path.read_text().split())
+                self.assertIn(OFFERED_TOOLS_RULE, prose)
+                self.assertNotRegex(
+                    prose, r"externally billed recipient|recipient's provider route|next user turn")
+
+    def test_claude_code_parents_get_their_own_section_and_listing_ids(self):
+        guide = (SUBAGENTS / 'references/tool-guide.md').read_text()
+        section = re.search(r'^## Claude Code\n(.*?)(?=^## |\Z)', guide, re.S | re.M).group(1)
+        section = ' '.join(section.split())
+        for needed in ('SendMessage', '`run_in_background: false`', '`model: inherit`',
+                       'router_worker.py --list', '../../router-workers/SKILL.md', 'unverified'):
+            self.assertIn(needed, section)
+        # Codex tool shapes mean nothing to Claude Code.
+        self.assertNotRegex(section, r'collaboration\w*\.|spawn_agent|fork_turns|reasoning_effort')
+        entry = ' '.join((SUBAGENTS / 'SKILL.md').read_text().split())
+        self.assertIn('Claude Code reads the Claude Code section', entry)
+        # The guide sends attached sessions to --list for the id a definition's model: takes.
+        with tempfile.TemporaryDirectory() as home, patch.object(worker, 'ROUTER_HOME', Path(home)):
+            (row,) = worker.list_models([{'id': 'claude/scg/abc', 'display_name': 'Z.ai: GLM'}])
+        self.assertEqual(row['id'], 'claude/scg/abc')
 
 
 class InstallerSelectionTests(unittest.TestCase):

@@ -1,5 +1,24 @@
 # Changelog
 
+## scg-review 0.4.20 and scg-subagents 0.5.19 - 2026-10-01
+
+- Codex agents no longer pick handoff tools by the recipient's provider. When
+  `collaboration_plaintext` handoff tools are offered, use them for every
+  subagent assignment, message and follow-up, whatever the recipient;
+  otherwise use the `collaboration` tools. Keep passing model and effort
+  explicitly; external children need `fork_turns="none"`. The same wording
+  works on routers before and after the change that shows native GPT parents
+  only the plaintext tools. Reviewer selection and approval still follow
+  the bundled policy.
+- Drop the advice to correct a refused handoff on the next turn: the refusal
+  ends the parent turn and never reaches the model. Report the delivery
+  blocker instead.
+- Claude Code parents now read their own tool-guide section instead of the
+  Codex collaboration tools. It covers Claude and router models, follow-ups
+  with SendMessage and foreground runs. `router_worker.py --list` now prints
+  each model's router listing id for agent definitions, and a `fable`
+  subagent inside a worker stays on the worker's model.
+
 ## scg-review 0.4.19 and scg-subagents 0.5.18 (2026-10-01)
 
 - Every Codex review pass now has automatic availability fallbacks. OpenRouter
