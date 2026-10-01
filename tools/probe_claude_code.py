@@ -8,11 +8,10 @@ marker file, so a model that refuses the turn or returns no text fails loudly.
 
 `--deferred` adds the leg the attached client actually runs: a synthetic MCP
 server advertising 700 stub tools, tool search on, and one round trip that
-must come back through the search. Without it the tool list is the client's
-own, which is the easy case.
+must come back through the search; otherwise only built-in tools are loaded.
 
-The unit suite stays offline. This is invoked separately, makes one model call
-per row plus its tool round trip, and never retries a row.
+The unit suite stays offline. Each separate leg is capped at three client
+turns and never retries a row.
 
 `CLAUDE_BIN` overrides the client binary; the acceptance test uses it to swap
 in a scripted fake. The client runs in an empty config folder, so none of the
@@ -40,6 +39,12 @@ import tempfile
 import time
 import urllib.request
 from pathlib import Path
+try:
+    from tools.claude_probe_env import environment
+    from tools.claude_probe_report import accepted as _accepted, identity as _identity, stream_report as _stream_report
+except ModuleNotFoundError:
+    from claude_probe_env import environment
+    from claude_probe_report import accepted as _accepted, identity as _identity, stream_report as _stream_report
 
 DEFAULT_HOME = Path.home() / '.codex' / 'mixed-model-router'
 PROMPT = 'Read the file probe.txt and reply with exactly its contents, nothing else.'
@@ -78,9 +83,9 @@ def _registry_rows(home):
         return []
 
 
-def _expected_model(home, model):
+def _expected_model(home, model, rows=None):
     """Upstream id behind an advertised alias, or the input when unresolved."""
-    for row in _registry_rows(home):
+    for row in _registry_rows(home) if rows is None else rows:
         slug = row.get('slug')
         if not isinstance(slug, str):
             continue
@@ -119,11 +124,10 @@ def probe(home, model, deferred=False, read_count=1, effort=None,
                 'args': [str(STUB_MCP), '--tools', str(STUB_TOOLS)]}}
             prompt = DEFERRED_PROMPT % (STUB_TOOL, STUB_TOOL, marker)
             allowed = ['Read', 'ToolSearch', STUB_TOOL]
-        # Empty config dir: none of the owner's setup, and no login, so a synthetic bearer.
-        env.update(CLAUDE_CONFIG_DIR=tempfile.mkdtemp(prefix='config.', dir=work),
-                   ANTHROPIC_AUTH_TOKEN=os.environ.get('PROBE_AUTH_TOKEN') or 'probe-synthetic')
+        env = environment(work, env['ANTHROPIC_BASE_URL'],
+                          os.environ.get('PROBE_AUTH_TOKEN') or 'probe-synthetic', effort, env)
         settings = work / 'settings.json'
-        settings.write_text(json.dumps({'env': env}))
+        settings.write_text('{}')
         mcp_path = work / 'mcp.json'
         mcp_path.write_text(json.dumps({'mcpServers': servers}))
         os.chmod(settings, 0o600)
@@ -133,14 +137,15 @@ def probe(home, model, deferred=False, read_count=1, effort=None,
             cmd.extend(['--effort', effort])
         if max_budget_usd is not None:
             cmd.extend(['--max-budget-usd', str(max_budget_usd)])
+        stream_output = read_count > 1 or deferred
         cmd.extend([
             '--strict-mcp-config', '--mcp-config', str(mcp_path),
             '--allowedTools', *allowed, '--settings', str(settings),
-            '--output-format', 'stream-json' if read_count > 1 else 'json']
-            + (['--verbose'] if read_count > 1 else []))
+            '--output-format', 'stream-json' if stream_output else 'json']
+            + (['--verbose'] if stream_output else []))
         try:
             done = subprocess.run(  # a parent's ANTHROPIC_BASE_URL outranks --settings
-                cmd, env={**os.environ, **env},
+                cmd, env=env,
                 cwd=str(work), capture_output=True, text=True, timeout=TIMEOUT_S)
         except subprocess.TimeoutExpired:
             return {'model': model, 'leg': leg_of(deferred, read_count),
@@ -148,8 +153,7 @@ def probe(home, model, deferred=False, read_count=1, effort=None,
                     'pass': False,
                     'error': 'timeout',
                     'seconds': round(time.time() - started, 1)}
-        report = (_stream_report(done.stdout) if read_count > 1
-                  else _report(done.stdout))
+        report = _stream_report(done.stdout) if stream_output else _report(done.stdout)
         answer = report.get('result') or ''
         # Containment, not an exact echo: a model that reads the file and then
         # says "the contents are: <marker>" has done the job, and several rows
@@ -157,18 +161,21 @@ def probe(home, model, deferred=False, read_count=1, effort=None,
         read_paths = sorted(set(report.get('read_paths') or ()))
         expected_model = expected_model or _expected_model(home, model)
         identity = _identity(expected_model, report)
-        passed = _accepted(read_count, markers, report, expected_model)
+        passed = done.returncode == 0 and _accepted(read_count, markers, report, expected_model, deferred)
         if report.get('is_error'):
             error = report.get('subtype')
         elif identity == 'mismatched':
             error = 'served_model_mismatch'
+        elif done.returncode:
+            error = 'client_exit'
         else:
             error = None
         return {'model': model, 'expected_model': expected_model,
                 'leg': leg_of(deferred, read_count),
                 'effort': effort, 'max_budget_usd': max_budget_usd, 'pass': passed,
                 'turns': report.get('num_turns'),
-                'calls': report.get('read_calls', report.get('tool_calls')),
+                'calls': report.get('tool_calls') if deferred else report.get('read_calls'),
+                'tool_names': report.get('tool_names'),
                 'read_paths': read_paths,
                 'sequential_reads': report.get('sequential_reads'),
                 'tool_result_ids_match': report.get('tool_result_ids_match'),
@@ -197,88 +204,6 @@ def _report(stdout):
         return json.loads(stdout[start:])
     except ValueError:
         return {}
-
-
-def _identity(expected_model, report):
-    """Classify provider-reported identity without inventing a match."""
-    served = report.get('served') or []
-    if not served:
-        return 'unverified'
-    return ('matched' if all(item == expected_model for item in served)
-            else 'mismatched')
-
-
-def _accepted(read_count, markers, report, expected_model):
-    """Accept only a non-error answer with the requested Read history."""
-    answer = report.get('result') or ''
-    if (report.get('is_error') or _identity(expected_model, report) == 'mismatched'
-            or not all(item in answer for item in markers)):
-        return False
-    if read_count == 1:
-        return True
-    return (report.get('read_calls') == read_count
-            and report.get('tool_calls') == read_count
-            and report.get('read_paths') == ['probe-1.txt', 'probe-2.txt']
-            and bool(report.get('sequential_reads'))
-            and bool(report.get('tool_result_ids_match')))
-
-
-def _event_content(event):
-    message = event.get('message') if isinstance(event.get('message'), dict) else {}
-    content = message.get('content')
-    return content if isinstance(content, list) else []
-
-
-def _stream_report(stdout):
-    """Result, served ids and Read-call facts from Claude Code stream-json."""
-    served, result = set(), {}
-    calls = read_calls = 0
-    read_paths = []
-    read_steps = []
-    read_ids, result_ids = [], []
-    for step, line in enumerate(stdout.splitlines()):
-        try:
-            event = json.loads(line)
-        except ValueError:
-            continue
-        if event.get('type') == 'assistant':
-            message = event.get('message') or {}
-            if message.get('model'):
-                served.add(message['model'])
-            for part in message.get('content') or []:
-                if not isinstance(part, dict) or part.get('type') != 'tool_use':
-                    continue
-                calls += 1
-                if part.get('name') != 'Read':
-                    continue
-                read_calls += 1
-                read_ids.append(part.get('id'))
-                inputs = part.get('input') if isinstance(part.get('input'), dict) else {}
-                path = inputs.get('file_path') or inputs.get('path')
-                if path:
-                    name = Path(str(path)).name
-                    read_paths.append(name)
-                    read_steps.append((step, len(result_ids), name))
-        elif event.get('type') == 'user':
-            for part in _event_content(event):
-                if isinstance(part, dict) and part.get('type') == 'tool_result':
-                    result_ids.append(part.get('tool_use_id'))
-        elif event.get('type') == 'result':
-            result = event
-    sequential_reads = any(
-        later[0] > earlier[0] and later[1] > earlier[1]
-        and {earlier[2], later[2]} == {'probe-1.txt', 'probe-2.txt'}
-        for earlier, later in zip(read_steps, read_steps[1:]))
-    tool_result_ids_match = (
-        len(read_ids) == len(result_ids)
-        and all(isinstance(tool_id, str) and tool_id for tool_id in read_ids)
-        and len(set(read_ids)) == len(read_ids)
-        and result_ids == read_ids)
-    result.update(tool_calls=calls, read_calls=read_calls,
-                  read_paths=read_paths, sequential_reads=sequential_reads,
-                  tool_result_ids_match=tool_result_ids_match,
-                  served=sorted(served))
-    return result
 
 
 def client_version():
@@ -312,7 +237,7 @@ def _summary(row):
     return '%ss, answer %r' % (row['seconds'], row.get('answer'))
 
 
-def _legs(args, home):
+def _legs(args, home, rows=None):
     """Every probe leg, in order; the caller owns the router home."""
     results = []
     models = args.models or listing(home)
@@ -332,7 +257,7 @@ def _legs(args, home):
         raise SystemExit(2)
     for model, deferred in legs:
         result = probe(home, model, deferred, args.read_count, args.effort,
-                       args.max_budget_usd)
+                       args.max_budget_usd, expected_model=_expected_model(home, model, rows))
         results.append(result)
         if not args.json:
             print('%-4s %-10s %-64s %s'
@@ -342,10 +267,9 @@ def _legs(args, home):
 
 
 def _candidate_home(slug):
-    """Isolated router from this working tree; teardown is the caller's."""
     sys.path.insert(0, str(ROOT))
     from ai_router.candidate import IsolatedRouter
-    return IsolatedRouter(slug)
+    return IsolatedRouter(slug, bounded=True, max_output=2048)
 
 
 def main(argv=None):
@@ -385,7 +309,8 @@ def main(argv=None):
         parser.error('--read-count 2 requires --max-budget-usd')
     if args.candidate:
         with _candidate_home(args.candidate) as scope:
-            results = _legs(args, scope.home)
+            rows = json.loads((ROOT / 'ai_router' / 'models.json').read_text())
+            results = _legs(args, scope.home, rows)
     else:
         results = _legs(args, args.home)
 

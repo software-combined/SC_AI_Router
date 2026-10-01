@@ -1,5 +1,51 @@
 # Compatibility
 
+## Claude switch test preparation, 1 October 2026 AEST
+
+The owner-Mac read-only baseline is router `1.0.6.141`, Claude desktop
+`2.16120.0`, standalone Claude Code `2.1.283` and desktop-bundled Code
+`2.1.284`, on macOS `26.5.1`. All 16 installed Claude packaging helpers match
+develop `b41a8222`; installed runtime fingerprint
+`a10eacb59add178b80d48d460f43d55ac22682e4bfaa1063c38d54acc57fa151`
+matches that source. The attachment, policy and both account identities passed
+read-only preflight. Claude remained in subscription mode throughout; the shared
+router was neither paused nor restarted.
+
+Before the probe fixes, the full offline suite including installers passed
+2,922 tests with five skips. New offline regressions reproduced inherited
+effort/retry/configuration leakage, an unguarded candidate probe, and a deferred
+marker echo accepted without tool execution. The corrected probes use private
+client environments, the existing shared attempt guard and explicit tool-result
+evidence. These are probe fixes, not changes to the installed switch or daemon.
+
+| Isolated check | Requested model / effort | Actual upstream attempts | Result |
+| --- | --- | --- | --- |
+| Two sequential Reads | DeepSeek V4.1 Flash / low | 3 | Both results retained; IDs paired; served model matched |
+| Deferred 700-tool MCP | GLM 5.3 Flash / low | 3 | Search then released tool executed; IDs paired; served model matched |
+| Saved-session round trip | DeepSeek -> GLM -> DeepSeek / low | 5 | Same session ID, original Read results and newest marker retained; models matched |
+
+Both checks used the real `2.1.284` binary, synthetic data, USD 0.25 per-invocation
+client budgets, 12 upstream attempts, 512 KiB input and 2,048 output tokens per
+attempt, and five-minute client deadlines. Served effort was not exposed. The
+first GLM sample returned its marker under the older answer-only gate; only the
+rerun with stream tool/result evidence supplies the deferred-execution proof.
+The saved-session check disabled tools on both continuation turns, so the
+markers had to come from carried history rather than fresh file reads. It
+proves the bundled client's external-model resume path, not desktop task sharing.
+
+Zero-paid fake-upstream checks on the same binary verified three turns and
+2,048 output tokens per request, including resuming the saved synthetic session.
+A persistent 503 produced two requests even with SDK retries set to zero, then
+stopped with an error. A 429 produced one request. These are measured client
+limits, not proof of a strict installed-desktop upstream cap.
+
+The standalone subscription login reports unavailable, so no native subscription
+inference was attempted. Complete installed-launcher acceptance remains pending
+the owner's fresh approval to close Claude and share all eligible Code tasks.
+Actual Code-tab continuation, newest-message convergence and restoration of the
+original mode are still required. Isolated bundled-client results do not close
+those gates. Cowork sharing and Windows/Linux switch acceptance remain out of scope.
+
 ## Single readable handoff surface, 1 October 2026 AEST
 
 The 1.0.5 checks below used isolated routers, replaced parent instructions
