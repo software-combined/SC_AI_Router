@@ -3,6 +3,8 @@ import json
 import unittest
 
 from tools.appserver_probe import failure_shape, request_failure_shape
+from tools.probe_handoff_matrix import MatrixProbe
+from tools.probe_agent_handoffs import sse
 
 
 class HandoffDiagnosticsTests(unittest.TestCase):
@@ -34,3 +36,14 @@ class HandoffDiagnosticsTests(unittest.TestCase):
         self.assertEqual(request_failure_shape({'code': 'UPSTREAM_INCOMPLETE', 'upstream_reason': 'max_output_tokens',
             'status': 200, 'terminal_event': 'response.incomplete'}),
             {'code': 'UPSTREAM_INCOMPLETE', 'reason': 'max_output_tokens', 'status': 200, 'terminal': 'response.incomplete'})
+
+    def test_matrix_records_every_terminal_and_safe_tool_name(self):
+        probe = MatrixProbe(False, 0)
+        probe.observe(sse([{'type': 'function_call', 'name': 'wait_agent', 'call_id': 'synthetic',
+                           'arguments': '{}'}], 'synthetic'), 'parent')
+        incomplete = {'type': 'response.incomplete', 'response': {'incomplete_details': {'reason': 'max_output_tokens'}}}
+        probe.observe(b'data: ' + json.dumps(incomplete).encode() + b'\n\n', 'parent')
+        self.assertEqual(probe.facts['parent_tool_methods'], ['wait_agent'])
+        self.assertEqual(probe.facts['terminals'], [
+            {'role': 'parent', 'type': 'response.completed', 'reason': None},
+            {'role': 'parent', 'type': 'response.incomplete', 'reason': 'max_output_tokens'}])

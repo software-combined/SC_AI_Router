@@ -94,7 +94,13 @@ Unreadable or unadvertised handoffs raise a typed response refusal before an
 executable completed item is released. `relay.py` returns HTTP 400 before JSON
 headers or one terminal `invalid_prompt` event on an open stream. It never
 replays the parent request or invents a tool result. Earlier valid calls remain
-released.
+released. `tool_adapter.py` promotes developer Lite declarations through its
+existing tool map. External projection copies canonical handoff message schemas
+as readable in Classic, Lite and discovered declarations, including recalled
+schemas. Its effective tool map after paging controls which restored calls
+receive the plaintext signal. Alias authority stays separate from canonical
+readability. Native subscription schemas keep their encryption
+contract, and a changed Lite prefix receives a stable content-based identity.
 `sse.py` owns shared event framing without provider-specific argument rewriting.
 `standalone_outputs.py` owns app-injected output projection. External requests
 project readable peer messages and standalone outputs into matched tool results.

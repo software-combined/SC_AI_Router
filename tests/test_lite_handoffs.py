@@ -2,10 +2,12 @@
 from copy import deepcopy
 from compression import zstd
 import json
+from types import SimpleNamespace
 import unittest
 
 from ai_router import agent_handoffs as handoffs
-from ai_router.providers import SubscriptionProvider
+from ai_router import provider_defs
+from ai_router.providers import ExternalResponsesProvider, SubscriptionProvider
 from tests.test_agent_handoffs import alias_call, native_tools
 from tests.test_agent_handoff_providers import Response
 
@@ -102,6 +104,57 @@ class LiteHandoffTests(unittest.TestCase):
             payload, raw, {'Content-Encoding': 'zstd'}, None)
         self.assertEqual(prepared.body, raw)
         self.assertEqual(prepared.headers['Content-Encoding'], 'zstd')
+
+    def test_external_lite_declarations_restore_readable_native_calls(self):
+        provider = ExternalResponsesProvider(provider_defs.OPENROUTER)
+        payload = lite()
+        original = deepcopy(payload)
+        prepared = provider.prepare('openai/gpt-6.1-sol', '/responses', payload,
+            json.dumps(payload).encode(), {}, SimpleNamespace(key_for=lambda _: 'synthetic-key'))
+        self.assertTrue(prepared.tool_names)
+        self.assertEqual(prepared.tool_names.handoffs, handoffs.HANDOFF_TOOLS)
+        projected = json.loads(prepared.body)
+        self.assertTrue(projected['tools'])
+        prefix = projected['input'][0]
+        self.assertNotEqual(prefix['id'], original['input'][0]['id'])
+        retry = provider.prepare('openai/gpt-6.1-sol', '/responses', payload,
+            json.dumps(payload).encode(), {}, SimpleNamespace(key_for=lambda _: 'synthetic-key'))
+        self.assertEqual(json.loads(retry.body)['input'][0], prefix)
+        for old, new in zip(original['input'][0]['tools'][0]['tools'], prefix['tools'][0]['tools']):
+            expected = deepcopy(old['parameters'])
+            if old['name'] in handoffs.HANDOFF_TOOLS:
+                expected['properties']['message'].update(
+                    encrypted=False, description=handoffs.READABLE_MESSAGE)
+            self.assertEqual(expected, new['parameters'])
+        native = alias_call(namespace='collaboration', arguments='{"message":"SYNTH_LITE"}')
+        response = Response(json.dumps({'output': [native]}).encode(), 'application/json')
+        restored = json.loads(b''.join(provider.adapt(response, prepared.tool_names)))['output'][0]
+        self.assertEqual(restored, {**native, 'encrypted_function_args': []})
+        self.assertEqual(payload, original)
+
+    def test_external_lite_catalogue_pages_without_pinning_every_declaration(self):
+        declarations = [{'type': 'tool_search', 'parameters': {'type': 'object'}},
+            *native_tools('spawn_agent'), *[{'type': 'function', 'name': f'unused_{i}',
+                'parameters': {'type': 'object'}} for i in range(130)]]
+        payload = lite(declarations)
+        payload['input'].extend([
+            {'type': 'tool_search_call', 'call_id': 'search_fixture', 'execution': 'client',
+             'arguments': {'query': 'spawn_agent'}},
+            {'type': 'tool_search_output', 'call_id': 'search_fixture', 'execution': 'client',
+             'tools': native_tools('spawn_agent')}])
+        before = deepcopy(payload)
+        provider = ExternalResponsesProvider(provider_defs.OPENROUTER)
+        prepared = provider.prepare('z-ai/glm-5.3-flash', '/responses', payload,
+            json.dumps(payload).encode(), {}, SimpleNamespace(key_for=lambda _: 'synthetic-key'))
+        self.assertEqual(len(json.loads(prepared.body)['tools']), 2)
+        self.assertFalse(prepared.tool_names.handoffs)
+        self.assertEqual(prepared.tool_names.handoffs.readable, {'spawn_agent'})
+        call = alias_call(namespace='collaboration', name='spawn_agent',
+                          arguments='{"message":"SYNTH_PAGED"}')
+        response = Response(json.dumps({'output': [call]}).encode(), 'application/json')
+        restored = json.loads(b''.join(provider.adapt(response, prepared.tool_names)))['output'][0]
+        self.assertEqual(restored, {**call, 'encrypted_function_args': []})
+        self.assertEqual(payload, before)
 
 
 if __name__ == '__main__':

@@ -55,8 +55,7 @@ def sse(items, ident):
 
 
 class Probe:
-    required_final = None
-    live_prompts = None
+    required_final = live_prompts = None
 
     def __init__(self, live, call_limit, live_children=False):
         self.live, self.call_limit = live, call_limit
@@ -110,7 +109,7 @@ class Probe:
                 'arguments': json.dumps(arguments)}
         return sse([item], str(ordinal))
 
-    def respond(self, body, headers, ordinal, path='/responses'):
+    def record_input_facts(self, body):
         for item in body.get('input', []):
             if item.get('type') == 'function_call' and item.get('namespace') == 'collaboration':
                 self.facts['canonical_replay'] |= item.get('call_id') in self.alias_call_ids
@@ -120,6 +119,9 @@ class Probe:
                     safe = 'tool_output_reported_failure'
                     if safe not in self.facts['tool_failures']:
                         self.facts['tool_failures'].append(safe)
+
+    def respond(self, body, headers, ordinal, path='/responses'):
+        self.record_input_facts(body)
         offered = body.get('tools', []) if isinstance(body.get('tools'), list) else []
         self.facts.setdefault('turns', []).append({
             'model': body.get('model'),
@@ -223,9 +225,9 @@ def run(args, probe_type=Probe):
         raise ValueError('--live-children requires --live')
     if getattr(args, 'installed', False) and (not args.live_children or args.lifecycle):
         raise ValueError('--installed requires --live-children without --lifecycle')
-    if getattr(args, 'child', CHILD) == getattr(args, 'parent', PARENT):
-        raise ValueError('--parent and --child must name different rows')
     probe = probe_type(args.live, args.max_live_calls, args.live_children)
+    if CHILD == PARENT and not getattr(probe, 'identifies_threads', False):
+        raise ValueError('same-model probes must distinguish client thread identities')
     probe.facts.setdefault('client_version', subprocess.run([args.codex, '--version'], check=True,
         capture_output=True, text=True, timeout=10).stdout.strip())
     class Handler(BaseHTTPRequestHandler):
@@ -275,6 +277,7 @@ def run(args, probe_type=Probe):
 
     with tempfile.TemporaryDirectory(prefix='agent-handoff-probe-') as temp:
         root = Path(temp)
+        probe.home = root
         candidate = None
         if args.live_children and not getattr(args, 'installed', False):
             from ai_router.credentials import Credentials
@@ -300,7 +303,8 @@ def run(args, probe_type=Probe):
         server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
         server.ordinal = 0
         threading.Thread(target=server.serve_forever, daemon=True).start()
-        child = external_entry(by_slug(CHILD))
+        entry = by_slug(CHILD)
+        child = external_entry(entry) if entry else subscription_stub(CHILD)
         child['prefer_websockets'] = False
         rows = getattr(probe, 'catalogue_rows', None)
         if args.live and rows is None:
@@ -348,9 +352,10 @@ def run(args, probe_type=Probe):
         deadline = time.monotonic() + (getattr(probe, 'timeout', 600) if args.live else 40)
         sequence = 0
         def record_failure(event):
-            # Probe policy: every dequeued event is scanned for failures and
-            # recorded via the on_event hook; the shared class stays generic.
             params = event.get('params', {})
+            if event.get('method') == 'turn/completed':
+                probe.facts.setdefault('completed_turns', []).append({'thread': params.get('threadId'),
+                    'turn': params.get('turn', {}).get('id'), 'status': params.get('turn', {}).get('status')})
             failure = params.get('error') if event.get('method') == 'error' else None
             if event.get('method') == 'turn/completed' and params.get('turn', {}).get('status') == 'failed':
                 failure = params['turn'].get('error')
@@ -361,19 +366,14 @@ def run(args, probe_type=Probe):
                 safe = failure_shape(event, failure)
                 if safe not in probe.facts['tool_failures']:
                     probe.facts['tool_failures'].append(safe)
-        # Piped stderr drained silently, plain terminate, ambient-adjacent
-        # scrub: the shared AppServer default. This probe keeps its own reply
-        # loop and never calls the shared rpc, so the shared cap is untouched.
         server_process = AppServer(command, cwd=temp, env=env, stderr=subprocess.PIPE,
                                    on_event=record_failure)
-        def send(value):
-            server_process.send(value)
         def next_event():
             return server_process.next_event(deadline=deadline)
         def rpc(method, params):
             nonlocal sequence
             sequence += 1
-            send({'id': sequence, 'method': method, 'params': params})
+            server_process.send({'id': sequence, 'method': method, 'params': params})
             while True:
                 event = next_event()
                 if event.get('id') == sequence:
@@ -383,11 +383,12 @@ def run(args, probe_type=Probe):
         try:
             rpc('initialize', {'clientInfo': {'name': 'agent_handoff_probe', 'version': '1.0'},
                               'capabilities': {'experimentalApi': True}})
-            send({'method': 'initialized', 'params': {}})
+            server_process.send({'method': 'initialized', 'params': {}})
             thread = rpc('thread/start', {'model': PARENT, 'modelProvider': provider,
-                'cwd': temp, 'ephemeral': not args.lifecycle, 'approvalPolicy': 'never', 'sandbox': 'read-only',
+                'cwd': temp, 'ephemeral': not (args.lifecycle or getattr(probe, 'persist', False)), 'approvalPolicy': 'never', 'sandbox': 'read-only',
                 'baseInstructions': 'Synthetic collaboration protocol test. No files or external tools.',
                 'developerInstructions': getattr(probe, 'instructions', 'Use only the collaboration tools requested by the user.')})['thread']['id']
+            probe.parent_thread_id = thread
             prompts = [
                 f'Use collaboration_plaintext.spawn_agent once to create plain on {CHILD}, '
                 f'fork_turns none, reasoning_effort max, message "Reply exactly {MARKERS[0]}". Then finish this turn.',
@@ -420,7 +421,9 @@ def run(args, probe_type=Probe):
                             raise ValueError('synthetic parent turn failed')
                         break
                 return '\n'.join(answer)
-            for prompt_text in prompts:
+            for index, prompt_text in enumerate(prompts):
+                if index and getattr(probe, 'persist', False):
+                    rpc('thread/resume', {'threadId': thread, 'model': PARENT, 'modelProvider': provider, 'cwd': temp})
                 answer = turn(prompt_text)
                 if probe.required_final and probe.required_final not in answer:
                     raise ValueError('parent did not finish after handoff recovery')
