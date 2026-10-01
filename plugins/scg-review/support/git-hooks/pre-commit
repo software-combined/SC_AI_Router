@@ -1,4 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-exec python3 "$HOME/.config/scg-agent-git-hooks/lib/scg_agent_git_hooks.py" pre-commit "$@"
+# The helper runs on the interpreter recorded in config.json, an explicit
+# absolute path: Git for Windows ships bash but no python3 on PATH. A POSIX
+# installation that predates the setting keeps the historical python3.
+config="$HOME/.config/scg-agent-git-hooks/config.json"
+interpreter=python3
+if [ -f "$config" ]; then
+  configured=$(sed -n 's/.*"interpreter"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$config" | head -n 1)
+  configured=$(printf '%s' "$configured" | sed 's/\\\\/\\/g')
+  if [ -n "$configured" ]; then
+    interpreter=$configured
+  fi
+fi
+
+exec "$interpreter" "$HOME/.config/scg-agent-git-hooks/lib/scg_agent_git_hooks.py" pre-commit "$@"

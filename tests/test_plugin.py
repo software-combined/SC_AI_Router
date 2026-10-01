@@ -97,6 +97,21 @@ class PluginTest(unittest.TestCase):
         self.assertIn("from the first mention, not only in the recap", review)
         self.assertIn("never paraphrased", review)
 
+    def test_posix_interpreter_setting_is_additive(self):
+        # A POSIX config that predates the setting keeps the historical bare
+        # python3 and is not rewritten, so existing installs still pass check.
+        self.assertEqual(setup.resolve_interpreter({}, "posix"), "python3")
+        self.assertNotIn("interpreter", setup.effective_config({}, "posix"))
+
+    def test_windows_interpreter_defaults_to_the_router_runtime(self):
+        # Windows has no python3 on PATH, so the default is the router's
+        # pinned runtime, never a PATH search.
+        router = Path("C:/router") if os.name == "nt" else Path("/router")
+        with patch.dict(os.environ, {"ROUTER_HOME": str(router)}):
+            self.assertEqual(
+                setup.resolve_interpreter({}, "nt"),
+                str(router / "runtime" / "python" / "python.exe"))
+
     def test_shared_updater_and_update_guide_are_synchronized_copies(self):
         marketplace = json.loads(
             (ROOT / '.agents/plugins/marketplace.json').read_text(encoding="utf-8"))
@@ -152,6 +167,10 @@ class PluginTest(unittest.TestCase):
                 setup.provision(repo, config, install=True, home=home)
                 setup.provision(repo, config, home=home)
                 target = home / ".config/scg-agent-git-hooks"
+                # A POSIX install records no interpreter, so the installed
+                # config is exactly the bytes the owner supplied.
+                self.assertEqual((target / "config.json").read_bytes(),
+                                 (json.dumps(config, indent=2) + "\n").encode())
                 before = (target / "config.json").read_bytes()
                 changed = {**config, "review_state_ttl_seconds": 100}
                 with self.assertRaisesRegex(ValueError, "configuration differs"):
