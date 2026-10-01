@@ -1,4 +1,4 @@
-"""Real-Codex negative proof: a wrong-route handoff ends once before delivery.
+"""Real-Codex negative proof: an encrypted handoff ends once before delivery.
 
 Scripted loopback only, no credentials or paid calls. The shared router guard
 provides the same typed refusal the production relay renders as response.failed.
@@ -43,7 +43,6 @@ class RejectionProbe(Probe):
             return False
         message = failure.get('message', '')
         if (failure.get('codexErrorInfo') in ('invalidPrompt', 'other')
-                and 'collaboration_plaintext.spawn_agent' in message
                 and 'blocked before delivery' in message
                 and 'SpawnAgentArgs' not in message and 'failed to parse' not in message):
             self.facts['typed_rejection_received'] = True

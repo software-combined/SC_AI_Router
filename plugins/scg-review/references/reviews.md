@@ -11,16 +11,17 @@ optimal-subagents skill.
 
 ## Defaults and authorized availability fallbacks
 
-Local user policy override: all pre-commit passes use
-`openai/gpt-6.1-sol` at `high`, which is GPT-6.1 Sol through OpenRouter.
-This exact model and effort requirement overrides the table below and has no
-model fallback. If that route is unavailable, the affected pass is `BLOCK`.
+Every pass prefers GPT-6.1 Sol through OpenRouter at `high`. The ordered
+fallbacks below are enabled by default, including when the preferred model is
+named in a brief. Use them automatically unless the current user explicitly
+forbids substitution or an applicable instruction requires an exact route.
+Astra is excluded from automatic reviewer routing.
 
-These are provisional, evidence-based choices from the September 12, 2026 evidence.
-Public benchmarks do not directly measure code-review defect recall. Validate
-with representative real regressions before claiming superiority. Use one fixed
-reasoning level per model, not a cheaper effort variant. Subscription/account
-arrangements do not influence this selection.
+These alternatives are lane-specific choices, not a claim of general parity
+with Sol. Public benchmarks do not measure review defect recall. Qualification
+uses known defects and clean controls; a missed material defect or false blocking
+finding excludes that model from the affected lane. Use the prescribed effort,
+never a cheaper effort variant.
 
 For future routing changes, compare a small sanitized set of known regression
 diffs and clean controls using the same full staged context and hidden ground
@@ -32,39 +33,69 @@ replace these public-benchmark priors, within an authorized evaluation budget.
 The same defaults apply to normal and elevated-risk reviews. Elevated risk
 changes inspection depth and required evidence, not automatically the model bill.
 
-| Pass | Required model, fixed effort | Ordered fallback models, fixed effort |
+### Qualification and limits
+
+The 1 October 2026 AEST pilot used synthetic full files with hidden defect/control
+labels. Flash completed simplification and quality; GLM completed all four roles.
+Each role detected its material defect and accepted its clean control: duplicate
+loss during simplification, public-catalogue eligibility diverging from the
+canonical account check, invocation-ID replay mismatch (correctness), and stale
+staged-tree receipt reuse (adversarial). No model was excluded from these lanes.
+
+Six compact paired-case calls completed after one full-rubric Flash call exhausted
+its output allowance without a review. That incomplete call was not accepted.
+All seven inference calls requested `max`, capped output at 4,096 tokens and
+matched the returned model ID; served effort was unverified. OpenRouter reported
+US$0.012934 total under the 12-call / US$5 pilot limits. Pricing came from the
+current [OpenRouter catalogue](https://openrouter.ai/api/v1/models), with a hard
+provider price ceiling. These small cases do not establish general parity,
+full-context review reliability or Windows delivery. A real pass must still meet
+every coverage and report requirement; a truncated answer is incomplete.
+
+| Pass | Preferred model, fixed effort | Ordered fallback models, fixed effort |
 | --- | --- | --- |
-| Simplification | `openai/gpt-6.1-sol` at `high` | None |
-| Correctness | `openai/gpt-6.1-sol` at `high` | None |
-| Quality | `openai/gpt-6.1-sol` at `high` | None |
-| Adversarial | `openai/gpt-6.1-sol` at `high` | None |
+| Simplification | `openai/gpt-6.1-sol` at `high` | `deepseek/deepseek-v4.1-flash` at `max` → `z-ai/glm-5.3` at `max` → `gpt-6.1-sol` at `high` |
+| Correctness | `openai/gpt-6.1-sol` at `high` | `z-ai/glm-5.3` at `max` → `gpt-6.1-sol` at `high` |
+| Quality | `openai/gpt-6.1-sol` at `high` | `deepseek/deepseek-v4.1-flash` at `max` → `z-ai/glm-5.3` at `max` → `gpt-6.1-sol` at `high` |
+| Adversarial | `openai/gpt-6.1-sol` at `high` | `z-ai/glm-5.3` at `max` → `gpt-6.1-sol` at `high` |
 
 Resolve the selected model's actual tool identifier from the active catalogue.
 `openai/gpt-6.1-sol` is the OpenRouter route; `gpt-6.1-sol` is the native
-subscription route. They are not interchangeable identifiers under an exact
-provider requirement. Verify the accepted request and record
-served identity when available. Never claim an unavailable effort was used.
+subscription route. Native Sol is a listed alternative, not proof that the
+OpenRouter route works. Check the active runtime's callable native identifier;
+do not silently select a different Sol version. Verify the accepted request and
+record served identity when available. Never claim an unavailable effort was used.
 
 Fallbacks in this table are authorized by this policy when a preferred model is
-unavailable. They do not need a new permission question unless the user or an
-applicable instruction explicitly requires an exact model/effort or forbids the
-substitution. Such exact requirements still block when unavailable until the
-owner authorizes an exception. Never switch runtimes or weaken a gate to evade
-an exact requirement.
+unavailable. They do not need a new permission question. An explicit exact-model,
+provider or effort requirement still blocks when unavailable until the owner
+authorizes an exception. Never switch runtimes or weaken a gate to evade it.
 
 ## Handle failures without buying repeated failures
 
-1. Read the actual error. Resolve a wrong identifier through known catalogue
-   aliases; skip models already known unavailable. Do not lower fixed effort.
+1. Before dispatch, check effective availability for the active key, region,
+   account and runtime, plus supported effort and applicable data constraints.
+   A public catalogue entry alone does not establish access. For OpenRouter,
+   use its key-scoped `/models/user` list or the router's matching effective
+   snapshot; do not reuse another key's or region's snapshot. Check native Sol
+   through the active native catalogue. Skip known unavailable models and
+   unsupported efforts without an inference call or fallback dispatch.
+   Unknown access may be established by an actual review call. Resolve a wrong
+   identifier through verified aliases; do not lower fixed effort.
 2. For a model-specific capacity/access failure, use the next eligible fallback.
    Respect a useful supplied retry delay instead of repeating immediate calls.
-3. For a shared router/tool/transport failure before inference, skip candidates
-   sharing that failing path. Use a listed model only when its existing tool
-   path is known to be unaffected. Do not change accounts, credentials, clients
-   or data constraints. If no eligible path is known, the review is `BLOCK`.
-4. Default to at most two alternative-model attempts per pass, within the task's
-   authorized cost envelope. Preserve the work if they fail; do not walk the
-   whole catalogue indefinitely. A failed dispatch is not a completed pass.
+3. For a shared OpenRouter outage, authentication or transport failure, skip
+   its remaining candidates and try listed native Sol when its existing route
+   is callable and unaffected. A shared Codex handoff/tool failure stops all
+   dispatch, including native Sol. An unsafe encrypted handoff is a delivery
+   error, not an OpenRouter outage; report the delivery blocker.
+   Do not change accounts, credentials, clients or data constraints. If no
+   eligible path is known, the review is `BLOCK`.
+4. Permit at most two fallback dispatches per pass, within the authorized cost
+   envelope. A dispatched fallback counts even if it fails before inference;
+   candidates skipped by step 1 or a shared-path failure do not count. Stop
+   after two failed fallback dispatches even if a listed candidate remains.
+   A failed dispatch is not a completed pass.
 5. Brief each replacement with the same lane, full staged scope, context,
    Ponytail requirement and report contract. Stop any active prior pass before
    transferring its scope. All three final lanes remain independent subagent
@@ -78,10 +109,11 @@ and put the actually requested successful-pass identity in the hook receipt.
 ## Escalate for evidence, not ceremony
 
 A returned answer that fails the acceptance check is not model unavailability.
-Request a focused correction only when concrete unresolved reasoning warrants
-it. Corrections and escalations retain the exact model and effort above.
-A different model or provider needs an explicit owner exception; the general
-model-selection guide does not override the review policy.
+Make one focused correction when concrete missing coverage or reasoning warrants
+it; if the pass remains incomplete, use the next eligible fallback within the
+dispatch limit. Preserve every finding for adjudication. A valid blocking
+finding stops approval and cannot be erased by buying another model's opinion.
+The general model-selection guide does not add reviewer choices to this table.
 
 A no-findings review, model age or a general benchmark rank alone is not a reason
 for another paid pass. Escalation never waives full staged-file coverage,
@@ -98,13 +130,15 @@ real task name when no plan number exists. This makes the request traceable
 from the message; it does not prove the served identity recorded separately.
 
 Codex packaging and its active collaboration tools are the supported path.
-For every Codex pass, call `spawn_agent` with explicit
-`model="openai/gpt-6.1-sol"`, `reasoning_effort="high"` and `fork_turns="none"`.
+Select the first eligible route for the pass, then call `spawn_agent` with
+explicit `model`, `reasoning_effort` and `fork_turns="none"`.
 If `collaboration_plaintext` handoff tools are offered, use them for every
 subagent assignment, message and follow-up, whatever the recipient. Otherwise
-use the `collaboration` tools. A handoff refusal is not evidence of an
-OpenRouter outage or grounds to request native reviewers, and the router cannot
-create a recoverable tool result.
+use the `collaboration` tools. An unsafe handoff refusal ends the parent turn
+before the bad call executes; report the delivery blocker as `BLOCK`.
+It is not evidence of an OpenRouter outage. The router cannot create a
+recoverable tool result, and an encrypted message containing a file path
+cannot repair delivery.
 Other runtimes need their own verified installed adapter and identifiers;
 this document does not install or certify Claude Code/OpenCode integrations.
 Do not switch runtimes to work around an unavailable required pass.

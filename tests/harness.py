@@ -47,6 +47,9 @@ class StubCredentials:
     def key_for(self, provider_id=None):
         return self.key
 
+    def key_missing(self, provider_id=None):
+        return None
+
 
 def stub_credentials(key='router-secret'):
     return SimpleNamespace(key_for=lambda _pid=None: key)

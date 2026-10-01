@@ -1,4 +1,4 @@
-"""The parent selects a child and a provider-compatible, readable handoff."""
+"""The parent selects a child explicitly; every handoff uses the canonical tools."""
 from copy import deepcopy
 import json
 from pathlib import Path
@@ -26,25 +26,20 @@ OFFERED_TOOLS_RULE = (
 
 
 class SelectionGuidanceTests(unittest.TestCase):
-    def test_both_wire_shapes_explain_selection_and_recipient_route(self):
+    def test_both_wire_shapes_explain_explicit_selection_without_a_choice_of_tools(self):
         for payload in ({'tools': native_tools('spawn_agent', 'send_message', 'followup_task')}, lite()):
             original = deepcopy(payload)
-            prepared, _ = agent_handoffs.add_plaintext_tools(payload)
-            tools = prepared.get('tools', prepared.get('input', [{}])[0].get('tools'))
-            native, aliases = tools
-            for namespace in (native, aliases):
-                for tool in namespace['tools']:
-                    description = tool['description']
-                    self.assertIn('recipient', description)
-                    self.assertIn('GPT through OpenRouter', description)
-                    self.assertIn('collaboration_plaintext.' + tool['name'], description)
-                    if tool['name'] == 'spawn_agent':
-                        self.assertIn('model and reasoning_effort explicitly', description)
-                        self.assertIn('fork_turns="none"', description)
+            prepared, _ = agent_handoffs.native_handoffs(payload, True)
             self.assertEqual(payload, original)
-            for old, new in zip(original.get('tools', original.get('input', [{}])[0].get('tools'))[0]['tools'], native['tools']):
-                self.assertEqual({k: v for k, v in old.items() if k != 'description'},
-                                 {k: v for k, v in new.items() if k != 'description'})
+            (namespace,) = prepared.get('tools', prepared.get('input', [{}])[0].get('tools'))
+            self.assertEqual(namespace['name'], 'collaboration_plaintext')
+            for tool in namespace['tools']:
+                description = tool['description']
+                if tool['name'] == 'spawn_agent':
+                    self.assertIn('model and reasoning_effort explicitly', description)
+                    self.assertIn('fork_turns="none"', description)
+                else:
+                    self.assertEqual(description, 'Native operation.')
 
     def test_review_example_selects_exact_policy_route_and_fresh_context(self):
         path = ROOT / 'plugins/scg-review/skills/pre-commit-review/SKILL.md'

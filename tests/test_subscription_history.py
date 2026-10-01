@@ -201,18 +201,18 @@ class SubscriptionHistoryTests(unittest.TestCase):
                 self.assertIs(subscription_history.normalize(payload), payload)
                 self.assertIsNone(subscription_history.repair_input([item]))
 
-    def test_adapter_reencodes_only_changed_history_or_aliases(self):
+    def test_adapter_reencodes_only_changed_history_or_handoffs(self):
         provider = providers.SubscriptionProvider()
         for path in ('/responses', '/responses/compact'):
             for foreign in (False, True):
-                for aliases in (False, True):
-                    with self.subTest(path=path, foreign=foreign, aliases=aliases):
+                for readable in (False, True):
+                    with self.subTest(path=path, foreign=foreign, readable=readable):
                         payload = {'model': 'gpt-6-astra', 'input': [reasoning()] if foreign else []}
                         raw = zstd.compress(json.dumps(payload).encode())
-                        names = {'spawn_agent'} if aliases and path == '/responses' else set()
-                        # Aliases come back on a copy; none leave the payload as sent.
-                        added = lambda payload, catalogue=None, names=names: (dict(payload) if names else payload, names)
-                        with mock.patch('ai_router.agent_handoffs.add_plaintext_tools', added):
+                        names = {'spawn_agent'} if readable and path == '/responses' else set()
+                        # Readable schemas come back on a copy; none leave the payload as sent.
+                        hinted = lambda payload, readable, catalogue=None, names=names: (dict(payload) if names else payload, names)
+                        with mock.patch('ai_router.agent_handoffs.native_handoffs', hinted):
                             prepared = provider.prepare('gpt-6-astra', path, payload, raw,
                                 {'Content-Encoding': 'zstd', 'Accept-Encoding': 'zstd',
                                  'Authorization': 'Bearer synthetic', 'Content-Length': str(len(raw))}, None)
