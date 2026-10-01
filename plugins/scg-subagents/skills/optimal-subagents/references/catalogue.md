@@ -43,7 +43,7 @@ comparable price. Contributor permits prompts/outputs to improve Meta products p
 | `openai/gpt-5.6-luna` | `max` | 0.2 / 1.2 | Cheap general candidate for bounded work; Good PDF/LCR for price. |
 | `openai/gpt-5.6-sol` | `max` | 2 / 10 | Balanced harder coding/automation candidate; refreshed reference price. |
 | `openai/gpt-6-astra` | `max` | 10 / 50 | Strongest measured terminal score and WebDev ceiling here; use focused high-consequence reasoning, mindful of API price. |
-| `openai/gpt-6.1-sol` | `high` | Unverified | Exact pre-commit reviewer requirement set by the owner; no independent benchmark row found. Not a general-work pick. |
+| `openai/gpt-6.1-sol` | `high` | Unverified | Preferred pre-commit reviewer; lane-specific availability fallbacks are in [review routing](reviews.md). No independent benchmark row in this snapshot. Not a general-work pick. |
 | `qwen/qwen3.8-max-0902` | `xhigh` | 2 / 6 | Exact Arena UI evidence, preliminary and overlapping Kimi/Opus intervals. AA undated row is a proxy and excluded from AA frontiers. |
 | `x-ai/grok-4.7` | `xhigh` | 1.6 / 4.8 | Automation/document alternative; no blanket cost advantage. Search capability requires tool/route verification. |
 | `z-ai/glm-5.3-flash` | `max` | 0.075 / 0.25 | Lowest token-price general starting point; discounted rate, so refresh. Local task qualification still needed. |
