@@ -1,5 +1,88 @@
 # Compatibility
 
+## Readable handoff candidate, 1 October 2026 AEST
+
+Fresh Codex `0.159.2` app-server sessions returned exact child-authored receipts
+for both assignment and follow-up through the isolated 1.0.5 candidate. All
+cases requested Sol 6.1 at `high`, explicit child selection and
+`fork_turns="none"`, then resumed the parent before follow-up.
+
+| Parent route | Child route | Actual upstream attempts | Latest result |
+| --- | --- | --- | --- |
+| Native | Native | 8 | Passed |
+| Native | OpenRouter | 9 | Passed, including one router repair |
+| OpenRouter | Native | 8 | Passed |
+| OpenRouter | OpenRouter | 8 | Passed |
+
+Native requests used `gpt-6.1-sol`; external requests used
+`openai/gpt-6.1-sol`. Returned model and effort matched when exposed. A distinct
+child thread, matching parent-thread header and client-generated `agent_name`
+establish receipt provenance; a parent echo cannot pass. Both calls persisted
+under canonical names. The real native-to-native run proves the native provider
+can consume its encrypted envelope. The other routes delivered readable text.
+These samples predate the tool-result failure regression caught in review.
+They prove delivery but do not establish zero tool-result failures.
+Fresh installed acceptance must pass the corrected observer.
+
+The policy-loaded native-to-OpenRouter review scenario also passed in eight
+attempts. Its parent received the revised guidance; the synthetic task prompts
+did not prescribe tool names or model arguments. The child requested and served
+OpenRouter Sol 6.1 at `high` and returned both exact receipts.
+Its strengthened gate requires one initial spawn and one follow-up to that
+same child; two replacement spawns cannot pass.
+
+Earlier external-parent samples failed the strict gate despite delivering
+receipts: they reported retried status-null stream errors, and one sample
+exhausted its attempt budget. Their detailed error causes were discarded, so
+the cause remains unknown. The latest instrumented samples passed unchanged,
+without increasing the token limit. These successes do not establish why the
+older samples failed. Probe diagnostics now retain terminal types, retry counts
+and whitelisted causes, including incomplete upstream responses, without content.
+
+The harness now matches production's 426 WebSocket refusal for the Responses
+path; other GETs remain 404. Codex falls directly back to HTTP/SSE. The previous
+404 suppression is removed. Production authentication and ingress are unchanged.
+
+Scripted real-client checks also passed all four routes in both Classic and Lite
+formats, without provider calls. Negative checks passed in both formats: one
+terminal refusal, no child request, no argument-parser error and no retry.
+Relay regressions cover JSON 400, non-retryable stream refusal, preservation of
+earlier valid calls and content redaction. The scalar argument rewrite is removed.
+
+External schema tests cover all three handoff tools in Classic, Lite and discovery,
+readable response markers, paging authority, immutable client input, stable prefix
+identities and untouched native encryption. The installer regressions cover first
+install and update, preserving intentional settings without a subagent model default.
+
+Live cases retain limits of 12 actual upstream attempts, 4,096 output tokens on
+each external request, 128 KiB input and five minutes. Repairs share the attempt
+budget. Live runs use real catalogue metadata; `--wire-mode` selects scripted
+fixtures only. Missing serving identity is unverified; a known mismatch fails.
+Recorded client errors or retries still fail the gate. Installed beta and stable
+acceptance remain separate gates.
+
+Claude retains its structured Agent and SendMessage transport. The signed-in
+desktop Code client `2.1.284` passed assignment and follow-up to the same native
+child on Sonnet 5.5 at requested low effort. Parent and child records both
+reported `claude-sonnet-5-5`; served effort was not exposed. The disposable
+project allowed Read and delegation, denied shell, writes and web access, and
+limited parent turns to four, child turns to one, retries to zero and output
+to 4,096 tokens. It recorded no tool or assistant errors. The desktop does not
+expose a complete upstream attempt or retry counter, so this is compatibility
+evidence rather than a strict Codex matrix pass. It used installed router
+1.0.4 and did not change the owner's sign-in or settings.
+
+A separate real Claude Code `2.1.283` run through the isolated candidate passed
+the same-child OpenRouter assignment and follow-up on
+`deepseek/deepseek-v4.1-flash` at requested low effort. It used seven actual
+upstream attempts in 83.2 seconds under the 12-attempt, 4,096-output-token and
+five-minute limits, with a USD 0.25 client budget per invocation. Both receipts
+came from one child, resumed using SendMessage; serving model matched and no
+CLI result error was reported. Its temporary client records were removed after
+extracting synthetic receipt and identity metadata. The complete retry and
+terminal-event ledger was not retained; this is separate Claude compatibility
+evidence, not an installed beta or Codex matrix claim.
+
 ## Subscription picker parity candidate, 30 September 2026 AEST
 
 Codex desktop was updated to `26.928.21956` (build `12404`), with bundled

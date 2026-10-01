@@ -11,18 +11,18 @@ HANDOFF_TOOLS = frozenset(('spawn_agent', 'send_message', 'followup_task'))
 LANE_HINT_NAMES = frozenset(('spawn_agent', 'close_agent'))
 LANE_HINT = ('When all subagent lanes are full, close finished agents, '
              'or all of them if needed, then retry spawn.')
-
 READABLE_MESSAGE = 'The complete readable assignment or message. Do not encrypt it.'
 
 
 class AliasTools(frozenset):
-    """Advertised names, response framing and target catalogue for one request."""
-    def __new__(cls, names, stream=False, spawn_models=None, location='unknown', catalogue=None):
+    """Alias authority, canonical readability and captured metadata for one request."""
+    def __new__(cls, names, stream=False, spawn_models=None, location='unknown', catalogue=None, readable=()):
         value = super().__new__(cls, names)
         value.stream = stream
         value.spawn_models = dict(spawn_models or {})
         value.location = location
         value.catalogue = request_context.capture() if catalogue is None else catalogue
+        value.readable = frozenset(readable)
         return value
 
 
@@ -110,7 +110,7 @@ def readable_handoff_tool(tool, namespace):
     return {**tool, 'parameters': parameters}
 
 
-def _hint_tool(tool):
+def _hint_tool(tool, namespace=None, plaintext=False):
     """`tool`, or a copy with LANE_HINT appended once to spawn/close; walks namespaces."""
     if not isinstance(tool, dict):
         return tool
@@ -118,8 +118,10 @@ def _hint_tool(tool):
         children = tool.get('tools')
         if not isinstance(children, list):
             return tool
-        hinted = _hint_tools(children)
+        hinted = _hint_tools(children, tool.get('name'), plaintext)
         return tool if hinted is children else {**tool, 'tools': hinted}
+    if plaintext:
+        tool = readable_handoff_tool(tool, namespace)
     if tool.get('type') != 'function' or tool.get('name') not in LANE_HINT_NAMES:
         return tool
     text = tool.get('description') or ''
@@ -128,18 +130,18 @@ def _hint_tool(tool):
     return {**tool, 'description': (text + '\n' if text else '') + LANE_HINT}
 
 
-def _hint_tools(tools):
-    hinted = [_hint_tool(tool) for tool in tools]
+def _hint_tools(tools, namespace=None, plaintext=False):
+    hinted = [_hint_tool(tool, namespace, plaintext) for tool in tools]
     return tools if all(new is old for new, old in zip(hinted, tools)) else hinted
 
 
-def _hint_item(item):
+def _hint_item(item, plaintext=False):
     """A discovery result or Lite prefix with hinted tools; a changed prefix gets a new ID."""
     tools = item.get('tools') if isinstance(item, dict) else None
     lite = tools is not None and item.get('type') == 'additional_tools' and item.get('role') == 'developer'
     if not isinstance(tools, list) or not (lite or item.get('type') == 'tool_search_output'):
         return item
-    hinted = _hint_tools(tools)
+    hinted = _hint_tools(tools, plaintext=plaintext)
     if hinted is tools or not lite:
         return item if hinted is tools else {**item, 'tools': hinted}
     identity = json.dumps([item.get('id'), hinted], sort_keys=True)
@@ -147,16 +149,16 @@ def _hint_item(item):
             'id': 'at_' + str(uuid.uuid5(uuid.NAMESPACE_URL, 'scg-lane-hint:' + identity))}
 
 
-def hint_full_lanes(payload):
-    """Codex-only: tell spawn/close to free lanes, without stacking; copies, never edits."""
+def hint_full_lanes(payload, *, plaintext=False):
+    """Copy declaration hints and, for external routes, readable message schemas."""
     tools = payload.get('tools')
-    hinted = _hint_tools(tools) if isinstance(tools, list) else tools
+    hinted = _hint_tools(tools, plaintext=plaintext) if isinstance(tools, list) else tools
     if hinted is not tools:
         payload = {**payload, 'tools': hinted}
     items = payload.get('input')
     if not isinstance(items, list):
         return payload
-    hinted = [_hint_item(item) for item in items]
+    hinted = [_hint_item(item, plaintext) for item in items]
     return payload if all(new is old for new, old in zip(hinted, items)) else {**payload, 'input': hinted}
 
 
