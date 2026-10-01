@@ -1,6 +1,6 @@
 # Changelog
 
-## scg-review 0.4.19 and scg-subagents 0.5.18 - 2026-10-01
+## scg-review 0.4.20 and scg-subagents 0.5.19 - 2026-10-01
 
 - Codex agents no longer pick handoff tools by the recipient's provider. When
   `collaboration_plaintext` handoff tools are offered, use them for every
@@ -8,8 +8,8 @@
   otherwise use the `collaboration` tools. Keep passing model and effort
   explicitly; external children need `fork_turns="none"`. The same wording
   works on routers before and after the change that shows native GPT parents
-  only the plaintext tools. The pre-commit review dispatch is unchanged apart
-  from the tool name.
+  only the plaintext tools. Reviewer selection and approval still follow
+  the bundled policy.
 - Drop the advice to correct a refused handoff on the next turn: the refusal
   ends the parent turn and never reaches the model. Report the delivery
   blocker instead.
@@ -18,6 +18,21 @@
   with SendMessage and foreground runs. `router_worker.py --list` now prints
   each model's router listing id for agent definitions, and a `fable`
   subagent inside a worker stays on the worker's model.
+
+## scg-review 0.4.19 and scg-subagents 0.5.18 (2026-10-01)
+
+- Every Codex review pass now has automatic availability fallbacks. OpenRouter
+  Sol remains preferred at high; Flash and GLM provide the lane-specific cheaper
+  alternatives at max, followed by native Sol at high. Astra is excluded.
+- Check key-scoped availability and supported effort before spending a call.
+  Skip remaining OpenRouter candidates after a shared provider failure; a shared
+  Codex handoff failure stops dispatch. Limit each pass to two fallback dispatches
+  and retain blocking findings through substitutions and adjudication.
+- Qualify the cheaper models on role-specific synthetic defects and clean controls:
+  six completed paired-case calls plus one incomplete call, US$0.012934 total,
+  within the 12-call, 4,096-output-token and US$5 pilot caps. Full staged-file
+  coverage, independent lanes, secret scanning, tests and exact-tree approval
+  remain required. The Windows hook and receipt format are unchanged.
 
 ## scg-review 0.4.18 and scg-subagents 0.5.17 - 2026-10-01
 

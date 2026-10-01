@@ -556,17 +556,25 @@ fixed codes and counts; terminal request records repeat those outcome fields.
 
 `handoff_observed` joins a native Responses handoff to `request_id`, the ledger's
 `attempt`, and a response-local `call_ordinal`. It records the tool, declaration
-location, alias advertisement, namespace category, encryption-marker state and
-argument JSON kind before restoration, after restoration and after the guard.
+location, whether this request declared the tool readable (`schema_mode` is
+`readable` or `native`), and `message_shape`: `readable`, `ciphertext`,
+`absent` or `other`, a classification that never carries the text. It also
+records the namespace category (`native`, `plaintext` for the readable alias,
+or `other`), encryption-marker state and argument JSON kind as the upstream sent
+them and as the client received them.
 `envelope_changed` identifies a namespace or marker change between envelopes;
 `identity_consistent` reports whether their identifiers agree. Raw identifiers,
 assignments, recipients, ciphertext and results are never logged.
 
-An upstream native call with a nonempty or absent plaintext marker and
-`guard_rejected=true` was refused by the existing encrypted-handoff rule. A
-plaintext alias that becomes native with an empty marker and an object argument
-passed that rule. `restoration_rejected` identifies an invalid alias envelope.
-These facts locate the failure without inferring readable text from ciphertext.
+A readable call that reaches the client as `native` with an empty marker
+passed every rule; an alias call is restored that way. `marker_rejected=true`
+means the upstream marked a readable call encrypted, or sent ciphertext under
+the alias, so it was refused rather than relabelled. A canonical `ciphertext`
+message, or a call to a tool this request did not declare readable, stays
+unmarked; `guard_rejected=true` means the encrypted-handoff guard refused it
+because the recipient is external. `message_shape` therefore shows in live logs whether the
+backend returned readable messages for the native namespace. These facts locate
+the failure without inferring readable text from ciphertext.
 
 `frame_end_offset` is the end of the adapted frame in that attempt's outgoing
 body. Compare it with `forwarded_delta_bytes` for the same request and attempt:

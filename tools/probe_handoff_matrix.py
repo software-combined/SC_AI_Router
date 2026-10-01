@@ -1,13 +1,16 @@
-"""Real-Codex four-route handoff proof; scripted loopback by default.
+"""Real-Codex handoff proofs; scripted loopback by default.
 
---live permits four cases, each capped at 12 actual upstream attempts, 4,096
-tokens on every external request and five minutes. Failure stops the matrix.
-Scripted native ciphertext proves envelope retention; live receipts prove that
-the native provider reads it. No live configuration is edited.
+--live permits the four route cases, each capped at 12 actual upstream attempts,
+4,096 tokens on every external request and five minutes. Failure stops the matrix.
+--live --case legacy-native runs the router-upgrade case from probe_desktop_handoff
+under the same caps. Child receipts prove each recipient read its brief; handoffs
+are scored by the client-side call and its message shape, never by the upstream
+namespace. No live configuration is edited.
 """
 import argparse
 import io
 import json
+import logging
 from pathlib import Path
 import re
 import subprocess
@@ -15,24 +18,75 @@ import sys
 import threading
 import time
 from types import SimpleNamespace
+import urllib.error
 import urllib.request
-from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from ai_router import catalogue, history_items, provider_defs, providers, subscription_discovery, transport
+from ai_router import (agent_handoffs, catalogue, history_items, provider_defs, providers,
+                       subscription_discovery)
 from ai_router.registry import by_slug
 from tools import probe_agent_handoffs as handoffs
-from tools.probe_review_handoffs import Budget, MAX_CALLS, MAX_OUTPUT, TIMEOUT
+from tools.probe_review_handoffs import MAX_CALLS, MAX_OUTPUT
 
 CASES = ('native-native', 'native-external', 'external-native', 'external-external')
+LEGACY = 'legacy-native'
 MARKERS = ('SYNTH_MATRIX_INITIAL', 'SYNTH_MATRIX_FOLLOWUP')
+SAFE = re.compile(r'[\w.:/@-]{1,96}')
+ROUTER_EVENTS = frozenset(('handoff_observed', 'attempt_ledger', 'request_started', 'request_completed',
+                           'request_failed', 'request_rejected', 'turn_refused', 'upstream_rejected'))
+ROW_FIELDS = ('event', 'request_id', 'router_version', 'model', 'reasoning_effort', 'request_bytes', 'sends',
+              'status', 'code', 'outcome', 'served_model', 'tool', 'parameter', 'phase', 'declaration',
+              'schema_mode', 'message_shape', 'marker_rejected', 'guard_rejected', 'restoration_rejected')
+
+
+def safe_value(value):
+    """A number, flag or identifier-like string; anything else becomes 'other'."""
+    if value is None or isinstance(value, (int, float)):
+        return value
+    return value if isinstance(value, str) and SAFE.fullmatch(value) else 'other'
+
+
+def safe_row(row, turn):
+    """The whitelisted, content-free fields of one router log row."""
+    kept = {key: safe_value(row[key]) for key in ROW_FIELDS if key in row}
+    for key in ('upstream', 'client'):
+        if isinstance(row.get(key), dict):
+            kept[key] = {field: safe_value(row[key].get(field)) for field in ('namespace', 'marker', 'arguments')}
+    return {'turn': turn, **kept}
+
+
+def tally(rows, field):
+    """Per-turn counts of row[field], or of field(row) when it is callable."""
+    totals = {}
+    for row in rows:
+        value = str(field(row) if callable(field) else row.get(field))
+        turn = totals.setdefault(f"turn{row['turn']}", {})
+        turn[value] = turn.get(value, 0) + 1
+    return totals
+
+
+class RouterRows(logging.Handler):
+    """Content-free in-process router events for one probe."""
+    def __init__(self, probe):
+        super().__init__()
+        self.probe = probe
+
+    def emit(self, record):
+        try:
+            row = json.loads(record.getMessage())
+        except ValueError:
+            return
+        if isinstance(row, dict) and row.get('event') in ROUTER_EVENTS:
+            self.probe.router_rows.append(safe_row(row, self.probe.turn_index()))
 
 
 class MatrixProbe(handoffs.Probe):
     identifies_threads = persist = True
     required_final = 'SYNTH_MATRIX_PARENT_DONE'
+    markers = MARKERS
     expected_replies = set(MARKERS)
+    agents = {'/root/matrix_child': 'child'}
     native, external = 'gpt-6.1-sol', 'openai/gpt-6.1-sol'
     parent_effort = child_effort = 'high'
     wire_mode = 'lite'
@@ -42,16 +96,20 @@ class MatrixProbe(handoffs.Probe):
     def timeout(self):
         return max(0, self.deadline - time.monotonic())
 
+    @property
+    def routes(self):
+        """Each client role's requested model and effort."""
+        return {'parent': (self.parent, self.parent_effort), 'child': (self.child, self.child_effort)}
+
     def __init__(self, *args):
         super().__init__(*args)
         self.native_model = self.native
         self.parent, self.child = handoffs.PARENT, handoffs.CHILD
         self.child_agents, self.parent_calls, self.child_calls = set(), 0, 0
-        self.call_ids, self.scope_ready = set(), False
+        self.call_ids, self.scope_ready, self.router_rows = set(), False, []
         self.receipt = threading.Event()
         self.instructions = ('Synthetic handoff test. Preserve the requested child model and effort. '
-            'Choose the handoff by recipient provider route: native subscription recipients accept '
-            'native encrypted messages; external recipients require the exposed plaintext alias. '
+            'Use the collaboration tools for every recipient. '
             'Start fresh children with fork_turns none. Children must not use tools, files or delegation.')
         self.live_prompts = [
             f'Delegate to one fresh child named matrix_child on {self.child}, reasoning effort '
@@ -61,15 +119,16 @@ class MatrixProbe(handoffs.Probe):
             'Wait for its reply and finish with ' + self.required_final + '.']
         self.facts.update(parent_model=self.parent, child_model=self.child,
             parent_effort=self.parent_effort, child_effort=self.child_effort, selections=[], served=[],
-            child_receipts=[], parent_requests=0, child_requests=0, scripted_native_envelope=False,
-            observed_declarations={'parent': [], 'child': []})
+            child_receipts=[], receipt_roles=[], client_calls=[], rejections=[],
+            observed_declarations={role: [] for role in self.routes},
+            **{role + '_requests': 0 for role in self.routes})
         self.facts.update(assigned_markers=[], peer_shapes=[], child_reply_shapes=[], terminals=[], parent_tool_methods=[])
         if self.live:
             version = subprocess.run([self.codex, '--version'], check=True,
                                      capture_output=True, text=True, timeout=10).stdout
             self.version = re.search(r'\d+(?:\.\d+)+', version).group()
             auth = json.loads((Path.home() / '.codex/auth.json').read_text())['tokens']
-            headers = {'Authorization': 'Bearer ' + auth['access_token']}
+            self.auth_headers = headers = {'Authorization': 'Bearer ' + auth['access_token']}
             if auth.get('account_id'):
                 headers['ChatGPT-Account-Id'] = auth['account_id']
             rows = subscription_discovery.fetch_native(headers, self.version)
@@ -92,11 +151,16 @@ class MatrixProbe(handoffs.Probe):
         agent = metadata.get('agent_name')
         if ident == self.parent_thread_id and agent == '/root':
             return 'parent'
-        if (ident and ident != self.parent_thread_id and agent == '/root/matrix_child'
+        if (ident and ident != self.parent_thread_id and agent in self.agents
                 and headers.get('x-codex-parent-thread-id') == self.parent_thread_id):
             self.child_agents.add((ident, agent))
-            return 'child'
+            return self.agents[agent]
         raise ValueError('matrix request has no matching client thread identity')
+
+    def turn_index(self):
+        """1 + the parent turns the client has reported complete."""
+        parent = getattr(self, 'parent_thread_id', None)
+        return 1 + sum(row.get('thread') == parent for row in self.facts.get('completed_turns', []))
 
     def respond(self, body, headers, ordinal, path='/responses'):
         self.record_input_facts(body)
@@ -106,8 +170,7 @@ class MatrixProbe(handoffs.Probe):
             else 'classic' if body.get('tools') else 'none')
         if declaration not in self.facts['observed_declarations'][role]:
             self.facts['observed_declarations'][role].append(declaration)
-        expected = self.child if role == 'child' else self.parent
-        effort = self.child_effort if role == 'child' else self.parent_effort
+        expected, effort = self.routes[role]
         if (body.get('model') != expected or body.get('reasoning', {}).get('effort') != effort
                 or path.endswith('/compact')):
             raise ValueError('matrix model or effort mismatch')
@@ -117,10 +180,10 @@ class MatrixProbe(handoffs.Probe):
                 text = '\n'.join(b.get('text', '') for b in item.get('content', [])
                     if b.get('type') == 'input_text' and isinstance(b.get('text'), str))
                 self.facts['peer_shapes'].append({'role': role, 'request': ordinal,
-                    'markers': [m for m in MARKERS if m in text],
+                    'markers': [m for m in self.markers if m in text],
                     'new_task': 'NEW_TASK' in text, 'final_answer': 'FINAL_ANSWER' in text,
                     'recoverable_sidecar': history_items.recoverable_agent_message(item) is not None})
-        if self.facts['parent_requests'] + self.facts['child_requests'] > MAX_CALLS:
+        if sum(self.facts[name + '_requests'] for name in self.routes) > MAX_CALLS:
             raise ValueError('matrix client request cap')
         if role == 'parent':
             for item in body.get('input', []):
@@ -136,32 +199,37 @@ class MatrixProbe(handoffs.Probe):
                 self.scope_ready = True
             if expected == self.external:
                 body = {**body, 'max_output_tokens': MAX_OUTPUT}
-            raw = self.forward(body, headers, path)
+            raw = self.forward(body, headers, path, role)
         else:
             raw = self.scripted_response(body, headers, ordinal, role)
         self.observe(raw, role)
         return raw
 
+    def forward(self, body, headers, path='/responses', role=None):
+        try:
+            return super().forward(body, headers, path)
+        except urllib.error.HTTPError as exc:
+            try:
+                code = json.loads(exc.read(65536))['error']['code']
+            except (ValueError, KeyError, TypeError, OSError):
+                code = None
+            self.facts['rejections'].append({'turn': self.turn_index(), 'role': role,
+                                             'status': exc.code, 'code': safe_value(code)})
+            raise
+
     def scripted_response(self, body, headers, ordinal, role):
         provider = (providers.ExternalResponsesProvider(provider_defs.OPENROUTER)
                     if body['model'] == self.external else providers.SubscriptionProvider())
+        # A mixed install: the external key resolves, so every brief is readable.
         prepared = provider.prepare(body['model'], '/responses', body, json.dumps(body).encode(),
-                                    headers, SimpleNamespace(key_for=lambda _: 'synthetic-key'))
+            headers, SimpleNamespace(key_for=lambda _: 'synthetic-key', key_missing=lambda _: None))
         if role == 'child':
             self.child_calls += 1
-            if self.parent == self.native and self.child == self.native:
-                opaque = any(block.get('type') == 'encrypted_content'
-                    for item in body.get('input', []) if item.get('type') == 'agent_message'
-                    for block in item.get('content', []))
-                if not opaque:
-                    raise ValueError('native scripted envelope lost encryption')
-                self.facts['scripted_native_envelope'] = True
-            else:
-                text = '\n'.join(block.get('text', '') for item in body.get('input', [])
-                    if item.get('type') == 'agent_message' for block in item.get('content', [])
-                    if block.get('type') == 'input_text')
-                if MARKERS[min(self.child_calls - 1, 1)] not in text:
-                    raise ValueError('scripted child did not receive its readable assignment')
+            text = '\n'.join(block.get('text', '') for item in body.get('input', [])
+                if item.get('type') == 'agent_message' for block in item.get('content', [])
+                if block.get('type') == 'input_text')
+            if MARKERS[min(self.child_calls - 1, 1)] not in text:
+                raise ValueError('scripted child did not receive its readable assignment')
             items = [handoffs.message(MARKERS[min(self.child_calls - 1, 1)], str(ordinal))]
         else:
             step = self.parent_calls
@@ -176,18 +244,16 @@ class MatrixProbe(handoffs.Probe):
                 args = ({'task_name': 'matrix_child', 'model': self.child, 'fork_turns': 'none',
                          'reasoning_effort': self.child_effort} if step == 0 else {'target': 'matrix_child'})
                 args['message'] = MARKERS[min(step // 2, 1)]
-                alias = self.parent == self.native and self.child == self.external
-                items = [{'type': 'function_call', 'namespace': 'collaboration_plaintext' if alias else 'collaboration',
+                items = [{'type': 'function_call', 'namespace': 'collaboration',
                     'name': name, 'id': 'fc_' + str(ordinal), 'call_id': 'call_' + str(ordinal),
                     'arguments': json.dumps(args)}]
-                if self.parent == self.native and not alias:
-                    items[0]['encrypted_function_args'] = ['message']
         source = io.BytesIO(handoffs.sse(items, str(ordinal)))
         source.status = 200
         source.getheader = lambda name, default='': 'text/event-stream'
         return b''.join(provider.adapt(source, prepared.tool_names))
 
     def observe(self, raw, role):
+        turn = self.turn_index()
         for part in raw.replace(b'\r\n', b'\n').split(b'\n\n'):
             data = handoffs.frame_data(part)
             if not data or data == b'[DONE]':
@@ -196,12 +262,15 @@ class MatrixProbe(handoffs.Probe):
             if event.get('type') in ('response.completed', 'response.incomplete', 'response.failed'):
                 response = event.get('response', {})
                 reason = (response.get('incomplete_details') or {}).get('reason')
-                self.facts['terminals'].append({'role': role, 'type': event['type'],
+                error = response.get('error') if isinstance(response.get('error'), dict) else {}
+                self.facts['terminals'].append({'turn': turn, 'role': role, 'type': event['type'], 'code': safe_value(error.get('code')),
                     'reason': reason if reason in ('max_output_tokens', 'interrupted', 'content_filter') else None})
+                if event['type'] == 'response.failed':
+                    self.facts['rejections'].append({'turn': turn, 'role': role, 'status': 200, 'code': safe_value(error.get('code'))})
             if event.get('type') == 'response.completed' and self.live:
                 response = event.get('response', {})
-                self.facts['served'].append({'role': role, 'model': response.get('model', 'unverified'),
-                    'effort': response.get('reasoning', {}).get('effort', 'unverified')})
+                self.facts['served'].append({'role': role, 'model': safe_value(response.get('model', 'unverified')),
+                    'effort': safe_value(response.get('reasoning', {}).get('effort', 'unverified'))})
             if event.get('type') != 'response.output_item.done':
                 continue
             item = event.get('item', {})
@@ -209,21 +278,28 @@ class MatrixProbe(handoffs.Probe):
                 name = item.get('name')
                 self.facts['parent_tool_methods'].append(name if name in
                     ('spawn_agent', 'send_message', 'followup_task', 'wait_agent', 'list_agents', 'interrupt_agent') else 'other')
+                if name in agent_handoffs.HANDOFF_TOOLS:
+                    marker = item.get('encrypted_function_args', 'absent')
+                    self.facts['client_calls'].append({'turn': turn, 'tool': name,
+                        'namespace': 'canonical' if item.get('namespace') == agent_handoffs.NATIVE_NAMESPACE else 'other',
+                        'marker': 'absent' if marker == 'absent' else 'empty' if marker == [] else 'nonempty',
+                        'message_shape': agent_handoffs.message_shape(item)})
             if role == 'parent' and item.get('type') == 'function_call' and item.get('name') in ('spawn_agent', 'followup_task'):
                 args = json.loads(item['arguments'])
                 self.call_ids.add(item['call_id'])
                 self.facts['selections'].append({'tool': item['name'],
-                    **{key: args[key] for key in ('model', 'reasoning_effort', 'fork_turns') if key in args},
+                    **{key: safe_value(args[key]) for key in ('model', 'reasoning_effort', 'fork_turns') if key in args},
                     'plaintext': item.get('encrypted_function_args') == []})
                 self.facts['assigned_markers'].append({'tool': item['name'],
-                    'markers': [m for m in MARKERS if m in args.get('message', '')]})
-            if role == 'child' and item.get('type') == 'message':
+                    'markers': [m for m in self.markers if m in str(args.get('message', ''))]})
+            if role != 'parent' and item.get('type') == 'message':
                 text = ''.join(block.get('text', '') for block in item.get('content', []))
-                self.facts['child_reply_shapes'].append({'markers': [m for m in MARKERS if m in text],
-                    'exact': text.strip() in MARKERS})
-                for marker in MARKERS:
+                self.facts['child_reply_shapes'].append({'markers': [m for m in self.markers if m in text],
+                    'exact': text.strip() in self.markers})
+                for marker in self.markers:
                     if text.strip() == marker:
                         self.facts['child_receipts'].append(marker)
+                        self.facts['receipt_roles'].append([marker, role])
                         self.facts['replies'].append(marker)
                         self.receipt.set()
 
@@ -236,9 +312,8 @@ class MatrixProbe(handoffs.Probe):
                         and entry.get('call_id') in self.call_ids):
                     stored.add(entry['call_id'])
         self.facts['persisted_canonical_replay'] = len(stored) == 2 and stored == self.call_ids
-        plaintext = not (self.parent == self.native and self.child == self.native)
         expected = [{'tool': 'spawn_agent', 'model': self.child, 'reasoning_effort': self.child_effort,
-                     'fork_turns': 'none', 'plaintext': plaintext}, {'tool': 'followup_task', 'plaintext': plaintext}]
+                     'fork_turns': 'none', 'plaintext': True}, {'tool': 'followup_task', 'plaintext': True}]
         self.facts['distinct_child_agent'] = len(self.child_agents) == 1
         identities = all(row['model'] in ('unverified', self.child if row['role'] == 'child' else self.parent)
                          and row['effort'] in ('unverified', self.child_effort if row['role'] == 'child' else self.parent_effort)
@@ -247,7 +322,7 @@ class MatrixProbe(handoffs.Probe):
                 and not self.facts['request_failures'] and self.facts['retry_events'] == 0
                 and self.facts['selections'] == expected and self.facts['canonical_replay']
                 and self.facts['persisted_canonical_replay'] and self.facts['distinct_child_agent']
-                and set(self.facts['child_receipts']) == set(MARKERS))
+                and set(self.facts['child_receipts']) == set(self.markers))
 
 
 def main(argv=None):
@@ -255,13 +330,13 @@ def main(argv=None):
     parser.add_argument('--live', action='store_true')
     parser.add_argument('--wire-mode', choices=('classic', 'lite'), default='lite',
                         help='Scripted fixture only; live uses the real client catalogue.')
-    parser.add_argument('--case', choices=(*CASES, 'all'), default='all')
+    parser.add_argument('--case', choices=(*CASES, LEGACY, 'all'), default='all')
     parser.add_argument('--native', default=MatrixProbe.native)
     parser.add_argument('--external', default=MatrixProbe.external)
     parser.add_argument('--native-effort', default='high')
     parser.add_argument('--external-effort', default='high')
+    parser.add_argument('--record', type=Path, help='Append each case\'s content-free record here.')
     args = parser.parse_args(argv)
-    MatrixProbe.wire_mode = args.wire_mode
     external = by_slug(args.external)
     if by_slug(args.native) is not None or external is None or not provider_defs.is_external(external.provider):
         parser.error('native and external must name their respective catalogue routes')
@@ -269,22 +344,19 @@ def main(argv=None):
     args.max_live_calls = MAX_CALLS
     args.live_children = args.live
     args.native_only = args.lifecycle = args.installed = False
-    results = []
+    from tools.probe_desktop_handoff import CaseProbe, run_case, run_legacy  # That module builds on this one.
+    if args.case == LEGACY:
+        if not args.live:
+            parser.error('legacy-native requires --live; unit tests exercise it offline')
+        return run_legacy(args)
     for case in CASES if args.case == 'all' else (args.case,):
         rows = {'native': args.native, 'external': args.external}
         efforts = {'native': args.native_effort, 'external': args.external_effort}
         parent, child = case.split('-')
         handoffs.PARENT, handoffs.CHILD = rows[parent], rows[child]
-        MatrixProbe.native, MatrixProbe.external = args.native, args.external
-        MatrixProbe.parent_effort, MatrixProbe.child_effort = efforts[parent], efforts[child]
-        budget = Budget(transport.post_with_phases)
-        MatrixProbe.deadline = budget.deadline
-        with patch.object(transport, 'post_with_phases', budget):
-            result = handoffs.run(args, probe_type=MatrixProbe)
-        results.append({'case': case, 'passed': result == 0, 'upstream_attempts': budget.calls})
-        print(json.dumps({'matrix': results, 'case_cap': 4, 'attempt_cap_per_case': MAX_CALLS,
-                          'external_output_cap': MAX_OUTPUT, 'seconds_per_case': TIMEOUT}), flush=True)
-        if result:
+        CaseProbe.native, CaseProbe.external, CaseProbe.wire_mode = args.native, args.external, args.wire_mode
+        CaseProbe.parent_effort, CaseProbe.child_effort = efforts[parent], efforts[child]
+        if run_case(args, CaseProbe, case, 'in-process'):
             return 1
     return 0
 

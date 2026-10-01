@@ -20,7 +20,7 @@
     "type": "message"
    },
    {
-    "id": "at_c49d3c1d-41f8-583e-8d36-25a479480b97",
+    "id": "at_957b6977-d203-527c-bd53-d11061755ada",
     "role": "developer",
     "tools": [
      {
@@ -28,7 +28,7 @@
       "name": "collaboration",
       "tools": [
        {
-        "description": "Start a synthetic helper agent.\nChoose by the recipient provider route. Native subscription GPT uses collaboration. External recipients, including GPT through OpenRouter, require collaboration_plaintext.spawn_agent for every assignment and follow-up, even when saved calls use native names. Pass model and reasoning_effort explicitly for fresh or partial-history children. Choose full native history inheritance deliberately. External children require fork_turns=\"none\"; encrypted history cannot be translated.\nWhen all subagent lanes are full, close finished agents, or all of them if needed, then retry spawn.",
+        "description": "Start a synthetic helper agent.\nWhen all subagent lanes are full, close finished agents, or all of them if needed, then retry spawn.\nPass model and reasoning_effort explicitly for a fresh child; a child on an externally billed model needs fork_turns=\"none\".",
         "name": "spawn_agent",
         "parameters": {
          "additionalProperties": false,
@@ -57,7 +57,7 @@
         "type": "function"
        },
        {
-        "description": "Message a synthetic agent.\nChoose by the recipient provider route. Native subscription GPT uses collaboration. External recipients, including GPT through OpenRouter, require collaboration_plaintext.send_message for every assignment and follow-up, even when saved calls use native names.",
+        "description": "Message a synthetic agent.",
         "name": "send_message",
         "parameters": {
          "additionalProperties": false,
@@ -80,7 +80,7 @@
         "type": "function"
        },
        {
-        "description": "Give a synthetic agent more work.\nChoose by the recipient provider route. Native subscription GPT uses collaboration. External recipients, including GPT through OpenRouter, require collaboration_plaintext.followup_task for every assignment and follow-up, even when saved calls use native names.",
+        "description": "Give a synthetic agent more work.",
         "name": "followup_task",
         "parameters": {
          "additionalProperties": false,
@@ -111,88 +111,6 @@
           "message": {
            "description": "The assignment or message.",
            "encrypted": true,
-           "type": "string"
-          },
-          "target": {
-           "type": "string"
-          }
-         },
-         "required": [
-          "message"
-         ],
-         "type": "object"
-        },
-        "strict": true,
-        "type": "function"
-       }
-      ],
-      "type": "namespace"
-     },
-     {
-      "description": "Use this namespace for every initial assignment and follow-up to externally billed agents. Previous calls may appear under collaboration in history because Codex executes the native tool; that does not change the need to choose collaboration_plaintext for the next message.",
-      "name": "collaboration_plaintext",
-      "tools": [
-       {
-        "description": "PLAINTEXT HANDOFF: use collaboration_plaintext.spawn_agent for externally billed agents. Start a synthetic helper agent.\nChoose by the recipient provider route. Native subscription GPT uses collaboration. External recipients, including GPT through OpenRouter, require collaboration_plaintext.spawn_agent for every assignment and follow-up, even when saved calls use native names. Pass model and reasoning_effort explicitly for fresh or partial-history children. Choose full native history inheritance deliberately. External children require fork_turns=\"none\"; encrypted history cannot be translated.\nSend the complete readable message. Do not encrypt it.\nWhen all subagent lanes are full, close finished agents, or all of them if needed, then retry spawn.",
-        "name": "spawn_agent",
-        "parameters": {
-         "additionalProperties": false,
-         "properties": {
-          "message": {
-           "description": "The complete readable assignment or message. Do not encrypt it.",
-           "encrypted": false,
-           "type": "string"
-          },
-          "model": {
-           "type": "string"
-          },
-          "target": {
-           "type": "string"
-          },
-          "task_name": {
-           "type": "string"
-          }
-         },
-         "required": [
-          "message"
-         ],
-         "type": "object"
-        },
-        "strict": true,
-        "type": "function"
-       },
-       {
-        "description": "PLAINTEXT HANDOFF: use collaboration_plaintext.send_message for externally billed agents. Message a synthetic agent.\nChoose by the recipient provider route. Native subscription GPT uses collaboration. External recipients, including GPT through OpenRouter, require collaboration_plaintext.send_message for every assignment and follow-up, even when saved calls use native names.\nSend the complete readable message. Do not encrypt it.",
-        "name": "send_message",
-        "parameters": {
-         "additionalProperties": false,
-         "properties": {
-          "message": {
-           "description": "The complete readable assignment or message. Do not encrypt it.",
-           "encrypted": false,
-           "type": "string"
-          },
-          "target": {
-           "type": "string"
-          }
-         },
-         "required": [
-          "message"
-         ],
-         "type": "object"
-        },
-        "strict": true,
-        "type": "function"
-       },
-       {
-        "description": "PLAINTEXT HANDOFF: use collaboration_plaintext.followup_task for externally billed agents. Give a synthetic agent more work.\nChoose by the recipient provider route. Native subscription GPT uses collaboration. External recipients, including GPT through OpenRouter, require collaboration_plaintext.followup_task for every assignment and follow-up, even when saved calls use native names.\nSend the complete readable message. Do not encrypt it.",
-        "name": "followup_task",
-        "parameters": {
-         "additionalProperties": false,
-         "properties": {
-          "message": {
-           "description": "The complete readable assignment or message. Do not encrypt it.",
-           "encrypted": false,
            "type": "string"
           },
           "target": {
@@ -276,7 +194,7 @@
     "type": "function"
    },
    {
-    "description": "collaboration.spawn_agent: Start a synthetic helper agent.\nChoose by the recipient provider route. Native subscription GPT uses collaboration. External recipients, including GPT through OpenRouter, require collaboration_plaintext.spawn_agent for every assignment and follow-up, even when saved calls use native names. Pass model and reasoning_effort explicitly for fresh or partial-history children. Choose full native history inheritance deliberately. External children require fork_turns=\"none\"; encrypted history cannot be translated.\nWhen all subagent lanes are full, close finished agents, or all of them if needed, then retry spawn.",
+    "description": "collaboration.spawn_agent: Start a synthetic helper agent.\nWhen all subagent lanes are full, close finished agents, or all of them if needed, then retry spawn.\nPass model and reasoning_effort explicitly for a fresh child; a child on an externally billed model needs fork_turns=\"none\".",
     "name": "collaboration__spawn_agent",
     "parameters": {
      "additionalProperties": false,
@@ -305,7 +223,7 @@
     "type": "function"
    },
    {
-    "description": "collaboration.send_message: Message a synthetic agent.\nChoose by the recipient provider route. Native subscription GPT uses collaboration. External recipients, including GPT through OpenRouter, require collaboration_plaintext.send_message for every assignment and follow-up, even when saved calls use native names.",
+    "description": "collaboration.send_message: Message a synthetic agent.",
     "name": "collaboration__send_message",
     "parameters": {
      "additionalProperties": false,
@@ -328,7 +246,7 @@
     "type": "function"
    },
    {
-    "description": "collaboration.followup_task: Give a synthetic agent more work.\nChoose by the recipient provider route. Native subscription GPT uses collaboration. External recipients, including GPT through OpenRouter, require collaboration_plaintext.followup_task for every assignment and follow-up, even when saved calls use native names.",
+    "description": "collaboration.followup_task: Give a synthetic agent more work.",
     "name": "collaboration__followup_task",
     "parameters": {
      "additionalProperties": false,
@@ -359,81 +277,6 @@
       "message": {
        "description": "The assignment or message.",
        "encrypted": true,
-       "type": "string"
-      },
-      "target": {
-       "type": "string"
-      }
-     },
-     "required": [
-      "message"
-     ],
-     "type": "object"
-    },
-    "strict": true,
-    "type": "function"
-   },
-   {
-    "description": "collaboration_plaintext.spawn_agent: PLAINTEXT HANDOFF: use collaboration_plaintext.spawn_agent for externally billed agents. Start a synthetic helper agent.\nChoose by the recipient provider route. Native subscription GPT uses collaboration. External recipients, including GPT through OpenRouter, require collaboration_plaintext.spawn_agent for every assignment and follow-up, even when saved calls use native names. Pass model and reasoning_effort explicitly for fresh or partial-history children. Choose full native history inheritance deliberately. External children require fork_turns=\"none\"; encrypted history cannot be translated.\nSend the complete readable message. Do not encrypt it.\nWhen all subagent lanes are full, close finished agents, or all of them if needed, then retry spawn.",
-    "name": "collaboration_plaintext__spawn_agent",
-    "parameters": {
-     "additionalProperties": false,
-     "properties": {
-      "message": {
-       "description": "The complete readable assignment or message. Do not encrypt it.",
-       "encrypted": false,
-       "type": "string"
-      },
-      "model": {
-       "type": "string"
-      },
-      "target": {
-       "type": "string"
-      },
-      "task_name": {
-       "type": "string"
-      }
-     },
-     "required": [
-      "message"
-     ],
-     "type": "object"
-    },
-    "strict": true,
-    "type": "function"
-   },
-   {
-    "description": "collaboration_plaintext.send_message: PLAINTEXT HANDOFF: use collaboration_plaintext.send_message for externally billed agents. Message a synthetic agent.\nChoose by the recipient provider route. Native subscription GPT uses collaboration. External recipients, including GPT through OpenRouter, require collaboration_plaintext.send_message for every assignment and follow-up, even when saved calls use native names.\nSend the complete readable message. Do not encrypt it.",
-    "name": "collaboration_plaintext__send_message",
-    "parameters": {
-     "additionalProperties": false,
-     "properties": {
-      "message": {
-       "description": "The complete readable assignment or message. Do not encrypt it.",
-       "encrypted": false,
-       "type": "string"
-      },
-      "target": {
-       "type": "string"
-      }
-     },
-     "required": [
-      "message"
-     ],
-     "type": "object"
-    },
-    "strict": true,
-    "type": "function"
-   },
-   {
-    "description": "collaboration_plaintext.followup_task: PLAINTEXT HANDOFF: use collaboration_plaintext.followup_task for externally billed agents. Give a synthetic agent more work.\nChoose by the recipient provider route. Native subscription GPT uses collaboration. External recipients, including GPT through OpenRouter, require collaboration_plaintext.followup_task for every assignment and follow-up, even when saved calls use native names.\nSend the complete readable message. Do not encrypt it.",
-    "name": "collaboration_plaintext__followup_task",
-    "parameters": {
-     "additionalProperties": false,
-     "properties": {
-      "message": {
-       "description": "The complete readable assignment or message. Do not encrypt it.",
-       "encrypted": false,
        "type": "string"
       },
       "target": {

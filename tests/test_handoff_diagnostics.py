@@ -45,5 +45,12 @@ class HandoffDiagnosticsTests(unittest.TestCase):
         probe.observe(b'data: ' + json.dumps(incomplete).encode() + b'\n\n', 'parent')
         self.assertEqual(probe.facts['parent_tool_methods'], ['wait_agent'])
         self.assertEqual(probe.facts['terminals'], [
-            {'role': 'parent', 'type': 'response.completed', 'reason': None},
-            {'role': 'parent', 'type': 'response.incomplete', 'reason': 'max_output_tokens'}])
+            {'turn': 1, 'role': 'parent', 'type': 'response.completed', 'code': None, 'reason': None},
+            {'turn': 1, 'role': 'parent', 'type': 'response.incomplete', 'code': None, 'reason': 'max_output_tokens'}])
+        failed = {'type': 'response.failed', 'response': {'error': {
+            'code': 'invalid_prompt', 'message': 'SYNTH_PRIVATE https://private.invalid'}}}
+        probe.observe(b'data: ' + json.dumps(failed).encode() + b'\n\n', 'parent')
+        self.assertEqual(probe.facts['rejections'], [
+            {'turn': 1, 'role': 'parent', 'status': 200, 'code': 'invalid_prompt'}])
+        self.assertNotIn('SYNTH_PRIVATE', json.dumps(probe.facts))
+        self.assertNotIn('private.invalid', json.dumps(probe.facts))

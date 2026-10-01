@@ -36,8 +36,8 @@ disable token-budget rollover; explicitly enabled and existing sessions still
 need the recovery path. The separate PATH CLI is `0.153.1` and is not the
 desktop acceptance target.
 
-The earlier handoff fixes remain distinct: plaintext aliases handle external
-brief delivery, and 0.6.38 makes invalid encrypted handoffs recover within the
+The earlier handoff fixes remain distinct: readable handoff schemas handle
+external brief delivery, and 0.6.38 makes invalid encrypted handoffs recover within the
 parent turn. Neither addresses a child forgetting an already-delivered brief.
 An accepted spawn or brief acknowledgement does not prove task completion.
 

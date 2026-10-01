@@ -1,5 +1,5 @@
 {
-  "ai_router/agent_handoffs.py": 324,
+  "ai_router/agent_handoffs.py": 308,
   "ai_router/catalogue.py": 395,
   "ai_router/compaction_summary.py": 263,
   "ai_router/errors.py": 292,
@@ -23,7 +23,6 @@
   "packaging/platforms/windows.py": 402,
   "packaging/service.py": 507,
   "packaging/updater.py": 587,
-  "tests/test_agent_handoff_providers.py": 311,
   "tests/test_bootstrap.py": 310,
   "tests/test_catalogue.py": 495,
   "tests/test_claude_compat.py": 339,
@@ -71,5 +70,6 @@
   "tools/probe_agent_handoffs.py": 515,
   "tools/probe_claude_code.py": 408,
   "tools/probe_codex_runtime.py": 501,
+  "tools/probe_desktop_handoff.py": 425,
   "ai_router/claude_compat.py": 260
 }

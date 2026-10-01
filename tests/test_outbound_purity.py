@@ -12,11 +12,10 @@ import unittest
 from unittest import mock
 
 from ai_router import provider_defs, request_context, subscription_fallback, turn_budget
-from ai_router.errors import PreparationError
 from ai_router.image_items import IMAGE_TRIM_NOTE
 from ai_router.providers import ExternalResponsesProvider, SubscriptionProvider
 from tests.fakes import FakeUpstream, install_fake
-from tests.harness import (auth_file, isolated_home, post, start_server,
+from tests.harness import (StubCredentials, auth_file, isolated_home, post, start_server,
                            stub_credentials, test_state)
 from tests.test_agent_handoffs import native_tools
 from tests.test_replay_golden import EXPECTED, FIXTURES, golden_name
@@ -38,7 +37,7 @@ def _prepare(target, payload, context=None):
     try:
         if route == 'subscription':
             prepared = SubscriptionProvider().prepare(
-                slug, '/responses', payload, json.dumps(payload).encode(), {}, None,
+                slug, '/responses', payload, json.dumps(payload).encode(), {}, StubCredentials(),
                 context=context)
         else:
             prepared = ExternalResponsesProvider(provider_defs.OPENROUTER).prepare(
@@ -119,7 +118,7 @@ class HelperFallbackReuseTests(unittest.TestCase):
     def _plan(self, payload):
         context = request_context.resolve(HELPER, request_context.capture())
         native = SubscriptionProvider().prepare(
-            HELPER, '/responses', payload, json.dumps(payload).encode(), {}, None,
+            HELPER, '/responses', payload, json.dumps(payload).encode(), {}, StubCredentials(),
             context=context)
         target = request_context.retarget(
             context, subscription_fallback.twin_slug(HELPER, context.catalogue))
@@ -137,20 +136,7 @@ class HelperFallbackReuseTests(unittest.TestCase):
         self.assertEqual(twin.body, _prepare('external:' + plan.target.slug, fresh,
                                              plan.target)[0])
         sent = [tool['name'] for tool in json.loads(twin.body)['tools']]
-        self.assertEqual(sent.count('collaboration_plaintext__spawn_agent'), 1, sent)
-
-    def test_a_client_declared_plaintext_namespace_is_still_rejected(self):
-        payload = self._payload([
-            *native_tools('send_message'),
-            {'type': 'namespace', 'name': 'collaboration_plaintext', 'tools': []}])
-        collision = 'plaintext collaboration namespace collision'
-        with self.assertRaisesRegex(PreparationError, collision):
-            self._plan(payload)
-        target = request_context.retarget(
-            request_context.resolve(HELPER, request_context.capture()), 'openai/gpt-6-luna')
-        with self.assertRaisesRegex(PreparationError, collision):
-            subscription_fallback.Plan(target, '/responses', payload, b'', {},
-                                       stub_credentials()).prepared()
+        self.assertEqual(sent, ['collaboration__spawn_agent', 'collaboration__send_message'])
 
 
 def _read_turn(outputs):
@@ -222,12 +208,9 @@ class RoutedHelperFallbackTests(unittest.TestCase):
         response.read()
         self.assertEqual([call[0] for call in recorded], ['chatgpt.com', 'openrouter.ai'])
         native = json.loads(recorded[0][3])['tools']
-        self.assertEqual([tool['name'] for tool in native],
-                         ['collaboration', 'collaboration_plaintext'])
+        self.assertEqual([tool['name'] for tool in native], ['collaboration_plaintext'])
         twin = [tool['name'] for tool in json.loads(recorded[1][3])['tools']]
-        self.assertEqual(twin, ['collaboration__spawn_agent', 'collaboration__send_message',
-                                'collaboration_plaintext__spawn_agent',
-                                'collaboration_plaintext__send_message'])
+        self.assertEqual(twin, ['collaboration__spawn_agent', 'collaboration__send_message'])
 
 
 if __name__ == '__main__':

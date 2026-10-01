@@ -47,18 +47,30 @@ class PluginTest(unittest.TestCase):
         self.assertIn('../../references/reviews.md', review)
         self.assertIn('listed eligible fallback', review)
         self.assertIn('Exact user or project model/effort', review)
-        required = re.search(
-            r'Local user policy override:.*?`([^`]+)` at `([^`]+)`',
-            canonical, re.S)
-        self.assertIsNotNone(required)
-        self.assertIn(f'`{required.group(1)}` at `{required.group(2)}`', review)
-        self.assertIn('no model fallback', review.lower())
+        preferred = [('openai/gpt-6.1-sol', 'high')]
+        flash = [('deepseek/deepseek-v4.1-flash', 'max')]
+        glm = [('z-ai/glm-5.3', 'max')]
+        native = [('gpt-6.1-sol', 'high')]
+        expected = {
+            'Simplification': (preferred, flash + glm + native),
+            'Correctness': (preferred, glm + native),
+            'Quality': (preferred, flash + glm + native),
+            'Adversarial': (preferred, glm + native),
+        }
+        routes = {}
+        for lane, primary, fallbacks in re.findall(
+                r'^\| (Simplification|Correctness|Quality|Adversarial) \| ([^|]+) \| ([^|]+) \|$',
+                canonical, re.M):
+            self.assertNotIn(lane, routes)
+            routes[lane] = tuple(re.findall(r'`([^`]+)` at `([^`]+)`', cell)
+                                 for cell in (primary, fallbacks))
+        self.assertEqual(routes, expected)
+        self.assertNotIn('no model fallback', review.lower())
         efforts = json.loads(
             (policy_root / 'model-evidence.json').read_text(encoding="utf-8"))['prescribed_efforts']
         for model, effort in re.findall(r'`([^`]+)` at `([^`]+)`', canonical):
-            self.assertEqual(efforts[model], effort)
-        for lane in ('Simplification', 'Correctness', 'Quality', 'Adversarial'):
-            self.assertEqual(canonical.count('| ' + lane + ' |'), 1)
+            if model != 'gpt-6.1-sol':  # Native route is outside OpenRouter evidence.
+                self.assertEqual(efforts[model], effort)
         self.assertNotRegex(review, r"muse-spark|glm-5\.3")
         for markdown in skills.glob("*/SKILL.md"):
             self.assertNotRegex(markdown.read_text(encoding="utf-8").lower(), r"kimi|luna")
