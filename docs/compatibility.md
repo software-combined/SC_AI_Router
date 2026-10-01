@@ -1,6 +1,6 @@
 # Compatibility
 
-## Claude switch test preparation, 1 October 2026 AEST
+## Claude switch and Code-tab acceptance, 1 October 2026 AEST
 
 The owner-Mac read-only baseline is router `1.0.6.141`, Claude desktop
 `2.16120.0`, standalone Claude Code `2.1.283` and desktop-bundled Code
@@ -8,8 +8,8 @@ The owner-Mac read-only baseline is router `1.0.6.141`, Claude desktop
 develop `b41a8222`; installed runtime fingerprint
 `a10eacb59add178b80d48d460f43d55ac22682e4bfaa1063c38d54acc57fa151`
 matches that source. The attachment, policy and both account identities passed
-read-only preflight. Claude remained in subscription mode throughout; the shared
-router was neither paused nor restarted.
+read-only preflight. The owner then authorized closing and reopening Claude for
+installed-launcher acceptance. The shared router was neither paused nor restarted.
 
 Before the probe fixes, the full offline suite including installers passed
 2,922 tests with five skips. New offline regressions reproduced inherited
@@ -24,7 +24,7 @@ evidence. These are probe fixes, not changes to the installed switch or daemon.
 | Deferred 700-tool MCP | GLM 5.3 Flash / low | 3 | Search then released tool executed; IDs paired; served model matched |
 | Saved-session round trip | DeepSeek -> GLM -> DeepSeek / low | 5 | Same session ID, original Read results and newest marker retained; models matched |
 
-Both checks used the real `2.1.284` binary, synthetic data, USD 0.25 per-invocation
+All paid isolated checks used the real `2.1.284` binary, synthetic data, USD 0.25 per-invocation
 client budgets, 12 upstream attempts, 512 KiB input and 2,048 output tokens per
 attempt, and five-minute client deadlines. Served effort was not exposed. The
 first GLM sample returned its marker under the older answer-only gate; only the
@@ -39,12 +39,53 @@ A persistent 503 produced two requests even with SDK retries set to zero, then
 stopped with an error. A 429 produced one request. These are measured client
 limits, not proof of a strict installed-desktop upstream cap.
 
-The standalone subscription login reports unavailable, so no native subscription
-inference was attempted. Complete installed-launcher acceptance remains pending
-the owner's fresh approval to close Claude and share all eligible Code tasks.
-Actual Code-tab continuation, newest-message convergence and restoration of the
-original mode are still required. Isolated bundled-client results do not close
-those gates. Cowork sharing and Windows/Linux switch acceptance remain out of scope.
+The actual desktop Code tab then passed both round trips using the installed
+**Switch Claude** launcher and synthetic tasks:
+
+| Origin | Model sequence | Result |
+| --- | --- | --- |
+| Subscription | Sonnet 5.5 / low -> DeepSeek V4.1 Flash / max -> Sonnet 5.5 / low | Two original Read results, baseline and latest gateway turn retained |
+| OpenRouter | DeepSeek V4.1 Flash / max -> Sonnet 5.5 / low -> DeepSeek V4.1 Flash / max | Original gateway turn and latest Sonnet turn retained |
+
+Saved assistant records confirm `claude-sonnet-5-5` and
+`deepseek/deepseek-v4.1-flash` in those sequences. Served effort is unverified;
+the table records requested effort. Each thread kept its desktop and CLI session
+IDs and appeared once in each profile. Continuations used no tools, so their
+original and newest markers came from saved history. Final copied transcripts in
+both profiles contain the latest turns, including the gateway-created task.
+
+Cancel left connection settings and saved Code records unchanged. A concurrent
+launcher request received the busy refusal. Consistent private backups verified
+319 initial files by content, mode and timestamp; the desktop mode file was
+backed up later, not in that initial set. All 33 initial task-record paths remain.
+The final read-only comparison found all 244 backed-up files outside the current
+account or subscription organization unchanged by content, mode and timestamp.
+
+The desktop's prompt hook confirmed three-turn, 2,048-output-token, zero-SDK-retry
+and disabled-watchdog settings on all six synthetic task turns. The external
+turns used two temporary forwarding-gateway waves, each limited to four Messages
+requests, 256 KiB input and 2,048 output tokens per request. The unchanged installed
+router permits at most two upstream attempts per forwarded request, so each wave
+had an eight-attempt ceiling. The first wave forwarded three requests, including
+automatic title generation; the second forwarded one. All four completed with
+HTTP 200 and matching served model. Native subscription turns have no complete
+upstream-attempt ledger. Ordinary gateway readiness probes outside these waves
+were not covered by the temporary gateway's cap.
+
+Both temporary gateways stopped after the original connection was restored.
+Claude is back in subscription mode with Sonnet 5.5 / low selected; the final
+gateway reply is visible there. Attachment and router `1.0.6.141` health passed
+final readback, and the global CLI settings match their backup. The standalone
+subscription login remains unavailable; native inference used the signed-in
+desktop profile without migrating credentials. Cowork sharing and Windows/Linux
+switch acceptance remain out of scope. No release, installation or router update
+was performed.
+
+Probe fixes were reviewed and merged into develop in PR #380. Its integrated
+tree `094125da90c7643f23c5d50350627ff7d9f66810` passed 2,935 tests including
+installers, with seven expected skips, plus compilation, source limits, policy
+scans and the merged-revision CI check. The installed switch helpers tested above
+were unchanged by those probe fixes.
 
 ## Single readable handoff surface, 1 October 2026 AEST
 
