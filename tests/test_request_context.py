@@ -131,7 +131,7 @@ class RoutedGenerationTests(unittest.TestCase):
                    default_reasoning='low', max_output_tokens=1000,
                    provider_prefs={'order': ['fresh']})
         hooks = ((subscription_discovery, 'request_models'),
-                 (agent_handoffs, 'add_plaintext_tools'))
+                 (agent_handoffs, 'hint_full_lanes'))
         for target, name in hooks:
             with self.subTest(hook=name), _generation():
                 recorded = install_fake(self, lambda: FakeUpstream(*OK))

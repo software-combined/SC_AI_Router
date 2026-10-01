@@ -88,7 +88,7 @@ authorizes an exception. Never switch runtimes or weaken a gate to evade it.
    its remaining candidates and try listed native Sol when its existing route
    is callable and unaffected. A shared Codex handoff/tool failure stops all
    dispatch, including native Sol. An unsafe encrypted handoff is a delivery
-   error, not an OpenRouter outage; apply the one readable correction below.
+   error, not an OpenRouter outage; report the delivery blocker.
    Do not change accounts, credentials, clients or data constraints. If no
    eligible path is known, the review is `BLOCK`.
 4. Permit at most two fallback dispatches per pass, within the authorized cost
@@ -130,17 +130,15 @@ real task name when no plan number exists. This makes the request traceable
 from the message; it does not prove the served identity recorded separately.
 
 Codex packaging and its active collaboration tools are the supported path.
-Select the first eligible route for the pass, then use explicit `model`,
-`reasoning_effort` and `fork_turns="none"`. OpenRouter recipients use
-`collaboration_plaintext.spawn_agent`, `collaboration_plaintext.send_message`
-and `collaboration_plaintext.followup_task`; native subscription recipients use
-the original `collaboration` tools. Native saved tool names do not change an
-OpenRouter recipient's provider route. An unsafe handoff refusal may end the
-parent turn. Correct it once on the next user turn with a readable plaintext
-brief and the same model and effort. If that correction fails or the required
-handoff tool is unavailable, stop dispatch with `BLOCK`. The router cannot
-create a recoverable tool result, and an encrypted message containing a file
-path cannot repair it.
+Select the first eligible route for the pass, then call `spawn_agent` with
+explicit `model`, `reasoning_effort` and `fork_turns="none"`.
+If `collaboration_plaintext` handoff tools are offered, use them for every
+subagent assignment, message and follow-up, whatever the recipient. Otherwise
+use the `collaboration` tools. An unsafe handoff refusal ends the parent turn
+before the bad call executes; report the delivery blocker as `BLOCK`.
+It is not evidence of an OpenRouter outage. The router cannot create a
+recoverable tool result, and an encrypted message containing a file path
+cannot repair delivery.
 Other runtimes need their own verified installed adapter and identifiers;
 this document does not install or certify Claude Code/OpenCode integrations.
 Do not switch runtimes to work around an unavailable required pass.

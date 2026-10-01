@@ -178,11 +178,9 @@ class ToolEvents:
         self.changed = False
 
     def _plaintext(self, item):
-        aliases = getattr(self.names, 'handoffs', ())
-        restored = agent_handoffs.restore_item(item, aliases)
-        restored = agent_handoffs.external_plaintext_call(restored, getattr(aliases, 'readable', aliases))
-        self.changed |= restored is not item
-        return restored
+        marked = agent_handoffs.mark_readable(item, getattr(self.names, 'handoffs', ()))
+        self.changed |= marked is not item
+        return marked
 
     def item(self, item, started=False):
         if not started and item.get('type') == 'function_call' and isinstance(item.get('arguments'), str):
@@ -208,11 +206,6 @@ class ToolEvents:
             if item.get('namespace') != kind['namespace'] or item.get('name') != kind['name']:
                 self.changed = True
             item.update(namespace=kind['namespace'], name=kind['name'])
-            if kind['namespace'] == agent_handoffs.PLAINTEXT_NAMESPACE:
-                restored = agent_handoffs.restore_item(item, {kind['name']})
-                if restored is not item:
-                    self.changed = True
-                item = restored
             kind = kind['kind']
         if kind == 'identity':
             if not had_arguments:

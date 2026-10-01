@@ -22,7 +22,7 @@ from pathlib import Path
 
 from ai_router import provider_defs, request_context, wire_shape
 from ai_router.providers import ExternalResponsesProvider, SubscriptionProvider
-from tests.harness import isolated_home, stub_credentials
+from tests.harness import StubCredentials, isolated_home, stub_credentials
 
 FIXTURES = Path(__file__).resolve().parent / 'fixtures' / 'replay'
 EXPECTED = FIXTURES / 'expected'
@@ -40,8 +40,9 @@ def golden(target, payload):
     try:
         if route == 'subscription':
             provider = SubscriptionProvider()
-            prepared = provider.prepare(slug, '/responses', payload,
-                                        json.dumps(payload).encode(), {}, None, context=context)
+            # A resolving external key: the install shape that ships readable briefs.
+            prepared = provider.prepare(slug, '/responses', payload, json.dumps(payload).encode(),
+                                        {}, StubCredentials(), context=context)
         else:
             provider = ExternalResponsesProvider(provider_defs.OPENROUTER)
             prepared = provider.prepare(slug, '/responses', payload, b'', {},
