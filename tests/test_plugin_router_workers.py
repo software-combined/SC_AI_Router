@@ -186,11 +186,11 @@ class RouterWorkersSkillTest(unittest.TestCase):
                   'CLAUDE_CODE_OAUTH_TOKEN': 'oauth'}
         with patch.dict(os.environ, caller, clear=True):
             env = worker.worker_env('http://127.0.0.1:1/t/', 'claude/scg/x', Path('/s'))
-        for name in ('GH_TOKEN', 'AWS_SECRET_ACCESS_KEY', 'ANTHROPIC_API_KEY',
-                     'CLAUDE_CODE_OAUTH_TOKEN'):
+        for name in set(caller) - {'PATH', 'USERPROFILE'}:
             self.assertNotIn(name, env)
         self.assertEqual(env['CLAUDE_CONFIG_DIR'], str(Path('/s') / 'config'))
-        self.assertEqual(env['ANTHROPIC_DEFAULT_HAIKU_MODEL'], 'claude/scg/x')
+        for tier in ('HAIKU', 'SONNET', 'OPUS', 'FABLE'):  # a child named by tier stays on the row
+            self.assertEqual(env['ANTHROPIC_DEFAULT_%s_MODEL' % tier], 'claude/scg/x')
 
     def test_home_folder_is_refused_before_any_worker_starts(self):
         # Every spelling of home that exists here: case variants on macOS and

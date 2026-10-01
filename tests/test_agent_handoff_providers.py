@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import Mock
 
 from ai_router import agent_handoffs, compaction, errors, handoff_response, providers, upstream
-from tests.test_agent_handoffs import alias_call, native_tools
+from tests.test_agent_handoffs import handoff_call, native_tools
 from ai_router.tool_adapter import tool_entries
 
 
@@ -36,6 +36,7 @@ class ProviderTests(unittest.TestCase):
     def prepare(self, provider, tools=None, items=None):
         credentials = Mock()
         credentials.key_for.return_value = 'synthetic-router-key'
+        credentials.key_missing.return_value = None
         payload = {'model': 'meta/muse-spark-1.3-contributor',
                    'tools': tools or [], 'input': items or []}
         original = deepcopy(payload)
@@ -70,14 +71,16 @@ class ProviderTests(unittest.TestCase):
                 self.assertNotIn(agent_handoffs.LANE_HINT,
                                  original['tools'][0]['tools'][0]['description'])
 
-    def test_native_reserialized_headers_and_encrypted_tools(self):
+    def test_native_reserialized_headers_and_readable_tools(self):
         prepared, credentials, original = self.prepare(providers.SubscriptionProvider(),
                                                        native_tools('spawn_agent'))
         body = json.loads(prepared.body)
-        native = body['tools'][0]
-        self.assertEqual(native['name'], 'collaboration')
-        self.assertEqual(native['tools'][0]['name'], 'spawn_agent')
-        self.assertIn(agent_handoffs.LANE_HINT, native['tools'][0]['description'])
+        alias = body['tools'][0]
+        # The emptied canonical namespace is dropped; only the readable alias remains.
+        self.assertEqual([tool['name'] for tool in body['tools']], ['collaboration_plaintext'])
+        self.assertEqual(alias['tools'][0]['name'], 'spawn_agent')
+        self.assertIn(agent_handoffs.LANE_HINT, alias['tools'][0]['description'])
+        self.assertIs(alias['tools'][0]['parameters']['properties']['message']['encrypted'], False)
         self.assertEqual(prepared.headers['Authorization'], 'Bearer synthetic-subscription')
         self.assertEqual(prepared.headers['Accept-Encoding'], 'identity')
         self.assertFalse(any(k.lower() in ('content-length', 'content-encoding')
@@ -123,12 +126,11 @@ class ProviderTests(unittest.TestCase):
                         {'input': items}, b'', {}, credentials)
                 credentials.key_for.assert_not_called()
 
-    def test_openrouter_json_and_sse_aliases_restore_native_call_ids(self):
+    def test_openrouter_json_and_sse_restore_native_call_ids(self):
         provider = _external_responses()
         prepared, _, _ = self.prepare(provider, native_tools('send_message'))
-        wire = next(name for (_, name), info in prepared.tool_names.items()
-                    if info['namespace'] == 'collaboration_plaintext')
-        call = alias_call(namespace=None, name=wire)
+        self.assertEqual([wire for _, wire in prepared.tool_names], ['collaboration__send_message'])
+        call = handoff_call(namespace=None, name='collaboration__send_message')
         response = {'model': 'synthetic-served', 'output': [call]}
         for streaming in (False, True):
             event = {'type': 'response.completed', 'response': response}
@@ -194,15 +196,6 @@ class ProviderTests(unittest.TestCase):
                     self.assertEqual(item['encrypted_function_args'], [])
                     self.assertEqual(json.loads(item['arguments']), args)
 
-    def test_external_plaintext_signal_requires_advertisement_and_readable_fields(self):
-        call = {'type': 'function_call', 'namespace': 'collaboration',
-                'name': 'send_message', 'arguments': '{"message":"SYNTH"}'}
-        self.assertIs(agent_handoffs.external_plaintext_call(call, set()), call)
-        opaque = {**call, 'encrypted_function_args': ['message']}
-        with self.assertRaises(errors.ResponseRejected):
-            agent_handoffs.external_plaintext_call(opaque, {'send_message'})
-        self.assertNotIn('encrypted_function_args', call)
-
     def test_adapted_responses_reject_unsupported_encoding(self):
         for provider in (providers.SubscriptionProvider(), _external_responses()):
             prepared, _, _ = self.prepare(provider, native_tools('send_message'))
@@ -215,25 +208,26 @@ class ProviderTests(unittest.TestCase):
 class NativeStreamTests(unittest.TestCase):
     def test_missing_content_type_uses_the_requested_streaming_contract(self):
         payload = {'stream': True, 'tools': native_tools('send_message')}
-        _, names = agent_handoffs.add_plaintext_tools(payload)
-        event = {'type': 'response.output_item.done', 'item': alias_call()}
+        _, names = agent_handoffs.native_handoffs(payload, True)
+        event = {'type': 'response.output_item.done',
+                 'item': handoff_call(namespace='collaboration_plaintext')}
         source = Response(b'data: ' + json.dumps(event).encode() + b'\n\n', '')
         result = b''.join(handoff_response.adapt_response(source, names))
-        self.assertEqual(json.loads(result[6:])['item']['encrypted_function_args'], [])
+        self.assertEqual(json.loads(result[6:])['item'], {**handoff_call(), 'encrypted_function_args': []})
 
-    def test_json_alias_restoration_keeps_native_calls_exact(self):
-        native = alias_call(namespace='collaboration', encrypted_function_args=['message'])
-        response = {'model': 'synthetic-served', 'output': [native, alias_call()]}
+    def test_json_marking_keeps_other_native_calls_exact(self):
+        native = handoff_call(name='followup_task', encrypted_function_args=['message'])
+        response = {'model': 'synthetic-served', 'output': [native, handoff_call()]}
         notes = {}
         result = json.loads(b''.join(providers.SubscriptionProvider().adapt(
             Response(json.dumps(response).encode()), {'send_message'}, notes)))
         self.assertEqual(result['output'][0], native)
-        self.assertEqual(result['output'][1]['encrypted_function_args'], [])
+        self.assertEqual(result['output'][1], {**handoff_call(), 'encrypted_function_args': []})
         self.assertEqual(notes['served_model'], 'synthetic-served')
 
-    def test_fragmented_native_stream_keeps_frames_and_alias_arguments(self):
-        native = b'data: {"type":"response.output_item.done","item":{"type":"function_call","namespace":"collaboration","name":"send_message","arguments":"{\\"count\\":8.0}"}}\r\n\r\n'
-        event = {'type': 'response.output_item.done', 'item': alias_call()}
+    def test_fragmented_native_stream_keeps_frames_and_readable_arguments(self):
+        native = b'data: {"type":"response.output_item.done","item":{"type":"function_call","namespace":"collaboration","name":"followup_task","arguments":"{\\"count\\":8.0}"}}\r\n\r\n'
+        event = {'type': 'response.output_item.done', 'item': handoff_call()}
         alias = b'id: synthetic\n: comment\ndata: ' + json.dumps(event).encode() + b'\n\n'
         class Fragmented(io.RawIOBase):
             def __init__(self, raw):
@@ -251,57 +245,42 @@ class NativeStreamTests(unittest.TestCase):
         self.assertIn(b'id: synthetic\n: comment\n', result)
         self.assertIn(b'data: [DONE]\n\n', result)
         mapped = json.loads(result[len(native):].split(b'data: ', 1)[1].split(b'\n\n')[0])
-        self.assertEqual(mapped['item']['arguments'], alias_call()['arguments'])
+        self.assertEqual(mapped['item']['arguments'], handoff_call()['arguments'])
         self.assertEqual(mapped['item']['encrypted_function_args'], [])
         source.close()
 
-    def test_truncated_event_and_encrypted_alias_fail(self):
+    def test_truncated_event_and_encrypted_readable_call_fail(self):
         encrypted = b'data: ' + json.dumps({'type': 'response.output_item.done',
-                        'item': alias_call(encrypted_function_args=['message'])}).encode() + b'\n\n'
+                        'item': handoff_call(encrypted_function_args=['message'])}).encode() + b'\n\n'
         for raw, failure in ((b'data: {', ValueError), (encrypted, errors.ResponseRejected)):
             with self.assertRaises(failure):
                 list(handoff_response.adapt_response(Response(raw, 'text/event-stream'), {'send_message'}))
 
 
-class GuardWiringTests(unittest.TestCase):
-    def test_subscription_rejects_unreadable_wake_followup(self):
+class NativeWiringTests(unittest.TestCase):
+    def test_subscription_marks_a_wake_followup_readable(self):
         spawn = {'type': 'function_call', 'namespace': 'collaboration',
                  'name': 'spawn_agent', 'id': 'fc_hist', 'call_id': 'call_hist',
                  'arguments': json.dumps({'task_name': 'plain',
                      'model': 'meta/muse-spark-1.3-contributor'}),
                  'encrypted_function_args': []}
-        credentials = Mock()
+        credentials = Mock(**{'key_missing.return_value': None})
         payload = {'model': 'gpt-6-luna', 'tools': native_tools('followup_task'),
                    'input': [spawn]}
         prepared = providers.SubscriptionProvider().prepare(
             payload['model'], '/responses', payload, b'', {}, credentials)
         self.assertEqual(prepared.tool_names.spawn_models,
                          {'plain': 'meta/muse-spark-1.3-contributor'})
-        wake = {'type': 'function_call', 'namespace': 'collaboration',
+        wake = {'type': 'function_call', 'namespace': 'collaboration_plaintext',
                 'name': 'followup_task', 'id': 'fc_wake', 'call_id': 'call_wake',
                 'arguments': json.dumps({'target': 'plain', 'message': 'SYNTH_WAKE'})}
         event = {'type': 'response.output_item.done', 'item': wake}
         raw = b'data: ' + json.dumps(event).encode() + b'\n\n'
-        with self.assertRaisesRegex(errors.ResponseRejected, 'collaboration_plaintext.followup_task') as caught:
-            b''.join(providers.SubscriptionProvider().adapt(
-                Response(raw, 'text/event-stream'), prepared.tool_names))
-        self.assertNotIn('SYNTH_WAKE', str(caught.exception))
-        credentials.key_for.assert_not_called()
-
-    def test_subscription_leaves_native_followup_alone(self):
-        credentials = Mock()
-        payload = {'model': 'gpt-6-luna', 'tools': native_tools('followup_task'),
-                   'input': []}
-        prepared = providers.SubscriptionProvider().prepare(
-            payload['model'], '/responses', payload, b'', {}, credentials)
-        call = {'type': 'function_call', 'namespace': 'collaboration',
-                'name': 'followup_task', 'id': 'fc_n', 'call_id': 'call_n',
-                'arguments': json.dumps({'target': 'native', 'message': 'SYNTH_OPAQUE'})}
-        event = {'type': 'response.output_item.done', 'item': call}
-        raw = b'data: ' + json.dumps(event).encode() + b'\n\n'
         result = b''.join(providers.SubscriptionProvider().adapt(
             Response(raw, 'text/event-stream'), prepared.tool_names))
-        self.assertEqual(json.loads(result[6:])['item'], call)
+        self.assertEqual(json.loads(result[6:])['item'],
+                         {**wake, 'namespace': 'collaboration', 'encrypted_function_args': []})
+        credentials.key_for.assert_not_called()
 
 
 if __name__ == '__main__':

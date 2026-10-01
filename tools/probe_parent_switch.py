@@ -73,9 +73,7 @@ RECALL = 'Without calling any tools, reply with the exact marker the plain agent
 
 
 def spawn_prompt(child):
-    # The router offers readable aliases for externally billed children.
-    tool = 'collaboration_plaintext' if by_slug(child) else 'collaboration'
-    return (f'In one step, call {tool}.spawn_agent with task_name "plain", model '
+    return (f'In one step, call collaboration.spawn_agent with task_name "plain", model '
             f'"{child}", fork_turns "none", reasoning_effort "{EFFORT}" and message '
             f'"Reply exactly {MARKER}", and call collaboration.wait_agent with '
             'timeout_ms 120000. When the wait returns, finish this turn with one '

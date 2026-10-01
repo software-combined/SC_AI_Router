@@ -15,10 +15,14 @@ stay the orchestrator and verify what it returns.
 
 A session that can already spawn router models as native subagents, such as
 Codex, an attached terminal Claude Code session, or a Claude desktop session
-in the gateway profile, should keep doing that through the
-[tool guide](../optimal-subagents/references/tool-guide.md). The guide's
-runtime-neutral rules apply here too: no secrets in a brief, and record the
-requested and served model for every worker.
+in the gateway profile, should keep doing that. Codex follows the
+[tool guide](../optimal-subagents/references/tool-guide.md), and those Claude
+Code sessions follow its
+[Claude Code section](../optimal-subagents/references/tool-guide.md#claude-code),
+which sets an agent definition's `model:` to the router listing id, the `id`
+that `--list` below prints. The guide's runtime-neutral rules apply here too:
+no secrets in a brief, and record the requested and served model for every
+worker.
 
 ## Choose the model
 
