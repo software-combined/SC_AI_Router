@@ -7,7 +7,7 @@ import time
 from compression import zstd
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from . import (errors, ingress, local_services, model_prompt_page,
-               provider_defs, relay, setup, subscription_discovery,
+               provider_defs, relay, setup, subscription_recovery,
                subscription_fallback, transport, turn_budget, request_evidence)
 from .credentials import Credentials
 from .protocols import select as select_protocol
@@ -212,8 +212,7 @@ class Handler(BaseHTTPRequestHandler):
             context = policy.resolve(model)  # this request's one registry read (Plan 188)
             provider = policy.select_provider(
                 model, path, self.server.state, mode, catalogue=context.catalogue,
-                openai_models=subscription_discovery.request_models(
-                    self.server, dict(self.headers), self.path.partition('?')[2]))
+                openai_models=subscription_recovery.request_models(self, model, path, context.catalogue))
             if provider.kind == provider_defs.EXTERNAL: reject_opaque_agent_items(payload.get('input'))
             if provider.kind == provider_defs.SUBSCRIPTION and not via_path:
                 return self.error(errors.bearer_for_no_subscription_only())
@@ -246,6 +245,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.error(exc)
             if os.environ.get('ROUTER_DEBUG'):
                 log_event('provider_selected', provider=provider.name, model=model, path=path)
+        except errors.RouterError as exc:
+            return self.error(exc)
         except PermissionError as exc:
             return self.error(errors.map_client_error(exc))
         except errors.OversizeBusy:
