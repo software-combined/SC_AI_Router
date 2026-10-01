@@ -1,11 +1,11 @@
 """Scanner-path portability and pin integrity, with no scanner execution.
 
-The end-to-end tests in ``test_review_gate.py`` drive a ``/bin/sh`` scanner
-stub and override ``HOME``, which ``Path.home()`` ignores on Windows, so they
-run on macOS/Linux only. The configured scanner now claims native Windows
-support, so the pin path and the scanner argv need coverage that runs on every
-platform. These tests exercise the helper in-process and stub the subprocess
-boundary, so nothing is installed, executed or written outside a temp dir.
+``test_review_gate.py`` now covers the receipt gate on every platform; its two
+scanner tests stay POSIX-only because they drive a ``/bin/sh`` stub. The
+configured scanner claims native Windows support, so the pin path and the
+scanner argv need coverage that runs on every platform. These tests exercise
+the helper in-process and stub the subprocess boundary, so nothing is
+installed, executed or written outside a temp dir.
 """
 from __future__ import annotations
 
