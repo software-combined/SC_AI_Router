@@ -146,7 +146,7 @@ def _raw_events(chunks, metrics, protocol):
 
 
 def relay_stream(handler, provider, response, prepared, metrics, started,
-                 headers_done, record, *, attempt=None):
+                 headers_done, record, *, attempt=None, on_ready=lambda: None):
     """Forward one stream; normalized frames may wait for safe replay."""
     # Tool repair logs need request model/context without changing the request.
     attempt_metrics = {'model': metrics.get('model'),
@@ -155,6 +155,9 @@ def relay_stream(handler, provider, response, prepared, metrics, started,
                        'context_tokens': metrics.get('context_tokens')}
     wire = record.response_format
     raw_encoded = wire.encoding != 'identity'
+    # JSON adapters validate their complete document before committing HTTP 200.
+    if wire.kind != 'json' or raw_encoded:
+        on_ready()
     # Native Responses can stream without declaring an SSE content type.
     streamed = (wire.kind == 'sse' or (wire.stream is True and wire.kind == 'other'
                                      and wire.protocol == provider_defs.RESPONSES))
@@ -187,6 +190,7 @@ def relay_stream(handler, provider, response, prepared, metrics, started,
                   for chunk in chunks)
     try:
         for event in frames:
+            on_ready()
             if 'first_chunk_ms' not in metrics:
                 metrics['first_chunk_ms'] = round((time.monotonic() - started) * 1000, 1)
             transport.note_first_data(metrics, headers_done)
@@ -222,6 +226,7 @@ def relay_stream(handler, provider, response, prepared, metrics, started,
                 record.content_delta_bytes += len(event.frame)
             elif event.kind == stream_events.REASONING:
                 record.reasoning_bytes += len(event.frame)
+        on_ready()
         if wire.kind == 'json' and not raw_encoded and not messages_json:
             # Known non-stream JSON keeps its EOF rule; opaque data proves no outcome.
             record.outcome = outcome.Outcome(outcome.SUCCESS, outcome.STATUS, outcome.UPSTREAM)

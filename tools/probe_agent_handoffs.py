@@ -1,9 +1,6 @@
-"""Isolated native-client handoff proof; live mode requires an explicit call cap.
-
-Children are scripted sinks. --live sends only the synthetic parent to the
-installed router, testing real schema acceptance and canonical replay.
-No request content, ciphertext, credentials or private URLs are printed.
-"""
+"""Isolated Codex handoff proof; live modes require an explicit call cap.
+Synthetic tasks and scripted children unless --live-children. No request content,
+ciphertext, credentials or private URLs are printed."""
 import argparse
 from compression import zstd
 import io
@@ -23,10 +20,11 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from ai_router.agent_handoffs import add_plaintext_tools, restore_event, steer_event
+from ai_router.agent_handoffs import add_plaintext_tools
+from ai_router import handoff_response
 from ai_router.catalogue import external_entry, subscription_stub
 from ai_router.registry import by_slug
-from tools.appserver_probe import AppServer, AGENT_HANDOFFS, codex_bin, scrub_env
+from tools.appserver_probe import AppServer, AGENT_HANDOFFS, codex_bin, failure_shape, request_failure_shape, scrub_env
 
 PARENT = 'gpt-6-astra'
 CHILD = 'deepseek/deepseek-v4.1-flash'
@@ -57,9 +55,7 @@ def sse(items, ident):
 
 
 class Probe:
-    required_final = None
-    live_prompts = None
-    expected_recovered = ()
+    required_final = live_prompts = None
 
     def __init__(self, live, call_limit, live_children=False):
         self.live, self.call_limit = live, call_limit
@@ -69,7 +65,7 @@ class Probe:
         self.lock = threading.Lock()
         self.facts = {'markers': [], 'encrypted_child': False,
                       'canonical_replay': False, 'alias_emitted': False, 'calls': [], 'child_shapes': [],
-                      'tool_failures': [], 'replies': []}
+                      'tool_failures': [], 'replies': [], 'retry_events': 0, 'request_failures': []}
         self.errors = []
         self.upstream = None
         if live:
@@ -113,7 +109,7 @@ class Probe:
                 'arguments': json.dumps(arguments)}
         return sse([item], str(ordinal))
 
-    def respond(self, body, headers, ordinal, path='/responses'):
+    def record_input_facts(self, body):
         for item in body.get('input', []):
             if item.get('type') == 'function_call' and item.get('namespace') == 'collaboration':
                 self.facts['canonical_replay'] |= item.get('call_id') in self.alias_call_ids
@@ -123,7 +119,9 @@ class Probe:
                     safe = 'tool_output_reported_failure'
                     if safe not in self.facts['tool_failures']:
                         self.facts['tool_failures'].append(safe)
-        # Collaboration tools only; the turn log is structural, no payload.
+
+    def respond(self, body, headers, ordinal, path='/responses'):
+        self.record_input_facts(body)
         offered = body.get('tools', []) if isinstance(body.get('tools'), list) else []
         self.facts.setdefault('turns', []).append({
             'model': body.get('model'),
@@ -169,9 +167,6 @@ class Probe:
                 if item.get('encrypted_function_args') == []:
                     self.alias_call_ids.add(item.get('call_id'))
                     self.facts['alias_emitted'] = True
-                if item.get('type') == 'function_call_output':
-                    if isinstance(item.get('output'), str) and 'collaboration_plaintext' in item.get('output'):
-                        self.facts.setdefault('steers', []).append(item.get('call_id'))
                 if body.get('model') != PARENT and item.get('type') == 'message':
                     text = ''.join(b.get('text', '') for b in item.get('content', []))
                     for marker in ALL_MARKERS:
@@ -185,11 +180,9 @@ class Probe:
             raw = self.forward(body, headers)
         else:
             raw = self.scripted(body, ordinal)
-        frames = []
         for frame in raw.replace(b'\r\n', b'\n').split(b'\n\n'):
             data = frame_data(frame)
             if not data or data == b'[DONE]':
-                frames.append(frame)
                 continue
             event = json.loads(data)
             if event.get('type') == 'response.output_item.done':
@@ -201,14 +194,12 @@ class Probe:
                         'name': item.get('name'),
                         'encrypted_fields': 'absent' if fields == 'absent' else ('empty' if fields == [] else 'nonempty'),
                         'model': arguments.get('model'), 'fork_turns': arguments.get('fork_turns')})
-            restored = steer_event(restore_event(event, aliases), aliases)
-            if restored is not event:
-                self.facts['alias_emitted'] = True
-                if isinstance(restored.get('item'), dict):
-                    self.alias_call_ids.add(restored['item'].get('call_id'))
-                frame = b'data: ' + json.dumps(restored).encode()
-            frames.append(frame)
-        return b'\n\n'.join(frames)
+                if item.get('namespace') == 'collaboration_plaintext':
+                    self.facts['alias_emitted'] = True
+                    self.alias_call_ids.add(item.get('call_id'))
+        source = io.BytesIO(raw)
+        source.getheader = lambda name, default='': 'text/event-stream'
+        return b''.join(handoff_response.adapt_response(source, aliases))
 
     def forward(self, body, headers, path='/responses'):
         with self.lock:
@@ -234,9 +225,11 @@ def run(args, probe_type=Probe):
         raise ValueError('--live-children requires --live')
     if getattr(args, 'installed', False) and (not args.live_children or args.lifecycle):
         raise ValueError('--installed requires --live-children without --lifecycle')
-    if getattr(args, 'child', CHILD) == getattr(args, 'parent', PARENT):
-        raise ValueError('--parent and --child must name different rows')
     probe = probe_type(args.live, args.max_live_calls, args.live_children)
+    if CHILD == PARENT and not getattr(probe, 'identifies_threads', False):
+        raise ValueError('same-model probes must distinguish client thread identities')
+    probe.facts.setdefault('client_version', subprocess.run([args.codex, '--version'], check=True,
+        capture_output=True, text=True, timeout=10).stdout.strip())
     class Handler(BaseHTTPRequestHandler):
         protocol_version = 'HTTP/1.1'
 
@@ -244,8 +237,10 @@ def run(args, probe_type=Probe):
             pass
 
         def do_GET(self):
-            # Match the router's unsupported route (404) so Codex falls back.
-            self.send_response(404)
+            # Match production: 426 switches Codex directly to HTTP/SSE.
+            upgrade = self.path.split('?', 1)[0] == '/v1/responses' and self.headers.get('Upgrade', '').lower() == 'websocket'
+            probe.facts['websocket_fallbacks'] = probe.facts.get('websocket_fallbacks', 0) + upgrade
+            self.send_response(426 if upgrade else 404)
             self.send_header('Content-Length', '0')
             self.send_header('Connection', 'close')
             self.end_headers()
@@ -271,7 +266,7 @@ def run(args, probe_type=Probe):
                 reason = str(exc) if str(exc) in known else 'protocol_or_transport_failure'
                 probe.errors.append({'type': type(exc).__name__, 'status': getattr(exc, 'code', None), 'reason': reason})
                 result = b'{"error":{"message":"synthetic handoff probe failed"}}'
-                self.send_response(409 if isinstance(exc, ValueError) else 502)
+                self.send_response(400 if isinstance(exc, ValueError) else 502)
                 self.send_header('Content-Type', 'application/json')
             self.send_header('Content-Length', str(len(result)))
             self.end_headers()
@@ -282,6 +277,7 @@ def run(args, probe_type=Probe):
 
     with tempfile.TemporaryDirectory(prefix='agent-handoff-probe-') as temp:
         root = Path(temp)
+        probe.home = root
         candidate = None
         if args.live_children and not getattr(args, 'installed', False):
             from ai_router.credentials import Credentials
@@ -290,7 +286,9 @@ def run(args, probe_type=Probe):
             class Events(logging.Handler):
                 def emit(self, record):
                     row = json.loads(record.getMessage())
-                    if row.get('event') in ('transport_error', 'request_rejected', 'preparation_error'):
+                    if row.get('event') == 'request_failed':
+                        probe.facts['request_failures'].append(request_failure_shape(row))
+                    elif row.get('event') in ('transport_error', 'request_rejected', 'preparation_error'):
                         probe.errors.append({key: row.get(key) for key in
                             ('event', 'status', 'code', 'error_type', 'location')})
             LOG.addHandler(Events())
@@ -305,26 +303,30 @@ def run(args, probe_type=Probe):
         server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
         server.ordinal = 0
         threading.Thread(target=server.serve_forever, daemon=True).start()
-        child = external_entry(by_slug(CHILD))
+        entry = by_slug(CHILD)
+        child = external_entry(entry) if entry else subscription_stub(CHILD)
         child['prefer_websockets'] = False
-        if args.live:
+        rows = getattr(probe, 'catalogue_rows', None)
+        if args.live and rows is None:
             installed = json.loads((Path.home() / '.codex/mixed-model-router'
                                     / 'mixed-models.json').read_text())
             rows = {m['slug']: m for m in installed['models']}
+        if rows is not None:
             if PARENT not in rows:
                 raise SystemExit(f'live catalogue has no parent row: {PARENT}')
             parent = dict(rows[PARENT])
-            native = dict(rows['gpt-5.6-sol'])
+            child = dict(rows.get(CHILD, child))
+            native = dict(rows[getattr(probe, 'native_model', 'gpt-5.6-sol')])
         else:
             parent = (subscription_stub(PARENT) if PARENT.startswith('gpt-')
                       else external_entry(by_slug(PARENT)))
             parent['use_responses_lite'] = args.wire_mode == 'lite'
             parent['multi_agent_version'] = 'v2'
-            native = dict(parent, slug='gpt-5.6-sol')
+            native = dict(parent, slug=getattr(probe, 'native_model', 'gpt-5.6-sol'))
         probe.facts['parent_wire_mode'] = 'lite' if parent['use_responses_lite'] else 'classic'
-        probe.facts['child_effort'] = 'max'
+        probe.facts['child_effort'] = getattr(probe, 'child_effort', 'max')
         catalog = root / 'catalog.json'
-        catalog.write_text(json.dumps({'models': [parent, child, native]}))
+        catalog.write_text(json.dumps({'models': list({m['slug']: m for m in (parent, child, native)}.values())}))
         if args.live:
             auth = root / 'auth.json'
             auth.touch(mode=0o600)
@@ -347,33 +349,31 @@ def run(args, probe_type=Probe):
         for key, value in config.items():
             command.extend(['-c', key + '=' + json.dumps(value)])
         env = scrub_env(os.environ, AGENT_HANDOFFS, inject={'CODEX_HOME': temp})
-        deadline = time.monotonic() + (600 if args.live else 40)
+        deadline = time.monotonic() + (getattr(probe, 'timeout', 600) if args.live else 40)
         sequence = 0
         def record_failure(event):
-            # Probe policy: every dequeued event is scanned for failures and
-            # recorded via the on_event hook; the shared class stays generic.
             params = event.get('params', {})
+            if event.get('method') == 'turn/completed':
+                probe.facts.setdefault('completed_turns', []).append({'thread': params.get('threadId'),
+                    'turn': params.get('turn', {}).get('id'), 'status': params.get('turn', {}).get('status')})
             failure = params.get('error') if event.get('method') == 'error' else None
             if event.get('method') == 'turn/completed' and params.get('turn', {}).get('status') == 'failed':
                 failure = params['turn'].get('error')
             if failure:
-                safe = {'event': event.get('method'),
-                        'code': failure.get('codexErrorInfo') if isinstance(failure, dict) else None}
+                if hasattr(probe, 'negotiation_failure') and probe.negotiation_failure(event, failure):
+                    return
+                probe.facts['retry_events'] += event.get('method') == 'error' and params.get('willRetry') is True
+                safe = failure_shape(event, failure)
                 if safe not in probe.facts['tool_failures']:
                     probe.facts['tool_failures'].append(safe)
-        # Piped stderr drained silently, plain terminate, ambient-adjacent
-        # scrub: the shared AppServer default. This probe keeps its own reply
-        # loop and never calls the shared rpc, so the shared cap is untouched.
         server_process = AppServer(command, cwd=temp, env=env, stderr=subprocess.PIPE,
                                    on_event=record_failure)
-        def send(value):
-            server_process.send(value)
         def next_event():
             return server_process.next_event(deadline=deadline)
         def rpc(method, params):
             nonlocal sequence
             sequence += 1
-            send({'id': sequence, 'method': method, 'params': params})
+            server_process.send({'id': sequence, 'method': method, 'params': params})
             while True:
                 event = next_event()
                 if event.get('id') == sequence:
@@ -383,11 +383,12 @@ def run(args, probe_type=Probe):
         try:
             rpc('initialize', {'clientInfo': {'name': 'agent_handoff_probe', 'version': '1.0'},
                               'capabilities': {'experimentalApi': True}})
-            send({'method': 'initialized', 'params': {}})
+            server_process.send({'method': 'initialized', 'params': {}})
             thread = rpc('thread/start', {'model': PARENT, 'modelProvider': provider,
-                'cwd': temp, 'ephemeral': not args.lifecycle, 'approvalPolicy': 'never', 'sandbox': 'read-only',
+                'cwd': temp, 'ephemeral': not (args.lifecycle or getattr(probe, 'persist', False)), 'approvalPolicy': 'never', 'sandbox': 'read-only',
                 'baseInstructions': 'Synthetic collaboration protocol test. No files or external tools.',
-                'developerInstructions': 'Use only the collaboration tools requested by the user.'})['thread']['id']
+                'developerInstructions': getattr(probe, 'instructions', 'Use only the collaboration tools requested by the user.')})['thread']['id']
+            probe.parent_thread_id = thread
             prompts = [
                 f'Use collaboration_plaintext.spawn_agent once to create plain on {CHILD}, '
                 f'fork_turns none, reasoning_effort max, message "Reply exactly {MARKERS[0]}". Then finish this turn.',
@@ -402,12 +403,12 @@ def run(args, probe_type=Probe):
                 'Without tools, reply SYNTH_REPLAY_TWO.'] if args.live else ['Synthetic test.']
             if args.native_only:
                 prompts = prompts[-2:]
-            if args.live and probe.live_prompts:
+            if probe.live_prompts:
                 prompts = probe.live_prompts
             def turn(prompt_text):
                 answer = []
                 rpc('turn/start', {'threadId': thread, 'input': [{'type': 'text', 'text': prompt_text,
-                    'text_elements': []}], 'effort': 'low'})
+                    'text_elements': []}], 'effort': getattr(probe, 'parent_effort', 'low')})
                 while True:
                     event = next_event()
                     if event.get('method') == 'item/completed' and event.get('params', {}).get('threadId') == thread:
@@ -415,16 +416,18 @@ def run(args, probe_type=Probe):
                         if item.get('type') == 'agentMessage':
                             answer.append(item.get('text', ''))
                     if event.get('method') == 'turn/completed' and event.get('params', {}).get('threadId') == thread:
-                        if event['params']['turn']['status'] != 'completed':
+                        if (event['params']['turn']['status'] != 'completed'
+                                and not getattr(probe, 'expected_parent_failure', False)):
                             raise ValueError('synthetic parent turn failed')
                         break
                 return '\n'.join(answer)
-            for prompt_text in prompts:
+            for index, prompt_text in enumerate(prompts):
+                if index and getattr(probe, 'persist', False):
+                    rpc('thread/resume', {'threadId': thread, 'model': PARENT, 'modelProvider': provider, 'cwd': temp})
                 answer = turn(prompt_text)
                 if probe.required_final and probe.required_final not in answer:
                     raise ValueError('parent did not finish after handoff recovery')
-            # A non-native parent drives the plaintext path only (leg F).
-            expected_replies = (
+            expected_replies = getattr(probe, 'expected_replies', None) or (
                 {'SYNTH_NATIVE_CONTROL'} if args.native_only
                 else set(ALL_MARKERS) if PARENT.startswith('gpt-')
                 else set(MARKERS))
@@ -433,8 +436,6 @@ def run(args, probe_type=Probe):
                 if args.live_children and expected_replies <= set(probe.facts['replies']):
                     break
                 try:
-                    # Raw dequeue-and-discard, exactly as before: the
-                    # failure-recording hook must not see settle events.
                     server_process.events.get(timeout=.1)
                 except queue.Empty:
                     pass
@@ -465,10 +466,11 @@ def run(args, probe_type=Probe):
                     if not all(marker in answer for marker in MARKERS):
                         raise ValueError('post-compaction marker recall failed')
                 probe.facts['compaction_and_two_turns'] = True
+            verified = probe.verify() if hasattr(probe, 'verify') else None
             print(json.dumps({'live_parent': args.live, 'scripted_children': not args.live_children,
                 'live_calls': probe.live_calls, **probe.facts, 'errors': probe.errors}), flush=True)
-            if set(probe.expected_recovered) - set(probe.facts.get('recovered_tools', [])):
-                return 1
+            if verified is not None:
+                return 0 if verified else 1
             if args.native_only:
                 return 0 if (probe.facts['encrypted_child'] and not probe.errors
                     and (not args.live_children or expected_replies <= set(probe.facts['replies']))) else 1
@@ -503,8 +505,6 @@ if __name__ == '__main__':
     parser.add_argument('--native-only', action='store_true')
     parser.add_argument('--lifecycle', action='store_true')
     parser.add_argument('--max-live-calls', type=int, default=0)
-    # Any routed row may be the child: leg F is that row's own evidence leg, so
-    # the roster owns the list; a parent may be a client-native subscription id.
     parser.add_argument('--parent', default=PARENT, help='Parent row slug for leg F.')
     parser.add_argument('--child', default=CHILD, help='Child row slug for leg F.')
     arguments = parser.parse_args()
