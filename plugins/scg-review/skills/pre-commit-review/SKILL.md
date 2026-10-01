@@ -91,6 +91,13 @@ Find the repo root and branch, and read the root and nested `AGENTS.md` files th
 python3 <plugin-root>/scripts/setup.py check --repo <absolute-repo-path>
 ```
 
+On native Windows, use Git Bash for this guide's Bash commands. In PowerShell,
+run setup with an absolute interpreter, for example the router's runtime:
+
+```powershell
+& "$env:USERPROFILE\.codex\mixed-model-router\runtime\python\python.exe" "<plugin-root>\scripts\setup.py" check --repo "<absolute-repo-path>"
+```
+
 A failure is `❌ Block`. Use [review-setup](../review-setup/SKILL.md) to diagnose it. Installing never counts as a review or an approval.
 
 ## Step 2: Stage only the intended change
@@ -122,7 +129,9 @@ Run this before any reviewer call:
 ~/.config/scg-agent-git-hooks/bin/scg-review-state scan
 ```
 
-On native Windows, where that Bash shim does not work, run `python <plugin-root>/support/git-hooks/lib/scg_agent_git_hooks.py scan` instead. Windows support covers the scan only, not hooks or receipts.
+On native Windows, run this Bash command in Git Bash. Git for Windows also runs
+the installed hook shims through Bash; the helper uses the interpreter recorded
+in `config.json` (the router's runtime by default).
 
 The scan checks the pinned Gitleaks binary (absolute path, version and SHA-256 in `~/.config/scg-agent-git-hooks/config.json`). It refuses to run if `GITLEAKS_CONFIG` or `GITLEAKS_CONFIG_TOML` is set or the repository supplies `.gitleaks.toml` or `.gitleaksignore`, and it scans the exact staged tree with redacted output. Any non-zero exit (a missing, changed, timed-out or failed scanner, or any leak) means zero reviewer calls and `❌ Block`. Never print or paste a secret: report the credential type and `file:line`, and recommend rotation. Changing the pin or allowing a repository config is an owner change to the hook adapter, never a session workaround. A different target must supply and prove its own adapter before this skill is usable there.
 

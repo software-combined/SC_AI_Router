@@ -1,6 +1,13 @@
+"""End-to-end coverage for the shared hook adapter's receipt gate.
+
+The gate, approve and status paths run on every platform; the harness isolates
+both HOME and USERPROFILE. Two scanner tests use a /bin/sh stub and stay
+POSIX-only; the portability module covers scanner contracts on both platforms.
+"""
 from __future__ import annotations
 
 import hashlib
+from contextlib import chdir
 import json
 import os
 from pathlib import Path
@@ -9,6 +16,10 @@ import sys
 import tempfile
 import time
 import unittest
+from types import SimpleNamespace
+from unittest import mock
+
+from test_gitleaks_pin_portability import load_helper_module
 
 
 HELPER = Path(__file__).resolve().parents[1] / "lib" / "scg_agent_git_hooks.py"
@@ -49,7 +60,8 @@ class ReviewGateTest(unittest.TestCase):
 
     @property
     def env(self) -> dict[str, str]:
-        return {**os.environ, "HOME": str(self.home)}
+        # Path.home() reads USERPROFILE on Windows and HOME elsewhere.
+        return {**os.environ, "HOME": str(self.home), "USERPROFILE": str(self.home)}
 
     def git(self, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
@@ -174,6 +186,31 @@ class ReviewGateTest(unittest.TestCase):
         result = self.helper("pre-commit")
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_windows_chaining_preserves_python_hook_and_rejection(self) -> None:
+        marker = self.home / "chained-hook.json"
+        hook = self.repo / ".git" / "hooks" / "pre-commit"
+        hook.write_text(
+            f"#!{Path(sys.executable).as_posix()}\n"
+            "import json, os, pathlib, sys\n"
+            f"pathlib.Path({str(marker)!r}).write_text(json.dumps("
+            "[sys.argv[1], os.environ.get('SCG_AGENT_GIT_HOOK_CHAINED')]))\n"
+            "sys.exit(7 if sys.argv[1] == 'reject' else 0)\n",
+            encoding="utf-8")
+        hook.chmod(0o755)
+        module = load_helper_module()
+        # Select the Windows adapter branch without changing pathlib's host OS.
+        windows_os = SimpleNamespace(name="nt", environ=self.env,
+                                     access=os.access, X_OK=os.X_OK)
+        with chdir(self.repo), mock.patch.object(module, "os", windows_os):
+            for argument in ("accepted value", "reject"):
+                with self.subTest(argument=argument):
+                    result = module.chain_local_hook("pre-commit", [argument])
+                    if argument == "reject":
+                        self.assertNotEqual(result, 0)
+                    else:
+                        self.assertEqual(result, 0)
+                    self.assertEqual(json.loads(marker.read_text()), [argument, "1"])
+
     def write_fake_scanner(self, version: str = "9.9.9", exit_code: int = 0) -> Path:
         scanner = self.home / "bin" / "fake-gitleaks"
         scanner.parent.mkdir(parents=True, exist_ok=True)
@@ -197,6 +234,7 @@ class ReviewGateTest(unittest.TestCase):
         }
         config_path.write_text(json.dumps(config))
 
+    @unittest.skipIf(os.name == "nt", "drives a /bin/sh scanner stub")
     def test_scan_passes_with_pinned_clean_scanner(self) -> None:
         scanner = self.write_fake_scanner()
         self.pin_scanner(scanner)
@@ -210,6 +248,7 @@ class ReviewGateTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("must define a gitleaks pin", result.stderr)
 
+    @unittest.skipIf(os.name == "nt", "drives a /bin/sh scanner stub")
     def test_scan_blocks_on_drift_external_config_and_leaks(self) -> None:
         scanner = self.write_fake_scanner()
         self.pin_scanner(scanner)

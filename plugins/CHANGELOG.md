@@ -1,6 +1,6 @@
 # Changelog
 
-## scg-review 0.4.18 and scg-subagents 0.5.17 - 2026-09-30
+## scg-review 0.4.18 and scg-subagents 0.5.17 - 2026-10-01
 
 - The parent now explicitly selects each fresh or partial-history child's model
   and effort. Full native history inheritance is a deliberate choice, and a
@@ -13,6 +13,32 @@
   next user turn through plaintext with the same model and effort; it does not
   show an OpenRouter outage or justify requesting native reviewers. An encrypted
   file path cannot repair delivery. Review lanes and approval gates stay unchanged.
+- Run the SCG pre-commit review gate on native Windows. `setup.py check` and
+  `install` no longer refuse the platform, so Windows gets the same
+  staged-tree receipt gate, commit-msg check and hook provisioning as macOS
+  and Linux, through the one shared adapter.
+- The hook helper runs on an interpreter recorded in `config.json` as an
+  absolute path. Windows defaults to the Python runtime shipped by the router
+  (`%USERPROFILE%\.codex\mixed-model-router\runtime\python\python.exe`, or
+  `ROUTER_HOME` when set) and never searches PATH: a missing runtime blocks
+  setup rather than falling back. macOS and Linux keep the historical
+  `python3` when the setting is absent, so an existing installation and its
+  config bytes are unchanged. An explicit `interpreter` must be absolute and
+  is probed before anything is written. Configurations record absolute
+  interpreter paths as UTF-8, so paths containing non-ASCII characters work
+  through the Bash shims.
+- The Git-for-Windows Bash shims read that interpreter, so `pre-commit`,
+  `commit-msg` and `bin/scg-review-state` work on Windows. A repository hook
+  is chained through Git's hook runner on Windows, preserving its declared
+  interpreter and its ability to reject a commit.
+- The adapter's end-to-end tests now run on `windows-latest` as well as Linux.
+  Tests that need a POSIX scanner stub stay POSIX-only; the portability
+  module covers the scanner on both.
+- Refresh the installed adapter before the next review. `setup.py check`
+  compares every installed file with the bundled bytes, so copy the files it
+  names (`pre-commit`, `commit-msg`, `bin/scg-review-state` and
+  `lib/scg_agent_git_hooks.py`) and re-run the check. Keep `config.json`, the
+  repository's `core.hooksPath` and the review receipts as they are.
 
 ## scg-review 0.4.17 and scg-subagents 0.5.16 - 2026-09-30
 

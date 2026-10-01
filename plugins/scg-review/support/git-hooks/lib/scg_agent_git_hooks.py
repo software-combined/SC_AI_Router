@@ -30,7 +30,7 @@ def fail(message: str, code: int = 1) -> None:
 
 def load_config() -> dict[str, Any]:
     try:
-        return json.loads(CONFIG_PATH.read_text())
+        return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
     except FileNotFoundError:
         fail(f"SCG git hook config missing: {CONFIG_PATH}")
     except json.JSONDecodeError as exc:
@@ -220,7 +220,13 @@ def chain_local_hook(hook_name: str, extra_args: list[str]) -> int:
         return 0
     env = dict(os.environ)
     env["SCG_AGENT_GIT_HOOK_CHAINED"] = "1"
-    proc = subprocess.run([str(hook_path), *extra_args], env=env)
+    # Git for Windows honours the hook's shebang; CreateProcess cannot.
+    command = (
+        ["git", "-c", f"core.hooksPath={hook_path.parent.resolve()}",
+         "hook", "run", hook_name, "--"]
+        if os.name == "nt" else [str(hook_path)]
+    )
+    proc = subprocess.run([*command, *extra_args], env=env)
     return proc.returncode
 
 
