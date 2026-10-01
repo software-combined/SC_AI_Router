@@ -37,6 +37,11 @@ def _stream(events):
 
 
 class MultiReadGateTest(unittest.TestCase):
+    def test_candidate_uses_the_shared_attempt_guard_and_probe_output_cap(self):
+        with patch('ai_router.candidate.IsolatedRouter') as scope:
+            self.assertIs(probe._candidate_home('synthetic/model'), scope.return_value)
+        scope.assert_called_once_with('synthetic/model', bounded=True, max_output=2048)
+
     def test_sequential_reads_pass(self):
         report = _stream([
             {'type': 'assistant', 'message': {'model': 'deepseek/deepseek-v4.1-flash',
@@ -179,6 +184,21 @@ class MultiReadGateTest(unittest.TestCase):
         self.assertEqual(probe._identity(expected, report), 'matched')
         self.assertTrue(probe._accepted(1, ['MARKER'], report, expected))
 
+    def test_candidate_alias_uses_its_explicit_source_registry(self):
+        slug = 'z-ai/glm-5.3-flash'
+        alias = 'claude/scg/' + hashlib.sha256(slug.encode()).hexdigest()
+        rows = [{'slug': slug, 'upstream_id': 'synthetic/served'}]
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            expected = probe._expected_model(home, alias, rows)
+            self.assertEqual(expected, 'synthetic/served')
+            self.assertEqual(probe._expected_model(home, alias), alias)
+            args = SimpleNamespace(models=[alias], max_rows=1, deferred=True,
+                max_legs=2, read_count=1, effort='low', max_budget_usd=None, json=True)
+            with patch.object(probe, 'probe', return_value={'pass': True}) as client:
+                probe._legs(args, home, rows)
+            self.assertEqual(client.call_args.kwargs['expected_model'], expected)
+
     def test_budget_must_be_finite_and_positive(self):
         for value in ('nan', 'inf', '-inf', '0', '-1'):
             with self.subTest(value=value):
@@ -196,6 +216,38 @@ class MultiReadGateTest(unittest.TestCase):
                 probe._legs(args, Path('/tmp'))
         self.assertEqual(raised.exception.code, 2)
         fake.assert_not_called()
+
+
+class DeferredGateTests(unittest.TestCase):
+    def report(self, results=('search-id', 'stub-id'), error=False):
+        content = lambda name, identifier: {'type': 'tool_use', 'id': identifier,
+                                            'name': name, 'input': {}}
+        events = [
+            {'type': 'assistant', 'message': {'model': 'fake/model', 'content': [
+                content('ToolSearch', 'search-id')]}},
+            {'type': 'user', 'message': {'content': [
+                {'type': 'tool_result', 'tool_use_id': results[0]}]}},
+            {'type': 'assistant', 'message': {'model': 'fake/model', 'content': [
+                content(probe.STUB_TOOL, 'stub-id')]}},
+            {'type': 'user', 'message': {'content': [
+                {'type': 'tool_result', 'tool_use_id': results[1], 'is_error': error}]}},
+            {'type': 'result', 'result': 'MARKER', 'is_error': False},
+        ]
+        return _stream(events)
+
+    def test_marker_echo_without_search_or_tool_use_cannot_pass(self):
+        self.assertFalse(probe._accepted(1, ['MARKER'],
+            {'result': 'MARKER', 'is_error': False}, 'fake/model', deferred=True))
+
+    def test_search_then_released_tool_with_paired_results_passes(self):
+        self.assertTrue(probe._accepted(1, ['MARKER'], self.report(),
+                                      'fake/model', deferred=True))
+
+    def test_wrong_result_ids_or_tool_errors_fail_even_with_the_marker(self):
+        for report in (self.report(results=('search-id', 'search-id')),
+                       self.report(error=True)):
+            self.assertFalse(probe._accepted(1, ['MARKER'], report,
+                                           'fake/model', deferred=True))
 
 
 if __name__ == '__main__':

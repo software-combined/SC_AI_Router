@@ -25,8 +25,11 @@ CODEX = appserver_probe.codex_bin()
 
 class Budget:
     """One probe budget for request attempts and compaction helper attempts."""
-    def __init__(self, home, send):
+    def __init__(self, home, send, *, max_output=MAX_OUTPUT):
+        if type(max_output) is not int or not 0 < max_output <= MAX_OUTPUT:
+            raise ValueError('candidate probe output budget')
         self.home, self.send, self.calls = home, send, 0
+        self.max_output = max_output
         self.lock = threading.Lock()
 
     def __call__(self, conn, prepared, metrics):
@@ -38,7 +41,7 @@ class Budget:
             raise ValueError('candidate probe route or input budget')
         payload = json.loads(prepared.body)
         output = payload.get('max_output_tokens', payload.get('max_tokens'))
-        if type(output) is not int or not 0 < output <= MAX_OUTPUT:
+        if type(output) is not int or not 0 < output <= self.max_output:
             raise ValueError('candidate probe output budget')
         with self.lock:
             if self.calls >= MAX_CALLS:
@@ -60,14 +63,14 @@ def call_count(home):
         return 0
 
 
-def serve(home):
+def serve(home, max_output=MAX_OUTPUT):
     # This isolated process deliberately omits background catalogue refresh.
     # The runtime handler, preparation, attempt ownership and credentials are real.
     from ai_router.router import Router
     from ai_router.runtime import configure_logging, load_state
     from ai_router import availability, compaction_summary
     configure_logging()
-    budget = Budget(home, transport.post_with_phases)
+    budget = Budget(home, transport.post_with_phases, max_output=max_output)
     transport.post_with_phases = budget
     compaction_summary._fetch_summary = partial(budget.summary, compaction_summary._fetch_summary)
     server = Router(load_state())
@@ -159,12 +162,13 @@ def probe(row, home, catalog):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--serve', action='store_true')
+    parser.add_argument('--max-output', type=int, default=MAX_OUTPUT)
     parser.add_argument('--home', type=Path, required=True)
     parser.add_argument('--catalog', type=Path)
     parser.add_argument('--model')
     args = parser.parse_args(argv)
     if args.serve:
-        serve(args.home)
+        serve(args.home, args.max_output)
         return 0
     row = registry.by_slug(args.model)
     if row is None:
