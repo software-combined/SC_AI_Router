@@ -308,9 +308,11 @@ you open a Code task. On macOS, setup installs that background callback
 automatically; you do not enter account IDs or choose profile folders. The
 callback exits quietly when the router or its sharing files are gone. It makes no
 model call; its cached identity becomes invalid when the account or workspace changes.
-Native Code continuation has passed in both profiles, but the complete installed
-launcher round trip remains unaccepted. Cowork tasks are not shared in this
-beta. See [candidate verification](compatibility.md) before relying on task sharing.
+The installed macOS launchers passed both subscription-to-OpenRouter-to-subscription
+and OpenRouter-to-subscription-to-OpenRouter Code-tab round trips, preserving
+original tool results and the newest turns. This acceptance does not cover Cowork
+sharing or Windows/Linux switching. See [compatibility evidence](compatibility.md)
+for client versions, tested models and limits.
 
 On macOS, candidate desktop setup installs **Open Claude** and **Switch Claude**
 launchers for the current user. In this beta they, and task sharing, are
@@ -427,8 +429,9 @@ so an attachment made before Windows moved to `LOCALAPPDATA` keeps updating.
 Running setup with `--desktop` refuses a different profile while an existing
 attachment still owns its restore record; detach that connection before
 selecting another profile.
-The paths are pinned by simulated platform tests. Real task visibility, open and resume
-acceptance remains pending for macOS, Windows and Linux.
+The paths are pinned by simulated platform tests. Real macOS Code-task visibility,
+open and resume passed the installed-launcher round trips above. Windows and
+Linux still require native app acceptance.
 Pointing the third-party profile at the loopback router lists every
 approved Messages-compatible registry row. The app filters non-Anthropic
 vendor words from IDs even when a valid `anthropic_family_tier` is present.
