@@ -1,5 +1,65 @@
 # Compatibility
 
+## Single readable handoff surface, 1 October 2026 AEST
+
+The 1.0.5 checks below used isolated routers, replaced parent instructions
+and parent effort `high`. They did not prove the real desktop profile at
+`max`: subsequent desktop chats still selected encrypted canonical handoffs
+for external children. The earlier failed samples and unexplained disconnects
+remain relevant evidence; successful synthetic cases did not explain them.
+
+Router 1.0.6 removes that tool choice on native-parent installs where an
+external key resolves. It offers readable handoff copies, then restores the
+canonical names and empty encryption marker before Codex executes them.
+Native-to-native briefs also become readable on those installs, as approved
+by the owner. No-key installs retain encrypted handoffs. External parents use
+readable canonical declarations. Ciphertext is never marked readable.
+
+Installed candidate 1.0.6.0 passed the real Codex setup probe with bundled
+CLI `0.159.2`: native `gpt-6.1-sol` at `max` assigned and followed up with the
+same `openai/gpt-6.1-sol` child at `high`. Codex kept its instructions, tools,
+skills and plugins in a disposable home. All receipt, child-identity, readable
+call, serving-identity and error gates passed in eight upstream sends, with
+no recorded retry or refusal. This targets the installed daemon rather than
+an isolated replacement for it.
+
+The four route matrix also passed on this candidate: native-to-native and
+native-to-external used low effort; the two external-parent routes used Sol
+at high. Each case completed assignment and same-child follow-up in eight
+sends, with canonical persisted calls and no recorded error, retry or refusal.
+The first external-to-native run with DeepSeek Flash at low emitted an empty
+spawn before its valid assignment. It failed the strict selection gate even
+though both receipts arrived. That failed sample is retained; the Sol runs
+used the same gate and limits.
+
+The legacy-history case also passed against the same router code: an old
+encrypted call stayed in a resumed thread, a readable follow-up reached the
+original native child, and a new external child read its assignment. All
+three receipts arrived once in ten upstream sends, with no recorded error.
+Each probe caps upstream sends at 12, external output at 4,096 tokens and
+runtime at five minutes. The desktop case allows 512 KiB native input and
+128 KiB external input. Missing serving identity stays unverified.
+
+Installed desktop acceptance reserves the daemon's possible repair sends
+before each forwarded request and returns unused capacity only after a
+complete attributed ledger arrives. Final scoring rereads that ledger and
+rejects refusals, missing evidence or more than 12 actual sends. Review caught
+the earlier scoring order caching client success before daemon readback;
+regressions now reproduce and reject each of those false-success cases.
+
+Develop also includes the separately reviewed subscription model recovery
+and reviewer availability fallbacks. This release preserves both changes;
+the final offline regression and CI acceptance cover their combined tree.
+
+Claude Code terminal `2.1.283` and desktop Code `2.1.284` retain their Agent
+and SendMessage transport. The 1 October terminal checks passed an inherited
+router child and same-child follow-up in six attempts, an agent-definition
+GLM 5.3 Flash child in six, and a router-worker case in one. Native desktop
+Agent and SendMessage also passed with serving model `claude-opus-5-5`.
+These Claude samples used installed 1.0.5.138; installed 1.0.6 acceptance
+is a separate release gate. The initial background-child sample did not
+return its result in the parent turn and is retained as a failed sample.
+
 ## Readable handoff candidate, 1 October 2026 AEST
 
 Fresh Codex `0.159.2` app-server sessions returned exact child-authored receipts

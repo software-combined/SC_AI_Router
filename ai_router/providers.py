@@ -48,8 +48,14 @@ class SubscriptionProvider:
         # The URL path token is the loopback auth; Codex >=0.153.4 omits the
         # subscription Authorization header, so forward client headers unchanged.
         fwd = {k: v for k, v in headers.items() if k.lower() not in HOP_HEADERS}
+        # Readable briefs only where an external child can exist: an external key
+        # resolves. A credentials object without that lookup keeps the stock contract.
+        missing = getattr(credentials, 'key_missing', None)
+        readable = path == '/responses' and missing is not None and any(
+            missing(defn.id) is None for defn in provider_defs.external_defs())
         payload, names, changed = outbound.project_subscription(
-            payload, path, catalogue=context.catalogue if context is not None else None)
+            payload, path, catalogue=context.catalogue if context is not None else None,
+            readable=readable)
         if changed:
             fwd = {k: v for k, v in fwd.items() if k.lower() not in ('content-encoding', 'accept-encoding')}
             fwd['Accept-Encoding'] = 'identity'

@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+## 1.0.6
+
+- Ongoing Codex chats keep their subscription model after a router update.
+  If restarting loses the discovered model list, the first request refreshes
+  it for that account and client version before deciding the model is unavailable.
+  Two chats resuming together share the refresh. OpenRouter routing is unchanged.
+- On an install with an external model key, native Codex parents now receive
+  one readable set of subagent assignment and follow-up tools. This removes
+  the choice that repeatedly sent encrypted briefs to OpenRouter children.
+  Native children also receive readable briefs on these installs. Installs
+  without an external key keep the original encrypted handoffs.
+- External parents declare their existing collaboration tools readable.
+  Returned calls keep Codex's canonical tool names and explicit readable
+  marker. Ciphertext is never relabelled as readable, and an unreadable
+  external handoff still stops before delivery.
+- Bundle scg-review 0.4.20 and scg-subagents 0.5.19 with consistent Codex
+  handoff guidance and a separate Claude Code tool guide. Router workers
+  expose listing IDs for agent definitions and keep Fable children on the
+  selected worker model.
+
 ## 1.0.5
 
 - Unreadable subagent handoffs now stop before Codex executes them, with a clear

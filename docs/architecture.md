@@ -25,7 +25,7 @@ the uncommitted attempt) + stream_relay (one stream for relay.py): wire and
 failure policy, consumed by the adapters below
   ^
   |
-subscription_discovery / subscription_catalogue + catalogue / models /
+subscription_recovery -> subscription_discovery / subscription_catalogue + catalogue / models /
 live_refresh / apply_catalogue (client projections and native discovery)
   |
 tool_runs (the pairing model, on history_items alone) + agent_handoffs /
@@ -85,22 +85,38 @@ This guard belongs to the probe process and never changes production limits.
 
 Rules:
 
-`agent_handoffs.py` owns collaboration alias schemas and native-name restoration;
+`agent_handoffs.py` owns readable handoff schemas and the per-call plaintext
+marker. Codex delivers a brief as plaintext only when its call carries
+`encrypted_function_args: []`. The ChatGPT subscription adapter asks the
+install's credentials whether any external provider's key resolves; only then
+can an external child exist, so only then are native briefs made readable.
+Without such a key the request keeps Codex's stock encryption contract and
+gains only lane hints. The native backend refuses a canonical
+`collaboration.spawn_agent`, `send_message` or `followup_task` whose message is
+not `encrypted: true`, so a keyed native request moves those three out of each
+`collaboration` namespace into a `collaboration_plaintext` namespace placed
+after it, as readable copies. This happens in Classic, Lite and discovered
+declarations; the other collaboration tools stay, and an emptied namespace is
+dropped. The model therefore sees one handoff surface, with nothing to choose.
+A changed Lite prefix receives a stable content-based identity.
+Each alias call returns to its canonical name with the marker, so Codex
+executes the normal tool and saves canonical history. Ciphertext under an alias,
+or an upstream encryption marker, is refused, never relabelled. A canonical
+call to a readable declaration gets the marker unless its message matches the
+backend ciphertext fingerprint; that call stays unmarked for the guard.
 `handoff_response.py` applies those decisions to native Responses envelopes and
 records bounded structural provenance through the shared event logger. Its
 per-response call ordinals retain upstream ids only until that response closes.
 Observation never grants plaintext authority or changes a handoff decision.
-Unreadable or unadvertised handoffs raise a typed response refusal before an
-executable completed item is released. `relay.py` returns HTTP 400 before JSON
-headers or one terminal `invalid_prompt` event on an open stream. It never
-replays the parent request or invents a tool result. Earlier valid calls remain
-released. `tool_adapter.py` promotes developer Lite declarations through its
-existing tool map. External projection copies canonical handoff message schemas
-as readable in Classic, Lite and discovered declarations, including recalled
-schemas. Its effective tool map after paging controls which restored calls
-receive the plaintext signal. Alias authority stays separate from canonical
-readability. Native subscription schemas keep their encryption
-contract, and a changed Lite prefix receives a stable content-based identity.
+An encrypted handoff to an external recipient raises a typed response refusal
+before an executable completed item is released. `relay.py` returns HTTP 400
+before JSON headers or one terminal `invalid_prompt` event on an open stream.
+It never replays the parent request or invents a tool result. Earlier valid
+calls remain released. `tool_adapter.py` promotes developer Lite declarations
+through its existing tool map. External upstreams accept readable canonical
+schemas, so external projection rewrites them in place, including recalled
+schemas, and its effective tool map after paging controls which calls receive
+the marker.
 `sse.py` owns shared event framing without provider-specific argument rewriting.
 `standalone_outputs.py` owns app-injected output projection. External requests
 project readable peer messages and standalone outputs into matched tool results.
@@ -158,9 +174,9 @@ custom pairs, discovery listings, tool-search items, call renames and
 Neither looks a row up. Preparation never edits the client's payload (Plan 183
 phase 3). Every stage and helper returns its result: the value it was given
 when nothing changed, otherwise new lists with copies of only the items and
-containers it changed. `agent_handoffs.add_plaintext_tools` returns the payload
-with the alias metadata, `hint_full_lanes` and `rewrite_tool_history` return
-the payload, and `rewrite_custom_pairs` returns the items. The external
+containers it changed. `agent_handoffs.native_handoffs` returns the payload
+with the readable-handoff metadata, `hint_full_lanes` and `rewrite_tool_history`
+return the payload, and `rewrite_custom_pairs` returns the items. The external
 turn-size fit follows the same rule: `turn_budget.fit` returns
 `(payload, stats)`, and its image and tool-output trims copy only the path to
 each trimmed block, never the whole body. The original body stays whole, so
@@ -279,10 +295,10 @@ fallback plan retargets it in place, so the twin keeps the same request id. A
 native id with no registry row resolves with `row=None` and goes out as the
 client spelled it. `request_started` and the final record share the
 `request_id`. It is a random id, not derived from request content.
-Handoff aliases retain that same catalogue through response adaptation.
-The encrypted spawn, send and follow-up guard resolves child models from it, so a
-refresh cannot change an in-flight request's decision. Direct helper callers
-without a request context capture once when creating their aliases.
+The readable-handoff metadata retains that same catalogue through response
+adaptation. The encrypted spawn, send and follow-up guard resolves child models
+from it, so a refresh cannot change an in-flight request's decision. Direct
+helper callers without a request context capture once when creating it.
 `codex_route.py` owns the switched Codex route. Switch Codex gives Codex a
 provider entry that needs no OpenAI sign-in and sends `x-scg-codex-route`, so
 that header marks the route; a missing credential cannot, because the normal
@@ -642,6 +658,9 @@ them while the child installer retains its own installation lock.
 - `ai_router/subscription_discovery.py` fetches Codex's native subscription
   catalogue; `subscription_catalogue.py` validates it and composes the
   effective roster without turning local configuration into entitlement data.
+  `subscription_recovery.py` refreshes missing native membership before a
+  resumed request is rejected, using the same account and client version.
+  Concurrent requests share the refresh; external routes never use it.
   `ai_router/catalogue.py` + `models.py` + `live_refresh.py` share client
   projection duties through `model_metadata.py` (pure normalization) and
   `clients/` (capability projection, picker visibility); the served

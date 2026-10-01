@@ -222,7 +222,7 @@ def listing_id(slug, rows):
 
 
 def list_models(rows):
-    """Offered rows with their registry slug, read from the installed release."""
+    """Offered rows: registry slug (from the installed release), listing id and name."""
     try:
         release = (ROUTER_HOME / 'current').read_text().strip()
         registry = ROUTER_HOME / 'releases' / release / 'ai_router' / 'models.json'
@@ -230,8 +230,8 @@ def list_models(rows):
                  for entry in json.loads(registry.read_text())}
     except (OSError, ValueError, KeyError, TypeError):
         slugs = {}  # listing ids still print; slugs are a convenience
-    return [{'model': slugs.get(row['id'], row['id']), 'name': row.get('display_name')}
-            for row in rows]
+    return [{'model': slugs.get(row['id'], row['id']), 'id': row['id'],
+             'name': row.get('display_name')} for row in rows]
 
 
 def worker_env(base, model, scratch):
@@ -248,7 +248,8 @@ def worker_env(base, model, scratch):
         'CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY': 'false',
         'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC': '1',
     })
-    for tier in ('HAIKU', 'SONNET', 'OPUS'):  # background calls stay on this row
+    # Background calls and subagents named by tier stay on this row.
+    for tier in ('HAIKU', 'SONNET', 'OPUS', 'FABLE'):
         env['ANTHROPIC_DEFAULT_%s_MODEL' % tier] = model
     return env
 
