@@ -46,20 +46,17 @@ class HandoffRequestContextTests(unittest.TestCase):
         response = post(self.server.server_port, '/test-token/responses', payload,
                         {'Authorization': 'Bearer subscription-fixture'})
         received = response.read()
-        self.assertEqual(response.status, 200)
         self.assertEqual(len(sends), 1)
         self.assertEqual(sends[0][4]['Authorization'], 'Bearer subscription-fixture')
-        body = json.loads(received[6:] if stream else received)
-        items = body['response']['output'] if stream else body['output']
-        return items, received, raw
+        body = json.loads(received.split(b'data: ', 1)[1] if stream else received)
+        return body['response'] if stream else body, received, raw, response.status
 
-    def assert_guarded(self, items):
-        self.assertEqual(len(items), 3)
-        for item in items:
-            self.assertIsInstance(json.loads(item['arguments']), str)
-            self.assertIn('collaboration_plaintext.' + item['name'], item['arguments'])
-            self.assertNotIn('SYNTHETIC', item['arguments'])
-            self.assertEqual(item['encrypted_function_args'], [])
+    def assert_guarded(self, result):
+        body, received, _, status = result
+        self.assertEqual(body['error']['code'], 'invalid_prompt')
+        self.assertIn(status, (200, 400))
+        self.assertNotIn(b'SYNTHETIC', received)
+        self.assertNotIn('output', body)
 
     def test_refresh_changes_only_the_next_handoff_request(self):
         for lite in (False, True):
@@ -68,16 +65,17 @@ class HandoffRequestContextTests(unittest.TestCase):
                     without_child = tuple(row for row in registry.MODELS if row.slug != CHILD)
                     with mock.patch.object(request_context, 'capture', wraps=request_context.capture) as capture:
                         with _after_resolution(lambda: model_refresh.apply(without_child)):
-                            self.assert_guarded(self.turn(lite, stream)[0])
+                            self.assert_guarded(self.turn(lite, stream))
                         self.assertEqual(capture.call_count, 1)
-                        _, received, original = self.turn(lite, stream)
+                        _, received, original, status = self.turn(lite, stream)
+                        self.assertEqual(status, 200)
                         self.assertEqual(received, original)
                         self.assertEqual(capture.call_count, 2)
 
     def test_guard_uses_the_snapshot_when_live_lookups_are_unavailable(self):
         with contextlib.ExitStack() as stack:
             with _after_resolution(lambda: _poison(stack)):
-                self.assert_guarded(self.turn()[0])
+                self.assert_guarded(self.turn())
 
 
 if __name__ == '__main__':

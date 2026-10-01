@@ -218,10 +218,11 @@ jobs:
 
   hook-adapter:
     name: Hook adapter portability
-    # The SCG hook adapter ships to every host and now claims native Windows
-    # scanner support. No other job runs its tests, so this is their only
-    # executor: without the matrix, the Windows claim would be asserted rather
-    # than exercised. Main acceptance only, like the scheduler job above.
+    # The SCG hook adapter ships to every host and claims native Windows
+    # support for the receipt gate, the shims and the scanner. No other job
+    # runs its tests, so this is their only executor: without the matrix, the
+    # Windows claim would be asserted rather than exercised. Main acceptance
+    # only, like the scheduler job above.
     if: (github.event.action != 'edited' || github.event.changes.base) && ((github.event_name == 'pull_request' && github.base_ref == 'main') || (github.event_name == 'push' && github.ref == 'refs/heads/main'))
     strategy:
       matrix:
@@ -234,16 +235,7 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
       - name: Hook adapter tests
-        # The pre-existing end-to-end tests drive a /bin/sh scanner stub and
-        # override HOME, which Path.home() ignores on Windows, so the full
-        # directory runs on macOS/Linux and the portability module runs on
-        # both. Making the end-to-end harness Windows-capable is a separate
-        # change.
-        if: runner.os != 'Windows'
+        # The receipt gate, the interpreter selection and the shims run on
+        # both platforms. Tests needing a POSIX scanner stub stay
+        # POSIX-only; the portability module covers the scanner here.
         run: python -m unittest discover -s plugins/scg-review/support/git-hooks/tests -v
-      - name: Hook adapter portability tests
-        if: runner.os == 'Windows'
-        run: >-
-          python -m unittest discover
-          -s plugins/scg-review/support/git-hooks/tests
-          -p "test_gitleaks_pin_portability.py" -v

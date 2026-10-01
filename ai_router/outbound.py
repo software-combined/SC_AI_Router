@@ -82,8 +82,16 @@ def hint_lanes(payload, p):
 
 
 def declare_tools(payload, p):
+    payload = agent_handoffs.hint_full_lanes(payload, plaintext=True)
     tools, p.names, p.wire_names = prepare_tools(payload, p.row)
-    p.names.handoffs = p.handoffs
+    declared = {(entry['namespace'], entry['name']) for entry in p.names.values()
+                if isinstance(entry, dict) and entry['name'] in agent_handoffs.HANDOFF_TOOLS}
+    aliases = p.handoffs
+    p.names.handoffs = agent_handoffs.AliasTools(
+        [name for namespace, name in declared if namespace == agent_handoffs.PLAINTEXT_NAMESPACE],
+        getattr(aliases, 'stream', False), getattr(aliases, 'spawn_models', None),
+        getattr(aliases, 'location', 'unknown'), getattr(aliases, 'catalogue', p.catalogue),
+        readable=[name for namespace, name in declared if namespace == agent_handoffs.NATIVE_NAMESPACE])
     return {**payload, 'tools': tools}
 
 
@@ -160,7 +168,7 @@ def replay_reasoning(payload, p):
 
 EXTERNAL_STAGES = (
     refuse_opaque_briefs, recover_context, materialize_standalone, scrub_fragments,
-    add_handoff_tools, hint_lanes, declare_tools, rewrite_history, compaction_text,
+    add_handoff_tools, declare_tools, rewrite_history, compaction_text,
     strip_reasoning, note_media, check_effort, drop_native_fields, upstream_model,
     output_cap)
 # A compaction request replays history but is offered no tools.

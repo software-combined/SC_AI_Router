@@ -8,6 +8,9 @@ description: Choose the right model and coordinate subagents for research, codin
 Read this entrypoint at each session start when required by host instructions.
 Use it to decide whether delegation helps; reading it does not require spawning.
 Keep the current user's scope, exact model requests and required review gates.
+The parent chooses each child's model and effort; these task-specific choices
+are not installation-wide subagent defaults. Pass them explicitly for fresh
+and partial-history children. Choose full native history inheritance deliberately.
 This guide does not replace the installed pre-commit-review procedure. Its
 [review routing source](references/reviews.md) is bundled unchanged in that
 plugin; the installed review plugin's release copy governs a running review.
@@ -115,7 +118,7 @@ files or shared browser. Default children to no recursive delegation.
 
 Start every initial or follow-up assignment message with the requested model,
 effort, role/pass and task or plan context. For example: "GLM 5.3 Flash Max —
-Pre-commit review Pass 1 (code simplification) for plan 147." Use the actual
+Parser investigation for the empty-input fix." Use the actual
 selected model and a real task identifier; do not invent a plan number. Repeat
 the label in a file-based brief. This labels the request, not verified serving
 identity; keep recording the returned identity separately.

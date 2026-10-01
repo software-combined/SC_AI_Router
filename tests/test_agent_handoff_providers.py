@@ -5,7 +5,7 @@ import json
 import unittest
 from unittest.mock import Mock
 
-from ai_router import agent_handoffs, compaction, handoff_response, providers, upstream
+from ai_router import agent_handoffs, compaction, errors, handoff_response, providers, upstream
 from tests.test_agent_handoffs import alias_call, native_tools
 from ai_router.tool_adapter import tool_entries
 
@@ -199,7 +199,7 @@ class ProviderTests(unittest.TestCase):
                 'name': 'send_message', 'arguments': '{"message":"SYNTH"}'}
         self.assertIs(agent_handoffs.external_plaintext_call(call, set()), call)
         opaque = {**call, 'encrypted_function_args': ['message']}
-        with self.assertRaisesRegex(ValueError, 'encrypted external'):
+        with self.assertRaises(errors.ResponseRejected):
             agent_handoffs.external_plaintext_call(opaque, {'send_message'})
         self.assertNotIn('encrypted_function_args', call)
 
@@ -256,14 +256,15 @@ class NativeStreamTests(unittest.TestCase):
         source.close()
 
     def test_truncated_event_and_encrypted_alias_fail(self):
-        for raw in (b'data: {', b'data: ' + json.dumps({'type': 'response.output_item.done',
-                        'item': alias_call(encrypted_function_args=['message'])}).encode() + b'\n\n'):
-            with self.assertRaises(ValueError):
+        encrypted = b'data: ' + json.dumps({'type': 'response.output_item.done',
+                        'item': alias_call(encrypted_function_args=['message'])}).encode() + b'\n\n'
+        for raw, failure in ((b'data: {', ValueError), (encrypted, errors.ResponseRejected)):
+            with self.assertRaises(failure):
                 list(handoff_response.adapt_response(Response(raw, 'text/event-stream'), {'send_message'}))
 
 
-class SteerWiringTests(unittest.TestCase):
-    def test_subscription_steers_doomed_wake_followup(self):
+class GuardWiringTests(unittest.TestCase):
+    def test_subscription_rejects_unreadable_wake_followup(self):
         spawn = {'type': 'function_call', 'namespace': 'collaboration',
                  'name': 'spawn_agent', 'id': 'fc_hist', 'call_id': 'call_hist',
                  'arguments': json.dumps({'task_name': 'plain',
@@ -281,14 +282,10 @@ class SteerWiringTests(unittest.TestCase):
                 'arguments': json.dumps({'target': 'plain', 'message': 'SYNTH_WAKE'})}
         event = {'type': 'response.output_item.done', 'item': wake}
         raw = b'data: ' + json.dumps(event).encode() + b'\n\n'
-        result = b''.join(providers.SubscriptionProvider().adapt(
-            Response(raw, 'text/event-stream'), prepared.tool_names))
-        item = json.loads(result[6:])['item']
-        self.assertEqual(item['type'], 'function_call')
-        self.assertEqual(item['call_id'], 'call_wake')
-        self.assertIsInstance(json.loads(item['arguments']), str)
-        self.assertIn('collaboration_plaintext.followup_task', item['arguments'])
-        self.assertNotIn('SYNTH_WAKE', item['arguments'])
+        with self.assertRaisesRegex(errors.ResponseRejected, 'collaboration_plaintext.followup_task') as caught:
+            b''.join(providers.SubscriptionProvider().adapt(
+                Response(raw, 'text/event-stream'), prepared.tool_names))
+        self.assertNotIn('SYNTH_WAKE', str(caught.exception))
         credentials.key_for.assert_not_called()
 
     def test_subscription_leaves_native_followup_alone(self):

@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+## 1.0.5
+
+- Unreadable subagent handoffs now stop before Codex executes them, with a clear
+  instruction to start a new turn using plaintext. The router no longer turns
+  valid tool arguments into a string that triggers a parser error. Native
+  encrypted handoffs and earlier valid tool calls remain intact.
+- External parents now expose tools from Codex's Lite declarations and retain
+  the explicit plaintext signal on saved native tool names. Classic, Lite and
+  discovered handoff tools all request readable messages on external routes;
+  only tools offered after paging can grant that signal. Initial assignments
+  and follow-ups work across native and external parent/child routes.
+
+- Codex subagent tools now explain that the parent selects the model and effort
+  explicitly, and chooses the handoff by the recipient's provider route. GPT
+  through OpenRouter needs the plaintext tools for both initial and later
+  assignments, even when the parent uses GPT. The bundled SCG review and
+  subagent skills include the same guidance and one bounded delivery correction.
+  The installer leaves subagent defaults under the user's control.
+
+- Add a read-only Linux check for the selected Codex or Claude desktop package
+  and its bundled Electron package version. Linux switching remains unavailable
+  pending later lifecycle work and native acceptance.
+
 ## 1.0.4
 
 - The Windows router finds an app-installed Codex again, so the SCG plugins
