@@ -2,7 +2,7 @@
 
 The pre-commit review runs three read-only lanes in parallel on the same staged tree. Each lane owns one class of failure and does not report the others' findings. The main agent sends every lane the same brief from the [pre-commit-review skill](../skills/pre-commit-review/SKILL.md) (step 7). Each lane reads this whole guide and applies its own section; the reportability, severity and report-format rules apply to every lane. The main agent uses the same reportability and severity rules when it adjudicates the findings.
 
-Before inspecting anything, every lane reads the bundled [ponytail](../skills/ponytail/SKILL.md) skill in full and applies it within its own lane. A lane that cannot confirm it read ponytail is incomplete, the same as a lane that did not inspect the whole staged scope.
+Before inspecting anything, every lane reads the installed `scg-ponytail:ponytail` skill in full at the resolved absolute path supplied by the parent, following [Ponytail dependency](../skills/pre-commit-review/SKILL.md#ponytail-dependency), and applies it within its own lane. A lane that cannot confirm it read Ponytail is incomplete, the same as a lane that did not inspect the whole staged scope.
 
 ## Correctness lane
 

@@ -11,7 +11,7 @@ updater to configure. Respect explicit read-only scope.
 
 Delegate using the active runtime's entry under [models and runtimes](../pre-commit-review/SKILL.md#models-and-runtimes) in the pre-commit review skill. Apply its availability and identity-recording rules, and let an explicit applicable host/project model policy take precedence. Use a Codex executor subagent, or the installed `code-simplifier` agent in Claude Code or OpenCode; do not maintain a second model table here.
 
-Supply the staged scope and relevant context with the prompt below. Require the executor to read the bundled [ponytail](../ponytail/SKILL.md) in full before inspection; supply its resolved absolute path. During its edits the main agent pauses writing; the main agent stages and verifies the result afterwards.
+Supply the staged scope and relevant context with the prompt below. Resolve the installed `scg-ponytail:ponytail` skill under the pre-commit skill's [Ponytail dependency](../pre-commit-review/SKILL.md#ponytail-dependency) rule. Require the executor to read it in full before inspection; supply its resolved absolute path. A missing, disabled or unreadable dependency blocks this pass. During its edits the main agent pauses writing; the main agent stages and verifies the result afterwards.
 
 Pass 1 can take longer than the three read-only review lanes because the
 executor must read the staged scope and its context before deciding whether a

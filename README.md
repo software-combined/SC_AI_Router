@@ -465,7 +465,8 @@ target `develop`, and user-visible changes update `CHANGELOG.md` and
 This repo also hosts the private `scg-agent-plugins` marketplace:
 `scg-review` (pre-commit review), `scg-subagents` (subagent coordination),
 `scg-prototypes` (prototype publishing), `scg-finance` (finance analysis) and
-`scg-documentation` (technical writing). Every plugin works in Codex and Claude
+`scg-documentation` (technical writing) and `scg-ponytail` (coding simplicity).
+Every plugin works in Codex and Claude
 Code.
 
 The router is the delivery channel. Its release bundle carries the plugin
@@ -484,8 +485,17 @@ marketplace:
 
 ```sh
 codex plugin marketplace add software-combined/SC_AI_Router --ref main
+codex plugin add scg-ponytail@scg-agent-plugins
 codex plugin add scg-review@scg-agent-plugins
 ```
+
+SCG Review uses the single `scg-ponytail:ponytail` skill for its simplifier
+and every review lane. Install Ponytail before Review; a missing, disabled or
+unreadable Ponytail blocks the review. Claude Code users install the same
+dependency with `claude plugin install scg-ponytail@scg-agent-plugins` before
+installing or updating `scg-review`. Client inventories resolve the installed
+skill path, so a cache version is never part of the instructions. Plugin caches
+are delivery copies; the authored skill lives in this repository.
 
 Installing the router later moves that Codex registration to the router's own
 copy. A plugin you turned off in Codex or Claude Code stays off.
