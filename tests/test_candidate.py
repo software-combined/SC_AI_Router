@@ -179,6 +179,20 @@ class VerifySequenceTests(unittest.TestCase):
         self.assertEqual(len(spawned), 1)
         self.assertEqual(spawned[0]['env']['ROUTER_HOME'], str(home))
 
+    def test_bounded_server_receives_the_narrow_output_cap(self):
+        scope = candidate.IsolatedRouter(bounded=True, max_output=2048)
+        process = mock.Mock()
+        try:
+            with mock.patch.object(candidate.subprocess, 'Popen', return_value=process) as spawn, \
+                    mock.patch.object(scope, '_wait_healthy', return_value=True):
+                scope._spawn()
+            command = spawn.call_args.args[0]
+            self.assertIn('--serve', command)
+            self.assertEqual(command[command.index('--max-output') + 1], '2048')
+        finally:
+            scope.close()
+        process.terminate.assert_called_once()
+
     def test_boot_passes_ambient_opencode_auth_as_path_reference(self):
         # The isolated router may reference the ambient opencode auth file
         # by path (as the installed router does); the key value itself is
