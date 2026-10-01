@@ -19,7 +19,7 @@ Do them in this order. Each section below says exactly what to run.
 
 | Step | Do | Stop with `❌ Block` when |
 |---|---|---|
-| 1 | Setup check | the check fails |
+| 1 | Setup and Ponytail dependency check | the check fails or Ponytail cannot be read |
 | 2 | Stage only the intended change and check its size | unrelated work is staged, or it is oversized without a reason |
 | 3 | Pass 1: simplification, then stage its edits | no permitted model can complete Pass 1 |
 | 4 | Capture the reviewed tree | |
@@ -29,6 +29,20 @@ Do them in this order. Each section below says exactly what to run.
 | 8 | Adjudicate the findings and fix blockers | an accepted blocker needs owner input |
 | 9 | Re-review if the staged tree changed | |
 | 10 | Record the approval and commit | |
+
+## Ponytail dependency
+
+Before Pass 1, resolve `scg-ponytail:ponytail` from the active client's skill
+catalogue or installed-plugin inventory (`/scg-ponytail:ponytail` in Claude
+Code), and read its `SKILL.md` in full. Supply that same resolved absolute
+path to the simplifier and every review lane; each pass reads it before
+inspection and confirms its path. Resolve the current installation, never a
+hard-coded cache version or the former standalone or SCG Review copy.
+
+If the plugin is missing, disabled or unreadable, report `❌ Block` before
+dispatching any pass. Install and enable `scg-ponytail@scg-agent-plugins` in
+the active client, then retry the setup check. Never omit this dependency or
+fall back to older Ponytail guidance.
 
 ## Models and runtimes
 
@@ -158,7 +172,7 @@ Staged files: <list>
 Context files: <absolute paths>
 Risk profile: <normal, or elevated because ...>
 Verification already run: <commands and results>
-First read in full: <absolute path of the bundled ponytail SKILL.md>, then <absolute path of references/lanes.md>, applying its <lane> section.
+First read in full: <resolved absolute path of scg-ponytail's ponytail SKILL.md>, then <absolute path of references/lanes.md>, applying its <lane> section.
 Inspect the staged change with these commands, run in the worktree, and read the listed context files; inspect nothing else:
   git write-tree            must print the reviewed tree id; on a mismatch, report it and stop
   git diff --cached --stat
@@ -243,5 +257,5 @@ Commit with `<type>: <short summary>`, where type is `feat`, `fix`, `refactor`, 
 
 - Run this process once for the intended staged commit scope.
 - Reviewers are read-only. They inspect the staged diff and the full staged files from the git index, never snippets or working-tree content, and the main agent's single verification run stands for all three lanes.
-- Every pass reads the bundled [ponytail](../ponytail/SKILL.md) in full before inspecting anything; give each pass its resolved absolute path. Ponytail informs judgement about the smallest correct change. It never makes style-only, `LOW`, speculative or out-of-lane findings reportable, and never justifies editing for rejected items.
+- Every pass reads the installed `scg-ponytail:ponytail` skill in full before inspecting anything; give each pass its resolved absolute path under [Ponytail dependency](#ponytail-dependency). Ponytail informs judgement about the smallest correct change. It never makes style-only, `LOW`, speculative or out-of-lane findings reportable, and never justifies editing for rejected items.
 - The parent owns orchestration. A reviewer must not run the whole gate or spawn its own reviewers. Use the runtime's actual subagent tools and schemas, and the current policy rather than model names remembered from an earlier turn.
