@@ -4,7 +4,7 @@ import json
 from types import SimpleNamespace
 import unittest
 
-from ai_router import agent_handoffs, errors, provider_defs, request_context
+from ai_router import errors, provider_defs, request_context
 from ai_router.providers import ExternalResponsesProvider, SubscriptionProvider
 from ai_router.tool_merge import tool_entries
 from tests.test_agent_handoff_providers import Response

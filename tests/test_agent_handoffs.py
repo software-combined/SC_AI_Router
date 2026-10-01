@@ -1,6 +1,5 @@
 """Plaintext aliases preserve the native execution and encryption contracts."""
 from copy import deepcopy
-import json
 import unittest
 
 from ai_router import agent_handoffs as handoffs, errors, history_items
