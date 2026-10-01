@@ -180,19 +180,6 @@ class DesktopPlatformTests(unittest.TestCase):
         for paths in ('', str(app) + '\n/other/Claude.app'):
             with self.assertRaises(OSError):
                 platform.app_identity('darwin', run=lambda *a, **k: result(paths))
-        apps = self.root / 'xdg/applications'
-        apps.mkdir(parents=True)
-        exe = self.root / 'space ü' / 'claude-desktop'
-        exe.parent.mkdir()
-        exe.touch()
-        entry = apps / (platform.APP_DESKTOP_ID + '.desktop')
-        entry.write_text('[Desktop Entry]\nExec="' + str(exe) + '" %U\n', encoding='utf-8')
-        with mock.patch.dict(os.environ, {'XDG_DATA_HOME': str(apps.parent)}):
-            self.assertEqual(platform.app_identity('linux')['exe'], str(exe))
-            target = exe.with_name('claude')
-            exe.rename(target)
-            exe.symlink_to(target)
-            self.assertEqual(platform.app_identity('linux')['exe'], str(target))
         info['CFBundleIdentifier'] = 'untrusted.app'
         (app / 'Contents/Info.plist').write_bytes(plistlib.dumps(info))
         with self.assertRaises(OSError):

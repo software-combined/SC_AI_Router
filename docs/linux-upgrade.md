@@ -1,5 +1,22 @@
 # Linux upgrade and verification
 
+## Read the desktop identity
+
+From the checkout root, run the read-only check for the installed desktop app:
+
+```sh
+python3.14 packaging/desktop_linux.py --app codex
+python3.14 packaging/desktop_linux.py --app claude
+```
+
+The command reports the selected desktop entry, executable path, app root and
+package version stored in the app's Electron `package.json`. This is the app's
+internal package version, not its distribution package-manager release. The
+check refuses unrecognized wrappers and wrappers with relative targets. It
+does not start or stop the app or change its settings. It confirms local
+identity discovery only; Linux switching remains unavailable until lifecycle
+support and native acceptance are complete.
+
 Use the merged `develop` source for the first upgrade from the old 0.6.2.0
 symlink installation. Its updater cannot bootstrap this transition: it
 rejects the unsigned local feed and has no systemd lifecycle backend.
