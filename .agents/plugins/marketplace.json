@@ -63,6 +63,12 @@
         "authentication": "ON_INSTALL"
       },
       "category": "Productivity"
+    },
+    {
+      "name": "scg-ponytail",
+      "source": {"source": "local", "path": "./plugins/scg-ponytail"},
+      "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
+      "category": "Productivity"
     }
   ]
 }
