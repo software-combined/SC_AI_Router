@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Claude Code verification probes no longer inherit the caller's routing,
+  sign-in, effort or retry settings. Isolated candidates share a hard attempt
+  budget and a smaller output cap. Deferred-tool verification now requires the
+  search, released tool and paired results instead of accepting a marker echo.
+
 ## 1.0.6
 
 - Ongoing Codex chats keep their subscription model after a router update.
