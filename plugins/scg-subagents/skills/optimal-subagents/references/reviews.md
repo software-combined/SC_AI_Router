@@ -98,15 +98,13 @@ real task name when no plan number exists. This makes the request traceable
 from the message; it does not prove the served identity recorded separately.
 
 Codex packaging and its active collaboration tools are the supported path.
-For every Codex pass, use `collaboration_plaintext.spawn_agent`, explicit
+For every Codex pass, call `spawn_agent` with explicit
 `model="openai/gpt-6.1-sol"`, `reasoning_effort="high"` and `fork_turns="none"`.
-Keep using `collaboration_plaintext.send_message` and
-`collaboration_plaintext.followup_task` for that recipient. Native saved tool
-names do not change its provider route. An unsafe handoff refusal may end the
-parent turn. Correct it once on the next user turn with a readable plaintext
-brief and the same model and effort. It is not evidence of an OpenRouter outage
-or grounds to request native reviewers. The router cannot create a recoverable
-tool result, and an encrypted message containing a file path cannot repair it.
+If `collaboration_plaintext` handoff tools are offered, use them for every
+subagent assignment, message and follow-up, whatever the recipient. Otherwise
+use the `collaboration` tools. A handoff refusal is not evidence of an
+OpenRouter outage or grounds to request native reviewers, and the router cannot
+create a recoverable tool result.
 Other runtimes need their own verified installed adapter and identifiers;
 this document does not install or certify Claude Code/OpenCode integrations.
 Do not switch runtimes to work around an unavailable required pass.

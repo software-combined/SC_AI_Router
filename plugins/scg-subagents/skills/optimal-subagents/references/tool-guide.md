@@ -2,21 +2,18 @@
 
 Use the active runtime's schema as authority. The following examples match the
 collaboration tools exposed in Codex on 2026-09-12. Other runtimes must discover
-their equivalent; do not paste these shapes into a different API.
+their equivalent; do not paste these shapes into a different API. Claude Code
+has none of these tools, so it reads only the [Claude Code](#claude-code)
+section at the end; everything before it is for Codex.
 
-For externally billed recipients, use `collaboration_plaintext.spawn_agent`,
-`collaboration_plaintext.send_message` and `collaboration_plaintext.followup_task`
-when the router exposes them. Use `fork_turns="none"` for external children:
-encrypted inherited history cannot be translated. Keep using the plaintext
-namespace on later turns even if saved calls appear under `collaboration`;
-Codex executes those aliases under their native names. Choose by the recipient's
-provider route, not the model vendor or the parent's model. GPT through OpenRouter
-is external even when the parent uses GPT. Native parents keep encrypted
-`collaboration` handoffs to native subscription recipients. External parents
-produce readable calls; their adapter marks even canonical `collaboration`
-calls as plaintext, including calls to native recipients. If the required plaintext
-surface is unavailable, apply the transport-failure policy; an encrypted
-message containing a file path is not a readable fallback.
+If `collaboration_plaintext` handoff tools are offered, use them for every
+subagent assignment, message and follow-up, whatever the recipient. Otherwise
+use the `collaboration` tools. Pass model and reasoning_effort explicitly.
+External children need `fork_turns="none"`: inherited history can hold
+encrypted items they cannot read. GPT through OpenRouter is external even when
+the parent uses GPT. If a brief still arrives encrypted, apply the
+transport-failure policy; an encrypted message containing a file path is not a
+readable fallback.
 
 ## Parent: launch and brief
 
@@ -26,7 +23,8 @@ Omitting them can select configured defaults instead of the intended model;
 writing "inherit GPT" or a model name in `message` does not select it.
 Task names use lowercase letters, digits and underscores.
 Store the returned agent id and canonical task name, not just your chosen label.
-Send this external-model example through `collaboration_plaintext.spawn_agent`:
+Send this external-model example through `collaboration_plaintext.spawn_agent`,
+or `collaboration.spawn_agent` when no plaintext tools are offered:
 
 The assignment message itself must begin with the selected model, fixed effort,
 role/pass and task context, including follow-up assignments and replacement
@@ -67,12 +65,12 @@ and returned/served identity if provided; otherwise record served identity as
 {"target":"inspect_parser","message":"The failing input is an empty array, not an empty string. Include that distinction in the analysis."}
 ```
 
-Send that to the external child above through `collaboration_plaintext.send_message`.
-For native recipients use `collaboration.send_message`. It delivers information without
-starting a new turn on an idle child. A tool acknowledgement is not proof the
-child read or acted on it; inspect a reply or resulting work when it matters.
+Send that to the child above through `send_message` from the same tool set as
+the spawn. It delivers information without starting a new turn on an idle
+child. A tool acknowledgement is not proof the child read or acted on it;
+inspect a reply or resulting work when it matters.
 
-Use the recipient's matching `followup_task` namespace with the same `target`/`message` fields to
+Use `followup_task` from that tool set with the same `target`/`message` fields to
 assign follow-up work and wake an idle child. For a running child it supplies
 steering; do not use it to create competing write ownership.
 
@@ -109,10 +107,8 @@ from task context for nested tasks):
 {"target":"/root","message":"The empty-array failure is in parser.py:84. I am checking the caller contract before recommending a fix."}
 ```
 
-Use the recipient's matching `send_message` namespace for progress or a
-blocker: `collaboration.send_message` for a native parent and
-`collaboration_plaintext.send_message` for an external parent. Make it
-actionable:
+Use `send_message` for progress or a blocker, from `collaboration_plaintext`
+when those tools are offered. Make it actionable:
 what evidence is missing, what work can continue, and what decision is needed.
 Do not repeatedly poll for a reply. A parent message can arrive mid-work; apply
 it while preserving the assigned scope. If it conflicts with current writes,
@@ -136,16 +132,12 @@ errors before research children started; that is a transport limitation, not a
 benchmark or proof that the selected model lacks tools. Do not bypass exact-model
 review gates by switching runtimes or fabricating review results.
 
-An unsafe handoff refusal says nothing about model or provider availability.
-It does not justify replacing an exact OpenRouter reviewer with a native model.
-The router may end the parent turn with a terminal error before executing the
-bad call; it cannot create a recoverable Codex tool result or decrypt the brief.
-On the next user turn, correct the handoff once through the indicated
-`collaboration_plaintext` tool with a fresh readable assignment and the same
-intended model, effort and recipient. Do not replay the encrypted call or
-reinterpret ciphertext as text. If the correction fails, report the exact
-delivery blocker and preserve the work. A completed turn without an assistant
-reply is not success.
+A handoff refusal says nothing about model or provider availability. It does
+not justify replacing an exact OpenRouter reviewer with a native model. The
+router ends the parent turn with a terminal error before executing the bad
+call; it cannot create a recoverable Codex tool result or decrypt the brief.
+Never reinterpret ciphertext as text. Report the exact delivery blocker and
+preserve the work. A completed turn without an assistant reply is not success.
 
 Codex app `create_thread`, `send_message_to_thread`, `read_thread` and
 `wait_threads` manage separate user-visible tasks, not child agents. Create one
@@ -160,3 +152,38 @@ handler limits displayed override candidates to five. Runtime schemas and actual
 acceptance remain the contract; an upstream source snapshot does not prove
 this desktop build or provider served a requested model. The local update CLI
 was separately verified as 0.153.1; its plugin behavior is documented in updates.
+
+## Claude Code
+
+Claude Code has no `collaboration` tools or fork settings. A parent starts a
+child with the Agent tool and picks its model like this:
+
+- A Claude model: set the Agent tool's `model` to `sonnet`, `opus`, `haiku` or
+  `fable`, the only values it accepts. Leave it out and the child takes its
+  agent definition's `model:`, else a configured default subagent model, or
+  else the parent's model.
+- A router model in a Claude desktop Code session in the subscription profile:
+  use [router workers](../../router-workers/SKILL.md). That profile talks to
+  Anthropic directly, so a native child cannot run a router model, and a
+  router model id sent there fails with HTTP 404.
+- A router model in a session attached to the router (an attached terminal
+  session, or the desktop gateway profile): use an agent definition
+  (`.claude/agents/<name>.md`) whose `model:` is the router listing id and
+  whose `effort:` is the model's prescribed effort. Router workers'
+  `router_worker.py --list` prints each listing id as `id`. Start the child by
+  its `subagent_type` and leave the Agent tool's `model` out, because that
+  would override the definition. `model: inherit` keeps the parent's router
+  row instead.
+
+Send follow-up work to the same child with SendMessage, using its name or
+agent id; a new Agent call starts a fresh child without that context. Pass
+`run_in_background: false` when you need the result in the same turn. Children
+start in the background by default, and in headless `claude -p` a background
+child's result does not come back in that turn.
+
+Record the model the child actually resolved to as its served identity, or
+`unverified` when you cannot see it; the label in the brief is not proof. The
+entrypoint's brief, label and verification rules still apply, and no brief
+carries secrets. As a child, end with one final answer that holds the
+deliverable, paths, checks and gaps, and never claim a served model from your
+own name or the brief.

@@ -97,14 +97,17 @@ cycling for a shared transport failure or an exact-model review gate.
 
 ## Run a bounded delegation
 
-MANDATORY: read [tool operation and communication](references/tool-guide.md) in
-full before the first spawn in this session, and re-read it when acting as a
-child. No delegation without it: the entrypoint alone does not authorize a
-spawn. It includes exact examples for the current collaboration tools, fork
-restrictions, replies, waiting and failure handling. On the mixed-provider
-Codex route, external recipients require the exposed `collaboration_plaintext`
-handoff tools and fresh `fork_turns="none"` children. Saved native tool names
-do not change that requirement for later messages.
+MANDATORY: before the first spawn in this session, read your runtime's part of
+[tool operation and communication](references/tool-guide.md) in full, and
+re-read it when acting as a child. No delegation without it: the entrypoint
+alone does not authorize a spawn. Claude Code reads the Claude Code section,
+because the Codex collaboration tools and fork options do not exist there.
+Codex reads the Codex sections, which include exact examples for the current
+collaboration tools, fork restrictions, replies, waiting and failure handling.
+On the mixed-provider Codex route, if `collaboration_plaintext` handoff tools
+are offered, use them for every subagent assignment, message and follow-up,
+whatever the recipient. Otherwise use the `collaboration` tools. Pass model and
+reasoning_effort explicitly; external children need `fork_turns="none"`.
 
 When the active client cannot spawn the selected router model as a native
 child, as in a Claude desktop Code session in the subscription profile, run
