@@ -28,7 +28,8 @@ def _headers(source, router_token):
     bearer = 'Bearer ' + router_token if router_token else None
     for key, value in source.items():
         name = key.lower()
-        if name in HOP_HEADERS or (name == 'authorization' and value == bearer):
+        if (name in HOP_HEADERS or name in ('content-length', 'content-encoding', 'content-type')
+                or (name == 'authorization' and value == bearer)):
             continue
         forwarded[key] = value
     return forwarded
@@ -70,9 +71,10 @@ def _auth_identity(headers):
     return hashlib.sha256(auth.encode('utf-8')).hexdigest()[:16] if auth else ''
 
 
-def _client_version(query):
+def _client_version(query, headers=None):
     params = urllib.parse.parse_qs(query)
-    return (params.get('client_version') or [''])[0][:80]
+    return ((params.get('client_version') or [''])[0] or next(
+        (value for key, value in (headers or {}).items() if key.lower() == 'version'), ''))[:80]
 
 
 def _snapshots(server):
@@ -147,8 +149,7 @@ def _fallback_snapshot(server, identity):
 
 def request_models(server, headers, query=''):
     """Live subscription membership for one request identity."""
-    version = _client_version(query) or next(
-        (value[:80] for key, value in headers.items() if key.lower() == 'version'), '')
+    version = _client_version(query, headers)
     identity = _identity(headers, version)
     routing = _routing_identity(headers)
     auth = _auth_identity(headers)
