@@ -25,7 +25,7 @@ the uncommitted attempt) + stream_relay (one stream for relay.py): wire and
 failure policy, consumed by the adapters below
   ^
   |
-subscription_discovery / subscription_catalogue + catalogue / models /
+subscription_recovery -> subscription_discovery / subscription_catalogue + catalogue / models /
 live_refresh / apply_catalogue (client projections and native discovery)
   |
 tool_runs (the pairing model, on history_items alone) + agent_handoffs /
@@ -642,6 +642,9 @@ them while the child installer retains its own installation lock.
 - `ai_router/subscription_discovery.py` fetches Codex's native subscription
   catalogue; `subscription_catalogue.py` validates it and composes the
   effective roster without turning local configuration into entitlement data.
+  `subscription_recovery.py` refreshes missing native membership before a
+  resumed request is rejected, using the same account and client version.
+  Concurrent requests share the refresh; external routes never use it.
   `ai_router/catalogue.py` + `models.py` + `live_refresh.py` share client
   projection duties through `model_metadata.py` (pure normalization) and
   `clients/` (capability projection, picker visibility); the served

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Ongoing Codex chats keep their subscription model after a router update.
+  If restarting loses the discovered model list, the first request refreshes
+  it for that account and client version before deciding the model is unavailable.
+  Two chats resuming together share the refresh. OpenRouter routing is unchanged.
+
 ## 1.0.5
 
 - Unreadable subagent handoffs now stop before Codex executes them, with a clear
