@@ -154,12 +154,20 @@ must produce conforming rows; the registry naming test enforces it.
 ## 9. Agent plugins
 
 This repo also hosts the `scg-agent-plugins` marketplace (`scg-review`,
-`scg-subagents`, `scg-prototypes`, `scg-finance`, `scg-documentation`). Author
+`scg-subagents`, `scg-prototypes`, `scg-finance`, `scg-documentation`,
+`scg-ponytail`). Author
 under `plugins/<name>`; installed plugin caches are delivery copies. The root
 `scg-openrouter` plugin stays outside the marketplace. Keep the marketplace
 name and plugin names stable; release via `develop` to `main`, and let the
 router carry them (Plan 179) so a consumer needs no Git account or marketplace
 command.
+
+Before coding or reviewing code, read the installed `scg-ponytail:ponytail`
+skill in full. Resolve its current absolute path from the active client's
+skill catalogue or plugin inventory; never pin a cache version. SCG Review
+requires that same skill for its simplifier and all three lanes, and blocks
+when the dependency is missing, disabled or unreadable. Ponytail owns solution
+simplicity; this file and the review skill retain all verification gates.
 
 - Every plugin works in Codex and Claude Code: ship both `.codex-plugin`
   and `.claude-plugin` manifests at the same version, keep skill content
@@ -173,14 +181,20 @@ command.
   across the plugins (tests pin it); the release bundle withholds them. Link
   every skill to the shared update guide.
 - Release a plugin by bumping both manifests' version and adding a
-  `plugins/CHANGELOG.md` entry; validate with the plugin-creator validator
-  and the plugin test modules.
+  `plugins/CHANGELOG.md` entry. Validate Claude manifests and skills with
+  `claude plugin validate --strict`, run the installed skill-creator's
+  `scripts/quick_validate.py` for a new or changed skill, and run the plugin
+  test modules for paired Codex/Claude manifests and package contracts.
+  Require actual Codex installation and new-session skill pickup before
+  claiming local delivery; the retired plugin-creator validator is not a gate.
 - Integrate plugin fixes through `develop` first. If `develop` contains
   unrelated unreleased router changes, reuse the owned worktree for a release
   branch based on current `main` and cherry-pick only the reviewed plugin
   commits. The release PR targets `main`; its diff may contain only `plugins/`,
-  directly related plugin verification tests, and directly related
-  plugin-release instructions in this file. Verify the complete diff against
+  directly related plugin verification tests, marketplace registration in
+  `.agents/plugins/marketplace.json`, the README's agent-plugin documentation,
+  and directly related plugin-release instructions in this file.
+  Verify the complete diff against
   current `main`, run all required checks and reviews on that exact candidate,
   and use the normal PR gates. Do not include router code, `packaging/VERSION`,
   router tags, or release-workflow changes. Reconcile
