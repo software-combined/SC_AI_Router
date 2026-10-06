@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Rename the integration branch to `development` across contribution guidance,
+  checks and beta release validation. Existing review and test gates remain.
+
 - Rework the README around staff setup, everyday use and clear limits. Keep
   detailed setup, plugin and update instructions in the linked guides.
 

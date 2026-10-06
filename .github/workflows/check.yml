@@ -2,13 +2,13 @@ name: Check
 
 on:
   pull_request:
-    branches: [main, develop]
+    branches: [main, development]
     # edited reruns the checks when a pull request changes its base branch,
     # which decides whether main acceptance runs. GitHub sends the same event
     # for a title or body edit (a text edit), and every job below skips that.
     types: [opened, synchronize, reopened, edited]
   push:
-    branches: [main, develop]
+    branches: [main, development]
 
 permissions:
   contents: read
@@ -105,7 +105,7 @@ jobs:
     name: ${{ (github.event.action != 'edited' || github.event.changes.base) && 'Test' || 'Skipped for a title or body edit' }}
     # The required gate fails when a prerequisite fails or is cancelled.
     # Installer jobs may be skipped when scope finds no installer paths;
-    # release-only prerequisites are skipped on develop runs.
+    # release-only prerequisites are skipped on development runs.
     # !cancelled() lets the failure guard run after a failed prerequisite.
     needs: [changes, installer-macos, installer-windows, installer-python39, plugin-schedulers, hook-adapter]
     if: ${{ !cancelled() && (github.event.action != 'edited' || github.event.changes.base) }}
@@ -192,7 +192,7 @@ jobs:
     name: Plugin schedulers
     # Native scheduler coverage for the agent-plugin updater: real systemd
     # user timers on Linux and Task Scheduler on Windows, using a fake local
-    # Codex CLI. Run for main acceptance; develop stays lightweight.
+    # Codex CLI. Run for main acceptance; development stays lightweight.
     if: (github.event.action != 'edited' || github.event.changes.base) && ((github.event_name == 'pull_request' && github.base_ref == 'main') || (github.event_name == 'push' && github.ref == 'refs/heads/main'))
     strategy:
       matrix:

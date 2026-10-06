@@ -30,7 +30,7 @@ jobs:
     name: Build and publish
     # Check both identities: reruns use the original actor's privileges.
     # Main acceptance owns the long checks. Stable publishes only an exact main
-    # commit with a successful Check run; beta publishes a commit develop or
+    # commit with a successful Check run; beta publishes a commit development or
     # main moved to. Neither repeats that suite.
     if: ${{ contains(fromJSON('["SC-Cyril", "BrentJMaxwell"]'), github.actor) && contains(fromJSON('["SC-Cyril", "BrentJMaxwell"]'), github.triggering_actor) }}
     runs-on: ubuntu-latest
@@ -54,7 +54,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Require an accepted commit
-        # A beta must be a commit develop or main moved to (their first-parent
+        # A beta must be a commit development or main moved to (their first-parent
         # line). Only pull requests that pass the Test check move them, so a
         # beta needs no main acceptance run.
         env:
@@ -62,8 +62,8 @@ jobs:
         run: |
           case "$GITHUB_REF_NAME" in
             *-beta|*-beta-express)
-              git rev-list --first-parent origin/develop origin/main | grep -Fx "$GITHUB_SHA" >/dev/null || {
-                echo "beta tag must be on a commit develop or main moved to"; exit 1;
+              git rev-list --first-parent origin/development origin/main | grep -Fx "$GITHUB_SHA" >/dev/null || {
+                echo "beta tag must be on a commit development or main moved to"; exit 1;
               }
               exit 0 ;;
           esac
