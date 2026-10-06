@@ -2,12 +2,12 @@
 
 ## How to ship
 
-Work lands on `develop` via `fix/*`/`feat/*` branches, then `develop`
+Work lands on `development` via `fix/*`/`feat/*` branches, then `development`
 merges to `main` via PR. Release tags use the full `v<VERSION>` label
 matching `packaging/VERSION`: `0.6.117` becomes `v0.6.117`.
 Add `-beta` for a pre-release, `-express` for an urgent stable release, or
 `-beta-express` for an urgent beta. The release workflow runs on `v*` tags
-only. A beta tag needs a commit that `develop` or `main` moved to, such as a
+only. A beta tag needs a commit that `development` or `main` moved to, such as a
 PR merge commit, not a commit inside a merged branch. A
 stable tag needs a commit merged into `main` with a successful `Check` run for
 that exact commit, so tag the `main` merge commit after that run passes. The
@@ -22,7 +22,7 @@ checks but publishes nothing.
 Develop PRs and branch pushes run fast static checks. The full offline suite,
 scoped native installer checks, plugin scheduler checks and hook-adapter
 portability checks run for main PRs and pushes to `main`. A beta tag does not
-wait for them: `develop` accepts commits only through pull requests that pass
+wait for them: `development` accepts commits only through pull requests that pass
 the required `Test` check, and local tests and review run before every commit.
 A stable tag reuses the exact-commit `main` acceptance instead of repeating it.
 Both channels then run packaging, runtime-pin verification, signing and
@@ -406,22 +406,22 @@ never announced.
 
 ## How to test first
 
-Merge the release candidate into `develop` through its PR, then tag the
-resulting `develop` commit `v<VERSION>-beta`. A beta waits only for that PR's
+Merge the release candidate into `development` through its PR, then tag the
+resulting `development` commit `v<VERSION>-beta`. A beta waits only for that PR's
 checks, not the long `main` checks. The workflow publishes a pre-release to the
 public beta document (`beta/latest.json`). Cyril's machine follows the
 `beta` channel (`beta`
 in the `channel` file beside the state directory), so it updates first;
-watch its `/health` version and `logs/update.log` before promoting `develop`
+watch its `/health` version and `logs/update.log` before promoting `development`
 to `main` through its PR. Promote only what the beta ran: before merging the
-release PR, confirm its head is still the beta commit; if `develop` has moved,
-tag and watch a new beta on the new `develop` commit first. Once the `Check`
+release PR, confirm its head is still the beta commit; if `development` has moved,
+tag and watch a new beta on the new `development` commit first. Once the `Check`
 run for the push to `main` passes on the merge commit, tag that merge commit
 `v<VERSION>` for stable.
 
 ## How to roll back
 
-Revert through `develop` to `main` and tag (the next release supersedes
+Revert through `development` to `main` and tag (the next release supersedes
 the bad one), or pin one machine with
 `python3 packaging/install.py --rollback --to X`. The installer itself
 restores the old pointer automatically when the new release fails its

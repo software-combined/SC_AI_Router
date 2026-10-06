@@ -128,7 +128,7 @@ class InstallerCiGateTests(unittest.TestCase):
         # read as "no installer files changed" and silently skip the native
         # checks while the required gate stays green.
         block = (run_block('Installer scope', self.CHECK)
-                 .replace('${{ github.base_ref }}', 'develop')
+                 .replace('${{ github.base_ref }}', 'development')
                  .replace('${{ github.event.before }}', 'before')
                  .replace('${{ github.sha }}', 'after'))
         with tempfile.TemporaryDirectory() as tmp:
@@ -236,7 +236,7 @@ class InstallerCiGateTests(unittest.TestCase):
             develop_tip = git('commit-tree', tree, '-p', develop_only, '-p', feature, '-m', 'merge')
             unmerged = git('commit-tree', tree, '-p', develop_only, '-m', 'unmerged')
             git('update-ref', 'refs/remotes/origin/main', main_only)
-            git('update-ref', 'refs/remotes/origin/develop', develop_tip)
+            git('update-ref', 'refs/remotes/origin/development', develop_tip)
             beta, stable = 'v0.6.123-beta', 'v0.6.123'
             # (tag, commit, successful main Check runs, publishes, asks gh)
             for tag, sha, count, allowed, asks_gh in (
@@ -268,7 +268,7 @@ class InstallerCiGateTests(unittest.TestCase):
             ([accepted], 1),
             ([{**accepted, 'conclusion': 'failure'}], 0),
             ([{**accepted, 'status': 'in_progress', 'conclusion': None}], 0),
-            ([{**accepted, 'head_branch': 'develop'}], 0),
+            ([{**accepted, 'head_branch': 'development'}], 0),
             ([{**accepted, 'head_sha': 'b' * 40}], 0),
         ]
         env = {**os.environ, 'GITHUB_SHA': sha}
@@ -289,7 +289,7 @@ class WorkflowBoundaryTests(unittest.TestCase):
 
     def test_public_prs_keep_read_only_checks_on_both_targets(self):
         check = (WORKFLOWS / 'check.yml').read_text()
-        self.assertIn('pull_request:\n    branches: [main, develop]', check)
+        self.assertIn('pull_request:\n    branches: [main, development]', check)
         self.assertIn('types: [opened, synchronize, reopened, edited]', check)
         self.assertIn('permissions:\n  contents: read', check)
         self.assertIn('persist-credentials: false', check)
