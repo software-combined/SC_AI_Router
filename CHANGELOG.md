@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Rework the README around staff setup, everyday use and clear limits. Keep
+  detailed setup, plugin and update instructions in the linked guides.
+
 - Claude Code verification probes no longer inherit the caller's routing,
   sign-in, effort or retry settings. Isolated candidates share a hard attempt
   budget and a smaller output cap. Deferred-tool verification now requires the
