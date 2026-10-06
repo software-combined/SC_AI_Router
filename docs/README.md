@@ -1,10 +1,12 @@
 # Router documentation
 
-Start with the repository [README](../README.md) for install, clients, models
-and billing. These pages go deeper.
+Start with the repository [README](../README.md) for the ordinary user path,
+models and billing. These pages go deeper.
 
 | Page | Use it for |
 |---|---|
+| [Setup](setup.md) | Staff setup, assistant choices, prerequisites and installation from source |
+| [Agent plugins](agent-plugins.md) | The bundled tools, standalone setup and their release rules |
 | [Operations](operations.md) | Install, update, rollback, uninstall and the daily commands |
 | [Troubleshooting](troubleshooting.md) | Symptom-first remedies: updates, serving, keys, client quirks |
 | [Adding a model](adding-a-model.md) | Adding, probing and promoting a registry row |
