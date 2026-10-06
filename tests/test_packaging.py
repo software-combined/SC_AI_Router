@@ -79,11 +79,12 @@ class PackagingTests(unittest.TestCase):
                 continue
             self.assertIn(rel, bundled, 'packaging module missing from the release inventory')
 
-    def test_readme_quick_start_installs_its_own_build(self):
+    def test_linked_setup_installs_its_own_build(self):
         # --url-base keeps the built feed pointing at the local tarball.
         root = Path(__file__).resolve().parents[1]
+        self.assertIn('(docs/setup.md)', (root / 'README.md').read_text())
         blocks = re.findall(r'```(?:sh|powershell)\n(.*?)```',
-                            (root / 'README.md').read_text(), re.S)
+                            (root / 'docs' / 'setup.md').read_text(), re.S)
         release_blocks = [block for block in blocks if 'packaging/release.py' in block]
         self.assertEqual(len(release_blocks), 2)
         for block in release_blocks:
