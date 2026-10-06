@@ -103,7 +103,7 @@ The runtime uses Python 3.14 and its standard library. See
 [development setup and required checks](CONTRIBUTING.md),
 [architecture](docs/architecture.md) and [operations](docs/operations.md).
 
-Branch from `develop` and target pull requests at `develop`. Maintainers
+Branch from `development` and target pull requests at `development`. Maintainers
 promote releases to `main`; release tags and verification follow
 [the release procedure](docs/operations.md#how-to-ship).
 The release bundle includes the README, Markdown guides and licence files;
