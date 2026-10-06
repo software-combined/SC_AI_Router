@@ -221,6 +221,10 @@ Ambiguous pairs, invalid or partial answers, decision failures,
 a state that cannot fit the 32 KiB request budget, or retained text over 40%
 of the selected model's compaction limit (its context window when the row sets
 no limit) all use the existing summarizer.
+The fast summarizer uses Xiaomi MiMo V2.6 Flash first, then DeepSeek V4.1 Flash
+after an unsent timeout or incomplete output. History can therefore go to a
+different vendor from the active model. A timeout after dispatch fails closed
+to avoid duplicate side effects.
 There are no decision retries, fallback models, per-turn calls or decision
 cache. `compact_jev` logs only mode, counts, byte sizes, elapsed milliseconds
 and a closed-set error code; never content, tool names or keys.
@@ -302,6 +306,66 @@ non-production home unless `ROUTER_LIVE_RUN=1` is set; local feed
 experiments belong in a disposable session or VM with its own service
 manager. Direct `do_install` calls in tests must use the fake `run` seam.
 
+## Switch Codex
+
+From version 26.917.51856, the ChatGPT app (Codex) stops sending messages once
+your ChatGPT subscription reaches its usage limit, even for OpenRouter models.
+Switch Codex works around this. It moves Codex to OpenRouter models until the
+limit resets, then back to your ChatGPT subscription. Like Switch Claude,
+Switch Codex is macOS-only in this beta. SCG Router adds Switch Codex to your
+Applications folder when Codex uses your ChatGPT subscription and your ChatGPT
+app is affected.
+
+When the limit is reached, SCG Router offers to switch once. Choose **Open
+Switch Codex**, or open Switch Codex from your Applications folder at any time.
+Switch Codex asks before it changes anything, then quits and reopens the
+ChatGPT app. It keeps the switch only after Codex has loaded the new settings,
+so a switch that fails changes nothing.
+
+When the limit resets, SCG Router offers the way back once. Choose **Open
+Switch Codex** again, or open it yourself. Switching back does not depend on
+the ChatGPT app: if Switch Codex cannot check the app, it asks you to quit the
+app first and to open it again afterwards.
+
+While Codex is switched:
+
+- only OpenRouter models are listed, and they are billed to OpenRouter;
+- a model that needs your ChatGPT subscription answers with a short message
+  that says what to pick instead;
+- Codex still asks you before it runs a command that needs approval;
+- conversations you start while switched still open after you switch back.
+
+Two things do not work while Codex is switched. Archiving a conversation fails
+with "Failed to archive conversation", a ChatGPT app (Codex) issue, so switch
+back to archive it. Conversation titles are not generated.
+
+## Express updates
+
+Maintainers can publish an urgent stable release with `v<VERSION>-express`,
+or an urgent beta with `v<VERSION>-beta-express`. The tag includes the exact
+semantic version from `packaging/VERSION`: `0.6.117` is `v0.6.117`. Use a new
+tag for each release. These tags use the same tests, publisher permissions
+and integrity checks as ordinary releases.
+
+After installing an Express-capable version, macOS, Windows and Linux run
+a separate lightweight Express check about every minute. Online machines
+can begin an urgent update within a few minutes of feed publication;
+downloads, request draining and health checks take additional time.
+Each machine follows its existing stable or beta channel. Normal releases
+continue on the four-hour schedule. A failed Express attempt waits for the
+regular retry schedule, retaining the existing three-failure limit.
+
+The jobs are `com.local.codex-mixed-model-router.update.express` on macOS,
+`CodexMixedModelRouterUpdateExpress` on Windows, and
+`codex-mixed-model-router-express.timer` on Linux. The installer registers
+and removes these with the regular jobs. They use the same home launcher
+under the name `express_launch.py`, which skips older restored releases
+that do not support Express.
+
+Existing machines first need this version through their current update
+schedule or a manual update. Sleeping/offline machines check when available.
+A missing interpreter or broken updater still needs local recovery.
+
 ## Global starter instructions
 
 The setup window offers an Everyday help or Coding help starter after the key is stored and
@@ -379,6 +443,17 @@ feed has not reached. Every scheduled check then refuses the real feed with
 `stale feed serial N is older than M`. Delete `<home>/feed-serial` to clear
 it; the next unpinned update records the channel's own serial. Installs from
 0.6.9 on leave that file alone.
+
+## Uninstall
+
+From the source checkout or installed release directory, run
+`python3.14 packaging/install.py --uninstall`. This stops and removes the
+service, update schedule and client configuration. For a bootstrap installation,
+use the [pinned interpreter](setup.md#what-the-installer-does) if Python 3.14
+is not available on the system.
+
+The state directory, key file and loopback token remain in place for you to
+delete separately. Uninstall does not remove them.
 
 ## Operator surface
 
