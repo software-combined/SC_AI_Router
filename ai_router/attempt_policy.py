@@ -89,10 +89,12 @@ def cached_refusal(status):
 class Ledger:
     __slots__ = ('request_id', 'operation', 'protocol', 'model', 'stream', 'route', 'opening',
                  'attempts', 'decisions', 'transitions', 'committed', 'outcome',
-                 'terminal_source', '_budget', '_spent', '_owned', 'evidence', 'version', 'dialect')
+                 'terminal_source', '_budget', '_spent', '_owned', 'evidence', 'version', 'dialect', 'client_threads')
 
     def __init__(self, provider, metrics):
         self.request_id = metrics.get('request_id')
+        self.client_threads = {k: request_evidence.thread_id(metrics.get(k))
+                               for k in ('thread_id', 'parent_thread_id')}
         self.operation = metrics.get('path')
         self.protocol = metrics.get('protocol')
         self.model, self.stream = metrics.get('model'), metrics.get('stream')
@@ -220,7 +222,7 @@ class Ledger:
 
     def facts(self):
         return {
-            'request_id': self.request_id, 'operation': self.operation,
+            'request_id': self.request_id, 'operation': self.operation, **self.client_threads,
             'router_version': self.version, 'attempt_evidence': self.evidence,
             'protocol': self.protocol, 'route': self.route,
             'sends': len(self.attempts),
