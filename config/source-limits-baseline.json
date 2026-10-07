@@ -68,7 +68,6 @@
   "tests/test_windows_backend.py": 449,
   "tests/test_workflows.py": 303,
   "tools/probe_agent_handoffs.py": 515,
-  "tools/probe_claude_code.py": 408,
   "tools/probe_codex_runtime.py": 501,
   "tools/probe_desktop_handoff.py": 425,
   "ai_router/claude_compat.py": 260

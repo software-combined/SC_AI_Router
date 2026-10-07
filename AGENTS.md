@@ -15,8 +15,8 @@ Never run `git reset --hard` or `git checkout --` without explicit approval.
 Record worktree ownership (path, branch, owning task, integration target) and
 reuse the same worktree for follow-ups. Clean up after verified integration.
 
-Base every branch on `develop` and target every PR at `develop`,
-except release PRs from `develop` to `main` and the scoped plugin release
+Base every branch on `development` and target every PR at `development`,
+except release PRs from `development` to `main` and the scoped plugin release
 procedure in section 9. Never push directly to `main`.
 
 ## 2a. Architecture
@@ -90,10 +90,10 @@ Run `python3.14 -m unittest discover -s tests -t .`,
 with type `feat`, `fix`, `refactor`, `test`, `chore` or `docs`.
 Discover runs the fast core suite; installer tests are opt-in via
 `SCG_RUN_INSTALLER_TESTS=1` (native CI runners cover them on scope for release
-PRs into `main` and pushes to `main`). Develop CI runs fast static checks; full
+PRs into `main` and pushes to `main`). Development CI runs fast static checks; full
 remote regression runs for main acceptance. Stable tags publish only an exact
 main commit with a successful `Check` run; beta tags publish a commit that
-`develop` or `main` moved to (their first-parent line). Neither repeats those
+`development` or `main` moved to (their first-parent line). Neither repeats those
 acceptance checks.
 Local pre-commit requirements above still apply.
 
@@ -158,7 +158,7 @@ This repo also hosts the `scg-agent-plugins` marketplace (`scg-review`,
 `scg-ponytail`). Author
 under `plugins/<name>`; installed plugin caches are delivery copies. The root
 `scg-openrouter` plugin stays outside the marketplace. Keep the marketplace
-name and plugin names stable; release via `develop` to `main`, and let the
+name and plugin names stable; release via `development` to `main`, and let the
 router carry them (Plan 179) so a consumer needs no Git account or marketplace
 command.
 
@@ -187,7 +187,7 @@ simplicity; this file and the review skill retain all verification gates.
   test modules for paired Codex/Claude manifests and package contracts.
   Require actual Codex installation and new-session skill pickup before
   claiming local delivery; the retired plugin-creator validator is not a gate.
-- Integrate plugin fixes through `develop` first. If `develop` contains
+- Integrate plugin fixes through `development` first. If `development` contains
   unrelated unreleased router changes, reuse the owned worktree for a release
   branch based on current `main` and cherry-pick only the reviewed plugin
   commits. The release PR targets `main`; its diff may contain only `plugins/`,
@@ -198,4 +198,4 @@ simplicity; this file and the review skill retain all verification gates.
   current `main`, run all required checks and reviews on that exact candidate,
   and use the normal PR gates. Do not include router code, `packaging/VERSION`,
   router tags, or release-workflow changes. Reconcile
-  the release into `develop` afterwards without discarding either side.
+  the release into `development` afterwards without discarding either side.

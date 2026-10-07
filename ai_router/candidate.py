@@ -37,11 +37,12 @@ def _free_port():
 class IsolatedRouter:
     """Throwaway router plus catalogue; close() always tears it down."""
 
-    def __init__(self, slug=None, row=None, bounded=False):
+    def __init__(self, slug=None, row=None, bounded=False, max_output=None):
         self.tmp = tempfile.TemporaryDirectory()
         self.home = Path(self.tmp.name)
         self.slug = slug
         self.row, self.bounded = row, bounded
+        self.max_output = max_output
         self.process = None
 
     def __enter__(self):
@@ -85,6 +86,8 @@ class IsolatedRouter:
     def _spawn(self):
         command = ([sys.executable, str(PROBE_TOOL), '--serve', '--home', str(self.home)]
                    if self.bounded else [sys.executable, '-m', 'ai_router'])
+        if self.bounded and self.max_output is not None:
+            command += ['--max-output', str(self.max_output)]
         self.process = subprocess.Popen(
             command,
             env={**os.environ, 'ROUTER_HOME': str(self.home)}, cwd=str(ROOT),

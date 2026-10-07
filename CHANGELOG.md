@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+## 1.0.10
+
+- Codex retries after interrupted reasoning no longer send a reasoning-only
+  tail to external models, which could reject the turn as an assistant prefill.
+  Earlier reasoning, tool results and ChatGPT subscription history keep their
+  existing replay rules.
+- Raise omitted external output limits from 32,000 to at most 64,000 tokens
+  so long reasoning turns have more room to finish. Model limits, context
+  headroom and explicit client limits still apply. The larger allowance can
+  reserve more OpenRouter credit while a request is running.
+
+- Rename the integration branch to `development` across contribution guidance,
+  checks and beta release validation. Existing review and test gates remain.
+
+- Rework the README around staff setup, everyday use and clear limits. Keep
+  detailed setup, plugin and update instructions in the linked guides.
+
+- Claude Code verification probes no longer inherit the caller's routing,
+  sign-in, effort or retry settings. Isolated candidates share a hard attempt
+  budget and a smaller output cap. Deferred-tool verification now requires the
+  search, released tool and paired results instead of accepting a marker echo.
+
 ## 1.0.6
 
 - Ongoing Codex chats keep their subscription model after a router update.

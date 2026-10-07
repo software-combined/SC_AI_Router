@@ -22,7 +22,7 @@ PROBE = ROOT / 'tools' / 'probe_claude_code.py'
 MODEL = 'fake/model'
 
 FAKE_BIN = '''#!/usr/bin/env python3
-import json, os
+import json, os, sys
 mode = os.environ.get('FAKE_CLAUDE_MODE', 'exact')
 marker = open('probe.txt').read().strip()
 if mode == 'prose':
@@ -53,9 +53,25 @@ elif mode == 'isolated':
                'result': 'The owner setup reached the probe.'}
     else:
         out = {'is_error': False, 'num_turns': 2, 'result': marker}
+elif mode == 'bounded':
+    expected = {'CLAUDE_CODE_EFFORT_LEVEL': 'low',
+                'CLAUDE_CODE_MAX_RETRIES': '0', 'CLAUDE_CODE_RETRY_WATCHDOG': '0',
+                'CLAUDE_CODE_MAX_OUTPUT_TOKENS': '2048', 'CLAUDE_CODE_MAX_TURNS': '3'}
+    safe = all(os.environ.get(key) == value for key, value in expected.items())
+    safe = safe and not os.environ.get('ANTHROPIC_API_KEY')
+    out = {'is_error': not safe, 'num_turns': 2, 'result': marker if safe else ''}
 else:
     out = {'is_error': False, 'num_turns': 2, 'result': marker}
+if 'stream-json' in sys.argv and mode != 'echo-only':
+    for name, identifier in (('ToolSearch', 'search-id'), ('mcp__stubtools__tool_000', 'stub-id')):
+        print(json.dumps({'type':'assistant','message':{'model':'fake/model','content':[
+            {'type':'tool_use','id':identifier,'name':name,'input':{}}]}}))
+        print(json.dumps({'type':'user','message':{'content':[
+            {'type':'tool_result','tool_use_id':identifier}]}}))
+out['type'] = 'result'
 print(json.dumps(out))
+if mode == 'failed-exit':
+    raise SystemExit(1)
 '''
 
 
@@ -105,6 +121,11 @@ class ClaudeCodeProbeTests(unittest.TestCase):
         self.assertFalse(row['pass'], row)
         self.assertEqual(done.returncode, 1)
 
+    def test_failed_process_cannot_certify_an_earlier_success_result(self):
+        done, row = self._row('failed-exit')
+        self.assertFalse(row['pass'], row)
+        self.assertEqual(done.returncode, 1)
+
     def test_a_refused_turn_fails_and_names_the_subtype(self):
         done, row = self._row('refused')
         self.assertFalse(row['pass'], row)
@@ -139,13 +160,24 @@ class ClaudeCodeProbeTests(unittest.TestCase):
         self.assertNotIn('test-token', done.stdout)
         self.assertNotIn('127.0.0.1', done.stdout)
 
+    def test_parent_effort_retries_and_api_key_cannot_override_probe_limits(self):
+        done = self._run('bounded', '--effort', 'low',
+                        CLAUDE_CODE_EFFORT_LEVEL='max', CLAUDE_CODE_MAX_RETRIES='10',
+                        CLAUDE_CODE_RETRY_WATCHDOG='1', CLAUDE_CODE_MAX_TURNS='100',
+                        CLAUDE_CODE_MAX_OUTPUT_TOKENS='32000', ANTHROPIC_API_KEY='synthetic-owner')
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertTrue(json.loads(done.stdout)['results'][0]['pass'])
+
     def test_the_deferred_leg_runs_with_the_installed_client_settings(self):
-        # The fake echoes probe.txt, so the marker proves the harness reached
-        # the same acceptance rule with the deferred leg's own prompt, tool
-        # list and env; the record names the leg it ran.
         done = self._run('exact', '--deferred')
         report = json.loads(done.stdout)
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
         self.assertEqual([row['leg'] for row in report['results']],
                          ['read', 'deferred'])
         self.assertTrue(all(row['pass'] for row in report['results']))
+
+    def test_deferred_marker_without_tool_execution_is_rejected(self):
+        done = self._run('echo-only', '--deferred')
+        report = json.loads(done.stdout)
+        self.assertEqual(done.returncode, 1)
+        self.assertEqual([row['pass'] for row in report['results']], [True, False])
