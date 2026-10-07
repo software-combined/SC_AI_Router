@@ -148,7 +148,11 @@ output and the summary transcript, including bounded native `apply_patch` and
 tool-search call/result evidence. `external_history.py` owns the two external
 stages that read that codec: compaction items replay as readable text
 (`rewrite_input`), and OpenAI-owned reasoning blobs go (`strip_reasoning_blobs`,
-which the subscription retry repair reuses). The
+which the subscription retry repair reuses). External Responses also drop
+the contiguous reasoning suffix after blob stripping: Codex saves interrupted
+reasoning before retrying, and an external upstream can reject that suffix as
+assistant prefill. Subscription retry repair keeps its existing blob-only rule.
+The
 switch boundary's run check, the custom-pair call map and Jev's candidate
 pairing keep their own id rules (any truthy id and any later output; the last
 custom call; ambiguous ids pinned), so moving them onto `pairs` would be a
