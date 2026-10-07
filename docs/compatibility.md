@@ -1,5 +1,39 @@
 # Compatibility
 
+## Reasoning-cutoff recovery, 7 October 2026 AEDT
+
+Candidate `bc370ef0` passed bounded live checks with Codex CLI `0.160.0`
+and Claude Code `2.1.283`. Temporary routers used the candidate source;
+the installed router was not restarted or changed for these checks.
+
+| Client / route | Requested model / effort | Attempts | Result |
+| --- | --- | --- | --- |
+| Codex / OpenRouter | DeepSeek V4.1 Flash / low | 2 | Dynamic tool round trip passed |
+| Codex / ChatGPT subscription | `gpt-6-luna` / low | 2 | Dynamic tool round trip passed |
+| Claude Code / OpenRouter | DeepSeek V4.1 Flash / low | 3 | Two sequential Reads, paired results and exact markers passed; served model matched |
+| Claude Code / subscription | `sonnet` / low | Not exposed; 2 client turns | One Read and exact marker passed; client reported `claude-sonnet-5` |
+
+The two external client legs shared a 12-attempt, 512 KiB input and 65,536
+output-token ceiling. Codex used the new omitted-limit default of 64,000;
+Claude requested 2,048 output tokens and a USD 0.25 client budget. The native
+Codex leg had a four-attempt, 512 KiB input ceiling and no external-model cost.
+The native Claude leg had three-turn, 2,048-output-token and USD 0.25 client
+limits, with SDK retries disabled. Served effort was not exposed. The Codex
+probe confirmed the selected models but did not report served identity.
+
+A separate synthetic Responses request ending in interrupted reasoning passed
+through the candidate to `anthropic/claude-sonnet-5.5` at low effort: one HTTP
+200 attempt, matching served model and exact marker. Its isolated router capped
+output at 2,048 tokens, input at 512 KiB and attempts at 12. This proves the
+Anthropic replay boundary accepts the repaired tail; it does not recreate a
+long-running Opus cutoff or prove installation of the published bundle.
+
+Offline coverage includes the trailing-reasoning regression, preserved earlier
+reasoning and tool results, explicit output limits, model caps, context headroom
+and unchanged subscription replay. The real Codex client also passed all six
+fake-upstream context-recovery scenarios. Publication and installed-version
+readback are separate gates.
+
 ## Claude switch and Code-tab acceptance, 1 October 2026 AEST
 
 The owner-Mac read-only baseline is router `1.0.6.141`, Claude desktop
