@@ -23,8 +23,8 @@ def rewrite_input(items):
     return rewritten
 
 
-def strip_reasoning_blobs(items):
-    """Strip OpenAI-owned reasoning blobs; keep items that still hold readable text."""
+def strip_reasoning_blobs(items, *, drop_tail=False):
+    """Strip blobs; external retries also omit an unfinished reasoning suffix."""
     if not isinstance(items, list):
         return items
     out = []
@@ -35,4 +35,9 @@ def strip_reasoning_blobs(items):
             if not reasoning_text(item):
                 continue
         out.append(item)
+    # Codex saves interrupted reasoning before retrying. External providers
+    # treat a reasoning-only tail as assistant prefill and reject the retry.
+    if drop_tail:
+        while out and isinstance(out[-1], dict) and out[-1].get('type') == 'reasoning':
+            out.pop()
     return out

@@ -100,7 +100,8 @@ def compaction_text(payload, p):
 
 
 def strip_reasoning(payload, p):
-    return _set(payload, 'input', external_history.strip_reasoning_blobs(payload['input']))
+    return _set(payload, 'input', external_history.strip_reasoning_blobs(
+        payload['input'], drop_tail=True))
 
 
 def note_media(payload, p):
@@ -146,7 +147,7 @@ def output_cap(payload, p):
         limit = min(limit, window // 2)
     # Codex omits the cap and compacts at 90% of context. Its remaining
     # headroom must fit our default output, not the provider's maximum.
-    default = min(32000, p.row.max_output_tokens)
+    default = min(64000, p.row.max_output_tokens)
     if window:
         default = min(default, window - window * 9 // 10)
     requested = payload.get('max_output_tokens')
