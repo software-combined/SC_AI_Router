@@ -334,7 +334,7 @@ def run(args, probe_type=Probe):
         provider = 'openai' if args.live else 'probe'
         config = {'model_provider': provider, 'model_catalog_json': str(catalog), 'approval_policy': 'never',
             'sandbox_mode': 'read-only'} | ({} if cwd != temp else {'project_doc_max_bytes': 0,
-            'features.multi_agent': True, 'features.multi_agent_v2': True,
+            'features.multi_agent': True, 'features.multi_agent_v2': getattr(probe, 'multi_agent_v2', True),
             'features.apps': False, 'features.memories': False, 'features.code_mode': False,
             'features.shell_tool': False, 'web_search': 'disabled'})
         base = f'http://127.0.0.1:{server.server_port}/v1'
