@@ -106,7 +106,7 @@ class Upstream:
             return Reply(200, json.dumps({'output': [message(MARKER)]}).encode(),
                          'application/json')
         self.calls += 1
-        assert payload['max_output_tokens'] == 32000, 'incorrect default output budget'
+        assert payload['max_output_tokens'] == 64000, 'incorrect default output budget'
         if self.scenario == 'context_error' and self.calls == 2:
             return Reply(400, b'{"error":{"code":"context_length_exceeded"}}',
                          'application/json')

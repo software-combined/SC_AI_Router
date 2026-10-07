@@ -62,7 +62,7 @@
    }
   ],
   "instructions": "You are the synthetic coding agent for the replay goldens.",
-  "max_output_tokens": 32000,
+  "max_output_tokens": 64000,
   "model": "deepseek/deepseek-v4.1-flash",
   "parallel_tool_calls": true,
   "prompt_cache_key": "replay-s01",

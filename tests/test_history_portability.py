@@ -261,7 +261,7 @@ class HistoryPortabilityTests(unittest.TestCase):
                                   'parameters': {'type': 'object'}}],
                        'input': [dict(self._reasoning_item(), id='rs_foreign'),
                                  self._marker(),
-                                 dict(self._reasoning_item(), id='rs_native')]}
+                                 dict(self._reasoning_item(), id='rs_native'), {'type': 'message', 'role': 'user', 'content': 'Continue.'}]}
             provider = ExternalResponsesProvider(provider_defs.OPENROUTER)
             prepared = provider.prepare(payload['model'], '/responses', payload,
                                         json.dumps(payload).encode(), {}, stub_credentials())

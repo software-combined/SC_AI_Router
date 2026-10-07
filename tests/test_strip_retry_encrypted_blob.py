@@ -174,10 +174,11 @@ class RetryRepairTests(unittest.TestCase):
             self.assertEqual([i.get('encrypted_content') for i in items
                               if i.get('type') == 'reasoning'], ['BLOB-ONE', 'BLOB-TWO'])
         # An external native-history row strips the owned blobs, drops the
-        # blob-only item and keeps the readable trace.
+        # blob-only item and keeps the readable trace before a user message.
         self.assertEqual(by_slug('z-ai/glm-5.3').history_mode, 'native')
-        external = prepare(providers.ExternalResponsesProvider(provider_defs.OPENROUTER),
-                           'z-ai/glm-5.3', json.loads(GUARDIAN_BODY))
+        external_client = json.loads(GUARDIAN_BODY)
+        external_client['input'].append({'type': 'message', 'role': 'user', 'content': 'Continue.'})
+        external = prepare(providers.ExternalResponsesProvider(provider_defs.OPENROUTER), 'z-ai/glm-5.3', external_client)
         reasoning = [i for i in external if i.get('type') == 'reasoning']
         self.assertEqual([i.get('id') for i in reasoning], ['rs_2'])
         self.assertEqual(reasoning[0]['summary'][0]['text'], 'readable trace')

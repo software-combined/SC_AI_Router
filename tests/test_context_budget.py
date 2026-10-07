@@ -43,13 +43,13 @@ class ContextBudgetTests(unittest.TestCase):
                 payload = request_of(chars)
                 original = json.loads(json.dumps(payload['input']))
                 sent = self.prepare(payload)
-                self.assertEqual(sent['max_output_tokens'], 32000)
+                self.assertEqual(sent['max_output_tokens'], 64000)
                 self.assertEqual(sent['input'], original)
 
     def test_default_respects_small_window_and_provider_ceiling(self):
         for window, ceiling, expected in ((100000, 50000, 10000),
                                           (100000, 5000, 5000),
-                                          (0, 100000, 32000), (0, 1000, 1000)):
+                                          (0, 100000, 64000), (0, 1000, 1000)):
             with self.subTest(window=window, ceiling=ceiling):
                 model = SimpleNamespace(context_window=window,
                                         max_output_tokens=ceiling,
