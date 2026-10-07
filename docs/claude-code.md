@@ -237,8 +237,8 @@ request stays at the client's own tool set, and a row is never retried. A row
 passes when the marker comes back in the answer, not only when it is the whole
 answer: some rows narrate it, and that is a finished turn rather than a fault.
 An empty or refused turn still fails. The probe leaves the caller's Claude
-settings alone: it names the router in a disposable settings file and in the
-client's own environment, and never prints the loopback URL. The environment
+settings alone: it names the router in the client's private process environment
+and never prints the loopback URL. The environment
 matters: Claude Code lets its own environment override a settings file, and a
 probe started from a Claude Code session inherits that session's first-party
 `ANTHROPIC_BASE_URL`, which sent every turn to Anthropic on the user's own
@@ -249,10 +249,12 @@ hooks, permissions or login apply, and it sends a synthetic bearer that
 subscription leg of the AGENTS.md section 7 check runs as a real Claude Code
 session with the owner's own login and settings, started from a terminal
 rather than from inside another Claude Code session. `--deferred` adds the leg an attached client
-actually runs: a synthetic MCP server advertising 700 stub tools, tool search
-on, and one round trip that must come back through the search. `--candidate
-<slug>` boots an isolated router from this working tree for that row and tears
-it down afterwards, so a build can be checked before it is installed. Pass `--models` to
+actually runs: a synthetic MCP server advertising 700 stub tools. A pass requires
+ToolSearch followed by the released tool, matching result IDs, no tool errors,
+and the returned marker. An answer that only echoes the marker fails.
+`--candidate <slug>` boots an isolated router from this working tree with a shared
+12-attempt cap, 512 KiB input and 2,048 output tokens per attempt, then tears it
+down. Repairs and replays consume that same cap. Pass `--models` to
 narrow it, `--max-rows` to raise the cap, or `--json` for a machine-readable
 report, and set `CLAUDE_BIN` to drive a different client binary. For the
 multi-turn history check, `--read-count 2` makes two sequential synthetic
@@ -268,6 +270,26 @@ comparison, so a valid routed row is not rejected for using a client-safe
 discovery id.
 Budgeted runs accept exactly one row and one leg, so the cap cannot be
 multiplied across models.
+
+Both the probe and the zero-paid shape capture use a fresh empty client config
+and remove inherited Claude routing, authentication, effort and retry variables.
+Each client invocation limits agentic turns to three and output to 2,048 tokens;
+an explicit effort overrides the parent's setting. SDK retries are disabled, but
+Claude Code 2.1.284 still makes one separate recovery request after a 503. The
+isolated router's attempt cap therefore remains the paid-call boundary; these
+client settings alone are not a hard upstream-call cap on the installed router.
+
+Verify the embedded client's limits separately, without calling a model:
+
+```sh
+SCG_TEST_CLAUDE_CLIENT=1 CLAUDE_BIN="<tested-client-path>" \
+  python3.14 -m unittest tests.test_claude_client_limits -v
+```
+
+That check uses a local fake upstream and disposable history, tests turn and
+output limits after resume, and measures the bounded 503 recovery. It is opt-in
+and does not run an installed client during the ordinary unit suite. It does
+not establish that the desktop app propagates the same settings.
 
 ## Claude desktop app
 
@@ -286,9 +308,11 @@ you open a Code task. On macOS, setup installs that background callback
 automatically; you do not enter account IDs or choose profile folders. The
 callback exits quietly when the router or its sharing files are gone. It makes no
 model call; its cached identity becomes invalid when the account or workspace changes.
-Native Code continuation has passed in both profiles, but the complete installed
-launcher round trip remains unaccepted. Cowork tasks are not shared in this
-beta. See [candidate verification](compatibility.md) before relying on task sharing.
+The installed macOS launchers passed both subscription-to-OpenRouter-to-subscription
+and OpenRouter-to-subscription-to-OpenRouter Code-tab round trips, preserving
+original tool results and the newest turns. This acceptance does not cover Cowork
+sharing or Windows/Linux switching. See [compatibility evidence](compatibility.md)
+for client versions, tested models and limits.
 
 On macOS, candidate desktop setup installs **Open Claude** and **Switch Claude**
 launchers for the current user. In this beta they, and task sharing, are
@@ -405,8 +429,9 @@ so an attachment made before Windows moved to `LOCALAPPDATA` keeps updating.
 Running setup with `--desktop` refuses a different profile while an existing
 attachment still owns its restore record; detach that connection before
 selecting another profile.
-The paths are pinned by simulated platform tests. Real task visibility, open and resume
-acceptance remains pending for macOS, Windows and Linux.
+The paths are pinned by simulated platform tests. Real macOS Code-task visibility,
+open and resume passed the installed-launcher round trips above. Windows and
+Linux still require native app acceptance.
 Pointing the third-party profile at the loopback router lists every
 approved Messages-compatible registry row. The app filters non-Anthropic
 vendor words from IDs even when a valid `anthropic_family_tier` is present.

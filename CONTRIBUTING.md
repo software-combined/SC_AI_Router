@@ -28,11 +28,11 @@ real router home.
 
 ## Branches and pull requests
 
-- Fork the repository, branch from `develop`, and target `develop` for normal
+- Fork the repository, branch from `development`, and target `development` for normal
   contributions. Develop pull requests run fast static checks, so run the suite
   locally first. Pull requests opened against `main` are welcome and run the
-  full release acceptance; a maintainer retargets them to `develop` before
-  merging. `main` receives release merges from `develop`.
+  full release acceptance; a maintainer retargets them to `development` before
+  merging. `main` receives release merges from `development`.
 - Cyril (`SC-Cyril`) and Brent (`BrentJMaxwell`) are the release maintainers.
   Only they merge pull requests, create tags, and run or rerun releases.
   Other contributors can open issues and pull requests; repository triage
@@ -51,9 +51,19 @@ real router home.
   `python3.14 -m ai_router.models check` output and a probe result in the
   pull request, or a deliberate `tier: preview`.
 
+### Existing clones after the branch rename
+
+The integration branch is now `development`. Keep any local work intact. If your clone still has a local `develop` branch, rename it and update its upstream:
+
+```bash
+git fetch origin
+git branch -m develop development
+git branch --set-upstream-to=origin/development development
+```
+
 ## Refreshing model capabilities
 
-On a branch based on `develop`, run `python3.14 -m ai_router.live_refresh
+On a branch based on `development`, run `python3.14 -m ai_router.live_refresh
 --fetch`, inspect the `ai_router/models.json` diff, and submit it through the
 normal pull-request checks and model-probe requirements above. This command
 uses the public upstream catalogue and needs network access. There is no

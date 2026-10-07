@@ -17,15 +17,15 @@ does not start or stop the app or change its settings. It confirms local
 identity discovery only; Linux switching remains unavailable until lifecycle
 support and native acceptance are complete.
 
-Use the merged `develop` source for the first upgrade from the old 0.6.2.0
+Use the merged `development` source for the first upgrade from the old 0.6.2.0
 symlink installation. Its updater cannot bootstrap this transition: it
 rejects the unsigned local feed and has no systemd lifecycle backend.
 
 The machine's agent should:
 
 1. Record the clean checkout's branch/commit and preserve any local work.
-   Fetch and fast-forward `develop` only when safe. If fixes are needed, use
-   one owned worktree and open a PR back to `develop`; do not edit the primary
+   Fetch and fast-forward `development` only when safe. If fixes are needed, use
+   one owned worktree and open a PR back to `development`; do not edit the primary
    checkout or leave machine-only patches behind.
 2. Inspect the existing unit definitions, pointer, installed version and
    release channel. No token, no GitHub account and no repository access

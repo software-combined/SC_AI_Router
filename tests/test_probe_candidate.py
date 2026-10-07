@@ -18,6 +18,17 @@ def prepared(**payload):
 
 
 class BudgetTests(unittest.TestCase):
+    def test_a_narrower_output_cap_refuses_before_an_upstream_send(self):
+        with tempfile.TemporaryDirectory() as folder:
+            send = Mock()
+            budget = probe.Budget(Path(folder), send, max_output=2048)
+            with self.assertRaisesRegex(ValueError, 'output budget'):
+                budget(None, prepared(max_tokens=2049), {})
+            send.assert_not_called()
+            self.assertEqual(budget.calls, 0)
+            budget(None, prepared(max_tokens=2048), {})
+            send.assert_called_once()
+
     def test_summary_and_normal_attempts_exhaust_one_shared_budget(self):
         provider = SimpleNamespace(host='example.invalid', defn=provider_defs.OPENROUTER)
         with tempfile.TemporaryDirectory() as folder:

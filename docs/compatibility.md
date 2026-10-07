@@ -1,5 +1,126 @@
 # Compatibility
 
+## Reasoning-cutoff recovery, 7 October 2026 AEDT
+
+Candidate `bc370ef0` passed bounded live checks with Codex CLI `0.160.0`
+and Claude Code `2.1.283`. Temporary routers used the candidate source;
+the installed router was not restarted or changed for these checks.
+
+| Client / route | Requested model / effort | Attempts | Result |
+| --- | --- | --- | --- |
+| Codex / OpenRouter | DeepSeek V4.1 Flash / low | 2 | Dynamic tool round trip passed |
+| Codex / ChatGPT subscription | `gpt-6-luna` / low | 2 | Dynamic tool round trip passed |
+| Claude Code / OpenRouter | DeepSeek V4.1 Flash / low | 3 | Two sequential Reads, paired results and exact markers passed; served model matched |
+| Claude Code / subscription | `sonnet` / low | Not exposed; 2 client turns | One Read and exact marker passed; client reported `claude-sonnet-5` |
+
+The two external client legs shared a 12-attempt, 512 KiB input and 65,536
+output-token ceiling. Codex used the new omitted-limit default of 64,000;
+Claude requested 2,048 output tokens and a USD 0.25 client budget. The native
+Codex leg had a four-attempt, 512 KiB input ceiling and no external-model cost.
+The native Claude leg had three-turn, 2,048-output-token and USD 0.25 client
+limits, with SDK retries disabled. Served effort was not exposed. The Codex
+probe confirmed the selected models but did not report served identity.
+
+A separate synthetic Responses request ending in interrupted reasoning passed
+through the candidate to `anthropic/claude-sonnet-5.5` at low effort: one HTTP
+200 attempt, matching served model and exact marker. Its isolated router capped
+output at 2,048 tokens, input at 512 KiB and attempts at 12. This proves the
+Anthropic replay boundary accepts the repaired tail; it does not recreate a
+long-running Opus cutoff or prove installation of the published bundle.
+
+Offline coverage includes the trailing-reasoning regression, preserved earlier
+reasoning and tool results, explicit output limits, model caps, context headroom
+and unchanged subscription replay. The real Codex client also passed all six
+fake-upstream context-recovery scenarios. Publication and installed-version
+readback are separate gates.
+
+## Claude switch and Code-tab acceptance, 1 October 2026 AEST
+
+The owner-Mac read-only baseline is router `1.0.6.141`, Claude desktop
+`2.16120.0`, standalone Claude Code `2.1.283` and desktop-bundled Code
+`2.1.284`, on macOS `26.5.1`. All 16 installed Claude packaging helpers match
+develop `b41a8222`; installed runtime fingerprint
+`a10eacb59add178b80d48d460f43d55ac22682e4bfaa1063c38d54acc57fa151`
+matches that source. The attachment, policy and both account identities passed
+read-only preflight. The owner then authorized closing and reopening Claude for
+installed-launcher acceptance. The shared router was neither paused nor restarted.
+
+Before the probe fixes, the full offline suite including installers passed
+2,922 tests with five skips. New offline regressions reproduced inherited
+effort/retry/configuration leakage, an unguarded candidate probe, and a deferred
+marker echo accepted without tool execution. The corrected probes use private
+client environments, the existing shared attempt guard and explicit tool-result
+evidence. These are probe fixes, not changes to the installed switch or daemon.
+
+| Isolated check | Requested model / effort | Actual upstream attempts | Result |
+| --- | --- | --- | --- |
+| Two sequential Reads | DeepSeek V4.1 Flash / low | 3 | Both results retained; IDs paired; served model matched |
+| Deferred 700-tool MCP | GLM 5.3 Flash / low | 3 | Search then released tool executed; IDs paired; served model matched |
+| Saved-session round trip | DeepSeek -> GLM -> DeepSeek / low | 5 | Same session ID, original Read results and newest marker retained; models matched |
+
+All paid isolated checks used the real `2.1.284` binary, synthetic data, USD 0.25 per-invocation
+client budgets, 12 upstream attempts, 512 KiB input and 2,048 output tokens per
+attempt, and five-minute client deadlines. Served effort was not exposed. The
+first GLM sample returned its marker under the older answer-only gate; only the
+rerun with stream tool/result evidence supplies the deferred-execution proof.
+The saved-session check disabled tools on both continuation turns, so the
+markers had to come from carried history rather than fresh file reads. It
+proves the bundled client's external-model resume path, not desktop task sharing.
+
+Zero-paid fake-upstream checks on the same binary verified three turns and
+2,048 output tokens per request, including resuming the saved synthetic session.
+A persistent 503 produced two requests even with SDK retries set to zero, then
+stopped with an error. A 429 produced one request. These are measured client
+limits, not proof of a strict installed-desktop upstream cap.
+
+The actual desktop Code tab then passed both round trips using the installed
+**Switch Claude** launcher and synthetic tasks:
+
+| Origin | Model sequence | Result |
+| --- | --- | --- |
+| Subscription | Sonnet 5.5 / low -> DeepSeek V4.1 Flash / max -> Sonnet 5.5 / low | Two original Read results, baseline and latest gateway turn retained |
+| OpenRouter | DeepSeek V4.1 Flash / max -> Sonnet 5.5 / low -> DeepSeek V4.1 Flash / max | Original gateway turn and latest Sonnet turn retained |
+
+Saved assistant records confirm `claude-sonnet-5-5` and
+`deepseek/deepseek-v4.1-flash` in those sequences. Served effort is unverified;
+the table records requested effort. Each thread kept its desktop and CLI session
+IDs and appeared once in each profile. Continuations used no tools, so their
+original and newest markers came from saved history. Final copied transcripts in
+both profiles contain the latest turns, including the gateway-created task.
+
+Cancel left connection settings and saved Code records unchanged. A concurrent
+launcher request received the busy refusal. Consistent private backups verified
+319 initial files by content, mode and timestamp; the desktop mode file was
+backed up later, not in that initial set. All 33 initial task-record paths remain.
+The final read-only comparison found all 244 backed-up files outside the current
+account or subscription organization unchanged by content, mode and timestamp.
+
+The desktop's prompt hook confirmed three-turn, 2,048-output-token, zero-SDK-retry
+and disabled-watchdog settings on all six synthetic task turns. The external
+turns used two temporary forwarding-gateway waves, each limited to four Messages
+requests, 256 KiB input and 2,048 output tokens per request. The unchanged installed
+router permits at most two upstream attempts per forwarded request, so each wave
+had an eight-attempt ceiling. The first wave forwarded three requests, including
+automatic title generation; the second forwarded one. All four completed with
+HTTP 200 and matching served model. Native subscription turns have no complete
+upstream-attempt ledger. Ordinary gateway readiness probes outside these waves
+were not covered by the temporary gateway's cap.
+
+Both temporary gateways stopped after the original connection was restored.
+Claude is back in subscription mode with Sonnet 5.5 / low selected; the final
+gateway reply is visible there. Attachment and router `1.0.6.141` health passed
+final readback, and the global CLI settings match their backup. The standalone
+subscription login remains unavailable; native inference used the signed-in
+desktop profile without migrating credentials. Cowork sharing and Windows/Linux
+switch acceptance remain out of scope. No release, installation or router update
+was performed.
+
+Probe fixes were reviewed and merged into develop in PR #380. Its integrated
+tree `094125da90c7643f23c5d50350627ff7d9f66810` passed 2,935 tests including
+installers, with seven expected skips, plus compilation, source limits, policy
+scans and the merged-revision CI check. The installed switch helpers tested above
+were unchanged by those probe fixes.
+
 ## Single readable handoff surface, 1 October 2026 AEST
 
 The 1.0.5 checks below used isolated routers, replaced parent instructions

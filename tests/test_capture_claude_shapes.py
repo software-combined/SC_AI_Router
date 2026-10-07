@@ -6,7 +6,12 @@ references shows up here rather than as a silent "no deferral" in the
 evidence.
 """
 import json
+import os
+from pathlib import Path
+import tempfile
+from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 from tools import capture_claude_shapes as capture
 from tools import mcp_stub_server as stub
@@ -31,6 +36,29 @@ def _request(**extra):
 
 
 class SummariseTests(unittest.TestCase):
+    def test_capture_overrides_parent_gateway_and_uses_an_empty_private_config(self):
+        with tempfile.TemporaryDirectory() as folder:
+            owner = str(Path(folder) / 'owner-config')
+
+            def client(command, **kwargs):
+                env = kwargs['env']
+                config = Path(env['CLAUDE_CONFIG_DIR'])
+                self.assertNotEqual(str(config), owner)
+                self.assertTrue(config.is_dir())
+                self.assertEqual(list(config.iterdir()), [])
+                self.assertTrue(env['ANTHROPIC_BASE_URL'].startswith('http://127.0.0.1:'))
+                self.assertEqual(env.get('CLAUDE_CODE_EFFORT_LEVEL'), 'low')
+                self.assertEqual(env.get('CLAUDE_CODE_MAX_RETRIES'), '0')
+                self.assertEqual(env.get('CLAUDE_CODE_MAX_OUTPUT_TOKENS'), '2048')
+                self.assertNotIn('ANTHROPIC_API_KEY', env)
+                return SimpleNamespace(returncode=0, stdout='{}', stderr='')
+
+            with patch.dict(os.environ, {'CLAUDE_CONFIG_DIR': owner,
+                    'ANTHROPIC_BASE_URL': 'https://parent.invalid',
+                    'ANTHROPIC_API_KEY': 'synthetic-owner', 'CLAUDE_CODE_EFFORT_LEVEL': 'max'}), \
+                    patch.object(capture.subprocess, 'run', side_effect=client):
+                capture.capture('synthetic/model', {}, 0, folder)
+
     def test_a_deferred_turn_is_reported_as_deferred(self):
         body = _request(tools=[SEARCH_TOOL, dict(PLACEHOLDER)])
         record = capture.summarise(

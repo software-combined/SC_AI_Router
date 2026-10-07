@@ -55,7 +55,7 @@
    }
   ],
   "instructions": "You are the synthetic coding agent for the replay goldens.",
-  "max_output_tokens": 32000,
+  "max_output_tokens": 50000,
   "model": "x-ai/grok-4.7",
   "parallel_tool_calls": true,
   "prompt_cache_key": "replay-s11",

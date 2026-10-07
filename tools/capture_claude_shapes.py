@@ -26,6 +26,10 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+try:
+    from tools.claude_probe_env import environment
+except ModuleNotFoundError:
+    from claude_probe_env import environment
 
 CLAUDE_BIN = os.environ.get('CLAUDE_BIN') or shutil.which('claude')
 STUB_MCP = Path(__file__).resolve().parent / 'mcp_stub_server.py'
@@ -178,6 +182,7 @@ def summarise(raw, headers, preview=False):
         'keys': sorted(body),
         'model': body.get('model'),
         'stream': body.get('stream'),
+        'max_tokens': body.get('max_tokens'),
         'tools': len(tools),
         'tool_names': sorted(str(tool.get('name')) for tool in tools)[:40],
         'tool_types': sorted({str(tool.get('type')) for tool in tools}),
@@ -252,6 +257,9 @@ def _handler(sink):
                 body = _tool_use(model, 'ToolSearch', {'query': value})
             elif kind == 'tool_call':
                 body = _tool_use(model, value, {'value': 'stub'})
+            elif kind == 'http_error':
+                return self._reply(int(value), b'{"type":"error","error":{"type":"overloaded_error",'
+                                   b'"message":"Synthetic limit check"}}', 'application/json')
             else:
                 body = _text(model, value)
             self._reply(200, body, 'text/event-stream')
@@ -277,11 +285,8 @@ def capture(model, env_overrides, tool_count, root, script=SCRIPT, preview=False
                                   % server.server_port,
             'CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY': 'false'}}))
         os.chmod(settings, 0o600)
-        env = dict(os.environ)
-        env.pop('ANTHROPIC_AUTH_TOKEN', None)
-        env.pop('ANTHROPIC_API_KEY', None)
-        env['ANTHROPIC_AUTH_TOKEN'] = AUTH_TOKEN
-        env.update(env_overrides)
+        env = environment(work, 'http://127.0.0.1:%d/synthetic/' % server.server_port,
+                          AUTH_TOKEN, 'low', env_overrides)
         command = [CLAUDE_BIN, '-p', PROMPT, '--model', model,
                    '--strict-mcp-config', '--mcp-config', str(mcp_path),
                    '--dangerously-skip-permissions',
