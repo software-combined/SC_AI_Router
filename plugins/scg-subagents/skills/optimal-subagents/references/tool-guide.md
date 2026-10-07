@@ -6,6 +6,13 @@ their equivalent; do not paste these shapes into a different API. Claude Code
 has none of these tools, so it reads only the [Claude Code](#claude-code)
 section at the end; everything before it is for Codex.
 
+Codex V1 currently exposes `multi_agent_v1.spawn_agent` with `fork_context`,
+`message` or `items`, `model` and `reasoning_effort`; it returns `agent_id`.
+Use `fork_context=false` for a fresh child. It has no `task_name` or
+`fork_turns`. Its wait tool takes `targets` (agent IDs) and `timeout_ms`.
+The V2 examples below apply only when their actual schema is offered.
+Never transpose V2 arguments into V1 or infer a child's ID from its nickname.
+
 If `collaboration_plaintext` handoff tools are offered, use them for every
 subagent assignment, message and follow-up, whatever the recipient. Otherwise
 use the `collaboration` tools. Pass model and reasoning_effort explicitly.
@@ -59,6 +66,17 @@ A successful spawn proves request acceptance only. Record requested model/effort
 and returned/served identity if provided; otherwise record served identity as
 `unverified`. Do not report a model's quality from a run that never started.
 
+For Codex V1, record the parent thread ID, returned child ID and assignment
+start/completion times with UTC offsets. Router 1.0.11's installed
+`ai_router.inspect_requests --agent-summary` can look up that exact pair and
+window without credentials or paid calls; [router operations](https://github.com/software-combined/SC_AI_Router/blob/main/docs/operations.md#request-identity-and-failure-evidence)
+owns the command. Retained reports identify what the upstream reported, not
+independently attested model weights. Keep model and effort evidence separate,
+preserve mismatches across retries, and label coverage as retained records only.
+Unknown IDs, old routers, missing reports or unsupported clients stay
+unverified. Recheck the ID/header contract with the zero-paid
+`tools/probe_agent_identity.py` after a Codex upgrade; never guess a mapping.
+
 ## Parent: communicate and wait
 
 ```json
@@ -92,9 +110,9 @@ Use `collaboration.interrupt_agent({"target":"inspect_parser"})` to stop its
 current turn. It remains available; interruption does not undo edits. Inspect
 any partial changes before handing its write scope to someone else.
 
-Call collaboration tools directly. In this runtime they are not nested under
+Call V2 collaboration tools directly. In that runtime they are not nested under
 `functions.exec` and cannot be called as guessed `tools.collaboration.*` methods.
-The current `wait_agent` has **no targets argument**. Some older runtimes differ;
+The V2 `wait_agent` has **no targets argument**. V1 instead requires agent-ID targets;
 never reuse a previous `wait_agent.targets` shape without reading the schema.
 
 ## Child: report, ask for context, finish

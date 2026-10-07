@@ -281,7 +281,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.error(err)
         prepare_done = time.monotonic()
         metrics = {'request_id': context.request_id, 'provider': prepared.provider, 'router_version': VERSION,
-                   'protocol': policy.name,
+                   'protocol': policy.name, **request_evidence.client_threads(self.headers),
                    'model': model, 'path': path, 'request_bytes': size,
                    'stream': payload.get('stream') is True,
                    'reasoning_effort': request_evidence.requested_effort(payload),
