@@ -55,10 +55,19 @@ Read the bundled [reviewer routing policy](../../references/reviews.md) before e
 When a policy has a listed eligible fallback and the preferred model is unavailable, use that fallback and record the substitution. Fallbacks are enabled for every pass unless the current user explicitly forbids substitution or an applicable instruction requires an exact route. Follow the policy's two-fallback dispatch limit and shared-failure rules. A required pass is `❌ Block` when no permitted model can complete it. Never switch runtimes, accounts or data constraints, or weaken a gate, to get around a requirement. Confirm access through actual review calls: an accepted dispatch is not a completed review. See [provider access and identity rules](../../references/reviewer-models.md).
 
 Record each pass's requested and returned model and effort in your notes. Missing served identity is `unverified`; a known mismatch invalidates that pass. Fallbacks never remove staged-tree coverage, lane independence or the need for a genuine review.
+For Codex, keep the exact child/parent IDs and assignment window, then read
+[child evidence](../../references/reviewer-models.md#exact-codex-child-evidence)
+after completion. Use upstream-reported fields separately from requested
+effort; incomplete evidence keeps the existing unverified fallback.
 
 Use the **elevated-risk profile** when the staged change, or a directly relevant context file, touches auth, security, money, destructive data, migrations, concurrency or deployment. You decide the profile in step 2 and state it in every brief. It deepens inspection and the evidence required for the whole review; it does not by itself require a more expensive model.
 
 ### Codex: select the model and handoff
+
+Use the active tool schema. With `multi_agent_v1`, pass `fork_context=false`,
+explicit model/effort and the brief in `message`; there is no `task_name`
+or `fork_turns`. Keep the returned `agent_id`. The example below is for V2
+only, when that schema is actually offered.
 
 For Pass 1 and each review lane, select the first eligible route from the policy.
 Call `spawn_agent` directly from the tool set chosen below, with explicit model
@@ -216,7 +225,7 @@ These three labels are the whole verdict vocabulary. A verdict keeps its label a
 
 5. Rerun the required checks that a fix affects, or all of them when unsure. A failed required check blocks. If one cannot run because of an environment or dependency problem, record the blocker, the residual risk and the next check before allowing `📝 Proceed With Notes`.
 6. Record in the repo's task notes, when it has them (`tasks/todo.md`, `tasks/lessons.md` or similar): staged scope, simplification outcome, reviewed tree id, requested and returned model and effort per lane, verdicts, fixed findings, final staged delta, accepted residual risks, and verification results.
-7. Write a short recap for the person: the combined verdict, then one bullet per lane with its verdict and `Model: <returned-model> at <effort>` (or `unverified`). For `📝 Proceed With Notes` or `❌ Block`, add a flat list of the accepted notes: lane, one-line point, and why it was accepted or why it blocks.
+7. Write a short recap for the person: the combined verdict, then one bullet per lane with its verdict, requested model/effort and upstream-reported model/effort (or `unverified`). Label provider reports and retained-record coverage as described in [child evidence](../../references/reviewer-models.md#exact-codex-child-evidence); never turn the requested effort into a served claim. For `📝 Proceed With Notes` or `❌ Block`, add a flat list of the accepted notes: lane, one-line point, and why it was accepted or why it blocks.
 
 The combined decision:
 
