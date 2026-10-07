@@ -756,6 +756,39 @@ native aliases or snapshot names may explain it. A provider report is not
 independent proof of the weights executed. `/health served_models` remains a
 last-observed cache and never attests the selected request.
 
+For a Codex V1 child, keep the `agent_id` returned by spawn, the actual parent
+thread ID and the assignment start/completion times. Router 1.0.11 records only
+canonical UUID values from `thread-id` and `x-codex-parent-thread-id`; malformed
+values, agent names and the rest of the turn metadata are not retained.
+The real-client, zero-paid `tools/probe_agent_identity.py` checks two overlapping
+same-model children and proves the returned IDs match these headers. Run it
+again after a client upgrade before relying on that mapping.
+
+From the installed release directory, look up a pass without filtering away
+other models or mismatching attempts:
+
+```sh
+python3.14 -m ai_router.inspect_requests --agent-summary --json --limit 100 \
+  --thread-id <agent-id> --parent-thread-id <parent-id> \
+  --since <assignment-start-with-offset> --until <completion-with-offset> \
+  --model <requested-model> --expected-effort <requested-effort>
+```
+
+In summary mode `--model` is the expected model, not a filter. Model and effort
+statuses are separate. A matching retry cannot erase an earlier mismatch or
+contradiction; missing or limited reports and failed request chains stay
+unverified. `records` retain the source and request/attempt IDs.
+`limit_reached: true` marks a full page conservatively: matching fields stay
+unverified because older records may have been omitted; retained mismatches
+and contradictions still take precedence. Compaction and
+non-turn operations are counted separately. The coverage label is always
+`retained_records_only`: the bounded log may have rotated or hit the record
+limit, and an abrupt exit may leave no ledger. Never call this complete serving
+attestation, or treat an echoed effort as measured reasoning compute. The
+client-facing `openai-model` header remains the configured compatibility slug,
+not identity proof. An older router or unavailable parent ID leaves the pass
+unverified rather than guessed from the latest health cache or reviewer text.
+
 Attempt outcomes describe the observed upstream or transport ending. The
 request outcome also reflects delivery and recovery, which can preserve the
 first terminal after a later attempt fails. Timings name connect, send, headers

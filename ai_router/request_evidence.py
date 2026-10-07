@@ -20,6 +20,16 @@ def identifier(value):
         r'[~A-Za-z0-9][A-Za-z0-9._/+:~\-]{0,127}', value) else None
 
 
+def thread_id(value):
+    return value if isinstance(value, str) and re.fullmatch(
+        r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}', value) else None
+
+
+def client_threads(headers):
+    return {'thread_id': thread_id(headers.get('thread-id')),
+            'parent_thread_id': thread_id(headers.get('x-codex-parent-thread-id'))}
+
+
 def requested_effort(payload):
     for key in ('reasoning', 'output_config'):
         source = payload.get(key)

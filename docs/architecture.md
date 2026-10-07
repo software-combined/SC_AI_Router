@@ -61,6 +61,9 @@ identity never attests a later one. These records cannot authorize replay.
 `inspect_requests.py` reads the existing rotated log without contacting a model
 or loading credentials. Request outcomes and each attempt's observed ending
 remain separate when recovery preserves an earlier terminal for the client.
+Canonical Codex child and parent UUID headers bind the ledger to a child;
+`inspect_requests` owns exact assignment-window lookup and retained-only
+summaries. No agent names, turn metadata blobs or tool results are persisted.
 
 `wire_shape.py` reads measured extra item types from the request's captured row.
 The registry owns that profile; absence means unverified and never changes

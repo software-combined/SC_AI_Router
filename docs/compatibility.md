@@ -1,5 +1,37 @@
 # Compatibility
 
+## Child model evidence, 7 October 2026 AEDT
+
+The zero-paid `tools/probe_agent_identity.py` passed on Codex CLI `0.160.1`.
+It selected V1 with V2 disabled, discovered `multi_agent_v1` using the client's
+tool search, and spawned two overlapping, same-model synthetic children.
+Both returned `agent_id` values exactly matched their `thread-id` headers;
+both parent headers matched the actual parent thread. No live upstream,
+credentials or installed configuration were used. This is a client ID mapping
+proof, not a serving-model claim. Re-run it after client upgrades.
+
+A separate synthetic parent spawned two overlapping real DeepSeek V4.1 Flash
+children at low effort through the isolated candidate. Both completed their
+marker assignment in one attempt each. Exact child/parent/window lookup found
+both request ledgers, with matching upstream model and effort reports and their
+response-field sources. The probe capped client sends at two, router attempts
+at six (three per Responses request), input at 512 KiB and output at 2,048
+tokens per attempt. The parent made no model call. These are provider reports,
+not independent model attestation or measured reasoning compute.
+
+The 1.0.11 candidate also passed bounded live checks on Codex CLI `0.160.1`
+and Claude Code `2.1.283`: DeepSeek V4.1 Flash / low completed the Codex dynamic
+tool round trip in two upstream attempts and two sequential Claude Reads in
+three attempts; `gpt-6-luna` / low completed the subscription Codex round trip
+in two attempts. Claude `sonnet` / low completed one subscription Read in two
+client turns. Claude reported the expected DeepSeek ID and `claude-sonnet-5`;
+served effort was not exposed. The isolated external legs shared a 12-attempt,
+512 KiB input and 65,536 output-token ceiling. Claude also had a USD 0.25
+client budget and 2,048 output-token limit, with retries disabled. Native
+Codex allowed four attempts; native Claude allowed three turns, 2,048 output
+tokens and USD 0.25. Installed rollout and a real child evidence lookup remain
+separate acceptance gates.
+
 ## Reasoning-cutoff recovery, 7 October 2026 AEDT
 
 Candidate `bc370ef0` passed bounded live checks with Codex CLI `0.160.0`
