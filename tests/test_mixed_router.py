@@ -87,11 +87,11 @@ class RoutingTests(unittest.TestCase):
                     'encrypted_content': None}
         empty = {'type': 'reasoning', 'id': 'rs_b', 'summary': [],
                  'content': [], 'encrypted_content': None}
-        data = json.loads(_prepared('z-ai/glm-5.3', '/responses',
-                                    {'input': [readable, empty]}).body)['input']
+        following = {'type': 'message', 'role': 'user', 'content': 'Continue.'}
+        data = json.loads(_prepared('z-ai/glm-5.3', '/responses', {'input': [readable, empty, following]}).body)['input']
         self.assertEqual(data, [{'type': 'reasoning', 'id': 'rs_a', 'summary': [],
                                  'content': [{'type': 'reasoning_text',
-                                              'text': 'read first'}]}])
+                                              'text': 'read first'}]}, following])
 
     def test_reasoning_blob_stripped_but_readable_text_survives(self):
         summary = [{'type': 'text', 'text': 'chose X'}]
