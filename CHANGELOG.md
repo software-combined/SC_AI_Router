@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.0.10
+
 - Codex retries after interrupted reasoning no longer send a reasoning-only
   tail to external models, which could reject the turn as an assistant prefill.
   Earlier reasoning, tool results and ChatGPT subscription history keep their
