@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 1.0.11
+
+- Review recaps can read upstream-reported model evidence for an exact Codex
+  child and assignment window. The router retains only validated child and
+  parent thread IDs, never prompts, tool data or agent names. Missing reports
+  stay unverified; mismatches remain visible across retries. Model reports
+  and requested reasoning effort are separate, not proof of model weights
+  or reasoning compute.
+
 ## 1.0.10
 
 - Codex retries after interrupted reasoning no longer send a reasoning-only

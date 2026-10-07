@@ -50,7 +50,8 @@ def _attempt(row):
     return clean
 
 
-def recent(home, *, request_id=None, model=None, since=None, identity='any', limit=20):
+def recent(home, *, request_id=None, model=None, since=None, until=None, identity='any',
+           thread_id=None, parent_thread_id=None, limit=20):
     """At most four existing 5 MiB log tails; never consult auth, state or the network."""
     results, seen = [], set()
     for suffix in ('', '.1', '.2', '.3'):
@@ -76,14 +77,20 @@ def recent(home, *, request_id=None, model=None, since=None, identity='any', lim
                 if timestamp.tzinfo is None: continue
             except (ValueError, KeyError, TypeError, RecursionError):
                 continue
-            if ident in seen or request_id and ident != request_id or since and timestamp < since:
+            if (ident in seen or request_id and ident != request_id or since and timestamp < since
+                    or until and timestamp > until):
                 continue
             seen.add(ident)
+            threads = {key: request_evidence.thread_id(row.get(key))
+                       for key in ('thread_id', 'parent_thread_id')}
+            if (thread_id and threads['thread_id'] != thread_id
+                    or parent_thread_id and threads['parent_thread_id'] != parent_thread_id):
+                continue
             entries = row.get('attempt_evidence')
             attempts = [_attempt(value) for value in entries[:5] if isinstance(value, dict)] if isinstance(entries, list) else []
             if model and not any(model in (a['requested_model'], a['resolved_model'], a['upstream_model']) for a in attempts): continue
             if identity != 'any' and not any(a['model_status'] == identity for a in attempts): continue
-            results.append({'ts': timestamp.isoformat(), 'request_id': ident,
+            results.append({'ts': timestamp.isoformat(), 'request_id': ident, **threads,
                 'router_version': request_evidence.identifier(row.get('router_version')),
                 'operation': row.get('operation') if row.get('operation') in (
                     '/responses', '/responses/compact', '/v1/messages', '/v1/messages/count_tokens') else 'native_service',
@@ -93,19 +100,71 @@ def recent(home, *, request_id=None, model=None, since=None, identity='any', lim
     return results
 
 
+def agent_summary(rows, model, effort, *, limit):
+    """Reports from retained child turns, not an attestation or a completeness claim."""
+    turns = [row for row in rows if row['operation'] == '/responses']
+    pairs = [(row, attempt) for row in turns for attempt in row['attempt_evidence']]
+    summary = {'coverage': 'retained_records_only', 'limit_reached': len(rows) >= limit, 'requests': len(turns),
+               'helper_requests': len(rows) - len(turns), 'attempts': len(pairs)}
+    for field, expected in (('model', model), ('effort', effort)):
+        requested = 'requested_' + field
+        statuses = [a[field + '_status'] for _, a in pairs]
+        summary[field + '_reports'] = [dict(report, request_id=row['request_id'], attempt=a.get('attempt'))
+            for row, a in pairs for report in a[field + '_reports']]
+        mismatch = any(a[requested] is not None and a[requested] != expected for _, a in pairs)
+        partial = (summary['limit_reached'] or not pairs or any(not row['attempt_evidence'] or row['outcome'] != 'success'
+            for row in turns) or any(a[requested] is None or a.get('reports_limited') or not a[field + '_reports']
+            for _, a in pairs))
+        summary[field + '_status'] = ('contradictory' if 'contradictory' in statuses else
+            'mismatch' if mismatch or 'mismatch' in statuses else
+            'unverified' if partial or any(s != 'provider_reported_match' for s in statuses)
+            else 'provider_reported_match')
+    return summary
+
+
+def _timestamp(value):
+    try:
+        parsed = datetime.fromisoformat(value)
+        if parsed.tzinfo is not None:
+            return parsed
+    except ValueError:
+        pass
+    raise argparse.ArgumentTypeError('timestamp must include a UTC offset')
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--home', type=Path, default=state.default_home())
     parser.add_argument('--request-id')
     parser.add_argument('--model')
+    parser.add_argument('--thread-id')
+    parser.add_argument('--parent-thread-id')
+    parser.add_argument('--since', type=_timestamp)
+    parser.add_argument('--until', type=_timestamp)
+    parser.add_argument('--agent-summary', action='store_true',
+                        help='Summarize exact child evidence; --model is expected, not a filter')
+    parser.add_argument('--expected-effort', choices=sorted(request_evidence.EFFORTS))
     parser.add_argument('--minutes', type=int, default=60, help='Recent window; 0 reads all retained records')
     parser.add_argument('--limit', type=int, default=20)
     parser.add_argument('--identity', choices=('any', 'unverified', 'mismatch', 'contradictory'), default='any')
     parser.add_argument('--json', action='store_true')
     args = parser.parse_args(argv)
     if args.minutes < 0 or not 1 <= args.limit <= 100: parser.error('minutes must be nonnegative; limit must be 1–100')
-    rows = recent(args.home, request_id=args.request_id, model=args.model, identity=args.identity,
-                  limit=args.limit, since=datetime.now(timezone.utc) - timedelta(minutes=args.minutes) if args.minutes else None)
+    for value in (args.thread_id, args.parent_thread_id):
+        if value is not None and request_evidence.thread_id(value) is None:
+            parser.error('thread IDs must be canonical UUIDs')
+    if args.since and args.until and args.until < args.since: parser.error('until must not precede since')
+    if args.agent_summary and (not all((args.thread_id, args.parent_thread_id, args.since,
+            args.until, args.model, args.expected_effort)) or args.request_id or args.identity != 'any'):
+        parser.error('agent-summary needs child and parent IDs, since/until, model and expected-effort; no identity/request filter')
+    rows = recent(args.home, request_id=args.request_id, model=None if args.agent_summary else args.model,
+                  identity=args.identity, thread_id=args.thread_id, parent_thread_id=args.parent_thread_id,
+                  until=args.until, limit=args.limit, since=args.since or (
+                  datetime.now(timezone.utc) - timedelta(minutes=args.minutes) if args.minutes else None))
+    if args.agent_summary:
+        print(json.dumps({'summary': agent_summary(rows, args.model, args.expected_effort, limit=args.limit),
+                          'records': rows}, indent=2))
+        return 0
     if args.json:
         print(json.dumps(rows, indent=2))
     else:

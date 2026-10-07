@@ -1,5 +1,16 @@
 # Changelog
 
+## scg-review 0.5.1 and scg-subagents 0.5.20 (2026-10-07)
+
+- Resolve Codex child model reports from the installed router's bounded
+  request evidence, using exact child and parent IDs and assignment times.
+  Keep provider-reported identity separate from requested effort and from
+  independent attestation. Missing evidence stays unverified; a known mismatch
+  still invalidates a review. Older routers and other clients keep the existing
+  unverified fallback. Review order, model selection and approval gates stay put.
+- Document the current V1 tool schema without assuming V2 task names or
+  fork arguments exist. A zero-paid real-client probe checks the ID mapping.
+
 ## scg-ponytail 0.1.0 and scg-review 0.5.0 (2026-10-01)
 
 - Add the dedicated Ponytail plugin for Codex and Claude Code, with one

@@ -122,7 +122,7 @@ class LedgerTests(unittest.TestCase):
                 facts = ledger.facts()
                 self.assertEqual(
                     set(facts),
-                    {'request_id', 'operation', 'protocol', 'route', 'sends',
+                    {'request_id', 'thread_id', 'parent_thread_id', 'operation', 'protocol', 'route', 'sends',
                      'attempts', 'decisions', 'transitions', 'committed',
                      'terminal_source', 'outcome', 'outcome_phase',
                      'outcome_source', 'outcome_code', 'outcome_output',
