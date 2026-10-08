@@ -2,15 +2,17 @@
 import json
 import time
 from . import (availability, compaction as comp, local_services, handoff_response,
-               provider_defs, request_context, transport, turn_budget, jev_compaction)
+               media, provider_defs, request_context, transport, turn_budget, jev_compaction)
 from . import outbound, rejected_repair, request_evidence, subscription_roster
 from .compaction_summary import (summary_entries as _summary_entries,
                                  summarize as _summarize)
 from .errors import PreparationError, SubscriptionRequired, UnknownModel
+from .external_provider import ExternalProvider
 from .registry import by_slug, near_miss
 from .events import log_event
 from .discovered import remember
 from .tool_adapter import snoop_response_identity, stream_events, ToolEvents
+from .video_provider import VideoResponsesProvider
 
 from .transport import HOP_HEADERS, Prepared, passthrough
 NATIVE_SERVICE_PATHS = {'/alpha/search', '/alpha/notes/v2/thread_hint', '/guardian', '/guardian-classifier'}
@@ -76,34 +78,16 @@ class SubscriptionProvider:
         return rejected_repair.encrypted_content(prepared, described, raw)
 
 
-class ExternalResponsesProvider:
+class ExternalResponsesProvider(ExternalProvider):
     """One external provider serving the Codex Responses family (Plan 141)."""
-
-    def __init__(self, defn, region='global'):
-        self.defn = defn
-        self.name = defn.id
-        self.region = region if provider_defs.valid_region(region) else 'global'
-        self.host = provider_defs.region_host(defn.id, self.region) or defn.host
-        self.kind = defn.kind
-
-    def owns(self, model, path, openai_models, openai_mode='subscription',
-             allowed=None, *, catalogue):
-        entry = catalogue.get(model) if isinstance(model, str) else None
-        if (entry is None or entry.provider != self.defn.id
-                or is_native_service(path)):
-            return False
-        # Plan 068 allowlist plus the key-filtered snapshot gate
-        # routing like the picker; no snapshot yet means policy decides.
-        if allowed is not None and model not in allowed:
-            return False
-        from . import availability as _availability
-        return _availability.permitted(model)
 
     def prepare(self, model, path, payload, raw_body, headers, credentials, decoded_len=None, context=None):
         if path not in ('/responses', '/responses/compact'):
             raise PreparationError(f'{self.defn.label} supports responses only')
         # Every model fact below reads this row: routed, the ingress snapshot (Plan 188).
         entry = context.row if context is not None else by_slug(model) if isinstance(model, str) else model
+        if getattr(entry, 'media_kind', None) is not None or media.media_tool(payload)[0] is not None:
+            raise PreparationError(f'{model} is not a media-generation model')
         # Before any rewrite: what this client's thread carries. The slim below
         # is invisible upstream, so provider usage alone never moves the trigger.
         carried = turn_budget.carried_tokens(payload, decoded_len) if decoded_len else None
@@ -265,7 +249,9 @@ def adapters(region='global'):
     `region` selects the endpoint profile host (Plan 145); unknown
     names fall back to the global host inside the adapter.
     """
-    return (tuple(ExternalResponsesProvider(defn, region)
+    return (tuple(VideoResponsesProvider(defn, region)
+                  for defn in provider_defs.external_serving(provider_defs.VIDEOS))
+            + tuple(ExternalResponsesProvider(defn, region)
                   for defn in provider_defs.external_serving(provider_defs.RESPONSES))
             + (SubscriptionProvider(), LocalServicesProvider()))
 
@@ -276,6 +262,9 @@ def compaction_call(provider, model, path, payload, row=None, context=None,
     if provider.kind != provider_defs.EXTERNAL:
         return None
     row = context.row if context is not None else row
+    if getattr(row, 'media_kind', None) is not None and (
+            path == '/responses/compact' or comp.has_compaction_trigger(payload.get('input', []))):
+        raise PreparationError('Media generation models cannot compact a chat')
     if path == '/responses/compact':
         return lambda key: provider.compact(
             model, payload, key, row, context=context, allowed=allowed)

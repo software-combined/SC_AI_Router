@@ -41,15 +41,16 @@ class Prepared:
 
     __slots__ = ('host', 'path', 'headers', 'body', 'tool_names', 'provider',
                  'fallback', 'output_cap', 'context_tokens', 'context',
-                 'decoded_body_bytes')
+                 'decoded_body_bytes', 'response_adapter')
 
     def __init__(self, host, path, headers, body, tool_names, provider,
                  fallback=None, output_cap=None, context_tokens=None, context=None,
-                 decoded_body_bytes=None):
+                 decoded_body_bytes=None, response_adapter=None):
         self.host, self.path, self.headers = host, path, headers
         self.body, self.tool_names, self.provider = body, tool_names, provider
         self.fallback, self.context = fallback, context
         self.decoded_body_bytes = decoded_body_bytes
+        self.response_adapter = response_adapter
         # The output cap this request asks upstream for, when the adapter
         # computes one; None when the client's own body passes through.
         self.output_cap = output_cap
