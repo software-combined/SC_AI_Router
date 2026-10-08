@@ -9,13 +9,15 @@ The path rows are built from their owners (Plan 125): `providers` owns the
 native service paths and `claude` owns the Messages paths, so a path added
 there is routable here without a second edit.
 """
-from .. import claude, provider_defs, providers
-from . import messages, responses
+from .. import claude, image_provider, provider_defs, providers
+from . import images, messages, responses
 
 POST = 'POST'
 GET = 'GET'
 
 TABLE = (
+    {'methods': (POST,), 'paths': image_provider.IMAGE_POST_PATHS,
+     'policy': images.POLICY},
     # Responses family: Codex turns, compaction, native service paths.
     {'methods': (POST,), 'paths': frozenset({'/responses', '/responses/compact'}),
      'policy': responses.POLICY},

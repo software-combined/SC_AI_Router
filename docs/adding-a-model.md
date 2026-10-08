@@ -11,6 +11,13 @@ Rows belong to a provider (`ai_router/provider_defs.py`); `--provider ID`
 picks a different one, and defaults to `openrouter`. A provider whose
 definition carries `catalogue_shape: manual` (no live model list) has its
 rows authored by hand, and `models add` refuses it rather than guessing.
+Media rows (the image and video models behind OpenRouter's Images and
+Videos APIs) are likewise hand-authored: the default chat `/models`
+list omits them, so `models add` cannot derive them. Author them as unlisted preview
+with `media_kind: image` or `video`, `modalities: ["text", "image"]` and
+reasoning `["none"]`, following the existing media rows.
+See [media generation](media-generation.md) for native image routing and
+the video submission boundary.
 `models check` and `live_refresh` follow the same rule in reverse: a fetch
 only ever rewrites rows owned by the provider whose catalogue it read.
 

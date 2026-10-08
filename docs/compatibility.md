@@ -1,5 +1,33 @@
 # Compatibility
 
+## Native media, 8 October 2026 AEDT
+
+Codex desktop `26.930.61225` bundles CLI `0.160.1`; Claude Code remains
+`2.1.283`. The four 1.0.11 chat-route checks below remain applicable to
+unchanged paths on these same client versions.
+
+The isolated 1.0.12 candidate passed real Codex media checks with
+`tools/probe_media_generation.py`. GPT Image 2 produced one native
+`imageGeneration` item; saved bytes matched the provider response by SHA-256.
+OpenRouter reported USD
+0.005955 usage cost; it did not expose a served model or effort.
+Veo 3.1 Fast accepted one video job and Codex retained its polling message.
+Video completion and download were not tested. The stricter retention check
+passed on a second run of each model: four paid generation sends in total.
+
+Each live leg allowed one generation send and no polls or retries. Images
+used one low-quality 1024-square output; videos used four seconds at 720p
+without audio. Input was capped at 128 KiB and the client deadline at 180
+seconds. Image chat/tool orchestration used two synthetic Responses replies;
+only the image generation reached a live provider. All credentials and
+client configuration lived in a private temporary probe home. The installed
+router and client settings were unchanged.
+
+The image probe supplied a compatible signed-in provider profile and a
+vision-capable chat model. Codex 0.160.1 does not expose the native image tool
+in the stock external-only router profile. This verifies the media route and
+saved artifact, not installed image-tool availability or fleet rollout.
+
 ## Child model evidence, 7 October 2026 AEDT
 
 The zero-paid `tools/probe_agent_identity.py` passed on Codex CLI `0.160.1`.

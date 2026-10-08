@@ -60,7 +60,7 @@ def validate(payload):
 def fetch(host, key, _urlopen=urllib.request.urlopen):
     """(status, document, auth_rejected) for one `/models/user` call."""
     req = urllib.request.Request(
-        'https://' + host + '/api/v1/models/user',
+        'https://' + host + '/api/v1/models/user?output_modalities=text,image,video',
         headers={'Authorization': 'Bearer ' + key})
     try:
         with _urlopen(req, timeout=30) as response:

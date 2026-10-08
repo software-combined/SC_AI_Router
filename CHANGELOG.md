@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 1.0.12
+
+- Add OpenRouter image generation through Codex's native image tool in
+  external-only mode. Subscription mode keeps native image requests on
+  ChatGPT; explicit external image IDs use the OpenRouter key in either mode.
+  Generated image bytes retain Codex's native display and save contract.
+  Codex requires a compatible signed-in provider profile to expose its image
+  tool; the stock external-only router profile does not enable it.
+  External image edits and image models used as chat models fail before a send.
+- Add preview video job submission for `google/veo-3.1` and
+  `google/veo-3.1-fast`. Accepted jobs complete the Codex turn with their ID
+  and polling URL. Polling and downloading require the OpenRouter key.
+  Media models remain unlisted previews; the router does not poll video jobs.
+
 ## 1.0.11
 
 - Review recaps can read upstream-reported model evidence for an exact Codex
