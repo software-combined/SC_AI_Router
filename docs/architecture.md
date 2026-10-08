@@ -352,8 +352,13 @@ is in [runtime files](runtime-files.md#codex-usage-limit-record).
    `ingress.read_body`, `router.Handler.admit` and again on every send in
    `transport.post_with_phases`; `Prepared.decoded_body_bytes` keeps a
    compressed passthrough from being under-counted. `runtime.MAX_BODY`
-   (16 MiB) is only the threshold for the single large-request slot, which
-   `router.py` holds until relay, repair, fallback and cleanup return.
+   (16 MiB) is only the threshold for the single large-request slot.
+   `request_lease.py` owns acquisition, ownership, release and scalar diagnostics;
+   the controller injects the threshold and logger. After preparation returns,
+   the controller releases a slot when the prepared request fits that threshold
+   and retains neither a fallback nor a response adapter. Otherwise the slot
+   spans relay and cleanup. Retry admission counts both retained bodies and
+   reacquires a released slot before any additional send.
    `turn_budget.BODY_BUDGET` shapes external Responses turns only; native
    bodies are forwarded whole. Protocol representation lives in `providers.py` (Responses/Messages) and
    `claude.py` (Messages ingress).
