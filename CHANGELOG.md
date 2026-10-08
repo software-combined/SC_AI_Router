@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 1.0.13
+
+- Enable Codex's native image tool in ordinary OpenRouter-only and Switch
+  Codex profiles without a ChatGPT sign-in. Generate images with GPT Image 2
+  using the OpenRouter key, then display and save them through Codex.
+  Switched profiles keep image billing on OpenRouter even when the install
+  also supports a ChatGPT subscription. Subscription profiles keep their
+  existing native image route. External image editing remains unavailable.
+
 ## 1.0.12
 
 - Add OpenRouter image generation through Codex's native image tool in
