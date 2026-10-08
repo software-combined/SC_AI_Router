@@ -24,27 +24,33 @@ class ProtocolContractTests(unittest.TestCase):
         # Plan 125: a path added to providers/claude is routable here with
         # no second edit, and the union stays exact.
         from ai_router import claude as claude_mod
-        from ai_router import protocols, providers as providers_mod
+        from ai_router import image_provider, protocols, providers as providers_mod
+        from ai_router.protocols import images as images_mod
         from ai_router.protocols import messages as messages_mod
         from ai_router.protocols import responses as responses_mod
         for path in providers_mod.NATIVE_SERVICE_PATHS:
             self.assertIs(protocols.select('POST', path), responses_mod.POLICY)
         for path in claude_mod.CLAUDE_POST_PATHS:
             self.assertIs(protocols.select('POST', path), messages_mod.POLICY)
+        for path in image_provider.IMAGE_POST_PATHS:
+            self.assertIs(protocols.select('POST', path), images_mod.POLICY)
         self.assertEqual(
             protocols.owned_paths(),
             frozenset(providers_mod.NATIVE_SERVICE_PATHS)
             | claude_mod.CLAUDE_POST_PATHS
+            | image_provider.IMAGE_POST_PATHS
             | {'/responses', '/responses/compact', '/models', '/v1/models'})
 
     def test_policy_names_are_the_definition_constants(self):
         # Plan 155 (F10): the table exports the protocol names, so a policy
         # name cannot drift into a second literal.
         from ai_router import provider_defs
+        from ai_router.protocols import images as images_mod
         from ai_router.protocols import messages as messages_mod
         from ai_router.protocols import responses as responses_mod
         self.assertEqual(responses_mod.POLICY.name, provider_defs.RESPONSES)
         self.assertEqual(messages_mod.POLICY.name, provider_defs.MESSAGES)
+        self.assertEqual(images_mod.POLICY.name, provider_defs.IMAGES)
 
     def test_the_discovery_listing_is_a_table_row(self):
         # Plan 155 (F10): the handler asks the table, so the GET is owned by

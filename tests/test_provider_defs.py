@@ -66,6 +66,17 @@ class DefinitionTests(unittest.TestCase):
         self.assertEqual(
             provider_defs.OPENROUTER.path_for(provider_defs.RESPONSES, '/responses'),
             '/api/v1/responses')
+        self.assertEqual(
+            provider_defs.OPENROUTER.path_for(provider_defs.IMAGES, ''),
+            '/api/v1/images')
+        self.assertEqual(
+            provider_defs.OPENROUTER.path_for(provider_defs.IMAGES, '/generations'),
+            '/api/v1/images/generations')
+        self.assertEqual(
+            provider_defs.OPENROUTER.path_for(provider_defs.VIDEOS, ''),
+            '/api/v1/videos')
+        with self.assertRaises(ValueError):
+            provider_defs.ANTHROPIC.path_for(provider_defs.IMAGES, '')
         # Anthropic's prefix is empty: the client path travels as-is.
         self.assertEqual(
             provider_defs.ANTHROPIC.path_for(provider_defs.MESSAGES, '/v1/messages'),

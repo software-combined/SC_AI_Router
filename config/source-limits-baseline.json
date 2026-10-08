@@ -44,6 +44,7 @@
   "tests/test_lifecycle.py": 456,
   "tests/test_mixed_router.py": 409,
   "tests/test_models_cmd.py": 373,
+  "tests/test_model_route_conformance.py": 320,
   "tests/test_notice.py": 376,
   "tests/test_notice_delivery.py": 414,
   "tests/test_operator_surface.py": 451,
@@ -70,5 +71,6 @@
   "tools/probe_agent_handoffs.py": 515,
   "tools/probe_codex_runtime.py": 501,
   "tools/probe_desktop_handoff.py": 425,
-  "ai_router/claude_compat.py": 260
+  "ai_router/claude_compat.py": 260,
+  "ai_router/provider_defs.py": 255
 }

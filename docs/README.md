@@ -10,6 +10,7 @@ models and billing. These pages go deeper.
 | [Operations](operations.md) | Install, update, rollback, uninstall and the daily commands |
 | [Troubleshooting](troubleshooting.md) | Symptom-first remedies: updates, serving, keys, client quirks |
 | [Adding a model](adding-a-model.md) | Adding, probing and promoting a registry row |
+| [Media generation](media-generation.md) | Preview image and video routes, client prerequisites and bounded verification |
 | [Claude Code setup](claude-code.md) | Pointing Claude Code and the desktop app at the router |
 | [Architecture](architecture.md) | Module ownership and the allowed dependency direction |
 | [Installed runtime files](runtime-files.md) | What the release bundle contains |

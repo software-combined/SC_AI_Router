@@ -49,6 +49,13 @@ def open_calls(items):
 # and is never dropped here; providers materialize it before the scrub.
 def _call_complete(item):
     kind = item.get('type')
+    if kind == 'image_generation_call':
+        # A finished image result carries `id`, not `call_id`: completed
+        # (or failed) results replay as history, while an in-progress call
+        # without either id is still a fragment.
+        return (isinstance(item.get('call_id'), str)
+                or (isinstance(item.get('id'), str)
+                    and item.get('status') in ('completed', 'failed')))
     if not isinstance(item.get('call_id'), str):
         return False
     field = {'function_call': 'arguments', 'custom_tool_call': 'input'}.get(kind)

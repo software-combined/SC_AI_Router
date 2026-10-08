@@ -26,17 +26,25 @@ class ClientContractTests(unittest.TestCase):
         served = _served_protocols()
         for defn in client_table.CLIENTS:
             with self.subTest(client=defn.id):
-                self.assertIn(defn.protocol, served)
+                for protocol in defn.protocols:
+                    self.assertIn(protocol, served)
 
     def test_every_served_protocol_has_a_client(self):
-        claimed = {defn.protocol for defn in client_table.CLIENTS}
+        claimed = {protocol for defn in client_table.CLIENTS for protocol in defn.protocols}
         for name in _served_protocols():
             with self.subTest(protocol=name):
                 self.assertIn(name, claimed)
 
     def test_the_table_names_the_provider_defs_constants(self):
-        names = {defn.protocol for defn in client_table.CLIENTS}
-        self.assertLessEqual(names, {provider_defs.RESPONSES, provider_defs.MESSAGES})
+        names = {protocol for defn in client_table.CLIENTS for protocol in defn.protocols}
+        self.assertLessEqual(names, {provider_defs.RESPONSES, provider_defs.MESSAGES,
+                                    provider_defs.IMAGES})
+
+    def test_images_belong_to_codex_and_preserve_the_primary_picker_protocol(self):
+        self.assertEqual(client_table.CODEX.protocols,
+                         (provider_defs.RESPONSES, provider_defs.IMAGES))
+        self.assertEqual(client_table.CODEX.protocol, provider_defs.RESPONSES)
+        self.assertEqual(client_table.CLAUDE.protocols, (provider_defs.MESSAGES,))
 
     def test_the_roster_leaf_matches_the_table(self):
         self.assertEqual(tuple(d.id for d in client_table.CLIENTS), roster.CLIENT_IDS)
