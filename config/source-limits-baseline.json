@@ -52,7 +52,7 @@
   "tests/test_provider_swap.py": 343,
   "tests/test_providers.py": 477,
   "tests/test_publish_feed.py": 331,
-  "tests/test_registry.py": 324,
+  "tests/test_registry.py": 340,
   "tests/test_runtime.py": 327,
   "tests/test_setup.py": 413,
   "tests/test_stream_context_errors.py": 358,
@@ -70,5 +70,6 @@
   "tools/probe_agent_handoffs.py": 515,
   "tools/probe_codex_runtime.py": 501,
   "tools/probe_desktop_handoff.py": 425,
-  "ai_router/claude_compat.py": 260
+  "ai_router/claude_compat.py": 260,
+  "ai_router/provider_defs.py": 254
 }

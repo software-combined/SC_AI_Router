@@ -361,7 +361,11 @@ is in [runtime files](runtime-files.md#codex-usage-limit-record).
    parameterized by one `ProviderDef`, never by a provider-name branch. A
    new external provider is a table entry plus registry rows; a provider
    with a different wire format is a new adapter class, never a branch in
-   the request path. External headers start fresh every request;
+   the request path. Media is the one row-driven fork inside the Responses
+   adapter: a row with `media_kind` answers OpenRouter's Images or Videos
+   API through the pure `media.py` translation (prompt from the turn, answer
+   back as a Responses message), while chat rows keep the shared projection.
+   External headers start fresh every request;
    subscription headers never accompany an externally billed request.
    `decisions.py` is the one client for a provider's typed-decision endpoint
    (Jev today): it holds no policy and answers only what it can validate, so

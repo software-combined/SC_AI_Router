@@ -404,19 +404,45 @@ class ImageProjectionTests(unittest.TestCase):
         self.assertEqual(prepared.host, 'openrouter.ai')
 
 
-class ImageGenerationTests(unittest.TestCase):
-    def test_image_tool_declaration_reaches_upstream_untouched(self):
-        payload = {'model': 'openai/gpt-5.4-image-2',
-                   'reasoning': {'effort': 'low'},
+class MediaRouteTests(unittest.TestCase):
+    def test_image_turn_posts_prompt_to_the_images_api(self):
+        payload = {'model': 'openai/gpt-image-2',
+                   'reasoning': {'effort': 'none'},
                    'tools': [{'type': 'image_generation'}],
                    'input': [{'type': 'message', 'role': 'user', 'content': [
                        {'type': 'input_text', 'text': 'draw a red square'}]}]}
         prepared = _external_responses().prepare(
-            'openai/gpt-5.4-image-2', '/responses', payload, b'raw', {},
+            'openai/gpt-image-2', '/responses', payload, b'raw', {},
             _stub_credentials())
+        self.assertEqual(
+            (prepared.host, prepared.path), ('openrouter.ai', '/api/v1/images'))
         sent = json.loads(prepared.body)
-        self.assertEqual(sent['model'], 'openai/gpt-5.4-image-2')
-        self.assertEqual(sent['tools'], [{'type': 'image_generation'}])
+        self.assertEqual(sent, {'model': 'openai/gpt-image-2',
+                                'prompt': 'draw a red square'})
+
+    def test_video_turn_opens_a_job_on_the_videos_api(self):
+        payload = {'model': 'google/veo-3.1-fast',
+                   'reasoning': {'effort': 'none'},
+                   'tools': [{'type': 'video_generation'}],
+                   'input': [{'role': 'user', 'content': 'a slow push-in'}]}
+        prepared = _external_responses().prepare(
+            'google/veo-3.1-fast', '/responses', payload, b'raw', {},
+            _stub_credentials())
+        self.assertEqual(
+            (prepared.host, prepared.path), ('openrouter.ai', '/api/v1/videos'))
+        sent = json.loads(prepared.body)
+        self.assertEqual(sent, {'model': 'google/veo-3.1-fast',
+                                'prompt': 'a slow push-in'})
+
+    def test_media_tool_on_a_chat_row_is_refused(self):
+        from ai_router.errors import PreparationError
+        payload = {'model': 'z-ai/glm-5.3',
+                   'tools': [{'type': 'image_generation'}],
+                   'input': [{'role': 'user', 'content': 'draw'}]}
+        with self.assertRaises(PreparationError):
+            _external_responses().prepare(
+                'z-ai/glm-5.3', '/responses', payload, b'raw', {},
+                _stub_credentials())
 
     def test_image_result_item_survives_history_replay(self):
         # A completed image_generation_call result carries `id`, not
@@ -429,14 +455,17 @@ class ImageGenerationTests(unittest.TestCase):
         self.assertEqual(wire_shape.pair_problems(items), {})
         self.assertEqual(tool_runs.open_calls(items), {})
 
-    def test_image_rows_are_unlisted_preview(self):
-        for slug in ('openai/gpt-5-image', 'openai/gpt-5-image-mini',
-                     'openai/gpt-5.4-image-2'):
+    def test_media_rows_are_unlisted_preview(self):
+        for slug, kind in (('openai/gpt-image-2', 'image'),
+                            ('openai/gpt-image-2.5-sunburst', 'image'),
+                            ('openai/gpt-image-2.5-flare', 'image'),
+                            ('google/veo-3.1', 'video'),
+                            ('google/veo-3.1-fast', 'video')):
             with self.subTest(model=slug):
                 row = registry.by_slug(slug)
                 self.assertEqual(row.tier, 'preview')
                 self.assertFalse(row.listed)
-                self.assertIn('image', row.modalities)
+                self.assertEqual(row.media_kind, kind)
 
 
 if __name__ == '__main__':
