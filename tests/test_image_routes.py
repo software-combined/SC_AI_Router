@@ -1,11 +1,13 @@
 """Native Codex Images requests retain billing, credentials and result bytes."""
 import json
+import tomllib
 import unittest
 from unittest import mock
 
 from ai_router import availability, provider_defs, registry
 from tests.fakes import FakeUpstream, install_fake
 from tests.harness import isolated_home, post, start_server
+from tests.install_fixtures import install_mod
 from tests.model_route_fixtures import HEADERS, media_success
 
 
@@ -19,10 +21,10 @@ class ImageRoutesTests(unittest.TestCase):
         self.addCleanup(self.server.server_close)
         self.addCleanup(self.server.shutdown)
 
-    def request(self, model, path='/images/generations', **options):
+    def request(self, model, path='/images/generations', headers=None, **options):
         payload = {'model': model, 'prompt': 'a red square', **options}
         response = post(self.server.server_port, '/test-token/backend-api/codex' + path,
-                        payload, HEADERS)
+                        payload, HEADERS if headers is None else headers)
         raw, status = response.read(), response.status
         response.close()
         return status, raw
@@ -54,6 +56,57 @@ class ImageRoutesTests(unittest.TestCase):
                 self.assertEqual(json.loads(send[3]), {'model': 'gpt-image-2', 'prompt': 'a red square'})
                 self.assertEqual(send[4]['Authorization'], HEADERS['Authorization'])
                 self.assertNotIn('test-key', json.dumps(send[4]))
+
+    def test_switched_native_image_uses_external_key_and_drops_local_credentials(self):
+        self.server.state['openai_mode'] = 'subscription'
+        for login in ({}, HEADERS):
+            with self.subTest(login_present=bool(login)):
+                self.sends.clear()
+                self.response = media_success('openai/gpt-image-2', 'image')
+                headers = {**login, 'X-SCG-Codex-Route': 'routed',
+                           'X-OpenAI-Actor-Authorization': 'Bearer test-token'}
+                status, raw = self.request('gpt-image-2', headers=headers)
+                self.assertEqual((status, raw), (200, self.response._buf))
+                send, = self.sends
+                self.assertEqual(send[:3], (provider_defs.OPENROUTER.host, 'POST', '/api/v1/images'))
+                self.assertEqual(json.loads(send[3])['model'], 'openai/gpt-image-2')
+                sent_headers = {key.lower(): value for key, value in send[4].items()}
+                self.assertEqual(sent_headers['authorization'], 'Bearer test-key')
+                for key in ('x-scg-codex-route', 'x-openai-actor-authorization',
+                            'chatgpt-account-id', 'x-api-key', 'anthropic-beta'):
+                    self.assertNotIn(key, sent_headers)
+
+    def test_open_external_only_client_stays_external_after_install_mode_change(self):
+        switch = install_mod._client_choice._switch
+        block = switch.build('/r', {'port': 4321, 'token': 'test-token'},
+                             'none', False, 'default')
+        headers = tomllib.loads(block)['model_providers']['scg_router']['http_headers']
+        self.server.state['openai_mode'] = 'subscription'
+        status, raw = self.request('gpt-image-2', headers=headers)
+        self.assertEqual((status, raw), (200, self.response._buf))
+        send, = self.sends
+        self.assertEqual(send[:3], (provider_defs.OPENROUTER.host, 'POST', '/api/v1/images'))
+        sent_headers = {key.lower(): value for key, value in send[4].items()}
+        self.assertEqual(sent_headers['authorization'], 'Bearer test-key')
+        self.assertNotIn('x-openai-actor-authorization', sent_headers)
+        self.assertNotIn('x-scg-codex-route', sent_headers)
+
+    def test_switched_native_images_keep_policy_and_edit_refusals(self):
+        self.server.state['openai_mode'] = 'subscription'
+        headers = {'x-scg-codex-route': 'routed',
+                   'x-openai-actor-authorization': 'Bearer test-token'}
+        cases = (('gpt-image-2', '/images/edits', None, True),
+                 ('unregistered-image', '/images/generations', None, True),
+                 ('gpt-image-2', '/images/generations', [], True),
+                 ('gpt-image-2', '/images/generations', None, False))
+        for model, path, allowed, permitted in cases:
+            with self.subTest(model=model, path=path, allowed=allowed, permitted=permitted):
+                self.sends.clear()
+                self.server.state['allowed_models'] = allowed
+                with mock.patch.object(availability, 'permitted', return_value=permitted):
+                    status, _ = self.request(model, path, headers=headers)
+                self.assertEqual(status, 400)
+                self.assertEqual(self.sends, [])
 
     def test_explicit_external_image_rows_route_their_exact_model(self):
         self.server.state['openai_mode'] = 'subscription'

@@ -12,6 +12,8 @@ from pathlib import Path
 
 BEGIN = '# BEGIN local mixed model picker'
 END = '# END local mixed model picker'
+# Codex's gateway capability check; this credential stays on the local route.
+IMAGE_AUTH_HEADER = 'x-openai-actor-authorization'
 
 # Codex desktop preferences this installer owns, in the config's [desktop]
 # table the client writes itself through config/batchWrite: Max in, Ultra out.
@@ -49,17 +51,15 @@ def build_block(home, state, mode, static_catalogue=False):
     catalog_line = f'model_catalog_json = "{Path(home).as_posix()}/mixed-models.json"\n'
     url = f'http://127.0.0.1:{state["port"]}/{state["token"]}/backend-api/codex'
     if mode == 'none':
-        return (BEGIN + '\n'
-                'model_provider = "scg_router"\n'
+        return (BEGIN + '\nmodel_provider = "scg_router"\n'
                 + catalog_line +
                 'approvals_reviewer = "user"\n'
-                # Dotted keys, not a [table]: owner keys after END stay root.
-                'model_providers.scg_router.name = "SC router"\n'
-                f'model_providers.scg_router.base_url = "{url}"\n'
-                'model_providers.scg_router.wire_api = "responses"\n'
+                # An inline table keeps owner keys after END at root.
+                'model_providers.scg_router = { name = "SC router", wire_api = "responses", '
+                f'base_url = "{url}", requires_openai_auth = false, '
+                f'http_headers = {{ "x-scg-codex-route" = "routed", "{IMAGE_AUTH_HEADER}" = "Bearer {state["token"]}" }} }}\n'
                 + END + '\n')
-    return (BEGIN + '\n'
-            f'openai_base_url = "{url}"\n'
+    return (BEGIN + f'\nopenai_base_url = "{url}"\n'
             + (catalog_line if static_catalogue else '')
             + 'approvals_reviewer = "user"\n' + END + '\n')
 

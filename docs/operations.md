@@ -330,6 +330,8 @@ app first and to open it again afterwards.
 While Codex is switched:
 
 - only OpenRouter models are listed, and they are billed to OpenRouter;
+- image generation uses GPT Image 2 and bills the OpenRouter key without a
+  ChatGPT sign-in; see [media generation](media-generation.md);
 - a model that needs your ChatGPT subscription answers with a short message
   that says what to pick instead;
 - Codex still asks you before it runs a command that needs approval;
