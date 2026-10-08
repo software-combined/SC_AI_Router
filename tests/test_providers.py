@@ -2,7 +2,7 @@ import json
 import unittest
 from types import SimpleNamespace
 from unittest import mock
-from ai_router import availability, compaction_summary, provider_defs, providers
+from ai_router import availability, compaction_summary, provider_defs, providers, registry, tool_runs, wire_shape
 from ai_router.image_items import IMAGE_NOTE
 from tests.harness import (
     isolated_home as _isolated_home,
@@ -402,6 +402,41 @@ class ImageProjectionTests(unittest.TestCase):
         prepared = _external_responses().prepare(
             'z-ai/glm-5.3', '/responses', payload, b'raw', {}, _stub_credentials())
         self.assertEqual(prepared.host, 'openrouter.ai')
+
+
+class ImageGenerationTests(unittest.TestCase):
+    def test_image_tool_declaration_reaches_upstream_untouched(self):
+        payload = {'model': 'openai/gpt-5.4-image-2',
+                   'reasoning': {'effort': 'low'},
+                   'tools': [{'type': 'image_generation'}],
+                   'input': [{'type': 'message', 'role': 'user', 'content': [
+                       {'type': 'input_text', 'text': 'draw a red square'}]}]}
+        prepared = _external_responses().prepare(
+            'openai/gpt-5.4-image-2', '/responses', payload, b'raw', {},
+            _stub_credentials())
+        sent = json.loads(prepared.body)
+        self.assertEqual(sent['model'], 'openai/gpt-5.4-image-2')
+        self.assertEqual(sent['tools'], [{'type': 'image_generation'}])
+
+    def test_image_result_item_survives_history_replay(self):
+        # A completed image_generation_call result carries `id`, not
+        # `call_id`: it answers nothing, so the pairing contract and the
+        # fragment scrub must both leave it alone on the next turn.
+        items = [{'type': 'message', 'role': 'user', 'content': 'draw'},
+                 {'type': 'image_generation_call', 'id': 'img1',
+                  'status': 'completed', 'result': 'B64DATA'}]
+        self.assertEqual(tool_runs.scrub_tool_fragments(items), items)
+        self.assertEqual(wire_shape.pair_problems(items), {})
+        self.assertEqual(tool_runs.open_calls(items), {})
+
+    def test_image_rows_are_unlisted_preview(self):
+        for slug in ('openai/gpt-5-image', 'openai/gpt-5-image-mini',
+                     'openai/gpt-5.4-image-2'):
+            with self.subTest(model=slug):
+                row = registry.by_slug(slug)
+                self.assertEqual(row.tier, 'preview')
+                self.assertFalse(row.listed)
+                self.assertIn('image', row.modalities)
 
 
 if __name__ == '__main__':
