@@ -28,7 +28,6 @@ def relay(handler, provider, prepared, metrics, started, has_image=False, *, log
         ledger.close()
         log_event('attempt_ledger', **ledger.facts())
 
-
 def _route(handler, provider, prepared, metrics, has_image, started, ledger, log_event,
            admit):
     observed = getattr(getattr(prepared.context, 'row', None), 'observed_item_types', ())
@@ -48,6 +47,7 @@ def _route(handler, provider, prepared, metrics, has_image, started, ledger, log
     try:
         response, headers_done, prepared, drained = strip_retry.post_with_retry(
             ledger, prepared, metrics, provider, log_event, admit); response_status = response.status
+        if prepared.response_adapter is not None: response = prepared.response_adapter(response, ledger.stream, metrics)
         if response.status >= 400:
             ledger.settle(upstream.outcome_of(response.status, drained, provider.defn.dialect))
         if (provider.defn.dialect == provider_defs.DIALECT_OPENAI
