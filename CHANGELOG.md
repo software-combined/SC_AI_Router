@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 1.0.14
+
+- Replace Claude Haiku 4.5 with the verified OpenRouter Haiku 5.5 row.
+  Offer Low through Max reasoning, with Low as the default, image input
+  and a one-million-token context. Upgrades remove the retired 4.5 picker row.
+- Keep hand-authored image/video rows outside the chat-catalogue availability
+  check. Missing chat models still fail model onboarding validation.
+
 ## 1.0.13
 
 - Enable Codex's native image tool in ordinary OpenRouter-only and Switch

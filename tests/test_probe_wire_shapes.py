@@ -12,6 +12,7 @@ import unittest
 import urllib.error
 import urllib.response
 from contextlib import redirect_stdout
+from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
@@ -78,7 +79,8 @@ class ShapeBodyTests(unittest.TestCase):
                                  (MIMO, {'effort': 'low'}, probe.MAX_OUTPUT_TOKENS))
 
     def test_a_row_without_low_effort_keeps_its_own_default(self):
-        body = probe.shape_body('apply_patch', registry.by_slug('anthropic/claude-haiku-4.5'))
+        row = replace(registry.by_slug(MIMO), reasoning=('none',), default_reasoning='none')
+        body = probe.shape_body('apply_patch', row)
         self.assertNotIn('reasoning', body)
 
 
