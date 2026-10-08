@@ -8,7 +8,7 @@ from ai_router.catalogue import RETIRED_SLUGS, merge
 from ai_router.providers import ExternalResponsesProvider, PreparationError, select
 from ai_router.registry import MODELS, by_slug
 
-PINNED_CLAUDE = ('anthropic/claude-fable-5.1', 'anthropic/claude-haiku-4.5',
+PINNED_CLAUDE = ('anthropic/claude-fable-5.1', 'anthropic/claude-haiku-5.5',
                  'anthropic/claude-opus-5.5', 'anthropic/claude-sonnet-5.5')
 RETIRED_LATEST = ('~anthropic/claude-sonnet-latest', '~anthropic/claude-fable-latest',
                   '~anthropic/claude-haiku-latest', '~anthropic/claude-opus-latest',
@@ -125,19 +125,28 @@ class ModelRosterTests(unittest.TestCase):
         self.assertNotIn(RETIRED_TERRA, merged)
         self.assertIn(SUBSCRIPTION_TERRA, merged)
 
-    def test_claude_without_effort_control_survives_refresh_and_prepares_none(self):
-        slug = 'anthropic/claude-haiku-4.5'
-        entries = apply(merge({'models': []}), {slug: {'reasoning': {'mandatory': False}}})
+    def test_haiku_replacement_retires_stale_picker_row_and_preserves_reasoning(self):
+        slug, retired = 'anthropic/claude-haiku-5.5', 'anthropic/claude-haiku-4.5'
+        haiku = by_slug(slug)
+        self.assertEqual((haiku.tier, haiku.listed), ('verified', True))
+        self.assertEqual((haiku.context_window, haiku.max_output_tokens), (1000000, 128000))
+        self.assertEqual(haiku.modalities, ('text', 'image'))
+        self.assertIsNone(by_slug(retired))
+        self.assertIn(retired, RETIRED_SLUGS)
+        entries = apply(merge({'models': [{'slug': retired}]}),
+                        {slug: {'reasoning': {'supported_efforts': list(haiku.reasoning)}}})
+        self.assertNotIn(retired, {m['slug'] for m in entries['models']})
         entry = next(m for m in entries['models'] if m['slug'] == slug)
-        self.assertEqual(entry['supported_reasoning_levels'],
-                         [{'effort': 'none', 'description': 'No reasoning'}])
+        self.assertEqual([r['effort'] for r in entry['supported_reasoning_levels']],
+                         ['low', 'medium', 'high', 'xhigh', 'max'])
+        self.assertEqual(entry['default_reasoning_level'], 'low')
         provider = select(slug, '/responses', [])
-        payload = {'model': slug, 'input': [], 'reasoning': {'effort': 'none'}}
+        payload = {'model': slug, 'input': [], 'reasoning': {'effort': 'low'}}
         prepared = provider.prepare(slug, '/responses', payload, b'',
                                     {'Authorization': 'Bearer subscription-test'},
                                     SimpleNamespace(key_for=lambda _pid=None: 'router-test'))
-        self.assertEqual(json.loads(prepared.body)['reasoning'], {'effort': 'none'})
+        self.assertEqual(json.loads(prepared.body)['reasoning'], {'effort': 'low'})
         self.assertEqual(prepared.headers['Authorization'], 'Bearer router-test')
-        payload['reasoning']['effort'] = 'high'
+        payload['reasoning']['effort'] = 'none'
         with self.assertRaises(PreparationError):
             provider.prepare(slug, '/responses', payload, b'', {}, None)

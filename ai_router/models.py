@@ -231,7 +231,8 @@ def cmd_check(path, live_by_id, provider_id=provider_defs.DEFAULT_EXTERNAL):
             problems.append('priorities not in picker order')
     if live_by_id is not None:
         owned = [row['slug'] for row in rows
-                 if (row.get('provider') or provider_defs.DEFAULT_EXTERNAL) == provider_id]
+                 if (row.get('provider') or provider_defs.DEFAULT_EXTERNAL) == provider_id
+                 and not row.get('media_kind')]
         missing = [slug for slug in owned if slug not in live_by_id]
         if missing:
             problems.append('not in live list: ' + ', '.join(sorted(missing)))
