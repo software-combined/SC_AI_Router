@@ -69,7 +69,8 @@ def image_body(upstream_id, payload, tool):
     if not prompt:
         raise PreparationError('image generation needs a text prompt')
     body = {'model': upstream_id, 'prompt': prompt}
-    for key in ('size', 'aspect_ratio', 'quality', 'n', 'output_format', 'background'):
+    for key in ('size', 'aspect_ratio', 'quality', 'n', 'output_format', 'background',
+                'output_compression', 'resolution', 'seed', 'input_references'):
         value = tool.get(key)
         if value is not None:
             body[key] = value
