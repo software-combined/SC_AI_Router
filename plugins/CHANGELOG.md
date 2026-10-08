@@ -1,5 +1,15 @@
 # Changelog
 
+## scg-ponytail 0.1.1 (2026-10-08)
+
+- Include affected callers, tests, fixtures, configuration and exports when
+  defining a change's scope, so a small edit still completes the task.
+- Preserve existing architectural boundaries, interfaces and conventions
+  during simplification. State material checks not completed and remaining
+  risks in the final response.
+- Retain the conditional shared-function fix, total-complexity guidance and
+  risk-based verification requirements.
+
 ## scg-review 0.5.1 and scg-subagents 0.5.20 (2026-10-07)
 
 - Resolve Codex child model reports from the installed router's bounded
