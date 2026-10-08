@@ -60,6 +60,10 @@ Windows); read `<version>` from `<home>/current`.
   OpenRouter models.
 - Claude desktop's gateway profile uses OpenRouter models. Its subscription
   remains in the signed-in profile; see [Claude setup](docs/claude-code.md).
+- Generate images in an OpenRouter-only Codex setup or while using Switch
+  Codex. Select an image-capable chat model, such as DeepSeek V4.1 Flash, and
+  ask for an image. GPT Image 2 bills your OpenRouter key; no ChatGPT sign-in
+  is needed. See [image generation](docs/media-generation.md).
 - Updates install automatically. Restart the assistant when asked to load
   new models. See [update and recovery instructions](docs/operations.md).
 

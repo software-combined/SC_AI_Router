@@ -86,9 +86,10 @@ def build(home, state, mode, static_catalogue, variant):
             # Attach moves the owner's own line into the receipt, and this
             # route refuses the ChatGPT model an automatic reviewer would use.
             'approvals_reviewer = "user"\n',
-            provider + 'false, http_headers = { "%s" = "routed" } }\n' % HEADER,
+            provider + 'false, http_headers = { "%s" = "routed", "%s" = "Bearer %s" } }\n'
+            % (HEADER, _codex.IMAGE_AUTH_HEADER, state['token']),
             _codex.END + '\n'))
-    if 'model_providers.%s.' % PROVIDER in block:
+    if mode == 'none':
         # The no-subscription block already defines the provider, sign-in off;
         # a second definition would make the whole file unreadable.
         return block

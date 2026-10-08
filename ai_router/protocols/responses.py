@@ -19,7 +19,7 @@ class _Policy:
         return request_context.resolve(model, request_context.capture())
 
     def select_provider(self, model, path, state, mode, openai_models=None,
-                        catalogue=None):
+                        catalogue=None, headers=None):
         if openai_models is None:
             openai_models = state.get('openai_models', [])
         return providers.select(

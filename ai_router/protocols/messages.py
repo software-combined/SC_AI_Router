@@ -23,7 +23,7 @@ class _Policy:
         return request_context.resolve(model, catalogue, claude.resolve(model, catalogue))
 
     def select_provider(self, model, path, state, mode, openai_models=None,
-                        catalogue=None):
+                        catalogue=None, headers=None):
         del openai_models
         return claude.select(model, path, mode,
                              anthropic_mode=state.get('anthropic_mode'),
