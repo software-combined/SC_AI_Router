@@ -1,5 +1,36 @@
 # Compatibility
 
+## OpenRouter-only images, 8 October 2026 AEDT
+
+The 1.0.13 candidate passed on Codex CLI `0.160.1`, bundled with desktop
+`26.930.61225`. Claude Code remains `2.1.283`; unchanged chat paths reuse the
+four client-route checks below.
+
+The real Codex client passed zero-paid checks for both normal managed
+OpenRouter-only and Switch Codex configurations. Neither used an auth file
+or ChatGPT account. Each exposed the native image tool, saved the returned
+PNG and finished the turn. The video submission contract also passed its
+zero-paid check.
+
+A bounded live Switch Codex check used DeepSeek V4.1 Flash at low effort and
+GPT Image 2. It finished three real chat sends and one image generation,
+saved the image and completed the chat. The saved bytes matched the provider
+response by SHA-256. OpenRouter reported DeepSeek's exact model ID on all
+three chat replies; image serving identity and served effort were not exposed.
+The responses reported USD 0.006914965 combined usage cost.
+
+The live check allowed at most three chat sends, 2,048 output tokens per
+chat send and one low-quality 1024-square image. It disabled retries and
+polling, capped chat input at 8 MiB and media input at 128 KiB, and used a
+180-second deadline. Two earlier harness attempts generated an image but
+stopped on the chat-input cap or an existing output file. Both harness
+defects were corrected; all three attempts totalled five paid chat sends
+and three image generations. No installed client settings changed.
+
+This verifies ordinary managed profiles and real OpenRouter orchestration.
+Installed delivery and desktop restart remain separate checks. The 1.0.12
+section below describes the earlier signed-in probe, before this profile fix.
+
 ## Native media, 8 October 2026 AEDT
 
 Codex desktop `26.930.61225` bundles CLI `0.160.1`; Claude Code remains

@@ -101,7 +101,7 @@ class InstallConfigTests(unittest.TestCase):
             self.assertEqual((doc['approval_policy'], doc['model_provider'],
                               doc['approvals_reviewer']), ('never', 'scg_router', 'user'))
             self.assertEqual(sorted(doc['model_providers']['scg_router']),
-                             ['base_url', 'name', 'wire_api'])
+                             ['base_url', 'http_headers', 'name', 'requires_openai_auth', 'wire_api'])
             self.assertNotIn('openai_base_url', block)
             state = json.loads((home / 'mixed-router-state.json').read_text())
             self.assertIn(f"/{state['token']}/backend-api/codex", block)
