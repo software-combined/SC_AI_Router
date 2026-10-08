@@ -1,6 +1,6 @@
 # Media generation
 
-With router 1.0.14, images follow the originating chat's provider connection.
+With router 1.0.15, images follow the originating chat's provider connection.
 An OpenAI subscription chat keeps native OpenAI images. An OpenRouter chat
 uses OpenRouter images, including when both chats share one subscription
 profile. The conversation model stays selected; the image model is separate.

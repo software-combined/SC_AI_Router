@@ -1,5 +1,21 @@
 # Compatibility
 
+## Haiku 5.5, 8 October 2026 AEDT
+
+The 1.0.14 candidate passed isolated real-client onboarding at Low effort
+on Codex CLI `0.160.1` (desktop `26.930.61225`) and Claude Code `2.1.283`.
+Codex passed streamed tools, image input and compaction in four upstream
+attempts. Claude passed two sequential reads with paired tool results in three.
+Both reported `anthropic/claude-haiku-5.5`; Codex reported Low effort.
+Claude did not expose served effort. The acceptance ledger binds the proof
+to the final capability and Python runtime fingerprints.
+
+An earlier seven-attempt proof became stale after retirement and onboarding
+validation edits. The final bounded proof added seven attempts, fourteen total.
+No client settings changed. These same client versions reuse the unchanged
+subscription and external chat-route checks below. Source acceptance precedes
+channel publication and installed picker delivery; each has its own readback.
+
 ## OpenRouter-only images, 8 October 2026 AEDT
 
 The 1.0.13 candidate passed on Codex CLI `0.160.1`, bundled with desktop
