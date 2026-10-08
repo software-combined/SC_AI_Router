@@ -37,7 +37,6 @@ OWNER = ('\nowner_setting = 1\n[model_providers.other]\nname = "x"\n'
 
 class VariantBlockTests(unittest.TestCase):
     def test_default_is_todays_block_byte_for_byte(self):
-        # Never-switched installs and older Codex builds must see no change.
         cases = {
             ('subscription', False): (BEGIN + f'openai_base_url = "{URL}"\n'
                                       + REVIEWER + END),
@@ -46,9 +45,11 @@ class VariantBlockTests(unittest.TestCase):
                                      + REVIEWER + END),
             ('none', False): (BEGIN + 'model_provider = "scg_router"\n'
                               'model_catalog_json = "/r/mixed-models.json"\n'
-                              'approvals_reviewer = "user"\nmodel_providers.scg_router.'
-                              f'name = "SC router"\nmodel_providers.scg_router.base_url = "{URL}"\n'
-                              'model_providers.scg_router.wire_api = "responses"\n' + END),
+                              'approvals_reviewer = "user"\n'
+                              'model_providers.scg_router = { name = "SC router", wire_api = "responses", '
+                              f'base_url = "{URL}", requires_openai_auth = false, '
+                              'http_headers = { "x-scg-codex-route" = "routed", '
+                              '"x-openai-actor-authorization" = "Bearer tok" } }\n' + END),
         }
         for (mode, static), want in cases.items():
             with self.subTest(mode=mode, static=static):
@@ -62,7 +63,8 @@ class VariantBlockTests(unittest.TestCase):
                 'model_catalog_json': '/r/routed-models.json', 'approvals_reviewer': 'user',
                 'model_providers': {'scg_router': dict(
                     PROVIDER, requires_openai_auth=False,
-                    http_headers={'x-scg-codex-route': 'routed'})}},
+                    http_headers={'x-scg-codex-route': 'routed',
+                                  'x-openai-actor-authorization': 'Bearer tok'})}},
             'switched_back': {
                 'openai_base_url': URL, 'approvals_reviewer': 'user',
                 'model_providers': {'scg_router': dict(PROVIDER, requires_openai_auth=True)}},

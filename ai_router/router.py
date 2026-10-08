@@ -211,7 +211,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.error(errors.unsupported_route())
             context = policy.resolve(model)  # this request's one registry read (Plan 188)
             provider = policy.select_provider(
-                model, path, self.server.state, mode, catalogue=context.catalogue,
+                model, path, self.server.state, mode, catalogue=context.catalogue, headers=self.headers,
                 openai_models=subscription_recovery.request_models(self, model, path, context.catalogue))
             if provider.kind == provider_defs.EXTERNAL: reject_opaque_agent_items(payload.get('input'))
             if provider.kind == provider_defs.SUBSCRIPTION and not via_path:

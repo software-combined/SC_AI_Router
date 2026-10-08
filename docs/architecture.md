@@ -363,8 +363,9 @@ is in [runtime files](runtime-files.md#codex-usage-limit-record).
    with a different wire format is a new adapter class, never a branch in
    the request path. `image_provider.py` owns the native Images wire format;
    `protocols/images.py` selects subscription or external billing from the
-   install mode and explicit model ID. `video_provider.py` owns Responses
-   video job submission. Both use `media.py` for media envelopes and retain
+   install mode, switched-client header and explicit model ID.
+   `video_provider.py` owns Responses video job submission. Both use `media.py`
+   for media envelopes and retain
    the shared credential, admission and transport boundaries. Media rows do
    not enter the chat projection. [Media generation](media-generation.md)
    records the client contract and preview limits.
