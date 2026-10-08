@@ -691,12 +691,34 @@ that size. Native history, images, signatures and headers are forwarded whole.
 
 16 MiB is the ordinary request threshold, not a limit. A turn past it on the
 wire, on decode or once prepared takes the single large-request slot, before
-the rest of a compressed body is expanded, and keeps it until relay, any
-repair retry or subscription fallback, and cleanup finish. A second large turn
+the rest of a compressed body is expanded. After preparation returns, the
+router releases it if the remaining request is at most 16 MiB and retains
+neither a fallback plan nor a response adapter. This lets another large turn
+prepare while the reduced request streams. Large retained requests keep the
+slot through relay, retries, fallback and final cleanup. A second large turn
 arriving meanwhile answers 503 `OVERSIZE_BUSY` with `Retry-After: 2` and no
 upstream call; smaller turns proceed within the 32-request in-flight limit. A
 repair or fallback body is sized together with the body still held, and one
 that does not fit is never sent (a fallback keeps the refusal answer).
+After an early release, a retry reacquires the slot when its combined retained
+bodies cross the threshold. If another request owns it, no additional send occurs.
+
+The router generates a request ID before reading each POST body. Request,
+rejection and attempt-ledger records share that ID. Large-slot records add
+validated chat and parent IDs, the router version and the acquisition stage
+(`wire`, `decode`, `prepared` or `retry`). Known sizes are `wire_bytes`,
+`decoded_bytes`, `prepared_wire_bytes`, `prepared_decoded_bytes` and
+`retained_accounted_bytes` (the combined size used for admission). If decoding
+stops early, `decoded_lower_bound_bytes` names the observed lower bound;
+it is never reported as an exact decoded size. Unavailable facts are omitted.
+
+An `OVERSIZE_BUSY` rejection snapshots the blocking owner at acquisition failure:
+`owner_request_id`, `owner_stage` and `owner_held_ms`. These facts remain valid
+even if ownership changes before logging. Slot release records use
+`release_reason=prepared_small` or `request_end`, `acquisition_stage` and `held_ms`.
+All these fields are scalar metadata; no payload, raw header, credential or
+token-bearing URL is recorded. The server lock protects ownership and snapshots;
+reading, streaming and logging run outside it.
 
 An external Responses turn still over the 16 MiB prepared budget is reduced
 with visible notes before it is sent: repeated released-tool listings collapse
@@ -724,6 +746,8 @@ tool names a person no longer reads stay searchable in the log.
 | Event | Meaning |
 |---|---|
 | `request_rejected` | one per refusal, retryable or final: `status`, `code`, `path`, `retry_after`, bounded `detail` |
+| `oversize_slot_acquired` | a request took the large-request slot; correlated IDs, version, stage and known sizes |
+| `oversize_slot_released` | the owner released the slot; reason, acquisition stage, hold time and known sizes |
 | `upstream_unavailable` | an upstream 5xx or 408 on a Responses turn, answered 503 |
 | `client_disconnected` | the client hung up mid-stream; previously counted as `transport_error` |
 | `upstream_rate_limited` | an upstream 429, with `category` `quota`, `auth` or `transient`; on Responses a quota 429 answers 400 `PROVIDER_REJECTED` and an auth 429 opens the key window; a subscription turn's `transient` 429 answers 503 naming the model and the subscription |
