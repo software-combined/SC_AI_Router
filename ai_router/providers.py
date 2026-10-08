@@ -2,12 +2,12 @@
 import json
 import time
 from . import (availability, compaction as comp, local_services, handoff_response,
-               provider_defs, request_context, transport, turn_budget, jev_compaction)
+               media, provider_defs, request_context, transport, turn_budget, jev_compaction)
 from . import outbound, rejected_repair, request_evidence, subscription_roster
 from .compaction_summary import (summary_entries as _summary_entries,
                                  summarize as _summarize)
 from .errors import PreparationError, SubscriptionRequired, UnknownModel
-from .registry import by_slug, near_miss
+from .registry import by_slug, near_miss, upstream_id_for
 from .events import log_event
 from .discovered import remember
 from .tool_adapter import snoop_response_identity, stream_events, ToolEvents
@@ -104,6 +104,18 @@ class ExternalResponsesProvider:
             raise PreparationError(f'{self.defn.label} supports responses only')
         # Every model fact below reads this row: routed, the ingress snapshot (Plan 188).
         entry = context.row if context is not None else by_slug(model) if isinstance(model, str) else model
+        media_kind = getattr(entry, 'media_kind', None)
+        if media_kind is not None and path == '/responses':
+            kind, tool = media.media_tool(payload)
+            if kind != media_kind or tool is None:
+                raise PreparationError(
+                    f'{model} needs a {media_kind}-generation tool entry')
+            upstream_id = ((upstream_id_for(entry) if entry is not None else None)
+                           or (model if isinstance(model, str) else ''))
+            return media.prepared(self, kind, tool, model, entry, payload,
+                                  upstream_id, credentials, context)
+        if media.media_tool(payload)[0] is not None:
+            raise PreparationError(f'{model} is not a media-generation model')
         # Before any rewrite: what this client's thread carries. The slim below
         # is invisible upstream, so provider usage alone never moves the trigger.
         carried = turn_budget.carried_tokens(payload, decoded_len) if decoded_len else None
@@ -129,6 +141,11 @@ class ExternalResponsesProvider:
                         context_tokens=carried, context=context, decoded_body_bytes=len(body))
 
     def adapt(self, response, tool_names, notes=None):
+        # Media turns mark their tool names with a 'media:<kind>' tuple;
+        # chat turns carry the ToolNames map, which never equals one.
+        if response.status == 200 and media.is_media_tools(tool_names):
+            yield from media.adapt(response, tool_names)
+            return
         if notes is not None and not tool_names and response.status == 200:
             yield from snoop_response_identity(response, notes)
         elif tool_names and response.status == 200:

@@ -20,6 +20,8 @@ in OpenRouter's metadata envelope.
 
 RESPONSES = 'responses'
 MESSAGES = 'messages'
+IMAGES = 'images'
+VIDEOS = 'videos'
 EXTERNAL = 'external'
 SUBSCRIPTION = 'subscription'
 
@@ -61,13 +63,15 @@ class ProviderDef:
     """
 
     __slots__ = ('id', 'label', 'kind', 'host', 'responses_path',
-                 'messages_path', 'key', 'catalogue_url', 'catalogue_shape',
+                 'messages_path', 'images_path', 'videos_path',
+                 'key', 'catalogue_url', 'catalogue_shape',
                  'key_info_url', 'key_info_shape', 'dialect', 'native_prefixes',
                  'request_headers', 'subscription_label', 'decisions_path',
                  'decisions_model')
 
     def __init__(self, id, label, kind, host, responses_path=None,
-                 messages_path=None, key=None, catalogue_url=None,
+                 messages_path=None, images_path=None, videos_path=None,
+                 key=None, catalogue_url=None,
                  catalogue_shape='manual', key_info_url=None,
                  key_info_shape='openrouter', dialect=None,
                  subscription_label=None,
@@ -84,20 +88,20 @@ class ProviderDef:
             raise ValueError(f'{id}: an external provider needs a key spec')
         if kind == SUBSCRIPTION and key is not None:
             raise ValueError(f'{id}: a subscription provider holds no key')
-        if responses_path is None and messages_path is None:
-            raise ValueError(f'{id}: serves neither responses nor messages')
+        paths = (responses_path, messages_path, images_path, videos_path)
+        if all(path is None for path in paths):
+            raise ValueError(f'{id}: serves no protocol')
         native_prefixes = tuple(native_prefixes)
         for prefix in native_prefixes:
             if not isinstance(prefix, str) or not prefix.startswith('/'):
                 raise ValueError(f'{id}: bad native prefix {prefix!r}')
         self.id, self.label, self.kind, self.host = id, label, kind, host
         self.responses_path, self.messages_path = responses_path, messages_path
+        self.images_path, self.videos_path = images_path, videos_path
         self.key, self.catalogue_url = key, catalogue_url
         self.catalogue_shape, self.key_info_url = catalogue_shape, key_info_url
         self.key_info_shape, self.dialect = key_info_shape, dialect
-        # Client-facing wording for the login this provider serves. An
-        # external route serves no login, so it carries None and its
-        # refusals keep the neutral text.
+        # An external route serves no login, so its refusals keep neutral text.
         self.subscription_label = None
         if kind == SUBSCRIPTION:
             self.subscription_label = subscription_label or f'{label} subscription'
@@ -108,24 +112,23 @@ class ProviderDef:
                     or not all(isinstance(part, str) and part for part in pair)):
                 raise ValueError(f'{id}: bad request header {pair!r}')
         self.request_headers = request_headers
-        # A typed-decision endpoint (Jev, TypeSafe System One) is not a
-        # chat route: nothing here serves a conversation turn, so both the
-        # path and the model it answers for stay beside the other upstream
-        # facts. None means this provider has no such endpoint.
+        # A typed-decision endpoint is not a chat route: None means none.
         self.decisions_path = decisions_path
         self.decisions_model = decisions_model
 
     def serves(self, protocol):
         """True when this provider serves that protocol natively."""
-        path = self.responses_path if protocol == RESPONSES else self.messages_path
-        return path is not None
+        return self._prefix(protocol) is not None
+
+    def _prefix(self, protocol):
+        return {RESPONSES: self.responses_path, MESSAGES: self.messages_path,
+                IMAGES: self.images_path, VIDEOS: self.videos_path}.get(protocol)
 
     def path_for(self, protocol, path):
         """Upstream path for a client path on that protocol."""
         if not self.serves(protocol):
             raise ValueError(f'{self.label} does not serve {protocol}')
-        prefix = self.responses_path if protocol == RESPONSES else self.messages_path
-        return (prefix or '') + path
+        return (self._prefix(protocol) or '') + path
 
     def sends_context_error_frame(self):
         """True when this upstream's error body can name a context overrun."""
@@ -143,6 +146,7 @@ class ProviderDef:
 OPENROUTER = ProviderDef(
     id='openrouter', label='OpenRouter', kind=EXTERNAL, host='openrouter.ai',
     responses_path='/api/v1', messages_path='/api',
+    images_path='/api/v1/images', videos_path='/api/v1/videos',
     key=KeySpec('OPENROUTER_API_KEY', 'openrouter.key', state_key='openrouter',
                 example='sk-or-v1-...'),
     catalogue_url='https://openrouter.ai/api/v1/models',

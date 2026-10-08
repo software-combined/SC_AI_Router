@@ -35,6 +35,25 @@ def payload(model, protocol, effort='low', stream=True):
     return body
 
 
+def media_payload(model, kind, stream=False):
+    tool = {'type': 'image_generation' if kind == 'image' else 'video_generation'}
+    return {'model': model, 'stream': stream,
+            'input': [{'role': 'user', 'content': 'synthetic media check'}],
+            'reasoning': {'effort': 'none'}, 'tools': [tool]}
+
+
+def media_success(model, kind):
+    if kind == 'image':
+        value = {'created': 1748372400, 'model': model,
+                 'data': [{'b64_json': 'QUJD', 'media_type': 'image/png'}],
+                 'usage': {'total_tokens': 7}}
+    else:
+        value = {'id': 'job_fixture', 'model': model, 'status': 'pending',
+                 'polling_url': 'https://openrouter.ai/api/v1/videos/job_fixture'}
+    return FakeUpstream(200, json.dumps(value).encode(),
+                        [('Content-Type', 'application/json')])
+
+
 def success(model, protocol, stream=True):
     if protocol == provider_defs.RESPONSES:
         value = {'model': model, 'status': 'completed', 'output': []}

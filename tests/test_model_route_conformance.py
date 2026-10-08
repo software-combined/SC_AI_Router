@@ -7,20 +7,68 @@ from unittest import mock
 
 from ai_router import (catalogue, outcome, provider_defs, registry, subscription_discovery,
                        wire_shape)
+from ai_router import media as media_api
 from tests.fakes import FakeUpstream
-from tests.model_route_fixtures import (HEADERS, PROTOCOLS, RouteHarness, overloaded,
-                                       payload, routes, success)
+from tests.model_route_fixtures import (HEADERS, PROTOCOLS, RouteHarness,
+                                       media_payload, media_success, overloaded, payload, routes, success)
 
 
 class ModelRouteConformanceTests(unittest.TestCase):
     def setUp(self):
         self.harness = RouteHarness(self)
 
+    def test_media_rows_reach_their_own_api_with_the_prompt(self):
+        media = [row for row in registry.MODELS if row.media_kind is not None]
+        self.assertTrue(media, 'no media rows registered')
+        for row in media:
+            with self.subTest(model=row.slug, kind=row.media_kind):
+                reply = media_success(row.upstream_id or row.slug, row.media_kind)
+                status, wire, sends, facts = self.harness.turn(
+                    media_payload(row.slug, row.media_kind), provider_defs.RESPONSES,
+                    [reply], projected=False)
+                self.assertEqual(status, 200)
+                self.assertTrue(wire)
+                self.assertEqual(len(sends), 1)
+                defn = provider_defs.get(row.provider)
+                want = (media_api.images_path(defn) if row.media_kind == 'image'
+                        else media_api.videos_path(defn))
+                self.assertEqual(sends[0][:3], (defn.host, 'POST', want))
+                sent = json.loads(sends[0][3])
+                self.assertEqual(sent['model'], row.upstream_id or row.slug)
+                self.assertEqual(sent['prompt'], 'synthetic media check')
+                headers = {key.lower(): value for key, value in sends[0][4].items()}
+                self.assertEqual(headers['authorization'], 'Bearer test-key')
+                self.assertEqual(facts['outcome'], outcome.SUCCESS)
+                attempt, = facts['attempt_evidence']
+                self.assertEqual(attempt['requested_model'], row.slug)
+                if row.media_kind == 'image':
+                    self.assertIn('image_generation_call', wire.decode())
+                else:
+                    self.assertIn('job_fixture', wire.decode())
+
+    def test_media_tool_on_a_chat_row_is_refused_before_any_send(self):
+        chat = next(row for row in registry.MODELS if row.media_kind is None
+                    and row.provider == provider_defs.DEFAULT_EXTERNAL)
+        for kind in ('image', 'video'):
+            with self.subTest(model=chat.slug, kind=kind):
+                body = media_payload(chat.slug, kind)
+                # Refused in the adapter before projection or dispatch.
+                status, _, sends, _ = self.harness.turn(
+                    body, provider_defs.RESPONSES, [], sent=False,
+                    projected=False)
+                self.assertEqual(status, 400)
+                self.assertEqual(sends, [])
+
     def test_every_row_routes_json_and_stream_through_the_common_owners(self):
+        # Media rows answer their own Images/Videos API, covered by
+        # test_media_rows_reach_their_own_api_with_the_prompt.
         expected = {(row.slug, row.provider, protocol) for row in registry.MODELS
+                    if row.media_kind is None
                     for protocol in PROTOCOLS if provider_defs.get(row.provider).serves(protocol)}
         observed = set()
         for row, protocol in routes():
+            if row.media_kind is not None:
+                continue
             for stream in (False, True):
                 with self.subTest(model=row.slug, protocol=protocol, stream=stream):
                     upstream_id = row.upstream_id or row.slug
@@ -50,6 +98,8 @@ class ModelRouteConformanceTests(unittest.TestCase):
 
     def test_each_route_recovers_once_before_output_and_never_after_output(self):
         for row, protocol in routes():
+            if row.media_kind is not None:
+                continue
             for committed in (False, True):
                 with self.subTest(model=row.slug, protocol=protocol, committed=committed):
                     model = row.upstream_id or row.slug
@@ -69,6 +119,8 @@ class ModelRouteConformanceTests(unittest.TestCase):
                  (402, 'insufficient_quota', outcome.QUOTA),
                  (503, 'overloaded_error', outcome.TRANSIENT))
         for row, protocol in routes():
+            if row.media_kind is not None:
+                continue
             for status, code, expected in cases:
                 with self.subTest(model=row.slug, protocol=protocol, code=code):
                     raw = json.dumps({'error': {'code': code, 'type': code}}).encode()
@@ -88,6 +140,8 @@ class ModelRouteConformanceTests(unittest.TestCase):
         image = {'type': 'input_image', 'image_url': 'data:image/png;base64,AA=='}
         profiles = set()
         for row, protocol in routes():
+            if row.media_kind is not None:
+                continue
             with self.subTest(model=row.slug, protocol=protocol):
                 body = payload(row.slug, protocol, row.default_reasoning, False)
                 if protocol == provider_defs.RESPONSES:
@@ -135,11 +189,12 @@ class ModelRouteConformanceTests(unittest.TestCase):
                 self.assertEqual(facts['outcome'], outcome.SUCCESS)
                 profiles.add((row.schema_mode, row.history_mode, protocol))
         self.assertEqual(profiles, {(row.schema_mode, row.history_mode, protocol)
-                                    for row, protocol in routes()})
+                                    for row, protocol in routes()
+                                    if row.media_kind is None})
 
     def test_responses_refuses_unsupported_efforts_before_a_send_for_every_row(self):
         for row, protocol in routes():
-            if protocol != provider_defs.RESPONSES:
+            if protocol != provider_defs.RESPONSES or row.media_kind is not None:
                 continue
             with self.subTest(model=row.slug):
                 status, _, sends, _ = self.harness.turn(
@@ -149,6 +204,8 @@ class ModelRouteConformanceTests(unittest.TestCase):
 
     def test_every_row_refuses_a_disabled_protocol_before_projection_or_dispatch(self):
         for row, protocol in routes():
+            if row.media_kind is not None:
+                continue
             with self.subTest(model=row.slug, protocol=protocol), mock.patch.object(
                     provider_defs.get(row.provider), protocol + '_path', None):
                 status, _, sends, _ = self.harness.turn(
@@ -159,7 +216,7 @@ class ModelRouteConformanceTests(unittest.TestCase):
 
     def test_declared_tool_ceilings_and_search_capabilities_on_responses(self):
         for row, protocol in routes():
-            if protocol != provider_defs.RESPONSES:
+            if protocol != provider_defs.RESPONSES or row.media_kind is not None:
                 continue
             with self.subTest(model=row.slug):
                 body = payload(row.slug, protocol, row.default_reasoning, False)

@@ -2,14 +2,15 @@
 
 ## Unreleased
 
-- Codex can now generate images through the router. Three OpenAI image rows
-  ride the external Responses route as unlisted preview
-  (`openai/gpt-5-image`, `openai/gpt-5-image-mini`, `openai/gpt-5.4-image-2`),
-  so a Codex `image_generation` turn reaches a real image model instead of a
-  text row. Finished image results now survive history replay on the next
-  turn. Video generation has no route yet: OpenRouter serves no
-  video-generation chat models, so there is nothing to register; this will
-  be revisited when an upstream serves one.
+- Codex can now generate images and videos through the router. Media rows
+  ride OpenRouter's dedicated media APIs as unlisted preview: three image
+  rows (`openai/gpt-image-2`, `openai/gpt-image-2.5-sunburst`,
+  `openai/gpt-image-2.5-flare`) post the turn's prompt to `POST
+  /api/v1/images` and return the picture as a model message, and two video
+  rows (`google/veo-3.1`, `google/veo-3.1-fast`) submit to `POST
+  /api/v1/videos` and hand back the async job id with its polling URL.
+  A media tool aimed at a chat row is refused before any send. Finished
+  image results now survive history replay on the next turn.
 
 ## 1.0.11
 
