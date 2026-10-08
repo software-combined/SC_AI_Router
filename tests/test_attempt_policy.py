@@ -1,3 +1,4 @@
+import threading
 import unittest
 from types import SimpleNamespace
 from unittest import mock
@@ -148,9 +149,16 @@ class HelperFallbackTests(unittest.TestCase):
     def facts(self, responder, enabled=True):
         install_fake(self, responder)
         server = self._server(openai_helper_fallback=enabled)
-        with mock.patch.object(router_mod, 'log_event') as logged:
+        finished = threading.Event()
+
+        def observe(event, **facts):
+            if event == 'attempt_ledger':
+                finished.set()
+
+        with mock.patch.object(router_mod, 'log_event', side_effect=observe) as logged:
             response = self._turn(server, fallback_suite.HEADERS)
             response.read()
+            self.assertTrue(finished.wait(2), 'request ledger did not finish')
         ledger = [c.kwargs for c in logged.call_args_list
                   if c.args[0] == 'attempt_ledger'][0]
         return (response.status, [a[2] for a in ledger['attempts']],

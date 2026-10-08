@@ -362,13 +362,16 @@ is in [runtime files](runtime-files.md#codex-usage-limit-record).
    new external provider is a table entry plus registry rows; a provider
    with a different wire format is a new adapter class, never a branch in
    the request path. `image_provider.py` owns the native Images wire format;
-   `protocols/images.py` selects subscription or external billing from the
-   install mode, switched-client header and explicit model ID.
+   `protocols/images.py` selects the originating chat's connection;
+   `media_origin.py` retains bounded, content-free turn bindings after chat
+   preparation. Standalone calls without provenance keep their profile contract.
    `video_provider.py` owns Responses video job submission. Both use `media.py`
    for media envelopes and retain
    the shared credential, admission and transport boundaries. Media rows do
    not enter the chat projection. [Media generation](media-generation.md)
-   records the client contract and preview limits.
+   records the client contract and preview limits. `media_cli.py` owns the
+   explicit fallback command, including bounded video polling, a recovery
+   receipt and exclusive output creation; it reuses the canonical adapters.
    `external_provider.py` owns the region, provider identity and model
    authorization shared by chat and video adapters. It imports neither
    adapter; distinct wire formats remain in their own modules.

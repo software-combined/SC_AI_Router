@@ -13,6 +13,7 @@ still serves Codex from Git.
 import importlib.util
 import json
 import os
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -209,9 +210,7 @@ class DeliveryTest(unittest.TestCase):
 
     @unittest.skipIf(os.name == 'nt', 'shebang scripts are POSIX-only')
     def test_a_scheduled_job_path_still_reaches_both_clients(self):
-        # Real subprocess and real which, as the scheduled update runs them.
-        # codex is a `#!/usr/bin/env node` script, so the interpreter beside
-        # it must resolve too; the fakes stand in for both with a call log.
+        # Exercise scheduled subprocesses with fake clients and an adjacent interpreter.
         bin_dir = self.home / '.local' / 'bin'
         bin_dir.mkdir(parents=True)
         log = self.tmp / 'calls.log'
@@ -223,12 +222,13 @@ class DeliveryTest(unittest.TestCase):
             (bin_dir / client).write_text('#!/usr/bin/env scg-test-node\n')
         for script in bin_dir.iterdir():
             script.chmod(0o755)
-        # A real client elsewhere on this machine could only touch these.
+        # Only fake clients run; their interpreter still needs the extended PATH.
         isolated = {'PATH': LAUNCHD_PATH, 'HOME': str(self.home),
                     'CODEX_HOME': str(self.tmp / 'codex-home'),
                     'CLAUDE_CONFIG_DIR': str(self.tmp / 'claude-home')}
         with patch.dict(os.environ, isolated):
-            line = skills.sync({'clients': 'both'}, self.plugins, base=self.base)
+            line = skills.sync({'clients': 'both'}, self.plugins, base=self.base,
+                               which=lambda name, path=None: shutil.which(name, path=str(bin_dir)))
         self.assertIn('codex: 2 plugin(s)', line)
         self.assertIn('claude: 2 plugin(s)', line)
         self.assertNotIn('refused', line)
