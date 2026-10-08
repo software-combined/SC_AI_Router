@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Route Codex images by their originating chat connection, not only the
+  client profile. Native OpenAI chats keep native images; OpenRouter chats
+  use approved OpenRouter image models. Concurrent chats retain separate
+  turn bindings. Unknown or conflicting origins fail without provider fallback.
+- Support OpenRouter image edits using inline references, without sending
+  OpenAI file IDs across providers. Add an explicit media command for clients
+  without native video: submit once, retain the job ID, poll within fixed
+  limits, save the MP4 and resume without another paid submission.
+
 ## 1.0.14
 
 - Replace Claude Haiku 4.5 with the verified OpenRouter Haiku 5.5 row.

@@ -67,3 +67,13 @@ def select(method, path):
         if method in row['methods'] and native is not None and native(path):
             return row['policy']
     return None
+
+
+def route(policy, model, path, state, mode, payload, headers, turns, native_models):
+    """Resolve once; the Images policy also checks the originating chat turn."""
+    context = policy.resolve(model)
+    if policy is images.POLICY:
+        return policy.origin_route(model, path, state, mode, payload, headers, turns, context)
+    provider = policy.select_provider(model, path, state, mode,
+        catalogue=context.catalogue, headers=headers, openai_models=native_models(context))
+    return context, provider
