@@ -17,7 +17,7 @@ are never copied between machines.
 `ai_router/claude_compat.py`,
 `ai_router/availability.py`, `ai_router/snapshot_store.py`,
 `ai_router/registry.py`, `ai_router/credentials.py`,
-`ai_router/request_context.py`, `ai_router/outbound.py`,
+`ai_router/request_context.py`, `ai_router/request_lease.py`, `ai_router/outbound.py`,
 `ai_router/tool_adapter.py`, `ai_router/tool_history.py`, `ai_router/tool_aliases.py`,
 `ai_router/agent_handoffs.py`, `ai_router/handoff_response.py`,
 `ai_router/sse.py`, `ai_router/outcome.py`,

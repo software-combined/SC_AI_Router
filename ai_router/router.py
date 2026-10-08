@@ -4,11 +4,12 @@ import os
 import socket
 import threading
 import time
+from dataclasses import replace
 from compression import zstd
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from . import (errors, ingress, local_services, model_prompt_page,
                media_origin, provider_defs, relay, setup, subscription_recovery,
-               subscription_fallback, transport, turn_budget, request_evidence)
+               subscription_fallback, transport, turn_budget, request_evidence, request_lease)
 from .credentials import Credentials
 from .protocols import route as resolve_route, select as select_protocol
 from .errors import InvalidSize, PreparationError
@@ -73,9 +74,9 @@ class Router(ThreadingHTTPServer):
             self.server_activate()
         self.state = state
         self.lock = threading.Lock()
-        # One large turn at a time, read to last send: the parsed form costs
-        # roughly five times its bytes, and sub-agents replay the same history.
+        # Serialize large retained bodies, including oversized ingress parsing.
         self.oversize_lock = threading.Lock()
+        self.oversize_owner = None
         self.inflight = 0
         self.draining = False
         self.served_models = {}
@@ -135,6 +136,7 @@ class Handler(BaseHTTPRequestHandler):
         return self.error(errors.draining(), retry_after='2')
     def do_POST(self):
         started = time.monotonic()
+        request_lease.begin(self, VERSION)
         path, via_path = self.authorized_path()
         if path is None:
             return self.error(errors.forbidden())
@@ -175,14 +177,13 @@ class Handler(BaseHTTPRequestHandler):
         try:
             ready = self._owned_post(path, via_path, started)
             if isinstance(ready, tuple):
+                request_lease.downgrade(self, ready[1], MAX_BODY, log_event)
                 self.relay(*ready)
         finally:
             # A large prepared body lives until relay returns, so the slot
             # spans the stream; this frame drops its reference first.
             ready = None
-            if self.oversize_held:
-                self.server.oversize_lock.release()
-                self.oversize_held = False
+            request_lease.release(self, 'request_end', log_event)
             with self.server.lock:
                 self.server.inflight -= 1
 
@@ -194,6 +195,7 @@ class Handler(BaseHTTPRequestHandler):
         self.connection.settimeout(CLIENT_TIMEOUT_S)
         try:
             raw, payload, size, decoded_len = self.read_body()
+            request_lease.read_complete(self, size, decoded_len)
             read_done = time.monotonic()
             facts.update(compressed_bytes=size, decoded_bytes=decoded_len)
             if decoded_len > MAX_BODY:
@@ -212,6 +214,7 @@ class Handler(BaseHTTPRequestHandler):
             context, provider = resolve_route(policy, model, path, self.server.state, mode,
                 payload, self.headers, self.server.media_turns,
                 lambda ctx: subscription_recovery.request_models(self, model, path, ctx.catalogue))
+            context = replace(context, request_id=self.lease_facts['request_id'])
             if provider.kind == provider_defs.EXTERNAL: reject_opaque_agent_items(payload.get('input'))
             if provider.kind == provider_defs.SUBSCRIPTION and not via_path:
                 return self.error(errors.bearer_for_no_subscription_only())
@@ -299,24 +302,10 @@ class Handler(BaseHTTPRequestHandler):
         return ingress.read_body(self, MAX_BODY, self._take_oversize_slot)
 
     def admit(self, prepared, retained=None):
-        """Admit one body for sending, with any body the caller still retains.
+        return request_lease.admit(self, prepared, retained, MAX_BODY, log_event)
 
-        InvalidSize past the request ceiling; past MAX_BODY together, the
-        turn takes (or keeps) the large-request slot or raises OversizeBusy.
-        """
-        held = sum(transport.request_bytes(body) for body in (prepared, retained)
-                   if body is not None)
-        if held > MAX_BODY and not self._take_oversize_slot():
-            raise errors.OversizeBusy()
-
-    def _take_oversize_slot(self):
-        """Take or keep the large-request slot; False while another turn has it."""
-        if self.oversize_held:
-            return True
-        if not self.server.oversize_lock.acquire(blocking=False):
-            return False
-        self.oversize_held = True
-        return True
+    def _take_oversize_slot(self, stage='prepared', **sizes):
+        return request_lease.acquire(self, stage, log_event, **sizes)
 
     def _declared_bytes(self):
         try:
