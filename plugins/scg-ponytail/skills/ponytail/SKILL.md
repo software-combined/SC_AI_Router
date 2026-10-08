@@ -21,6 +21,9 @@ burden. Line count is a clue, not the goal.
 
 ## Ladder
 
+Before editing, identify the callers, tests, fixtures, configuration and exports
+the change must reach. Include required updates to each in the task's scope.
+
 Before changing a function, find every caller and reference (for example
 `rg -nw fnName`; text search can miss Blueprint, reflection, route, and
 cross-repo callers). Patching only the reported path leaves sibling callers
@@ -60,6 +63,8 @@ asked and mention the option once, in one line.
   test isolation.
 - Put new code where related code already lives; add a file only for a
   distinct responsibility.
+- Preserve the project's architectural boundaries, interfaces and conventions
+  when simplifying; use existing components as the surrounding code does.
 - When two changes both meet the requirement, prefer the one that deletes or
   narrows code.
 - Boring over clever: a few readable lines beat a dense one-liner.
@@ -76,3 +81,5 @@ asked and mention the option once, in one line.
 - Do not defend simplifications in prose. For each thing a reader might assume
   you built but you deliberately left out, write one line:
   `Skipped X; add when Y.`
+- Briefly state any material checks not completed and remaining risks in the
+  final response.
