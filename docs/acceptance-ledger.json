@@ -1027,4 +1027,126 @@
     }
   ]
 }
+,
+  {
+    "kind": "model_routes_v1",
+    "observed_at": "2026-10-08T11:50:44.204687+00:00",
+    "model": "anthropic/claude-haiku-5.5",
+    "provider": "openrouter",
+    "capability_fingerprint": "71c038ebd6cf948ef8f3e8b3e84b1c1318860ef16e46f467fd4eaffa61062c39",
+    "runtime_fingerprint": "cd3570de4b4153b87d22f71d87a0b45ddbf2be2f41497ada875d98f3901f21e4",
+    "router_version": "1.0.15",
+    "router_revision": "68f1c0f7419e7834354d808ad8c52a20c3ccc9dc",
+    "routes": [
+      {
+        "protocol": "responses",
+        "client": "codex",
+        "client_version": "0.160.1",
+        "requested_effort": "low",
+        "served_models": [
+          {
+            "value": "anthropic/claude-haiku-5.5",
+            "source": "response.created.response.model"
+          },
+          {
+            "value": "anthropic/claude-haiku-5.5",
+            "source": "response.in_progress.response.model"
+          },
+          {
+            "value": "anthropic/claude-haiku-5.5",
+            "source": "response.completed.response.model"
+          },
+          {
+            "value": "anthropic/claude-haiku-5.5",
+            "source": "response.created.response.model"
+          },
+          {
+            "value": "anthropic/claude-haiku-5.5",
+            "source": "response.in_progress.response.model"
+          },
+          {
+            "value": "anthropic/claude-haiku-5.5",
+            "source": "response.completed.response.model"
+          },
+          {
+            "value": "anthropic/claude-haiku-5.5",
+            "source": "response.created.response.model"
+          },
+          {
+            "value": "anthropic/claude-haiku-5.5",
+            "source": "response.in_progress.response.model"
+          },
+          {
+            "value": "anthropic/claude-haiku-5.5",
+            "source": "response.completed.response.model"
+          }
+        ],
+        "served_efforts": [
+          {
+            "value": "low",
+            "source": "response.created.response.reasoning.effort"
+          },
+          {
+            "value": "low",
+            "source": "response.in_progress.response.reasoning.effort"
+          },
+          {
+            "value": "low",
+            "source": "response.completed.response.reasoning.effort"
+          },
+          {
+            "value": "low",
+            "source": "response.created.response.reasoning.effort"
+          },
+          {
+            "value": "low",
+            "source": "response.in_progress.response.reasoning.effort"
+          },
+          {
+            "value": "low",
+            "source": "response.completed.response.reasoning.effort"
+          },
+          {
+            "value": "low",
+            "source": "response.created.response.reasoning.effort"
+          },
+          {
+            "value": "low",
+            "source": "response.in_progress.response.reasoning.effort"
+          },
+          {
+            "value": "low",
+            "source": "response.completed.response.reasoning.effort"
+          }
+        ],
+        "calls": 4,
+        "conformance": "pass",
+        "result": "pass"
+      },
+      {
+        "protocol": "messages",
+        "client": "claude",
+        "client_version": "2.1.283",
+        "requested_effort": "low",
+        "served_models": [
+          {
+            "value": "anthropic/claude-haiku-5.5",
+            "source": "message_start.message.model"
+          },
+          {
+            "value": "anthropic/claude-haiku-5.5",
+            "source": "message_start.message.model"
+          },
+          {
+            "value": "anthropic/claude-haiku-5.5",
+            "source": "message_start.message.model"
+          }
+        ],
+        "served_efforts": [],
+        "calls": 3,
+        "conformance": "pass",
+        "result": "pass"
+      }
+    ]
+  }
 ]
