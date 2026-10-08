@@ -1,9 +1,11 @@
 """Adapters for Codex's standalone Images wire format."""
+import json
 from . import availability, media, provider_defs, request_context, transport
 from .errors import PreparationError, UnknownModel
 from .providers import SubscriptionProvider
 
 IMAGE_POST_PATHS = frozenset(('/images/generations', '/images/edits'))
+NATIVE_MODELS = frozenset(('gpt-image-2', 'gpt-image-2.5-flare', 'gpt-image-2.5-sunburst'))
 
 
 def row_for(model, catalogue):
@@ -20,6 +22,10 @@ class SubscriptionImagesProvider(SubscriptionProvider):
                 decoded_len=None, context=None):
         forwarded = {key: value for key, value in headers.items()
                      if key.lower() not in transport.HOP_HEADERS}
+        if 'chat_model' in payload:
+            raw_body = json.dumps({k: v for k, v in payload.items() if k != 'chat_model'}).encode()
+            decoded_len = len(raw_body)
+            forwarded = {k: v for k, v in forwarded.items() if k.lower() != 'content-encoding'}
         return transport.Prepared(self.host,
             self.defn.path_for(provider_defs.IMAGES, path[len('/images'):]),
             forwarded, raw_body, {}, self.name, context=context,
@@ -35,8 +41,8 @@ class ExternalImagesProvider:
 
     def prepare(self, model, path, payload, raw_body, headers, credentials,
                 decoded_len=None, context=None):
-        if path != '/images/generations':
-            raise PreparationError('External image editing is not available yet')
+        if path not in IMAGE_POST_PATHS:
+            raise PreparationError('Unsupported image operation')
         if (self.allowed is not None and self.row.slug not in self.allowed
                 or not availability.permitted(self.row.slug)):
             raise UnknownModel(model)
@@ -47,6 +53,17 @@ class ExternalImagesProvider:
         options = dict(payload)
         if options.get('size') == 'auto':
             options.pop('size')
+        if path == '/images/edits':
+            images = payload.get('images')
+            if not isinstance(images, list) or not 1 <= len(images) <= 5:
+                raise PreparationError('Image editing needs one to five inline reference images')
+            references = []
+            for image in images:
+                url = image.get('image_url') if isinstance(image, dict) else None
+                if not isinstance(url, str) or not url.startswith('data:image/'):
+                    raise PreparationError('Inline images are required; OpenAI file IDs cannot cross providers')
+                references.append({'type': 'image_url', 'image_url': {'url': url}})
+            options['input_references'] = references
         turn = {'input': [{'role': 'user', 'content': prompt}]}
         prepared = media.prepared(self, 'image', options, model, self.row, turn,
                                   self.row.upstream_id or self.row.slug,

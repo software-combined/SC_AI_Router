@@ -11,6 +11,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -22,8 +23,9 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from ai_router import catalogue, media, provider_defs, registry, sse, transport
+from ai_router import catalogue, media, media_origin, provider_defs, registry, sse, transport
 from ai_router.credentials import Credentials
+from ai_router.protocols.images import POLICY as IMAGE_POLICY
 from ai_router.router import Router
 from tools.appserver_probe import AGENT_HANDOFFS, AppServer, codex_bin, scrub_env
 from tools.probe_media import red_png
@@ -44,16 +46,27 @@ def probe(model, live=False, variant='default', live_chat=False, output=None):
         raise ValueError('live budget permits GPT Image 2 or Veo 3.1 Fast only')
     if live_chat and (not live or row.media_kind != 'image'):
         raise ValueError('live chat requires a live image probe')
-    if variant not in ('default', 'switched'):
-        raise ValueError('choose default or switched client configuration')
+    if variant not in ('default', 'switched', 'subscription'):
+        raise ValueError('choose default, switched or subscription client configuration')
+    native = variant == 'subscription'
+    if native and (live or row.media_kind != 'image'):
+        raise ValueError('subscription probe permits only synthetic images')
     if output is not None and Path(output).exists():
         raise FileExistsError('choose a new output file before starting a probe')
     chat_model = _client_config._codex.DEFAULT_MODEL if row.media_kind == 'image' else model
+    if native:
+        chat_model = 'gpt-6-astra'
     calls, chat_calls, served, costs, items = [], [], [], [], []
     chat_served, chat_costs, copied = [], [], []
     upstream_statuses = []
     expected_result, retained = [], []
+    image_origins = []
     send = transport.post_with_phases
+    origin_route = IMAGE_POLICY.origin_route
+
+    def bound_route(model, path, state, mode, payload, headers, turns, context):
+        image_origins.append(media_origin.header(headers, 'x-codex-image-turn-id') is not None)
+        return origin_route(model, path, state, mode, payload, headers, turns, context)
 
     def live_response(conn, prepared, metrics, identities, reported_costs):
         response, elapsed = send(conn, prepared, metrics)
@@ -80,7 +93,7 @@ def probe(model, live=False, variant='default', live_chat=False, output=None):
 
     def bounded_send(conn, prepared, metrics):
         body = json.loads(prepared.body)
-        if any(name.lower() in ('x-openai-actor-authorization', 'x-scg-codex-route',
+        if prepared.provider != provider_defs.OPENAI.id and any(name.lower() in ('x-openai-actor-authorization', 'x-scg-codex-route',
                                 'chatgpt-account-id') for name in prepared.headers):
             raise ValueError('private client headers reached an external send')
         if row.media_kind == 'image' and prepared.path.endswith('/responses'):
@@ -97,13 +110,18 @@ def probe(model, live=False, variant='default', live_chat=False, output=None):
                 return live_response(conn, prepared, metrics, chat_served, chat_costs)
             if len(chat_calls) == 1:
                 name = next((tool['name'] for tool in body.get('tools', [])
-                             if 'imagegen' in tool.get('name', '')), None)
+                             if 'imagegen' in tool.get('name', '')
+                             or native and tool.get('name') == 'image_gen'), None)
                 if name is None:
                     raise ValueError('Codex did not expose its native image tool')
                 item = {'type': 'function_call', 'id': 'fc_media_probe',
                         'call_id': 'call_media_probe', 'name': name,
                         'arguments': json.dumps({'prompt': 'A plain red square on a white background.',
                                                  'transparent_background': False})}
+                if native:
+                    item['name'] = 'imagegen'
+                    item['namespace'] = 'image_gen'
+                    item['status'] = 'completed'
             else:
                 item = {'type': 'message', 'id': 'msg_media_probe', 'role': 'assistant',
                         'content': [{'type': 'output_text', 'text': 'Image created.'}]}
@@ -118,9 +136,11 @@ def probe(model, live=False, variant='default', live_chat=False, output=None):
             return media.Response(raw, 'text/event-stream'), time.monotonic()
         if calls:
             raise ValueError('media probe generation budget exhausted')
-        defn = provider_defs.get(row.provider)
-        expected = media.images_path(defn) if row.media_kind == 'image' else media.videos_path(defn)
-        if prepared.path != expected or body.get('model') != (row.upstream_id or row.slug):
+        defn = provider_defs.OPENAI if native else provider_defs.get(row.provider)
+        expected = (defn.path_for(provider_defs.IMAGES, '/generations') if native else
+                    media.images_path(defn) if row.media_kind == 'image' else media.videos_path(defn))
+        image_model = 'gpt-image-2' if native else row.upstream_id or row.slug
+        if prepared.path != expected or body.get('model') != image_model:
             raise ValueError('unexpected media destination or model')
         if transport.request_bytes(prepared) > 128 * 1024:
             raise ValueError('media probe input budget exceeded')
@@ -158,8 +178,8 @@ def probe(model, live=False, variant='default', live_chat=False, output=None):
         router_home = root / 'router'
         router_home.mkdir(mode=0o700)
         state = {'port': 0, 'token': 'synthetic-media-probe',
-                 'openai_mode': 'subscription' if variant == 'switched' else 'none',
-                 'openai_models': [], 'clients': []}
+                 'openai_mode': 'subscription' if variant != 'default' else 'none',
+                 'openai_models': [chat_model] if native else [], 'clients': []}
         if live:
             home = Path.home() / '.codex/mixed-model-router'
             saved = json.loads((home / 'mixed-router-state.json').read_text())
@@ -173,25 +193,35 @@ def probe(model, live=False, variant='default', live_chat=False, output=None):
         path.write_text(key)
         with mock.patch.dict(os.environ, {'ROUTER_HOME': str(router_home)}), \
                 mock.patch.object(transport, 'post_with_phases', bounded_send), \
+                mock.patch.object(IMAGE_POLICY, 'origin_route', bound_route), \
                 mock.patch('ai_router.subscription_discovery.fetch_native', return_value=[]):
             router = Router(state, credentials=Credentials(state, router_home))
             threading.Thread(target=router.serve_forever, daemon=True).start()
             client_home = root / 'codex'
             client_home.mkdir(mode=0o700)
+            if native:
+                auth = Path(os.environ.get('CODEX_HOME', Path.home() / '.codex')) / 'auth.json'
+                shutil.copy2(auth, client_home / 'auth.json')
             state['port'] = router.server_port
             (client_home / 'config.toml').write_text(_client_config.build(
-                router_home, state, state['openai_mode'], True, variant))
+                router_home, state, state['openai_mode'], True, 'default' if native else variant))
             catalog_path = router_home / ('routed-models.json' if variant == 'switched'
                                           else 'mixed-models.json')
             catalog_path.write_text(json.dumps({'models': [
+                catalogue.subscription_stub(chat_model) if native else
                 catalogue.external_entry(registry.by_slug(chat_model))]}))
             config = {
                 'model_providers.scg_router.request_max_retries': 0,
                 'model_providers.scg_router.stream_max_retries': 0,
                 'cli_auth_credentials_store': 'file',
                 'model_reasoning_effort': 'low' if row.media_kind == 'image' else 'none',
+                'features.enable_request_compression': False,
+                'features.image_generation': True,
                 'project_doc_max_bytes': 0, 'approval_policy': 'never',
                 'sandbox_mode': 'read-only', 'web_search': 'disabled', 'mcp_servers': {}}
+            if native:
+                config.pop('model_providers.scg_router.request_max_retries')
+                config.pop('model_providers.scg_router.stream_max_retries')
             for flag in ('apps', 'memories', 'plugins', 'shell_tool', 'multi_agent', 'code_mode',
                          'code_mode_only'):
                 config['features.' + flag] = False
@@ -206,7 +236,8 @@ def probe(model, live=False, variant='default', live_chat=False, output=None):
                 client.rpc('initialize', {'clientInfo': {'name': 'media_probe', 'version': '1'},
                            'capabilities': {'experimentalApi': True}})
                 client.send({'method': 'initialized', 'params': {}})
-                if client.rpc('account/read', {'refreshToken': False}).get('account') is not None:
+                account_absent = client.rpc('account/read', {'refreshToken': False}).get('account') is None
+                if not native and not account_absent:
                     raise RuntimeError('external-only probe unexpectedly has a Codex account')
                 thread = client.rpc('thread/start', {'model': chat_model, 'cwd': folder,
                     'approvalPolicy': 'never', 'sandbox': 'read-only', 'ephemeral': True,
@@ -250,10 +281,14 @@ def probe(model, live=False, variant='default', live_chat=False, output=None):
                 expected = 'imageGeneration' if row.media_kind == 'image' else 'agentMessage'
                 if expected not in items or retained != expected_result:
                     raise RuntimeError('Codex did not retain the media result: ' + ','.join(items))
+                if row.media_kind == 'image' and image_origins != [True]:
+                    raise RuntimeError('Codex did not bind its image to the originating chat turn')
                 return {'client_version': subprocess.check_output([codex_bin(), '--version'],
                     text=True).strip(), 'requested_model': model, 'requested_effort': 'none',
                     'served_models': served, 'served_effort': 'unverified', 'live': live,
-                    'client_variant': variant, 'chatgpt_account_absent': True,
+                    'client_variant': variant, 'chatgpt_account_absent': account_absent,
+                    'generation_provider': provider_defs.OPENAI.id if native else row.provider,
+                    'generation_paths': calls, 'originating_image_turn_verified': image_origins == [True],
                     'requested_chat_model': chat_model,
                     'requested_chat_effort': 'low' if row.media_kind == 'image' else 'none',
                     'generation_calls': len(calls),
@@ -280,7 +315,7 @@ if __name__ == '__main__':
     parser.add_argument('--model', required=True)
     parser.add_argument('--live', action='store_true')
     parser.add_argument('--live-chat', action='store_true', help='also send capped real chat turns')
-    parser.add_argument('--variant', choices=('default', 'switched'), default='default')
+    parser.add_argument('--variant', choices=('default', 'switched', 'subscription'), default='default')
     parser.add_argument('--output', help='copy the retained image to a new file')
     args = parser.parse_args()
     try:
