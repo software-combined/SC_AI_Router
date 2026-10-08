@@ -11,6 +11,7 @@ are never copied between machines.
 
 `ai_router/router.py`, `ai_router/providers.py`, `ai_router/claude.py`,
 `ai_router/media.py`, `ai_router/video_provider.py`,
+`ai_router/media_origin.py`, `ai_router/media_cli.py`,
 `ai_router/external_provider.py`,
 `ai_router/image_provider.py`, `ai_router/protocols/images.py`,
 `ai_router/claude_compat.py`,
