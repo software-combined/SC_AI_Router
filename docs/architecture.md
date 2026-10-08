@@ -361,7 +361,17 @@ is in [runtime files](runtime-files.md#codex-usage-limit-record).
    parameterized by one `ProviderDef`, never by a provider-name branch. A
    new external provider is a table entry plus registry rows; a provider
    with a different wire format is a new adapter class, never a branch in
-   the request path. External headers start fresh every request;
+   the request path. `image_provider.py` owns the native Images wire format;
+   `protocols/images.py` selects subscription or external billing from the
+   install mode and explicit model ID. `video_provider.py` owns Responses
+   video job submission. Both use `media.py` for media envelopes and retain
+   the shared credential, admission and transport boundaries. Media rows do
+   not enter the chat projection. [Media generation](media-generation.md)
+   records the client contract and preview limits.
+   `external_provider.py` owns the region, provider identity and model
+   authorization shared by chat and video adapters. It imports neither
+   adapter; distinct wire formats remain in their own modules.
+   External headers start fresh every request;
    subscription headers never accompany an externally billed request.
    `decisions.py` is the one client for a provider's typed-decision endpoint
    (Jev today): it holds no policy and answers only what it can validate, so
@@ -394,16 +404,16 @@ router code.
 ## Client contract
 
 `ai_router/clients/registry.py` is the one owner of who sees what: one row per
-client, carrying the wire protocol the router already serves, the picker
+client, carrying its primary picker protocol and supported wire protocols, the picker
 predicate and the discovery predicate. Both Claude projections read it, and
 `packaging/install.py` derives its `--client`/`--clients` choices from the
 `ai_router/clients/roster.py` leaf, which is import-free so the installer can
 spec-load it (`packaging/service.py::load`). Adding a client means:
 
 1. a row in `ai_router/clients/registry.py` (and its id in the roster leaf);
-2. a protocol the router already dispatches on -- `/responses` or
-   `/v1/messages`, per `protocols/TABLE` -- or a STOP: a third protocol is a
-   decision, not an edit;
+2. protocols the router already dispatches on, per `protocols/TABLE`:
+   Responses and native Images for Codex, Messages for Claude Code. A new
+   wire protocol requires a verified client contract before it joins this table;
 3. a capability projection under `ai_router/clients/` only if the client's
    catalogue shape differs from Codex's;
 4. an activation adapter under `packaging/` owning that client's config file,

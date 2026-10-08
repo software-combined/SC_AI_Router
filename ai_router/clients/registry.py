@@ -1,7 +1,7 @@
 """The client table: one row per supported client (Plan 155).
 
 A client is not a provider and an OS is neither. A row names the wire
-protocol the router already serves, the predicate its picker applies, and the
+protocols the router already serves, the predicate its picker applies, and the
 predicate its own discovery listing applies. Both Claude projections read
 here, so "what does Claude Code see" has one owner.
 
@@ -13,7 +13,7 @@ from .roster import CLIENT_IDS
 
 
 class ClientDef:
-    """One supported client: protocol, picker visibility, discovery visibility.
+    """One client: primary picker protocol, wire protocols and visibility.
 
     `picker_visible(model, include_twins=False)` answers the catalogue
     question ("may this row appear in the client's picker"). The discovery
@@ -21,10 +21,12 @@ class ClientDef:
     key filter on top -- that separation is why the two can differ.
     """
 
-    __slots__ = ('id', 'label', 'protocol', 'picker_visible', 'discovery_visible')
+    __slots__ = ('id', 'label', 'protocol', 'protocols', 'picker_visible', 'discovery_visible')
 
-    def __init__(self, id, label, protocol, picker_visible, discovery_visible):
+    def __init__(self, id, label, protocol, picker_visible, discovery_visible,
+                 additional_protocols=()):
         self.id, self.label, self.protocol = id, label, protocol
+        self.protocols = (protocol,) + tuple(additional_protocols)
         self.picker_visible, self.discovery_visible = picker_visible, discovery_visible
 
 
@@ -49,6 +51,7 @@ def _listed_outside_anthropic(model, include_twins=False):
 
 CODEX = ClientDef(id='codex', label='Codex',
                   protocol=provider_defs.RESPONSES,
+                  additional_protocols=(provider_defs.IMAGES,),
                   picker_visible=_listed, discovery_visible=_listed)
 CLAUDE = ClientDef(id='claude', label='Claude Code',
                    protocol=provider_defs.MESSAGES,

@@ -22,7 +22,7 @@ FIELDS = ('slug', 'provider', 'display_name', 'vendor', 'reasoning',
 # Fields a row may carry or omit. `upstream_id` empty (or absent) means the
 # slug is the id the provider expects, which every current row relies on.
 OPTIONAL_FIELDS = ('listed', 'provider_prefs', 'upstream_id',
-                   'auto_compact_token_limit', 'observed_item_types')
+                   'auto_compact_token_limit', 'observed_item_types', 'media_kind')
 OBSERVABLE_ITEM_TYPES = frozenset(('custom_tool_call', 'custom_tool_call_output',
                                   'compaction', 'additional_tools'))
 
@@ -57,6 +57,7 @@ class Model:
     auto_compact_token_limit: int | None = None  # Codex compacts at this many
                                                  # tokens; None keeps its default
     observed_item_types: tuple = ()  # measured Responses shapes; diagnostic only
+    media_kind: str | None = None  # None (chat row) | 'image' | 'video'
 
 
 # Documented OpenRouter `provider` object keys (router-metadata guide,
@@ -161,6 +162,9 @@ def load(text):
             raise SystemExit(f'models.json {row["slug"]}: bad auto_compact_token_limit')
         if row.get('listed', False) and row['tier'] != 'verified':
             raise SystemExit(f'models.json {row["slug"]}: preview row must not be listed')
+        media_kind = row.get('media_kind')
+        if media_kind not in (None, 'image', 'video'):
+            raise SystemExit(f'models.json {row["slug"]}: bad media_kind')
         observed = row.get('observed_item_types', [])
         if (not isinstance(observed, list) or any(not isinstance(v, str) for v in observed)
                 or not set(observed) <= OBSERVABLE_ITEM_TYPES or len(set(observed)) != len(observed)):
@@ -189,7 +193,7 @@ def load(text):
             listed=row.get('listed', True),
             provider_prefs=dict(prefs) if prefs is not None else None,
             upstream_id=upstream_id, auto_compact_token_limit=limit,
-            observed_item_types=tuple(observed)))
+            observed_item_types=tuple(observed), media_kind=media_kind))
     return tuple(models)
 
 

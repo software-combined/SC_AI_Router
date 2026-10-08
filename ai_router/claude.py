@@ -154,6 +154,8 @@ class ExternalMessagesProvider:
         if context is None:  # a direct call; routed requests resolved at ingress
             context = request_context.resolve(model, request_context.capture(), resolve(model))
         slug, entry = context.slug, context.row
+        if getattr(entry, 'media_kind', None) is not None:
+            raise PreparationError('Media generation models require the Codex Responses route')
         upstream = upstream_id_for(entry) if entry is not None else slug
         projected = outbound.project_messages_external(payload, model, upstream)
         # Unchanged bodies keep client serialization. Encoded external input

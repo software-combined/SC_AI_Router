@@ -10,6 +10,9 @@ receipts, catalogues, backups and logs are never part of a release bundle and
 are never copied between machines.
 
 `ai_router/router.py`, `ai_router/providers.py`, `ai_router/claude.py`,
+`ai_router/media.py`, `ai_router/video_provider.py`,
+`ai_router/external_provider.py`,
+`ai_router/image_provider.py`, `ai_router/protocols/images.py`,
 `ai_router/claude_compat.py`,
 `ai_router/availability.py`, `ai_router/snapshot_store.py`,
 `ai_router/registry.py`, `ai_router/credentials.py`,
@@ -64,7 +67,7 @@ are never copied between machines.
 `ai_router/agents_general.txt`, `ai_router/agents_dev.txt`,
 `tools/probe_codex_runtime.py`, `tools/probe_model_discovery.py`, `tools/probe_context_budget.py`,
 `tools/probe_context_recovery.py`, `tools/probe_handoff_recovery.py`,
-`tools/probe_history_switch.py`, `tools/probe_media.py`,
+`tools/probe_history_switch.py`, `tools/probe_media.py`, `tools/probe_media_generation.py`,
 `tools/probe_standalone_outputs.py`, `tools/probe_agent_handoffs.py`,
 `tools/probe_parent_switch.py`, `tools/probe_claude_code.py`,
 `tools/probe_candidate.py`, `tools/probe_subscription_restart.py`,
