@@ -166,4 +166,5 @@ def _with_body(prepared, body):
                                body, prepared.tool_names, prepared.provider,
                                prepared.fallback, prepared.output_cap,
                                prepared.context_tokens, prepared.context,
-                               decoded_body_bytes=len(body))
+                               decoded_body_bytes=len(body),
+                               response_adapter=prepared.response_adapter)

@@ -38,7 +38,7 @@ class StripAnnotationsTests(unittest.TestCase):
         native = providers.SubscriptionProvider()
         unnamed = (400, 'refused', None)
         encrypted = (400, 'refused', 'invalid_encrypted_content')
-        fallback, context = object(), object()
+        fallback, context, response_adapter = object(), object(), object()
         body = json.dumps({'model': 'm', 'store': True, 'input': [
             {'type': 'reasoning', 'id': 'rs_1', 'encrypted_content': 'BLOB'}]}).encode()
         for adapter, described, raw, repair in ((external, unnamed, UNNAMED, 'annotation_strip'),
@@ -47,7 +47,7 @@ class StripAnnotationsTests(unittest.TestCase):
                 original = transport.Prepared(
                     'upstream.example', '/responses',
                     {'Authorization': 'Bearer k', 'Connection': 'close'}, body,
-                    {'tool': 'kind'}, adapter.name, fallback, 321, 654, context)
+                    {'tool': 'kind'}, adapter.name, fallback, 321, 654, context, response_adapter=response_adapter)
                 proposal = adapter.repair_rejected(original, described, raw)
                 self.assertEqual(proposal.repair, repair)
                 sent = proposal.prepared
@@ -57,7 +57,7 @@ class StripAnnotationsTests(unittest.TestCase):
                 self.assertEqual([getattr(sent, key) for key in transport.Prepared.__slots__
                                   if key not in ('headers', 'body', 'decoded_body_bytes')],
                                  ['upstream.example', '/responses', {'tool': 'kind'},
-                                  adapter.name, fallback, 321, 654, context])
+                                  adapter.name, fallback, 321, 654, context, response_adapter])
                 self.assertEqual((original.body, original.headers),
                                  (body, {'Authorization': 'Bearer k', 'Connection': 'close'}))
                 # A context error, or the other adapter's rejection, is not repaired.

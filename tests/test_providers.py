@@ -2,7 +2,7 @@ import json
 import unittest
 from types import SimpleNamespace
 from unittest import mock
-from ai_router import availability, compaction_summary, provider_defs, providers
+from ai_router import availability, compaction_summary, provider_defs, providers, registry, tool_runs, wire_shape
 from ai_router.image_items import IMAGE_NOTE
 from tests.harness import (
     isolated_home as _isolated_home,
@@ -402,6 +402,67 @@ class ImageProjectionTests(unittest.TestCase):
         prepared = _external_responses().prepare(
             'z-ai/glm-5.3', '/responses', payload, b'raw', {}, _stub_credentials())
         self.assertEqual(prepared.host, 'openrouter.ai')
+
+
+class MediaRouteTests(unittest.TestCase):
+    def test_image_row_cannot_use_the_chat_responses_route(self):
+        from ai_router.errors import PreparationError
+        payload = {'model': 'openai/gpt-image-2',
+                   'reasoning': {'effort': 'none'},
+                   'tools': [{'type': 'image_generation'}],
+                   'input': [{'type': 'message', 'role': 'user', 'content': [
+                       {'type': 'input_text', 'text': 'draw a red square'}]}]}
+        with self.assertRaises(PreparationError):
+            providers.select('openai/gpt-image-2', '/responses').prepare(
+                'openai/gpt-image-2', '/responses', payload, b'raw', {},
+                _stub_credentials())
+
+    def test_video_turn_opens_a_job_on_the_videos_api(self):
+        payload = {'model': 'google/veo-3.1-fast',
+                   'reasoning': {'effort': 'none'},
+                   'tools': [{'type': 'video_generation'}],
+                   'input': [{'role': 'user', 'content': 'a slow push-in'}]}
+        prepared = providers.select('google/veo-3.1-fast', '/responses').prepare(
+            'google/veo-3.1-fast', '/responses', payload, b'raw', {},
+            _stub_credentials())
+        self.assertEqual(
+            (prepared.host, prepared.path), ('openrouter.ai', '/api/v1/videos'))
+        sent = json.loads(prepared.body)
+        self.assertEqual(sent, {'model': 'google/veo-3.1-fast',
+                                'prompt': 'a slow push-in'})
+
+    def test_media_tool_on_a_chat_row_is_refused(self):
+        from ai_router.errors import PreparationError
+        payload = {'model': 'z-ai/glm-5.3',
+                   'tools': [{'type': 'image_generation'}],
+                   'input': [{'role': 'user', 'content': 'draw'}]}
+        with self.assertRaises(PreparationError):
+            _external_responses().prepare(
+                'z-ai/glm-5.3', '/responses', payload, b'raw', {},
+                _stub_credentials())
+
+    def test_image_result_item_survives_history_replay(self):
+        # A completed image_generation_call result carries `id`, not
+        # `call_id`: it answers nothing, so the pairing contract and the
+        # fragment scrub must both leave it alone on the next turn.
+        items = [{'type': 'message', 'role': 'user', 'content': 'draw'},
+                 {'type': 'image_generation_call', 'id': 'img1',
+                  'status': 'completed', 'result': 'B64DATA'}]
+        self.assertEqual(tool_runs.scrub_tool_fragments(items), items)
+        self.assertEqual(wire_shape.pair_problems(items), {})
+        self.assertEqual(tool_runs.open_calls(items), {})
+
+    def test_media_rows_are_unlisted_preview(self):
+        for slug, kind in (('openai/gpt-image-2', 'image'),
+                            ('openai/gpt-image-2.5-sunburst', 'image'),
+                            ('openai/gpt-image-2.5-flare', 'image'),
+                            ('google/veo-3.1', 'video'),
+                            ('google/veo-3.1-fast', 'video')):
+            with self.subTest(model=slug):
+                row = registry.by_slug(slug)
+                self.assertEqual(row.tier, 'preview')
+                self.assertFalse(row.listed)
+                self.assertEqual(row.media_kind, kind)
 
 
 if __name__ == '__main__':
