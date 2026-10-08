@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.0.16
+
+- Let another large request prepare while a reduced request streams its answer.
+  Requests that retain large data stay protected. Add request IDs, slot hold
+  times and size diagnostics to explain large-request refusals without logging content.
+
 ## 1.0.15
 
 - Route Codex images by their originating chat connection, not only the
