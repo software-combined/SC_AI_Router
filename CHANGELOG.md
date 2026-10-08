@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.0.15
+
 - Route Codex images by their originating chat connection, not only the
   client profile. Native OpenAI chats keep native images; OpenRouter chats
   use approved OpenRouter image models. Concurrent chats retain separate
