@@ -85,11 +85,15 @@ def error(handler, err, *, log_event, retry_after=None):
     stream = getattr(err, 'stream', False) is True
     fields = {'status': 200 if stream else err.status, 'code': err.code,
               'path': suffix.split('?')[0][:200]}
+    fields.update({k: v for k, v in getattr(handler, 'lease_facts', {}).items()
+                   if k in ('request_id', 'thread_id', 'parent_thread_id', 'router_version')})
     detail = getattr(err, 'detail', None)
     if detail:
         fields['detail'] = str(detail)[:MAX_LOG_DETAIL]
     if retry_after:
         fields['retry_after'] = retry_after
+    if err.code == 'OVERSIZE_BUSY':
+        fields.update(getattr(handler, 'lease_busy', {}))
     log_event('request_rejected', **fields)
     if stream:
         return send_failed_stream(handler, err)
@@ -215,8 +219,8 @@ def read_body(handler, max_body, oversize_guard=None):
     # ai_router.router.MAX_BODY still bounds this read (Plan 128). It is the
     # ordinary threshold: `oversize_guard` is asked on the declared size and
     # again on the decoded size, so a body past it is read or expanded only
-    # while the large-request slot is free (the caller keeps the slot for the
-    # rest of the turn). Either encoding may carry up to the request ceiling:
+    # while the large-request slot is free. The caller keeps it until large
+    # retained data leaves scope. Either encoding may carry up to the ceiling:
     # native history with images is forwarded whole, and a compressed turn
     # the 2026-09-18 read refused as framing (17.6 MB on the wire) needs its
     # decoded size to decide.
@@ -227,14 +231,16 @@ def read_body(handler, max_body, oversize_guard=None):
         raise InvalidSize('Invalid request size')
     if size > limit:
         raise InvalidSize('Decoded request is too large')
-    if size > max_body and oversize_guard is not None and not oversize_guard():
+    if (size > max_body and oversize_guard is not None
+            and not oversize_guard('wire', wire_bytes=size)):
         raise OversizeBusy()
     body = handler.rfile.read(size)
     if encoding == 'zstd':
         with zstd.ZstdFile(io.BytesIO(body)) as stream:
             decoded = stream.read(max_body + 1)
             if len(decoded) > max_body:
-                if oversize_guard is not None and not oversize_guard():
+                if (oversize_guard is not None and not oversize_guard(
+                        'decode', wire_bytes=size, decoded_lower_bound_bytes=len(decoded))):
                     raise OversizeBusy()
                 decoded += stream.read(max(limit + 1 - len(decoded), 0))
     else:
