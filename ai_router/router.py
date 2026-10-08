@@ -7,10 +7,10 @@ import time
 from compression import zstd
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from . import (errors, ingress, local_services, model_prompt_page,
-               provider_defs, relay, setup, subscription_recovery,
+               media_origin, provider_defs, relay, setup, subscription_recovery,
                subscription_fallback, transport, turn_budget, request_evidence)
 from .credentials import Credentials
-from .protocols import select as select_protocol
+from .protocols import route as resolve_route, select as select_protocol
 from .errors import InvalidSize, PreparationError
 from .image_items import has_images
 from .providers import is_native_service, reject_opaque_agent_items
@@ -79,6 +79,7 @@ class Router(ThreadingHTTPServer):
         self.inflight = 0
         self.draining = False
         self.served_models = {}
+        self.media_turns = media_origin.TurnRoutes()
         self.credentials = credentials if credentials is not None else Credentials(state, ROUTER_HOME)
 
     def drain_and_exit(self):
@@ -112,7 +113,6 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, *args):
         pass  # Request URLs and upstream credentials must never enter access logs.
-
     def send_json(self, status, obj, headers=None):
         return ingress.send_json(self, status, obj, headers)
 
@@ -133,7 +133,6 @@ class Handler(BaseHTTPRequestHandler):
 
     def drain_reject(self):
         return self.error(errors.draining(), retry_after='2')
-
     def do_POST(self):
         started = time.monotonic()
         path, via_path = self.authorized_path()
@@ -203,16 +202,16 @@ class Handler(BaseHTTPRequestHandler):
             # Snapshot before provider.prepare mutates or strips the payload.
             has_image = _payload_has_image(payload)
             model = payload.get('model')
+            origin_turn = media_origin.turn_id(payload, self.headers)
             if not isinstance(model, str) and not is_native_service(path):
                 return self.error(errors.missing_model())
             mode = self.server.state.get('openai_mode', 'subscription')
             policy = select_protocol(self.command, path)
             if policy is None:
                 return self.error(errors.unsupported_route())
-            context = policy.resolve(model)  # this request's one registry read (Plan 188)
-            provider = policy.select_provider(
-                model, path, self.server.state, mode, catalogue=context.catalogue, headers=self.headers,
-                openai_models=subscription_recovery.request_models(self, model, path, context.catalogue))
+            context, provider = resolve_route(policy, model, path, self.server.state, mode,
+                payload, self.headers, self.server.media_turns,
+                lambda ctx: subscription_recovery.request_models(self, model, path, ctx.catalogue))
             if provider.kind == provider_defs.EXTERNAL: reject_opaque_agent_items(payload.get('input'))
             if provider.kind == provider_defs.SUBSCRIPTION and not via_path:
                 return self.error(errors.bearer_for_no_subscription_only())
@@ -241,6 +240,7 @@ class Handler(BaseHTTPRequestHandler):
                 facts.update(prepared_bytes=len(prepared.body),
                              prepared_decoded_bytes=prepared.decoded_body_bytes)
                 self.admit(prepared)
+                self.server.media_turns.remember(origin_turn if path == '/responses' else None, prepared)
             except local_services.LocalAnswer as exc:
                 return self.error(exc)
             if os.environ.get('ROUTER_DEBUG'):

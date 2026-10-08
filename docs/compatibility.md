@@ -1,5 +1,35 @@
 # Compatibility
 
+## Chat-provider media release, 8 October 2026 AEDT
+
+The 1.0.15 runtime passed fresh Haiku 5.5 candidate checks on Codex CLI
+`0.160.1` (desktop `26.930.61225`) and Claude Code `2.1.283` at Low effort.
+Codex passed streamed tools, image input and compaction in four upstream
+attempts. Claude passed two sequential reads in three. Both reported
+`anthropic/claude-haiku-5.5`; Codex reported Low effort. Claude did not
+expose served effort. The ledger binds these results to this runtime.
+
+The same Codex client passed synthetic native, normal external and switched
+image checks, each with one generation and two synthetic chat replies.
+Each image retained its originating turn and exact returned PNG bytes.
+The synthetic video submission check also passed with one generation.
+These checks made no paid media calls. The media implementation is identical
+to the initially reviewed branch; the reconciliation added the Haiku release.
+
+Two live Luna turns survived an isolated router restart on this runtime,
+with Low requested effort and `gpt-6-luna` reported on both replies.
+The first two-call run exposed a completion-observer race: its immediate
+verdict was false although the final report contained both successful turns.
+A diagnostic repeat waited 250 milliseconds after each client completion
+and passed the unchanged assertions, using two more calls. Installed settings
+were unchanged. Existing Claude subscription evidence on these client
+versions remains applicable to its unchanged route.
+
+These are source-candidate checks. Native image upstreams remain simulated;
+Brent's live OpenRouter image and video results retain their stated scope.
+Historical Plan 185 cells below remain historical and do not certify this
+release. Publication and installed delivery require separate readback.
+
 ## Haiku 5.5, 8 October 2026 AEDT
 
 The 1.0.14 candidate passed isolated real-client onboarding at Low effort
