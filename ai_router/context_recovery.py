@@ -54,7 +54,7 @@ def _reset_marker(item):
 
 
 def normalize(payload):
-    """Append one fixed recovery note only to a client-declared reset window."""
+    """Add recovery guidance without moving a terminal compaction trigger."""
     items = payload.get('input')
     if not isinstance(items, list) or not any(_reset_marker(item) for item in items):
         return payload
@@ -62,4 +62,8 @@ def normalize(payload):
         {'type': 'input_text', 'text': RECOVERY_GUIDANCE}]}
     if note in items:
         return payload
-    return {**payload, 'input': [*items, note]}
+    insert_at = len(items)
+    # OpenAI requires the V2 compaction trigger to be the final input item.
+    if isinstance(items[-1], dict) and items[-1].get('type') == 'compaction_trigger':
+        insert_at -= 1
+    return {**payload, 'input': [*items[:insert_at], note, *items[insert_at:]]}
