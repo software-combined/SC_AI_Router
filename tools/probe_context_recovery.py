@@ -30,7 +30,7 @@ from tools.probe_context_budget import Reply
 
 MARKER = 'SYNTH_RECOVERED_ASSIGNMENT_819'
 ASSIGNMENT = 'Your assignment: reply exactly ' + MARKER + '. Do not edit files.'
-HISTORY_TOOL = {'type': 'namespace', 'name': 'history',
+HISTORY_TOOL = {'type': 'namespace', 'name': 'recovery_history',
     'description': 'Read-only access to this synthetic task\'s earlier context windows.',
     'tools': [{'type': 'function', 'name': 'list_items',
         'description': 'Read earlier items from the specified context window.',
@@ -106,10 +106,10 @@ class Scenario:
             return None
         if self.calls == 2:
             for tool in payload['tools']:
-                if tool.get('name') == 'history':
-                    name, namespace = 'list_items', 'history'
+                if tool.get('name') == 'recovery_history':
+                    name, namespace = 'list_items', 'recovery_history'
                     break
-                if 'history.list_items:' in tool.get('description', ''):
+                if 'recovery_history.list_items:' in tool.get('description', ''):
                     name, namespace = tool['name'], None
                     break
             else:
@@ -123,7 +123,7 @@ class Scenario:
         return sse([message(MARKER, ident)], ident)
 
     def tool_result(self, params):
-        assert params.get('namespace') == 'history' and params['tool'] == 'list_items', 'unexpected tool'
+        assert params.get('namespace') == 'recovery_history' and params['tool'] == 'list_items', 'unexpected tool'
         assert params['arguments'].get('window_id') == self.previous, 'wrong history window'
         self.retrievals += 1
         assert self.retrievals <= 3, 'repeated history retrieval'
@@ -155,7 +155,7 @@ def run(args):
         transport = SimpleNamespace(client=SimpleNamespace(
             HTTPSConnection=scenario.connect, HTTPException=http.client.HTTPException))
         with mock.patch.dict(os.environ, {'ROUTER_HOME': str(root / 'router')}), \
-                mock.patch('ai_router.relay.http', transport):
+                mock.patch('ai_router.attempt_policy.http', transport):
             router = Router(state, credentials=credentials)
             threading.Thread(target=router.serve_forever, daemon=True).start()
             url = f'http://127.0.0.1:{router.server_port}/synthetic-probe/backend-api/codex'

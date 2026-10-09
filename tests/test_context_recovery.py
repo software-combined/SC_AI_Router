@@ -86,6 +86,36 @@ class ContextRecoveryTests(unittest.TestCase):
             prepared, raw = self.prepare('gpt-6-luna', [window()], path, True)
             self.assertIs(prepared.body, raw)
 
+    def test_reset_guidance_precedes_native_v2_compaction_trigger(self):
+        trigger = {'type': 'compaction_trigger', 'id': 'trigger-synthetic'}
+        items = [window(), {'type': 'message', 'role': 'user',
+                            'content': 'Remember SYNTHETIC_MARKER'}, trigger]
+        original = copy.deepcopy(items)
+        prepared, _ = self.prepare('gpt-6-luna', items, compressed=True)
+        sent = json.loads(prepared.body)['input']
+        self.assertEqual(sent[-1], trigger, 'OpenAI requires the trigger last')
+        self.assertEqual(sent[:-2], original[:-1])
+        self.assertEqual(sent[-2]['content'][0]['text'], context_recovery.RECOVERY_GUIDANCE)
+        self.assertEqual(items, original, 'saved client history must not change')
+        self.assertNotIn('Content-Encoding', prepared.headers)
+        self.assertEqual(prepared.headers['Authorization'], 'Bearer synthetic-subscription')
+
+    def test_compaction_guidance_is_idempotent_and_preserves_trigger_identity(self):
+        trigger = {'type': 'compaction_trigger'}
+        payload = {'input': [window(), trigger]}
+        original = copy.deepcopy(payload)
+        normalized = context_recovery.normalize(payload)
+        self.assertIs(normalized['input'][-1], trigger)
+        self.assertEqual(len(normalized['input']), 3)
+        self.assertIs(context_recovery.normalize(normalized), normalized)
+        self.assertEqual(payload, original)
+
+    def test_first_window_v2_compaction_keeps_native_bytes(self):
+        prepared, raw = self.prepare('gpt-6-luna',
+                                    [window(False), {'type': 'compaction_trigger'}],
+                                    compressed=True)
+        self.assertIs(prepared.body, raw)
+
     def test_guidance_names_the_tool_loading_step(self):
         # The history tools are deferred: models must search for them, not
         # call remembered names (which answer `unsupported call`).
