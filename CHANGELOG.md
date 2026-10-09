@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.0.17
+
+- Keep Codex's compaction trigger last after a context reset. Recovery guidance
+  now precedes the trigger, so subscription chats can compact and continue.
+  Previously OpenAI rejected the request and the router showed a generic refusal.
+
 ## 1.0.16
 
 - Let another large request prepare while a reduced request streams its answer.
