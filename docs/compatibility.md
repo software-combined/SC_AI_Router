@@ -1,5 +1,38 @@
 # Compatibility
 
+## Reset-compaction ordering, 9 October 2026 AEDT
+
+The 1.0.17 candidate passed on Codex desktop `26.1002.52244`, bundled CLI
+`0.162.0-alpha.2`, and Claude Code `2.1.283`. Synthetic data only was used.
+
+| Client / route | Requested model / effort | Upstream attempts | Result |
+| --- | --- | --- | --- |
+| Codex / ChatGPT subscription | `gpt-6-luna` / low | 4 | Dynamic tool, native compaction and marker continuation passed |
+| Codex / OpenRouter | DeepSeek V4.1 Flash / low | 2 | Dynamic tool round trip passed |
+| Claude Code / OpenRouter | DeepSeek V4.1 Flash / low | 3 | Two sequential Reads and paired results passed |
+| Claude Code / subscription | `sonnet` / low | Not exposed; 2 client turns | One Read and exact marker passed |
+
+Codex reported the requested native and external model identities. The external
+Codex route reported low effort. Claude reported the expected DeepSeek ID and
+`claude-sonnet-5`. Native Codex and both Claude legs did not report served effort.
+
+The native Codex probe inserted synthetic previous-window metadata at its input
+boundary for the client's actual compaction request. It checked the candidate's
+outbound guidance immediately before the final trigger, then required the real
+client to retain its tool-result marker after compaction. Its limits were four
+sends, 512 KiB input and no external-provider spend. The external legs shared
+twelve sends, 512 KiB input and 2,048 output tokens. Both Claude legs disabled
+retries and capped turns at three, output at 2,048 tokens and spend at USD 0.25.
+Disposable routers and temporary credentials were removed after workers stopped.
+
+Initial probe attempts exposed harness issues: a reserved native history schema,
+an obsolete connection interception target, and an external output ceiling.
+They were not counted as acceptance. The corrected recovery helper passed native
+and external scripted modes without provider calls. A live native recovery run
+also completed; token-budget rollover did not exercise remote compaction there,
+so the separate native compaction check above supplied that evidence. These
+checks prove the candidate; installed beta delivery still requires readback.
+
 ## Chat-provider media release, 8 October 2026 AEDT
 
 The 1.0.15 runtime passed fresh Haiku 5.5 candidate checks on Codex CLI
