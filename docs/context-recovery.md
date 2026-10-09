@@ -1,5 +1,28 @@
 # Context-reset brief recovery
 
+## Native compaction rejection, 9 October 2026 AEDT
+
+The Activate audit chat failed twice when Codex compacted its history after
+a context reset. Ordinary subscription turns succeeded. The router appended
+its fixed recovery guidance after the client's terminal `compaction_trigger`.
+OpenAI returned HTTP 400: "The 'compaction_trigger' item must be the final input item."
+The router's generic refusal hid this input-ordering error.
+
+`context_recovery.normalize()` now inserts guidance immediately before a terminal
+trigger. Other reset requests retain their existing order. The projection keeps
+the original input unchanged, preserves the trigger and remains idempotent.
+Native legacy compaction and external local compaction retain their existing paths.
+
+Regression tests failed before the correction and passed afterwards. They cover
+compressed native requests, trigger identity, repeated normalization and initial
+windows without a previous-window marker. Live checks use synthetic data only;
+the failed chat's private request and tool contents were never replayed.
+
+The current probe also intercepts the connection-owning `attempt_policy` module.
+Its synthetic namespace is `recovery_history`; OpenAI reserves `history.list_items`
+for its configured native schema. These changes restore the bounded probe's
+interception and avoid a test-only schema rejection.
+
 ## Root cause and evidence
 
 The 2026-09-13 investigation of task `01a08bbd-7a0a-7d42-834d-190cda2bb16f`
