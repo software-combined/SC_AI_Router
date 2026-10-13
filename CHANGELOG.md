@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 1.0.18
+
+- Add Meta Muse Wonder through OpenRouter after real Codex and Claude Code
+  checks. Offer Minimal through Max effort, with Low as the default, image
+  input and a one-million-token context. Keep existing Muse Spark rows.
+- Repair the synthetic Codex compaction capture for current runtime arguments
+  and key-scoped summary access. Production routing and permissions are unchanged.
+
 ## 1.0.17
 
 - Keep Codex's compaction trigger last after a context reset. Recovery guidance

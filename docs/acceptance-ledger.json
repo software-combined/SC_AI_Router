@@ -1148,5 +1148,126 @@
         "result": "pass"
       }
     ]
-  }
+  },
+{
+  "kind": "model_routes_v1",
+  "observed_at": "2026-10-13T00:10:03.442881+00:00",
+  "model": "meta/muse-wonder",
+  "provider": "openrouter",
+  "capability_fingerprint": "e16750e3061441fc3e815db20065305718a287d1393a1ec73413ccb26fa04019",
+  "runtime_fingerprint": "5ad8a247e8fe04a34aa47b75f307d10f05f41efb97c413e20cb1cf52272e1a1a",
+  "router_version": "1.0.17",
+  "router_revision": "9ecce15780ab5cde1a074465b465778ffb0ee71d",
+  "routes": [
+    {
+      "protocol": "responses",
+      "client": "codex",
+      "client_version": "0.162.0-alpha.17.2",
+      "requested_effort": "low",
+      "served_models": [
+        {
+          "value": "meta/muse-wonder",
+          "source": "response.created.response.model"
+        },
+        {
+          "value": "meta/muse-wonder",
+          "source": "response.in_progress.response.model"
+        },
+        {
+          "value": "meta/muse-wonder",
+          "source": "response.completed.response.model"
+        },
+        {
+          "value": "meta/muse-wonder",
+          "source": "response.created.response.model"
+        },
+        {
+          "value": "meta/muse-wonder",
+          "source": "response.in_progress.response.model"
+        },
+        {
+          "value": "meta/muse-wonder",
+          "source": "response.completed.response.model"
+        },
+        {
+          "value": "meta/muse-wonder",
+          "source": "response.created.response.model"
+        },
+        {
+          "value": "meta/muse-wonder",
+          "source": "response.in_progress.response.model"
+        },
+        {
+          "value": "meta/muse-wonder",
+          "source": "response.completed.response.model"
+        }
+      ],
+      "served_efforts": [
+        {
+          "value": "low",
+          "source": "response.created.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.in_progress.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.completed.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.created.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.in_progress.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.completed.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.created.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.in_progress.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.completed.response.reasoning.effort"
+        }
+      ],
+      "calls": 4,
+      "conformance": "pass",
+      "result": "pass"
+    },
+    {
+      "protocol": "messages",
+      "client": "claude",
+      "client_version": "2.1.283",
+      "requested_effort": "low",
+      "served_models": [
+        {
+          "value": "meta/muse-wonder",
+          "source": "message_start.message.model"
+        },
+        {
+          "value": "meta/muse-wonder",
+          "source": "message_start.message.model"
+        },
+        {
+          "value": "meta/muse-wonder",
+          "source": "message_start.message.model"
+        }
+      ],
+      "served_efforts": [],
+      "calls": 3,
+      "conformance": "pass",
+      "result": "pass"
+    }
+  ]
+}
 ]
