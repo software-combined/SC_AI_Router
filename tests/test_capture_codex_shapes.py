@@ -12,6 +12,7 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from tools import capture_codex_shapes as capture
 
@@ -24,6 +25,31 @@ def developer(text):
 
 def record(items, **fields):
     return {'via': 'prepare', 'path': '/responses', 'payload': {'input': items, **fields}}
+
+
+class CompactionCaptureTests(unittest.TestCase):
+    def test_synthetic_summary_reports_the_requested_model(self):
+        from ai_router.compaction_result import extract_summary
+        fake = capture.Upstream('compaction')
+        response = fake.reply({'model': 'xiaomi/mimo-v2.6-flash'})
+        self.assertEqual(extract_summary(response.status, json.loads(response.read()),
+                         expected_model='xiaomi/mimo-v2.6-flash'), 'Synthetic summary.')
+
+    def test_wrapper_keeps_runtime_row_context_and_policy_arguments(self):
+        records = []
+        provider, row, context = object(), object(), object()
+        payload = {'input': [{'role': 'user', 'content': 'Synthetic task.'}]}
+        original = mock.Mock(return_value=['synthetic compacted item'])
+        wrapper = capture.record_compaction(original, 'compact_trigger', records)
+        result = wrapper(provider, 'model', payload, 'synthetic-key', row,
+                         context=context, allowed={'model'})
+        original.assert_called_once_with(provider, 'model', payload, 'synthetic-key',
+                                         row, context=context, allowed={'model'})
+        self.assertEqual(result, ['synthetic compacted item'])
+        self.assertEqual(records, [{'via': 'compact_trigger', 'path': '/responses',
+                                   'payload': payload}])
+        payload['input'].clear()
+        self.assertEqual(len(records[0]['payload']['input']), 1)
 
 
 class SanitiseTests(unittest.TestCase):
