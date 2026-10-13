@@ -24,8 +24,15 @@ STARTERS = {'Everyday help': 'general', 'Coding help': 'dev'}
 CLIENTS = ('codex', 'claude', 'both', 'none')
 TIMEOUT_S = 900  # matches ai_router.setup.SETUP_TTL_S
 
-KEY_PROMPT = (f'Paste the {provider_defs.OPENROUTER.label} key you were given. '
-              'It is checked before it is saved, and kept only on this computer.')
+def key_prompt(provider_id=None):
+    """Key prompt for one provider; checked wording only when it checks."""
+    defn = provider_defs.get(provider_id) or provider_defs.OPENROUTER
+    checked = ('checked before it is saved' if defn.key_info_shape != 'none'
+               else 'saved as you paste it; the first request checks it')
+    return f'Paste the {defn.label} key you were given. It is {checked}, and kept only on this computer.'
+
+
+KEY_PROMPT = key_prompt()
 CODEX_QUESTION = 'Do you also use a ChatGPT subscription on this computer?'
 CLAUDE_QUESTION = 'Do you also use a Claude subscription for Claude Code?'
 STARTER_QUESTION = 'How should Codex write for you by default?'
@@ -79,13 +86,13 @@ def _icon_clause():
     return ' with icon (POSIX file %s)' % _quote(icon()) if icon() else ''
 
 
-def _macos_script(which='codex'):
+def _macos_script(which='codex', provider_id=None):
     """One AppleScript run: the key, then each question in order."""
     clause = _icon_clause()
     lines = ['set k to text returned of (display dialog %s default answer "" '
              'buttons {"Cancel", "Continue"} default button "Continue" '
              'with title "%s" with hidden answer%s)'
-             % (_quote(KEY_PROMPT), TITLE, clause)]
+             % (_quote(key_prompt(provider_id)), TITLE, clause)]
     collected = ['k']
     for index, (_field, question, answers) in enumerate(questions(which)):
         var = 'a%d' % index
@@ -124,7 +131,7 @@ def _labelled(index, prompt, answers):
                combo, combo, combo))
 
 
-def _windows_script(which='codex'):
+def _windows_script(which='codex', provider_id=None):
     """One WinForms form: product icon, masked key and each question.
 
     Every control goes into an explicit top-down FlowLayoutPanel. WinForms
@@ -185,31 +192,33 @@ def _windows_script(which='codex'):
         "$f.AcceptButton = $b; $f.CancelButton = $c; "
         "$f.Add_Shown({ $f.Activate(); $k.Focus() }); "
         "[void]$f.ShowDialog(); if ($f.Tag -eq 'cancel') { exit 2 }; "
-        "%s" % (TITLE, picture, KEY_PROMPT.replace("'", "''"), boxes, output))
+        "%s" % (TITLE, picture, key_prompt(provider_id).replace("'", "''"), boxes, output))
 
 
-def _zenity_argv(tool_path, which='codex'):
-    argv = [tool_path, '--forms', '--title=' + TITLE, '--text=' + KEY_PROMPT]
+def _zenity_argv(tool_path, which='codex', provider_id=None):
+    defn = provider_defs.get(provider_id) or provider_defs.OPENROUTER
+    argv = [tool_path, '--forms', '--title=' + TITLE, '--text=' + key_prompt(provider_id)]
     if icon():
         argv.append('--window-icon=' + icon())
-    argv.append('--add-password=%s key' % provider_defs.OPENROUTER.label)
+    argv.append('--add-password=%s key' % defn.label)
     for _field, question, answers in questions(which):
         argv.append('--add-combo=' + question)
         argv.append('--combo-values=' + '|'.join(answers))
     return argv + ['--separator=	']
 
 
-def argv(tool_path, platform_name, which='codex'):
+def argv(tool_path, platform_name, which='codex', provider_id=None):
     """The command that shows the key dialog on this platform."""
     if platform_name == 'darwin':
-        return [tool_path, '-e', _macos_script(which)]
+        return [tool_path, '-e', _macos_script(which, provider_id)]
     if platform_name == 'win32':
         return [tool_path, '-NoProfile', '-WindowStyle', 'Hidden',
-                '-Command', _windows_script(which)]
-    return _zenity_argv(tool_path, which)
+                '-Command', _windows_script(which, provider_id)]
+    return _zenity_argv(tool_path, which, provider_id)
 
 
-def collect(tool_path, platform_name=None, run=None, which='codex'):
+def collect(tool_path, platform_name=None, run=None, which='codex',
+            provider_id=None):
     """Choices from the platform dialog, or None when the operator cancels.
 
     OSError means the dialog itself could not be used, so the caller falls
@@ -219,7 +228,8 @@ def collect(tool_path, platform_name=None, run=None, which='codex'):
         platform_name = sys.platform
     if run is None:
         run = subprocess.run
-    result = run(argv(tool_path, platform_name, which), stdout=subprocess.PIPE,
+    result = run(argv(tool_path, platform_name, which, provider_id),
+                 stdout=subprocess.PIPE,
                  stderr=subprocess.PIPE, text=True, timeout=TIMEOUT_S)
     if (platform_name.startswith('linux') and result.returncode == 1) \
             or (platform_name == 'win32' and result.returncode == 2):

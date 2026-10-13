@@ -6,13 +6,15 @@ from ai_router.registry import MODELS
 class CapabilityTests(unittest.TestCase):
     def test_single_source_covers_registry_models(self):
         self.assertEqual(EXTERNAL_MODELS,
-                         {m.slug for m in MODELS if m.provider == 'openrouter'})
+                         {m.slug for m in MODELS
+                          if m.provider in ('openrouter', 'bedrock')})
 
     def test_text_only_set_matches_live_metadata(self):
         for slug in ('z-ai/glm-5.3', 'deepseek/deepseek-v4-pro-0813'):
             self.assertEqual(input_modalities(slug), ['text'])
         for slug in EXTERNAL_MODELS - {'z-ai/glm-5.3',
-                                         'deepseek/deepseek-v4-pro-0813'}:
+                                         'deepseek/deepseek-v4-pro-0813',
+                                         'bedrock/openai.gpt-oss-120b'}:
             self.assertIn('image', input_modalities(slug))
 
     def test_reasoning_matches_live_acceptance(self):

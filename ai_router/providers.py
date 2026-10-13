@@ -8,7 +8,7 @@ from .compaction_summary import (summary_entries as _summary_entries,
                                  summarize as _summarize)
 from .errors import PreparationError, SubscriptionRequired, UnknownModel
 from .external_provider import ExternalProvider
-from .registry import by_slug, near_miss
+from .registry import by_slug, near_miss, row_serves
 from .events import log_event
 from .discovered import remember
 from .tool_adapter import snoop_response_identity, stream_events, ToolEvents
@@ -134,13 +134,14 @@ class ExternalResponsesProvider(ExternalProvider):
         return rejected_repair.annotation_strip(self.defn, prepared, described, raw)
 
     def _summary_snapshot(self, key):
-        snap = availability.current()
+        snap = availability.current(self.defn.id)
         return snap if (snap is not None
                         and snap.get('key') == availability.key_fingerprint(key)
                         and snap.get('region') == self.region) else None
 
     def _jev_enabled(self):
-        return self.region == 'global' and jev_compaction.state() != 'off'
+        return (self.defn.id == provider_defs.DEFAULT_EXTERNAL
+                and self.region == 'global' and jev_compaction.state() != 'off')
 
     def _require_summary_rows(self, key, context, allowed):
         snapshot = self._summary_snapshot(key)
@@ -243,15 +244,18 @@ class LocalServicesProvider:
         raise AssertionError('unreachable')
 
 
-def adapters(region='global'):
+def adapters(region='global', bedrock_region='us-east-1'):
     """One adapter per external def serving Responses, plus the rest.
 
-    `region` selects the endpoint profile host (Plan 145); unknown
-    names fall back to the global host inside the adapter.
+    Each external def is built with its own region value (Plan 145):
+    OpenRouter's named profile, or the install's AWS region for a
+    regional provider. Unknown names fall back inside the adapter.
     """
-    return (tuple(VideoResponsesProvider(defn, region)
+    def region_for(defn):
+        return bedrock_region if defn.regional else region
+    return (tuple(VideoResponsesProvider(defn, region_for(defn))
                   for defn in provider_defs.external_serving(provider_defs.VIDEOS))
-            + tuple(ExternalResponsesProvider(defn, region)
+            + tuple(ExternalResponsesProvider(defn, region_for(defn))
                   for defn in provider_defs.external_serving(provider_defs.RESPONSES))
             + (SubscriptionProvider(), LocalServicesProvider()))
 
@@ -275,10 +279,11 @@ def compaction_call(provider, model, path, payload, row=None, context=None,
 
 
 def select(model, path, openai_models=(), openai_mode='subscription',
-           region='global', allowed=None, catalogue=None):
+           region='global', bedrock_region='us-east-1',
+           allowed=None, catalogue=None):
     allowset = None if allowed is None else frozenset(allowed)
     rows = request_context.capture() if catalogue is None else catalogue
-    for provider in adapters(region):
+    for provider in adapters(region, bedrock_region):
         if provider.owns(model, path, openai_models, openai_mode,
                          allowed=allowset, catalogue=rows):
             return provider
@@ -286,7 +291,7 @@ def select(model, path, openai_models=(), openai_mode='subscription',
         raise SubscriptionRequired()
     entry = rows.get(model) if isinstance(model, str) else None
     defn = provider_defs.get(entry.provider) if entry is not None else None
-    if defn is not None and not defn.serves(provider_defs.RESPONSES):
+    if defn is not None and not row_serves(entry, provider_defs.RESPONSES):
         raise PreparationError(
             f'{defn.label} models are available to Claude Code only: '
             f'{entry.slug} does not serve the Codex Responses API')

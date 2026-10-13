@@ -68,6 +68,8 @@ def load_state(path=STATE):
         raise SystemExit('policy_enforced must be true or false')
     if 'openrouter_region' in state and not provider_defs.valid_region(state['openrouter_region']):
         raise SystemExit("openrouter_region must be one of 'global', 'us' or 'eu'")
+    if 'bedrock_region' in state and not provider_defs.valid_bedrock_region(state['bedrock_region']):
+        raise SystemExit('bedrock_region must be an AWS region name such as us-east-1')
     # Every external provider the registry routes to needs its own key, but
     # the router boots as soon as one resolves: a provider without a key
     # fails its own requests closed instead of taking the service down. A
@@ -75,13 +77,19 @@ def load_state(path=STATE):
     # first-run window can collect one.
     external = sorted({m.provider for m in registry.MODELS
                        if provider_defs.is_external(m.provider)})
+    required = [pid for pid in external
+                if provider_defs.get(pid).required]
     credentials = Credentials(state, ROUTER_HOME)
     missing = [(pid, credentials.key_missing(pid)) for pid in external]
     missing = [(pid, exc) for pid, exc in missing if exc is not None]
-    if external and len(missing) == len(external) and not setup_pending(state):
+    if required and all(pid in {p for p, _e in missing} for pid in required) \
+            and not setup_pending(state):
+        # The message names the required providers that block boot; an
+        # optional provider's missing key is reported but never blocks.
+        blocking = [(pid, exc) for pid, exc in missing if pid in required]
         detail = '; '.join(f'{provider_defs.label_for(pid)}: {exc}'
-                           for pid, exc in missing)
-        raise SystemExit(f'{provider_defs.label_for(missing[0][0])} '
+                           for pid, exc in blocking)
+        raise SystemExit(f'{provider_defs.label_for(blocking[0][0])} '
                          f'credential problem: {detail}')
     # Plan 068: resolved portco allowlist rides alongside the roster. No
     # policy fetch may block startup: absent file means no policy (None) on a

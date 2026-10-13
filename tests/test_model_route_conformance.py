@@ -106,7 +106,7 @@ class ModelRouteConformanceTests(unittest.TestCase):
         # test_media_rows_reach_their_own_api_with_the_prompt.
         expected = {(row.slug, row.provider, protocol) for row in registry.MODELS
                     if row.media_kind is None
-                    for protocol in PROTOCOLS if provider_defs.get(row.provider).serves(protocol)}
+                    for protocol in PROTOCOLS if registry.row_serves(row, protocol)}
         observed = set()
         for row, protocol in routes():
             if row.media_kind is not None:
@@ -123,12 +123,21 @@ class ModelRouteConformanceTests(unittest.TestCase):
                     self.assertEqual(len(sends), 1)
                     defn = provider_defs.get(row.provider)
                     path = '/responses' if protocol == provider_defs.RESPONSES else '/v1/messages'
-                    self.assertEqual(sends[0][:3], (defn.host, 'POST', defn.path_for(protocol, path)))
+                    want_host = provider_defs.host_for(row.provider, 'us-east-1' if defn.regional else 'global')
+                    self.assertEqual(sends[0][:3], (want_host, 'POST', defn.path_for(protocol, path)))
                     self.assertEqual(json.loads(sends[0][3])['model'], upstream_id)
                     headers = {key.lower(): value for key, value in sends[0][4].items()}
-                    self.assertEqual(headers['authorization'], 'Bearer test-key')
-                    for name in ('x-api-key', 'chatgpt-account-id', 'anthropic-beta'):
+                    if defn.regional and protocol == provider_defs.MESSAGES:
+                        self.assertEqual(headers['x-api-key'], 'test-key')
+                        self.assertEqual(headers['anthropic-version'], '2023-06-01')
+                    else:
+                        self.assertEqual(headers['authorization'], 'Bearer test-key')
+                    # Client credential headers never cross; the provider's
+                    # own x-api-key (Bedrock Messages) is not a client secret.
+                    for name in ('chatgpt-account-id', 'anthropic-beta'):
                         self.assertNotIn(name, headers)
+                    if not (defn.regional and protocol == provider_defs.MESSAGES):
+                        self.assertNotIn('x-api-key', headers)
                     self.assertEqual(facts['outcome'], outcome.SUCCESS)
                     attempt, = facts['attempt_evidence']
                     self.assertEqual(attempt['requested_model'], row.slug)

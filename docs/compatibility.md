@@ -1,5 +1,17 @@
 # Compatibility
 
+## AWS Bedrock rows, 13 October 2026 AEDT (offline candidate, live proof pending)
+
+Two Bedrock Mantle rows ship as unlisted preview: `bedrock/anthropic.claude-sonnet-5`
+(Messages) and `bedrock/openai.gpt-oss-120b` (Responses), per the AWS
+Messages and Responses guides and the Mantle model-list shape. Simulated-
+upstream route proofs pass in the offline suite. No Bedrock API key was
+available in this environment, so no real Codex or Claude Code probe ran:
+both rows stay `preview` and unlisted until the bounded candidate probe
+passes for each row's declared protocol. Do not read this section as live
+Bedrock acceptance.
+
+
 ## Muse Wonder onboarding, 13 October 2026 AEDT
 
 OpenRouter's `meta/muse-wonder` maps to `meta/muse-wonder-20261012` on the

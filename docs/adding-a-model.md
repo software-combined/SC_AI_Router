@@ -21,6 +21,14 @@ the video submission boundary.
 `models check` and `live_refresh` follow the same rule in reverse: a fetch
 only ever rewrites rows owned by the provider whose catalogue it read.
 
+Bedrock rows are hand-authored the same way. Give the row
+`provider: "bedrock"`, a `bedrock/<upstream-id>` slug, the exact Mantle
+model id in `upstream_id`, and `protocols` naming only the APIs AWS
+evidence shows for that model in the configured region (`responses`,
+`messages`, or both). Start at `tier: preview` with `listed: false`;
+availability filters the row by the Bedrock key's model list, but it
+never creates or widens a row.
+
 Without `--probe` the row lands as `tier: preview` and `listed: false`:
 it stays out of both pickers (the Codex catalogue and `GET /v1/models`)
 but remains routable so its own probe can reach it. With `--probe` the

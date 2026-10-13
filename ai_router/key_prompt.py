@@ -51,8 +51,8 @@ def _payload(status, body):
     return status, payload
 
 
-def _mode_line(mode):
-    label = provider_defs.OPENROUTER.label
+def _mode_line(mode, provider_id=None):
+    label = provider_defs.label_for(provider_id or provider_defs.DEFAULT_EXTERNAL)
     return ('ChatGPT subscription and %s' % label if mode == 'subscription'
             else '%s models only' % label)
 
@@ -85,7 +85,7 @@ def _open_page(url, opener=None, label=provider_defs.label_for(provider_defs.DEF
 
 
 def run_window(url, tool_path=None, platform_name=None, which=None, run=None,
-               opener=None, clients='codex', post=None,
+               opener=None, clients='codex', post=None, provider_id=None,
                label=provider_defs.label_for(provider_defs.DEFAULT_EXTERNAL)):
     """Prompt, submit, confirm. 0 stored, 2 cancelled, 3 no GUI, 1 refused."""
     if platform_name is None:
@@ -99,7 +99,8 @@ def run_window(url, tool_path=None, platform_name=None, which=None, run=None,
     while True:
         try:
             collected = key_dialog.collect(tool_path, platform_name=platform_name,
-                                           run=run, which=clients)
+                                           run=run, which=clients,
+                                           provider_id=provider_id)
         except (OSError, subprocess.SubprocessError):
             _open_page(url, opener, label)
             return 3
@@ -146,11 +147,11 @@ def open_window(url, thread=False, which=None, opener=None, platform_name=None,
     if not thread:
         return run_window(url, platform_name=platform_name, which=which, run=run,
                           opener=opener, clients=clients, post=post,
-                          label=label) == 0
+                          provider_id=provider_id, label=label) == 0
     threading.Thread(target=run_window, args=(url,),
                      kwargs=dict(platform_name=platform_name, which=which,
                                  run=run, opener=opener, clients=clients, post=post,
-                                 label=label),
+                                 provider_id=provider_id, label=label),
                      daemon=True).start()
     return True
 

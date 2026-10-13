@@ -1,7 +1,7 @@
 """Run the router: python3.14 -m ai_router"""
 import signal
 import threading
-from . import activation, availability, model_refresh, provider_defs
+from . import activation, availability, model_refresh, provider_defs, registry as _registry
 from .registry import external_slugs
 from .router import Router
 from .runtime import VERSION, ROUTER_HOME, configure_logging, load_state, log_event
@@ -10,6 +10,18 @@ from .runtime import VERSION, ROUTER_HOME, configure_logging, load_state, log_ev
 def _region(state):
     region = state.get('openrouter_region', 'global')
     return region if provider_defs.valid_region(region) else 'global'
+
+
+def _bedrock_region(state):
+    region = state.get('bedrock_region', 'us-east-1')
+    return region if provider_defs.valid_bedrock_region(region) else 'us-east-1'
+
+
+def _provider_region(state, provider_id):
+    defn = provider_defs.get(provider_id)
+    if defn is not None and defn.regional:
+        return _bedrock_region(state)
+    return _region(state)
 
 
 
@@ -38,23 +50,34 @@ def main():
     # one immediate refresh, then every five minutes. Temporary failures
     # keep the last good snapshot; auth rejection clears it. Subscription
     # rows are unaffected: the snapshot only ever hides external rows.
-    try:
-        key = server.credentials.key_for()
-    except (LookupError, PermissionError, ValueError, OSError):
-        key = None
     _models_url = _read_models_url(ROUTER_HOME, state)
     try:
         model_refresh.start(_models_url, ROUTER_HOME)
     except Exception:
         pass
-    host = provider_defs.region_host(provider_defs.DEFAULT_EXTERNAL, region)
-    if key and host:
-        availability.restore(ROUTER_HOME, key, region)
-        availability.refresh(host, key, ROUTER_HOME, region)
-        availability.start(lambda: provider_defs.region_host(
-            provider_defs.DEFAULT_EXTERNAL, _region(server.state)),
-            lambda: server.credentials.key_for(),
-            ROUTER_HOME, lambda: _region(server.state))
+    # One availability loop per external provider that has registry rows
+    # and a resolvable key; a provider without a key simply never gates.
+    for defn in provider_defs.external_defs():
+        if not any(m.provider == defn.id for m in _registry.MODELS):
+            continue
+        try:
+            key = server.credentials.key_for(defn.id)
+        except (LookupError, PermissionError, ValueError, OSError):
+            continue
+        host = provider_defs.host_for(defn.id, _provider_region(state, defn.id))
+        if not key or not host:
+            continue
+        availability.restore(ROUTER_HOME, defn.id, key,
+                             _provider_region(state, defn.id))
+        availability.refresh(defn.id, host, key, ROUTER_HOME,
+                             _provider_region(state, defn.id))
+        availability.start(
+            defn.id,
+            lambda pid=defn.id: provider_defs.host_for(
+                pid, _provider_region(server.state, pid)),
+            lambda pid=defn.id: server.credentials.key_for(pid),
+            ROUTER_HOME,
+            lambda pid=defn.id: _provider_region(server.state, pid))
     signal.signal(signal.SIGTERM, lambda signum, frame: _start_drain_thread(server))
     server.serve_forever()
 
