@@ -1,5 +1,44 @@
 # Compatibility
 
+## Muse Wonder onboarding, 13 October 2026 AEDT
+
+OpenRouter's `meta/muse-wonder` maps to `meta/muse-wonder-20261012` on the
+Meta endpoint. Its catalogue advertises Minimal, Low, Medium, High, Xhigh and
+Max reasoning. The registry uses Low, following the existing onboarding rule.
+No exact same-family supersession was established, so Muse Spark stays.
+
+The isolated candidate passed on Codex desktop `26.1007.30912`, bundled CLI
+`0.162.0-alpha.17.2`, and Claude Code `2.1.283`. Synthetic task data only was
+used. The proof completed at 11:10:03 AEDT (10:10:03 AEST).
+
+| Client / route | Requested model / effort | Upstream attempts | Result |
+| --- | --- | --- | --- |
+| Codex / OpenRouter | `meta/muse-wonder` / low | 4 | Streamed tool, image and compaction passed |
+| Claude Code / OpenRouter | `meta/muse-wonder` / low | 3 | Two sequential Reads and paired results passed |
+| Codex / ChatGPT subscription | `gpt-6-luna` / low | 2 | Dynamic tool and exact marker passed |
+| Claude Code / subscription | `sonnet` / low | Reused; 2 client turns | Unchanged 9 October client and route proof |
+
+Both external routes reported `meta/muse-wonder`. Codex reported Low effort;
+Claude did not expose served effort. The subscription tool probe did not retain
+served identity or effort. The acceptance ledger validates the unchanged Python
+runtime and model capabilities against both current client versions. The
+external probe capped all sends, repairs and summary helpers at twelve attempts,
+512 KiB input and 65,536 output tokens. Its subprocess deadline was 750 seconds;
+Claude also used USD 0.25, three turns and 2,048 output tokens.
+
+A separate two-call native restart diagnostic returned both exact markers and
+`gpt-6-luna` reports but its overall verdict was false. It is not acceptance.
+The subsequent required tool-round-trip probe passed at its two-call cap.
+
+Zero-paid current-client shape capture passed dynamic tools, model switching and
+V2 compaction. The initial compaction capture failed because its wrapper omitted
+new row/context arguments. After that repair, missing synthetic key availability
+and model identity caused fail-closed 409s. The capture now supplies both fixtures;
+production checks remain unchanged. Regression tests pin argument forwarding
+and synthetic summary identity. Sanitized captures contain no
+owner history or credentials. Publication and installed delivery remain separate
+gates from this source-candidate proof.
+
 ## Reset-compaction ordering, 9 October 2026 AEDT
 
 The 1.0.17 candidate passed on Codex desktop `26.1002.52244`, bundled CLI

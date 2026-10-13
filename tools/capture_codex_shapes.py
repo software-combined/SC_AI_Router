@@ -42,7 +42,8 @@ from unittest import mock
 from compression import zstd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from ai_router import catalogue, subscription_fallback, upstream
+from ai_router import availability, catalogue, subscription_fallback, upstream
+from ai_router.compaction_summary import SUMMARY_MODEL_SLUGS
 from ai_router.providers import ExternalResponsesProvider
 from ai_router.registry import by_slug
 from tools.appserver_probe import codex_bin
@@ -117,7 +118,8 @@ class Upstream:
 
     def reply(self, payload):
         if not payload.get('stream'):  # the router's own compaction summary request
-            return Reply(200, json.dumps({'output': [message('Synthetic summary.')]}).encode(),
+            return Reply(200, json.dumps({'model': payload['model'],
+                         'output': [message('Synthetic summary.')]}).encode(),
                          'application/json')
         self.turns += 1
         items, used = [message('Synthetic reply.')], 1000
@@ -155,6 +157,14 @@ def drive(client, thread, model, prompt):
             return
 
 
+def record_compaction(original, via, records):
+    def record(self, model, payload, key, *args, **kwargs):
+        records.append({'via': via, 'path': COMPACTION_PATHS[via],
+                        'payload': copy.deepcopy(payload)})
+        return original(self, model, payload, key, *args, **kwargs)
+    return record
+
+
 def capture(binary, name, home):
     """The sanitised client bodies one scenario sent the router, in order."""
     mode, turns = SCENARIOS[name]
@@ -165,27 +175,23 @@ def capture(binary, name, home):
         records.append({'via': 'prepare', 'path': path, 'payload': copy.deepcopy(payload)})
         return prepare(provider, model, path, payload, *args, **kwargs)
 
-    def record_compaction(via):
-        original = getattr(ExternalResponsesProvider, via)
-
-        def record(self, model, payload, key):
-            records.append({'via': via, 'path': COMPACTION_PATHS[via],
-                            'payload': copy.deepcopy(payload)})
-            return original(self, model, payload, key)
-        return record
-
     fake = Upstream(name)
     upstream.clear_refusals()
     # The disposable directory is HOME too: the client lists user-level skills
     # from the real home otherwise, whatever CODEX_HOME says. UTC keeps the
     # machine's timezone out of the environment context.
     isolated = {'ROUTER_HOME': str(home / 'router'), 'HOME': str(home), 'TZ': 'UTC'}
+    snapshot = {'key': availability.key_fingerprint('synthetic-capture-key'),
+                'region': 'global', 'models': frozenset(SUMMARY_MODEL_SLUGS)}
     with mock.patch.dict(os.environ, isolated), \
             mock.patch.object(http.client, 'HTTPSConnection', fake.connection), \
+            mock.patch.object(availability, 'current', return_value=snapshot), \
             mock.patch.object(subscription_fallback, 'prepare', record_prepare), \
-            mock.patch.object(ExternalResponsesProvider, 'compact', record_compaction('compact')), \
+            mock.patch.object(ExternalResponsesProvider, 'compact', record_compaction(
+                ExternalResponsesProvider.compact, 'compact', records)), \
             mock.patch.object(ExternalResponsesProvider, 'compact_trigger',
-                              record_compaction('compact_trigger')):
+                              record_compaction(ExternalResponsesProvider.compact_trigger,
+                                                'compact_trigger', records)):
         from ai_router.router import Router
         server = Router({'port': 0, 'token': 'capture-token', 'openai_models': [NATIVE]},
                         credentials=SimpleNamespace(key_for=lambda _pid=None: 'synthetic-capture-key'))
