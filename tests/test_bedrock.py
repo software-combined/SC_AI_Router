@@ -13,7 +13,7 @@ import urllib.error
 from pathlib import Path
 from unittest import mock
 
-from ai_router import availability, claude, provider_defs, providers, registry
+from ai_router import availability, provider_defs, providers, registry
 from tests.model_route_fixtures import RouteHarness, payload, success
 
 CLAUDE_ROW = 'bedrock/anthropic.claude-sonnet-5'

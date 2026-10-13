@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 import subprocess
 
-from . import provider_defs, registry, request_evidence
+from . import registry, request_evidence
 from .clients.registry import CLIENTS
 
 ROOT = Path(__file__).resolve().parents[1]

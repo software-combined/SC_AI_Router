@@ -6,7 +6,7 @@ from pathlib import Path
 import tempfile
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock, call, patch
+from unittest.mock import Mock, patch
 
 from ai_router import candidate_evidence, provider_defs, registry, transport
 from tools import probe_candidate as probe
