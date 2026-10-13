@@ -147,8 +147,9 @@ def open_key_window(server, home, provider_id=None, _opener=None, _prompt=None):
 
     Plan 107 Stage 3: at most one window per live nonce. When
     `setup_pending` already holds, the existing page is the window and no
-    new nonce is minted. The nonce persists atomically (temp file plus
-    `os.replace`), never through a truncating rewrite.
+    new nonce is minted. The nonce stays bound to the provider it was
+    minted for: a request for another provider is deferred until that
+    window closes, so a key can never be saved under the wrong provider.
 
     Plan 139: the native popup is the primary window and runs on its own
     worker thread (it submits back to this server). The URL carries the
@@ -164,7 +165,9 @@ def open_key_window(server, home, provider_id=None, _opener=None, _prompt=None):
         provider_id = provider_defs.DEFAULT_EXTERNAL
     with server.lock:
         if setup_pending(state):
-            return _repoint_window(state, home, provider_id)
+            # The open window keeps collecting for its own provider. The
+            # caller still answers its request; only the window defers.
+            return key_store.window_provider(state) == provider_id
         nonce = _secrets.token_urlsafe(32)
         expires = int(time.time()) + SETUP_TTL_S
         path = state_mod.path(home)
@@ -201,33 +204,6 @@ def open_key_window(server, home, provider_id=None, _opener=None, _prompt=None):
 
 
 
-def _repoint_window(state, home, provider_id):
-    """Point an already-open window at the provider this request needs.
-
-    One nonce slot: a second provider's request must not leave the open page
-    collecting for a different provider. False when the state cannot be
-    rewritten, so the caller reports the failure instead of pretending a
-    window is ready.
-    """
-    if key_store.window_provider(state) == provider_id:
-        return True
-    try:
-        path = state_mod.path(home)
-        doc = state_mod.read(path)
-        if doc is None or not isinstance(doc.get('setup'), dict):
-            return False
-        doc['setup']['provider'] = provider_id
-        _atomic_replace(path, doc)
-    except (OSError, ValueError):
-        return False
-    # Only after the rewrite succeeded: a failed re-point must not leave the
-    # running server collecting for one provider while the state file and the
-    # caller's answer disagree.
-    if isinstance(state, dict) and isinstance(state.get('setup'), dict):
-        state['setup']['provider'] = provider_id
-    return True
-
-
 def _atomic_replace(path, doc):
     # A crash between create and replace leaves the deterministic tmp behind;
     # the writer's default policy clears it once and retries, so a later nonce
@@ -258,14 +234,23 @@ def _finish_setup(state, home, mode=None, profile=None, claude_mode=None):
             doc['anthropic_mode'] = claude_mode
         from . import availability as _availability
         from . import provider_defs as _defs
-        region = _availability.current_region(home)
-        host = _defs.region_host(_defs.DEFAULT_EXTERNAL, region)
-        # A fresh key changes what `/models/user` allows: refresh now so
-        # the seeded catalogue matches the key at once.
-        _avail, _key = None, _availability.current_key(home)
-        if _key and host:
-            snap = _availability.refresh(host, _key, home, region)
-            _avail = None if snap is None else snap.get('models')
+        # A fresh key changes what its provider allows: refresh every
+        # provider whose key now resolves, so a provider that was keyless
+        # at startup joins availability without a service restart.
+        _refreshed = False
+        for _defn in _defs.external_defs():
+            _key = _availability.current_key(home, _defn.id)
+            _region = (_availability.current_bedrock_region(home)
+                       if _defn.regional
+                       else _availability.current_region(home))
+            _host = _defs.host_for(_defn.id, _region)
+            if _key and _host:
+                _refreshed = (_availability.refresh(
+                    _defn.id, _host, _key, home, _region) is not None
+                    or _refreshed)
+        # No successful refresh: keep today's file rather than hiding
+        # every row behind an empty set.
+        _avail = _availability.combined_ids() if _refreshed else None
         catalogue.merge_file(Path(home) / 'mixed-models.json',
                              openai_mode=mode or doc.get('openai_mode', 'subscription'),
                              available=_avail)

@@ -8,7 +8,8 @@
 <h1 align="center">SC AI Router</h1>
 
 <p align="center">
-Use Codex and Claude with your subscription and approved OpenRouter models.
+Use Codex and Claude with your subscription, approved OpenRouter models,
+and optional AWS Bedrock models.
 </p>
 
 <p align="center">
@@ -31,6 +32,8 @@ a subscription model and an approved model billed to your own OpenRouter key.
 
 Have your assistant installed and an OpenRouter key if you want to use models
 billed to OpenRouter. Those models cost money and have no local spend cap.
+An AWS Bedrock API key is optional and only enables the Bedrock models;
+see [setup options](docs/setup.md).
 
 1. Ask a maintainer for the setup script for your computer. You do not need
    a GitHub account or access to this repository.

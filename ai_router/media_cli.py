@@ -74,7 +74,7 @@ def generate(kind, chat_model, model, prompt, output, config, creds, duration=4,
         raise PreparationError('Use Codex native images for an OpenAI chat; native video is unavailable')
     if (row is None or row.media_kind != kind or row.provider != owner.name
             or config.get('allowed_models') is not None and model not in config['allowed_models']
-            or not availability.permitted(model)):
+            or not availability.permitted(model, provider_id=row.provider)):
         raise PreparationError('Choose an allowed media model on the chat provider')
     context = request_context.resolve(model, rows)
     if kind == 'image':
@@ -140,7 +140,10 @@ def main():
         creds = credentials.Credentials(config, home)
         row = request_context.capture().get(model)
         if row is not None and provider_defs.is_external(row.provider):
-            availability.restore(home, creds.key_for(row.provider), config.get('openrouter_region', 'global'))
+            _region = (config.get('bedrock_region', 'us-east-1')
+                       if provider_defs.get(row.provider).regional
+                       else config.get('openrouter_region', 'global'))
+            availability.restore(home, row.provider, creds.key_for(row.provider), _region)
         result = generate(args.kind, args.chat_model, model, args.prompt, args.output,
                           config, creds, args.duration, args.job_id)
     except (OSError, ValueError, LookupError, http.client.HTTPException) as exc:

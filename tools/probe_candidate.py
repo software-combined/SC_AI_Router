@@ -79,8 +79,21 @@ def serve(home, max_output=MAX_OUTPUT):
     try:
         # Compaction requires the same key-filtered permissions as production.
         # This one metadata read cannot rewrite the candidate capability rows.
-        availability.refresh(provider_defs.region_host(provider_defs.DEFAULT_EXTERNAL, 'global'),
-                             server.credentials.key_for(), home)
+        # Refresh the candidate row's own provider (its region decides the
+        # host); compaction summaries key off that provider's snapshot.
+        _state = server.state
+        for _defn in provider_defs.external_defs():
+            try:
+                _key = server.credentials.key_for(_defn.id)
+            except (LookupError, PermissionError, ValueError, OSError):
+                continue
+            if _defn.regional:
+                _region = _state.get('bedrock_region') or 'us-east-1'
+            else:
+                _region = _state.get('openrouter_region') or 'global'
+            _host = provider_defs.host_for(_defn.id, _region)
+            if _key and _host:
+                availability.refresh(_defn.id, _host, _key, home, _region)
         server.serve_forever()
     finally:
         server.server_close()
@@ -105,7 +118,12 @@ def codex(row, home, catalog):
                '--effort', row.default_reasoning]
         if 'image' in row.modalities and not row.drop_images:
             cmd.append('--image')
-        if row.context_window > 0:
+        # The compaction leg needs summary rows on the row's own provider;
+        # a provider without any (Bedrock today) fails that leg closed in
+        # the router, so the probe does not spend a leg proving the refusal.
+        from ai_router import compaction_summary as _summaries
+        if (row.context_window > 0
+                and _summaries.summary_entries(row.provider, availability_snapshot={})):
             cmd.append('--compact')
         try:
             done = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
@@ -127,7 +145,7 @@ def probe(row, home, catalog):
     if checked.returncode:
         return record
     for client in CLIENTS:
-        if not provider_defs.get(row.provider).serves(client.protocol):
+        if not registry.row_serves(row, client.protocol):
             continue
         before = attempts(home, client.protocol)
         before_calls = call_count(home)

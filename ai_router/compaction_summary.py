@@ -47,9 +47,14 @@ def _summary_budgets(entry):
 
 def summary_entries(provider_id, catalogue=None, allowed=None,
                     availability_snapshot=None, lookup=None):
-    """Resolve eligible pinned rows from one registry generation."""
+    """Resolve eligible pinned rows from one registry generation.
+
+    A None snapshot fails closed (summaries carry history). An empty
+    dict asks only whether any summary row exists for the provider,
+    which the candidate probe uses to decide its compaction leg.
+    """
+    exists_only = availability_snapshot is not None and not availability_snapshot
     if availability_snapshot is None:
-        # Summaries carry history; fail closed before a vendor is known.
         return []
     lookup_row = (catalogue.get if catalogue is not None
                   else (lookup or registry.by_slug))
@@ -57,12 +62,14 @@ def summary_entries(provider_id, catalogue=None, allowed=None,
     for slug in SUMMARY_MODEL_SLUGS:
         if allowed is not None and slug not in allowed:
             continue
-        if not availability.permitted(slug, availability_snapshot):
+        if not exists_only and not availability.permitted(slug, availability_snapshot):
             continue
         entry = lookup_row(slug)
         if entry is None:
             missing = True
             continue
+        if exists_only and getattr(entry, 'provider', None) != provider_id:
+            continue  # existence question only: another provider's rows do not count
         if (getattr(entry, 'slug', None) != slug
                 or getattr(entry, 'provider', None) != provider_id
                 or upstream_id_for(entry) != slug

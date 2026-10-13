@@ -67,8 +67,12 @@ class ProtocolContractTests(unittest.TestCase):
     def test_the_listing_hides_rows_outside_the_allowlist(self):
         # Every row this listing serves is externally routed, so the portco
         # allowlist is the whole answer: one named slug, one row.
-        from ai_router import claude, protocols, registry
+        from unittest import mock
+
+        from ai_router import availability, claude, protocols, registry
         from ai_router.clients import client_table
+        self.enterContext(mock.patch.object(
+            availability, 'combined_ids', return_value=None))
         defn = client_table.get('claude')
         slug = next(m.slug for m in registry.MODELS
                     if defn.discovery_visible(m) and claude.claude_alias(m.slug))

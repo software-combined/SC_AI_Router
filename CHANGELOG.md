@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add AWS Bedrock as an opt-in external provider through the Bedrock
+  Mantle endpoint. Claude models can use the Anthropic Messages API and
+  Responses models can use the OpenAI Responses API, both with one
+  Bedrock API key and one AWS region set in the router state. Bedrock
+  models start as preview rows and stay out of the pickers until real
+  Codex and Claude Code checks pass.
+
+
 ## 1.0.18
 
 - Add Meta Muse Wonder through OpenRouter after real Codex and Claude Code

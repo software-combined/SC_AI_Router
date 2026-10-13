@@ -12,7 +12,7 @@ class DesktopDiscoveryTests(unittest.TestCase):
     def test_desktop_accepts_every_listed_model_without_renaming_it(self):
         # Desktop 2.2553.1 rejects these ID fragments even with a family tier.
         rejected = re.compile(r'deepseek|gemini|glm|gpt|grok|kimi|moonshot|openai')
-        with mock.patch.object(availability, 'current', return_value=None):
+        with mock.patch.object(availability, 'combined_ids', return_value=None):
             rows = claude.models_listing()['data']
         expected = {m.slug: m.display_name for m in registry.MODELS
                     if m.listed and m.provider == 'openrouter'}

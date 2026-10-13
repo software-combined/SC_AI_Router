@@ -135,7 +135,7 @@ def problems(row, record, *, runtime=None, clients=None):
                 or record['runtime_fingerprint'] != runtime):
             return ['candidate changed']
         expected = {c.protocol: c.id for c in CLIENTS
-                    if provider_defs.get(row.provider).serves(c.protocol)}
+                    if registry.row_serves(row, c.protocol)}
         routes = record['routes']
         if len(routes) != len(expected) or {r['protocol'] for r in routes} != set(expected):
             return ['missing or duplicate route']

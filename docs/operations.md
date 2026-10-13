@@ -838,6 +838,16 @@ provider's key never overwrites the first. `--status` reports each
 provider's key under `providers`, with the legacy `key_present` /
 `key_usable` pair still describing the default provider (OpenRouter).
 
+AWS Bedrock is an optional second provider. Its key lives in
+`bedrock.key` beside `openrouter.key` (or `BEDROCK_API_KEY` for a manual
+run), and requests go to `bedrock-mantle.<region>.api.aws` for the
+`bedrock_region` in the state file. Bedrock keeps its own availability
+file, `models-availability-bedrock.json`; `/health` reports
+`bedrock_region`, `bedrock_host` and `bedrock_availability` beside the
+OpenRouter fields. A missing or rejected Bedrock key hides only Bedrock
+rows: it never blocks an OpenRouter install, and the router never falls
+back to another region or provider.
+
 1. IT creates the key in the OpenRouter dashboard with a monthly allowance
    and hands it to the user over an existing trusted channel (never commit
    it, never paste it into chat or email threads beyond that handoff).

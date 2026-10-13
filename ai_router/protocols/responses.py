@@ -25,6 +25,7 @@ class _Policy:
         return providers.select(
             model, path, openai_models, mode,
             region=state.get('openrouter_region', 'global'),
+            bedrock_region=state.get('bedrock_region', 'us-east-1'),
             allowed=state.get('allowed_models'), catalogue=catalogue)
 
     def compaction_call(self, provider, model, path, payload, context=None,

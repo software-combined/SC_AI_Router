@@ -35,9 +35,14 @@ def _down(req, timeout=None):
 
 class RoutedModelsTests(unittest.TestCase):
     def setUp(self):
-        saved = availability._SNAPSHOT
-        self.addCleanup(setattr, availability, '_SNAPSHOT', saved)
-        availability._SNAPSHOT = None
+        saved = dict(availability._SNAPSHOTS)
+        had = set(availability._HAD_SNAPSHOT)
+        self.addCleanup(availability._SNAPSHOTS.update, saved)
+        self.addCleanup(availability._SNAPSHOTS.clear)
+        self.addCleanup(availability._HAD_SNAPSHOT.symmetric_difference_update,
+                        availability._HAD_SNAPSHOT ^ had)
+        availability._SNAPSHOTS.clear()
+        availability._HAD_SNAPSHOT.clear()
 
     def _home(self, policy=None):
         home = tmp_home(self)
@@ -49,7 +54,7 @@ class RoutedModelsTests(unittest.TestCase):
         return home
 
     def _refresh(self, home, *ids, key=KEY, opener=None):
-        availability.refresh('openrouter.ai', key, home, 'global', opener or _ok(*ids))
+        availability.refresh('openrouter', 'openrouter.ai', key, home, 'global', opener or _ok(*ids))
 
     def _slugs(self, path):
         return {row['slug'] for row in json.loads(path.read_text())['models']}
@@ -118,20 +123,20 @@ class RoutedModelsTests(unittest.TestCase):
         self.assertFalse(self._ready(home))  # no list yet
         self._refresh(home, *external_slugs())
         self.assertTrue(self._ready(home))  # inside the router: its live snapshot
-        availability._SNAPSHOT = None  # Switch Codex asks from its own process
+        availability._SNAPSHOTS.clear()  # Switch Codex asks from its own process
         self.assertTrue(self._ready(home))
         self.assertFalse(self._ready(home, key='another-key'))
         self.assertFalse(self._ready(home, key=None))
-        snapshot_store.clear(home)
+        snapshot_store.clear(home, 'openrouter')
         self.assertFalse(self._ready(home))
 
     def test_ready_fails_when_the_list_names_a_model_the_snapshot_dropped(self):
         home = self._home()
         self._refresh(home, *external_slugs())
-        availability._SNAPSHOT = None
+        availability._SNAPSHOTS.clear()
         self.assertTrue(self._ready(home))
         # The key lost a model and no sync has rewritten the list yet.
-        snapshot_store.write(home, availability.key_fingerprint(KEY), 'global',
+        snapshot_store.write(home, 'openrouter', availability.key_fingerprint(KEY), 'global',
                              external_slugs() - {FLASH})
         self.assertFalse(self._ready(home))
 

@@ -135,9 +135,12 @@ class RefusedHelperTurnTests(unittest.TestCase):
 
     def _snapshot(self, models):
         from ai_router import availability
-        snap, availability._SNAPSHOT = availability._SNAPSHOT, {
-            'key': 'k', 'region': 'global', 'models': frozenset(models), 'fetched_at': 0}
-        self.addCleanup(setattr, availability, '_SNAPSHOT', snap)
+        saved = dict(availability._SNAPSHOTS)
+        availability._SNAPSHOTS['openrouter'] = {
+            'provider': 'openrouter', 'key': 'k', 'region': 'global',
+            'models': frozenset(models), 'fetched_at': 0}
+        self.addCleanup(availability._SNAPSHOTS.update, saved)
+        self.addCleanup(availability._SNAPSHOTS.clear)
 
     def test_missing_flag_answers_the_helper_turn_from_the_twin_row(self):
         recorded = install_fake(self, self._refusal())

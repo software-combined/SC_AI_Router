@@ -21,7 +21,7 @@ class NativeCatalogueWireTests(unittest.TestCase):
         for version, model in (('0.158.0', 'gpt-6-sol'), ('0.159.2', 'gpt-6.1-sol')):
             native = ({'slug': model, 'display_name': model},)
             with mock.patch.object(subscription_discovery, 'fetch_native', return_value=native), \
-                    mock.patch.object(availability, 'current', return_value=None):
+                    mock.patch.object(availability, 'combined_ids', return_value=None):
                 subscription_discovery.serve(handler, 'client_version=' + version)
             self.assertEqual(sent.get('status'), 200)
         self.assertIn('gpt-6.1-sol', {row['slug'] for row in sent['payload']['models']})
@@ -56,7 +56,7 @@ class NativeCatalogueWireTests(unittest.TestCase):
             error=lambda error: sent.update(error=error))
         with mock.patch.object(subscription_discovery, '_open_without_redirects',
                                return_value=_Response(json.dumps(native).encode())), \
-                mock.patch.object(availability, 'current', return_value=None):
+                mock.patch.object(availability, 'combined_ids', return_value=None):
             subscription_discovery.serve(handler, 'client_version=0.159.2')
             self.assertEqual(sent.get('status'), 200)
             rows = {row['slug']: row for row in sent['payload']['models']}
@@ -91,7 +91,7 @@ class NativeCatalogueWireTests(unittest.TestCase):
             error=lambda error: sent.update(error=error))
         with mock.patch.object(subscription_discovery, '_open_without_redirects',
                                return_value=_Response(json.dumps(native).encode())), \
-                mock.patch.object(availability, 'current', return_value=None):
+                mock.patch.object(availability, 'combined_ids', return_value=None):
             subscription_discovery.serve(handler, 'client_version=0.155.0')
         self.assertEqual(sent.get('status'), 200)
         rows = {row['slug']: row for row in sent['payload']['models']}
