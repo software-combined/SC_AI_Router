@@ -56,7 +56,8 @@ class MessagesRecoveryTests(unittest.TestCase):
         ledgers = [c.kwargs for c in logged.call_args_list if c.args[0] == 'attempt_ledger']
         self.assertEqual(len(ledgers), 1)
         self.assertEqual(server.inflight, 0)
-        self.assertFalse(server.oversize_lock.locked())
+        self.assertEqual(server.large_request_reservations, {})
+        self.assertEqual(server.large_request_bytes, 0)
         return result.status, wire, sends, ledgers[0]
 
     def test_empty_transient_attempt_is_replaced_once_without_duplicate_identity(self):

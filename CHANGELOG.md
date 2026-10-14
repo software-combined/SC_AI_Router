@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 1.0.20
+
+- Let large turns run together within a shared 1 GiB request budget. When the
+  budget is full, wait up to 60 seconds before asking the client to retry.
+  Release waiting turns as requests finish or their histories become small.
+  Keep the 96 MiB per-request ceiling and 32-request limit.
+
 ## 1.0.19
 
 - Add Google Gemini 4 Argon through OpenRouter after real Codex and Claude Code

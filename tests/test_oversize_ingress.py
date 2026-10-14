@@ -1,9 +1,9 @@
-"""Oversized routed turns: decode headroom, one read at a time, attribution.
+"""Oversized routed turns: decode headroom, byte reservations, attribution.
 
 The 2026-09-16 thread (01a0ab7c) died at ingress: 2,690 released-tool search
 results carried 67 MB of decoded history, past the four-times decode ceiling
 that exists so prepare can slim exactly that shape. These cases pin the two
-answers: a bigger, single-slot headroom, and a refusal line that names what
+answers: bigger decode headroom, and a refusal line that names what
 the turn carried.
 
 The 2026-09-18 thread (01a0b155) died one gate earlier: ten attached images
@@ -23,7 +23,7 @@ from compression import zstd
 from ai_router import router as router_mod
 from tests.fakes import FakeUpstream, install_fake
 from tests.harness import (
-    auth_file as _auth_file, scaled_limits,
+    auth_file as _auth_file, full_large_budget, scaled_limits,
     start_server as _start_server,
     test_state as _test_state,
 )
@@ -162,8 +162,8 @@ class OversizeIngressTests(unittest.TestCase):
         self.assertGreater(facts['tool_search_output_bytes'], 0)
         self.assertGreater(facts['prepared_bytes'], ceiling)
 
-    def test_only_one_oversized_read_runs_at_a_time(self):
-        # The slot is taken on decoded bytes, not the declared size: these
+    def test_an_oversized_read_times_out_when_the_budget_is_full(self):
+        # Reserve decoded bytes, not just declared bytes: these
         # bodies compress far too well for a declared-size gate to hold.
         payload = _repeated_search_payload(copies=8, schema_pad=500)
         packed = zstd.compress(json.dumps(payload).encode())
@@ -172,37 +172,29 @@ class OversizeIngressTests(unittest.TestCase):
         cap = 3500
         with mock.patch.object(router_mod, 'MAX_BODY', cap):
             self.assertGreater(len(json.dumps(payload).encode()), cap)
-            self.assertTrue(self.server.oversize_lock.acquire(blocking=False))
-            try:
+            with full_large_budget(self.server):
                 response = self.raw_request(headers, packed)
                 self.assertEqual(response.status, 503)
                 self.assertEqual(response.getheader('Retry-After'), '2')
                 self.assertEqual(json.loads(response.read())['error']['code'],
                                  'OVERSIZE_BUSY')
                 self.assertEqual(recorded, [])
-            finally:
-                self.server.oversize_lock.release()
             response = self.raw_request(headers, packed)
             self.assertEqual(response.status, 200)
             response.read()
             self.assertEqual(len(recorded), 1)
             # Oversized while reading, small by the time upstream sees it.
             self.assertLess(len(recorded[0][3]), cap)
-            # The slot is free again once the turn has finished.
-            self.assertTrue(self.server.oversize_lock.acquire(timeout=5))
-            self.server.oversize_lock.release()
+            self.assert_released()
 
     def test_a_small_zstd_body_never_waits_on_the_slot(self):
         payload = {'model': MODEL, 'input': [], 'note': 'x' * 40}
         packed = zstd.compress(json.dumps(payload).encode())
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
-        self.assertTrue(self.server.oversize_lock.acquire(blocking=False))
-        try:
+        with full_large_budget(self.server):
             response = self.raw_request(self.zstd_headers(packed), packed)
             self.assertEqual(response.status, 200)
             response.read()
-        finally:
-            self.server.oversize_lock.release()
         self.assertEqual(len(recorded), 1)
 
     def test_a_zstd_body_past_the_cap_on_the_wire_is_read_and_served(self):
@@ -224,8 +216,7 @@ class OversizeIngressTests(unittest.TestCase):
         self.assertEqual(len(recorded), 1)
         self.assertLess(len(recorded[0][3]), cap)
         # The pre-read acquire is released with the turn, not left held.
-        self.assertTrue(self.server.oversize_lock.acquire(timeout=5))
-        self.server.oversize_lock.release()
+        self.assert_released()
 
     def test_a_zstd_body_decoding_past_the_ceiling_is_refused_as_too_large(self):
         # Reading to the decode ceiling is not raising it: a body past the cap
@@ -247,8 +238,7 @@ class OversizeIngressTests(unittest.TestCase):
                              'BODY_TOO_LARGE')
             # Refused after the read, so the slot it took is free again; the
             # handler frees it just after answering, so allow it a moment.
-            self.assertTrue(self.server.oversize_lock.acquire(timeout=5))
-            self.server.oversize_lock.release()
+            self.assert_released()
         self.assertEqual(recorded, [])
 
     def test_a_zstd_body_past_the_ceiling_on_the_wire_is_too_large_not_malformed(self):
@@ -267,14 +257,12 @@ class OversizeIngressTests(unittest.TestCase):
             self.assertEqual(json.loads(response.read())['error']['code'],
                              'BODY_TOO_LARGE')
             # Refused before the slot is asked for, so none is left held.
-            self.assertTrue(self.server.oversize_lock.acquire(timeout=5))
-            self.server.oversize_lock.release()
+            self.assert_released()
         self.assertEqual(recorded, [])
 
     def test_a_body_past_the_cap_on_the_wire_waits_for_the_slot(self):
         # The read is the other half of the slot's job: a body this size is not
-        # read while another oversized turn holds it, so it answers the same
-        # retryable 503 rather than queueing the bytes in memory.
+        # read while the budget is full; an exhausted wait returns retryable 503.
         payload = _noisy_search_payload(copies=12, pad=800)
         packed = zstd.compress(json.dumps(payload).encode())
         headers = self.zstd_headers(packed)
@@ -282,8 +270,7 @@ class OversizeIngressTests(unittest.TestCase):
         cap = 4000
         with mock.patch.object(router_mod, 'MAX_BODY', cap):
             self.assertGreater(len(packed), cap)
-            self.assertTrue(self.server.oversize_lock.acquire(blocking=False))
-            try:
+            with full_large_budget(self.server):
                 response = self.raw_request(headers, packed)
                 self.assertEqual(response.status, 503)
                 self.assertEqual(response.getheader('Retry-After'), '2')
@@ -296,5 +283,8 @@ class OversizeIngressTests(unittest.TestCase):
                 self.assertEqual(response.status, 503)
                 self.assertEqual(json.loads(response.read())['error']['code'],
                                  'OVERSIZE_BUSY')
-            finally:
-                self.server.oversize_lock.release()
+    def assert_released(self):
+        with self.server.large_request_condition:
+            self.assertTrue(self.server.large_request_condition.wait_for(
+                lambda: not self.server.large_request_reservations, timeout=5))
+            self.assertEqual(self.server.large_request_bytes, 0)

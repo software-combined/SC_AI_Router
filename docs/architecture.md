@@ -352,13 +352,17 @@ is in [runtime files](runtime-files.md#codex-usage-limit-record).
    `ingress.read_body`, `router.Handler.admit` and again on every send in
    `transport.post_with_phases`; `Prepared.decoded_body_bytes` keeps a
    compressed passthrough from being under-counted. `runtime.MAX_BODY`
-   (16 MiB) is only the threshold for the single large-request slot.
-   `request_lease.py` owns acquisition, ownership, release and scalar diagnostics;
-   the controller injects the threshold and logger. After preparation returns,
-   the controller releases a slot when the prepared request fits that threshold
-   and retains neither a fallback nor a response adapter. Otherwise the slot
-   spans relay and cleanup. Retry admission counts both retained bodies and
-   reacquires a released slot before any additional send.
+   (16 MiB) is only the threshold for shared large-request reservations.
+   `request_lease.py` owns the 1 GiB budget, reservations, bounded waits and scalar
+   diagnostics. Its condition uses the server lock; releases and draining wake
+   waiters. A first reservation waits up to 60 seconds for space. Existing
+   holders grow without waiting, preventing deadlock while they retain bodies;
+   the budget is therefore an admission target, not a hard process-memory limit.
+   One request above the budget can start when no reservation exists.
+   After preparation returns, the controller releases a reservation when the
+   request fits the threshold and retains neither fallback nor response adapter.
+   Otherwise it spans relay and cleanup. Retry admission counts both retained
+   bodies and reacquires a released reservation before any additional send.
    `turn_budget.BODY_BUDGET` shapes external Responses turns only; native
    bodies are forwarded whole. Protocol representation lives in `providers.py` (Responses/Messages) and
    `claude.py` (Messages ingress).

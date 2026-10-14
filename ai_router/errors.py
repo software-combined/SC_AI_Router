@@ -160,12 +160,13 @@ def too_many_inflight():
 
 
 def oversize_busy():
-    return _error(503, 'OVERSIZE_BUSY',
-                  'The router is still serving another very large turn; retry shortly')
+    return _error(503, 'OVERSIZE_BUSY', 'The router is still serving other very large turns; retry shortly')
 
 
 class OversizeBusy(Exception):
-    """Another turn already holds the single large-request slot."""
+    """The shared large-request budget stayed full until the wait expired."""
+    def __init__(self, is_draining=False):
+        self.error = draining() if is_draining else oversize_busy()
 
 
 def unsupported_media_type():

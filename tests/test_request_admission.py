@@ -87,7 +87,6 @@ class ServerCase(unittest.TestCase):
         self.server = start_server(state)
         self.addCleanup(self.server.server_close)
         self.addCleanup(self.server.shutdown)
-        self.lock = self.server.oversize_lock
 
     def send(self, route, body, encoding=None, extra=None):
         path, _, _, auth = ROUTES[route]
@@ -107,8 +106,11 @@ class ServerCase(unittest.TestCase):
         return body
 
     def assert_released(self):
-        self.assertTrue(self.lock.acquire(timeout=5), 'the large-request slot leaked')
-        self.lock.release()
+        with self.server.large_request_condition:
+            self.assertTrue(self.server.large_request_condition.wait_for(
+                lambda: not self.server.large_request_reservations, timeout=5),
+                'large-request reservations leaked')
+            self.assertEqual(self.server.large_request_bytes, 0)
 
 
 class RequestAdmissionTests(ServerCase):

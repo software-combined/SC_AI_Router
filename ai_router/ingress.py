@@ -215,15 +215,10 @@ def do_get(handler):
 
 
 def read_body(handler, max_body, oversize_guard=None):
-    # max_body arrives from the handler so the existing patch point on
-    # ai_router.router.MAX_BODY still bounds this read (Plan 128). It is the
-    # ordinary threshold: `oversize_guard` is asked on the declared size and
-    # again on the decoded size, so a body past it is read or expanded only
-    # while the large-request slot is free. The caller keeps it until large
-    # retained data leaves scope. Either encoding may carry up to the ceiling:
-    # native history with images is forwarded whole, and a compressed turn
-    # the 2026-09-18 read refused as framing (17.6 MB on the wire) needs its
-    # decoded size to decide.
+    # The handler's ai_router.router.MAX_BODY patch point still bounds this read.
+    # ordinary threshold: reserve declared bytes before reading and ask again
+    # before expanding zstd past it. Account the full decoded size before parsing;
+    # existing reservations grow without waiting. Native histories stay whole.
     size = int(handler.headers.get('Content-Length', '-1'))
     encoding = handler.headers.get('Content-Encoding', '')
     limit = transport.MAX_REQUEST_BYTES
@@ -247,4 +242,7 @@ def read_body(handler, max_body, oversize_guard=None):
         decoded = body
     if len(decoded) > limit:
         raise InvalidSize('Decoded request is too large')
+    if (len(decoded) > max_body and oversize_guard is not None
+            and not oversize_guard('decode', wire_bytes=size, decoded_bytes=len(decoded))):
+        raise OversizeBusy()
     return body, json.loads(decoded), size, len(decoded)

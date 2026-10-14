@@ -11,8 +11,8 @@ ROUTER_HOME = default_home()
 STATE = state_mod.path(ROUTER_HOME)
 REQUIRED_STATE = {'port': int, 'token': str, 'openai_models': list}
 # The ordinary request-memory threshold, not a request limit: a body past it,
-# on the wire, decoded or prepared, is served only while it holds the router's
-# single large-request slot. transport.MAX_REQUEST_BYTES is the hard ceiling.
+# on the wire, decoded or prepared, reserves the shared large-request budget.
+# transport.MAX_REQUEST_BYTES is the hard ceiling.
 MAX_BODY = 16 * 1024 * 1024
 TOKEN_MIN_LENGTH = 32
 TOKEN_ALPHABET = frozenset(string.ascii_letters + string.digits + '_-')
