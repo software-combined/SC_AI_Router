@@ -1269,5 +1269,126 @@
       "result": "pass"
     }
   ]
+},
+{
+  "kind": "model_routes_v1",
+  "observed_at": "2026-10-14T00:09:47.275813+00:00",
+  "model": "google/gemini-4-argon",
+  "provider": "openrouter",
+  "capability_fingerprint": "eed92aaac5ee76b118a18338d6003efee85c790fb2738b62bbe19b43bbed0d89",
+  "runtime_fingerprint": "5ad8a247e8fe04a34aa47b75f307d10f05f41efb97c413e20cb1cf52272e1a1a",
+  "router_version": "1.0.19",
+  "router_revision": "7554f2b010c9e5948fba43d6cb1c19cfca172757",
+  "routes": [
+    {
+      "protocol": "responses",
+      "client": "codex",
+      "client_version": "0.162.0-alpha.17.2",
+      "requested_effort": "low",
+      "served_models": [
+        {
+          "value": "google/gemini-4-argon",
+          "source": "response.created.response.model"
+        },
+        {
+          "value": "google/gemini-4-argon",
+          "source": "response.in_progress.response.model"
+        },
+        {
+          "value": "google/gemini-4-argon",
+          "source": "response.completed.response.model"
+        },
+        {
+          "value": "google/gemini-4-argon",
+          "source": "response.created.response.model"
+        },
+        {
+          "value": "google/gemini-4-argon",
+          "source": "response.in_progress.response.model"
+        },
+        {
+          "value": "google/gemini-4-argon",
+          "source": "response.completed.response.model"
+        },
+        {
+          "value": "google/gemini-4-argon",
+          "source": "response.created.response.model"
+        },
+        {
+          "value": "google/gemini-4-argon",
+          "source": "response.in_progress.response.model"
+        },
+        {
+          "value": "google/gemini-4-argon",
+          "source": "response.completed.response.model"
+        }
+      ],
+      "served_efforts": [
+        {
+          "value": "low",
+          "source": "response.created.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.in_progress.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.completed.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.created.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.in_progress.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.completed.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.created.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.in_progress.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.completed.response.reasoning.effort"
+        }
+      ],
+      "calls": 4,
+      "conformance": "pass",
+      "result": "pass"
+    },
+    {
+      "protocol": "messages",
+      "client": "claude",
+      "client_version": "2.1.283",
+      "requested_effort": "low",
+      "served_models": [
+        {
+          "value": "google/gemini-4-argon",
+          "source": "message_start.message.model"
+        },
+        {
+          "value": "google/gemini-4-argon",
+          "source": "message_start.message.model"
+        },
+        {
+          "value": "google/gemini-4-argon",
+          "source": "message_start.message.model"
+        }
+      ],
+      "served_efforts": [],
+      "calls": 3,
+      "conformance": "pass",
+      "result": "pass"
+    }
+  ]
 }
 ]

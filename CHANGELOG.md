@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.0.19
+
+- Add Google Gemini 4 Argon through OpenRouter after real Codex and Claude Code
+  checks. Offer Low, Medium and High effort, with Low as the default, image
+  input and a one-million-token context. Keep the existing Gemini rows.
+
 ## 1.0.18
 
 - Add Meta Muse Wonder through OpenRouter after real Codex and Claude Code
