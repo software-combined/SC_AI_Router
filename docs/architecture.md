@@ -347,7 +347,7 @@ is in [runtime files](runtime-files.md#codex-usage-limit-record).
    connection cleanup: `ingress.py` owns auth/rebinding, body limits, GET
    routes and error shaping; `relay.py` owns the upstream relay loop; and
    `router.py` keeps drain/inflight plus POST orchestration over both.
-   `transport.MAX_REQUEST_BYTES` (96 MiB) is the local hard ceiling on wire,
+   `transport.MAX_REQUEST_BYTES` (256 MiB) is the local hard ceiling on wire,
    decoded and prepared bytes for every route and encoding, checked by
    `ingress.read_body`, `router.Handler.admit` and again on every send in
    `transport.post_with_phases`; `Prepared.decoded_body_bytes` keeps a

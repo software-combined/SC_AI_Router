@@ -91,7 +91,7 @@ def missing_model():
 
 def invalid_size(message):
     if message == 'Decoded request is too large':
-        return _error(400, 'BODY_TOO_LARGE', "This turn is larger than this router's local 96 MiB request ceiling (a resource limit on this machine, not a provider limit); start a new thread, or trim large tool outputs and images before continuing.")
+        return _error(400, 'BODY_TOO_LARGE', "This turn is larger than this router's local 256 MiB request ceiling (a resource limit on this machine, not a provider limit); start a new thread, or trim large tool outputs and images before continuing.")
     return _error(400, 'INVALID_REQUEST_SIZE', 'Invalid request size')
 
 
