@@ -682,7 +682,7 @@ the failure; an oversized turn answers 400 with guidance instead of 413. The
 Anthropic Messages path keeps its existing answers except at that shared
 size boundary, where it answers 400 like Responses.
 
-Every request has a local 96 MiB ceiling on its wire, decoded and prepared
+Every request has a local 256 MiB ceiling on its wire, decoded and prepared
 bytes, on all four routes and for identity and zstd bodies alike. A turn past
 it answers 400 `BODY_TOO_LARGE` with no upstream call, and the transport checks
 the same ceiling again on every send. The ceiling bounds what one turn makes
@@ -706,7 +706,7 @@ After an early release, a retry reserves bytes again before an additional send.
 An existing holder may grow beyond the budget without waiting, so two holders
 cannot deadlock while each keeps its earlier body. A request above the budget
 may start alone. The budget counts body sizes, not Python's actual memory use;
-the 96 MiB per-request ceiling and 32-request limit still bound each request
+the 256 MiB per-request ceiling and 32-request limit still bound each request
 and the total number of active requests.
 
 The router generates a request ID before reading each POST body. Request,

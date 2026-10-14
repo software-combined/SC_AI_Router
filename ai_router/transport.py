@@ -64,7 +64,7 @@ class Prepared:
 # (a native turn is forwarded whole, and a zstd one may decode this far so
 # prepare can slim released-tool schemas); it is no provider's or
 # subscription's limit. runtime.MAX_BODY stays the ordinary threshold.
-MAX_REQUEST_BYTES = 96 * 1024 * 1024
+MAX_REQUEST_BYTES = 256 * 1024 * 1024
 
 
 def encoded(headers):

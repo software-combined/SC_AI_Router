@@ -220,7 +220,7 @@ class IngressGuardTests(unittest.TestCase):
             response = conn.getresponse()
             self.assertEqual(response.status, 400)
             message = json.loads(response.read())['error']['message']
-            self.assertIn('local 96 MiB request ceiling', message)
+            self.assertIn('local 256 MiB request ceiling', message)
             self.assertIn('new thread', message)
         self.assertEqual(recorded, [])
 
