@@ -88,7 +88,7 @@ def raised(exc, sent, response, record, client_abort=False, response_seen=False)
         phase = STATUS
     output = record is not None and record.content_delta_bytes > 0
     if isinstance(exc, errors.OversizeBusy):
-        code = 'OVERSIZE_BUSY'
+        code = exc.error.code
     elif isinstance(exc, errors.InvalidSize):
         code = ('BODY_TOO_LARGE' if str(exc) == 'Decoded request is too large'
                 else 'INVALID_REQUEST_SIZE')

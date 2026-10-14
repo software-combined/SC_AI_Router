@@ -74,9 +74,7 @@ class Router(ThreadingHTTPServer):
             self.server_activate()
         self.state = state
         self.lock = threading.Lock()
-        # Serialize large retained bodies, including oversized ingress parsing.
-        self.oversize_lock = threading.Lock()
-        self.oversize_owner = None
+        request_lease.initialize(self)
         self.inflight = 0
         self.draining = False
         self.served_models = {}
@@ -86,6 +84,7 @@ class Router(ThreadingHTTPServer):
     def drain_and_exit(self):
         with self.lock:
             self.draining = True
+            self.large_request_condition.notify_all()
         log_event('draining', inflight=self.inflight)
         self.shutdown()
         deadline = time.monotonic() + self.drain_deadline_s
@@ -109,8 +108,6 @@ def _payload_has_image(payload):
 class Handler(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
     timeout = CLIENT_TIMEOUT_S
-    # True while this request holds the server's single large-request slot.
-    oversize_held = False
 
     def log_message(self, *args):
         pass  # Request URLs and upstream credentials must never enter access logs.
@@ -159,7 +156,7 @@ class Handler(BaseHTTPRequestHandler):
         if (self.headers.get('Content-Type') or '').split(';', 1)[0].strip().lower() \
                 != 'application/json':
             return self.error(errors.unsupported_media_type())
-        # One slot spans read_body, prepare and relay; rejects above return first.
+        # In-flight admission spans read_body, prepare and relay.
         # The drain flag is re-read under the same lock so a drain that lands
         # between admission and the increment cannot strand a request.
         with self.server.lock:
@@ -180,7 +177,7 @@ class Handler(BaseHTTPRequestHandler):
                 request_lease.downgrade(self, ready[1], MAX_BODY, log_event)
                 self.relay(*ready)
         finally:
-            # A large prepared body lives until relay returns, so the slot
+            # A large prepared body lives until relay returns, so its reservation
             # spans the stream; this frame drops its reference first.
             ready = None
             request_lease.release(self, 'request_end', log_event)
@@ -252,8 +249,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.error(exc)
         except PermissionError as exc:
             return self.error(errors.map_client_error(exc))
-        except errors.OversizeBusy:
-            return self.error(errors.oversize_busy(), retry_after='2')
+        except errors.OversizeBusy as exc:
+            return self.error(exc.error, retry_after='2')
         except InvalidSize as exc:
             err = errors.invalid_size(str(exc))
             log_event('turn_refused', code=err.code, **facts)

@@ -217,7 +217,7 @@ def _route(handler, provider, prepared, metrics, has_image, started, ledger, log
         log_event('request_failed', status=response.status if sent else exc.status, **metrics, code=exc.code)
     except errors.OversizeBusy as exc:
         ledger.settle(attempt_policy.raised(exc, sent, response, record))
-        _error(handler, ledger, errors.oversize_busy(), retry_after='2')
+        _error(handler, ledger, exc.error, retry_after='2')
     except errors.InvalidSize as exc:
         ledger.settle(attempt_policy.raised(exc, sent, response, record))
         _error(handler, ledger, errors.invalid_size(str(exc)))
