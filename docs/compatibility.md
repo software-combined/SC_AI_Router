@@ -1,5 +1,31 @@
 # Compatibility
 
+## Gemini 4 Argon onboarding, 14 October 2026 AEDT
+
+OpenRouter's `google/gemini-4-argon` maps to
+`google/gemini-4-argon-20261013`. The live catalogue advertises Low, Medium
+and High effort. The registry uses Low, following the onboarding rule.
+No exact predecessor mapping was established, so both existing Gemini rows stay.
+
+The isolated 1.0.19 candidate passed on Codex desktop `26.1007.30912`, bundled
+CLI `0.162.0-alpha.17.2`, and Claude Code `2.1.283`. The proof used synthetic
+data and completed at 11:09:47 AEDT (10:09:47 AEST).
+
+| Client / route | Requested model / effort | Upstream attempts | Result |
+| --- | --- | --- | --- |
+| Codex / OpenRouter | `google/gemini-4-argon` / low | 4 | Streamed tool, image and compaction passed |
+| Claude Code / OpenRouter | `google/gemini-4-argon` / low | 3 | Two sequential Reads and paired results passed |
+
+Both routes reported the exact Argon ID. Codex reported Low effort; Claude
+did not expose served effort. These are provider reports, not independent
+model or reasoning-compute attestation. The acceptance ledger binds the
+capability row and unchanged Python runtime to both client versions.
+The probe reserved every send, repair and summary helper against one
+twelve-attempt cap, with 512 KiB input, 65,536 output tokens and a 750-second
+subprocess deadline. Claude also used its USD 0.25 client budget.
+The unchanged subscription routes reuse the 13 October evidence on these
+same clients. Publication and installed picker delivery remain separate gates.
+
 ## Muse Wonder onboarding, 13 October 2026 AEDT
 
 OpenRouter's `meta/muse-wonder` maps to `meta/muse-wonder-20261012` on the
