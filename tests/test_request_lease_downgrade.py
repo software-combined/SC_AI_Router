@@ -3,7 +3,7 @@ import threading
 import unittest
 from unittest import mock
 
-from ai_router import providers
+from ai_router import providers, request_lease
 from tests.fakes import FakeUpstream, install_fake
 from tests.harness import scaled_limits
 from tests.test_request_admission import ServerCase, _turn, _wire
@@ -86,7 +86,9 @@ class RequestLeaseDowngradeTests(LeaseServerCase):
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
         body = _wire(_repeated_search_payload(12, 1000))[0]
         with scaled_limits(CAP, CEILING), mock.patch.object(
-                providers.ExternalResponsesProvider, 'prepare', prepare):
+                providers.ExternalResponsesProvider, 'prepare', prepare), mock.patch.object(
+                request_lease, 'LARGE_REQUEST_BUDGET_BYTES', 1), mock.patch.object(
+                request_lease, 'LARGE_REQUEST_WAIT_S', 0):
             thread, result, _ = self.background('external responses', body)
             self.assertTrue(reached.wait(5))
             try:
@@ -122,7 +124,9 @@ class RequestLeaseDowngradeTests(LeaseServerCase):
         install_fake(self, responder)
         reduced = _wire(_repeated_search_payload(12, 1000))[0]
         large = _wire(_turn('native responses', 5000))[0]
-        with scaled_limits(CAP, CEILING):
+        with scaled_limits(CAP, CEILING), mock.patch.object(
+                request_lease, 'LARGE_REQUEST_BUDGET_BYTES', 1), mock.patch.object(
+                request_lease, 'LARGE_REQUEST_WAIT_S', 0):
             first, first_result, first_done = self.background('external responses', reduced)
             self.assertTrue(reached[0].wait(5))
             second, second_result, _ = self.background('native responses', large)
@@ -130,7 +134,8 @@ class RequestLeaseDowngradeTests(LeaseServerCase):
             try:
                 release[0].set()
                 self.assertTrue(first_done.wait(5))
-                self.assertTrue(self.lock.locked(), 'previous owner released the new slot')
+                self.assertEqual(len(self.server.large_request_reservations), 1,
+                                 'previous owner released the new reservation')
                 self.answer(self.send('native responses', large), 503, 'OVERSIZE_BUSY')
             finally:
                 release[1].set()

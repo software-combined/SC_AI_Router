@@ -690,18 +690,24 @@ this machine hold; it does not mean a provider or subscription accepts a body
 that size. Native history, images, signatures and headers are forwarded whole.
 
 16 MiB is the ordinary request threshold, not a limit. A turn past it on the
-wire, on decode or once prepared takes the single large-request slot, before
-the rest of a compressed body is expanded. After preparation returns, the
+wire, on decode or once prepared reserves bytes in a shared 1 GiB budget, before
+the rest of a compressed body is expanded. Several large turns can run together.
+If the budget is full, a new reservation waits up to 60 seconds for space.
+After preparation returns, the
 router releases it if the remaining request is at most 16 MiB and retains
 neither a fallback plan nor a response adapter. This lets another large turn
 prepare while the reduced request streams. Large retained requests keep the
-slot through relay, retries, fallback and final cleanup. A second large turn
-arriving meanwhile answers 503 `OVERSIZE_BUSY` with `Retry-After: 2` and no
-upstream call; smaller turns proceed within the 32-request in-flight limit. A
-repair or fallback body is sized together with the body still held, and one
-that does not fit is never sent (a fallback keeps the refusal answer).
-After an early release, a retry reacquires the slot when its combined retained
-bodies cross the threshold. If another request owns it, no additional send occurs.
+reservation through relay, retries, fallback and final cleanup. An exhausted
+wait answers 503 `OVERSIZE_BUSY` with `Retry-After: 2` before the blocked send.
+Smaller turns proceed within the 32-request in-flight limit, which also counts
+waiting requests. Restarting wakes waiters with `SERVER_DRAINING`.
+A repair or fallback body is sized together with the body still held.
+After an early release, a retry reserves bytes again before an additional send.
+An existing holder may grow beyond the budget without waiting, so two holders
+cannot deadlock while each keeps its earlier body. A request above the budget
+may start alone. The budget counts body sizes, not Python's actual memory use;
+the 96 MiB per-request ceiling and 32-request limit still bound each request
+and the total number of active requests.
 
 The router generates a request ID before reading each POST body. Request,
 rejection and attempt-ledger records share that ID. Large-slot records add
@@ -712,9 +718,12 @@ validated chat and parent IDs, the router version and the acquisition stage
 stops early, `decoded_lower_bound_bytes` names the observed lower bound;
 it is never reported as an exact decoded size. Unavailable facts are omitted.
 
-An `OVERSIZE_BUSY` rejection snapshots the blocking owner at acquisition failure:
-`owner_request_id`, `owner_stage` and `owner_held_ms`. These facts remain valid
-even if ownership changes before logging. Slot release records use
+Acquisition and release events retain their names `oversize_slot_acquired` and
+`oversize_slot_released`. Both record `waited_ms`, `reserved_bytes`,
+`budget_used_bytes` and `holders`. An `OVERSIZE_BUSY` rejection snapshots the
+holder count and bytes in use at timeout; `owner_held_ms` is the oldest holder's
+age. These facts remain valid even if the budget changes before logging.
+Reservation release records use
 `release_reason=prepared_small` or `request_end`, `acquisition_stage` and `held_ms`.
 All these fields are scalar metadata; no payload, raw header, credential or
 token-bearing URL is recorded. The server lock protects ownership and snapshots;

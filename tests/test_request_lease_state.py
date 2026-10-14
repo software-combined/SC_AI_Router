@@ -3,6 +3,7 @@ import json
 import threading
 import unittest
 from types import SimpleNamespace
+from unittest import mock
 
 from ai_router import errors, ingress, request_lease, transport
 from ai_router.subscription_fallback import Plan
@@ -13,8 +14,13 @@ THREAD = '11111111-1111-4111-8111-111111111111'
 
 class RequestLeaseStateTests(unittest.TestCase):
     def setUp(self):
-        self.server = SimpleNamespace(lock=threading.Lock(), oversize_lock=threading.Lock(),
-                                      oversize_owner=None, state={'token': 'secret-url'})
+        self.server = SimpleNamespace(lock=threading.Lock(), draining=False,
+                                      state={'token': 'secret-url'})
+        request_lease.initialize(self.server)
+        for name, value in (('LARGE_REQUEST_BUDGET_BYTES', 3000), ('LARGE_REQUEST_WAIT_S', 0)):
+            patcher = mock.patch.object(request_lease, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
         self.events = []
 
     def log(self, event, **fields):
@@ -36,6 +42,9 @@ class RequestLeaseStateTests(unittest.TestCase):
     def take(self, handler):
         self.assertTrue(request_lease.acquire(handler, 'wire', self.log, wire_bytes=3000))
 
+    def held(self, handler):
+        return handler.lease_facts['request_id'] in self.server.large_request_reservations
+
     def test_small_prepared_boundary_and_retained_data(self):
         # A real lazy fallback plan retains the original history until a refusal.
         fallback = Plan(None, '/responses', {'input': 'secret-content' * 1000},
@@ -48,9 +57,9 @@ class RequestLeaseStateTests(unittest.TestCase):
                 handler = self.handler()
                 self.take(handler)
                 request_lease.downgrade(handler, self.prepared(size, **extras), CAP, self.log)
-                self.assertEqual(handler.oversize_held, not releases)
+                self.assertEqual(self.held(handler), not releases)
                 request_lease.release(handler, 'request_end', self.log)
-                self.assertFalse(self.server.oversize_lock.locked())
+                self.assertEqual(self.server.large_request_bytes, 0)
 
     def test_small_wire_with_large_decoded_body_keeps_the_lease(self):
         handler = self.handler()
@@ -59,7 +68,7 @@ class RequestLeaseStateTests(unittest.TestCase):
         prepared.headers = {'Content-Encoding': 'zstd'}
         prepared.decoded_body_bytes = CAP + 1
         request_lease.downgrade(handler, prepared, CAP, self.log)
-        self.assertTrue(handler.oversize_held)
+        self.assertTrue(self.held(handler))
         request_lease.release(handler, 'request_end', self.log)
 
     def test_real_sixteen_mib_boundary(self):
@@ -68,7 +77,7 @@ class RequestLeaseStateTests(unittest.TestCase):
             handler = self.handler()
             self.take(handler)
             request_lease.downgrade(handler, self.prepared(size), threshold, self.log)
-            self.assertEqual(handler.oversize_held, size > threshold)
+            self.assertEqual(self.held(handler), size > threshold)
             request_lease.release(handler, 'request_end', self.log)
 
     def test_retry_reacquires_or_refuses_before_send(self):
@@ -82,32 +91,33 @@ class RequestLeaseStateTests(unittest.TestCase):
                     with self.assertRaises(errors.OversizeBusy):
                         request_lease.admit(first, self.prepared(1100),
                                             self.prepared(1200), CAP, self.log)
-                    self.assertFalse(first.oversize_held)
+                    self.assertFalse(self.held(first))
                     self.assertEqual(first.lease_busy['stage'], 'retry')
                     self.assertEqual(first.lease_busy['retained_accounted_bytes'], 2300)
                     request_lease.release(second, 'request_end', self.log)
                 else:
                     request_lease.admit(first, self.prepared(1100),
                                         self.prepared(1200), CAP, self.log)
-                    self.assertTrue(first.oversize_held)
-                    self.assertEqual(self.server.oversize_owner['stage'], 'retry')
+                    self.assertTrue(self.held(first))
+                    self.assertEqual(self.server.large_request_reservations[
+                        first.lease_facts['request_id']]['stage'], 'retry')
                     request_lease.release(first, 'request_end', self.log)
-                self.assertFalse(self.server.oversize_lock.locked())
+                self.assertEqual(self.server.large_request_bytes, 0)
 
     def test_busy_snapshot_and_previous_borrower_do_not_follow_new_owner(self):
         first, rejected, next_owner = self.handler(), self.handler(), self.handler()
         self.take(first)
         self.assertFalse(request_lease.acquire(rejected, 'decode', self.log,
                                               wire_bytes=10, decoded_lower_bound_bytes=2001))
-        first_id = first.lease_facts['request_id']
         request_lease.release(first, 'prepared_small', self.log)
         self.take(next_owner)
         request_lease.release(first, 'request_end', self.log)
-        self.assertTrue(next_owner.oversize_held)
+        self.assertTrue(self.held(next_owner))
         rejected.send_json = lambda *_args: True
         ingress.error(rejected, errors.oversize_busy(), log_event=self.log, retry_after='2')
         refusal = self.events[-1]
-        self.assertEqual(refusal['owner_request_id'], first_id)
+        self.assertEqual((refusal['holders'], refusal['budget_used_bytes']), (1, 3000))
+        self.assertGreaterEqual(refusal['owner_held_ms'], 0)
         self.assertEqual(refusal['decoded_lower_bound_bytes'], 2001)
         self.assertNotIn('decoded_bytes', refusal)
         self.assertNotIn('model', refusal)

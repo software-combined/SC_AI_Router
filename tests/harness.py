@@ -106,6 +106,22 @@ def scaled_limits(cap, ceiling=None):
         yield
 
 
+@contextlib.contextmanager
+def full_large_budget(server):
+    """Hold the entire budget and make an exhausted test wait deterministic."""
+    from types import SimpleNamespace
+    from ai_router import request_lease
+    holder = SimpleNamespace(server=server, headers={})
+    request_lease.begin(holder, 'fixture')
+    request_lease.acquire(holder, 'wire', lambda *_args, **_kwargs: None,
+                          wire_bytes=request_lease.LARGE_REQUEST_BUDGET_BYTES)
+    with mock.patch.object(request_lease, 'LARGE_REQUEST_WAIT_S', 0):
+        try:
+            yield
+        finally:
+            request_lease.release(holder, 'request_end', lambda *_args, **_kwargs: None)
+
+
 def isolated_home(test):
     tmp = tempfile.mkdtemp()
     test.addCleanup(shutil.rmtree, tmp, True)

@@ -5,7 +5,7 @@ import threading
 import unittest
 from unittest import mock
 
-from ai_router import providers, router
+from ai_router import providers, request_lease, router
 from tests.fakes import FakeUpstream, install_fake
 from tests.harness import scaled_limits
 from tests.test_oversize_ingress import _repeated_search_payload
@@ -50,11 +50,14 @@ class RequestLeaseRetryTests(LeaseServerCase):
 
                 recorded = install_fake(self, responder)
                 with scaled_limits(CAP, CEILING), mock.patch.object(
+                        request_lease, 'LARGE_REQUEST_BUDGET_BYTES', 1), mock.patch.object(
+                        request_lease, 'LARGE_REQUEST_WAIT_S', 0), mock.patch.object(
                         router, 'log_event', lambda event, **fields:
                         events.append(dict(event=event, **fields))):
                     first, result, done = self.background('external responses', self.reduced())
                     self.assertTrue(rejected.wait(5))
-                    self.assertFalse(self.lock.locked(), 'ingress lease did not downgrade')
+                    self.assertEqual(self.server.large_request_reservations, {},
+                                     'ingress lease did not downgrade')
                     if busy:
                         second, second_result, _ = self.background(
                             'native responses', _wire(_turn('native responses', 5000))[0])
@@ -69,14 +72,15 @@ class RequestLeaseRetryTests(LeaseServerCase):
                             refusal = next(e for e in events if e.get('code') == 'OVERSIZE_BUSY')
                             self.assertEqual(refusal['stage'], 'retry')
                             self.assertGreater(refusal['retained_accounted_bytes'], CAP)
-                            self.assertEqual(refusal['owner_stage'], 'wire')
+                            self.assertEqual(refusal['holders'], 1)
                         else:
                             self.assertTrue(repair.wait(5))
-                            self.assertTrue(self.lock.locked())
+                            self.assertEqual(len(self.server.large_request_reservations), 1)
                             self.assertLess(len(recorded[0][3]), CAP)
                             self.assertLess(len(recorded[1][3]), CAP)
                             self.assertGreater(sum(len(r[3]) for r in recorded), CAP)
-                            self.assertEqual(self.server.oversize_owner['stage'], 'retry')
+                            owner = next(iter(self.server.large_request_reservations.values()))
+                            self.assertEqual(owner['stage'], 'retry')
                     finally:
                         release.set()
                         first.join(5)
@@ -164,6 +168,38 @@ class RequestLeaseRetryTests(LeaseServerCase):
                 self.assertNotIn('subscription-secret', json.dumps(events))
                 self.assertNotIn('test-key', json.dumps(events))
                 self.assertNotIn('test-token', json.dumps(events))
+
+    def test_drain_before_retry_reacquisition_returns_a_defined_error(self):
+        reached, resume = threading.Event(), threading.Event()
+        self.addCleanup(resume.set)
+        events = []
+
+        class Rejected(FakeUpstream):
+            def read(inner, amt=None):
+                reached.set()
+                if not resume.wait(5):
+                    raise TimeoutError('test did not release rejection')
+                return super().read(amt)
+
+        recorded = install_fake(self, lambda: Rejected(400, UNNAMED, []))
+        with scaled_limits(CAP, CEILING), mock.patch.object(
+                router, 'log_event', lambda event, **fields:
+                events.append(dict(event=event, **fields))):
+            thread, result, finished = self.background('external responses', self.reduced())
+            self.assertTrue(reached.wait(2))
+            self.assertEqual(self.server.large_request_reservations, {})
+            with self.server.large_request_condition:
+                self.server.draining = True
+                self.server.large_request_condition.notify_all()
+            resume.set()
+            self.assertTrue(finished.wait(2))
+            thread.join(5)
+        self.assertEqual(result, {'status': 503})
+        self.assertEqual(len(recorded), 1, 'retry was sent after drain began')
+        refusal = next(e for e in events if e.get('code') == 'SERVER_DRAINING')
+        self.assertEqual(refusal['retry_after'], '2')
+        self.assertEqual(self.server.inflight, 0)
+        self.assert_released()
 
 
 if __name__ == '__main__':
