@@ -248,8 +248,8 @@ def refused(handler, prepared, retry_after, metrics, started, admit=None, *, led
         if admit is not None:
             admit(twin, prepared)
     except (LookupError, ValueError, PermissionError, OSError, errors.OversizeBusy) as exc:
-        # No key, unreadable twin row, rejected effort, no room for the twin
-        # (InvalidSize is a ValueError): keep today's answer.
+        # Preserve the upstream refusal unless shutdown cancelled admission.
+        if isinstance(exc, errors.OversizeBusy) and exc.error.code == 'SERVER_DRAINING': raise
         log_event('subscription_fallback_unavailable', model=metrics.get('model'),
                   fallback_model=fallback.target.slug, reason=type(exc).__name__)
         ledger.decide(attempt_policy.HELPER_FALLBACK, 'unavailable')

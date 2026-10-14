@@ -1,4 +1,4 @@
-"""Plan 188: a large turn holds the single large-request slot to its last send.
+"""A large turn holds its byte reservation to its last send.
 
 Before, the slot covered reading and preparing only and was released before
 relay, which assumed every prepared body was under the ordinary threshold.
@@ -10,9 +10,11 @@ import http.client
 import json
 import threading
 import unittest
+from unittest import mock
 
+from ai_router import request_lease
 from tests.fakes import FakeUpstream, install_fake
-from tests.harness import scaled_limits
+from tests.harness import full_large_budget, scaled_limits
 from tests.test_request_admission import (CAP, CEILING, CONTEXT_RESET, SIGNATURE,
                                           ServerCase, _turn, _wire)
 
@@ -52,10 +54,9 @@ class RequestLeaseTests(ServerCase):
         return thread, result
 
     def assert_held(self):
-        held = not self.lock.acquire(blocking=False)
-        if not held:
-            self.lock.release()
-        self.assertTrue(held, 'the large-request slot was released early')
+        with self.server.lock:
+            self.assertTrue(self.server.large_request_reservations,
+                            'large-request reservation was released early')
 
     def test_preparation_growth_past_the_threshold_takes_the_slot(self):
         payload = _turn('native responses', 10, text='é' * 600)
@@ -64,14 +65,11 @@ class RequestLeaseTests(ServerCase):
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
         with scaled_limits(CAP, CEILING):
             self.assertLess(len(raw), CAP)
-            self.assertTrue(self.lock.acquire(blocking=False))
-            try:
+            with full_large_budget(self.server):
                 response = self.send('native responses', raw)
                 self.assertEqual(response.getheader('Retry-After'), '2')
                 self.answer(response, 503, 'OVERSIZE_BUSY')
                 self.assertEqual(recorded, [])
-            finally:
-                self.lock.release()
             self.answer(self.send('native responses', raw), 200)
         self.assertGreater(len(recorded[0][3]), CAP)
         self.assert_released()
@@ -87,13 +85,15 @@ class RequestLeaseTests(ServerCase):
                 responder, reached, release = _upstream(*responses, stalled=stalled)
                 self.addCleanup(release.set)
                 recorded = install_fake(self, responder)
-                with scaled_limits(CAP, CEILING):
+                with scaled_limits(CAP, CEILING), mock.patch.object(
+                        request_lease, 'LARGE_REQUEST_BUDGET_BYTES', 1), mock.patch.object(
+                        request_lease, 'LARGE_REQUEST_WAIT_S', 0):
                     thread, result = self.background('native responses', _wire(payload)[0],
                                                      extra)
                     self.assertTrue(reached.wait(5), 'the stalled send never started')
                     self.assert_held()
                     if name == 'relay':
-                        # Small turns still run; another large one is told to retry.
+                        # A full byte budget still lets small turns run.
                         small = _turn('external responses', 10)
                         self.answer(self.send('external responses', _wire(small)[0]), 200)
                         response = self.send('native responses', _wire(large)[0])
@@ -121,12 +121,9 @@ class RequestLeaseTests(ServerCase):
                     self.assertLess(len(raw), CAP)
                     # The repaired or twin body is well over half the original.
                     self.assertLess(CAP, len(raw) * 3 // 2)
-                    self.assertTrue(self.lock.acquire(blocking=False))
-                    try:
+                    with full_large_budget(self.server):
                         response = self.send('native responses', raw, extra=extra)
                         self.answer(response, 503, code)
-                    finally:
-                        self.lock.release()
                 self.assertEqual([record[0] for record in recorded], ['chatgpt.com'])
 
     def test_failures_and_disconnects_release_the_slot_and_the_inflight_count(self):
@@ -154,6 +151,27 @@ class RequestLeaseTests(ServerCase):
                     break
             threading.Event().wait(0.1)
         self.assertEqual(self.server.inflight, 0)
+
+    def test_drain_during_helper_fallback_returns_the_drain_error(self):
+        server = self.server
+
+        class Draining(FakeUpstream):
+            def read(inner, amt=None):
+                with server.large_request_condition:
+                    server.draining = True
+                    server.large_request_condition.notify_all()
+                return super().read(amt)
+
+        recorded = install_fake(self, lambda: Draining(429, b'{}', []))
+        payload = dict(_turn('native responses', 600), model='gpt-5.6-luna')
+        body = _wire(payload)[0]
+        with scaled_limits(CAP, CEILING):
+            self.assertLess(len(body), CAP)
+            response = self.send('native responses', body, extra=HELPER)
+            self.assertEqual(response.getheader('Retry-After'), '2')
+            self.answer(response, 503, 'SERVER_DRAINING')
+        self.assertEqual(len(recorded), 1)
+        self.assert_released()
 
 
 
