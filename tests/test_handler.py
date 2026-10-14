@@ -14,7 +14,7 @@ import time
 import unittest
 from unittest import mock
 from compression import zstd
-from ai_router import key_store, setup
+from ai_router import key_store, setup, transport
 from ai_router.credentials import Credentials
 from ai_router.registry import by_slug
 from ai_router.router import Handler, _payload_has_image
@@ -131,7 +131,7 @@ class HandlerCharacterisationTests(unittest.TestCase):
         conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
         conn.putrequest('POST', '/test-token/responses')
         conn.putheader('Content-Type', 'application/json')
-        conn.putheader('Content-Length', str(96 * 1024 * 1024 + 1))
+        conn.putheader('Content-Length', str(transport.MAX_REQUEST_BYTES + 1))
         conn.endheaders()
         self.assertEqual(conn.getresponse().status, 400)
         self.assertEqual(recorded, [])

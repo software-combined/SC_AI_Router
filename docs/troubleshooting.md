@@ -109,14 +109,15 @@ is `true` in the client's `env` block. See `docs/claude-code.md`.
 | 409 | The provider cannot serve this request, for example an unsupported reasoning level; the message names the allowed levels |
 | 503 with `Retry-After` | Not served: the router is draining for an update (`SERVER_DRAINING`) or mapped an upstream 429 (`UPSTREAM_RATE_LIMITED`); retry after the delay. A refused subscription turn names the model and the subscription: retry shortly, or select a routed model |
 
-`BODY_TOO_LARGE` (`400`) means the request exceeds the router's local 96 MiB
+`BODY_TOO_LARGE` (`400`) means the request exceeds the router's local 256 MiB
 ceiling on sent or decompressed bytes. Native history and images are preserved;
 external Responses can shorten old content before sending it. Reduce large
 attachments or use the client's compaction command before retrying. The work
 on disk is untouched. `logs/router.jsonl` records sizes and carried classes in
 `turn_refused`; `turn_trimmed` records any external content reduction.
-`OVERSIZE_BUSY` (`503`) means another large turn holds the router's single
-large-request slot. Retry shortly; smaller requests can still proceed.
+`OVERSIZE_BUSY` (`503`) means a large turn could not reserve space in the shared
+1 GiB request budget after waiting up to 60 seconds. Retry shortly; smaller
+requests can still proceed.
 
 ## The key is missing or was revoked
 
