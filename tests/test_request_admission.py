@@ -3,9 +3,9 @@
 The 2026-09-25 native gpt-6-astra turn (17 images, 10.5 MB on the wire,
 18.2 MB decoded) was read by ingress and then refused before any send: the
 final gate still held every prepared body to the 16 MiB ordinary threshold.
-Every route and encoding now forwards a turn whole below the local 96 MiB
+Every route and encoding now forwards a turn whole below the local 256 MiB
 ceiling and counts decoded bytes on every send; test_request_lease covers
-the slot such a turn holds. Limits are scaled (the parent's reproduction used
+the reservation such a turn holds. Limits are scaled (the parent's reproduction used
 2000 and 12000); one case crosses the real 16 MiB.
 """
 import http.client
@@ -189,7 +189,7 @@ class RequestAdmissionTests(ServerCase):
                             mock.patch.object(router_mod, 'log_event') as logged:
                         response = self.send(route, body, encoding)
                         body = self.answer(response, 400, 'BODY_TOO_LARGE')
-                    self.assertIn('96 MiB', body['error']['message'])
+                    self.assertIn('256 MiB', body['error']['message'])
                     self.assertEqual(recorded, [])
                     self.assert_released()
                     if stage == 'prepared':
@@ -211,7 +211,7 @@ class RequestAdmissionTests(ServerCase):
 
 class AccountingTests(unittest.TestCase):
     def test_the_ceiling_is_local_and_response_bounds_do_not_move(self):
-        self.assertEqual(transport.MAX_REQUEST_BYTES, 96 * 1024 * 1024)
+        self.assertEqual(transport.MAX_REQUEST_BYTES, 256 * 1024 * 1024)
         self.assertEqual(wire_shape.DECODE_LIMIT, transport.MAX_REQUEST_BYTES)
         self.assertEqual(rejected_repair.ZSTD_DECODE_LIMIT, transport.MAX_REQUEST_BYTES)
         for bound in (router_mod.MAX_BODY, transport.MAX_UPSTREAM_BODY,

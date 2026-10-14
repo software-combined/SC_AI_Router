@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.0.21
+
+- Raise the local request ceiling from 96 MiB to 256 MiB on sent, decoded and
+  prepared bytes. Image-heavy native turns can continue without dropping history.
+  Keep the shared 1 GiB request budget, 60-second wait and 32-request limit.
+
 ## 1.0.20
 
 - Let large turns run together within a shared 1 GiB request budget. When the
