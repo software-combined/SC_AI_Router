@@ -10,7 +10,7 @@ from unittest import mock
 from tests._platform import unix_only
 from tests.fakes import LaunchdDomain
 from tests.install_fixtures import install_mod
-from tests.test_windows_backend import _backend, _install, backend as windows, QUERY_READY
+from tests.test_windows_backend import USER, _backend, _install, backend as windows, QUERY_READY
 
 ROOT = Path(__file__).resolve().parents[1]
 darwin = install_mod._svc.load('express_test_darwin', ROOT / 'packaging/platforms/darwin.py')
@@ -98,10 +98,10 @@ class ExpressPlatforms(unittest.TestCase):
         self.assertEqual(len([c for c in self.calls if c['operation'] == 'register']), 3)
         state['query'] = QUERY_READY  # Simulate the task's completed drain.
         _backend(state, self.calls).uninstall(self.home)
-        self.assertIn(windows.EXPRESS_TASK,
+        self.assertIn(windows.EXPRESS_TASK + '-' + USER,
                       [c['name'] for c in self.calls if c['operation'] == 'delete'])
 
     def test_windows_uninstall_also_accepts_an_install_without_express(self):
         _backend({'missing': {windows.EXPRESS_TASK}}, calls=self.calls).uninstall(self.home)
-        self.assertNotIn(windows.EXPRESS_TASK,
+        self.assertNotIn(windows.EXPRESS_TASK + '-' + USER,
                          [c['name'] for c in self.calls if c['operation'] == 'delete'])

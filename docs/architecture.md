@@ -423,7 +423,10 @@ is in [runtime files](runtime-files.md#codex-usage-limit-record).
    rollback). Unsupported OS is an explicit refusal. Backends do not import
    runtime providers or client catalogue policy.
    `platforms/windows_tasks.py` owns structured Task Scheduler access and
-   principal/action checks; `windows.py` owns lifecycle order.
+   principal/action checks; `windows.py` owns account-scoped names and lifecycle
+   order. Owned legacy definitions remain available through registration and
+   expected-version health checks. An active legacy updater keeps its ownership
+   record until a later healthy install can remove it after exit.
 5. A client is not a provider and an OS is neither. New clients reuse a
    proven wire protocol; a new protocol lands only after its contract is
    verified against the installed client version.

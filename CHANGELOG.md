@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Isolate Windows tasks by account. Migrate only owned legacy tasks after the
+  replacement serves, preserve disabled schedules and retain active updater
+  parents until exit. Resume interrupted migration through the normal installer.
 - Verify Windows task ownership before changes and require prior instances to
   exit before restart. Refuse foreign tasks and failed process-state queries;
   preserve existing tasks when registration fails.

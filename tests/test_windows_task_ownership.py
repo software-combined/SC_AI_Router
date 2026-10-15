@@ -69,12 +69,31 @@ class ExplicitStopTests(_CurrentInstallerFixture, unittest.TestCase):
                     self.assertFalse(tasks[other]['enabled'])
 
 
+def _cleanup(obj, names):
+    # Independent cleanup must also work when the implementation under test fails.
+    script = r'''
+$ErrorActionPreference = 'Stop'
+$r = [Console]::In.ReadToEnd() | ConvertFrom-Json
+$s = New-Object -ComObject Schedule.Service; $s.Connect()
+foreach ($name in $r.names) {
+    foreach ($i in $s.GetRunningTasks(1)) { if ($i.Path -eq ('\' + $name)) { $i.Stop() } }
+    try { $s.GetFolder('\').DeleteTask($name, 0) } catch {
+        if ($_.Exception.GetBaseException().HResult -ne -2147024894) { throw }
+    }
+}
+'''
+    obj._call(['powershell', '-NoProfile', '-NonInteractive', '-Command', script],
+              input=json.dumps({'names': names}), text=True, capture_output=True,
+              timeout=20, check=True)
+
+
 @unittest.skipUnless(sys.platform == 'win32', 'requires the real Windows Task Scheduler')
 class NativeTaskTests(unittest.TestCase):
     def test_real_ownership_instances_and_parent_survival(self):
         obj = backend.Backend(service, subprocess.run)
         sid = obj._identity()
-        name = 'SCG-CI-' + uuid.uuid4().hex + '-' + sid
+        base = 'SCG-CI-' + uuid.uuid4().hex
+        name = base + '-' + sid
         with tempfile.TemporaryDirectory(prefix='router é & [] $ ') as tmp:
             home = Path(tmp)
             _state_file(home)
@@ -118,11 +137,11 @@ class NativeTaskTests(unittest.TestCase):
                 original = wait_running()['instances']
                 call('register')
                 self.assertTrue(set(original) & set(call()['instances']))
-                with mock.patch.object(backend, 'ROUTER_TASK', name), \
+                with mock.patch.object(backend, 'ROUTER_TASK', base), \
                         mock.patch.object(backend, '_post_shutdown', return_value=False), \
                         mock.patch.object(backend, 'DRAIN_TIMEOUT_S', 0):
                     call('stop')
-                    self.assertTrue(obj._wait_stopped(name, 10, home))
+                    self.assertTrue(obj._wait_stopped(base, 10, home))
                     self.assertEqual(call()['state'], 3)  # Refresh preserved Enabled, not just instances.
                     call('disable')
                     self.assertEqual(call('register')['state'], 1)
@@ -182,16 +201,88 @@ $null = $s.GetFolder('\').RegisterTaskDefinition($r.name, $d, 4, $r.sid, $null, 
                         call(operation)
             finally:
                 gate.unlink(missing_ok=True)
-                # Independent cleanup also works if the implementation under test fails.
-                cleanup = r'''
-$ErrorActionPreference = 'Stop'
-$r = [Console]::In.ReadToEnd() | ConvertFrom-Json
-$s = New-Object -ComObject Schedule.Service; $s.Connect()
-foreach ($i in $s.GetRunningTasks(1)) { if ($i.Path -eq ('\' + $r.name)) { $i.Stop() } }
-try { $s.GetFolder('\').DeleteTask($r.name, 0) } catch {
-    if ($_.Exception.GetBaseException().HResult -ne -2147024894) { throw }
-}
-'''
-                obj._call(['powershell', '-NoProfile', '-NonInteractive', '-Command', cleanup],
-                          input=json.dumps({'name': name}), text=True, capture_output=True,
-                          timeout=20, check=True)
+                _cleanup(obj, [name])
+
+    def test_native_migration_keeps_parent_until_exit_and_preserves_disabled_schedule(self):
+        obj = backend.Backend(service, subprocess.run)
+        sid = obj._identity()
+        prefix = 'SCG-CI-' + uuid.uuid4().hex
+        names = [prefix + suffix for suffix in ('', '-Update', '-Express')]
+        with tempfile.TemporaryDirectory(prefix='router migration ') as tmp, \
+                mock.patch.multiple(backend, ROUTER_TASK=names[0], UPDATE_TASK=names[1],
+                                    EXPRESS_TASK=names[2], DRAIN_TIMEOUT_S=0), \
+                mock.patch.object(backend, '_post_shutdown', return_value=False):
+            home = Path(tmp)
+            _state_file(home)
+            for script in ('router_launch.py', 'update_launch.py', 'express_launch.py'):
+                (home / script).write_text(
+                    'import time\nfrom pathlib import Path\nhome = Path(__file__).parent\n'
+                    'name = Path(__file__).stem\nend = time.monotonic() + 180\n'
+                    'while (home / (name + ".gate")).exists() and time.monotonic() < end:\n'
+                    '    (home / (name + ".alive")).write_text(str(time.monotonic()))\n'
+                    '    time.sleep(0.1)\n', encoding='utf-8')
+                (home / (Path(script).stem + '.gate')).touch()
+            service.install_task_launcher(home, Path(__file__).resolve().parents[1])
+            def task(name, operation='query', **kwargs):
+                return obj._task_state(name, home, operation, **kwargs)
+            def running(name, legacy=False):
+                deadline = time.monotonic() + 15
+                while time.monotonic() < deadline:
+                    result = task(name, legacy=legacy)
+                    if result and result['instances']:
+                        return result
+                    time.sleep(0.2)
+                self.fail('disposable migration task did not start')
+            try:
+                renderers = (backend.render_router_xml, backend.render_update_xml, backend.render_express_xml)
+                for index, name in enumerate(names):
+                    args = (sys.executable, home, sid) if index == 0 else (sys.executable, home)
+                    task(name, 'register', legacy=True, xml=renderers[index](*args))
+                    if index != 2:
+                        task(name, 'run', legacy=True)
+                        running(name, legacy=True)
+                        task(name, 'complete', legacy=True)
+                router = task(names[0], legacy=True)['instances']
+                parent = task(names[1], 'disable', legacy=True)['instances']
+                run = obj._run
+                def failed_registration(cmd, **kwargs):
+                    request = json.loads(kwargs.get('input', '{}'))
+                    if request.get('name') == names[2] + '-' + sid and request['operation'] == 'register':
+                        request['xml'] = '<Task>'  # The real Scheduler API must reject this definition.
+                        kwargs['input'] = json.dumps(request)
+                    return run(cmd, **kwargs)
+                obj._run = failed_registration
+                with self.assertRaises(SystemExit):
+                    obj.install(sys.executable, home, {}, Path(__file__).resolve().parents[1], None)
+                obj._run = run
+                self.assertEqual(task(names[0], legacy=True)['instances'], router)
+                self.assertEqual(task(names[1], legacy=True)['instances'], parent)
+                def healthy(state, version):
+                    self.assertEqual(version, '1.0.0')
+                    running(names[0])
+                    return True  # Native API proof; HTTP health is the external test boundary.
+                with mock.patch.object(service, 'wait_version', side_effect=healthy), \
+                        mock.patch.object(service, 'health', return_value={'version': '1.0.0'}):
+                    obj.install(sys.executable, home, {}, Path(__file__).resolve().parents[1],
+                                None, expected_version='1.0.0')
+                    self.assertFalse(task(names[1])['enabled'])
+                    self.assertFalse(task(names[1])['pending'])
+                    self.assertTrue(task(names[2])['enabled'])
+                    self.assertFalse(task(names[2])['pending'])
+                    self.assertFalse(task(names[1], legacy=True)['enabled'])
+                    self.assertEqual(task(names[1], legacy=True)['instances'], parent)
+                    heartbeat = home / 'update_launch.alive'
+                    before = heartbeat.read_text()
+                    time.sleep(0.3)
+                    self.assertNotEqual(heartbeat.read_text(), before)
+                    self.assertTrue(obj.ensure_serving(home, {}, '1.0.0'))
+                    (home / 'update_launch.gate').unlink()
+                    self.assertTrue(obj._wait_stopped(names[1], 15, home, legacy=True))
+                    obj.recover_pending(sys.executable, home, Path(__file__).resolve().parents[1], '1.0.0')
+                    self.assertIsNone(task(names[1], legacy=True))
+                    self.assertFalse(task(names[1])['enabled'])
+            finally:
+                obj._run = subprocess.run
+                for gate in home.glob('*.gate'):
+                    gate.unlink(missing_ok=True)
+                _cleanup(obj, names + [name + '-' + sid for name in names])

@@ -151,6 +151,10 @@ def _tail(text):
     return (text or '').strip()[-500:]
 
 
+def _active(task):
+    return task['state'] in (2, 4) or bool(task['instances'])
+
+
 def _grant(run, path, grantee, verb):
     result = run(['icacls', str(path), '/inheritance:r', '/grant:r', grantee],
                  capture_output=True, text=True)
@@ -222,22 +226,38 @@ class Backend:
             self._sid = _winacl.current_sid(run=self._call)
         return self._sid
 
-    def _task_state(self, name, home, operation='query', *, xml=None):
+    def _task_state(self, name, home, operation='query', *, xml=None, legacy=False, pending=True):
         scripts = {ROUTER_TASK: ('router_launch.py', ROUTER_LOG),
                    UPDATE_TASK: ('update_launch.py', UPDATE_LOG),
                    EXPRESS_TASK: ('express_launch.py', UPDATE_LOG)}
         sid = self._identity()
-        return _tasks.invoke(self._call, sid, name,
-                             _arguments(home, *scripts[name]), operation, xml)
+        try:
+            return _tasks.invoke(self._call, sid, name if legacy else name + '-' + sid,
+                                 _arguments(home, *scripts[name]), operation, xml, pending=pending)
+        except _tasks.OwnershipError:
+            if not legacy or operation != 'query':
+                raise
+            return None
 
-    def _running(self, name, home):
-        state = self._task_state(name, home)
+    def _running(self, name, home, *, legacy=False):
+        state = self._task_state(name, home, legacy=legacy)
         if state is None:
             raise SystemExit('Windows task %s disappeared; process exit is unverified' % name)
-        return state['state'] in (2, 4) or bool(state['instances'])
+        return _active(state)
+
+    def _legacy(self, home):
+        return {name: task for name in (ROUTER_TASK, UPDATE_TASK, EXPRESS_TASK)
+                if (task := self._task_state(name, home, legacy=True)) is not None}
+
+    def _router(self, home):
+        current = self._task_state(ROUTER_TASK, home)
+        legacy = self._task_state(ROUTER_TASK, home, legacy=True)
+        use_legacy = bool(legacy and (not current or (_active(legacy) and not _active(current))))
+        return use_legacy, legacy if use_legacy else current
 
     def install(self, python, home, state, release_dir, previous, *, expected_version=None):
         del previous  # the launchers resolve `current` at exec time.
+        legacy = self._legacy(home)
         self._svc.install_task_launcher(home, release_dir)
         definitions = {ROUTER_TASK: render_router_xml(python, home, self._identity()),
                        UPDATE_TASK: render_update_xml(python, home)}
@@ -245,30 +265,40 @@ class Backend:
             definitions[EXPRESS_TASK] = render_express_xml(python, home)
         # New definitions stay disabled until every registration has succeeded.
         for name, xml in definitions.items():
-            self._task_state(name, home, 'register', xml=xml)
+            old = legacy.get(name)
+            pending = name == ROUTER_TASK or not old or old['enabled'] or old['pending']
+            self._task_state(name, home, 'register', xml=xml, pending=pending)
+        if ROUTER_TASK in legacy:
+            self._task_state(ROUTER_TASK, home, 'handover', legacy=True)
+            self._end_router(home, DRAIN_TIMEOUT_S, legacy=True)
         self._handover(home, state, expected_version or Path(release_dir).name)
+        for name in legacy:
+            task = self._task_state(name, home, 'disable', legacy=True)
+            if not _active(task):
+                self._task_state(name, home, 'delete', legacy=True)
         self.start_updates(home)
 
     def recover_pending(self, python, home, release_dir, version):
         """Complete an interrupted install before reporting this version current."""
         tasks = [self._task_state(name, home) for name in
                  (ROUTER_TASK, UPDATE_TASK, EXPRESS_TASK)]
-        router = tasks[0]
+        legacy = self._legacy(home)
+        _, router = self._router(home)
         if router and not router['enabled'] and not router['pending']:
             return  # Updater setup cannot override an explicit router stop.
-        if not any(task and task['pending'] for task in tasks):
+        if not legacy and not any(task and task['pending'] for task in tasks):
             return
         self.install(python, home, self._state(home), release_dir, None, expected_version=version)
 
-    def _wait_stopped(self, name, timeout, home):
+    def _wait_stopped(self, name, timeout, home, *, legacy=False):
         deadline = time.monotonic() + timeout
-        while self._running(name, home):
+        while self._running(name, home, legacy=legacy):
             if time.monotonic() >= deadline:
                 return False
             self._sleep(1)
         return True
 
-    def _drain(self, home, timeout):
+    def _drain(self, home, timeout, *, legacy=False):
         # Always ask: /shutdown is authenticated, idempotent and cheap when
         # nothing is serving, so a misread task status can never suppress
         # the drain. Returns False when the instance is still running.
@@ -276,41 +306,45 @@ class Backend:
             _post_shutdown(self._state(home))
         except (OSError, ValueError, KeyError):
             pass
-        return self._wait_stopped(ROUTER_TASK, timeout, home)
+        return self._wait_stopped(ROUTER_TASK, timeout, home, legacy=legacy)
 
-    def _end_router(self, home, timeout):
-        if not self._drain(home, timeout):
-            self._stop_task(ROUTER_TASK, home)
+    def _end_router(self, home, timeout, *, legacy=False):
+        if not self._drain(home, timeout, legacy=legacy):
+            self._stop_task(ROUTER_TASK, home, legacy=legacy)
 
-    def _stop_task(self, name, home):
-        self._task_state(name, home, 'stop')
-        if not self._wait_stopped(name, 10, home):
+    def _stop_task(self, name, home, *, legacy=False):
+        self._task_state(name, home, 'stop', legacy=legacy)
+        if not self._wait_stopped(name, 10, home, legacy=legacy):
             raise SystemExit('Windows task %s did not exit' % name)
 
-    def _handover(self, home, state, version):
-        self._task_state(ROUTER_TASK, home, 'handover')
-        self._end_router(home, DRAIN_TIMEOUT_S)
-        self._run_task(ROUTER_TASK, home)
+    def _handover(self, home, state, version, *, legacy=False):
+        self._task_state(ROUTER_TASK, home, 'handover', legacy=legacy)
+        self._end_router(home, DRAIN_TIMEOUT_S, legacy=legacy)
+        self._run_task(ROUTER_TASK, home, legacy=legacy)
         if not self._svc.wait_version(state, version):
             raise SystemExit('Windows router did not reach version %s' % version)
-        self._task_state(ROUTER_TASK, home, 'complete')
+        self._task_state(ROUTER_TASK, home, 'complete', legacy=legacy)
 
     def restart(self, home):
-        self._handover(home, self._state(home), self._svc.current_version(home))
+        state = self._state(home)
+        self._handover(home, state, self._svc.current_version(home), legacy=self._router(home)[0])
 
     def stop(self, home):
-        if self._task_state(ROUTER_TASK, home) is not None:
-            self._task_state(ROUTER_TASK, home, 'disable')
-            self._stop_task(ROUTER_TASK, home)
+        routers = [legacy for legacy in (False, True)
+                   if self._task_state(ROUTER_TASK, home, legacy=legacy) is not None]
+        for legacy in routers:
+            self._task_state(ROUTER_TASK, home, 'disable', legacy=legacy)
+        for legacy in routers:
+            self._stop_task(ROUTER_TASK, home, legacy=legacy)
 
     def _state(self, home):
         return json.loads((Path(home) / 'mixed-router-state.json').read_text())
 
-    def _run_task(self, name, home):
-        self._task_state(name, home, 'run')
+    def _run_task(self, name, home, *, legacy=False):
+        self._task_state(name, home, 'run', legacy=legacy)
         deadline = time.monotonic() + 10
         while True:
-            state = self._task_state(name, home)
+            state = self._task_state(name, home, legacy=legacy)
             if state and state['state'] == 4 and state['instances']:
                 return
             if not state or state['state'] == 1 or time.monotonic() >= deadline:
@@ -324,7 +358,7 @@ class Backend:
                 self._task_state(name, home, 'enable')
 
     def ensure_serving(self, home, state, version):
-        if not self._running(ROUTER_TASK, home):
+        if not self._running(ROUTER_TASK, home, legacy=self._router(home)[0]):
             return False
         body = self._svc.health(state, timeout=180)
         if version is not None:
@@ -339,14 +373,13 @@ class Backend:
         return None
 
     def uninstall(self, home):
-        owned = []
-        for name in (ROUTER_TASK, UPDATE_TASK, EXPRESS_TASK):
-            if self._task_state(name, home) is not None:
-                owned.append(name)
-        for name in owned:
-            self._task_state(name, home, 'disable')
+        owned = [(name, legacy) for legacy in (False, True)
+                 for name in (ROUTER_TASK, UPDATE_TASK, EXPRESS_TASK)
+                 if self._task_state(name, home, legacy=legacy) is not None]
+        for name, legacy in owned:
+            self._task_state(name, home, 'disable', legacy=legacy)
             if name == ROUTER_TASK:
-                self._end_router(home, UNINSTALL_DRAIN_S)
+                self._end_router(home, UNINSTALL_DRAIN_S, legacy=legacy)
             else:
-                self._stop_task(name, home)
-            self._task_state(name, home, 'delete')
+                self._stop_task(name, home, legacy=legacy)
+            self._task_state(name, home, 'delete', legacy=legacy)

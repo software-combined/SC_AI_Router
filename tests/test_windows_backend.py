@@ -61,23 +61,29 @@ def _fake_run(state=None, calls=None, fail=(), end_fails=False):
         if 'path' in request:
             return SimpleNamespace(returncode=0, stdout=json.dumps({'user': USER}))
         (calls if calls is not None else []).append(request)
-        name, operation = request['name'], request['operation']
-        failed_once = (name, operation) == state.get('fail_once')
+        raw, operation = request['name'], request['operation']
+        suffix = '-' + request['sid']
+        legacy = not raw.endswith(suffix)
+        name = raw if legacy else raw[:-len(suffix)]
+        store = state.setdefault('legacy', {}) if legacy else state
+        failed_once = state.get('fail_once') in ((raw, operation), (name, operation))
         if failed_once:
             state.pop('fail_once')
         if (name in fail or failed_once or operation == state.get('fail_operation')
                 or (operation == 'stop' and end_fails)):
             return SimpleNamespace(returncode=1, stdout='', stderr='denied')
-        key = 'query' if name == backend.ROUTER_TASK else name
-        doc = {'kind': 'missing'} if name in state['missing'] else dict(state.get(key, QUERY_READY))
+        key = 'query' if name == backend.ROUTER_TASK and not legacy else name
+        default = {'kind': 'missing'} if legacy else QUERY_READY
+        doc = ({'kind': 'missing'} if not legacy and name in state['missing']
+               else dict(store.get(key, default)))
         if doc['kind'] in ('foreign', 'denied'):
             return SimpleNamespace(returncode=0, stdout=json.dumps(doc), stderr='')
         created = doc['kind'] == 'missing'
         if operation == 'register':
-            state['xml_' + name] = request['xml']
+            store['xml_' + name] = request['xml']
             state['missing'].discard(name)
             doc = _query(1) if created else doc
-            doc['pending'] = created or doc['pending']
+            doc['pending'] = request.get('pending', True) if created else doc['pending']
         if doc['kind'] == 'present':
             if operation in ('handover', 'enable', 'disable', 'complete'):
                 doc['pending'] = operation == 'handover'
@@ -85,12 +91,15 @@ def _fake_run(state=None, calls=None, fail=(), end_fails=False):
                 doc['enabled'] = operation not in ('disable', 'handover') and not state.get('policy_disabled', False)
             if operation == 'run' and doc['enabled']:
                 doc['instances'] = ['instance']
+                doc['state'] = 4
             if operation == 'stop' and not state.get('stuck'):
                 doc['instances'] = []
-            doc['state'] = 4 if doc['instances'] else (3 if doc['enabled'] else 1)
+            queued = doc['state'] == 2 and operation != 'stop'
+            running = doc['state'] == 4 and doc['instances']
+            doc['state'] = 4 if running else (2 if queued else (3 if doc['enabled'] else 1))
             if operation == 'delete':
                 doc = {'kind': 'missing'}
-            state[key] = doc
+        store[key] = doc
         return SimpleNamespace(returncode=0, stdout=json.dumps(doc), stderr='')
     return run
 
@@ -357,7 +366,7 @@ class ControlTests(unittest.TestCase):
         calls = []
         _backend({}, calls).stop('/home/x')
         self.assertEqual([c['name'] for c in calls if c['operation'] == 'stop'],
-                         [backend.ROUTER_TASK])
+                         [backend.ROUTER_TASK + '-' + USER])
 
     def test_stop_tolerates_only_a_task_that_was_never_registered(self):
         calls = []
@@ -379,11 +388,12 @@ class ControlTests(unittest.TestCase):
         calls = []
         _backend({}, calls).uninstall('/home/x')
         deleted = [c['name'] for c in calls if c['operation'] == 'delete']
-        self.assertEqual(deleted, [backend.ROUTER_TASK, backend.UPDATE_TASK, backend.EXPRESS_TASK])
+        self.assertEqual(deleted, [name + '-' + USER for name in
+                                  (backend.ROUTER_TASK, backend.UPDATE_TASK, backend.EXPRESS_TASK)])
         for task in deleted:
             operations = [c['operation'] for c in calls if c['name'] == task]
             self.assertLess(operations.index('disable'), operations.index('delete'))
-            if task != backend.ROUTER_TASK:
+            if task != backend.ROUTER_TASK + '-' + USER:
                 self.assertLess(operations.index('stop'), operations.index('delete'))
 
     def test_uninstall_drains_a_serving_router_first(self):

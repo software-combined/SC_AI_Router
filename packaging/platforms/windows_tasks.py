@@ -56,7 +56,8 @@ try {
         $definition = $service.NewTask(0)
         $definition.XmlText = $r.xml
         $definition.Principal.UserId = $r.sid
-        $definition.Data = if ($created -or $task.Definition.Data -eq $pendingMarker) {
+        $definition.Data = if (($created -and $r.pending) -or
+            (-not $created -and $task.Definition.Data -eq $pendingMarker)) {
             $pendingMarker
         } else { '' }
         $definition.Settings.Enabled = -not $created -and $task.Enabled
@@ -106,9 +107,9 @@ class OwnershipError(SystemExit):
     """A task belongs elsewhere, or its owner cannot be read."""
 
 
-def invoke(run, sid, name, arguments, operation='query', xml=None):
+def invoke(run, sid, name, arguments, operation='query', xml=None, *, pending=True):
     """Names and paths travel as JSON data, never interpolated PowerShell."""
-    request = dict(sid=sid, name=name, arguments=arguments, operation=operation, xml=xml)
+    request = dict(sid=sid, name=name, arguments=arguments, operation=operation, xml=xml, pending=pending)
     try:
         result = run(['powershell', '-NoLogo', '-NoProfile', '-NonInteractive',
                       '-Command', _SCRIPT], input=json.dumps(request),

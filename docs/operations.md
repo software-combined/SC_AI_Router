@@ -364,7 +364,7 @@ continue on the four-hour schedule. A failed Express attempt waits for the
 regular retry schedule, retaining the existing three-failure limit.
 
 The jobs are `com.local.codex-mixed-model-router.update.express` on macOS,
-`CodexMixedModelRouterUpdateExpress` on Windows, and
+`CodexMixedModelRouterUpdateExpress-<SID>` on Windows (the account's security identifier), and
 `codex-mixed-model-router-express.timer` on Linux. The installer registers
 and removes these with the regular jobs. They use the same home launcher
 under the name `express_launch.py`, which skips older restored releases
@@ -993,19 +993,25 @@ stops the boot with `policy_enforced must be true or false`.
 ## Windows (Task Scheduler)
 
 Windows tasks use `CodexMixedModelRouter`, `CodexMixedModelRouterUpdate` and
-`CodexMixedModelRouterUpdateExpress`. Before changing a task, the installer
-verifies its principal, Python executable and exact home launcher arguments.
-Foreign or unreadable tasks stop the operation and stay untouched. New
-definitions register before the old router stops. Registration failure never
-triggers deletion. Existing schedule settings survive refresh and rollback.
+`CodexMixedModelRouterUpdateExpress`, each followed by `-<SID>` for the installing
+account's security identifier. Before changing a task, the installer verifies
+its principal, Python executable and exact home launcher arguments.
+Foreign or inaccessible legacy tasks stay untouched. Such a conflict at an
+account-scoped name, or any malformed query, stops the operation. All replacement
+definitions register before the old router stops. Registration failure retains
+the old service for rollback. Existing schedule settings survive migration,
+refresh and rollback, including a disabled schedule whose process is still running.
 New tasks retain a pending setup marker in their definition.
 Router handover records the same intent before stopping the old process and
 clears it only after the expected version serves. A plain installer retry
 finishes an interrupted handover or setup before enabling updates. An explicit
-stop keeps the router stopped, even while updater setup is pending. Restart or
-run setup to verify the service before completing pending updates.
+stop cancels both owned router definitions during migration. The router stays
+stopped even while updater setup or legacy cleanup is pending. Restart or run
+setup to verify the service before completing pending work.
 Deliberately disabled schedules stay disabled.
-Re-registering an updater leaves its running parent alive.
+After replacement health passes, legacy schedules are disabled. Their definitions
+remain while queued or running, or while any instance remains. A later installer
+retry removes them after exit. The migration never stops its updater parent.
 Tasks run `pythonw.exe` through `task_launch.py` in the router home
 (rewritten on every install), which appends stdout and stderr to
 `logs\launchd.log` and `logs\update.log` (rotated at 1 MB, one backup). Every console child (`icacls`, `powershell`, `python`)
