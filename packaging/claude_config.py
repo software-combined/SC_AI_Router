@@ -1,6 +1,6 @@
 """Claude Code activation adapter (Plan 112). Python 3.9-safe helper.
 
-Owns the four `env` settings merged into the user's settings.json, conflict
+Owns three public `env` settings merged into the user's settings.json, conflict
 refusal on hand-edited owned values and on the tool-search hard switch, and
 activation receipt handling. Loaded through the installer's explicit
 file-import pattern and shipped in the release bundle. No runtime/protocol
@@ -21,17 +21,15 @@ _spec.loader.exec_module(atomic_write)
 
 BASE_URL_KEY = 'ANTHROPIC_BASE_URL'
 DISCOVERY_KEY = 'CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY'
-# Claude Code 2.1.223 turns deferred MCP tool loading off for a base URL that
-# is not Anthropic's own host unless ENABLE_TOOL_SEARCH says otherwise, and it
-# reads `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL` to decide whether the host
-# may carry the client's first-party betas and shapes at all. The router is the
-# only reason either is set, so it owns both and restores them on detach.
+# Public tool-search setting; never tell Claude this gateway is first-party.
 TOOL_SEARCH_KEY = 'ENABLE_TOOL_SEARCH'
+# Retained only to remove a receipt-proven legacy setting and restore old
+# receipts on detach. It is never added to a new attachment.
 FIRST_PARTY_KEY = '_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL'
 # Not owned: this one is a hard off switch for the whole feature and no value
 # can override it, so an attach refuses while it is set anywhere in reach.
 DISABLE_KEY = 'CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS'
-OWNED_KEYS = (BASE_URL_KEY, DISCOVERY_KEY, TOOL_SEARCH_KEY, FIRST_PARTY_KEY)
+OWNED_KEYS = (BASE_URL_KEY, DISCOVERY_KEY, TOOL_SEARCH_KEY)
 
 
 def settings_path(env=None):
@@ -46,8 +44,7 @@ def settings_path(env=None):
 def desired_env(home, state):
     return {BASE_URL_KEY: 'http://127.0.0.1:%s/%s' % (state['port'], state['token']),
             DISCOVERY_KEY: 'true',
-            TOOL_SEARCH_KEY: 'true',
-            FIRST_PARTY_KEY: '1'}
+            TOOL_SEARCH_KEY: 'true'}
 
 
 def _truthy(value):
@@ -98,8 +95,8 @@ def read_settings(path):
     return doc
 
 
-def merge_env(home, state, path=None, env=None):
-    """Merge the four owned env keys; refuse conflicting hand-edited values.
+def merge_env(home, state, path=None, env=None, legacy_snapshot=None):
+    """Merge public keys; migrate only a receipt-proven private flag.
 
     Returns (doc, changed, previous_owned) where previous_owned maps each
     owned key to its prior value (or None when absent) for the receipt.
@@ -122,13 +119,26 @@ def merge_env(home, state, path=None, env=None):
     doc['env'] = owned
     want = desired_env(home, state)
     previous = {key: owned.get(key) for key in OWNED_KEYS}
+    legacy = owned.get(FIRST_PARTY_KEY)
+    if legacy is not None and not (
+            legacy == '1' and legacy_snapshot is not None
+            and FIRST_PARTY_KEY in legacy_snapshot
+            and legacy_snapshot[FIRST_PARTY_KEY] is None
+            and previous[BASE_URL_KEY] == want[BASE_URL_KEY]):
+        raise SystemExit('Claude setting env.%s is managed outside this installer; '
+                         'review and remove it by hand, then re-run.' % FIRST_PARTY_KEY)
+    effective = os.environ if env is None else env
+    if _truthy(effective.get(FIRST_PARTY_KEY)):
+        raise SystemExit('Claude setting %s is managed outside this installer in '
+                         'the environment; remove it, then re-run.' % FIRST_PARTY_KEY)
     for key in OWNED_KEYS:
         if previous[key] is not None and previous[key] != want[key]:
             raise SystemExit(
                 'Claude setting env.%s is managed outside this installer; '
                 'remove or correct it by hand, then re-run.' % key)
-    changed = any(previous[key] != want[key] for key in OWNED_KEYS)
+    changed = legacy is not None or any(previous[key] != want[key] for key in OWNED_KEYS)
     owned.update(want)
+    owned.pop(FIRST_PARTY_KEY, None)
     return doc, changed, previous
 
 
@@ -157,7 +167,7 @@ def restore_settings(path, previous):
         # hand: treat it as empty so owned keys vanish and the claim drops.
         env = {}
         doc['env'] = env
-    for key in OWNED_KEYS:
+    for key in OWNED_KEYS + ((FIRST_PARTY_KEY,) if FIRST_PARTY_KEY in previous else ()):
         old = previous.get(key)
         if old is None:
             env.pop(key, None)
@@ -212,7 +222,7 @@ def attach(home, state, receipts, settings_path_override=None, env=None,
            listing=None):
     """Attach Claude Code without touching Codex settings or native login.
 
-    Merges only the four owned env keys; conflicting effective overrides
+    Merges three public keys and migrates an owned legacy flag; conflicts
     refuse with a redacted message. Records the claude attachment in the
     versioned receipt. Returns the settings path written.
     """
@@ -220,13 +230,17 @@ def attach(home, state, receipts, settings_path_override=None, env=None,
         path = Path(settings_path_override)
     else:
         path = settings_path(env)
-    doc, changed, previous = merge_env(home, state, path, env)
-    write_settings(path, doc)
     existing = receipts.read_receipt(home).get('clients', {}).get('claude', {})
-    if not changed and isinstance(existing, dict) and 'inserted_block' in existing:
+    snapshot = (receipts.parse_snapshot(existing['inserted_block'])
+                if isinstance(existing, dict) and existing.get('config_path') == str(path)
+                and 'inserted_block' in existing else None)
+    doc, changed, previous = merge_env(home, state, path, env, snapshot)
+    write_settings(path, doc)
+    if snapshot is not None and (not changed or
+            previous[BASE_URL_KEY] == desired_env(home, state)[BASE_URL_KEY]):
         # Re-attach with identical values: keep the original pre-attach
         # snapshot so a later detach restores it instead of our own URL.
-        previous = receipts.parse_snapshot(existing['inserted_block'])
+        previous = snapshot
     entry = {'config_path': str(path),
              'inserted_block': json.dumps(previous, sort_keys=True),
              'claude_mode': state.get('claude_mode', 'subscription')}

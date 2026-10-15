@@ -43,3 +43,26 @@ established by reading those clients and their public documentation; no
 client source code is copied into this repository. See
 `docs/PROVENANCE.md` and `docs/compatibility.md` for the versions those
 observations were made against.
+
+## Router instruction assets
+
+The current router instruction assets are independently authored
+Software Combined material under the repository licence. They replace the
+previous desktop-derived prompt. See [provenance](docs/PROVENANCE.md) for the
+scope of that replacement and the separate decision on older distributions.
+
+## CPython bootstrap runtimes
+
+The router itself declares no third-party Python runtime dependencies.
+Bootstrap installations download separate pinned CPython distributions from
+[python-build-standalone](https://github.com/astral-sh/python-build-standalone).
+These runtimes and their bundled components keep their upstream licences;
+the router's Apache-2.0 licence does not relicense them. `packaging/runtime.lock`
+records each archive and its interpreter licence path. Preserve all upstream
+licence files when mirroring or installing those archives. The candidate
+verifies all five exact archives and includes additional native notices in
+[RUNTIME-NOTICES.txt](packaging/RUNTIME-NOTICES.txt), with component licences,
+source locations and hashes in [the native inventory](packaging/runtime-components.json).
+See [runtime licences](docs/runtime-licenses.md) for the Linux source-companion
+requirement and the unresolved Windows distributor licence condition.
+The application bundle does not contain runtime binaries.

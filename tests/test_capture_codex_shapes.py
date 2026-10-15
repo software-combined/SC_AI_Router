@@ -53,6 +53,29 @@ class CompactionCaptureTests(unittest.TestCase):
 
 
 class SanitiseTests(unittest.TestCase):
+    def test_redacted_switch_still_marks_the_portable_history_boundary(self):
+        from ai_router.history_portability import portable_history
+        from ai_router.tool_adapter import SEARCH_NAME
+        prose = 'Synthetic private client guidance that must not be retained.'
+        marker = '<model_switch>\n' + prose + '\n</model_switch>'
+        foreign = {'type': 'reasoning', 'id': 'rs_foreign', 'summary': [],
+                   'encrypted_content': 'synthetic'}
+        for role, content in (
+                ('developer', marker),
+                ('developer', [{'type': 'input_text', 'text': marker}]),
+                ('system', [{'type': 'input_text', 'text': '  \n' + marker}]),
+                ('developer', [{'type': 'input_text', 'text': prose},
+                               {'type': 'input_text', 'text': marker}])):
+            payload = {'input': [foreign, {'type': 'message', 'role': role, 'content': content}]}
+            before = json.dumps(payload)
+            cleaned = capture.sanitise(payload)
+            self.assertEqual(json.dumps(payload), before)
+            self.assertNotIn(prose, json.dumps(cleaned))
+            self.assertEqual(portable_history(cleaned['input'], SEARCH_NAME, 'native'),
+                             [cleaned['input'][1]])
+        quoted = capture.sanitise({'input': [developer('Quoted marker: ' + marker)]})
+        self.assertNotIn('<model_switch>', json.dumps(quoted))
+
     def test_instructions_descriptions_and_work_paths(self):
         work = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, work, True)
@@ -74,8 +97,8 @@ class SanitiseTests(unittest.TestCase):
         self.assertEqual(clean['instructions'], f'<instructions sha256={digest}>')
         self.assertNotIn(work, json.dumps(clean))
         self.assertNotIn(real, json.dumps(clean))
-        self.assertEqual(clean['input'][0]['content'][0]['text'],
-                         '<environment_context><cwd><work></cwd> <work>/skills')
+        self.assertRegex(clean['input'][0]['content'][0]['text'],
+                         r'^<instructions sha256=[a-f0-9]{64}>$')
         cut = [clean['tools'][0], clean['tools'][1], clean['tools'][1]['tools'][0],
                clean['input'][1]['tools'][0], clean['input'][2]['tools'][0]]
         for described in cut:

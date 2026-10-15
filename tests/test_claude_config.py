@@ -29,9 +29,8 @@ class ClaudeMergeTests(unittest.TestCase):
             path = Path(tmp) / 'settings.json'
             path.write_text(json.dumps({}))
             listing = {'data': [
-                {'id': 'claude/z-ai/glm-5.3-flash',
-                 'display_name': 'Z.ai: GLM 5.3 Flash · OpenRouter',
-                 'anthropic_family_tier': 'sonnet'},
+                {'id': 'z-ai/glm-5.3-flash',
+                 'display_name': 'Z.ai: GLM 5.3 Flash · OpenRouter'},
                 {'id': 'anthropic/claude-opus-5.5',
                  'display_name': 'Anthropic: Claude Opus 5.5 · OpenRouter',
                  'anthropic_family_tier': 'opus'}]}
@@ -41,8 +40,8 @@ class ClaudeMergeTests(unittest.TestCase):
             snapshot = entry['listing']
             self.assertTrue(snapshot['served_at'].endswith('Z'))
             self.assertEqual([row['id'] for row in snapshot['models']],
-                             ['claude/z-ai/glm-5.3-flash', 'anthropic/claude-opus-5.5'])
-            self.assertEqual(snapshot['models'][0]['anthropic_family_tier'], 'sonnet')
+                             ['z-ai/glm-5.3-flash', 'anthropic/claude-opus-5.5'])
+            self.assertIsNone(snapshot['models'][0]['anthropic_family_tier'])
 
     def test_attach_without_a_listing_records_no_snapshot(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -135,10 +134,9 @@ class ClaudeMergeTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         doc = json.loads(result.stdout)
         self.assertTrue(doc['data'])
-        self.assertEqual(sorted(doc['data'][0]),
-                         ['anthropic_family_tier', 'display_name', 'id'])
+        self.assertTrue({'id', 'display_name'} <= set(doc['data'][0]))
 
-    def test_merge_adds_only_the_four_owned_keys(self):
+    def test_merge_adds_only_public_gateway_settings(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'settings.json'
             path.write_text(json.dumps({'model': 'keep-me', 'env': {'OTHER': '1'}}))
@@ -149,12 +147,11 @@ class ClaudeMergeTests(unittest.TestCase):
             self.assertIn('127.0.0.1:1/test-token', doc['env']['ANTHROPIC_BASE_URL'])
             self.assertEqual(doc['env']['CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY'], 'true')
             self.assertEqual(doc['env']['ENABLE_TOOL_SEARCH'], 'true')
-            self.assertEqual(doc['env']['_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL'], '1')
+            self.assertNotIn('_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL', doc['env'])
             self.assertEqual(previous, {
                 'ANTHROPIC_BASE_URL': None,
                 'CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY': None,
-                'ENABLE_TOOL_SEARCH': None,
-                '_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL': None})
+                'ENABLE_TOOL_SEARCH': None})
 
     @unix_only
     def test_rerun_is_stable_and_reports_unchanged(self):

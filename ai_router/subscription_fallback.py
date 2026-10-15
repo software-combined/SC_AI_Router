@@ -17,8 +17,8 @@ external row is.
 The router answers those helper turns from the registry's external
 twin row (`openai/<slug>`), or the Luna twin when the requesting slug has
 no twin of its own, and relays that response. Ordinary turns keep today's
-refusal. The fallback is on unless `openai_helper_fallback` is explicitly
-false: it bills that provider's key and sends the helper prompt to it.
+refusal. The fallback requires `openai_helper_fallback: true`: it bills that
+provider's key and sends the helper prompt to it only after explicit opt-in.
 """
 import json
 
@@ -121,7 +121,7 @@ def plan(state, prepared, path, payload, raw_body, headers, credentials):
     Only Responses turns the subscription owns that a helper thread source
     marks qualify; tools do not disqualify one.
     """
-    if state.get('openai_helper_fallback') is False or path != '/responses':
+    if state.get('openai_helper_fallback') is not True or path != '/responses':
         return None
     if prepared.provider != provider_defs.OPENAI.id:
         return None

@@ -9,7 +9,8 @@ operating system and client, and the steps to reproduce.
 Please do not open a public issue for a suspected vulnerability, and do not
 attach state files, logs or configuration: they can carry the loopback token.
 
-A confirmed vulnerability has a fix target of 30 days. Fixes ship as a normal
+For the internal SC deployment, a confirmed vulnerability has a fix target of
+30 days. Public users have no guaranteed response or fix deadline. Fixes ship as a normal
 release, and installs on the `stable` channel pick them up automatically
 within about four hours.
 

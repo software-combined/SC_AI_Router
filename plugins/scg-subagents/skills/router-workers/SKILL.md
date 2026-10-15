@@ -121,8 +121,9 @@ deadline. On Windows, which is not yet verified, the worker shares the
 runner's console, so Ctrl-C reaches both of them. Windows has no SIGHUP, and a
 runner ended from outside cannot stop its worker there.
 
-The router lists Anthropic models by their bare slug and every other model as
-`claude/scg/` plus the slug's SHA-256, so an id is the same on every machine.
+The router lists each model using its actual vendor slug. It does not disguise
+other vendors as Claude. Non-Claude models remain outside Anthropic's Claude
+Code support boundary and may be hidden or rejected by the installed client.
 The runner resolves the slug against the router's live list and refuses a
 model it does not offer.
 

@@ -18,10 +18,12 @@ ROOT = Path(__file__).resolve().parents[1]
 # withdrawn in 0.6.89: 27 function-local ai_router imports, all deliberate
 # (platform-only winacl, client-facing availability, CLI-only
 # candidate/catalogue, the transport/errors boundary, the events leaf's one
-# call-time home lookup, runtime's policy load). This is a ceiling, not a
-# target: shrinking it is welcome, and raising it again needs a comment
-# naming the module and why.
-LAZY_IMPORT_CEILING = 27
+# call-time home lookup, runtime's policy load). Bedrock raised it to 29:
+# availability's cross-provider union and bedrock-region reader each read
+# credentials/state lazily rather than widening the eager graph. This is a
+# ceiling, not a target: shrinking it is welcome, and raising it again
+# needs a comment naming the module and why.
+LAZY_IMPORT_CEILING = 29
 
 # Only the composition root's three importers may name `runtime`.
 RUNTIME_IMPORTERS = {'ai_router/router.py', 'ai_router/ingress.py',

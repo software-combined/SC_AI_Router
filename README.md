@@ -8,7 +8,7 @@
 <h1 align="center">SC AI Router</h1>
 
 <p align="center">
-Use Codex and Claude with your subscription and approved OpenRouter models.
+Route signed-in coding clients and separately billed OpenRouter or AWS Bedrock models locally.
 </p>
 
 <p align="center">
@@ -27,10 +27,20 @@ a subscription model and an approved model billed to your own OpenRouter key.
 | Status | Claude Code is in preview; [tested setups and remaining checks](docs/compatibility.md) |
 | Maintained by | Cyril Allart and Brent Maxwell; [contribution rules](CONTRIBUTING.md) |
 
+SC AI Router is independent software. OpenAI, Anthropic and OpenRouter do
+not endorse this release. Claude gateways retain the signed-in client's
+own authentication. Anthropic documents gateway configuration but does not
+endorse, maintain or audit third-party gateways. It does not support non-Claude
+models in Claude Code. Other Messages-compatible
+routes keep truthful vendor IDs and are outside that client support boundary.
+See [integration scope and data flows](docs/publication.md) for release decisions.
+
 ## Get started
 
 Have your assistant installed and an OpenRouter key if you want to use models
 billed to OpenRouter. Those models cost money and have no local spend cap.
+An AWS Bedrock API key is optional and only enables the Bedrock models;
+see [setup options](docs/setup.md).
 
 1. Ask a maintainer for the setup script for your computer. You do not need
    a GitHub account or access to this repository.
@@ -56,7 +66,7 @@ OpenRouter replies charge your OpenRouter key, even when a subscription is unava
 |---|---|---|
 | Codex | Follow the [PowerShell steps for new chats](docs/troubleshooting.md#codex-send-button-is-greyed-out-or-chatgpt-subscription-access-is-unavailable) to choose OpenRouter or your ChatGPT subscription | Open **Switch Codex**, confirm the restart; open it again to switch back |
 | Claude desktop | Setup connects the OpenRouter profile; [manual switching is an IT pilot](docs/troubleshooting.md#claude-desktop-switch-to-openrouter-and-back), with no automatic Windows shortcut | Open **Switch Claude**, confirm the restart; open it again to switch back |
-| Claude Code in the terminal | Use `/model` to choose an OpenRouter or subscription model; keep your Claude subscription sign-in | Same terminal steps |
+| Claude Code in the terminal | Use `/model` to choose a Claude-family OpenRouter or subscription model; keep your Claude subscription sign-in | Same terminal steps |
 
 For **Codex without ChatGPT subscription access**, choose **No subscription**
 in the key setup window, or use the Windows OpenRouter command in the linked guide.
@@ -92,8 +102,8 @@ Windows); read `<version>` from `<home>/current`.
 ## Use it
 
 - Switch models mid-thread from the picker to keep working in the same chat.
-  Codex and Claude Code in the terminal can use subscription models alongside
-  OpenRouter models.
+  Codex offers subscription and OpenRouter models. Claude Code's supported
+  gateway scope is Claude-family models; other vendors remain unsupported.
 - Claude desktop's gateway profile uses OpenRouter models. Its subscription
   remains in the signed-in profile; see [Claude setup](docs/claude-code.md).
 - Generate images on the originating chat's connection: native OpenAI chats
@@ -107,6 +117,9 @@ Windows); read `<version>` from `<home>/current`.
 The router also delivers SCG tools for code review, agent coordination,
 documentation and other work. See [agent plugins](docs/agent-plugins.md).
 
+On native routes the router may add its own instructions and recovery guidance;
+the signed-in client's credentials are forwarded to its native provider.
+
 Switching keeps text and tools within the new model's limits. Images become
 a note that the model cannot read them; unsupported reasoning levels are rejected.
 
@@ -114,7 +127,10 @@ a note that the model cannot read them; unsupported reasoning levels are rejecte
 
 Subscription models use the assistant's own sign-in. OpenRouter models use your
 local key; subscription credentials never accompany an OpenRouter request.
-Watch paid usage in the OpenRouter dashboard.
+Watch paid usage in the OpenRouter dashboard. Switching models sends the
+available conversation history and tool results to the selected provider.
+Subscription helper fallback is off by default; enabling it explicitly also
+sends eligible title/summary requests to OpenRouter and charges that key.
 
 macOS and Linux are supported; check the [Linux desktop requirements](docs/setup.md#before-you-start).
 Windows sign-in relaunch and complete Claude desktop
@@ -130,7 +146,8 @@ and tokens; see [security](SECURITY.md).
 ## Help
 
 If a model is missing, quit and reopen the assistant first. For other symptoms,
-use [troubleshooting](docs/troubleshooting.md) or contact Software Combined IT.
+use [troubleshooting](docs/troubleshooting.md) or open a project support issue. Software Combined IT support is for staff;
+external users have no guaranteed response or service level.
 Include what you tried and the error message. For diagnostics, use the redacted
 support bundle described in that guide, never raw state, logs or credentials.
 

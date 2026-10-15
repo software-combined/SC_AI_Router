@@ -171,8 +171,8 @@ def _visible_rows(client, allowed, include_twins=False, available=None):
     """(visible, hidden) external registry rows for one client and allowlist.
 
     `allowed` is the optional portco allowlist (Plan 068); `available` is
-    the optional key-filtered id set from `/models/user`. Either None
-    preserves today's behavior; a set hides rows the key cannot use.
+    the optional combined key-filtered slug set across providers. Either
+    None preserves today's behavior; a set hides rows no key can use.
     The registry is never pruned: hidden rows return with the next merge.
     """
     allowset = None if allowed is None else frozenset(allowed)

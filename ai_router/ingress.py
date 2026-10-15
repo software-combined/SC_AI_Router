@@ -190,6 +190,10 @@ def do_get(handler):
         region = handler.server.state.get('openrouter_region', 'global')
         if not _defs.valid_region(region):
             region = 'global'
+        bedrock_region = handler.server.state.get('bedrock_region', 'us-east-1')
+        if not _defs.valid_bedrock_region(bedrock_region):
+            bedrock_region = 'us-east-1'
+        bedrock_snap = _availability.current(_defs.BEDROCK.id)
         return handler.send_json(200, {'status': 'ok', 'version': VERSION,
                                        'inflight': handler.server.inflight,
                                        'max_inflight': handler.server.max_inflight,
@@ -198,10 +202,16 @@ def do_get(handler):
                                        'openrouter_region': region,
                                        'openrouter_host': _defs.region_host(
                                            _defs.DEFAULT_EXTERNAL, region),
+                                       'bedrock_region': bedrock_region,
+                                       'bedrock_host': _defs.bedrock_host(bedrock_region),
                                        'models_availability': (
                                            None if snap is None else {
                                                'models': len(snap.get('models') or ()),
-                                               'fetched_at': snap.get('fetched_at')})})
+                                               'fetched_at': snap.get('fetched_at')}),
+                                       'bedrock_availability': (
+                                           None if bedrock_snap is None else {
+                                               'models': len(bedrock_snap.get('models') or ()),
+                                               'fetched_at': bedrock_snap.get('fetched_at')})})
     if path == '/v1/models':
         listing = protocols.listing('GET', path,
                                     handler.server.state.get('allowed_models'))

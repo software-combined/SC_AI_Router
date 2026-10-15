@@ -12,7 +12,6 @@ Parameters:
     Description: Feed hostname the distribution will serve.
   HostedZoneId:
     Type: String
-    Default: Z0272966357LH6IEJY0NV
     Description: Public hosted zone for softwarecombined.com.
 
 Resources:

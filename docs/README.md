@@ -23,5 +23,7 @@ models and billing. These pages go deeper.
 | [Jev compaction benchmark](jev-compaction-benchmark.md) | What the archived-thread measurements showed about the experimental compaction |
 | [Codex routing incident, 2026-09-13](codex-routing-incident-20260913.md) | One incident's evidence and what changed because of it |
 | [Provenance](PROVENANCE.md) | Where the code came from |
+| [Publication](publication.md) | Integration scope, safeguards and owner decisions |
+| [Runtime licences](runtime-licenses.md) | Pinned archive and notice verification |
 | [Changelog archive](changelog-archive.md) | Every release before 1.0, unedited |
 | [Agent install prompt](agent-install-prompt.md) | The prompt to hand a coding agent |

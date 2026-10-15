@@ -10,7 +10,7 @@ from tests.test_claude_compat import BILLING, PLACEHOLDER, REFERENCE, RELEASED, 
 
 class MessagesOutboundPurityTests(unittest.TestCase):
     def test_external_repairs_do_not_change_a_later_native_request(self):
-        payload = {'model': 'claude/deepseek/deepseek-v4.1-flash', 'max_tokens': 32,
+        payload = {'model': 'deepseek/deepseek-v4.1-flash', 'max_tokens': 32,
                    'system': [{'type': 'text', 'text': BILLING}],
                    'tools': copy.deepcopy([SEARCH_TOOL, PLACEHOLDER, RELEASED]),
                    'messages': [{'role': 'assistant', 'content': [
