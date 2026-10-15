@@ -18,6 +18,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 MARKETPLACE = 'scg-agent-plugins'
@@ -51,15 +52,7 @@ def shared_base(home=None):
 
 
 def _windows_codex_dirs(environ=None):
-    """The Windows Codex app's own CLI directories, newest build first.
-
-    The Codex app stages its CLI under
-    ``%LOCALAPPDATA%\\OpenAI\\Codex\\bin\\<build>`` and injects that directory
-    into the children it starts, so Codex itself never needs it on the machine
-    PATH. A scheduled updater inherits neither, so an app-installed Codex was
-    reported as not installed and its plugins never refreshed. Read-only and
-    best effort: a missing or unreadable tree is no directories.
-    """
+    """Windows desktop's bundled CLI directories, newest build first."""
     local = (os.environ if environ is None else environ).get('LOCALAPPDATA')
     if not local:
         return ()
@@ -72,17 +65,20 @@ def _windows_codex_dirs(environ=None):
     return tuple(str(p) for p in builds)
 
 
+def _macos_codex_dirs():
+    """Desktop installs can supply Codex without a separate terminal install."""
+    dirs = []
+    for root in (Path.home() / 'Applications', Path('/Applications')):
+        for app in ('ChatGPT.app', 'Codex.app'):
+            for relative in ('Contents/Resources/codex-cli/bin', 'Contents/Resources'):
+                folder = root / app / relative
+                if (folder / 'codex').is_file():
+                    dirs.append(str(folder))
+    return tuple(dirs)
+
+
 def client_path(environ=None, os_name=None):
-    """PATH for the client CLIs: this process's, plus the usual install dirs.
-
-    A scheduled update inherits launchd's /usr/bin:/bin:/usr/sbin:/sbin, and a
-    systemd user timer's PATH also omits ~/.local/bin, so clients there were
-    logged as not installed. The child gets the same PATH: codex is a
-    `#!/usr/bin/env node` script, and its node usually sits beside it.
-
-    On Windows the Codex app keeps its CLI under %LOCALAPPDATA% and leaves it
-    off the scheduled job's PATH, so that directory is added there too.
-    """
+    """Find client CLIs and their helpers in scheduled jobs and desktop setup."""
     # ponytail: fixed common dirs; a client under a version manager (nvm, fnm)
     # still needs its bin dir on the scheduled job's PATH.
     env = os.environ if environ is None else environ
@@ -94,6 +90,8 @@ def client_path(environ=None, os_name=None):
         # Admin-owned on macOS and Linux. On Windows they would be drive-root
         # folders any local account can create, so a planted client could run.
         extra += ('/opt/homebrew/bin', '/usr/local/bin')
+        if sys.platform == 'darwin':
+            extra += _macos_codex_dirs()
     return os.pathsep.join(dirs + [d for d in extra if d not in dirs])
 
 

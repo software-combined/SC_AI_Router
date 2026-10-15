@@ -4,6 +4,20 @@ Single-page map of where new work goes. The dependency direction is inward:
 leaves know nothing about their consumers. Verified against current source;
 transitional owners name the plan that will move them.
 
+Native packaging lives under `packaging/native/`; it wraps the canonical
+installer without adding inference rules. `native_payload` retains disposable
+downloads. `native_setup` owns the graphical flow and uses the existing client,
+service and key-window owners. `install_delivery` repairs bundled plugin delivery
+on both full and same-version installs.
+
+`native_controller` retains verified installer code under an independent version
+pointer. `update_launch` selects that controller across runtime rollback.
+`download_auth`, `download_oauth` and `download_session` own Microsoft access;
+`feed` attaches its cookies only to the download origin. `control_models` checks
+model bytes against a signed feed's checksum. The inference process only reads
+the resulting model cache. `infra/downloads` owns token verification and short
+download grants. It cannot change model routing or provider credentials.
+
 ## Domains and direction
 
 ```

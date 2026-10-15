@@ -29,18 +29,19 @@ PACKAGING_FILES = (
     'packaging/launchd.py',
     'packaging/router_launch.py', 'packaging/service.py',
     'packaging/feed.py', 'packaging/feed_verify.py',
-    'packaging/download_auth.py', 'packaging/download_oauth.py',
-    'packaging/download_session.py', 'packaging/download_enrolment.py',
-    'packaging/control_models.py', 'packaging/download_notice.py',
-    'packaging/native_controller.py', 'packaging/install_delivery.py',
-    'packaging/native_dialog.py', 'packaging/native_payload.py',
-    'packaging/native_setup.py', 'packaging/native_launch.py',
-    'packaging/native_shortcuts.py', 'packaging/native_readiness.py',
     'packaging/atomic_write.py',
     'packaging/notice.py', 'packaging/notice_text.py',
     # Plan 179: the router carries the agent skills, so a machine needs no
     # git account and no marketplace command to receive them.
     'packaging/agent_skills.py',
+    'packaging/install_delivery.py', 'packaging/native_payload.py',
+    'packaging/native_controller.py', 'packaging/native_setup.py',
+    'packaging/native_launch.py', 'packaging/native_dialog.py',
+    'packaging/native_shortcuts.py', 'packaging/native_readiness.py',
+    'packaging/download_auth.py', 'packaging/download_oauth.py',
+    'packaging/download_session.py', 'packaging/download_enrolment.py',
+    'packaging/control_models.py',
+    'packaging/download_notice.py',
     'packaging/assets/router-icon.png',
     'packaging/systemd.py', 'packaging/update_launch.py',
     'packaging/task_launch.py',
@@ -78,6 +79,8 @@ PACKAGING_FILES = (
     # Every installed release is a copy of the software delivered to a
     # user, so the licence and notices travel with it (Apache-2.0).
     'LICENSE', 'NOTICE', 'THIRD_PARTY_NOTICES.md',
+    '.codex-plugin/plugin.json', '.claude-plugin/plugin.json',
+    'skills/manage-router/SKILL.md',
 )
 
 
@@ -97,6 +100,10 @@ def bundle_files(root):
         # the same page the repository shows.
         + sorted(p.relative_to(root).as_posix() for p in (root / 'docs').rglob('*.md'))
         + ['README.md', 'SECURITY.md']
+        + sorted(p.relative_to(root).as_posix()
+                 for folder in ('packaging/native', 'packaging/download-page')
+                 for p in (root / folder).rglob('*')
+                 if p.is_file() and '__pycache__' not in p.parts and p.suffix != '.pyc')
         + plugin_files(root)
         + list(PACKAGING_FILES)
     )
@@ -113,9 +120,6 @@ def plugin_files(root):
         return []
     wanted = []
     for plugin in sorted(p for p in plugins.iterdir() if p.is_dir()):
-        for manifest in ('.codex-plugin/plugin.json', '.claude-plugin/plugin.json'):
-            if (plugin / manifest).is_file():
-                wanted.append((plugin / manifest).relative_to(root).as_posix())
         prefix = plugin.relative_to(root).as_posix() + '/'
         for path in sorted(plugin.rglob('*')):
             rel = path.relative_to(root).as_posix()
@@ -127,7 +131,7 @@ def plugin_files(root):
             if rel.startswith(prefix + 'scripts/') and path.name != 'setup.py':
                 continue
             wanted.append(rel)
-    return wanted
+    return sorted(wanted)
 
 
 def semantic_version(base_version):

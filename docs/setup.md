@@ -15,9 +15,9 @@ assistant settings and adds a background service and automatic update jobs.
   region, and enter the key only in the setup window when the router asks
   for AWS Bedrock. Set `bedrock_region` in the router state file to that
   region (default `us-east-1`) and restart the router after changing it.
-- On macOS and Linux, the setup script needs any `python3`, plus `curl`,
-  `tar` and either `shasum` or `sha256sum`. It supplies its own pinned
-  Python runtime. Windows needs no Python.
+- Native installers include Python and graphical setup. They need no Git.
+  The older macOS/Linux setup script still needs `python3`, `curl`, `tar`
+  and a SHA-256 tool.
 - Linux needs a running systemd user manager in the signed-in desktop session;
   setup refuses a bare remote SSH session without one.
 - Check [compatibility](compatibility.md) for the supported platforms and
@@ -25,13 +25,27 @@ assistant settings and adds a background service and automatic update jobs.
 
 ## Setup for Software Combined staff
 
-Ask a maintainer for the setup script for your operating system. It needs no
-GitHub account, token or repository access. It downloads the pinned Python
-runtime and release bundle, verifies them and installs the service for your user.
+The native download route is prepared at
+`https://dist.softwarecombined.com/install/`. It becomes the staff route after
+the [native installer acceptance gate](native-installers.md) passes. Until then,
+use the existing setup script from a maintainer.
+
+On the download page, sign in with your approved work account and choose a
+package. Open the DMG on macOS, EXE on Windows, or AppImage on Ubuntu.
+Ubuntu may require allowing execution in the file's Properties window.
+No separate FUSE installation is needed. These packages have no paid publisher
+certificate. Device policy can still block them; contact IT if that happens.
+
+The SCG Router app saves setup in your user account. After setup, you can
+delete the download or eject the disk image. Reopen SCG Router to check setup,
+repair it, connect another assistant, replace your key, renew download sign-in
+or remove the router. Reopening preserves the existing channel and settings.
 
 The default channel is `stable`. Use `--channel=beta` on macOS/Linux or
 `-Channel beta` in PowerShell only when you intend to follow pre-releases.
 After setup, restart your assistant, choose a model and check that it replies.
+Native setup also checks installed SC tools and asks you to confirm they work
+in a fresh assistant session. It leaves unfinished setup pending.
 
 ## Choose or change assistants
 
