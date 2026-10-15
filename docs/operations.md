@@ -992,28 +992,33 @@ stops the boot with `policy_enforced must be true or false`.
 
 ## Windows (Task Scheduler)
 
-The Windows backend (`packaging/platforms/windows.py`) registers two
-per-user tasks, `CodexMixedModelRouter` and `CodexMixedModelRouterUpdate`,
-from XML it writes to `logs\*.task.xml`. Facts the design rests on, all
-verified on Windows 11 on 2026-09-10: a logon trigger must name the
-installing user (an unscoped one needs elevation and fails with "Access is
-denied"); a repeating trigger needs a `StartBoundary`; `schtasks /delete`
-leaves a running instance alive, so uninstall ends the tasks first;
-re-registering a running task keeps its instance, so the updater can refresh
-its own definition; and an interactive-token console task shows its window,
-so both tasks run `pythonw.exe` through `task_launch.py` in the router home
+Windows tasks use `CodexMixedModelRouter`, `CodexMixedModelRouterUpdate` and
+`CodexMixedModelRouterUpdateExpress`. Before changing a task, the installer
+verifies its principal, Python executable and exact home launcher arguments.
+Foreign or unreadable tasks stop the operation and stay untouched. New
+definitions register before the old router stops. Registration failure never
+triggers deletion. Existing schedule settings survive refresh and rollback.
+New tasks retain a pending setup marker in their definition.
+Router handover records the same intent before stopping the old process and
+clears it only after the expected version serves. A plain installer retry
+finishes an interrupted handover or setup before enabling updates. An explicit
+stop keeps the router stopped, even while updater setup is pending. Restart or
+run setup to verify the service before completing pending updates.
+Deliberately disabled schedules stay disabled.
+Re-registering an updater leaves its running parent alive.
+Tasks run `pythonw.exe` through `task_launch.py` in the router home
 (rewritten on every install), which appends stdout and stderr to
-`logs\launchd.log` and `logs\update.log` (rotated at 1 MB, one backup). Every console child (`schtasks`, `icacls`, `whoami`, `powershell`, `python`)
+`logs\launchd.log` and `logs\update.log` (rotated at 1 MB, one backup). Every console child (`icacls`, `powershell`, `python`)
 is spawned without a window; on every platform, a file under `logs/` is
 deleted 30 days after its last write, at each service start and scheduled
 update, apart from the live files, which keep their caps.
 
 Restart and update: the task allows one instance (`IgnoreNew`), so a
-handover posts the authenticated `/shutdown`, waits for the instance to
-leave the Running state (up to 180 seconds), then runs the task again; a
-process still alive after that deadline is ended. `schtasks /query /tn
-CodexMixedModelRouter /fo list /v` shows status, last run and last result
-(`267009` means running). Key protection: the router home carries an
+handover posts the authenticated `/shutdown` and waits up to 180 seconds.
+Structured task states and running instance identifiers prove exit; lost HTTP
+health or a failed task query cannot authorize restart. A hung instance receives
+a stop request and must exit within another ten seconds, or restart is refused.
+Key protection: the router home carries an
 inheritable owner-only grant and the key and state files a plain one.
 Permission checks use security identifiers (SIDs) and numeric access rules,
 so translated account names cannot change the result. Only the current user,

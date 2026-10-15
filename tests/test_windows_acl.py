@@ -209,13 +209,9 @@ class WinBackendShapeTests(unittest.TestCase):
     # tests/test_windows_backend.py with the Stage 3 implementation; only
     # the failure-path pins that have no counterpart there stay here.
     def test_uninstall_failure_names_the_surviving_task(self):
-        def fake_run(cmd, **kwargs):
-            if 'CodexMixedModelRouterUpdate' in cmd:
-                return SimpleNamespace(returncode=1, stdout='', stderr='not found')
-            return SimpleNamespace(returncode=0, stdout='', stderr='')
-
+        from tests.test_windows_backend import _fake_run
         with self.assertRaisesRegex(SystemExit, 'CodexMixedModelRouterUpdate'):
-            backend.Backend(service, fake_run).uninstall('/home/x')
+            backend.Backend(service, _fake_run(fail=(backend.UPDATE_TASK,))).uninstall('/home/x')
 
     def test_failed_state_protection_keeps_a_pre_existing_token(self):
         # Gap 0 (PR 55 review): a failed state-file ACL check unlinks only

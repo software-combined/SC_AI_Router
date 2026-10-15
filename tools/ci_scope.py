@@ -153,6 +153,8 @@ INSTALLER_TESTS = (
     'tests.test_windows_acl_native',
     'tests.test_windows_agent_skills',
     'tests.test_windows_backend',
+    'tests.test_windows_task_ownership',
+    'tests.test_windows_task_state',
     'tests.test_windows_portability',
 )
 

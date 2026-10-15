@@ -422,6 +422,8 @@ is in [runtime files](runtime-files.md#codex-usage-limit-record).
    `bundle.py` owns the release lifecycle (verify, install, prune,
    rollback). Unsupported OS is an explicit refusal. Backends do not import
    runtime providers or client catalogue policy.
+   `platforms/windows_tasks.py` owns structured Task Scheduler access and
+   principal/action checks; `windows.py` owns lifecycle order.
 5. A client is not a provider and an OS is neither. New clients reuse a
    proven wire protocol; a new protocol lands only after its contract is
    verified against the installed client version.

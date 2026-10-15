@@ -312,6 +312,8 @@ def _do_install(args, _fetch=fetch, _run=None):
     # Only a newer feed version takes the full install path.
     repair = bool(args.setup) and not newer(latest['version'], current)
     if not newer(latest['version'], current) and not repair:
+        if PLATFORM == 'win32' and not args.dry_run:
+            platform_backend().recover_pending(python, home, current_release_dir(home), current)
         print(f'up to date {current}')
         if (args.clients is None and args.client is None and not args.choose_clients
                 and not args.desktop and args.claude_mode is None

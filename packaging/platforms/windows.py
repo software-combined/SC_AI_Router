@@ -4,7 +4,7 @@ Per-user Scheduled Tasks at logon (no admin, no stored password), updater on
 a 4-hour repeat, pythonw.exe for both tasks through a home-root task
 launcher that routes stdout/stderr to the router log directory, and icacls
 owner-only protection verified after writing. Offline-testable: every
-schtasks call goes through the injected `run` seam, task XML is pure
+Windows command goes through the injected `run` seam, task XML is pure
 rendering over (python, home, user), and the shutdown request goes through
 the patchable `_post_shutdown` seam. Wired in select(); staff rollout stays
 gated on real-machine acceptance.
@@ -24,6 +24,10 @@ _winacl_spec = _ilu.spec_from_file_location(
     'router_winacl', Path(__file__).resolve().parents[2] / 'ai_router' / 'winacl.py')
 _winacl = _ilu.module_from_spec(_winacl_spec)
 _winacl_spec.loader.exec_module(_winacl)
+_tasks_spec = _ilu.spec_from_file_location(
+    'router_windows_tasks', Path(__file__).with_name('windows_tasks.py'))
+_tasks = _ilu.module_from_spec(_tasks_spec)
+_tasks_spec.loader.exec_module(_tasks)
 
 _XML_ENTITIES = {'"': '&quot;', "'": '&apos;'}
 
@@ -118,15 +122,18 @@ def _pythonw(python):
 def _render(template, python, home, script, log, user=''):
     # ntpath, not pathlib: the XML must render the same Windows path on a
     # POSIX host (tests, release tooling) as on the machine that registers it.
-    launcher = ntpath.join(str(home), TASK_LAUNCHER)
-    args = ' '.join(_quote(a) for a in (launcher, log, script))
+    args = _arguments(home, script, log)
     return template.format(exe=_sax.escape(_pythonw(python), _XML_ENTITIES),
                            args=_sax.escape(args, _XML_ENTITIES),
                            user=_sax.escape(user, _XML_ENTITIES))
 
 
+def _arguments(home, script, log):
+    return ' '.join(_quote(a) for a in (ntpath.join(str(home), TASK_LAUNCHER), log, script))
+
+
 def render_router_xml(python, home, user):
-    """Router task XML; `user` is the installing account as whoami names it."""
+    """Router task XML; `user` is the installing account's SID."""
     if not user:
         raise SystemExit('cannot scope the logon trigger: installing user unknown')
     return _render(_ROUTER_XML, python, home, 'router_launch.py', ROUTER_LOG, user)
@@ -142,18 +149,6 @@ def render_express_xml(python, home):
 
 def _tail(text):
     return (text or '').strip()[-500:]
-
-
-def _grantee(run):
-    """Installing account for legacy task definitions, as whoami reports it."""
-    whoami = run(['whoami'], capture_output=True, text=True)
-    owner = (whoami.stdout or '').strip()
-    if owner:
-        return owner
-    expanded = os.path.expandvars('%USERNAME%')
-    if expanded and expanded != '%USERNAME%':
-        return expanded
-    raise SystemExit('cannot determine the installing user for key protection')
 
 
 def _grant(run, path, grantee, verb):
@@ -206,6 +201,7 @@ class Backend:
         self._svc = svc
         self._run = run
         self._sleep = time.sleep
+        self._sid = None
 
     def _call(self, cmd, **kwargs):
         """Run one console child windowless; an explicit flag wins."""
@@ -217,96 +213,52 @@ class Backend:
 
     def check(self, home):
         del home
-        if shutil.which('schtasks') is None:
-            raise SystemExit('Task Scheduler command (schtasks) not found; '
+        if shutil.which('powershell') is None:
+            raise SystemExit('Windows PowerShell not found; '
                              'no files were changed')
 
-    def _register(self, name, xml, home):
-        # Written beside the router log directory, never into a prunable
-        # release path; the XML is a registration vehicle, not a secret.
-        # Re-registering a running task keeps its instance alive (verified
-        # 2026-09-10), so the updater may safely refresh its own definition.
-        xml_path = Path(home) / 'logs' / (name + '.task.xml')
-        xml_path.parent.mkdir(parents=True, exist_ok=True)
-        xml_path.write_text(xml, encoding='utf-16')
-        result = self._call(['schtasks', '/create', '/tn', name,
-                             '/xml', str(xml_path), '/f'],
-                            capture_output=True, text=True)
-        if result.returncode != 0:
-            # `/f` overwrites a task this caller already owns, but it CANNOT
-            # overwrite one registered under a different principal: an install
-            # first made under a local account (UserId = a local SID) is
-            # "Access is denied" to the same human's domain token
-            # (ACTIVATE\user), and vice versa. Deleting the stale task clears
-            # the owner, so a plain re-create then lands under the current
-            # principal. Verified on Windows 11 2026-09-16 (local->domain
-            # account switch). Only retried on failure, so a first, clean
-            # install keeps the running instance alive as before.
-            self._call(['schtasks', '/delete', '/tn', name, '/f'],
-                       capture_output=True, text=True)
-            result = self._call(['schtasks', '/create', '/tn', name,
-                                 '/xml', str(xml_path), '/f'],
-                                capture_output=True, text=True)
-        if result.returncode != 0:
-            raise SystemExit('Windows task registration failed for %s: %s'
-                             % (name, _tail(result.stderr or result.stdout)))
+    def _identity(self):
+        if self._sid is None:
+            self._sid = _winacl.current_sid(run=self._call)
+        return self._sid
 
-    def _task_state(self, name):
-        # schtasks /query is the registration-and-running readback: a task
-        # silently disabled by group policy reports here instead of being
-        # assumed healthy.
-        result = self._call(['schtasks', '/query', '/tn', name,
-                             '/fo', 'list', '/v'],
-                            capture_output=True, text=True)
-        if result.returncode != 0:
-            return None
-        state = {}
-        for line in (result.stdout or '').splitlines():
-            if ':' in line:
-                key, _, value = line.partition(':')
-                state[key.strip().lower()] = value.strip()
-        return state
+    def _task_state(self, name, home, operation='query', *, xml=None):
+        scripts = {ROUTER_TASK: ('router_launch.py', ROUTER_LOG),
+                   UPDATE_TASK: ('update_launch.py', UPDATE_LOG),
+                   EXPRESS_TASK: ('express_launch.py', UPDATE_LOG)}
+        sid = self._identity()
+        return _tasks.invoke(self._call, sid, name,
+                             _arguments(home, *scripts[name]), operation, xml)
 
     def _running(self, name, home):
-        # Status is localised: an unreadable line falls back to /health.
-        # The drain never depends on this alone (_drain posts first).
-        state = self._task_state(name)
+        state = self._task_state(name, home)
         if state is None:
-            return False
-        if 'running' in state.get('status', '').lower():
-            return True
-        try:
-            probe = self._svc.health(self._state(home), timeout=2)
-        except (OSError, ValueError, KeyError):
-            return False
-        return probe is not None
+            raise SystemExit('Windows task %s disappeared; process exit is unverified' % name)
+        return state['state'] in (2, 4) or bool(state['instances'])
 
-    def _registered_and_running(self, name):
-        state = self._task_state(name)
-        if state is None:
-            raise SystemExit('Windows task %s is not registered after creation: '
-                             'check group policy before retrying' % name)
-        status = state.get('status', '').lower()
-        if 'disabled' in status:
-            raise SystemExit('Windows task %s is registered but disabled by policy '
-                             '(status %r): enable the task or grant logon-task '
-                             'creation before retrying' % (name, status))
-        return state
-
-    def install(self, python, home, state, release_dir, previous):
+    def install(self, python, home, state, release_dir, previous, *, expected_version=None):
         del previous  # the launchers resolve `current` at exec time.
-        # Task Scheduler captures no stdout, and an InteractiveToken console
-        # task shows its window for its whole run, so both tasks run pythonw
-        # through this packaged launcher: it rotates the supervisor log,
-        # appends stdout/stderr to it, then runs the home launcher named on
-        # the command line (argv: LOG SCRIPT).
         self._svc.install_task_launcher(home, release_dir)
-        self._register(ROUTER_TASK,
-                       render_router_xml(python, home, _grantee(self._call)), home)
-        self._register(UPDATE_TASK, render_update_xml(python, home), home)
+        definitions = {ROUTER_TASK: render_router_xml(python, home, self._identity()),
+                       UPDATE_TASK: render_update_xml(python, home)}
         if (Path(home) / 'express_launch.py').is_file():
-            self._register(EXPRESS_TASK, render_express_xml(python, home), home)
-        self._handover(home)
+            definitions[EXPRESS_TASK] = render_express_xml(python, home)
+        # New definitions stay disabled until every registration has succeeded.
+        for name, xml in definitions.items():
+            self._task_state(name, home, 'register', xml=xml)
+        self._handover(home, state, expected_version or Path(release_dir).name)
+        self.start_updates(home)
+
+    def recover_pending(self, python, home, release_dir, version):
+        """Complete an interrupted install before reporting this version current."""
+        tasks = [self._task_state(name, home) for name in
+                 (ROUTER_TASK, UPDATE_TASK, EXPRESS_TASK)]
+        router = tasks[0]
+        if router and not router['enabled'] and not router['pending']:
+            return  # Updater setup cannot override an explicit router stop.
+        if not any(task and task['pending'] for task in tasks):
+            return
+        self.install(python, home, self._state(home), release_dir, None, expected_version=version)
 
     def _wait_stopped(self, name, timeout, home):
         deadline = time.monotonic() + timeout
@@ -326,56 +278,60 @@ class Backend:
             pass
         return self._wait_stopped(ROUTER_TASK, timeout, home)
 
-    def _handover(self, home):
-        # The task supervises one instance (IgnoreNew), so a running router
-        # must leave before /run can start the new pointer: drain it, wait
-        # for the instance to end, then run. Never taskkill /F a serving
-        # router; /end is reserved for a process still alive after the whole
-        # drain deadline, which only a hung router reaches.
-        if not self._drain(home, DRAIN_TIMEOUT_S):
-            self._call(['schtasks', '/end', '/tn', ROUTER_TASK], capture_output=True)
-            self._wait_stopped(ROUTER_TASK, 10, home)
-        self._run_task(ROUTER_TASK)
+    def _end_router(self, home, timeout):
+        if not self._drain(home, timeout):
+            self._stop_task(ROUTER_TASK, home)
+
+    def _stop_task(self, name, home):
+        self._task_state(name, home, 'stop')
+        if not self._wait_stopped(name, 10, home):
+            raise SystemExit('Windows task %s did not exit' % name)
+
+    def _handover(self, home, state, version):
+        self._task_state(ROUTER_TASK, home, 'handover')
+        self._end_router(home, DRAIN_TIMEOUT_S)
+        self._run_task(ROUTER_TASK, home)
+        if not self._svc.wait_version(state, version):
+            raise SystemExit('Windows router did not reach version %s' % version)
+        self._task_state(ROUTER_TASK, home, 'complete')
 
     def restart(self, home):
-        self._handover(home)
+        self._handover(home, self._state(home), self._svc.current_version(home))
 
     def stop(self, home):
-        result = self._call(['schtasks', '/end', '/tn', ROUTER_TASK],
-                            capture_output=True, text=True)
-        if result.returncode == 0:
-            return
-        if self._task_state(ROUTER_TASK) is None:
-            return  # never registered (failed first install): nothing to stop
-        raise SystemExit('Windows task failed to stop %s: %s'
-                         % (ROUTER_TASK, _tail(result.stderr)))
+        if self._task_state(ROUTER_TASK, home) is not None:
+            self._task_state(ROUTER_TASK, home, 'disable')
+            self._stop_task(ROUTER_TASK, home)
 
     def _state(self, home):
         return json.loads((Path(home) / 'mixed-router-state.json').read_text())
 
-    def _run_task(self, name):
-        self._call(['schtasks', '/run', '/tn', name], capture_output=True)
-        self._registered_and_running(name)
+    def _run_task(self, name, home):
+        self._task_state(name, home, 'run')
+        deadline = time.monotonic() + 10
+        while True:
+            state = self._task_state(name, home)
+            if state and state['state'] == 4 and state['instances']:
+                return
+            if not state or state['state'] == 1 or time.monotonic() >= deadline:
+                raise SystemExit('Windows task %s did not start (missing or disabled by policy)' % name)
+            self._sleep(0.2)
 
     def start_updates(self, home):
-        del home  # The updater task runs on its own 4-hour trigger.
-        return None
+        for name in (UPDATE_TASK, EXPRESS_TASK):
+            state = self._task_state(name, home)
+            if state and state['pending']:
+                self._task_state(name, home, 'enable')
 
     def ensure_serving(self, home, state, version):
-        # The installer's last act on every path: a pointer swap plus task
-        # control cannot recover a task that is not registered, so verify
-        # registration before trusting /health.
-        self._registered_and_running(ROUTER_TASK)
+        if not self._running(ROUTER_TASK, home):
+            return False
         body = self._svc.health(state, timeout=180)
         if version is not None:
             return bool(body and body.get('version') == version)
         return bool(body)
 
     def rollback_serving_ok(self, home, state, version):
-        # The launchers resolve `current` at exec time, so the restored
-        # release is live once the task runs; verify it serves rather than
-        # assuming so.
-        self._call(['schtasks', '/run', '/tn', ROUTER_TASK], capture_output=True)
         return bool(self.ensure_serving(home, state, version))
 
     def pinned_release(self, home):
@@ -383,16 +339,14 @@ class Backend:
         return None
 
     def uninstall(self, home):
-        # Deleting a task leaves its running instance alive (verified
-        # 2026-09-10), so drain and end the router before either
-        # definition goes; otherwise the old router serves until sign-out.
-        self._drain(home, UNINSTALL_DRAIN_S)
-        tasks = [ROUTER_TASK, UPDATE_TASK]
-        if self._task_state(EXPRESS_TASK) is not None:
-            tasks.append(EXPRESS_TASK)
-        for task in tasks:
-            self._call(['schtasks', '/end', '/tn', task], capture_output=True)
-            result = self._call(['schtasks', '/delete', '/tn', task, '/f'],
-                                capture_output=True)
-            if result.returncode != 0:
-                raise SystemExit('Windows task survived uninstall: %s' % task)
+        owned = []
+        for name in (ROUTER_TASK, UPDATE_TASK, EXPRESS_TASK):
+            if self._task_state(name, home) is not None:
+                owned.append(name)
+        for name in owned:
+            self._task_state(name, home, 'disable')
+            if name == ROUTER_TASK:
+                self._end_router(home, UNINSTALL_DRAIN_S)
+            else:
+                self._stop_task(name, home)
+            self._task_state(name, home, 'delete')

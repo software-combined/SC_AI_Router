@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Verify Windows task ownership before changes and require prior instances to
+  exit before restart. Refuse foreign tasks and failed process-state queries;
+  preserve existing tasks when registration fails.
 - Verify Windows file permissions using security identifiers and numeric rules,
   so translated account names do not block safe files. Refuse unverifiable or
   widened permissions, and verify fresh permissions after protecting a file.
