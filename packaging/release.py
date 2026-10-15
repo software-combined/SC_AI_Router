@@ -74,7 +74,7 @@ PACKAGING_FILES = (
     'packaging/runtime-components.json', 'packaging/RUNTIME-NOTICES.txt',
     'packaging/platforms/__init__.py',
     'packaging/platforms/darwin.py', 'packaging/platforms/linux.py',
-    'packaging/platforms/windows.py',
+    'packaging/platforms/windows.py', 'packaging/platforms/windows_tasks.py',
     'packaging/install.sh', 'packaging/install.ps1',
     # Every installed release is a copy of the software delivered to a
     # user, so the licence and notices travel with it (Apache-2.0).

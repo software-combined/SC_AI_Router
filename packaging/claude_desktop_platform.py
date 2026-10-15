@@ -29,6 +29,7 @@ def _load(name, filename):
 _atomic = _load('router_claude_desktop_atomic', 'atomic_write.py')
 _policy = _load('router_claude_desktop_policy', 'claude_desktop_policy.py')
 _linux_identity = _load('router_claude_desktop_linux', 'desktop_linux.py')
+_dialogs = _load('router_client_dialog', 'client_dialog.py')
 TITLE = 'SCG Router'
 ICON = Path(__file__).parent / 'assets' / 'router-icon.png'
 BUNDLE_ID = 'com.anthropic.claudefordesktop'
@@ -79,18 +80,21 @@ def _run(command, run, timeout=5):
     return run(command, capture_output=True, text=True, timeout=timeout)
 
 
-def _dialog(message, platform_name, confirm, run):
+def _dialog(message, platform_name, confirm, run, tool_path=None, detailed=False):
     if platform_name == 'darwin':
-        argv = ['/usr/bin/osascript', '-e', dialog_script(message, confirm)]
+        argv = [tool_path or '/usr/bin/osascript', '-e', dialog_script(message, confirm)]
     elif platform_name == 'win32':
-        argv = ['powershell', '-NoProfile', '-Command', _windows_dialog(message, confirm)]
+        argv = [tool_path or 'powershell', '-NoProfile', '-Command', _windows_dialog(message, confirm)]
     else:
-        argv = ['zenity', '--title', TITLE, '--window-icon', str(ICON),
+        argv = [tool_path or _dialogs.tool(platform_name) or 'zenity',
+                '--title', TITLE, '--window-icon', str(ICON),
                 '--question' if confirm else '--info', '--text', str(message),
                 '--ok-label', 'Continue' if confirm else 'Cancel']
         if confirm:
             argv += ['--cancel-label', 'Cancel']
     answer = _run(argv, run, 120)
+    if detailed:
+        return answer
     return answer.returncode == 0 and (platform_name != 'darwin' or not confirm
                                       or 'button returned:Continue' in answer.stdout)
 

@@ -364,7 +364,7 @@ continue on the four-hour schedule. A failed Express attempt waits for the
 regular retry schedule, retaining the existing three-failure limit.
 
 The jobs are `com.local.codex-mixed-model-router.update.express` on macOS,
-`CodexMixedModelRouterUpdateExpress` on Windows, and
+`CodexMixedModelRouterUpdateExpress-<SID>` on Windows (the account's security identifier), and
 `codex-mixed-model-router-express.timer` on Linux. The installer registers
 and removes these with the regular jobs. They use the same home launcher
 under the name `express_launch.py`, which skips older restored releases
@@ -992,30 +992,46 @@ stops the boot with `policy_enforced must be true or false`.
 
 ## Windows (Task Scheduler)
 
-The Windows backend (`packaging/platforms/windows.py`) registers two
-per-user tasks, `CodexMixedModelRouter` and `CodexMixedModelRouterUpdate`,
-from XML it writes to `logs\*.task.xml`. Facts the design rests on, all
-verified on Windows 11 on 2026-09-10: a logon trigger must name the
-installing user (an unscoped one needs elevation and fails with "Access is
-denied"); a repeating trigger needs a `StartBoundary`; `schtasks /delete`
-leaves a running instance alive, so uninstall ends the tasks first;
-re-registering a running task keeps its instance, so the updater can refresh
-its own definition; and an interactive-token console task shows its window,
-so both tasks run `pythonw.exe` through `task_launch.py` in the router home
+Windows tasks use `CodexMixedModelRouter`, `CodexMixedModelRouterUpdate` and
+`CodexMixedModelRouterUpdateExpress`, each followed by `-<SID>` for the installing
+account's security identifier. Before changing a task, the installer verifies
+its principal, Python executable and exact home launcher arguments.
+Foreign or inaccessible legacy tasks stay untouched. Such a conflict at an
+account-scoped name, or any malformed query, stops the operation. All replacement
+definitions register before the old router stops. Registration failure retains
+the old service for rollback. Existing schedule settings survive migration,
+refresh and rollback, including a disabled schedule whose process is still running.
+New tasks retain a pending setup marker in their definition.
+Router handover records the same intent before stopping the old process and
+clears it only after the expected version serves. A plain installer retry
+finishes an interrupted handover or setup before enabling updates. An explicit
+stop cancels both owned router definitions during migration. The router stays
+stopped even while updater setup or legacy cleanup is pending. Restart or run
+setup to verify the service before completing pending work.
+Deliberately disabled schedules stay disabled.
+After replacement health passes, legacy schedules are disabled. Their definitions
+remain while queued or running, or while any instance remains. A later installer
+retry removes them after exit. The migration never stops its updater parent.
+Tasks run `pythonw.exe` through `task_launch.py` in the router home
 (rewritten on every install), which appends stdout and stderr to
-`logs\launchd.log` and `logs\update.log` (rotated at 1 MB, one backup). Every console child (`schtasks`, `icacls`, `whoami`, `python`)
+`logs\launchd.log` and `logs\update.log` (rotated at 1 MB, one backup). Every console child (`icacls`, `powershell`, `python`)
 is spawned without a window; on every platform, a file under `logs/` is
 deleted 30 days after its last write, at each service start and scheduled
 update, apart from the live files, which keep their caps.
 
 Restart and update: the task allows one instance (`IgnoreNew`), so a
-handover posts the authenticated `/shutdown`, waits for the instance to
-leave the Running state (up to 180 seconds), then runs the task again; a
-process still alive after that deadline is ended. `schtasks /query /tn
-CodexMixedModelRouter /fo list /v` shows status, last run and last result
-(`267009` means running). Key protection: the router home carries an
-inheritable owner-only grant and the key and state files a plain one; a
-widened ACL makes the router refuse the key at read time.
+handover posts the authenticated `/shutdown` and waits up to 180 seconds.
+Structured task states and running instance identifiers prove exit; lost HTTP
+health or a failed task query cannot authorize restart. A hung instance receives
+a stop request and must exit within another ten seconds, or restart is refused.
+Key protection: the router home carries an
+inheritable owner-only grant and the key and state files a plain one.
+Permission checks use security identifiers (SIDs) and numeric access rules,
+so translated account names cannot change the result. Only the current user,
+SYSTEM and Administrators can own the file or receive grants; OWNER RIGHTS
+can refer only to that verified owner. An unreadable, malformed or widened
+access control list (ACL) makes the router refuse the key. Read checks expire
+after 30 seconds; protection writes always receive a fresh check.
 
 ## Incidents
 

@@ -30,6 +30,7 @@ load packaging/native_readiness.py
 load packaging/atomic_write.py
 load packaging/bundle.py
 load packaging/claude_config.py
+load packaging/client_choice.py
 load packaging/claude_desktop_config.py
 load packaging/claude_desktop_policy.py
 load packaging/claude_desktop_platform.py
@@ -64,7 +65,9 @@ load packaging/platforms/__init__.py
 load packaging/platforms/darwin.py
 load packaging/platforms/linux.py
 load packaging/platforms/windows.py
+load packaging/platforms/windows_tasks.py
 load ai_router/atomic_write.py
+load ai_router/dialog_tool.py
 load ai_router/provider_defs.py
 load ai_router/retired_slugs.py
 load ai_router/state.py

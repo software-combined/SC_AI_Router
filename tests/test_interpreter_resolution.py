@@ -230,9 +230,9 @@ class HandoverTests(unittest.TestCase):
 
 
 class PortableOrderTests(unittest.TestCase):
-    """find_python prefers portable interpreters over platform shims."""
+    """find_python keeps a valid running interpreter before discovering another."""
 
-    def test_sys_executable_last_resort(self):
+    def test_sys_executable_precedes_path_discovery(self):
         seen = []
 
         def fake_run(cmd, **kwargs):
@@ -246,9 +246,7 @@ class PortableOrderTests(unittest.TestCase):
             with mock.patch.object(sys, 'platform', 'darwin'):
                 got = svc.find_python()
         self.assertEqual(got, '/opt/homebrew/bin/python3.14')
-        # sys.executable probed only after portable candidates failed.
-        self.assertEqual(seen[-1][0], sys.executable)
-        self.assertIn(('python3.14', '-c'), seen)
+        self.assertEqual(seen, [(sys.executable, '-c')])
 
     def test_windows_never_runs_a_drive_less_candidate(self):
         # On Windows /usr/... and /opt/... are drive-root folders any local
@@ -256,8 +254,8 @@ class PortableOrderTests(unittest.TestCase):
         posix = ['/usr/bin/python3.14', '/usr/local/bin/python3.14',
                  '/opt/homebrew/bin/python3.14', '/opt/homebrew/bin/python3']
         exe = r'C:\Python314\python.exe'
-        for platform, want in (('win32', ['python3.14', exe, 'py']),
-                               ('darwin', ['python3.14'] + posix + [exe])):
+        for platform, want in (('win32', [exe, 'python3.14', 'py']),
+                               ('darwin', [exe, 'python3.14'] + posix)):
             tried = []
 
             def fake_run(cmd, **kwargs):

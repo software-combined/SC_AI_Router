@@ -209,47 +209,35 @@ def _sync_seams():
     _operator.bind(run=run, diag=_diag)
 
 
-def _resolve_clients_and_modes(args, home, state):
-    # The chooser fills the flags in before they are read; it never overrides one.
-    _client_choice.maybe_ask(
-        args, home, attached=_client_choice.any_attached(home, _codex_config))
-    # Absence in legacy state means Codex, not service-only.
-    client = args.client or state.get('client', 'codex')
-    if client not in (_client_roster.DEFAULT_CLIENT, 'none'):
-        raise SystemExit('client must be codex or none')
-    changed = state.get('client', 'codex') != client
-    if changed: state['client'] = client
-    # --clients selects attachments; --client none stays service-only.
-    # Unset means the legacy Codex-only path below. `both` keeps the Codex
-    # attach and adds Claude; `claude` attaches Claude without touching
-    # Codex settings.
-    clients = args.clients
-    if clients is None: clients = 'none' if client == 'none' else 'codex'
-    if clients not in _client_roster.CLIENT_IDS + ('both', 'none'):
-        raise SystemExit('clients must be codex, claude, both, or none')
-    if client == 'none' and clients != 'none':
-        raise SystemExit('--client none conflicts with --clients %s' % clients)
-    if args.client == 'codex' and args.clients == 'claude':
-        raise SystemExit('--client codex conflicts with --clients claude: '
-                         'use --clients both to keep the Codex attachment')
-    claude_mode = args.claude_mode
-    if claude_mode is None: claude_mode = state.get('claude_mode', state.get('anthropic_mode', 'subscription'))
-    if claude_mode not in ('subscription', 'none'):
-        raise SystemExit('claude_mode must be subscription or none')
-    if state.get('claude_mode') != claude_mode:
-        state['claude_mode'] = claude_mode; changed = True
-    if args.anthropic_mode is not None and args.anthropic_mode != state.get('anthropic_mode'):
-        state['anthropic_mode'] = args.anthropic_mode; changed = True
-    mode = args.openai_mode or state.get('openai_mode') or _codex_config.default_mode()
-    if mode not in ('subscription', 'none'):
-        raise SystemExit('openai_mode must be subscription or none')
-    if state.get('openai_mode') != mode:
-        state['openai_mode'] = mode; changed = True
-    if args.clients and not getattr(args, 'client_choice_cancelled', False) \
-            and state.get('clients') != clients:
-        state['clients'] = clients; changed = True
-    if changed: _write_state(home, state)
-    return (client, clients, claude_mode, mode)
+def _resolve_clients_and_modes(args, home, state, repair=False):
+    return _client_choice.resolve(args, home, state, _codex_config, _write_state, repair=repair)
+
+
+def _current_ready(home, state, previous, python, only_if_changed=False):
+    def modes(doc):
+        mode = doc.get('openai_mode', 'subscription')
+        return mode, doc.get('anthropic_mode', mode)
+    changed = modes(state) != modes(previous)
+    if only_if_changed and not changed:
+        return
+    backend, release, version = platform_backend(), current_release_dir(home), current_version(home)
+    try:
+        if changed:
+            # The repair lifecycle waits for the old process to leave. A TERM
+            # followed by same-version health could accept the old policy.
+            backend.install(python, home, state, release, None)
+        if not wait_version(state, version):
+            raise SystemExit('the current router did not become healthy')
+    except (OSError, subprocess.SubprocessError, SystemExit):
+        _write_state(home, previous)
+        if changed:
+            try:
+                backend.install(python, home, previous, release, None)
+                if not wait_version(previous, version):
+                    raise SystemExit('health check failed')
+            except (OSError, subprocess.SubprocessError, SystemExit):
+                print('Previous settings restored; router needs repair with --setup.')
+        raise SystemExit('Client connection stopped: could not verify the current router.')
 
 
 def _rollback_failed_install(home, state, backend, latest, previous, catalog_path,
@@ -297,6 +285,7 @@ def do_install(args, _fetch=fetch, _run=None):
 
 
 def _do_install(args, _fetch=fetch, _run=None):
+    _client_choice.validate(args)
     if _run is not None:
         _svc.run = _run
     _sync_seams()
@@ -323,14 +312,17 @@ def _do_install(args, _fetch=fetch, _run=None):
     # Only a newer feed version takes the full install path.
     repair = bool(args.setup) and not newer(latest['version'], current)
     if not newer(latest['version'], current) and not repair:
+        if PLATFORM == 'win32' and not args.dry_run:
+            platform_backend().recover_pending(python, home, current_release_dir(home), current)
         print(f'up to date {current}')
-        if args.clients is None and not args.choose_clients:
-            return _desktop_config.attach_current(
-                args, _codex_config, _write_state, python=python) if args.desktop else 0
+        if (args.clients is None and args.client is None and not args.choose_clients
+                and not args.desktop and args.claude_mode is None
+                and args.anthropic_mode is None and args.openai_mode is None):
+            return 0
         return _client_choice.attach_current(
             args, home, codex=_codex_config, desktop=_desktop_config,
             claude=attach_claude, write_state=_write_state, python=python,
-            resolve=_resolve_clients_and_modes, ensure_state=ensure_state)
+            resolve=_resolve_clients_and_modes, ensure_state=ensure_state, ready=_current_ready)
     if args.dry_run:
         print(f'would fetch {feed}; interpreter {python}')
         print('would verify, unpack, self-test, swap current, restart, write config')
@@ -363,7 +355,7 @@ def _do_install(args, _fetch=fetch, _run=None):
         if minted_state:
             (home / 'mixed-router-state.json').unlink(missing_ok=True)
         raise
-    client, clients, claude_mode, mode = _resolve_clients_and_modes(args, home, state)
+    client, clients, claude_mode, mode = _resolve_clients_and_modes(args, home, state, repair=repair)
     # First-run window: the router boots keyless on a single-use link and
     # the operator pastes one key there instead of into the terminal. TTL
     # mirrors ai_router.setup.SETUP_TTL_S; kept literal so the 3.9-compatible
@@ -439,14 +431,15 @@ def _do_install(args, _fetch=fetch, _run=None):
     previous_receipt = _codex_config.codex_attachment(home)
     if setup_url is not None and os.environ.get('ROUTER_NO_KEY_WINDOW') != '1':
         _open_key_window(python, home, setup_url, clients)
+    saved = None if args.desktop or args.client == 'none' else _desktop_config.saved_profile(home, _codex_config)
     if clients == 'none':
-        if args.desktop:
-            # An explicit desktop request attaches the Claude desktop profile
-            # alone: it detaches nothing, and the service-only branch used to
-            # drop the flag instead of honouring it.
-            _client_choice.attach_desktop_only(args, home, state, _codex_config, _desktop_config)
+        if args.desktop or saved:
+            # An explicit desktop request attaches that profile alone;
+            # a saved profile is refreshed without detaching other clients.
+            _client_choice.attach_desktop_only(args, home, state, _codex_config,
+                                               _desktop_config, saved, python)
         else:
-            if not getattr(args, 'client_choice_cancelled', False):
+            if args.client == 'none':
                 if previous_receipt.get('inserted_block'):
                     # Never silently detach an active Codex configuration:
                     # restore the exact owned settings first, or refuse when
@@ -458,14 +451,14 @@ def _do_install(args, _fetch=fetch, _run=None):
         if not args.feed:
             (home / 'feed-serial').write_text(str(serial) + '\n')
         backend.start_updates(home)
-        print(f"installed {latest['version']}; health ok; {_client_choice.none_outcome(args)}")
+        print(f"installed {latest['version']}; health ok; {_client_choice.none_outcome(args, bool(saved))}")
         return 0
-    if claude_mode == 'none' and clients in ('claude', 'both'):
+    if claude_mode == 'none' and clients in ('claude', 'both') and (
+            'claude' not in _codex_config.read_receipt(home).get('clients', {})):
         raise SystemExit('claude_mode is none: re-run with --claude-mode subscription '
                          'to attach Claude Code, or select --clients codex')
     if clients in ('claude', 'both'): attach_claude(home, state, python=python)
-    saved = None if args.desktop else _desktop_config.saved_profile(home, _codex_config)
-    if args.desktop or saved: _desktop_config.attach(home, state, _codex_config, saved, python=python)
+    if args.desktop or saved: _desktop_config.attach(home, state, _codex_config, saved, python=python, refresh=bool(saved))
     # Only explicit service-only installation or uninstall drops attachments.
     if clients == 'claude':
         # Claude-only: the shared service is up; Codex settings untouched.
@@ -642,6 +635,7 @@ def build_parser():
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
+    _client_choice.validate(args)
     if args.express_only and not args.update: raise SystemExit('--express-only needs --update')
     if args.to and not args.rollback:
         raise SystemExit('--to needs --rollback')

@@ -70,7 +70,7 @@ tar -xzf "$HOME_DIR/bundle.tar.gz" -C "$HOME_DIR/bootstrap"
 # Persist the channel only once the install proves out, so an aborted
 # bootstrap cannot move a stable host onto pre-releases. A host already
 # ahead of the requested channel is current, not deferred.
-if "$PY" "$HOME_DIR/bootstrap/packaging/install.py" --home "$HOME_DIR" \
+if "$PY" "$HOME_DIR/bootstrap/packaging/install.py" --home "$HOME_DIR" --python "$PY" \
      --feed "$FEED_ORIGIN/$CHANNEL/latest.json" ${CHOOSE:+"$CHOOSE"}; then
   CURRENT="$(cat "$HOME_DIR/current" 2>/dev/null || true)"
 else

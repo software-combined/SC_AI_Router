@@ -7,8 +7,18 @@ transitional owners name the plan that will move them.
 Native packaging lives under `packaging/native/`; it wraps the canonical
 installer without adding inference rules. `native_payload` retains disposable
 downloads. `native_setup` owns the graphical flow and uses the existing client,
-service and key-window owners. `install_delivery` repairs bundled plugin delivery
+service and key-window owners. Repair uses the canonical `--setup` path;
+explicit assistant additions use the existing client-selection path.
+`dialog_tool` is a Python 3.9 leaf shared by installer and runtime dialogs.
+It validates retained setup paths before selecting the Linux wrapper.
+`native_dialog` distinguishes cancellation from failed presentation so renewal
+notices remain pending until a window appears.
+`install_delivery` repairs bundled plugin delivery
 on both full and same-version installs.
+`client_choice` resolves explicit additions, receipt-owned attachments and saved
+choices. It persists Claude choices in `anthropic_mode`; the runtime keeps its
+existing policy reader. Same-version mode changes use the service repair
+lifecycle before client attachment, with prior state restored on reload failure.
 
 `native_controller` retains verified installer code under an independent version
 pointer. `update_launch` selects that controller across runtime rollback.
@@ -22,7 +32,7 @@ download grants. It cannot change model routing or provider credentials.
 
 ```
 provider_defs (one definition per upstream, imports nothing) + errors,
-redaction, sse, tool_merge, image_items, turn_budget, atomic_write, state,
+redaction, sse, tool_merge, image_items, turn_budget, atomic_write, dialog_tool, state,
 events, history_items (leaves: no module-level local imports; events' one
 call-time state lookup is the only exception)
   ^
@@ -418,6 +428,11 @@ is in [runtime files](runtime-files.md#codex-usage-limit-record).
    `bundle.py` owns the release lifecycle (verify, install, prune,
    rollback). Unsupported OS is an explicit refusal. Backends do not import
    runtime providers or client catalogue policy.
+   `platforms/windows_tasks.py` owns structured Task Scheduler access and
+   principal/action checks; `windows.py` owns account-scoped names and lifecycle
+   order. Owned legacy definitions remain available through registration and
+   expected-version health checks. An active legacy updater keeps its ownership
+   record until a later healthy install can remove it after exit.
 5. A client is not a provider and an OS is neither. New clients reuse a
    proven wire protocol; a new protocol lands only after its contract is
    verified against the installed client version.

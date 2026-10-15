@@ -29,20 +29,18 @@ def read_json(path):
 
 
 def environment(resources):
-    """Only this child tree uses the packaged Linux dialog dependencies."""
+    """Find the packaged wrapper; it scopes GTK dependencies to its child."""
     env = dict(os.environ)
     gui = Path(resources) / 'gui'
     if gui.is_dir():
         env['PATH'] = str(gui / 'bin') + os.pathsep + env.get('PATH', '')
-        env['LD_LIBRARY_PATH'] = str(gui / 'lib')
-        env['GSETTINGS_SCHEMA_DIR'] = str(gui / 'share/glib-2.0/schemas')
-        env['GI_TYPELIB_PATH'] = str(gui / 'lib/girepository-1.0')
     return env
 
 
 def run_installer(resources, home, flags=(), run=subprocess.run):
     state = read_json(Path(home) / 'mixed-router-state.json')
-    args = install_arguments(resources, home, state)
+    repair = '--setup' in flags
+    args = install_arguments(resources, home, state, key=repair)
     # Flags from the graphical chooser replace, rather than combine with,
     # the previous selection. No unattended fallback can attach Codex.
     if '--clients' in flags:
@@ -51,11 +49,11 @@ def run_installer(resources, home, flags=(), run=subprocess.run):
         if '--clients' in args:
             index = args.index('--clients')
             del args[index:index + 2]
-    if flags:
-        args += list(flags)
-    attached = load('codex_config').read_receipt(home).get('clients', {})
-    if '--desktop' not in args and 'claude-desktop' in attached:
-        args.append('--desktop')
+    args += [flag for flag in flags if flag != '--setup']
+    if not repair:
+        attached = load('codex_config').read_receipt(home).get('clients', {})
+        if '--desktop' not in args and 'claude-desktop' in attached:
+            args.append('--desktop')
     env = environment(resources)
     env.update(ROUTER_NO_KEY_WINDOW='1', ROUTER_NO_CLIENT_CHOOSER='1')
     return run(args, capture_output=True, text=True, timeout=900, env=env)
@@ -128,7 +126,7 @@ def _key(resources, home, replace=False, run=subprocess.run):
     result = run([str(python), '-m', 'ai_router.key_prompt', '--stdin',
                   '--clients', state.get('clients', 'codex')], input=url + '\n',
                  capture_output=True, text=True, timeout=900, cwd=release,
-                 env=environment(resources))
+                 env=dict(environment(resources), ROUTER_HOME=str(home)))
     if result.returncode not in (0, 2):
         raise ValueError('The key window could not finish. Open SCG Router to try again.')
 
@@ -203,8 +201,8 @@ def onboard(resources, home, action=None):
         dialog.message('SCG Router was removed.' if not result.returncode else
                        'SCG Router could not be removed safely. Contact Software Combined IT.')
         return result.returncode
-    flags = _select(dialog) if not existing or action == 'add' else []
-    if flags is None or (flags and _missing_assistant(flags, dialog)):
+    flags = _select(dialog) if not existing or action == 'add' else ['--setup']
+    if flags is None or ('--clients' in flags and _missing_assistant(flags, dialog)):
         return 0
     with dialog.Progress() as progress:
         permanent = retained(resources, home)

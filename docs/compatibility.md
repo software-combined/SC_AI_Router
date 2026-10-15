@@ -1,12 +1,36 @@
 # Compatibility
 
-The 1.1.0 publication candidate removes the private Claude first-party flag
-and disguised model aliases. The older client measurements below remain
-historical evidence. No live or paid client checks were run for this candidate;
-its offline verification does not establish client/provider approval.
+## Portability client checks, 15 October 2026 AEDT
 
+Four real client legs passed between 23:23:26 and 23:23:43 AEDT on commit
+`f5f0beb7`, source tree `7998726b`. They used desktop-bundled Codex CLI
+`0.162.0-alpha.17.2` and Claude Code `2.1.283`, with synthetic task data.
 
-## Publication candidate local client checks, 14 October 2026
+| Client / route | Requested model / effort | Physical sends | Verified result |
+| --- | --- | --- | --- |
+| Codex / OpenRouter | `deepseek/deepseek-v4.1-flash` / low | 2 | Dynamic tool round trip; exact model and low effort reported |
+| Codex / ChatGPT subscription | `gpt-6-luna` / low | 2 | Dynamic tool round trip; exact model and low effort reported |
+| Claude Code / OpenRouter | `anthropic/claude-haiku-5.5` / low | 3 | Two sequential Reads with paired results; exact model reported |
+| Claude Code / subscription | `sonnet` / low | 2 | Read with paired result; CLI reported `claude-sonnet-5` |
+
+The subscription leg used the genuine signed-in Claude session. Claude served
+effort remains unverified. Client and provider reports are not independent
+model or reasoning-compute attestation.
+
+The checks used nine physical sends, with no retries. Limits were three sends
+per leg, twelve overall, 512 KiB input and 2,048 external output tokens.
+Claude also used a USD 0.25 client budget. Actual spend was not retained.
+The 1.2.5 release may reuse this evidence only after checking unchanged request
+and protocol paths and the same client versions. Final package acceptance is
+separate: Windows and Linux packages remain private pending the native matrix.
+
+## Historical 1.1.0 publication candidate
+
+The 1.1.0 candidate removed the private Claude first-party flag and disguised
+model aliases. Its checks were offline; they did not establish client/provider
+approval. Older measurements below remain historical evidence.
+
+## Historical local client checks, 14 October 2026
 
 Installed Codex CLI `0.162.0-alpha.17.2` passed dynamic tool use, an external
 to native model switch, and external compaction through the candidate router

@@ -5,12 +5,17 @@ update notice and the first-run key window, and follows the same popup
 style (AGENTS.md 4a): the title `SCG Router`, the bundled icon, plain
 language, a single selection and Continue/Cancel on both questions.
 """
+import importlib.util
 import json
 import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+_spec = importlib.util.spec_from_file_location(
+    'router_dialog_tool', Path(__file__).resolve().parents[1] / 'ai_router/dialog_tool.py')
+_tool = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_tool)
 
 TITLE = 'SCG Router'
 ICON = Path(__file__).resolve().parent / 'assets' / 'router-icon.png'
@@ -53,19 +58,9 @@ def plan(assistant, surface):
     return PLANS[(assistant, surface)]
 
 
-def tool(platform_name=None, which=None):
+def tool(platform_name=None, which=None, home=None):
     """This platform's dialog tool, or None when the machine has no GUI."""
-    if platform_name is None:
-        platform_name = sys.platform
-    if which is None:
-        which = shutil.which
-    if platform_name == 'darwin':
-        return which('osascript')
-    if platform_name == 'win32':
-        return which('powershell') or which('powershell.exe')
-    if platform_name.startswith('linux'):
-        return which('zenity')
-    return None
+    return _tool.tool(platform_name, which, home)
 
 
 def _quote(text):
@@ -224,7 +219,7 @@ def maybe_ask(args, home, platform_name=None, tool_path=None, run=None,
         if not sys.stdin.isatty() or attached:
             return False
     if tool_path is None:
-        tool_path = tool(platform_name)
+        tool_path = tool(platform_name, home=home)
     if tool_path is None:
         print(NO_TOOL_NOTE if not args.choose_clients else NO_TOOL_EXPLICIT_NOTE)
         return False

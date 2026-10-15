@@ -16,7 +16,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from tests.fakes import LAUNCHD, launchd_in_sync
+from tests.fakes import LAUNCHD, launchd_in_sync, signed_static_fetch
 from tests._platform import unix_only
 from tests.install_fixtures import (
     _craft_bundle,
@@ -48,8 +48,7 @@ def _fake_write_catalogue(home, release_dir, python):
 def _install(test, tmp, home, version, *extra_args, feed='file:///latest.json',
              in_sync=False):
     blob, latest = _craft_bundle(version)
-    latest = dict(latest, version=version)
-    fake_fetch = _static_fetch(latest, blob)
+    fake_fetch, _, public = signed_static_fetch(dict(latest, version=version), blob)
     calls = []
 
     def fake_run(cmd, **kwargs):
@@ -68,7 +67,8 @@ def _install(test, tmp, home, version, *extra_args, feed='file:///latest.json',
     args = install_mod.build_parser().parse_args(argv)
     env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key',
            'ROUTER_NO_KEY_WINDOW': '1'}
-    with mock.patch.dict(os.environ, env):
+    with mock.patch.dict(os.environ, env), \
+            mock.patch.object(install_mod._updater, '_FEED_VERIFY_KEY', public):
         test.assertEqual(
             install_mod.do_install(args, _fetch=fake_fetch, _run=fake_run), 0)
     config = Path(env['HOME']) / '.codex' / 'config.toml'
@@ -465,7 +465,7 @@ class InstallConfigTests(unittest.TestCase):
                 finally:
                     updater_mod._FEED_VERIFY_KEY = old_key
             self.assertEqual(rc, 0)
-            invoked = [cmd for cmd in seen if cmd[-2:] == ['--home', str(home)]]
+            invoked = [cmd for cmd in seen if '--home' in cmd and cmd[cmd.index('--home') + 1] == str(home)]
             self.assertTrue(invoked, 'updater must re-invoke with the custom home')
             for cmd in invoked:
                 self.assertNotIn('--feed', cmd)

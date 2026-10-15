@@ -83,7 +83,8 @@ class ChooserGateTests(unittest.TestCase):
             with mock.patch.object(sys.stdin, 'isatty', return_value=True), \
                     mock.patch.object(dialog, 'tool', return_value='/dialog'), \
                     mock.patch.object(dialog, 'ask') as asked:
-                install_mod._resolve_clients_and_modes(args, home, state)
+                with self.assertRaisesRegex(SystemExit, 'receipts are unreadable'):
+                    install_mod._resolve_clients_and_modes(args, home, state)
             asked.assert_not_called()
             self.assertIsNone(args.clients)
             self.assertTrue(install_mod._client_choice.any_attached(
@@ -167,12 +168,16 @@ class ChooserGateTests(unittest.TestCase):
             paths = (config, settings, home / 'activation.json', state_path)
             before = tuple(path.read_bytes() for path in paths)
             with mock.patch.object(sys.stdin, 'isatty', return_value=True), \
+                    mock.patch.object(install_mod, 'platform_backend') as backend, \
                     mock.patch.object(dialog, 'tool', return_value='/dialog'), \
                     mock.patch.object(dialog, 'ask',
                                       return_value=dialog.CANCELLED) as asked:
-                code, out, _, _, _ = _install(tmp, home, ['--choose-clients'])
+                for extra in ([], ['--claude-mode', 'none']):
+                    code, out, _, _, _ = _install(tmp, home, ['--choose-clients', *extra])
+                    self.assertEqual(tuple(path.read_bytes() for path in paths), before)
             self.assertEqual(code, 0)
-            asked.assert_called_once()
+            self.assertEqual(asked.call_count, 2)
+            backend.assert_not_called()
             self.assertNotIn('connected', out)
             self.assertEqual(tuple(path.read_bytes() for path in paths), before)
 
@@ -207,6 +212,32 @@ class ChooserGateTests(unittest.TestCase):
             after = json.loads(state_path.read_text())
             self.assertEqual(after.get('clients'), before.get('clients'))
             self.assertIn('nothing was attached', out)
+
+    def test_unavailable_chooser_applies_only_verified_policy_changes(self):
+        for suppressed, healthy in ((False, True), (True, True), (False, False)):
+            with self.subTest(suppressed=suppressed, healthy=healthy), tempfile.TemporaryDirectory() as tmp:
+                home = _home(tmp)
+                before = install_mod.ensure_state(home)
+                backend = mock.Mock()
+                backend.install.side_effect = None if healthy else OSError('synthetic failed restart')
+                with mock.patch.object(dialog, 'tool', return_value=None), \
+                        mock.patch.object(install_mod, 'platform_backend', return_value=backend):
+                    env = {'ROUTER_NO_CLIENT_CHOOSER': '1' if suppressed else '0'}
+                    argv = ['--choose-clients', '--claude-mode', 'none']
+                    if healthy:
+                        self.assertEqual(_install(tmp, home, argv, env)[0], 0)
+                        self.assertEqual(install_mod.ensure_state(home)['anthropic_mode'], 'none')
+                        backend.install.assert_called_once()
+                        backend.install.reset_mock()
+                        _install(tmp, home, argv, env)
+                        backend.install.assert_not_called()
+                    else:
+                        with self.assertRaisesRegex(SystemExit, 'could not verify'):
+                            _install(tmp, home, argv, env)
+                        self.assertEqual(install_mod.ensure_state(home), before)
+                self.assertFalse((home / 'activation.json').exists())
+                self.assertFalse((Path(tmp) / 'fakehome/.codex/config.toml').exists())
+                self.assertFalse((Path(tmp) / 'claude/settings.json').exists())
 
     def test_cancel_on_a_newer_release_keeps_existing_attachments(self):
         # The newer-version path used to detach on a service-only run; a

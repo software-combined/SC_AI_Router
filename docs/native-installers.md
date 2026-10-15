@@ -68,7 +68,16 @@ The last step protects feeds, signatures, bundles, runtimes and model downloads.
 A missed migration uses the same native installer to upgrade in place.
 The independent controller and download session survive selecting an older
 runtime release. Expired access keeps the running router and last good model
-cache. A renewal dialog stays pending when no graphical session is available.
+cache. A renewal dialog stays pending if it cannot appear, including a failed
+launch or timeout. Cancel suppresses it for one day; Continue opens sign-in.
+Linux dialogs use the retained setup wrapper after the download is deleted,
+with system Zenity as a fallback. The wrapper scopes GTK dependencies to its
+dialog child, so service processes do not inherit bundled library overrides.
+
+Set up or repair uses the existing installer repair path. A same-version or
+older download restores the installed service without replacing its release,
+key, channel, custom feed or client settings. Unreadable client receipts remain
+intact during service repair; adding an assistant still requires readable receipts.
 
 Claude desktop can connect without a terminal client. Automatic SC tool delivery
 also needs the Claude Code setup tools from the desktop app's Install page.

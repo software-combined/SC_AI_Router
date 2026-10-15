@@ -330,7 +330,7 @@ class ServiceOnlyTests(unittest.TestCase):
             install_mod.attach_claude(home, json.loads(
                 (home / 'mixed-router-state.json').read_text()),
                 settings_path=claude_settings)
-            config2, _, _, _ = _install(self, tmp, home, '1.0.1')
+            config2, _, _, _ = _install(self, tmp, home, '1.0.1', '--clients', 'codex')
             self.assertEqual(config2, config)
             kept = json.loads((home / 'activation.json').read_text())
             self.assertEqual(set(kept['clients']), {'codex', 'claude'})

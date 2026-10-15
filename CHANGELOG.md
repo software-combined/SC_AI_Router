@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+## 1.2.5
+
+- Restore stopped or missing services from native Set up or repair, preserving
+  installed releases and saved settings when the download is older.
+- Keep Linux dialogs available after deleting the download. Leave renewal
+  notices pending after display or launch failures, and isolate bundled dialog
+  libraries from service processes.
+- Isolate Windows tasks by account. Migrate only owned legacy tasks after the
+  replacement serves, preserve disabled schedules and retain active updater
+  parents until exit. Resume interrupted migration through the normal installer.
+- Verify Windows task ownership before changes and require prior instances to
+  exit before restart. Refuse foreign tasks and failed process-state queries;
+  preserve existing tasks when registration fails.
+- Verify Windows file permissions using security identifiers and numeric rules,
+  so translated account names do not block safe files. Refuse unverifiable or
+  widened permissions, and verify fresh permissions after protecting a file.
+- Preserve attached assistants and the retained Python interpreter during updates.
+  Allow adding assistants after service-only setup without changing other clients.
+- Apply Claude's subscription choice independently of Codex and reload the current
+  router before confirming a connection. Refuse conflicting subscription choices.
+- Refuse a different Claude settings folder until the previous attachment is
+  detached, preserving its original settings and restore record.
+
 ## 1.2.0-beta
 
 - Add unsigned macOS DMG, Windows EXE and Ubuntu AppImage builds with private
