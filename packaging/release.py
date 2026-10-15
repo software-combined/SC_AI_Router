@@ -29,6 +29,8 @@ PACKAGING_FILES = (
     'packaging/launchd.py',
     'packaging/router_launch.py', 'packaging/service.py',
     'packaging/feed.py', 'packaging/feed_verify.py',
+    'packaging/download_auth.py', 'packaging/download_oauth.py',
+    'packaging/download_session.py',
     'packaging/atomic_write.py',
     'packaging/notice.py', 'packaging/notice_text.py',
     # Plan 179: the router carries the agent skills, so a machine needs no
