@@ -9,6 +9,10 @@ installer without adding inference rules. `native_payload` retains disposable
 downloads. `native_setup` owns the graphical flow and uses the existing client,
 service and key-window owners. `install_delivery` repairs bundled plugin delivery
 on both full and same-version installs.
+`client_choice` resolves explicit additions, receipt-owned attachments and saved
+choices. It persists Claude choices in `anthropic_mode`; the runtime keeps its
+existing policy reader. Same-version mode changes use the service repair
+lifecycle before client attachment, with prior state restored on reload failure.
 
 `native_controller` retains verified installer code under an independent version
 pointer. `update_launch` selects that controller across runtime rollback.

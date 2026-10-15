@@ -388,11 +388,11 @@ class SafeUpdateTests(unittest.TestCase):
                          self_test=lambda *a: None,
                          write_catalogue=_fake_write_catalogue,
                          wait_version=lambda *a, **k: True)
-            # Unpinned: only that path records a serial, so only there does
-            # "aborted before the serial write" assert anything.
+            # Unpinned local fixture: this path records a serial after success.
             args = install_mod.build_parser().parse_args(['--home', str(home)])
             env = {'HOME': str(Path(tmp) / 'fakehome'), 'OPENROUTER_API_KEY': 'test-key', 'ROUTER_NO_KEY_WINDOW': '1'}
-            with mock.patch.dict(os.environ, env):
+            with mock.patch.dict(os.environ, env), mock.patch.object(
+                    install_mod._svc, 'channel_feed', return_value='file:///latest.json'):
                 with self.assertRaisesRegex(SystemExit, 'release identity mismatch'):
                     install_mod.do_install(args, _fetch=_static_fetch(latest, bad_blob))
             self.assertFalse((home / 'current').exists())

@@ -197,7 +197,7 @@ class ClaudeMergeTests(unittest.TestCase):
             path = Path(tmp) / 'settings.json'
             path.write_text(json.dumps({'env': {}}))
             out = install_mod.attach_claude(home, _state(), settings_path=path)
-            self.assertEqual(out, path)
+            self.assertEqual(out, path.resolve())
             doc = json.loads(path.read_text())
             self.assertIn('127.0.0.1:1/test-token', doc['env']['ANTHROPIC_BASE_URL'])
             receipt = json.loads((home / 'activation.json').read_text())
@@ -258,7 +258,7 @@ class ClaudeMergeTests(unittest.TestCase):
         cfgdir = Path(_tf.mkdtemp())
         with _mock.patch.dict(os.environ, {'CLAUDE_CONFIG_DIR': str(cfgdir)}):
             out = install_mod.attach_claude(home, _state())
-        self.assertEqual(out, cfgdir / 'settings.json')
+            self.assertEqual(out, (cfgdir / 'settings.json').resolve())
         doc = json.loads(out.read_text())
         self.assertIn('127.0.0.1:1/test-token', doc['env']['ANTHROPIC_BASE_URL'])
         with _mock.patch.dict(os.environ, {'CLAUDE_CONFIG_DIR': str(cfgdir)}):

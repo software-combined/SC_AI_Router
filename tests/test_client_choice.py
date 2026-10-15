@@ -34,6 +34,7 @@ def _install(tmp, home, argv, extra_env=None):
     args = install_mod.build_parser().parse_args(
         ['--home', str(home), '--feed', 'file:///latest.json', *argv])
     env = {'HOME': str(Path(tmp) / 'fakehome'),
+           'USERPROFILE': str(Path(tmp) / 'fakehome'),
            'CLAUDE_CONFIG_DIR': str(Path(tmp) / 'claude'),
            'CLAUDE_USER_DATA_DIR': str(Path(tmp) / 'Claude-3p'),
            'ROUTER_NO_KEY_WINDOW': '1'}
@@ -41,6 +42,7 @@ def _install(tmp, home, argv, extra_env=None):
     out = io.StringIO()
     with mock.patch.dict(os.environ, env), \
             mock.patch.object(install_mod, 'find_python', return_value='python3.14'), \
+            mock.patch.object(install_mod._svc, 'wait_version', return_value=True), \
             mock.patch.object(install_mod._claude_config, 'release_listing',
                               return_value=None), \
             mock.patch.object(install_mod, 'install_bundle') as bundle, \
@@ -49,7 +51,7 @@ def _install(tmp, home, argv, extra_env=None):
     return code, out.getvalue(), bundle, Path(env['HOME']), Path(env['CLAUDE_CONFIG_DIR'])
 
 
-def _full_install(test, tmp, home, version, argv):
+def _full_install(test, tmp, home, version, argv, extra_env=None):
     """Run the newer-version install path with the bundle and service seams faked."""
     from tests.install_fixtures import _craft_bundle, _ok_run, _patch_attrs, _static_fetch
     from tests.test_install_config import _fake_write_catalogue
@@ -66,9 +68,11 @@ def _full_install(test, tmp, home, version, argv):
     args = install_mod.build_parser().parse_args(
         ['--feed', 'file:///latest.json', '--home', str(home), *argv])
     env = {'HOME': str(Path(tmp) / 'fakehome'),
+           'USERPROFILE': str(Path(tmp) / 'fakehome'),
            'CLAUDE_CONFIG_DIR': str(Path(tmp) / 'claude'),
            'CLAUDE_USER_DATA_DIR': str(Path(tmp) / 'Claude-3p'),
            'OPENROUTER_API_KEY': 'test-key', 'ROUTER_NO_KEY_WINDOW': '1'}
+    env.update(extra_env or {})
     out = io.StringIO()
     with mock.patch.dict(os.environ, env), contextlib.redirect_stdout(out):
         code = install_mod.do_install(args, _fetch=fetch, _run=fake_run)
@@ -76,6 +80,20 @@ def _full_install(test, tmp, home, version, argv):
 
 
 class CurrentInstallAttachTests(unittest.TestCase):
+    def test_helpers_isolate_windows_home_for_current_and_full_install(self):
+        for full in (False, True):
+            with self.subTest(full=full), tempfile.TemporaryDirectory() as tmp:
+                home, outside = _home(tmp), Path(tmp) / 'outside'
+                with mock.patch.dict(os.environ, {'USERPROFILE': str(outside)}), \
+                        mock.patch.object(Path, 'home', side_effect=lambda: Path(os.environ['USERPROFILE'])), \
+                        mock.patch.object(install_mod, 'platform_backend'):
+                    if full:
+                        _full_install(self, tmp, home, '1.0.1', ['--clients', 'codex'])
+                    else:
+                        _install(tmp, home, ['--clients', 'codex'])
+                self.assertTrue((Path(tmp) / 'fakehome/.codex/config.toml').exists())
+                self.assertFalse((outside / '.codex').exists())
+
     def test_claude_attach_on_a_current_install(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = _home(tmp)

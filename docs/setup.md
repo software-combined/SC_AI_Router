@@ -50,10 +50,14 @@ in a fresh assistant session. It leaves unfinished setup pending.
 ## Choose or change assistants
 
 The installer asks which assistant you use and where. Cancel at either
-question changes no attachments. With no available dialog, the default is Codex.
+question changes no attachments or subscription choices. With no available dialog, the default is Codex.
 A fresh install asks when it can show a dialog; `--choose-clients` asks again.
 `ROUTER_NO_CLIENT_CHOOSER=1` suppresses the questions for unattended runs.
 Explicit flags take precedence; attaching never detaches another client.
+Updates without a selection retain the attached assistants. If no attachments
+are recorded, setup uses the saved selection, then Codex for a legacy install.
+`--clients` selects only the requested additions, including after service-only
+setup. `--client none` conflicts with an attachment request.
 
 From a source checkout, with Python 3.14, use the command for your intended setup:
 
@@ -90,6 +94,10 @@ where `<version>` is recorded in `<home>/current`. Use its pinned interpreter
 at `<home>/runtime/python/bin/python3.14` (`python.exe` on Windows)
 when the computer has no Python 3.14. Source installs can run `--preflight`
 to check prerequisites or `--dry-run` to see planned changes without writing.
+Bootstrap and scheduled updates pass their retained interpreter to the installer.
+An explicit eligible `--python` wins; otherwise an eligible running interpreter
+precedes Python found through `PATH`. Older installer interpreters still discover
+Python 3.14 before starting the router.
 
 <p><img src="assets/key-window-macos.png" alt="The first-run key window on macOS" width="400"></p>
 The setup window checks your key before saving it on this computer.

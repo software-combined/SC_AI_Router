@@ -230,9 +230,15 @@ def attach(home, state, receipts, settings_path_override=None, env=None,
         path = Path(settings_path_override)
     else:
         path = settings_path(env)
+    path = path.expanduser().resolve()
     existing = receipts.read_receipt(home).get('clients', {}).get('claude', {})
+    owned_path = existing.get('config_path') if isinstance(existing, dict) else None
+    if existing and (not owned_path or os.path.normcase(str(Path(owned_path).resolve()))
+                     != os.path.normcase(str(path))):
+        raise SystemExit('Claude settings path changed; detach the existing Claude '
+                         'attachment first, then connect the new profile.')
     snapshot = (receipts.parse_snapshot(existing['inserted_block'])
-                if isinstance(existing, dict) and existing.get('config_path') == str(path)
+                if isinstance(existing, dict) and owned_path
                 and 'inserted_block' in existing else None)
     doc, changed, previous = merge_env(home, state, path, env, snapshot)
     write_settings(path, doc)

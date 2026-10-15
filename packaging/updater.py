@@ -423,7 +423,7 @@ def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
         # Scheduled and manual update checks never pop the first-run key
         # window; the next request opens it through the request path. The
         # nonce is still minted so a keyless service can boot.
-        cmd = [sys.executable, str(installer), '--home', str(home)]
+        cmd = [sys.executable, str(installer), '--home', str(home), '--python', sys.executable]
         if args.feed:
             cmd += ['--feed', feed]
         try:

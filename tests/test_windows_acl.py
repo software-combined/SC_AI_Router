@@ -321,9 +321,9 @@ class WinBackendShapeTests(unittest.TestCase):
         self.assertEqual(len(seen), 4)  # whoami, grant, verify (icacls + whoami)
 
     def test_install_hardens_the_home_before_minting_the_state_file(self):
-        # The state file carries the loopback token: it must be born inside
-        # an already-restricted home, then verified, before the backend runs.
+        # Protect the home before creating the token, then verify it before service startup.
         from tests.install_fixtures import _craft_bundle, _ok_run, _patch_attrs, install_mod
+        from tests.fakes import signed_static_fetch
         blob, latest = _craft_bundle('1.0.0')
         events = []
 
@@ -347,19 +347,19 @@ class WinBackendShapeTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
-            fetch = lambda url: blob if url.endswith('.tar.gz') else json.dumps(latest).encode()  # noqa: E731
+            fetch, _, public = signed_static_fetch(latest, blob)
             _patch_attrs(self, run=_ok_run, wait_version=lambda s, v: {'version': v},
                          self_test=lambda *a: None, write_catalogue=lambda *a: None)
             args = install_mod.build_parser().parse_args(
                 ['--home', str(home), '--client', 'none'])
             with mock.patch.object(install_mod, 'platform_backend', return_value=StubBackend()), \
+                    mock.patch.object(install_mod._updater, '_FEED_VERIFY_KEY', public), \
                     mock.patch.object(install_mod, 'find_python', return_value=sys.executable), \
                     mock.patch.dict(os.environ, {'OPENROUTER_API_KEY': 'env-key-for-test', 'ROUTER_NO_KEY_WINDOW': '1'}):
                 self.assertEqual(install_mod.do_install(args, _fetch=fetch), 0)
         self.assertEqual(events, [('protect', 'home', False),
                                   ('protect', 'mixed-router-state.json', None),
                                   ('install',)])
-
 
 
 if __name__ == '__main__':

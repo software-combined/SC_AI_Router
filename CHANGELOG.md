@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Preserve attached assistants and the retained Python interpreter during updates.
+  Allow adding assistants after service-only setup without changing other clients.
+- Apply Claude's subscription choice independently of Codex and reload the current
+  router before confirming a connection. Refuse conflicting subscription choices.
+- Refuse a different Claude settings folder until the previous attachment is
+  detached, preserving its original settings and restore record.
+
 ## 1.2.0-beta
 
 - Add unsigned macOS DMG, Windows EXE and Ubuntu AppImage builds with private
