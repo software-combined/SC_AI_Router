@@ -1003,7 +1003,7 @@ re-registering a running task keeps its instance, so the updater can refresh
 its own definition; and an interactive-token console task shows its window,
 so both tasks run `pythonw.exe` through `task_launch.py` in the router home
 (rewritten on every install), which appends stdout and stderr to
-`logs\launchd.log` and `logs\update.log` (rotated at 1 MB, one backup). Every console child (`schtasks`, `icacls`, `whoami`, `python`)
+`logs\launchd.log` and `logs\update.log` (rotated at 1 MB, one backup). Every console child (`schtasks`, `icacls`, `whoami`, `powershell`, `python`)
 is spawned without a window; on every platform, a file under `logs/` is
 deleted 30 days after its last write, at each service start and scheduled
 update, apart from the live files, which keep their caps.
@@ -1014,8 +1014,13 @@ leave the Running state (up to 180 seconds), then runs the task again; a
 process still alive after that deadline is ended. `schtasks /query /tn
 CodexMixedModelRouter /fo list /v` shows status, last run and last result
 (`267009` means running). Key protection: the router home carries an
-inheritable owner-only grant and the key and state files a plain one; a
-widened ACL makes the router refuse the key at read time.
+inheritable owner-only grant and the key and state files a plain one.
+Permission checks use security identifiers (SIDs) and numeric access rules,
+so translated account names cannot change the result. Only the current user,
+SYSTEM and Administrators can own the file or receive grants; OWNER RIGHTS
+can refer only to that verified owner. An unreadable, malformed or widened
+access control list (ACL) makes the router refuse the key. Read checks expire
+after 30 seconds; protection writes always receive a fresh check.
 
 ## Incidents
 

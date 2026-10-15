@@ -145,11 +145,7 @@ def _tail(text):
 
 
 def _grantee(run):
-    """Installing account for icacls grants, qualified as whoami reports it.
-
-    The qualified name is what icacls prints back, so the post-write check
-    compares like with like; %USERNAME% is the fallback, never a literal.
-    """
+    """Installing account for legacy task definitions, as whoami reports it."""
     whoami = run(['whoami'], capture_output=True, text=True)
     owner = (whoami.stdout or '').strip()
     if owner:
@@ -178,10 +174,10 @@ def protect_file(path, run):
     naming the exact failure; never silently leaves an exposed secret.
     """
     path = Path(path)
-    grantee = _grantee(run)
+    grantee = '*' + _winacl.current_sid(run=run)
     if path.is_dir():
         _grant(run, path, grantee + ':(OI)(CI)F', 'restrict')
-        _winacl.check(path, run=run)
+        _winacl.check(path, run=run, fresh=True)
         return
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     _grant(run, path.parent, grantee + ':(OI)(CI)F', 'restrict')
@@ -189,7 +185,7 @@ def protect_file(path, run):
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         os.close(fd)
     _grant(run, path, grantee + ':F', 'protect')
-    _winacl.check(path, run=run)
+    _winacl.check(path, run=run, fresh=True)
 
 
 def _post_shutdown(state):

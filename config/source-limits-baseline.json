@@ -20,7 +20,6 @@
   "packaging/install.py": 700,
   "packaging/notice.py": 500,
   "packaging/operator_surface.py": 421,
-  "packaging/platforms/windows.py": 402,
   "packaging/service.py": 507,
   "packaging/updater.py": 587,
   "tests/test_bootstrap.py": 310,

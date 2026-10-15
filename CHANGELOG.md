@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Verify Windows file permissions using security identifiers and numeric rules,
+  so translated account names do not block safe files. Refuse unverifiable or
+  widened permissions, and verify fresh permissions after protecting a file.
 - Preserve attached assistants and the retained Python interpreter during updates.
   Allow adding assistants after service-only setup without changing other clients.
 - Apply Claude's subscription choice independently of Codex and reload the current
