@@ -1,6 +1,6 @@
 {
   "name": "scg-ponytail",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Choose the simplest complete, correct solution for coding tasks.",
   "author": {"name": "Software Combined"},
   "repository": "https://github.com/software-combined/SC_AI_Router",

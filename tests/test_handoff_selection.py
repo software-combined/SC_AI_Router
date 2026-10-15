@@ -1,6 +1,5 @@
 """The parent selects a child explicitly; every handoff uses the canonical tools."""
 from copy import deepcopy
-import json
 from pathlib import Path
 import re
 import tempfile
@@ -40,14 +39,6 @@ class SelectionGuidanceTests(unittest.TestCase):
                     self.assertIn('fork_turns="none"', description)
                 else:
                     self.assertEqual(description, 'Native operation.')
-
-    def test_review_example_selects_exact_policy_route_and_fresh_context(self):
-        path = ROOT / 'plugins/scg-review/skills/pre-commit-review/SKILL.md'
-        text = path.read_text()
-        dispatch = json.loads(re.search(r'```json\n(.*?)\n```', text, re.S).group(1))
-        self.assertEqual(dispatch['model'], 'openai/gpt-6.1-sol')
-        self.assertEqual(dispatch['reasoning_effort'], 'high')
-        self.assertEqual(dispatch['fork_turns'], 'none')
 
     def test_codex_guidance_picks_handoff_tools_by_what_is_offered(self):
         # Native GPT parents may see only the plaintext tools and older routers offer

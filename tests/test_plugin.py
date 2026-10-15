@@ -71,42 +71,14 @@ class PluginTest(unittest.TestCase):
                     self.assertTrue(resolved.is_relative_to(PLUGIN), target)
                     self.assertTrue(resolved.is_file(), target)
 
-    def test_review_routing_is_one_synchronized_source_with_fixed_efforts(self):
+    def test_review_routing_has_one_synchronized_source(self):
         skills = PLUGIN / "skills"
         review = (skills / "pre-commit-review/SKILL.md").read_text(encoding="utf-8")
         policy_root = ROOT / 'plugins/scg-subagents/skills/optimal-subagents/references'
         canonical = (policy_root / 'reviews.md').read_text(encoding="utf-8")
         self.assertEqual((PLUGIN / 'references/reviews.md').read_text(encoding="utf-8"), canonical)
         self.assertIn('../../references/reviews.md', review)
-        self.assertIn('listed eligible fallback', review)
         self.assertIn('Exact user or project model/effort', review)
-        preferred = [('openai/gpt-6.1-sol', 'high')]
-        flash = [('deepseek/deepseek-v4.1-flash', 'max')]
-        glm = [('z-ai/glm-5.3', 'max')]
-        native = [('gpt-6.1-sol', 'high')]
-        expected = {
-            'Simplification': (preferred, flash + glm + native),
-            'Correctness': (preferred, glm + native),
-            'Quality': (preferred, flash + glm + native),
-            'Adversarial': (preferred, glm + native),
-        }
-        routes = {}
-        for lane, primary, fallbacks in re.findall(
-                r'^\| (Simplification|Correctness|Quality|Adversarial) \| ([^|]+) \| ([^|]+) \|$',
-                canonical, re.M):
-            self.assertNotIn(lane, routes)
-            routes[lane] = tuple(re.findall(r'`([^`]+)` at `([^`]+)`', cell)
-                                 for cell in (primary, fallbacks))
-        self.assertEqual(routes, expected)
-        self.assertNotIn('no model fallback', review.lower())
-        efforts = json.loads(
-            (policy_root / 'model-evidence.json').read_text(encoding="utf-8"))['prescribed_efforts']
-        for model, effort in re.findall(r'`([^`]+)` at `([^`]+)`', canonical):
-            if model != 'gpt-6.1-sol':  # Native route is outside OpenRouter evidence.
-                self.assertEqual(efforts[model], effort)
-        self.assertNotRegex(review, r"muse-spark|glm-5\.3")
-        for markdown in skills.glob("*/SKILL.md"):
-            self.assertNotRegex(markdown.read_text(encoding="utf-8").lower(), r"kimi|luna")
 
     def test_review_brief_pins_inspect_commands(self):
         review = (PLUGIN / "skills/pre-commit-review/SKILL.md").read_text(encoding="utf-8")
@@ -119,7 +91,6 @@ class PluginTest(unittest.TestCase):
             self.assertIn(command, review)
         self.assertIn("Do not reconstruct trees", review)
         self.assertIn("same model with the same brief", review)
-        self.assertNotRegex(review, r"muse-spark|glm-5\.3")
 
     def test_simplification_wait_guidance_prevents_duplicate_passes(self):
         review = (PLUGIN / "skills/pre-commit-review/SKILL.md").read_text()

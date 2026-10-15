@@ -112,7 +112,7 @@ from the catalogue; expand model coverage only for a demonstrated need.
 Record the client version, requested model and effort, served identity when
 exposed, call count, and result. Reuse passing evidence for unchanged paths;
 rerun only after a relevant change or failure. These probe defaults do not
-change mandatory fixed-effort pre-commit reviewer routing or waive section 7's
+change explicit pre-commit model or effort requirements or waive section 7's
 compatibility checks.
 
 ## 6. Release rule
