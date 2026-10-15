@@ -20,7 +20,7 @@ model or reasoning-compute attestation.
 The checks used nine physical sends, with no retries. Limits were three sends
 per leg, twelve overall, 512 KiB input and 2,048 external output tokens.
 Claude also used a USD 0.25 client budget. Actual spend was not retained.
-The 1.2.5 release may reuse this evidence only after checking unchanged request
+The 1.2.6 release may reuse this evidence only after checking unchanged request
 and protocol paths and the same client versions. Final package acceptance is
 separate: Windows and Linux packages remain private pending the native matrix.
 

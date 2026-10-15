@@ -5,6 +5,7 @@ The check runs wherever a key is read; protection at write time lives in
 the Windows platform backend. `run` is injectable for offline contract tests.
 """
 import json
+import os
 import re
 import subprocess
 import time
@@ -84,9 +85,13 @@ def _sid(value):
 
 def _query(path, run):
     try:
+        # PowerShell 7 can pass incompatible module paths through Python.
+        # Let Windows PowerShell build its defaults in the child only.
+        env = {key: value for key, value in os.environ.items()
+               if key.upper() != 'PSMODULEPATH'}
         result = run(['powershell', '-NoLogo', '-NoProfile', '-NonInteractive', '-Command', _QUERY],
                      input=json.dumps({'path': None if path is None else str(path)}),
-                     capture_output=True, text=True, timeout=15)
+                     capture_output=True, text=True, timeout=15, env=env)
         if result.returncode != 0:
             raise ValueError('ACL query failed')
         doc = json.loads(result.stdout)
