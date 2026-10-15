@@ -1,12 +1,14 @@
-# SC Router agent instructions
+# SC AI Router agent instructions
 
 ## 1. Purpose
 
-Local loopback router that keeps ChatGPT subscription traffic on OpenAI and
-Claude subscription traffic on Anthropic, and routes approved OpenRouter
-models with a separate key. Runtime Python 3.14+, stdlib only, no
-third-party dependencies, no network calls in the unit suite. Explicit live
-probes run separately under section 5's verification rules.
+These instructions apply to contributors and coding agents working in this
+repository. See [README.md](README.md) for setup and supported clients.
+
+The router keeps ChatGPT subscription traffic on OpenAI and Claude subscription
+traffic on Anthropic. External providers use separate credentials. The runtime
+requires Python 3.14+ and the standard library only. Keep the unit suite offline;
+run live probes separately under section 5.
 
 ## 2. Worktree discipline
 
@@ -21,18 +23,19 @@ procedure in section 9. Never push directly to `main`.
 
 ## 2a. Architecture
 
-`docs/architecture.md` owns domain responsibilities and allowed dependency
-direction. New modules go where that map says; transitional owners name the
-plan that will move them.
+[docs/architecture.md](docs/architecture.md) defines module responsibilities and
+allowed dependency direction. Place new modules within those boundaries and
+update the map when responsibilities change.
 
 ## 3. Source limits
 
-Modules 250 lines soft / 400 hard, entrypoints and tools 400/700, tests
-300/500. Checked by `python3.14 tools/check_source_limits.py`. A file above
+Modules have a soft limit of 250 lines and a hard limit of 400. Entrypoints and
+tools use 400/700; tests use 300/500. Check these with
+`python3.14 tools/check_source_limits.py`. A file above
 the soft cap needs a baseline entry, which is a ceiling: the file may shrink
 freely and may not grow past the recorded count. Remove the entry once the
-file is back under the cap. Keep the
-router and provider modules small. An upstream is one entry in
+file is back under the cap. Keep router and provider modules small.
+An upstream is one entry in
 `ai_router/provider_defs.py` (host, endpoint prefixes, key location,
 catalogue, failure dialect) consumed by adapter classes parameterized with
 that definition; a provider with a different wire format is a new adapter
@@ -42,8 +45,9 @@ or catalogue URL literal belongs anywhere else under `ai_router/`.
 ## 4. Security
 
 Never commit state, activation receipts, catalogues, logs, keys or bearer
-tokens. Never log request or tool content. Loopback only; the path token is
-per-install. Subscription headers never accompany OpenRouter requests.
+tokens. Never log request or tool content. Bind only to loopback addresses;
+the path token is unique to each installation. Never send subscription headers
+to external providers.
 
 ## 4a. Popup style
 
@@ -51,12 +55,12 @@ Every dialog the router shows a person (the update notice, the first-run key
 window, and anything added later) follows one style:
 
 - the title `SCG Router` and the bundled product icon
-  `packaging/assets/router-icon.png` -- no platform default icon;
+  `packaging/assets/router-icon.png`; never use a platform default icon;
 - plain language for non-technical users: say "key", "ChatGPT subscription",
   "restart"; never name router internals (`nonce`, `loopback`, `catalogue`,
   `owner-only file`, process or port detail);
-- client-aware: name the client(s) this install serves (Codex, Claude Code,
-  both) in the wording and the action -- never tell a Claude-only user to
+- client-aware: name the clients this install serves (Codex, Claude Code or
+  both) in the wording and the action. Never tell a Claude-only user to
   reopen Codex, and never offer a restart the machine cannot perform;
 - at most two actions, and the safe one is always available ("Later" or
   "Cancel" never disappears);
@@ -67,31 +71,28 @@ window, and anything added later) follows one style:
 `tests/test_popup_style.py` pins the shared title, icon asset and vocabulary
 across the platforms, so a new dialog cannot drift from this style.
 
-## 4b. Local watchlist
-
-In the primary checkout, `TO MONITOR/TOMONITOR.md` is the local, gitignored
-watchlist of unusual events analysed but not yet actionable: one index plus one
-file per issue type, each entry carrying the symptom, the evidence, the
-conclusion and the trigger that reopens it. Read the matching type file before
-re-investigating a recurring symptom, and add or update an entry when an event
-is understood but not yet actionable. Keep entries in the primary checkout:
-this local artifact sits outside the worktree discipline in section 2, so a
-linked worktree has no folder to write to, and a fresh clone has neither the
-folder nor the exclusion. It never carries keys, request content or tool
-content.
-
 ## 5. Verification before commit
 
-Run `python3.14 -m unittest discover -s tests -t .`,
-`python3.14 -m compileall -q ai_router tools tests packaging`,
-`python3.14 tools/check_source_limits.py` and
-`python3.14 tools/check_policy_scans.py`, then the shared
-`pre-commit-review` skill. Commit subjects use `<type>: <short summary>`
-with type `feat`, `fix`, `refactor`, `test`, `chore` or `docs`.
-Discover runs the fast core suite; installer tests are opt-in via
+Run all four checks:
+
+```sh
+python3.14 -m unittest discover -s tests -t .
+python3.14 -m compileall -q ai_router tools tests packaging
+python3.14 tools/check_source_limits.py
+python3.14 tools/check_policy_scans.py
+```
+
+Then run the installed
+[pre-commit-review skill](plugins/scg-review/skills/pre-commit-review/SKILL.md).
+Its [setup guide](plugins/scg-review/skills/review-setup/SKILL.md) covers the
+required hooks and scanner. Commit subjects use `<type>: <short summary>` with
+type `feat`, `fix`, `refactor`, `test`, `chore` or `docs`.
+
+Test discovery runs the fast core suite. Installer tests are opt-in via
 `SCG_RUN_INSTALLER_TESTS=1` (native CI runners cover them on scope for release
-PRs into `main` and pushes to `main`). Development CI runs fast static checks; full
-remote regression runs for main acceptance. Stable tags publish only an exact
+PRs into `main` and pushes to `main`). Development continuous integration (CI)
+runs fast static checks; full remote regression runs for main acceptance.
+Stable tags publish only an exact
 main commit with a successful `Check` run; beta tags publish a commit that
 `development` or `main` moved to (their first-parent line). Neither repeats those
 acceptance checks.
@@ -119,9 +120,8 @@ compatibility checks.
 
 Every user-visible router change updates `CHANGELOG.md` and
 `packaging/VERSION` (semver). Releases are cut with the full `v<VERSION>` tag
-matching `packaging/VERSION`, then run the release
-workflow. Plugin-only changes ride the plugin release train instead
-(section 9); they never bump `packaging/VERSION` or trigger router tags.
+matching `packaging/VERSION`, then run the release workflow. Plugin-only changes
+follow section 9; they never bump `packaging/VERSION` or trigger router tags.
 New entries go under `## Unreleased` and move under the version heading when
 the tag is cut; entries older than the current minor series move, unedited,
 to `docs/changelog-archive.md`.
@@ -139,8 +139,8 @@ Record both client versions in `docs/compatibility.md`.
 Picker labels read `<Vendor>: <Model> <Version?>` (e.g. `Z.ai: GLM 5.3 Flash`).
 `display_name` is stored fully qualified with a ` · <Provider label>` suffix
 (` · OpenRouter` for the built-in external provider, from
-`provider_defs.label_for`); the
-prefix always equals the row's `vendor` field, with one redundant leading vendor
+`provider_defs.label_for`). The prefix always equals the row's `vendor` field,
+with one redundant leading vendor
 word dropped (`DeepSeek: DeepSeek V4 ...` becomes `DeepSeek: V4 ...`). The
 roster pins exact upstream ids (`anthropic/claude-opus-5.5`,
 `google/gemini-3.8-flash`), so a new version is a registry edit: add the new
@@ -153,17 +153,16 @@ must produce conforming rows; the registry naming test enforces it.
 
 ## 9. Agent plugins
 
-This repo also hosts the `scg-agent-plugins` marketplace (`scg-review`,
-`scg-subagents`, `scg-prototypes`, `scg-finance`, `scg-documentation`,
-`scg-ponytail`). Author
-under `plugins/<name>`; installed plugin caches are delivery copies. The root
+This repository hosts the `scg-agent-plugins` marketplace. See
+[agent plugins](docs/agent-plugins.md) for installation and available plugins.
+Author under `plugins/<name>`; installed plugin caches are delivery copies. The root
 `scg-openrouter` plugin stays outside the marketplace. Keep the marketplace
-name and plugin names stable; release via `development` to `main`, and let the
-router carry them (Plan 179) so a consumer needs no Git account or marketplace
-command.
+name and plugin names stable. Release via `development` to `main`; the router
+delivers the plugins without requiring users to run Git or marketplace commands.
 
-Before coding or reviewing code, read the installed `scg-ponytail:ponytail`
-skill in full. Resolve its current absolute path from the active client's
+Before coding or reviewing code, read the installed
+[`scg-ponytail:ponytail` skill](plugins/scg-ponytail/skills/ponytail/SKILL.md)
+in full. Resolve its current absolute path from the active client's
 skill catalogue or plugin inventory; never pin a cache version. SCG Review
 requires that same skill for its simplifier and all three lanes, and blocks
 when the dependency is missing, disabled or unreadable. Ponytail owns solution
@@ -173,20 +172,19 @@ simplicity; this file and the review skill retain all verification gates.
   and `.claude-plugin` manifests at the same version, keep skill content
   client-agnostic, and read system state through whichever MCP or connector
   tools the active client exposes.
-- The router is the delivery channel (Plan 179): its release bundle carries
-  the plugin trees, and each install or scheduled update that lands a new
-  release materialises a router-owned local marketplace and registers it with
-  the attached clients, so a shipped plugin carries no updater of its own.
+- Router release bundles carry the plugin trees. Each install or scheduled
+  update that lands a new release creates a local marketplace and registers it
+  with the attached clients. Shipped plugins carry no updater of their own.
   Keep the retained `scripts/updater.py` and `scheduling.py` byte-identical
   across the plugins (tests pin it); the release bundle withholds them. Link
-  every skill to the shared update guide.
+  every skill to its shared update guide.
 - Release a plugin by bumping both manifests' version and adding a
   `plugins/CHANGELOG.md` entry. Validate Claude manifests and skills with
   `claude plugin validate --strict`, run the installed skill-creator's
   `scripts/quick_validate.py` for a new or changed skill, and run the plugin
   test modules for paired Codex/Claude manifests and package contracts.
-  Require actual Codex installation and new-session skill pickup before
-  claiming local delivery; the retired plugin-creator validator is not a gate.
+  Require actual Codex installation and skill availability in a new session
+  before claiming local delivery.
 - Integrate plugin fixes through `development` first. If `development` contains
   unrelated unreleased router changes, reuse the owned worktree for a release
   branch based on current `main` and cherry-pick only the reviewed plugin
@@ -194,8 +192,8 @@ simplicity; this file and the review skill retain all verification gates.
   directly related plugin verification tests, marketplace registration in
   `.agents/plugins/marketplace.json`, the README's agent-plugin documentation,
   and directly related plugin-release instructions in this file.
-  Verify the complete diff against
-  current `main`, run all required checks and reviews on that exact candidate,
+  Verify the complete diff against current `main`, run all required checks and
+  reviews on that exact candidate,
   and use the normal PR gates. Do not include router code, `packaging/VERSION`,
   router tags, or release-workflow changes. Reconcile
   the release into `development` afterwards without discarding either side.
