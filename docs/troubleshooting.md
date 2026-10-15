@@ -14,6 +14,175 @@ Start with `--doctor`: it reports one row per component (runtime, install,
 service, each provider's key, the picker catalogue, the scheduled command and
 update recency) and prints a `Fix:` line for every WARN or FAIL.
 
+## Windows: use the installed setup tools
+
+On Microsoft Windows 11 x64, run the supplied `bootstrap.ps1` before these steps.
+Use ordinary PowerShell under the same Windows user who ran setup.
+If your organization blocks scripts, contact IT; keep its execution policy in place.
+You do not need a repository checkout or a separate Python installation.
+
+Paste this block once to find the installed tools. It reads paths and the
+installed version, and prints no keys:
+
+```powershell
+$RouterRoot = if ($env:ROUTER_HOME) { $env:ROUTER_HOME } else { Join-Path $env:USERPROFILE '.codex\mixed-model-router' }
+$RouterVersion = (Get-Content -Raw -LiteralPath (Join-Path $RouterRoot 'current')).Trim()
+$RouterPython = Join-Path $RouterRoot 'runtime\python\python.exe'
+$RouterInstaller = Join-Path $RouterRoot "releases\$RouterVersion\packaging\install.py"
+if (!(Test-Path -LiteralPath $RouterPython) -or !(Test-Path -LiteralPath $RouterInstaller)) { throw 'Run SCG Router setup again before continuing.' }
+$RouterSavedState = Get-Content -Raw -LiteralPath (Join-Path $RouterRoot 'mixed-router-state.json') | ConvertFrom-Json
+$RouterClaudeRoute = if ($null -ne $RouterSavedState.anthropic_mode) { $RouterSavedState.anthropic_mode } elseif ($null -ne $RouterSavedState.openai_mode) { $RouterSavedState.openai_mode } else { 'subscription' }
+Remove-Variable RouterSavedState
+if (@('subscription', 'none') -notcontains $RouterClaudeRoute) { throw 'SCG Router settings need an IT check before continuing.' }
+```
+
+The block also preserves Claude's current subscription setting, including older
+installs where it follows the ChatGPT setting. Keep `$RouterClaudeRoute` in the
+Codex commands below so a Codex change does not disable a working Claude connection.
+
+For a diagnostic check, run:
+
+```powershell
+& $RouterPython $RouterInstaller --home $RouterRoot --doctor
+```
+
+If you open a new PowerShell window or the router updates, paste the path block again.
+For a source installation, use its Python 3.14 interpreter and matching installer instead.
+
+## Codex Send button is greyed out or ChatGPT subscription access is unavailable
+
+Affected Codex desktop versions disable **Send** when the ChatGPT allowance runs out,
+including when you select an OpenRouter model. The router cannot fix a disabled
+button by changing models alone. Change Codex's connection to OpenRouter.
+If you have no ChatGPT subscription access, use the same OpenRouter connection.
+Other causes of a disabled button need diagnosis if this does not restore it.
+
+### Microsoft Windows
+
+Use these commands for new chats. Before changing connections, save a short task
+handover outside Codex. Existing chats can need their original connection to reopen:
+OpenRouter chats need the OpenRouter connection again after you return to your subscription.
+These Windows commands do not provide the Mac helper's preservation of both chat connections.
+
+1. Let any running task finish. Quit Codex and close its terminal sessions normally.
+2. Open PowerShell and paste the [installed-tool path block](#windows-use-the-installed-setup-tools).
+3. Run this command to use OpenRouter without a ChatGPT subscription:
+
+```powershell
+& $RouterPython $RouterInstaller --python $RouterPython --home $RouterRoot --clients codex --openai-mode none --anthropic-mode $RouterClaudeRoute
+if ($LASTEXITCODE -ne 0) { throw 'The connection change failed. Stop and contact IT.' }
+& $RouterPython $RouterInstaller --python $RouterPython --home $RouterRoot --setup
+if ($LASTEXITCODE -ne 0) { throw 'SCG Router did not restart. Stop and contact IT.' }
+```
+
+4. The second command restarts SCG Router and opens its key window. If your key
+   already works, choose **Cancel**; the connection change and restart still apply.
+   If you enter a key, choose **No subscription**, then save it in that window.
+5. Reopen Codex and start a new chat. Select a model labelled `· OpenRouter`, then send a short greeting.
+6. Check that Send works and that you receive a reply. OpenRouter charges your key.
+
+When ChatGPT subscription access returns, quit Codex normally and run this command
+from the same PowerShell window. Recreate the paths first if needed:
+
+```powershell
+& $RouterPython $RouterInstaller --python $RouterPython --home $RouterRoot --clients codex --openai-mode subscription --anthropic-mode $RouterClaudeRoute
+if ($LASTEXITCODE -ne 0) { throw 'The connection change failed. Stop and contact IT.' }
+& $RouterPython $RouterInstaller --python $RouterPython --home $RouterRoot --setup
+if ($LASTEXITCODE -ne 0) { throw 'SCG Router did not restart. Stop and contact IT.' }
+```
+
+In the key window, choose **Cancel** if your key already works. If you save a
+key again, choose **I have one** for the ChatGPT subscription question.
+Reopen Codex, start a new chat and choose a subscription model without the `· OpenRouter` suffix.
+Check that it replies. Switching back cannot restore an expired plan or exhausted allowance.
+These commands keep your sign-in and other attached assistants in place.
+Use `--clients codex` with the mode flag so an already-current install applies the change.
+Run `--setup` separately afterwards to restart the router; combining the flags
+can take the key-window repair path without applying the client connection.
+
+### macOS
+
+If Codex already uses your ChatGPT subscription, open **Switch Codex** from
+your user's Applications folder, or choose **Open Switch Codex** in the router notice.
+Confirm the restart. Select an OpenRouter model and check that it replies.
+When subscription access returns, open **Switch Codex** again, confirm, and
+choose a subscription model after Codex reopens.
+
+For a first setup without a ChatGPT subscription, choose **No subscription**
+in the key window. The Switch Codex helper is unnecessary in that mode.
+The helper verifies the loaded settings and restores the previous connection if switching fails.
+See [Switch Codex](operations.md#switch-codex) for the affected versions and recovery details.
+
+While Codex uses its OpenRouter connection, automatic chat titles and archiving
+are unavailable. On Mac, switch back with **Switch Codex** when you need to archive a chat.
+On Windows, keep the chat-resume limit above in mind when changing connections.
+
+## Claude desktop: switch to OpenRouter and back
+
+Claude desktop uses separate subscription and OpenRouter profiles. Selecting a
+model inside one profile does not change the connection. The OpenRouter profile
+lists models billed to your OpenRouter key.
+
+### Microsoft Windows
+
+For first setup, choose **Claude desktop** in the setup questions. On an existing
+router installation, quit Claude normally, paste the [installed-tool path block](#windows-use-the-installed-setup-tools), then run:
+
+```powershell
+& $RouterPython $RouterInstaller --python $RouterPython --home $RouterRoot --clients none --desktop --claude-mode subscription
+```
+
+This attaches only Claude desktop and keeps other attached assistants in place.
+Reopen Claude, choose **Code**, a folder and an OpenRouter model. Send a short greeting
+and check that it replies. Re-running setup preserves an existing connection choice;
+it does not toggle between subscription and OpenRouter.
+
+**Windows switching is an IT pilot, not a verified staff rollout.** Setup does
+not install **Switch Claude** or **Open Claude** shortcuts on Windows yet.
+The release includes a manual helper for an IT-led pilot:
+
+```powershell
+$RouterClaudeSwitch = Join-Path $RouterRoot "releases\$RouterVersion\packaging\claude_desktop_switch.py"
+& $RouterPython $RouterClaudeSwitch --home $RouterRoot --action switch
+```
+
+The helper asks to change to the other connection, closes Claude normally, then reopens it.
+Run the same command again to return. It can refuse if settings are managed,
+tasks are not ready to share, or Claude cannot close. Keep that refusal and contact IT.
+Do not edit profile files or force-close Claude to get past it.
+
+Before staff use this Windows switch, IT must verify both directions on a real
+Windows machine, including a reply, saved Code tasks and the original subscription sign-in.
+Windows task sharing remains unverified; Cowork tasks and cloud chats are not transferred.
+Until that pilot passes, use Codex's Windows OpenRouter steps when you need to
+work without ChatGPT subscription access.
+
+### macOS
+
+Open **Switch Claude** from your user's Applications folder. Confirm the change
+to OpenRouter and let Claude restart. Choose **Code**, a folder and an OpenRouter
+model, then check that it replies. Open **Switch Claude** again to return to your
+Claude subscription, confirm the restart and check a subscription reply.
+**Open Claude** opens whichever connection is selected; it does not switch it.
+Cancel leaves the selection unchanged. If Claude refuses to close or share a task,
+follow its message; keep your original tasks in place.
+
+Mac Code-task sharing has passed recorded round trips. Cowork tasks and cloud chats
+remain separate. See [Claude desktop setup and limits](claude-code.md#claude-desktop-app).
+
+## I have no Claude subscription access
+
+This router currently rejects `--claude-mode none` for Claude desktop and the
+Claude Code terminal. A paid OpenRouter key does not remove that setup restriction.
+Use [Codex's OpenRouter connection](#codex-send-button-is-greyed-out-or-chatgpt-subscription-access-is-unavailable)
+or ask IT to confirm your Claude access. Returning to a subscription connection
+also requires working subscription access.
+
+If Claude Code in the terminal is already attached and signed in, use `/model`
+to choose an OpenRouter model or return to a subscription model. Restart the
+terminal client after setup. Keep `ANTHROPIC_API_KEY` and `ANTHROPIC_AUTH_TOKEN` unset;
+the [Claude guide](claude-code.md#setup) explains their effect on sign-in.
+
 ## The installer stops before it downloads anything
 
 Check that the machine can reach the feed origin for this channel
