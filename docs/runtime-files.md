@@ -66,18 +66,10 @@ are never copied between machines.
 `ai_router/subscription_base_instructions.txt`, `ai_router/agents.py`,
 `ai_router/model_instructions.py`,
 `ai_router/agents_general.txt`, `ai_router/agents_dev.txt`,
-`tools/probe_codex_runtime.py`, `tools/probe_model_discovery.py`, `tools/probe_context_budget.py`,
-`tools/probe_context_recovery.py`, `tools/probe_handoff_recovery.py`,
-`tools/probe_history_switch.py`, `tools/probe_media.py`, `tools/probe_media_generation.py`,
-`tools/probe_standalone_outputs.py`, `tools/probe_agent_handoffs.py`,
-`tools/probe_parent_switch.py`, `tools/probe_claude_code.py`,
-`tools/probe_candidate.py`, `tools/probe_subscription_restart.py`,
-`tools/appserver_probe.py`, `tools/provision_key.py`,
-`tools/verify_runtime_pins.py`, `tools/check_installer_python39.py`,
-`tools/check_policy_scans.py`, `tools/check_source_limits.py`,
-`tools/check_acceptance_ledger.py`,
-`tools/publish_feed.py`, `tools/publish_first_install.py`,
-`tools/global_instructions.py`, `tools/disable.py`.
+`tools/provision_key.py`, `tools/global_instructions.py`, `tools/disable.py`.
+
+Development probes, capture utilities, benchmark scripts and publishing
+helpers are source-checkout tools and are not shipped to end users.
 
 The feed-signature module lives with its consumers as
 `packaging/feed_verify.py`: `packaging/feed.py` and `packaging/release.py`

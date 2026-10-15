@@ -62,7 +62,8 @@ PACKAGING_FILES = (
     'packaging/client_dialog.py',
     'packaging/diagnostics.py', 'packaging/provider_keys.py',
     'packaging/operator_surface.py',
-    'packaging/runtime.lock', 'packaging/runtime_lock.py',
+    'packaging/runtime.lock', 'packaging/runtime_lock.py', 'packaging/runtime-notices.json',
+    'packaging/runtime-components.json', 'packaging/RUNTIME-NOTICES.txt',
     'packaging/platforms/__init__.py',
     'packaging/platforms/darwin.py', 'packaging/platforms/linux.py',
     'packaging/platforms/windows.py',
@@ -73,17 +74,22 @@ PACKAGING_FILES = (
 )
 
 
+# Installed operator helpers only. Development probes, capture utilities and
+# publication tools belong to a source checkout, never an end-user release.
+OPERATOR_TOOLS = ('disable.py', 'global_instructions.py', 'provision_key.py')
+
+
 def bundle_files(root):
     return (
         sorted(p.relative_to(root).as_posix() for p in (root / 'ai_router').rglob('*.py'))
         + sorted(p.relative_to(root).as_posix() for p in (root / 'ai_router').glob('*.txt'))
         + sorted(p.relative_to(root).as_posix() for p in (root / 'ai_router').glob('*.json'))
-        + sorted(p.relative_to(root).as_posix() for p in (root / 'tools').glob('*.py'))
+        + ['tools/' + name for name in OPERATOR_TOOLS]
         # Plan 134: an installed host had no documentation at all. The README
         # and the markdown docs travel with the release so an operator reads
         # the same page the repository shows.
         + sorted(p.relative_to(root).as_posix() for p in (root / 'docs').rglob('*.md'))
-        + ['README.md']
+        + ['README.md', 'SECURITY.md']
         + plugin_files(root)
         + list(PACKAGING_FILES)
     )

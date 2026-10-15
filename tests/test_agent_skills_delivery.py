@@ -110,6 +110,8 @@ class DeliveryTest(unittest.TestCase):
     def test_codex_moves_off_the_old_git_source_before_adding_the_router_copy(self):
         add = ['codex', 'plugin', 'marketplace', 'add', str(self.root)]
         for url in ('https://github.com/software-combined/SC_AI_Router.git',
+                    'https://github.com/software-combined/SC_AI_Router_Public.git',
+                    'git@github.com:software-combined/SC_AI_Router_Public.git',
                     'https://github.com/software-combined/SC_Unlimited_ai.git',
                     'git@github.com:software-combined/SC_OpenRouter_adapter.git',
                     'https://github.com/Software-Combined/SC_Agent_plugins'):

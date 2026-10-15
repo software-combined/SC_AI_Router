@@ -2,9 +2,29 @@
 
 ## Unreleased
 
+- Move installations from the clean public Git marketplace to router-managed
+  plugin delivery when the router is installed.
+
 - Explain switching Codex and Claude to OpenRouter and back, including a greyed
   Send button, missing subscription access, Windows PowerShell steps and Windows
   Claude pilot limits.
+
+- Publish clean source separately from private development history; remove
+  hosted-zone and immutable repository identifier defaults from infrastructure examples.
+
+- Prepare a publication candidate with independently authored router prompts
+  and synthetic fixture instruction text, documented provenance and notices.
+- Retain native bootstrap component notices and exact source references;
+  record the outstanding Windows runtime redistribution condition. Keep
+  model-switch markers observable when capture tools hash client prose.
+- Ship only operator helpers, excluding developer diagnostics and publishing
+  tools. Retire probes that extracted or copied native subscription credentials.
+- Use truthful Claude gateway IDs and Claude family metadata only for Claude
+  models. Retire disguised aliases and the private first-party override;
+  remove an old override only when its receipt proves installer ownership.
+- Require explicit opt-in for separately billed subscription helper fallback.
+  Document provider support boundaries, cross-provider data flows and a
+  clean-history public export that preserves private development history.
 
 ## 1.0.21
 
@@ -18,7 +38,6 @@
   budget is full, wait up to 60 seconds before asking the client to retry.
   Release waiting turns as requests finish or their histories become small.
   Keep the 96 MiB per-request ceiling and 32-request limit.
-
 ## 1.0.19
 
 - Add Google Gemini 4 Argon through OpenRouter after real Codex and Claude Code

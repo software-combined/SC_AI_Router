@@ -42,14 +42,15 @@ creates in the `softwarecombined.com` zone.
 
 ```sh
 aws cloudformation deploy --stack-name scg-router-feed-cert --region us-east-1 \
-  --template-file infra/feed-cert.yaml
+  --template-file infra/feed-cert.yaml --parameter-overrides HostedZoneId="$FEED_HOSTED_ZONE_ID"
 CERT="$(aws cloudformation describe-stacks --stack-name scg-router-feed-cert \
   --region us-east-1 \
   --query "Stacks[0].Outputs[?OutputKey=='CertificateArn'].OutputValue" --output text)"
 aws cloudformation deploy --stack-name scg-router-feed --region ap-southeast-2 \
   --template-file infra/feed.yaml --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides CertificateArn="$CERT" \
-    BucketName="$FEED_BUCKET" SigningSeedArn="$FEED_SIGNING_SEED_ARN"
+    BucketName="$FEED_BUCKET" SigningSeedArn="$FEED_SIGNING_SEED_ARN" \
+    HostedZoneId="$FEED_HOSTED_ZONE_ID" ImmutableSubjectPrefix="$FEED_IMMUTABLE_SUBJECT"
 ```
 
 No subscription confirmation step is left for the reader route. The per-write
@@ -96,8 +97,12 @@ publisher role. The role is assumable only by
 `token.actions.githubusercontent.com`, and only for this repository's tag
 refs: `repo:software-combined/SC_AI_Router:ref:refs/tags/v*` in the
 classic subject form, or
-`repo:software-combined@200868195/SC_AI_Router@1360169840:ref:refs/tags/v*`
-in GitHub's immutable form. It may read any object in the feed bucket and
+`repo:${ImmutableSubjectPrefix}:ref:refs/tags/v*`
+in GitHub's immutable form. Supply the hosted-zone ID and immutable subject
+from the private deployment configuration; the templates have no identifying
+defaults. Existing stack updates retain their parameter values unless the
+deployer explicitly overrides them. The clean public source repository has
+no feed-publishing grants or copied repository variables. The role may read any object in the feed bucket and
 write only what a release publishes: `bundles/*` and, per channel,
 `latest.json`, `latest.json.sig` and `models.json`. It can also list the
 bucket, invalidate the feed, read the stack outputs and read the signing
@@ -310,7 +315,7 @@ manager. Direct `do_install` calls in tests must use the fake `run` seam.
 
 From version 26.917.51856, the ChatGPT app (Codex) stops sending messages once
 your ChatGPT subscription reaches its usage limit, even for OpenRouter models.
-Switch Codex works around this. It moves Codex to OpenRouter models until the
+Switch Codex selects a separately billed OpenRouter profile until the
 limit resets, then back to your ChatGPT subscription. Like Switch Claude,
 Switch Codex is macOS-only in this beta. SCG Router adds Switch Codex to your
 Applications folder when Codex uses your ChatGPT subscription and your ChatGPT
@@ -927,7 +932,7 @@ tool allowlist it derives from the installed apps and MCP servers on those
 turns, so a helper turn carries tools; they do not make it ineligible.
 When the ChatGPT allowance is exhausted upstream refuses those turns, and
 the client stores a slice of the prompt as the title instead. The fallback
-is on unless `openai_helper_fallback` is explicitly false in
+requires explicit `openai_helper_fallback: true` in
 `mixed-router-state.json` (restart the service to load a change): a 429 on
 such a turn is answered from the OpenRouter twin row `openai/<slug>`, or
 from the Luna twin `openai/gpt-6-luna` when the requesting slug has no

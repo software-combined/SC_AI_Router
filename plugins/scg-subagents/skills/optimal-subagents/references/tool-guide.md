@@ -69,7 +69,7 @@ and returned/served identity if provided; otherwise record served identity as
 For Codex V1, record the parent thread ID, returned child ID and assignment
 start/completion times with UTC offsets. Router 1.0.11's installed
 `ai_router.inspect_requests --agent-summary` can look up that exact pair and
-window without credentials or paid calls; [router operations](https://github.com/software-combined/SC_AI_Router/blob/main/docs/operations.md#request-identity-and-failure-evidence)
+window without credentials or paid calls; [router operations](https://github.com/software-combined/SC_AI_Router_Public/blob/main/docs/operations.md#request-identity-and-failure-evidence)
 owns the command. Retained reports identify what the upstream reported, not
 independently attested model weights. Keep model and effort evidence separate,
 preserve mismatches across retries, and label coverage as retained records only.

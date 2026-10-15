@@ -60,7 +60,7 @@ class PackagingTests(unittest.TestCase):
                     'ai_router/routed_base_instructions.txt',
                     'ai_router/subscription_base_instructions.txt'):
             self.assertIn(dep, bundled, dep)
-        for tool in ('tools/probe_codex_runtime.py', 'tools/disable.py'):
+        for tool in ('tools/disable.py', 'tools/provision_key.py'):
             self.assertIn(tool, bundled, tool)
         for name in EXPLICIT_FILES:
             self.assertIn(name, bundled, name)

@@ -8,12 +8,12 @@
 <h1 align="center">SC AI Router</h1>
 
 <p align="center">
-Use Codex and Claude with your subscription and approved OpenRouter models.
+Route signed-in coding clients and separately billed provider models locally.
 </p>
 
 <p align="center">
-  <a href="https://github.com/software-combined/SC_AI_Router/actions/workflows/check.yml"><img alt="Checks on GitHub Actions" src="https://img.shields.io/badge/checks-GitHub_Actions-blue"></a>
-  <a href="https://github.com/software-combined/SC_AI_Router/releases/latest"><img alt="Releases on GitHub" src="https://img.shields.io/badge/releases-GitHub-blue"></a>
+  <a href="https://github.com/software-combined/SC_AI_Router_Public/actions/workflows/check.yml"><img alt="Checks on GitHub Actions" src="https://img.shields.io/badge/checks-GitHub_Actions-blue"></a>
+  <a href="https://github.com/software-combined/SC_AI_Router_Public/releases/latest"><img alt="Releases on GitHub" src="https://img.shields.io/badge/releases-GitHub-blue"></a>
   <a href="LICENSE"><img alt="Licence: Apache-2.0" src="https://img.shields.io/badge/licence-Apache--2.0-blue"></a>
 </p>
 
@@ -26,6 +26,13 @@ a subscription model and an approved model billed to your own OpenRouter key.
 | Who it is for | Software Combined staff using Codex or Claude |
 | Status | Claude Code is in preview; [tested setups and remaining checks](docs/compatibility.md) |
 | Maintained by | Cyril Allart and Brent Maxwell; [contribution rules](CONTRIBUTING.md) |
+
+SC AI Router is independent software. OpenAI, Anthropic and OpenRouter do
+not endorse this release. Claude gateways retain the signed-in client's
+own authentication; Anthropic supports Claude models through gateways and
+does not support non-Claude models in Claude Code. Other Messages-compatible
+routes keep truthful vendor IDs and are outside that client support boundary.
+See [integration scope and data flows](docs/publication.md) for release decisions.
 
 ## Get started
 
@@ -114,7 +121,10 @@ a note that the model cannot read them; unsupported reasoning levels are rejecte
 
 Subscription models use the assistant's own sign-in. OpenRouter models use your
 local key; subscription credentials never accompany an OpenRouter request.
-Watch paid usage in the OpenRouter dashboard.
+Watch paid usage in the OpenRouter dashboard. Switching models sends the
+available conversation history and tool results to the selected provider.
+Subscription helper fallback is off by default; enabling it explicitly also
+sends eligible title/summary requests to OpenRouter and charges that key.
 
 macOS and Linux are supported; check the [Linux desktop requirements](docs/setup.md#before-you-start).
 Windows sign-in relaunch and complete Claude desktop
@@ -130,7 +140,8 @@ and tokens; see [security](SECURITY.md).
 ## Help
 
 If a model is missing, quit and reopen the assistant first. For other symptoms,
-use [troubleshooting](docs/troubleshooting.md) or contact Software Combined IT.
+use [troubleshooting](docs/troubleshooting.md) or open a project support issue. Software Combined IT support is for staff;
+external users have no guaranteed response or service level.
 Include what you tried and the error message. For diagnostics, use the redacted
 support bundle described in that guide, never raw state, logs or credentials.
 

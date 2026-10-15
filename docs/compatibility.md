@@ -1,5 +1,30 @@
 # Compatibility
 
+The 1.0.20 publication candidate removes the private Claude first-party flag
+and disguised model aliases. The older client measurements below remain
+historical evidence. No live or paid client checks were run for this candidate;
+its offline verification does not establish client/provider approval.
+
+
+## Publication candidate local client checks, 14 October 2026
+
+Installed Codex CLI `0.162.0-alpha.17.2` passed dynamic tool use, an external
+to native model switch, and external compaction through the candidate router
+against fake upstreams. Installed Claude Code `2.1.283` passed four tool
+sessions through that router: native `claude-sonnet-5` and truthful
+`z-ai/glm-5.3`, each with baseline settings and public tool-search enabled.
+Every Claude request passed the expected provider/credential boundary check.
+Four additional direct local sink sessions passed the same client matrix.
+
+The clients used disposable homes/configuration and synthetic credentials.
+An OS sandbox allowed loopback and denied external network connections;
+that denial was checked before launch. No provider inference calls occurred.
+Captured Codex instruction prose is hashed, including text inside retained
+model-switch delimiters. Claude evidence contains request summaries only.
+These checks establish local client and router compatibility for these
+scenarios, not native OAuth acceptance, upstream model availability, billed
+cost, serving identity or Anthropic support for non-Claude models.
+
 ## Gemini 4 Argon onboarding, 14 October 2026 AEDT
 
 OpenRouter's `google/gemini-4-argon` maps to

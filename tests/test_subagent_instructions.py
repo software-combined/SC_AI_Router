@@ -26,13 +26,13 @@ class SubagentInstructionTests(unittest.TestCase):
     def test_rendered_instructions_mark_delivered_names_as_not_tools(self):
         template = external_entry(by_slug('z-ai/glm-5.3-flash'))[
             'model_messages']['instructions_template']
-        self.assertIn('`delivered_message` or `delivered_app_message` are', template)
+        self.assertIn('`delivered_message` or `delivered_app_message`', template)
 
     def test_rendered_instructions_tell_codex_how_to_use_tool_search(self):
         template = external_entry(by_slug('z-ai/glm-5.3-flash'))[
             'model_messages']['instructions_template']
-        self.assertIn('On Codex, after tool search returns matches', template)
-        self.assertIn('On Codex, if spawn is refused because all subagent lanes are full',
+        self.assertIn('On Codex, tool search reveals tool names and schemas', template)
+        self.assertIn('On Codex, when delegation lanes are full',
                       template)
 
     def test_claude_catalogue_omits_codex_only_hints(self):
@@ -42,8 +42,8 @@ class SubagentInstructionTests(unittest.TestCase):
             (row.get('model_messages') or {}).get('instructions_template') or ''
             for row in catalog['models'])
         self.assertNotIn('On Codex,', served)
-        self.assertNotIn('subagent lanes are full', served)
-        self.assertIn('`delivered_message` or `delivered_app_message` are', served)
+        self.assertNotIn('delegation lanes are full', served)
+        self.assertIn('`delivered_message` or `delivered_app_message`', served)
 
     def test_no_row_serves_the_raw_placeholder(self):
         catalog = merge({'models': []}, ('gpt-6-astra', 'gpt-6-luna'))

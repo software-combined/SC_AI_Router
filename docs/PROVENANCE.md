@@ -1,36 +1,31 @@
 # Provenance
 
-Imported from `software-combined/SC_Infrastructure` path
-`domains/ai-platform/codex-model-router` at commit `8d715eb4` on 2026-09-07
-(prior adapter commits `4c8e98e3`, `d1386bc0`, `749a6b8d`, `67486f14`,
-`6053502c`; sixteen OpenRouter models). Earlier history lived only in the
-deployed directory `~/.codex/mixed-model-router` and is not recoverable.
-Compatibility release 2 was verified against `codex-cli 0.153.4` on
-2026-09-07.
+SC AI Router is maintained by Software Combined. It was moved into this
+repository in September 2026; some earlier development history is unavailable.
+The repository adopted Apache-2.0 on 11 September 2026. `LICENSE` contains
+that licence and `NOTICE` records the Software Combined copyright.
+The adapted MIT-licensed opencodex compaction material remains attributed in
+`THIRD_PARTY_NOTICES.md`.
 
-An earlier migration commit (`3481b8e`) created this repository from the
-same source at `749a6b8d`; this layout supersedes it with the current
-source plus package structure, governance and CI.
+## Router instructions and fixtures
 
-The repository was created private on 2026-09-07, so the auto-updater's
-release feed is an S3 plus CloudFront distribution (`infra/`) rather than
-GitHub Releases; that feed is now public and token-free (see
-`CHANGELOG.md`).
+For the 1.0.23 publication candidate, both router instruction assets were
+written independently from the router's functional requirements and tool
+contracts. The prior desktop-derived prompt was removed, rather than edited
+or paraphrased. Captured replay fixtures retain protocol structure and
+synthetic tasks, with embedded client instruction prose replaced by synthetic
+text. Future captures hash developer/system instruction content while retaining
+model-switch protocol delimiters needed for compatibility checks.
 
-Licensing: the repository converted to Apache-2.0 only on 2026-09-11.
-`LICENSE` carries the verbatim Apache License 2.0 text, `NOTICE` carries the
-Software Combined copyright, `COMMERCIAL_LICENSE.md` was removed, and
-repository metadata uses the SPDX identifier `Apache-2.0`. The MIT-licensed
-opencodex material adapted into `ai_router/compaction.py` stays recorded in
-`THIRD_PARTY_NOTICES.md`. Publication stays an owner decision, and the plans
-directory records internal infrastructure detail that must be reviewed
-before any publication.
+This change establishes the provenance of the replacement text. It does not
+establish rights to the removed text in earlier releases or Git history.
+Those distributions require a separate owner decision.
 
-Open licensing question, unresolved at 2026-09-11: the wording in
-`ai_router/routed_base_instructions.txt` closely follows the Codex
-desktop application's own agent instructions, and shares several sentences
-with the published prompt files in `openai/codex` (Apache-2.0). The Codex
-desktop application itself is not open source, so the provenance and
-licence of that prompt text is not established. It is shipped as router
-data rather than copied client code, but it must be resolved by the owner
-before this repository is published or a release is distributed.
+## Distribution boundary
+
+End-user releases include runtime code, documented operator helpers and
+licence notices. Development diagnostics, capture utilities and publishing
+scripts are excluded. Public source exports must use a reviewed snapshot
+without the private repository's object database or internal working notes.
+See [publication procedure](publication.md). Existing shared history and
+already published downloads are outside this candidate's cleanup.

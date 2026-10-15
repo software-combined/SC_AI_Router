@@ -12,7 +12,6 @@ upstream with the client's own credentials, mirroring SubscriptionProvider:
 the router key never accompanies those requests and client credentials are
 never stored or logged.
 """
-import hashlib
 import json
 import sys
 
@@ -26,7 +25,6 @@ from .registry import by_slug, upstream_id_for
 # not silently become POST-routable.
 CLAUDE_POST_PATHS = frozenset({'/v1/messages', '/v1/messages/count_tokens'})
 CLAUDE_ALIAS_PREFIX = 'claude/'
-CLAUDE_ROUTE_PREFIX = 'claude/scg/'
 
 
 def claude_alias(slug):
@@ -41,44 +39,22 @@ def row_alias(entry):
         return None
     slug = entry.slug
     bare = slug.removeprefix('~')
-    if bare.startswith('anthropic/'):
-        return bare  # already passes the client filter
-    # Desktop 2.2553.1 rejects vendor words in IDs even with a family tier.
-    # Keep the actual vendor/model/billing name in display_name, not the ID.
-    return CLAUDE_ROUTE_PREFIX + hashlib.sha256(slug.encode()).hexdigest()
-
-
-def unalias(model, catalogue=None):
-    """Strip the discovery prefix back to the registry slug, tilde restored.
-
-    `catalogue` is the request's captured generation (request_context);
-    None reads the live registry once, for callers outside a request."""
-    if not isinstance(model, str) or not model.startswith(CLAUDE_ALIAS_PREFIX):
-        return model
-    rows = request_context.capture() if catalogue is None else catalogue
-    if model.startswith(CLAUDE_ROUTE_PREFIX):
-        return next((entry.slug for entry in rows.values()
-                     if row_alias(entry) == model), model)
-    # Older discovery IDs remain valid for saved sessions and CLI commands.
-    rest = model[len(CLAUDE_ALIAS_PREFIX):]
-    for candidate in (rest, '~' + rest):
-        if candidate in rows:
-            return candidate
-    return model  # unknown: leave untouched for subscription passthrough
+    # Clients may filter models they do not support. Discovery never disguises
+    # another vendor's model as Claude to circumvent those client filters.
+    return bare
 
 
 # Tier words the desktop accepts in anthropic_family_tier (client 1.49585.0).
 FAMILY_TIERS = frozenset({'sonnet', 'opus', 'haiku', 'fable', 'mythos'})
-FAMILY_TIER_DEFAULT = 'sonnet'
 
 
 def family_tier(alias):
-    """Tier word one discovery id stands in for; sonnet unless it names one."""
+    """Actual Claude family tier, or None for another vendor."""
     if isinstance(alias, str) and alias.startswith('anthropic/claude-'):
         word = alias.removeprefix('anthropic/claude-').split('-', 1)[0]
         if word in FAMILY_TIERS:
             return word
-    return FAMILY_TIER_DEFAULT
+    return None
 
 
 def models_listing(allowed=None):
@@ -111,8 +87,11 @@ def models_listing(allowed=None):
             continue
         alias = claude_alias(entry.slug)
         if alias is not None:
-            rows.append({'id': alias, 'display_name': entry.display_name,
-                         'anthropic_family_tier': family_tier(alias)})
+            row = {'id': alias, 'display_name': entry.display_name}
+            tier = family_tier(alias)
+            if tier is not None:
+                row['anthropic_family_tier'] = tier
+            rows.append(row)
     return {'data': rows}
 
 
@@ -128,11 +107,11 @@ if __name__ == '__main__':
 def resolve(model, catalogue=None):
     """Registry slug for a discovery id or direct slug; model untouched if unknown."""
     rows = request_context.capture() if catalogue is None else catalogue
-    slug = unalias(model, rows)
+    slug = model
     if isinstance(slug, str) and slug in rows:
         return slug
-    if isinstance(model, str) and model.startswith('anthropic/') and '~' + model in rows:
-        return '~' + model  # bare Anthropic id lists without its tilde
+    if isinstance(model, str) and '~' + model in rows:
+        return '~' + model  # truthful discovery IDs retain tracking-row membership
     return model
 
 
@@ -212,7 +191,7 @@ def select(model, path, openai_mode='subscription', anthropic_mode=None,
            region='global', allowed=None, catalogue=None):
     rows = request_context.capture() if catalogue is None else catalogue
     slug = resolve(model, rows)
-    if isinstance(model, str) and model.startswith(CLAUDE_ROUTE_PREFIX) and slug == model:
+    if isinstance(model, str) and model.startswith(CLAUDE_ALIAS_PREFIX):
         raise UnknownModel(model, ())
     entry = rows.get(slug) if isinstance(model, str) else None
     defn = provider_defs.get(entry.provider) if entry is not None else None

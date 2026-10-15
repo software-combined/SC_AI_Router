@@ -135,10 +135,9 @@ class ClaudeMergeTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         doc = json.loads(result.stdout)
         self.assertTrue(doc['data'])
-        self.assertEqual(sorted(doc['data'][0]),
-                         ['anthropic_family_tier', 'display_name', 'id'])
+        self.assertTrue({'id', 'display_name'} <= set(doc['data'][0]))
 
-    def test_merge_adds_only_the_four_owned_keys(self):
+    def test_merge_adds_only_public_gateway_settings(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'settings.json'
             path.write_text(json.dumps({'model': 'keep-me', 'env': {'OTHER': '1'}}))
@@ -149,12 +148,11 @@ class ClaudeMergeTests(unittest.TestCase):
             self.assertIn('127.0.0.1:1/test-token', doc['env']['ANTHROPIC_BASE_URL'])
             self.assertEqual(doc['env']['CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY'], 'true')
             self.assertEqual(doc['env']['ENABLE_TOOL_SEARCH'], 'true')
-            self.assertEqual(doc['env']['_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL'], '1')
+            self.assertNotIn('_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL', doc['env'])
             self.assertEqual(previous, {
                 'ANTHROPIC_BASE_URL': None,
                 'CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY': None,
-                'ENABLE_TOOL_SEARCH': None,
-                '_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL': None})
+                'ENABLE_TOOL_SEARCH': None})
 
     @unix_only
     def test_rerun_is_stable_and_reports_unchanged(self):

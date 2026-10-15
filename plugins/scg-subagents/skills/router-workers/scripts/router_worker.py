@@ -14,7 +14,6 @@ configuration, and prints one JSON result.
 Standard library only. Never prints the router's per-install path token.
 """
 import argparse
-import hashlib
 import json
 import os
 import re
@@ -215,9 +214,8 @@ def offered(base):
 
 
 def listing_id(slug, rows):
-    """The router lists Anthropic rows by bare slug and the rest by a hash of it."""
-    ids = {slug, slug.removeprefix('~'),
-           'claude/scg/' + hashlib.sha256(slug.encode()).hexdigest()}
+    """Match a truthful upstream ID, including a configured tracking row."""
+    ids = {slug, slug.removeprefix('~')}
     return next((row['id'] for row in rows if row['id'] in ids), None)
 
 

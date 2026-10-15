@@ -23,6 +23,7 @@
   "packaging/platforms/windows.py": 402,
   "packaging/service.py": 507,
   "packaging/updater.py": 587,
+  "tests/test_agent_skills_delivery.py": 302,
   "tests/test_bootstrap.py": 310,
   "tests/test_catalogue.py": 495,
   "tests/test_claude_compat.py": 339,
