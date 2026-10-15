@@ -46,9 +46,12 @@ class SwitchedRouteTests(unittest.TestCase):
         return error['message']
 
     def _snapshot(self, models):
-        saved, availability._SNAPSHOT = availability._SNAPSHOT, {
-            'key': 'k', 'region': 'global', 'models': frozenset(models), 'fetched_at': 0}
-        self.addCleanup(setattr, availability, '_SNAPSHOT', saved)
+        saved = dict(availability._SNAPSHOTS)
+        availability._SNAPSHOTS['openrouter'] = {
+            'provider': 'openrouter', 'key': 'k', 'region': 'global',
+            'models': frozenset(models), 'fetched_at': 0}
+        self.addCleanup(availability._SNAPSHOTS.update, saved)
+        self.addCleanup(availability._SNAPSHOTS.clear)
 
     def test_a_streaming_turn_gets_one_final_frame_and_nothing_is_sent(self):
         with mock.patch('ai_router.router.log_event') as log:

@@ -135,9 +135,10 @@ class ProviderWindowTests(unittest.TestCase):
         self.assertEqual((home / 'acme.key').read_text(), 'sk-acme\n')
         self.assertFalse((home / 'openrouter.key').exists())
 
-    def test_reusing_a_pending_window_repoints_it_at_the_new_provider(self):
-        # One nonce slot: a second request must not be told to connect while
-        # the open page collects for a different provider.
+    def test_a_pending_window_stays_bound_to_its_provider(self):
+        # One nonce, one provider: a second provider's request defers
+        # (returns False) instead of retargeting the open window, so a
+        # key can never be saved under the wrong provider.
         from ai_router import provider_defs
         acme = provider_defs.ProviderDef(
             id='acme', label='Acme', kind=provider_defs.EXTERNAL,
@@ -159,16 +160,20 @@ class ProviderWindowTests(unittest.TestCase):
                                               _opener=lambda url: True,
                                               _prompt=lambda url, **kw: True))
         self.assertEqual(key_store.window_provider(state), 'openrouter')
-        self.assertTrue(setup.open_key_window(server, home, 'acme',
+        # Same provider reuses the window; another provider defers.
+        self.assertTrue(setup.open_key_window(server, home, 'openrouter',
                                               _opener=lambda url: True,
                                               _prompt=lambda url, **kw: True))
-        self.assertEqual(key_store.window_provider(state), 'acme')
+        self.assertFalse(setup.open_key_window(server, home, 'acme',
+                                               _opener=lambda url: True,
+                                               _prompt=lambda url, **kw: True))
+        self.assertEqual(key_store.window_provider(state), 'openrouter')
         stored = json.loads((home / 'mixed-router-state.json').read_text())
-        self.assertEqual(stored['setup']['provider'], 'acme')
+        self.assertEqual(stored['setup']['provider'], 'openrouter')
 
-    def test_a_failed_repoint_leaves_the_running_provider_unchanged(self):
-        # The state file and the live state must agree: if the rewrite cannot
-        # happen, the window keeps collecting for the provider it already had.
+    def test_a_deferred_window_leaves_the_running_provider_unchanged(self):
+        # The state file and the live state must agree: a deferred second
+        # provider leaves the window collecting for its own provider.
         from ai_router import provider_defs
         acme = provider_defs.ProviderDef(
             id='acme', label='Acme', kind=provider_defs.EXTERNAL,

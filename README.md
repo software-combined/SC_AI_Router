@@ -8,12 +8,12 @@
 <h1 align="center">SC AI Router</h1>
 
 <p align="center">
-Route signed-in coding clients and separately billed provider models locally.
+Route signed-in coding clients and separately billed OpenRouter or AWS Bedrock models locally.
 </p>
 
 <p align="center">
-  <a href="https://github.com/software-combined/SC_AI_Router_Public/actions/workflows/check.yml"><img alt="Checks on GitHub Actions" src="https://img.shields.io/badge/checks-GitHub_Actions-blue"></a>
-  <a href="https://github.com/software-combined/SC_AI_Router_Public/releases/latest"><img alt="Releases on GitHub" src="https://img.shields.io/badge/releases-GitHub-blue"></a>
+  <a href="https://github.com/software-combined/SC_AI_Router/actions/workflows/check.yml"><img alt="Checks on GitHub Actions" src="https://img.shields.io/badge/checks-GitHub_Actions-blue"></a>
+  <a href="https://github.com/software-combined/SC_AI_Router/releases/latest"><img alt="Releases on GitHub" src="https://img.shields.io/badge/releases-GitHub-blue"></a>
   <a href="LICENSE"><img alt="Licence: Apache-2.0" src="https://img.shields.io/badge/licence-Apache--2.0-blue"></a>
 </p>
 
@@ -29,8 +29,9 @@ a subscription model and an approved model billed to your own OpenRouter key.
 
 SC AI Router is independent software. OpenAI, Anthropic and OpenRouter do
 not endorse this release. Claude gateways retain the signed-in client's
-own authentication; Anthropic supports Claude models through gateways and
-does not support non-Claude models in Claude Code. Other Messages-compatible
+own authentication. Anthropic documents gateway configuration but does not
+endorse, maintain or audit third-party gateways. It does not support non-Claude
+models in Claude Code. Other Messages-compatible
 routes keep truthful vendor IDs and are outside that client support boundary.
 See [integration scope and data flows](docs/publication.md) for release decisions.
 
@@ -38,6 +39,8 @@ See [integration scope and data flows](docs/publication.md) for release decision
 
 Have your assistant installed and an OpenRouter key if you want to use models
 billed to OpenRouter. Those models cost money and have no local spend cap.
+An AWS Bedrock API key is optional and only enables the Bedrock models;
+see [setup options](docs/setup.md).
 
 1. Ask a maintainer for the setup script for your computer. You do not need
    a GitHub account or access to this repository.
@@ -63,7 +66,7 @@ OpenRouter replies charge your OpenRouter key, even when a subscription is unava
 |---|---|---|
 | Codex | Follow the [PowerShell steps for new chats](docs/troubleshooting.md#codex-send-button-is-greyed-out-or-chatgpt-subscription-access-is-unavailable) to choose OpenRouter or your ChatGPT subscription | Open **Switch Codex**, confirm the restart; open it again to switch back |
 | Claude desktop | Setup connects the OpenRouter profile; [manual switching is an IT pilot](docs/troubleshooting.md#claude-desktop-switch-to-openrouter-and-back), with no automatic Windows shortcut | Open **Switch Claude**, confirm the restart; open it again to switch back |
-| Claude Code in the terminal | Use `/model` to choose an OpenRouter or subscription model; keep your Claude subscription sign-in | Same terminal steps |
+| Claude Code in the terminal | Use `/model` to choose a Claude-family OpenRouter or subscription model; keep your Claude subscription sign-in | Same terminal steps |
 
 For **Codex without ChatGPT subscription access**, choose **No subscription**
 in the key setup window, or use the Windows OpenRouter command in the linked guide.
@@ -99,8 +102,8 @@ Windows); read `<version>` from `<home>/current`.
 ## Use it
 
 - Switch models mid-thread from the picker to keep working in the same chat.
-  Codex and Claude Code in the terminal can use subscription models alongside
-  OpenRouter models.
+  Codex offers subscription and OpenRouter models. Claude Code's supported
+  gateway scope is Claude-family models; other vendors remain unsupported.
 - Claude desktop's gateway profile uses OpenRouter models. Its subscription
   remains in the signed-in profile; see [Claude setup](docs/claude-code.md).
 - Generate images on the originating chat's connection: native OpenAI chats
@@ -113,6 +116,9 @@ Windows); read `<version>` from `<home>/current`.
 
 The router also delivers SCG tools for code review, agent coordination,
 documentation and other work. See [agent plugins](docs/agent-plugins.md).
+
+On native routes the router may add its own instructions and recovery guidance;
+the signed-in client's credentials are forwarded to its native provider.
 
 Switching keeps text and tools within the new model's limits. Images become
 a note that the model cannot read them; unsupported reasoning levels are rejected.

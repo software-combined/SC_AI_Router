@@ -1,6 +1,6 @@
 [project]
 name = "ai-router"
-version = "1.0.23"
+version = "1.1.0"
 requires-python = ">=3.14"
 dependencies = []
 description = "Local model router for Codex and Claude Code: subscription models and OpenRouter models side by side from one loopback endpoint."
@@ -13,9 +13,9 @@ authors = [
 
 [project.urls]
 Homepage = "https://www.softwarecombined.com"
-Repository = "https://github.com/software-combined/SC_AI_Router_Public"
-Changelog = "https://github.com/software-combined/SC_AI_Router_Public/blob/main/CHANGELOG.md"
-Issues = "https://github.com/software-combined/SC_AI_Router_Public/issues"
+Repository = "https://github.com/software-combined/SC_AI_Router"
+Changelog = "https://github.com/software-combined/SC_AI_Router/blob/main/CHANGELOG.md"
+Issues = "https://github.com/software-combined/SC_AI_Router/issues"
 
 [tool.ruff]
 target-version = "py39"

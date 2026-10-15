@@ -1,10 +1,10 @@
 # Claude Code via the local router (Preview)
 
 Claude Code can talk to the local router instead of Anthropic directly. It
-keeps your Claude subscription sign-in, and the router's approved OpenRouter
-models appear next to your subscription models in the model picker. A model
-that belongs to an external provider is billed to the OpenRouter key;
-everything else passes through to your Claude subscription untouched.
+keeps your Claude subscription sign-in. Claude-family OpenRouter models can
+appear next to subscription models and charge the OpenRouter key. Anthropic
+does not support Claude Code routing to other vendors; the stock client may
+filter their truthful IDs. Native requests use your existing Claude sign-in.
 
 ## Setup
 
@@ -205,14 +205,16 @@ hand-edited conflict instead of overwriting it.
   left byte-identical. Without deferred loading a long connector list can
   still exceed a row's context window, and the session workaround is
   `--strict-mcp-config --mcp-config '{"mcpServers": {}}'`.
-- Live verification, 2026-09-21: Claude Code `2.1.223` completed a
+- Historical verification with earlier discovery IDs, 2026-09-21:
+  Claude Code `2.1.223` completed a
   Read-tool round trip on all 18 advertised rows plus a subscription
   model, with those connector servers excluded. Before the two repairs
   above, `anthropic/claude-fable-5.1` refused every turn and
   `google/gemini-3.8-flash` returned an empty answer after its tool
   call. The versions, the failures and the run are recorded in
   `docs/compatibility.md`.
-- Deferred-tool verification, 2026-09-22: a synthetic 700-tool MCP server,
+- Historical deferred-tool verification with earlier discovery IDs,
+  2026-09-22: a synthetic 700-tool MCP server,
   `z-ai/glm-5.3-flash`, Claude Code `2.1.223` and a router built from the
   working tree. Both legs passed; the deferred leg took three turns, meaning
   the search ran, the client released the tool and the model called it. The

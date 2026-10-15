@@ -31,7 +31,7 @@ class RegistryTests(unittest.TestCase):
 
     def test_provider_is_known(self):
         for model in MODELS:
-            self.assertIn(model.provider, {'openrouter', 'openai'}, model.slug)
+            self.assertIn(model.provider, {'openrouter', 'openai', 'bedrock'}, model.slug)
 
     def test_external_entry_has_every_catalogue_field(self):
         for model in MODELS:
@@ -68,6 +68,28 @@ class RegistryTests(unittest.TestCase):
             with self.subTest(bad=bad):
                 with self.assertRaises(SystemExit):
                     load(json.dumps([bad]))
+
+    def test_protocols_narrow_provider_protocols(self):
+        good = dict(zip(FIELDS, ['x/y', 'openrouter', 'X', 'V',
+            ['low'], 'low', ['text'], [], 'native', 'native', None, False, 1,
+            100, 32768, 'none', 'none', [], True, 'verified']))
+        row = load(json.dumps([{**good, 'protocols': ['messages']}]))[0]
+        self.assertEqual(row.protocols, ('messages',))
+        from ai_router.registry import row_serves
+        self.assertTrue(row_serves(row, 'messages'))
+        self.assertFalse(row_serves(row, 'responses'))
+        plain = load(json.dumps([good]))[0]
+        self.assertEqual(plain.protocols, ())
+        self.assertTrue(row_serves(plain, 'responses'))
+        for bad in (['messages', 'messages'], ['bogus'], 'messages',
+                    ['responses', 'messages', 'responses']):
+            with self.subTest(bad=bad):
+                with self.assertRaises(SystemExit):
+                    load(json.dumps([{**good, 'protocols': bad}]))
+        # A bedrock row may not claim a protocol Bedrock does not serve.
+        with self.assertRaises(SystemExit):
+            load(json.dumps([{**good, 'provider': 'bedrock',
+                              'protocols': ['images']}]))
 
     def test_listed_defaults_true_and_validates(self):
         model = Model(slug='x/y', provider='openrouter', display_name='X',
@@ -252,7 +274,8 @@ class RegistryTests(unittest.TestCase):
         self.assertEqual(by_slug('moonshotai/kimi-k3').vendor, 'MoonshotAI')
         self.assertIsNone(by_slug('unknown/model'))
         self.assertEqual(external_slugs(),
-                         {m.slug for m in MODELS if m.provider == 'openrouter'})
+                         {m.slug for m in MODELS
+                          if m.provider in ('openrouter', 'bedrock')})
 
     def test_visibility_hides_only_the_claude_same_billing_rows(self):
         unlisted = {m.slug for m in MODELS if m.provider == 'openrouter' and not m.listed}

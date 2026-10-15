@@ -15,7 +15,8 @@ Python 3.9 because `packaging/` spec-loads it on the installer surface.
 also which backend's native helper paths a provider owns: `openai` is the
 ChatGPT backend, `anthropic` is the Anthropic Messages API, and
 `openrouter` is an OpenAI-compatible Responses upstream whose errors arrive
-in OpenRouter's metadata envelope.
+in OpenRouter's metadata envelope. A regional provider (Bedrock Mantle)
+declares no single host; `host_for` builds it and fails closed.
 """
 
 RESPONSES = 'responses'
@@ -67,7 +68,8 @@ class ProviderDef:
                  'key', 'catalogue_url', 'catalogue_shape',
                  'key_info_url', 'key_info_shape', 'dialect', 'native_prefixes',
                  'request_headers', 'subscription_label', 'decisions_path',
-                 'decisions_model')
+                 'decisions_model', 'availability_path', 'required',
+                 'regional')
 
     def __init__(self, id, label, kind, host, responses_path=None,
                  messages_path=None, images_path=None, videos_path=None,
@@ -76,7 +78,8 @@ class ProviderDef:
                  key_info_shape='openrouter', dialect=None,
                  subscription_label=None,
                  decisions_path=None, decisions_model=None,
-                 native_prefixes=(), request_headers=()):
+                 native_prefixes=(), request_headers=(),
+                 availability_path=None, required=True, regional=False):
         if kind not in (EXTERNAL, SUBSCRIPTION):
             raise ValueError(f'{id}: bad kind {kind!r}')
         dialect = dialect or id
@@ -115,6 +118,16 @@ class ProviderDef:
         # A typed-decision endpoint is not a chat route: None means none.
         self.decisions_path = decisions_path
         self.decisions_model = decisions_model
+        # Model-list path for key-filtered availability; None never gates.
+        self.availability_path = availability_path
+        # An optional provider's missing key never blocks an install.
+        self.required = bool(required)
+        # A regional provider's host is built per region, never stored.
+        self.regional = bool(regional)
+        if self.regional and host is not None:
+            raise ValueError(f'{id}: a regional provider declares no host')
+        if not self.regional and not host:
+            raise ValueError(f'{id}: a provider needs a host')
 
     def serves(self, protocol):
         """True when this provider serves that protocol natively."""
@@ -155,7 +168,8 @@ OPENROUTER = ProviderDef(
     dialect=DIALECT_OPENROUTER,
     decisions_path='/api/alpha/decisions',
     decisions_model='typesafe/jev-1.13-20260917',
-    request_headers=(('X-OpenRouter-Metadata', 'enabled'),))
+    request_headers=(('X-OpenRouter-Metadata', 'enabled'),),
+    availability_path='/api/v1/models/user?output_modalities=text,image,video')
 
 # Regional endpoint profiles for one external provider. A profile names the
 # host that serves inference and key-filtered discovery for an enforced
@@ -185,6 +199,45 @@ def valid_region(region):
     # True for a known OpenRouter region profile name.
     return isinstance(region, str) and region in OPENROUTER_REGIONS
 
+
+BEDROCK = ProviderDef(
+    id='bedrock', label='AWS Bedrock', kind=EXTERNAL, host=None, regional=True,
+    responses_path='/v1', messages_path='/anthropic',
+    key=KeySpec('BEDROCK_API_KEY', 'bedrock.key', example='bedrock-api-key-...'),
+    catalogue_shape='manual', key_info_shape='none',
+    dialect=DIALECT_OPENAI_COMPATIBLE, required=False,
+    availability_path='/v1/models')
+
+def valid_bedrock_region(region):
+    """True for one AWS region name (us-east-1): lowercase letters,
+    digits and hyphens, letter first, digit last."""
+    return (isinstance(region, str) and len(region) >= 3
+            and 'a' <= region[0] <= 'z' and region[-1].isdigit()
+            and all('a' <= c <= 'z' or c.isdigit() or c == '-'
+                    for c in region))
+
+
+def bedrock_host(region):
+    """Mantle host for one AWS region, or None when the region is invalid."""
+    if not valid_bedrock_region(region):
+        return None
+    return f'bedrock-mantle.{region}.api.aws'
+
+
+def host_for(provider_id, region='global'):
+    """Inference host for one external provider and region, or None.
+
+    OpenRouter keeps its named region profiles; a regional provider builds
+    its host from an AWS region; any other external provider has one host.
+    None means the provider or region is unknown, so callers refuse.
+    """
+    defn = get(provider_id)
+    if defn is None or defn.kind != EXTERNAL:
+        return None
+    if defn.regional:
+        return bedrock_host(region)
+    return region_host(provider_id, region) or defn.host
+
 OPENAI = ProviderDef(
     id='openai', label='OpenAI', kind=SUBSCRIPTION, host='chatgpt.com',
     images_path='/backend-api/codex/images',
@@ -199,7 +252,7 @@ ANTHROPIC = ProviderDef(
     subscription_label='Claude subscription')
 
 
-PROVIDERS = (OPENROUTER, OPENAI, ANTHROPIC)
+PROVIDERS = (OPENROUTER, BEDROCK, OPENAI, ANTHROPIC)
 BY_ID = {provider.id: provider for provider in PROVIDERS}
 DEFAULT_EXTERNAL = OPENROUTER.id
 
@@ -253,3 +306,8 @@ def external_catalogues(shape=None):
     """External defs with a live model catalogue, optionally of one shape."""
     return tuple(p for p in external_defs()
                  if p.catalogue_url and (shape is None or p.catalogue_shape == shape))
+
+
+def required_external_defs():
+    """External defs whose key a first-run install must collect."""
+    return tuple(p for p in external_defs() if p.required)

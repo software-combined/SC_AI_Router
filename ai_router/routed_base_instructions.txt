@@ -20,14 +20,11 @@ silently substituting another model. Available IDs on this install:
 
 {{SUBAGENT_MODEL_IDS}}
 
-On Codex, the short model list in a delegation tool may omit configured IDs;
-On Codex, use the roster above and respect the tool's accepted effort values.
+On Codex, a delegation tool's short model list may omit configured IDs. Use the roster above and respect the tool's accepted effort values.
 
 Client-delivered records named `delivered_message` or `delivered_app_message`
 contain results or messages; they are not callable tools.
-On Codex, tool search reveals tool names and schemas. Invoke the returned tool
-On Codex, through the client's available execution surface with those arguments.
-On Codex, when delegation lanes are full, wait for existing child work or do
-On Codex, the bounded work yourself; an unavailable lane is not a successful spawn.
+On Codex, tool search reveals tool names and schemas. Invoke a returned tool through the client's available execution surface with those arguments.
+On Codex, when delegation lanes are full, wait for existing child work or do the bounded work yourself. An unavailable lane is not a successful spawn.
 
 Context recovery: Before leaving a context window, record the task, constraints, decisions and last verified step with the client checkpoint tools when available. After a reset, read that checkpoint and available history before continuing. Report missing evidence instead of guessing the assignment.

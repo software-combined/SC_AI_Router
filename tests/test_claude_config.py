@@ -29,9 +29,8 @@ class ClaudeMergeTests(unittest.TestCase):
             path = Path(tmp) / 'settings.json'
             path.write_text(json.dumps({}))
             listing = {'data': [
-                {'id': 'claude/z-ai/glm-5.3-flash',
-                 'display_name': 'Z.ai: GLM 5.3 Flash · OpenRouter',
-                 'anthropic_family_tier': 'sonnet'},
+                {'id': 'z-ai/glm-5.3-flash',
+                 'display_name': 'Z.ai: GLM 5.3 Flash · OpenRouter'},
                 {'id': 'anthropic/claude-opus-5.5',
                  'display_name': 'Anthropic: Claude Opus 5.5 · OpenRouter',
                  'anthropic_family_tier': 'opus'}]}
@@ -41,8 +40,8 @@ class ClaudeMergeTests(unittest.TestCase):
             snapshot = entry['listing']
             self.assertTrue(snapshot['served_at'].endswith('Z'))
             self.assertEqual([row['id'] for row in snapshot['models']],
-                             ['claude/z-ai/glm-5.3-flash', 'anthropic/claude-opus-5.5'])
-            self.assertEqual(snapshot['models'][0]['anthropic_family_tier'], 'sonnet')
+                             ['z-ai/glm-5.3-flash', 'anthropic/claude-opus-5.5'])
+            self.assertIsNone(snapshot['models'][0]['anthropic_family_tier'])
 
     def test_attach_without_a_listing_records_no_snapshot(self):
         with tempfile.TemporaryDirectory() as tmp:

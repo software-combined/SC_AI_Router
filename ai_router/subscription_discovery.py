@@ -218,14 +218,13 @@ def serve(handler, query=''):
         roster = subscription_catalogue.effective_roster(
             preferences,
             [row['slug'] for row in rows])
-    availability_snapshot = availability.current()
+    avail = availability.combined_ids()
     try:
         merged = catalogue.merge(
             {'models': []}, roster=roster, subscription_rows=rows,
             allowed=server.state.get('allowed_models'),
             include_twins=server.state.get('openai_mode', 'subscription') == 'none',
-            available=(None if availability_snapshot is None
-                       else availability_snapshot.get('models')))
+            available=avail)
     except (AttributeError, KeyError, TypeError, ValueError):
         if not fresh:
             _drop(server, identity)

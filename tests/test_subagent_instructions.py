@@ -43,6 +43,8 @@ class SubagentInstructionTests(unittest.TestCase):
             for row in catalog['models'])
         self.assertNotIn('On Codex,', served)
         self.assertNotIn('delegation lanes are full', served)
+        self.assertNotIn('the roster above', served)
+        self.assertNotIn('execution surface', served)
         self.assertIn('`delivered_message` or `delivered_app_message`', served)
 
     def test_no_row_serves_the_raw_placeholder(self):

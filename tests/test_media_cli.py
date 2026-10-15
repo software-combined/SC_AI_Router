@@ -119,15 +119,18 @@ class MediaCommandTests(unittest.TestCase):
 
     def test_command_restores_key_scoped_availability_before_sending(self):
         sends = install_fake(self, lambda: self.fail('must not send'))
-        with tempfile.TemporaryDirectory() as home, mock.patch.object(availability, '_SNAPSHOT', None), \
+        with tempfile.TemporaryDirectory() as home, \
+                mock.patch.object(availability, '_SNAPSHOTS', {}), \
+                mock.patch.object(availability, '_HAD_SNAPSHOT', set()), \
                 mock.patch.object(media_cli.state, 'default_home', return_value=Path(home)), \
                 mock.patch.object(media_cli.state, 'read_strict', return_value={}), \
                 mock.patch.object(media_cli.credentials, 'Credentials', return_value=StubCredentials()), \
                 mock.patch('sys.argv', ['media_cli', 'video', '--chat-model', 'openai/gpt-6-luna',
                                        '--output', str(Path(home, 'new.mp4'))]), \
                 mock.patch('sys.stderr', new_callable=io.StringIO):
-            availability.snapshot_store.write(home, availability.key_fingerprint('router-secret'),
-                                              'global', ['openai/gpt-6-luna'])
+            availability.snapshot_store.write(
+                home, 'openrouter', availability.key_fingerprint('router-secret'),
+                'global', ['openai/gpt-6-luna'])
             with self.assertRaises(SystemExit) as stopped:
                 media_cli.main()
             self.assertEqual(stopped.exception.code, 1)

@@ -22,7 +22,12 @@ FIELDS = ('slug', 'provider', 'display_name', 'vendor', 'reasoning',
 # Fields a row may carry or omit. `upstream_id` empty (or absent) means the
 # slug is the id the provider expects, which every current row relies on.
 OPTIONAL_FIELDS = ('listed', 'provider_prefs', 'upstream_id',
-                   'auto_compact_token_limit', 'observed_item_types', 'media_kind')
+                   'auto_compact_token_limit', 'observed_item_types', 'media_kind',
+                   'protocols')
+# Every wire protocol a provider definition may serve; a row's `protocols`
+# may only narrow this set, never widen it.
+PROTOCOLS = (provider_defs.RESPONSES, provider_defs.MESSAGES,
+             provider_defs.IMAGES, provider_defs.VIDEOS)
 OBSERVABLE_ITEM_TYPES = frozenset(('custom_tool_call', 'custom_tool_call_output',
                                   'compaction', 'additional_tools'))
 
@@ -58,6 +63,7 @@ class Model:
                                                  # tokens; None keeps its default
     observed_item_types: tuple = ()  # measured Responses shapes; diagnostic only
     media_kind: str | None = None  # None (chat row) | 'image' | 'video'
+    protocols: tuple = ()             # () means every protocol its provider serves
 
 
 # Documented OpenRouter `provider` object keys (router-metadata guide,
@@ -169,6 +175,14 @@ def load(text):
         if (not isinstance(observed, list) or any(not isinstance(v, str) for v in observed)
                 or not set(observed) <= OBSERVABLE_ITEM_TYPES or len(set(observed)) != len(observed)):
             raise SystemExit(f'models.json {row["slug"]}: bad observed_item_types')
+        protocols = row.get('protocols', [])
+        defn = provider_defs.get(row['provider'])
+        if (not isinstance(protocols, list)
+                or any(v not in PROTOCOLS for v in protocols)
+                or len(set(protocols)) != len(protocols)
+                or (protocols and defn is not None
+                    and any(not defn.serves(v) for v in protocols))):
+            raise SystemExit(f'models.json {row["slug"]}: bad protocols')
         # One upstream model may appear on several providers, but the picker
         # must be able to tell them apart: two rows that share an upstream id
         # may not share a label.
@@ -193,7 +207,8 @@ def load(text):
             listed=row.get('listed', True),
             provider_prefs=dict(prefs) if prefs is not None else None,
             upstream_id=upstream_id, auto_compact_token_limit=limit,
-            observed_item_types=tuple(observed), media_kind=media_kind))
+            observed_item_types=tuple(observed), media_kind=media_kind,
+            protocols=tuple(protocols)))
     return tuple(models)
 
 
@@ -242,3 +257,24 @@ def picker_key(vendor, tier, display_name, slug):
 def external_slugs():
     """Every slug billed on an external provider's own key (Plan 141)."""
     return frozenset(m.slug for m in MODELS if provider_defs.is_external(m.provider))
+
+
+def row_serves(row, protocol):
+    """True when one registry row may be routed on that protocol.
+
+    A raw dict is loaded first, so it gets the same validation as a
+    shipped row rather than a second, looser rule.
+    """
+    if isinstance(row, dict):
+        row = load(json.dumps([row]))[0]
+    defn = provider_defs.get(row.provider)
+    if defn is None:
+        return False
+    if row.provider in provider_defs.subscription_ids():
+        # A subscription row belongs to its client's own login route; the
+        # provider prefix already limits it (OpenAI Responses, Anthropic
+        # Messages), so picker visibility keeps following listed state.
+        return bool(getattr(row, 'listed', True))
+    if not defn.serves(protocol):
+        return False
+    return not row.protocols or protocol in row.protocols

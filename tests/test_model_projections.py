@@ -7,7 +7,9 @@ are preserved. No upstream fetch, model file write, or candidate probe.
 """
 import unittest
 
-from ai_router import apply_catalogue, catalogue, claude, clients, registry
+from unittest import mock
+
+from ai_router import apply_catalogue, availability, catalogue, claude, clients, registry
 from ai_router.registry import by_slug
 
 
@@ -60,6 +62,8 @@ class ModelProjectionTests(unittest.TestCase):
 
 class ClientSurfaceTests(unittest.TestCase):
     def test_the_claude_picker_and_the_messages_listing_differ(self):
+        self.enterContext(mock.patch.object(
+            availability, 'combined_ids', return_value=None))
         # Two surfaces answer "what does Claude Code see" and they differ by
         # design: the picker hides externally billed Anthropic rows so a
         # Claude Code user sees one row per model instead of the same model on

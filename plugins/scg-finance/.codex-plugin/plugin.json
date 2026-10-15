@@ -15,5 +15,5 @@
     "capabilities": [],
     "defaultPrompt": "Use the finance-analyst skill for this finance question."
   },
-  "repository": "https://github.com/software-combined/SC_AI_Router_Public"
+  "repository": "https://github.com/software-combined/SC_AI_Router"
 }

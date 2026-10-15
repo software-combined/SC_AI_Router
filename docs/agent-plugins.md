@@ -22,7 +22,7 @@ retry. A host without the router can still install the plugins from the Git
 marketplace:
 
 ```sh
-codex plugin marketplace add software-combined/SC_AI_Router_Public --ref main
+codex plugin marketplace add software-combined/SC_AI_Router --ref main
 codex plugin add scg-ponytail@scg-agent-plugins
 codex plugin add scg-review@scg-agent-plugins
 ```

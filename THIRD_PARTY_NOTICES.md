@@ -46,7 +46,7 @@ observations were made against.
 
 ## Router instruction assets
 
-The 1.0.20 candidate's router instruction assets are independently authored
+The current router instruction assets are independently authored
 Software Combined material under the repository licence. They replace the
 previous desktop-derived prompt. See [provenance](docs/PROVENANCE.md) for the
 scope of that replacement and the separate decision on older distributions.

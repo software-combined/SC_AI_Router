@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 # Literals that identify an upstream; each must live in provider_defs.py only.
 PROVIDER_LITERALS = ('openrouter.ai', 'chatgpt.com', 'api.anthropic.com',
+                     'api.aws', 'BEDROCK_API_KEY', 'bedrock.key',
                      'OPENROUTER_API_KEY', 'openrouter.key')
 
 

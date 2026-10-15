@@ -101,8 +101,9 @@ classic subject form, or
 in GitHub's immutable form. Supply the hosted-zone ID and immutable subject
 from the private deployment configuration; the templates have no identifying
 defaults. Existing stack updates retain their parameter values unless the
-deployer explicitly overrides them. The clean public source repository has
-no feed-publishing grants or copied repository variables. The role may read any object in the feed bucket and
+deployer explicitly overrides them. Publication retains this repository and
+publisher identity; public forks receive no publishing grants or copied
+repository variables. The role may read any object in the feed bucket and
 write only what a release publishes: `bundles/*` and, per channel,
 `latest.json`, `latest.json.sig` and `models.json`. It can also list the
 bucket, invalidate the feed, read the stack outputs and read the signing
@@ -851,6 +852,16 @@ window name the provider whose key they are collecting, and a second
 provider's key never overwrites the first. `--status` reports each
 provider's key under `providers`, with the legacy `key_present` /
 `key_usable` pair still describing the default provider (OpenRouter).
+
+AWS Bedrock is an optional second provider. Its key lives in
+`bedrock.key` beside `openrouter.key` (or `BEDROCK_API_KEY` for a manual
+run), and requests go to `bedrock-mantle.<region>.api.aws` for the
+`bedrock_region` in the state file. Bedrock keeps its own availability
+file, `models-availability-bedrock.json`; `/health` reports
+`bedrock_region`, `bedrock_host` and `bedrock_availability` beside the
+OpenRouter fields. A missing or rejected Bedrock key hides only Bedrock
+rows: it never blocks an OpenRouter install, and the router never falls
+back to another region or provider.
 
 1. IT creates the key in the OpenRouter dashboard with a monthly allowance
    and hands it to the user over an existing trusted channel (never commit

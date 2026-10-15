@@ -58,7 +58,7 @@ class PluginTest(unittest.TestCase):
         manifest = json.loads(
             (PLUGIN / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
         self.assertEqual(entry["name"], manifest["name"])
-        self.assertEqual(manifest["repository"], "https://github.com/software-combined/SC_AI_Router_Public")
+        self.assertEqual(manifest["repository"], "https://github.com/software-combined/SC_AI_Router")
         self.assertRegex(manifest["version"], r"^\d+\.\d+\.\d+(?:\+[A-Za-z0-9.-]+)?$")
         for skill in ("pre-commit-review", "code-simplifier", "review-setup"):
             self.assertTrue((PLUGIN / "skills" / skill / "SKILL.md").is_file())

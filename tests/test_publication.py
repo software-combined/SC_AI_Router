@@ -23,6 +23,11 @@ def module(name, path):
     return result
 
 
+def index_entry(mode, name, data):
+    oid = hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest()
+    return f'{mode} {oid} 0\t{name}\0'.encode()
+
+
 class PublicationTests(unittest.TestCase):
     def test_hosted_zone_is_supplied_by_the_deployer(self):
         for path in (ROOT / 'infra/feed.yaml', ROOT / 'infra/feed-cert.yaml'):
@@ -118,7 +123,8 @@ class PublicationTests(unittest.TestCase):
             (root / '.git' / 'old-history').write_text('private history')
             (root / 'local-notes.txt').write_text('private untracked notes')
             output = Path(folder) / 'export'
-            with mock.patch.object(exporter.subprocess, 'check_output', return_value=b'100644 ' + b'0' * 40 + b' 0\ta.py\0'):
+            with mock.patch.object(exporter.subprocess, 'check_output',
+                                   return_value=index_entry('100644', 'a.py', b'synthetic source')):
                 archive = exporter.export(root, output)
             with tarfile.open(archive) as tar:
                 self.assertEqual(tar.getnames(), ['a.py'])
@@ -136,12 +142,24 @@ class PublicationTests(unittest.TestCase):
             hook.write_text('#!/bin/sh\nexit 0\n')
             output = Path(folder) / 'export'
             with mock.patch.object(exporter.subprocess, 'check_output',
-                                   return_value=b'100755 ' + b'0' * 40 + b' 0\tpre-commit\0'):
+                                   return_value=index_entry('100755', 'pre-commit', hook.read_bytes())):
                 archive = exporter.export(root, output)
             with tarfile.open(archive) as tar:
                 self.assertEqual(tar.getmember('pre-commit').mode, 0o755)
             if os.name != 'nt':
                 self.assertEqual((output / 'source/pre-commit').stat().st_mode & 0o777, 0o755)
+
+    def test_source_export_refuses_bytes_not_in_reviewed_index(self):
+        exporter = module('publication_export_unstaged', 'tools/export_public_source.py')
+        with tempfile.TemporaryDirectory() as folder:
+            root, output = Path(folder) / 'checkout', Path(folder) / 'export'
+            root.mkdir()
+            (root / 'a.py').write_bytes(b'unreviewed working content')
+            with mock.patch.object(exporter.subprocess, 'check_output',
+                                   return_value=index_entry('100644', 'a.py', b'reviewed source')):
+                with self.assertRaisesRegex(SystemExit, 'reviewed index'):
+                    exporter.export(root, output)
+            self.assertFalse(output.exists())
 
     def test_source_export_refuses_a_private_index_path(self):
         exporter = module('publication_export_private', 'tools/export_public_source.py')
