@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Explain switching Codex and Claude to OpenRouter and back, including a greyed
+  Send button, missing subscription access, Windows PowerShell steps and Windows
+  Claude pilot limits.
+
 ## 1.0.21
 
 - Raise the local request ceiling from 96 MiB to 256 MiB on sent, decoded and

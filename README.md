@@ -36,12 +36,48 @@ billed to OpenRouter. Those models cost money and have no local spend cap.
    a GitHub account or access to this repository.
 2. Run setup and choose the assistant you use. Enter your key only in the
    setup window when prompted; never paste it into a chat or support ticket.
+   On Microsoft Windows 11 x64, use the supplied `bootstrap.ps1` in PowerShell.
+   You do not need to install Python. If Windows blocks the script, contact IT.
 3. Quit and reopen your assistant, select a model labelled `· OpenRouter`,
    and send a short greeting. Claude desktop uses its separate gateway profile.
 
 You should see the model in the picker and receive a reply. Installation alone
 does not confirm that the assistant works. See [setup options](docs/setup.md)
 for prerequisites, changing assistants and installation from source.
+
+## Switch to OpenRouter and back
+
+Changing the model and changing the assistant's connection are separate steps.
+If Codex's **Send button is greyed out** after your ChatGPT allowance runs out,
+selecting an OpenRouter model alone may not help. Use the connection steps below.
+OpenRouter replies charge your OpenRouter key, even when a subscription is unavailable.
+
+| Assistant | Microsoft Windows | macOS |
+|---|---|---|
+| Codex | Follow the [PowerShell steps for new chats](docs/troubleshooting.md#codex-send-button-is-greyed-out-or-chatgpt-subscription-access-is-unavailable) to choose OpenRouter or your ChatGPT subscription | Open **Switch Codex**, confirm the restart; open it again to switch back |
+| Claude desktop | Setup connects the OpenRouter profile; [manual switching is an IT pilot](docs/troubleshooting.md#claude-desktop-switch-to-openrouter-and-back), with no automatic Windows shortcut | Open **Switch Claude**, confirm the restart; open it again to switch back |
+| Claude Code in the terminal | Use `/model` to choose an OpenRouter or subscription model; keep your Claude subscription sign-in | Same terminal steps |
+
+For **Codex without ChatGPT subscription access**, choose **No subscription**
+in the key setup window, or use the Windows OpenRouter command in the linked guide.
+That connection needs no ChatGPT sign-in. Switch back only after subscription
+access returns, then select a subscription model. Your existing sign-in stays in place.
+
+Before changing Codex's Windows connection, save a short task handover outside
+the chat. Start a new chat after each change. Earlier chats can need their
+original connection to reopen; switching back does not migrate their history.
+The Mac Switch Codex app preserves the connections needed to resume chats in both modes.
+
+For **Claude without subscription access**, this repo currently rejects
+`--claude-mode none`. Use Codex's OpenRouter connection or contact IT about
+Claude access. An OpenRouter key alone does not establish that Claude setup works.
+
+After either switch, select the intended model and send a short greeting.
+Check that you receive a reply. On Mac, **Open Claude** opens the selected
+connection; **Switch Claude** changes it. The automatic switch apps are macOS-only
+in this beta. See [Codex switching](docs/operations.md#switch-codex),
+[Claude desktop setup](docs/claude-code.md#claude-desktop-app) and the
+[Windows pilot limits](docs/troubleshooting.md#claude-desktop-switch-to-openrouter-and-back).
 
 If you are reading the installed `<home>/README.md`, open
 `<home>/releases/<version>/README.md` for working guide links. The default home is
@@ -85,9 +121,8 @@ Windows sign-in relaunch and complete Claude desktop
 task sharing still need confirmation. Models marked Preview also have
 unfinished checks. See [compatibility](docs/compatibility.md).
 
-The macOS [Switch Codex helper](docs/operations.md#switch-codex) works around
-subscription usage limits. Archiving and automatic chat titles do not work
-while switched. Experimental [compaction](docs/operations.md#experimental-compaction)
+Archiving and automatic chat titles do not work while Codex uses its
+OpenRouter connection. Experimental [compaction](docs/operations.md#experimental-compaction)
 sends selected history to an external service and bills its key; confirm that
 sharing is permitted before enabling it. Logs exclude request content, keys
 and tokens; see [security](SECURITY.md).
