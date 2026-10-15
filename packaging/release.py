@@ -33,7 +33,9 @@ PACKAGING_FILES = (
     'packaging/download_session.py', 'packaging/download_enrolment.py',
     'packaging/control_models.py', 'packaging/download_notice.py',
     'packaging/native_controller.py', 'packaging/install_delivery.py',
-    'packaging/native_dialog.py',
+    'packaging/native_dialog.py', 'packaging/native_payload.py',
+    'packaging/native_setup.py', 'packaging/native_launch.py',
+    'packaging/native_shortcuts.py', 'packaging/native_readiness.py',
     'packaging/atomic_write.py',
     'packaging/notice.py', 'packaging/notice_text.py',
     # Plan 179: the router carries the agent skills, so a machine needs no
