@@ -1,0 +1,160 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Staff download cookie exchange. Does not change the existing distribution.
+Parameters:
+  TenantId:
+    Type: String
+    AllowedPattern: '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+    Description: Exact Microsoft Entra resource tenant UUID. No common or organizations authority.
+  ApiClientId:
+    Type: String
+    AllowedPattern: '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+    Description: Resource API app UUID, with v2 access tokens and Download.Read delegated scope.
+  NativeClientId:
+    Type: String
+    AllowedPattern: '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+    Description: Shared public-client app UUID, with approved native localhost and SPA redirects.
+  SigningKeyArn:
+    Type: String
+    AllowedPattern: 'arn:aws:kms:[a-z0-9-]+:[0-9]{12}:key/[0-9a-f-]{36}'
+    Description: Existing ECC_NIST_P256 SIGN_VERIFY KMS key in this account and region.
+  SigningPublicKeyPem:
+    Type: String
+    AllowedPattern: '-----BEGIN PUBLIC KEY-----[\r\nA-Za-z0-9+/=]+-----END PUBLIC KEY-----[\r\n]*'
+    MinLength: 100
+    MaxLength: 1024
+    Description: Public SPKI PEM from GetPublicKey for SigningKeyArn. Never supply a private key.
+  CodeBucket:
+    Type: String
+    AllowedPattern: '[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]'
+    Description: Private deployment bucket holding the handler zip.
+  CodeKey:
+    Type: String
+    MinLength: 1
+    Description: Immutable handler zip object key; handler.py must be at the zip root.
+  CodeVersion:
+    Type: String
+    MinLength: 1
+    Description: Required S3 object version of the reviewed handler zip.
+Resources:
+  PublicKey:
+    Type: AWS::CloudFront::PublicKey
+    Properties:
+      PublicKeyConfig:
+        CallerReference: !Sub '${AWS::StackName}-downloads'
+        Name: !Sub '${AWS::StackName}-downloads'
+        EncodedKey: !Ref SigningPublicKeyPem
+        Comment: Staff download cookie signer
+  KeyGroup:
+    Type: AWS::CloudFront::KeyGroup
+    Properties:
+      KeyGroupConfig:
+        Name: !Sub '${AWS::StackName}-downloads'
+        Items: [!Ref PublicKey]
+  FunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: lambda.amazonaws.com}
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SignDownloadCookies
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: kms:Sign
+                Resource: !Ref SigningKeyArn
+                Condition:
+                  StringEquals:
+                    kms:SigningAlgorithm: ECDSA_SHA_256
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !GetAtt FunctionLogGroup.Arn
+  FunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-exchange'
+      RetentionInDays: 30
+  ExchangeFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-exchange'
+      Runtime: python3.14
+      Architectures: [arm64]
+      Handler: handler.handler
+      Role: !GetAtt FunctionRole.Arn
+      MemorySize: 128
+      Timeout: 15
+      Code:
+        S3Bucket: !Ref CodeBucket
+        S3Key: !Ref CodeKey
+        S3ObjectVersion: !Ref CodeVersion
+      Environment:
+        Variables:
+          TENANT_ID: !Ref TenantId
+          API_CLIENT_ID: !Ref ApiClientId
+          NATIVE_CLIENT_ID: !Ref NativeClientId
+          SIGNING_KEY_ARN: !Ref SigningKeyArn
+          PUBLIC_KEY_ID: !Ref PublicKey
+  Api:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub '${AWS::StackName}-downloads'
+      ProtocolType: HTTP
+  Authorizer:
+    Type: AWS::ApiGatewayV2::Authorizer
+    Properties:
+      ApiId: !Ref Api
+      AuthorizerType: JWT
+      Name: ResourceTenantStaff
+      IdentitySource: ['$request.header.Authorization']
+      JwtConfiguration:
+        Audience: [!Ref ApiClientId]
+        Issuer: !Sub 'https://login.microsoftonline.com/${TenantId}/v2.0'
+  Integration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref Api
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt ExchangeFunction.Arn
+      PayloadFormatVersion: '2.0'
+      TimeoutInMillis: 16000
+  Route:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref Api
+      RouteKey: POST /download-access
+      AuthorizationType: JWT
+      AuthorizerId: !Ref Authorizer
+      AuthorizationScopes: [Download.Read]
+      Target: !Join ['/', [integrations, !Ref Integration]]
+  Stage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref Api
+      StageName: '$default'
+      AutoDeploy: true
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 20
+        ThrottlingRateLimit: 10
+  InvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ExchangeFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${Api}/*/POST/download-access'
+Outputs:
+  DownloadKeyGroupId:
+    Description: Attach only after authenticated update and rollback acceptance. No cutover is performed here.
+    Value: !Ref KeyGroup
+  ClientConfiguration:
+    Description: Public JSON for download-auth.json in the signed native package and persistent controller home.
+    Value: !Sub >-
+      {"version":1,"distribution_origin":"https://dist.softwarecombined.com","tenant_id":"${TenantId}","client_id":"${NativeClientId}","scope":"api://${ApiClientId}/Download.Read","exchange_url":"https://${Api}.execute-api.${AWS::Region}.${AWS::URLSuffix}/download-access"}

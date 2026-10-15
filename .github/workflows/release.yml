@@ -24,6 +24,8 @@ env:
   # ARN of the Secrets Manager secret holding the feed signing seed.
   # Empty fails closed rather than shipping unsigned.
   FEED_SIGNING_SEED_ARN: ${{ vars.FEED_SIGNING_SEED_ARN }}
+  NATIVE_INSTALLERS_ACCEPTED: ${{ vars.NATIVE_INSTALLERS_ACCEPTED }}
+  NATIVE_INSTALLERS_PILOT: ${{ vars.NATIVE_INSTALLERS_PILOT }}
 
 jobs:
   release:
@@ -79,11 +81,96 @@ jobs:
       - name: Verify runtime pins
         run: python tools/verify_runtime_pins.py
       - name: Build bundle
+        env:
+          DOWNLOAD_AUTH_CONFIG: ${{ vars.DOWNLOAD_AUTH_CONFIG }}
         run: |
+          EXTRA=()
+          if [ -n "$DOWNLOAD_AUTH_CONFIG" ]; then
+            mkdir -p dist
+            python -c 'import json,os;from pathlib import Path;Path("dist/download-auth.json").write_text(json.dumps(json.loads(os.environ["DOWNLOAD_AUTH_CONFIG"])))'
+            EXTRA=(--download-config dist/download-auth.json)
+          fi
           python packaging/release.py --out dist --build "$GITHUB_RUN_NUMBER" --sha "$GITHUB_SHA" --tag "$GITHUB_REF_NAME" \
-            --url-base "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
+            --url-base "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME" "${EXTRA[@]}"
           CHANNEL=$(python -c "import json;print(json.load(open('dist/latest.json'))['channel'])")
           echo "CHANNEL=$CHANNEL" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-bundle
+          path: dist/
+          if-no-files-found: error
+
+  native:
+    name: Native package (${{ matrix.target }})
+    needs: release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {target: darwin/arm64, runner: macos-15}
+          - {target: darwin/x86_64, runner: macos-15-intel}
+          - {target: windows/x86_64, runner: windows-2025}
+          - {target: linux/x86_64, runner: ubuntu-24.04}
+          - {target: linux/arm64, runner: ubuntu-24.04-arm}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: release-bundle
+          path: dist
+      - name: Linux graphical build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y zenity libgdk-pixbuf2.0-bin
+      - name: Native packaging contracts
+        run: python -m unittest tests.test_native_stage tests.test_native_packages tests.test_native_setup tests.test_native_readiness
+      - name: Build native package
+        run: python tools/build_release_installer.py --target ${{ matrix.target }}
+      - name: Verify disk image
+        if: runner.os == 'macOS'
+        run: hdiutil verify native-artifacts/*.dmg
+      - name: Configure private build storage
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c
+        with:
+          role-to-assume: ${{ env.FEED_ROLE }}
+          role-session-name: router-native-build
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Retain packages in private build storage
+        run: aws s3 cp native-artifacts/ "s3://${{ env.FEED_BUCKET }}/native-builds/${{ github.sha }}/${{ github.run_id }}/" --recursive --only-show-errors
+
+  publish:
+    name: Publish verified release
+    needs: [release, native]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: release-bundle
+          path: dist
+      - name: Read release channel
+        run: |
+          CHANNEL=$(python -c 'import json;print(json.load(open("dist/latest.json"))["channel"])')
+          PILOT_ONLY=false
+          if [ "$CHANNEL" = beta ] && [ "$NATIVE_INSTALLERS_PILOT" = true ] && [ "$NATIVE_INSTALLERS_ACCEPTED" != true ]; then
+            PILOT_ONLY=true
+          fi
+          echo "CHANNEL=$CHANNEL" >> "$GITHUB_ENV"
+          echo "PILOT_ONLY=$PILOT_ONLY" >> "$GITHUB_ENV"
       - name: Configure feed publishing credentials
         uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c
         with:
@@ -99,6 +186,8 @@ jobs:
             echo "no DistributionId output on $FEED_STACK"; exit 1
           fi
           echo "FEED_DISTRIBUTION_ID=$DIST_ID" >> "$GITHUB_ENV"
+      - name: Read verified native builds
+        run: aws s3 cp "s3://$FEED_BUCKET/native-builds/$GITHUB_SHA/$GITHUB_RUN_ID/" native-artifacts/ --recursive --only-show-errors
       - name: Publish to the update feed
         env:
           GH_TOKEN: ${{ github.token }}
@@ -111,15 +200,30 @@ jobs:
           trap 'rm -f "$SEED_FILE"' EXIT
           aws secretsmanager get-secret-value --secret-id "$FEED_SIGNING_SEED_ARN" \
             --query SecretString --output text > "$SEED_FILE"
-          python tools/publish_feed.py --dist dist --channel "$CHANNEL" \
-            --bucket "$FEED_BUCKET" --distribution-id "$FEED_DISTRIBUTION_ID" \
-            --sign "$SEED_FILE"
+          if [ "$PILOT_ONLY" != true ]; then
+            python tools/publish_feed.py --dist dist --channel "$CHANNEL" \
+              --bucket "$FEED_BUCKET" --distribution-id "$FEED_DISTRIBUTION_ID" \
+              --sign "$SEED_FILE"
+          fi
+          if [ "$NATIVE_INSTALLERS_ACCEPTED" = 'true' ] || { [ "$CHANNEL" = beta ] && [ "$NATIVE_INSTALLERS_PILOT" = 'true' ]; }; then
+            NATIVE_OPTIONS=()
+            if [ "$NATIVE_INSTALLERS_ACCEPTED" != 'true' ]; then
+              NATIVE_OPTIONS=(--pilot-macos-arm64)
+            fi
+            python tools/publish_native_installers.py --artifacts native-artifacts --channel "$CHANNEL" \
+              --download-config dist/download-auth.json --bucket "$FEED_BUCKET" \
+              --distribution-id "$FEED_DISTRIBUTION_ID" --sign "$SEED_FILE" "${NATIVE_OPTIONS[@]}"
+          fi
           rm -f "$SEED_FILE"
           trap - EXIT
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          if [ "$PILOT_ONLY" = true ]; then
+            gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --prerelease --generate-notes
+            exit 0
+          fi
           if [ "$CHANNEL" = stable ]; then
             cp dist/release-latest.json dist/latest.json
             gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/latest.json dist/feed-latest.json.sig --verify-tag --title "$GITHUB_REF_NAME" --generate-notes --latest

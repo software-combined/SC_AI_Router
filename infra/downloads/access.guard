@@ -1,0 +1,31 @@
+rule authenticated_download_exchange {
+  Resources.Route.Properties {
+    RouteKey == 'POST /download-access'
+    AuthorizationType == 'JWT'
+    AuthorizerId.Ref == 'Authorizer'
+    AuthorizationScopes == ['Download.Read']
+  }
+  Resources.Authorizer.Properties {
+    AuthorizerType == 'JWT'
+    IdentitySource == ['$request.header.Authorization']
+    JwtConfiguration.Audience == [{ 'Ref': 'ApiClientId' }]
+    JwtConfiguration.Issuer.'Fn::Sub' == 'https://login.microsoftonline.com/${TenantId}/v2.0'
+  }
+  Resources.InvokePermission.Properties {
+    Principal == 'apigateway.amazonaws.com'
+    SourceAccount exists
+    SourceArn exists
+  }
+}
+
+rule no_distribution_cutover_or_anonymous_function_url {
+  Resources.*[ Type == 'AWS::CloudFront::Distribution' ] empty
+  Resources.*[ Type == 'AWS::Lambda::Url' ] empty
+}
+
+rule deployment_identity_is_required {
+  Parameters.TenantId.Default !exists
+  Parameters.ApiClientId.Default !exists
+  Parameters.NativeClientId.Default !exists
+  Parameters.SigningKeyArn.Default !exists
+}

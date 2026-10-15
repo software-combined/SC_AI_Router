@@ -34,6 +34,14 @@ PACKAGING_FILES = (
     # Plan 179: the router carries the agent skills, so a machine needs no
     # git account and no marketplace command to receive them.
     'packaging/agent_skills.py',
+    'packaging/install_delivery.py', 'packaging/native_payload.py',
+    'packaging/native_controller.py', 'packaging/native_setup.py',
+    'packaging/native_launch.py', 'packaging/native_dialog.py',
+    'packaging/native_shortcuts.py', 'packaging/native_readiness.py',
+    'packaging/download_auth.py', 'packaging/download_oauth.py',
+    'packaging/download_session.py', 'packaging/download_enrolment.py',
+    'packaging/control_models.py',
+    'packaging/download_notice.py',
     'packaging/assets/router-icon.png',
     'packaging/systemd.py', 'packaging/update_launch.py',
     'packaging/task_launch.py',
@@ -71,6 +79,8 @@ PACKAGING_FILES = (
     # Every installed release is a copy of the software delivered to a
     # user, so the licence and notices travel with it (Apache-2.0).
     'LICENSE', 'NOTICE', 'THIRD_PARTY_NOTICES.md',
+    '.codex-plugin/plugin.json', '.claude-plugin/plugin.json',
+    'skills/manage-router/SKILL.md',
 )
 
 
@@ -90,6 +100,10 @@ def bundle_files(root):
         # the same page the repository shows.
         + sorted(p.relative_to(root).as_posix() for p in (root / 'docs').rglob('*.md'))
         + ['README.md', 'SECURITY.md']
+        + sorted(p.relative_to(root).as_posix()
+                 for folder in ('packaging/native', 'packaging/download-page')
+                 for p in (root / folder).rglob('*')
+                 if p.is_file() and '__pycache__' not in p.parts and p.suffix != '.pyc')
         + plugin_files(root)
         + list(PACKAGING_FILES)
     )
@@ -106,9 +120,6 @@ def plugin_files(root):
         return []
     wanted = []
     for plugin in sorted(p for p in plugins.iterdir() if p.is_dir()):
-        for manifest in ('.codex-plugin/plugin.json', '.claude-plugin/plugin.json'):
-            if (plugin / manifest).is_file():
-                wanted.append((plugin / manifest).relative_to(root).as_posix())
         prefix = plugin.relative_to(root).as_posix() + '/'
         for path in sorted(plugin.rglob('*')):
             rel = path.relative_to(root).as_posix()
@@ -120,7 +131,7 @@ def plugin_files(root):
             if rel.startswith(prefix + 'scripts/') and path.name != 'setup.py':
                 continue
             wanted.append(rel)
-    return wanted
+    return sorted(wanted)
 
 
 def semantic_version(base_version):
@@ -147,6 +158,8 @@ def main(argv=None):
     parser.add_argument('--channel', choices=('stable', 'beta'))
     parser.add_argument('--tag', help='Validated release tag, including optional -beta and -express.')
     parser.add_argument('--url-base')
+    parser.add_argument('--download-config', type=Path,
+                        help='public staff sign-in configuration for this release')
     parser.add_argument('--gen-key', metavar='OUT',
                         help='write a fresh 32-byte hex release signing seed (owner-only file) and exit')
     parser.add_argument('--sign', metavar='SEEDFILE',
@@ -210,7 +223,17 @@ def main(argv=None):
               'sha256': hashlib.sha256(tarball).hexdigest(), 'min_python': MIN_PYTHON,
               'serial': args.build, 'channel': channel, 'express': express,
               'models_url': f'https://dist.softwarecombined.com/{channel}/models.json',
+              'models_sha256': hashlib.sha256(payloads['ai_router/models.json']).hexdigest(),
               'published': datetime.now(timezone.utc).isoformat(timespec='seconds')}
+    if args.download_config:
+        import tempfile
+        auth_spec = importlib.util.spec_from_file_location(
+            'router_release_auth', root / 'packaging/download_auth.py')
+        auth = importlib.util.module_from_spec(auth_spec)
+        auth_spec.loader.exec_module(auth)
+        with tempfile.TemporaryDirectory() as temporary:
+            (Path(temporary) / auth.CONFIG_FILE).write_bytes(args.download_config.read_bytes())
+            latest['download_auth'] = auth.configure(temporary)
     (out_dir / 'latest.json').write_text(json.dumps(latest, indent=2) + '\n')
     # The bootstrap resolves its runtime from this table, never from a
     # hardcoded filename: pins land only through reviewed lock changes.

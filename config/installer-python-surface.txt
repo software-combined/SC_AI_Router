@@ -14,6 +14,19 @@
 # Owners: tools/check_installer_python39.py and
 # tests/test_packaging.py::test_installer_surface_parses_as_python39.
 load packaging/install.py
+load packaging/install_delivery.py
+load packaging/download_auth.py
+load packaging/download_oauth.py
+load packaging/download_session.py
+load packaging/download_enrolment.py
+load packaging/download_notice.py
+load packaging/control_models.py
+load packaging/native_payload.py
+load packaging/native_controller.py
+load packaging/native_dialog.py
+load packaging/native_setup.py
+load packaging/native_shortcuts.py
+load packaging/native_readiness.py
 load packaging/atomic_write.py
 load packaging/bundle.py
 load packaging/claude_config.py
@@ -64,5 +77,6 @@ parse packaging/codex_switch_launch.py
 parse packaging/runtime_lock.py
 parse packaging/task_launch.py
 parse packaging/update_launch.py
+parse packaging/native_launch.py
 parse tools/disable.py
 parse tools/global_instructions.py

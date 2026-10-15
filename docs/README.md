@@ -6,6 +6,7 @@ models and billing. These pages go deeper.
 | Page | Use it for |
 |---|---|
 | [Setup](setup.md) | Staff setup, assistant choices, prerequisites and installation from source |
+| [Native installers](native-installers.md) | DMG, EXE and AppImage builds, staff downloads, migration and acceptance |
 | [Agent plugins](agent-plugins.md) | The bundled tools, standalone setup and their release rules |
 | [Operations](operations.md) | Install, update, rollback, uninstall and the daily commands |
 | [Troubleshooting](troubleshooting.md) | Symptom-first remedies: updates, serving, keys, client quirks |

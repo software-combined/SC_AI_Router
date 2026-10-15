@@ -38,7 +38,7 @@ class ExpressUpdates(unittest.TestCase):
         (self.home / 'current').write_text('9.9.9')
         return SimpleNamespace(returncode=0, stdout='', stderr='')
 
-    def run_update(self, express=True, status=200, announce=None):
+    def run_update(self, express=True, status=200, announce=None, model_failure=None):
         args = install_mod.build_parser().parse_args(
             ['--home', str(self.home), '--update'] + (['--express-only'] if express else []))
 
@@ -56,6 +56,8 @@ class ExpressUpdates(unittest.TestCase):
 
         def fetch(url):
             self.fetches.append(url)
+            if url.endswith('/models.json') and model_failure is not None:
+                raise model_failure
             if url.endswith('.json.sig'):
                 return _fv.sign_hex(_seed, json.dumps(self.latest).encode()).encode()
             return self.blob
@@ -71,6 +73,17 @@ class ExpressUpdates(unittest.TestCase):
                                              (lambda _home, _state: None))
         finally:
             updater_mod._FEED_VERIFY_KEY = old_key
+
+    def test_model_download_failure_keeps_cache_and_still_applies_a_signed_update(self):
+        (self.home / 'download-auth.json').write_text('{}')
+        (self.home / 'models-cache.json').write_text('last good models')
+        install_mod._updater._models.accept(self.home, {
+            'models_url': 'https://dist.softwarecombined.com/beta/models.json',
+            'models_sha256': 'a' * 64})
+        self.assertEqual(self.run_update(model_failure=OSError('model object unavailable')), 0)
+        self.assertEqual(len(self.feeds), 1)
+        self.assertEqual((self.home / 'current').read_text(), '9.9.9')
+        self.assertEqual((self.home / 'models-cache.json').read_text(), 'last good models')
 
     def test_up_to_date_check_still_offers_new_models(self):
         # Plans 099 and 135: the hourly model refresh can add rows with no
