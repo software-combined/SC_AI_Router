@@ -34,7 +34,10 @@ def _roles(value):
         try:
             value = json.loads(value)
         except ValueError:
-            return []
+            # HTTP API JWT authorizers render array claims as [Role, Other].
+            if not (value.startswith('[') and value.endswith(']')):
+                return []
+            value = [role.strip() for role in value[1:-1].split(',')]
     return value if isinstance(value, list) else []
 
 

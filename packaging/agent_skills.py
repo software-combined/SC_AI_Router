@@ -383,9 +383,9 @@ def _digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def sync(state, plugins_dir, base=None, run=subprocess.run, which=shutil.which):
+def sync(state, plugins_dir, base=None, run=subprocess.run, which=shutil.which, clients=None):
     """One install's skills pass. Returns a short line for the install log."""
-    clients = attached_clients(state)
+    clients = attached_clients(state) if clients is None else clients
     if not clients:
         return 'no attached client'
     try:

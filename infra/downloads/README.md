@@ -109,6 +109,9 @@ send it to a custom feed, local file, another host, or redirected destination.
 Authentication requests reject redirects. Missing configuration and denied
 access are typed failures; neither returns an anonymous success.
 
+API Gateway renders role arrays as bracketed text. The handler still matches
+`Download` as one exact role after normalisation.
+
 The handler also returns the HTTP API version 2 `cookies` array. API Gateway
 turns each entry into a separate `Set-Cookie` header. Each cookie has `Secure`,
 `HttpOnly`, `SameSite=Lax`, `Path=/`, and a bounded `Max-Age`. It has no `Domain`

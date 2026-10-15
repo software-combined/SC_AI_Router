@@ -88,7 +88,7 @@ def bundle_state(bucket, key):
     return (result.stdout or '').strip() or None
 
 
-def publish_bundle(bucket, key, path, sha256):
+def publish_bundle(bucket, key, path, sha256, content_type='application/gzip'):
     """Upload an immutable bundle once; refuse to replace different bytes.
 
     The upload is create-only: S3 refuses a second write with
@@ -108,7 +108,7 @@ def publish_bundle(bucket, key, path, sha256):
                       '--key', key, '--body', str(path),
                       '--if-none-match', '*',
                       '--cache-control', BUNDLE_CACHE_CONTROL,
-                      '--content-type', 'application/gzip',
+                      '--content-type', content_type,
                       '--metadata', f'sha256={sha256}'],
                      capture_output=True, text=True)
     except OSError as exc:

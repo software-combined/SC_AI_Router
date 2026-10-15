@@ -134,7 +134,7 @@ newer = _bundle.newer
 check_manifest = _bundle.check_manifest
 check_identity = _bundle.check_identity
 
-_skills = _svc.load('router_agent_skills', Path(__file__).resolve().parent / 'agent_skills.py')
+_delivery = _svc.load('router_install_delivery', Path(__file__).resolve().parent / 'install_delivery.py')
 
 
 def self_test(python, release_dir):
@@ -289,6 +289,14 @@ def _open_key_window(python, home, setup_url, clients):
 
 
 def do_install(args, _fetch=fetch, _run=None):
+    _svc._feed.configure_home(Path(args.home).expanduser())
+    rc = _do_install(args, _fetch, _run)
+    if rc == 0 and not args.dry_run:
+        _delivery.finish(Path(args.home).expanduser(), run=run)
+    return rc
+
+
+def _do_install(args, _fetch=fetch, _run=None):
     if _run is not None:
         _svc.run = _run
     _sync_seams()
@@ -306,7 +314,7 @@ def do_install(args, _fetch=fetch, _run=None):
             print(f'No Python 3.14 found: {remedy}')
             raise SystemExit(2)
     feed = args.feed or _svc.channel_feed(home)
-    latest = json.loads(_svc.feed_read(_fetch, feed).decode())
+    latest = _updater._verified_feed(feed, _svc.feed_read(_fetch, feed), _fetch)
     serial = check_serial(home, latest, pinned=bool(args.feed))
     current = current_version(home)
     # --setup on a current install is a repair run: it restarts the current
@@ -409,12 +417,6 @@ def do_install(args, _fetch=fetch, _run=None):
             _open_key_window(python, home, setup_url, clients)
         print(f'installed {current}; health ok; key window ready')
         return 0
-    # No idle gate. A version swap is a pointer write plus a TERM: launchd
-    # owns the listening socket, so new connections queue for the incoming
-    # process while the outgoing one finishes the requests it already
-    # accepted (ai_router.router.drain_and_exit). Waiting for inflight to
-    # reach zero delayed every update on a machine that is actually in use,
-    # and bought nothing that the drain does not already guarantee.
     catalog_path = home / 'mixed-models.json'
     before_catalog = catalog_path.read_bytes() if catalog_path.exists() else None
     previous = install_bundle(home, latest['version'], tarball, manifest_doc, python)
@@ -470,7 +472,6 @@ def do_install(args, _fetch=fetch, _run=None):
         if not args.feed:
             (home / 'feed-serial').write_text(str(serial) + '\n')
         backend.start_updates(home)
-        print(f"agent skills: {_skills.sync(state, current_release_dir(home) / 'plugins', run=run)}")
         print(f"installed {latest['version']}; health ok; Claude Code attached")
         return 0
     _client_choice.attach_codex(home, state, mode, _codex_config, previous_receipt, static_catalogue=args.static_catalogue, python=python)
@@ -483,7 +484,6 @@ def do_install(args, _fetch=fetch, _run=None):
         # serial, so recording it makes the real feed look stale for good.
         (home / 'feed-serial').write_text(str(serial) + '\n')
     backend.start_updates(home)
-    print(f"agent skills: {_skills.sync(state, current_release_dir(home) / 'plugins', run=run)}")
     print(f"installed {latest['version']}; health ok; restart Codex to load the router")
     return 0
 

@@ -200,6 +200,14 @@ def start(models_url, home, _urlopen=urllib.request.urlopen):
         import random
         while True:
             time.sleep(REFRESH_INTERVAL_S + random.uniform(0, REFRESH_JITTER_S))
+            if (Path(home) / 'download-auth.json').exists():
+                # Download credentials belong to the independent updater.
+                # A signed-feed checksum protects its cache; failure retains it.
+                models = cached_models(home)
+                if models is not None:
+                    apply_fetched(models)
+                    check_pending(home)
+                continue
             models, etag = poll_once(models_url, home, etag, _urlopen)
             if models is not None:
                 apply_fetched(models)

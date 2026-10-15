@@ -30,7 +30,10 @@ PACKAGING_FILES = (
     'packaging/router_launch.py', 'packaging/service.py',
     'packaging/feed.py', 'packaging/feed_verify.py',
     'packaging/download_auth.py', 'packaging/download_oauth.py',
-    'packaging/download_session.py',
+    'packaging/download_session.py', 'packaging/download_enrolment.py',
+    'packaging/control_models.py', 'packaging/download_notice.py',
+    'packaging/native_controller.py', 'packaging/install_delivery.py',
+    'packaging/native_dialog.py',
     'packaging/atomic_write.py',
     'packaging/notice.py', 'packaging/notice_text.py',
     # Plan 179: the router carries the agent skills, so a machine needs no
@@ -149,6 +152,8 @@ def main(argv=None):
     parser.add_argument('--channel', choices=('stable', 'beta'))
     parser.add_argument('--tag', help='Validated release tag, including optional -beta and -express.')
     parser.add_argument('--url-base')
+    parser.add_argument('--download-config', type=Path,
+                        help='public staff sign-in configuration for this release')
     parser.add_argument('--gen-key', metavar='OUT',
                         help='write a fresh 32-byte hex release signing seed (owner-only file) and exit')
     parser.add_argument('--sign', metavar='SEEDFILE',
@@ -212,7 +217,17 @@ def main(argv=None):
               'sha256': hashlib.sha256(tarball).hexdigest(), 'min_python': MIN_PYTHON,
               'serial': args.build, 'channel': channel, 'express': express,
               'models_url': f'https://dist.softwarecombined.com/{channel}/models.json',
+              'models_sha256': hashlib.sha256(payloads['ai_router/models.json']).hexdigest(),
               'published': datetime.now(timezone.utc).isoformat(timespec='seconds')}
+    if args.download_config:
+        import tempfile
+        auth_spec = importlib.util.spec_from_file_location(
+            'router_release_auth', root / 'packaging/download_auth.py')
+        auth = importlib.util.module_from_spec(auth_spec)
+        auth_spec.loader.exec_module(auth)
+        with tempfile.TemporaryDirectory() as temporary:
+            (Path(temporary) / auth.CONFIG_FILE).write_bytes(args.download_config.read_bytes())
+            latest['download_auth'] = auth.configure(temporary)
     (out_dir / 'latest.json').write_text(json.dumps(latest, indent=2) + '\n')
     # The bootstrap resolves its runtime from this table, never from a
     # hardcoded filename: pins land only through reviewed lock changes.

@@ -91,9 +91,11 @@ class ExchangeTests(unittest.TestCase):
         self.kms.sign.assert_not_called()
 
     def test_single_and_json_encoded_role_claims_match_exactly(self):
-        for roles in ('Download', '["Download"]', ['Download', 'Other']):
+        for roles in ('Download', '["Download"]', ['Download', 'Other'],
+                      '[Download]', '[Other, Download]'):
             self.assertEqual(exchange.handler(event(roles=roles), None)['statusCode'], 200)
-        self.assertEqual(exchange.handler(event(roles='["DownloadExtra"]'), None)['statusCode'], 403)
+        for roles in ('["DownloadExtra"]', '[NotDownload]', 'Other, Download'):
+            self.assertEqual(exchange.handler(event(roles=roles), None)['statusCode'], 403)
 
     def test_cookie_expiry_never_outlives_authorized_access_token(self):
         response = exchange.handler(event(exp=str(NOW + 120)), None)
