@@ -5,10 +5,10 @@ protocols the router already serves, the predicate its picker applies, and the
 predicate its own discovery listing applies. Both Claude projections read
 here, so "what does Claude Code see" has one owner.
 
-Leaf beside `provider_defs` in the dependency map: it imports the provider
-table and the id roster, and nothing else.
+It imports the provider table, the model registry (for the one row-level
+protocol rule) and the id roster, and nothing else.
 """
-from .. import provider_defs
+from .. import provider_defs, registry as _registry
 from .roster import CLIENT_IDS
 
 
@@ -46,17 +46,31 @@ def _listed_outside_anthropic(model, include_twins=False):
         return False
     if not provider_defs.is_external(model.provider) or include_twins:
         return True
+    # A Bedrock Claude row is a distinct billing route, not the
+    # OpenRouter Anthropic twin this rule keeps out of Claude's picker.
+    if model.provider == 'bedrock':
+        return True
     return not model.slug.removeprefix('~').startswith('anthropic/')
+
+
+def _picker(protocol, base):
+    """One client's picker rule: the listed rule plus the row protocol."""
+    def visible(model, include_twins=False):
+        return (base(model, include_twins=include_twins)
+                and _registry.row_serves(model, protocol))
+    return visible
 
 
 CODEX = ClientDef(id='codex', label='Codex',
                   protocol=provider_defs.RESPONSES,
                   additional_protocols=(provider_defs.IMAGES,),
-                  picker_visible=_listed, discovery_visible=_listed)
+                  picker_visible=_picker(provider_defs.RESPONSES, _listed),
+                  discovery_visible=_picker(provider_defs.RESPONSES, _listed))
 CLAUDE = ClientDef(id='claude', label='Claude Code',
                    protocol=provider_defs.MESSAGES,
-                   picker_visible=_listed_outside_anthropic,
-                   discovery_visible=_listed)
+                   picker_visible=_picker(provider_defs.MESSAGES,
+                                          _listed_outside_anthropic),
+                   discovery_visible=_picker(provider_defs.MESSAGES, _listed))
 
 CLIENTS = (CODEX, CLAUDE)
 BY_ID = {client.id: client for client in CLIENTS}

@@ -1,5 +1,13 @@
 # Changelog
 
+## Public source metadata (2026-10-15)
+
+- Point plugin repository links to the clean public source. Versions: scg-documentation 0.1.4, scg-finance 0.1.3, scg-ponytail 0.1.2, scg-prototypes 0.1.4, scg-review 0.5.2, scg-subagents 0.5.22.
+
+## scg-subagents 0.5.21 (2026-10-14)
+
+- Select truthful gateway model IDs; retire hashed Claude aliases.
+
 ## scg-ponytail 0.1.1 (2026-10-08)
 
 - Include affected callers, tests, fixtures, configuration and exports when

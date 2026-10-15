@@ -25,23 +25,15 @@ restart, compaction, concurrent resumption, account and client-version
 separation, unavailable discovery, authentication rejection, and unchanged
 external routing. Its fake upstream never uses the network.
 
-Run the real-client check explicitly from the candidate checkout:
+Run the offline regression wrapper from a source checkout:
 
 ```bash
-python3.14 tools/probe_subscription_restart.py --live
+python3.14 tools/probe_subscription_restart.py
 ```
 
-It starts an isolated router and Codex home, completes a synthetic turn,
-restarts that router at the same address, and completes a second turn in the
-same chat. It leaves the installed router and client configuration alone.
-The probe permits at most two native upstream attempts, limits each input to
-128 KiB, uses low effort and refuses new upstream attempts after 120 seconds.
-Client setup and shutdown take additional time. External routes
-are rejected before sending, so its external API spend cap is zero. The native
-subscription endpoint does not accept a provider output-token cap.
-
-On 1 October 2026 (AEST), Codex CLI 0.159.2 completed both turns through the
-1.0.6 candidate using `gpt-6.1-sol` at low effort. Both responses reported
-`gpt-6.1-sol`; there were exactly two upstream attempts and two scoped native
-catalogue refreshes. This proves candidate behaviour; the installed release
-needs the normal release and compatibility gates before rollout.
+It runs `tests.test_subscription_restart` against synthetic credentials and
+mocked upstreams. `--live` is retired and refuses before any client or provider
+call. Native authentication is verified through the normal signed-in client
+path, never by reading or copying its credential files into a probe home.
+This candidate needs fresh real-client compatibility evidence before a
+production release; no live or paid checks were performed during preparation.

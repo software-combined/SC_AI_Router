@@ -37,14 +37,14 @@ class ExternalImagesProvider:
         self.row, self.allowed = row, allowed
         self.defn = provider_defs.get(row.provider)
         self.name, self.kind = self.defn.id, self.defn.kind
-        self.host = provider_defs.region_host(self.name, region) or self.defn.host
+        self.host = provider_defs.host_for(self.name, region)
 
     def prepare(self, model, path, payload, raw_body, headers, credentials,
                 decoded_len=None, context=None):
         if path not in IMAGE_POST_PATHS:
             raise PreparationError('Unsupported image operation')
         if (self.allowed is not None and self.row.slug not in self.allowed
-                or not availability.permitted(self.row.slug)):
+                or not availability.permitted(self.row.slug, provider_id=self.defn.id)):
             raise UnknownModel(model)
         context = request_context.retarget(context, self.row.slug)
         prompt = payload.get('prompt')

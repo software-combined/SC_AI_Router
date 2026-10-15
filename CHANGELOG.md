@@ -2,312 +2,38 @@
 
 ## Unreleased
 
-## 1.0.21
+## 1.1.0
 
-- Raise the local request ceiling from 96 MiB to 256 MiB on sent, decoded and
-  prepared bytes. Image-heavy native turns can continue without dropping history.
-  Keep the shared 1 GiB request budget, 60-second wait and 32-request limit.
+- Add AWS Bedrock as an opt-in external provider through the Bedrock
+  Mantle endpoint. Claude models can use the Anthropic Messages API and
+  Responses models can use the OpenAI Responses API, both with one
+  Bedrock API key and one AWS region set in the router state. Bedrock
+  models start as preview rows and stay out of the pickers until real
+  Codex and Claude Code checks pass.
+- Keep model availability refreshing when a provider's first key is saved
+  after startup. Refuse source exports whose files differ from the reviewed
+  Git index.
 
-## 1.0.20
+- Explain switching Codex and Claude to OpenRouter and back, including a greyed
+  Send button, missing subscription access, Windows PowerShell steps and Windows
+  Claude pilot limits.
 
-- Let large turns run together within a shared 1 GiB request budget. When the
-  budget is full, wait up to 60 seconds before asking the client to retry.
-  Release waiting turns as requests finish or their histories become small.
-  Keep the 96 MiB per-request ceiling and 32-request limit.
+- Prepare the existing repository for public sharing with cleaned history;
+  remove identifying defaults from infrastructure examples.
 
-## 1.0.19
+- Prepare a publication candidate with independently authored router prompts
+  and synthetic fixture instruction text, documented provenance and notices.
+- Retain native bootstrap component notices and exact source references;
+  record the outstanding Windows runtime redistribution condition. Keep
+  model-switch markers observable when capture tools hash client prose.
+- Ship only operator helpers, excluding developer diagnostics and publishing
+  tools. Retire probes that extracted or copied native subscription credentials.
+- Use truthful Claude gateway IDs and Claude family metadata only for Claude
+  models. Retire disguised aliases and the private first-party override;
+  remove an old override only when its receipt proves installer ownership.
+- Require explicit opt-in for separately billed subscription helper fallback.
+  Document provider support boundaries, cross-provider data flows and a
+  scanned source export with a private backup of earlier history.
 
-- Add Google Gemini 4 Argon through OpenRouter after real Codex and Claude Code
-  checks. Offer Low, Medium and High effort, with Low as the default, image
-  input and a one-million-token context. Keep the existing Gemini rows.
-
-## 1.0.18
-
-- Add Meta Muse Wonder through OpenRouter after real Codex and Claude Code
-  checks. Offer Minimal through Max effort, with Low as the default, image
-  input and a one-million-token context. Keep existing Muse Spark rows.
-- Repair the synthetic Codex compaction capture for current runtime arguments
-  and key-scoped summary access. Production routing and permissions are unchanged.
-
-## 1.0.17
-
-- Keep Codex's compaction trigger last after a context reset. Recovery guidance
-  now precedes the trigger, so subscription chats can compact and continue.
-  Previously OpenAI rejected the request and the router showed a generic refusal.
-
-## 1.0.16
-
-- Let another large request prepare while a reduced request streams its answer.
-  Requests that retain large data stay protected. Add request IDs, slot hold
-  times and size diagnostics to explain large-request refusals without logging content.
-
-## 1.0.15
-
-- Route Codex images by their originating chat connection, not only the
-  client profile. Native OpenAI chats keep native images; OpenRouter chats
-  use approved OpenRouter image models. Concurrent chats retain separate
-  turn bindings. Unknown or conflicting origins fail without provider fallback.
-- Support OpenRouter image edits using inline references, without sending
-  OpenAI file IDs across providers. Add an explicit media command for clients
-  without native video: submit once, retain the job ID, poll within fixed
-  limits, save the MP4 and resume without another paid submission.
-
-## 1.0.14
-
-- Replace Claude Haiku 4.5 with the verified OpenRouter Haiku 5.5 row.
-  Offer Low through Max reasoning, with Low as the default, image input
-  and a one-million-token context. Upgrades remove the retired 4.5 picker row.
-- Keep hand-authored image/video rows outside the chat-catalogue availability
-  check. Missing chat models still fail model onboarding validation.
-
-## 1.0.13
-
-- Enable Codex's native image tool in ordinary OpenRouter-only and Switch
-  Codex profiles without a ChatGPT sign-in. Generate images with GPT Image 2
-  using the OpenRouter key, then display and save them through Codex.
-  Switched profiles keep image billing on OpenRouter even when the install
-  also supports a ChatGPT subscription. Subscription profiles keep their
-  existing native image route. External image editing remains unavailable.
-
-## 1.0.12
-
-- Add OpenRouter image generation through Codex's native image tool in
-  external-only mode. Subscription mode keeps native image requests on
-  ChatGPT; explicit external image IDs use the OpenRouter key in either mode.
-  Generated image bytes retain Codex's native display and save contract.
-  Codex requires a compatible signed-in provider profile to expose its image
-  tool; the stock external-only router profile does not enable it.
-  External image edits and image models used as chat models fail before a send.
-- Add preview video job submission for `google/veo-3.1` and
-  `google/veo-3.1-fast`. Accepted jobs complete the Codex turn with their ID
-  and polling URL. Polling and downloading require the OpenRouter key.
-  Media models remain unlisted previews; the router does not poll video jobs.
-
-## 1.0.11
-
-- Review recaps can read upstream-reported model evidence for an exact Codex
-  child and assignment window. The router retains only validated child and
-  parent thread IDs, never prompts, tool data or agent names. Missing reports
-  stay unverified; mismatches remain visible across retries. Model reports
-  and requested reasoning effort are separate, not proof of model weights
-  or reasoning compute.
-
-## 1.0.10
-
-- Codex retries after interrupted reasoning no longer send a reasoning-only
-  tail to external models, which could reject the turn as an assistant prefill.
-  Earlier reasoning, tool results and ChatGPT subscription history keep their
-  existing replay rules.
-- Raise omitted external output limits from 32,000 to at most 64,000 tokens
-  so long reasoning turns have more room to finish. Model limits, context
-  headroom and explicit client limits still apply. The larger allowance can
-  reserve more OpenRouter credit while a request is running.
-
-- Rename the integration branch to `development` across contribution guidance,
-  checks and beta release validation. Existing review and test gates remain.
-
-- Rework the README around staff setup, everyday use and clear limits. Keep
-  detailed setup, plugin and update instructions in the linked guides.
-
-- Claude Code verification probes no longer inherit the caller's routing,
-  sign-in, effort or retry settings. Isolated candidates share a hard attempt
-  budget and a smaller output cap. Deferred-tool verification now requires the
-  search, released tool and paired results instead of accepting a marker echo.
-
-## 1.0.6
-
-- Ongoing Codex chats keep their subscription model after a router update.
-  If restarting loses the discovered model list, the first request refreshes
-  it for that account and client version before deciding the model is unavailable.
-  Two chats resuming together share the refresh. OpenRouter routing is unchanged.
-- On an install with an external model key, native Codex parents now receive
-  one readable set of subagent assignment and follow-up tools. This removes
-  the choice that repeatedly sent encrypted briefs to OpenRouter children.
-  Native children also receive readable briefs on these installs. Installs
-  without an external key keep the original encrypted handoffs.
-- External parents declare their existing collaboration tools readable.
-  Returned calls keep Codex's canonical tool names and explicit readable
-  marker. Ciphertext is never relabelled as readable, and an unreadable
-  external handoff still stops before delivery.
-- Bundle scg-review 0.4.20 and scg-subagents 0.5.19 with consistent Codex
-  handoff guidance and a separate Claude Code tool guide. Router workers
-  expose listing IDs for agent definitions and keep Fable children on the
-  selected worker model.
-
-## 1.0.5
-
-- Unreadable subagent handoffs now stop before Codex executes them, with a clear
-  instruction to start a new turn using plaintext. The router no longer turns
-  valid tool arguments into a string that triggers a parser error. Native
-  encrypted handoffs and earlier valid tool calls remain intact.
-- External parents now expose tools from Codex's Lite declarations and retain
-  the explicit plaintext signal on saved native tool names. Classic, Lite and
-  discovered handoff tools all request readable messages on external routes;
-  only tools offered after paging can grant that signal. Initial assignments
-  and follow-ups work across native and external parent/child routes.
-
-- Codex subagent tools now explain that the parent selects the model and effort
-  explicitly, and chooses the handoff by the recipient's provider route. GPT
-  through OpenRouter needs the plaintext tools for both initial and later
-  assignments, even when the parent uses GPT. The bundled SCG review and
-  subagent skills include the same guidance and one bounded delivery correction.
-  The installer leaves subagent defaults under the user's control.
-
-- Add a read-only Linux check for the selected Codex or Claude desktop package
-  and its bundled Electron package version. Linux switching remains unavailable
-  pending later lifecycle work and native acceptance.
-
-## 1.0.4
-
-- The Windows router finds an app-installed Codex again, so the SCG plugins
-  reach it on a scheduled update. The Codex app keeps its own CLI under
-  `%LOCALAPPDATA%` and never puts that directory on the updater's PATH, so the
-  plugin refresh reported Codex as not installed; the router looks there too.
-
-- The router now retires the old Git-based SCG plugin updater only once Codex
-  accepts the router's copy of the plugins. That updater only ever refreshes
-  Codex, but any client's success used to retire it. So a Claude Code success
-  alone could retire it while Codex still took its plugins from Git, for
-  example when the router serves only Claude Code or an update cannot find
-  Codex, and Codex's plugins then stopped updating. The router also
-  recognises the three earliest versions of that updater, so a host still
-  running one of them has it retired too.
-
-## 1.0.3
-
-- Codex now keeps every subscription model OpenAI still advertises, including
-  older models that the router had removed from its static list. Models OpenAI
-  hides stay hidden, and subscription and OpenRouter billing remain separate.
-  Updating the router does not replace updating Codex: OpenAI can offer a
-  different model list to an older client.
-- After a Codex upgrade, starting a chat now uses the model list for the
-  current client version. Previously, cached lists from both versions could
-  make a newly advertised model appear in the picker but fail as unavailable.
-
-## 1.0.2
-
-- Installing without a ChatGPT subscription no longer changes Codex settings
-  written just below the router's lines. The router's provider settings used
-  to open a section of their own, so an owner setting such as
-  `approval_policy` that followed them was read as part of that section and
-  ignored by Codex. The next update puts those settings back in effect.
-  An owner line that sets one of the router's own settings, such as your own
-  `model_provider`, is set aside while the router is attached instead of
-  making the configuration unreadable, and uninstalling puts it back.
-
-- On Linux, the router now switches off the old SCG plugin updater once it
-  delivers the plugins itself. Before, the old updater's daily timer kept
-  running and failed every day, which also marked the desktop session's
-  services as degraded. The router also recognises every released version of
-  that updater, and switches off a timer an earlier router left running after
-  it had already moved the old updater aside. The old files are kept, renamed,
-  rather than deleted. Its service is stopped too, and the old timer and
-  service's failure state is cleared. If the scheduler refuses the change,
-  retirement stays pending and keeps the files for a later retry.
-
-## 1.0.0
-
-- SCG plugins now reach Claude Code and Codex through the router. The router's
-  plugin folder now includes the marketplace file Claude Code reads, so Claude
-  Code installs the plugins instead of refusing the folder. When Codex still
-  had the plugins registered from the Git repository, the installer moves that
-  registration to the router's copy; before, Codex kept installing older
-  plugins from Git. Automatic updates now find `codex` and `claude` in
-  `~/.local/bin`, and on macOS and Linux also in `/opt/homebrew/bin` or
-  `/usr/local/bin`, so plugins refresh on scheduled updates as well as manual
-  installs. A plugin you turned off in Codex or Claude Code now stays off;
-  every install used to turn it back on. On Windows, a client installed
-  through npm (`codex.cmd`) now runs from the path it was found at; before,
-  every plugin command failed. A first plugin delivery that was cut short no
-  longer blocks every later one.
-- On Windows, the installer no longer looks for Python in drive-root folders
-  such as `C:\usr` or `C:\opt`, which any account on the computer can create.
-
-- Switch Codex (macOS): the ChatGPT app (Codex) 26.917.51856 and later stops
-  sending messages for every model once your ChatGPT subscription reaches its
-  usage limit. The new Switch Codex app in your Applications folder moves Codex
-  to OpenRouter models, and back. It asks first, quits and reopens the ChatGPT
-  app, and checks that Codex loads the new settings before it keeps a switch to
-  OpenRouter models. If the ChatGPT app does not close, Switch Codex reopens it
-  and asks you to quit it yourself and try again.
-- SCG Router offers Switch Codex once when your ChatGPT subscription reaches its
-  usage limit, and offers the way back once when the limit resets.
-- While Codex is switched, only OpenRouter models are listed, and a model that
-  needs your ChatGPT subscription answers with a plain message that says what
-  to pick instead. Codex still asks you before it runs a command that needs
-  approval, and conversations started while switched still open after you
-  switch back.
-- Known limitations while Codex is switched: archiving a conversation fails with
-  "Failed to archive conversation", a ChatGPT app (Codex) issue, so switch back
-  to archive it. Conversation titles are not generated.
-- If Claude does not close in time, Switch Claude reopens it and asks you to try
-  again. Crash-reporter helpers, which can keep running for days after an app
-  update, no longer hold up Switch Claude or Switch Codex.
-- Switch Codex, like Switch Claude, is macOS-only in this beta.
-- Claude Sonnet 5.5 replaces Claude Sonnet 5 in the OpenRouter model list.
-- The OpenRouter picker now offers GPT-6.1 Sol in place of GPT-6 Sol. An
-  upgrade drops the older row instead of showing both. A text-file Read no
-  longer receives Claude Code's PDF page argument, so a model that fills every
-  advertised argument reads the file once instead of retrying a blank page
-  range.
-- The OpenRouter picker no longer offers GPT-5.6 Terra. GPT-5.6 Terra on your
-  ChatGPT subscription is unchanged.
-
-- SCG plugin delivery now reports the cause of a marketplace-synchronisation
-  failure and the command and client error for each refused plugin
-  registration, so a broken but fail-soft delivery is diagnosable from the
-  install log instead of showing only an exception type or a refusal count.
-
-- Switch Claude now copies your current account's local Claude Code tasks, with
-  their full conversations and files, to the other connection before switching.
-  Only tasks from the organization you are signed in to are shared; tasks in
-  your other organizations stay where they are. Cowork tasks are not shared in
-  this beta and stay where they are. Sign-in files never move. A task whose
-  conversation is missing, or was continued differently on each connection, is
-  left as it is with both copies kept; Claude still switches and then says how
-  many tasks were not shared. Any other copy problem keeps Claude on its current
-  connection, and Claude reopens there if it had already closed. Open Claude and
-  router startup leave tasks alone. Full native acceptance remains pending; see
-  `docs/compatibility.md`.
-- A Claude Code task you delete no longer comes back after Switch Claude. Its
-  copy on the other connection is moved to a hidden trash folder,
-  `claude-code-sessions/.claude-profile-control-trash` inside that connection's
-  Claude folder, and is never erased. A copy that changed since the last switch
-  is kept and shared again. When a connection loses every one of several shared
-  tasks at once, for example after signing out, they are shared back instead.
-- Switching from OpenRouter back to your Claude subscription no longer waits for
-  task sharing to be set up. Switching away from the subscription with saved
-  tasks first asks you to open a Code task in Claude, before Claude closes.
-- Switch Claude waits for Claude's own task processes to finish before it
-  switches; browser helpers can stay open. If a switch is interrupted, or your
-  home folder was copied or restored, the next switch finishes or undoes the
-  earlier one instead of refusing every later switch.
-- On Windows, new Claude desktop setups use the gateway profile in local
-  AppData. An earlier attachment keeps its original profile, and automatic
-  updates keep using it.
-- Switch Claude, Open Claude and task sharing are macOS-only in this beta. On
-  Windows and Linux, setup connects Claude without them until they have been
-  tested there. After rolling back to a 0.6 release, Switch Claude uses that
-  release's plain switch, Open Claude just opens Claude, and Claude Code sessions
-  start normally; reinstall 1.0.0 to share tasks again.
-
-- Helper-turn fallback now also answers subscription 401/403 auth refusals
-  from the twin row. An exhausted login refuses naming turns with 401 as
-  well as 429; the twin answers those under the same gates. Ordinary
-  turns keep the raw upstream answer so a sign-in problem stays visible.
-
-- Refused thread-title helper turns now fall back to the Luna OpenRouter
-  twin unless `openai_helper_fallback` is explicitly false. Slugs with a
-  twin keep the same-model twin; twinless slugs answer from
-  `openai/gpt-6-luna`. Portco allowlist, key-filtered availability and the
-  single-handoff ledger rules still gate every fallback.
-
-- The installer now sets `approvals_reviewer = "user"` in the managed
-  Codex block in both subscription and no-subscription mode, so a fresh
-  or updated install never falls back to the background reviewer. An
-  owner copy of the line outside the block is removed on attach and its
-  exact text is recorded in the activation receipt, so detach puts it
-  back; `approval_policy` stays untouched.
-
-Entries older than the 1.0 series are archived unedited in
+Entries older than the 1.1 series are archived unedited in
 [docs/changelog-archive.md](docs/changelog-archive.md).

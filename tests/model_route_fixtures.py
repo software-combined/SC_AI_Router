@@ -17,7 +17,7 @@ HEADERS = {'Authorization': 'Bearer subscription-fixture',
 
 def routes():
     return tuple((row, protocol) for row in registry.MODELS for protocol in PROTOCOLS
-                 if provider_defs.get(row.provider).serves(protocol))
+                 if registry.row_serves(row, protocol))
 
 
 def frame(kind, **fields):

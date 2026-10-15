@@ -8,7 +8,7 @@
 <h1 align="center">SC AI Router</h1>
 
 <p align="center">
-Use Codex and Claude with your subscription and approved OpenRouter models.
+Route signed-in coding clients and separately billed OpenRouter or AWS Bedrock models locally.
 </p>
 
 <p align="center">
@@ -27,21 +27,67 @@ a subscription model and an approved model billed to your own OpenRouter key.
 | Status | Claude Code is in preview; [tested setups and remaining checks](docs/compatibility.md) |
 | Maintained by | Cyril Allart and Brent Maxwell; [contribution rules](CONTRIBUTING.md) |
 
+SC AI Router is independent software. OpenAI, Anthropic and OpenRouter do
+not endorse this release. Claude gateways retain the signed-in client's
+own authentication. Anthropic documents gateway configuration but does not
+endorse, maintain or audit third-party gateways. It does not support non-Claude
+models in Claude Code. Other Messages-compatible
+routes keep truthful vendor IDs and are outside that client support boundary.
+See [integration scope and data flows](docs/publication.md) for release decisions.
+
 ## Get started
 
 Have your assistant installed and an OpenRouter key if you want to use models
 billed to OpenRouter. Those models cost money and have no local spend cap.
+An AWS Bedrock API key is optional and only enables the Bedrock models;
+see [setup options](docs/setup.md).
 
 1. Ask a maintainer for the setup script for your computer. You do not need
    a GitHub account or access to this repository.
 2. Run setup and choose the assistant you use. Enter your key only in the
    setup window when prompted; never paste it into a chat or support ticket.
+   On Microsoft Windows 11 x64, use the supplied `bootstrap.ps1` in PowerShell.
+   You do not need to install Python. If Windows blocks the script, contact IT.
 3. Quit and reopen your assistant, select a model labelled `· OpenRouter`,
    and send a short greeting. Claude desktop uses its separate gateway profile.
 
 You should see the model in the picker and receive a reply. Installation alone
 does not confirm that the assistant works. See [setup options](docs/setup.md)
 for prerequisites, changing assistants and installation from source.
+
+## Switch to OpenRouter and back
+
+Changing the model and changing the assistant's connection are separate steps.
+If Codex's **Send button is greyed out** after your ChatGPT allowance runs out,
+selecting an OpenRouter model alone may not help. Use the connection steps below.
+OpenRouter replies charge your OpenRouter key, even when a subscription is unavailable.
+
+| Assistant | Microsoft Windows | macOS |
+|---|---|---|
+| Codex | Follow the [PowerShell steps for new chats](docs/troubleshooting.md#codex-send-button-is-greyed-out-or-chatgpt-subscription-access-is-unavailable) to choose OpenRouter or your ChatGPT subscription | Open **Switch Codex**, confirm the restart; open it again to switch back |
+| Claude desktop | Setup connects the OpenRouter profile; [manual switching is an IT pilot](docs/troubleshooting.md#claude-desktop-switch-to-openrouter-and-back), with no automatic Windows shortcut | Open **Switch Claude**, confirm the restart; open it again to switch back |
+| Claude Code in the terminal | Use `/model` to choose a Claude-family OpenRouter or subscription model; keep your Claude subscription sign-in | Same terminal steps |
+
+For **Codex without ChatGPT subscription access**, choose **No subscription**
+in the key setup window, or use the Windows OpenRouter command in the linked guide.
+That connection needs no ChatGPT sign-in. Switch back only after subscription
+access returns, then select a subscription model. Your existing sign-in stays in place.
+
+Before changing Codex's Windows connection, save a short task handover outside
+the chat. Start a new chat after each change. Earlier chats can need their
+original connection to reopen; switching back does not migrate their history.
+The Mac Switch Codex app preserves the connections needed to resume chats in both modes.
+
+For **Claude without subscription access**, this repo currently rejects
+`--claude-mode none`. Use Codex's OpenRouter connection or contact IT about
+Claude access. An OpenRouter key alone does not establish that Claude setup works.
+
+After either switch, select the intended model and send a short greeting.
+Check that you receive a reply. On Mac, **Open Claude** opens the selected
+connection; **Switch Claude** changes it. The automatic switch apps are macOS-only
+in this beta. See [Codex switching](docs/operations.md#switch-codex),
+[Claude desktop setup](docs/claude-code.md#claude-desktop-app) and the
+[Windows pilot limits](docs/troubleshooting.md#claude-desktop-switch-to-openrouter-and-back).
 
 If you are reading the installed `<home>/README.md`, open
 `<home>/releases/<version>/README.md` for working guide links. The default home is
@@ -56,8 +102,8 @@ Windows); read `<version>` from `<home>/current`.
 ## Use it
 
 - Switch models mid-thread from the picker to keep working in the same chat.
-  Codex and Claude Code in the terminal can use subscription models alongside
-  OpenRouter models.
+  Codex offers subscription and OpenRouter models. Claude Code's supported
+  gateway scope is Claude-family models; other vendors remain unsupported.
 - Claude desktop's gateway profile uses OpenRouter models. Its subscription
   remains in the signed-in profile; see [Claude setup](docs/claude-code.md).
 - Generate images on the originating chat's connection: native OpenAI chats
@@ -71,6 +117,9 @@ Windows); read `<version>` from `<home>/current`.
 The router also delivers SCG tools for code review, agent coordination,
 documentation and other work. See [agent plugins](docs/agent-plugins.md).
 
+On native routes the router may add its own instructions and recovery guidance;
+the signed-in client's credentials are forwarded to its native provider.
+
 Switching keeps text and tools within the new model's limits. Images become
 a note that the model cannot read them; unsupported reasoning levels are rejected.
 
@@ -78,16 +127,18 @@ a note that the model cannot read them; unsupported reasoning levels are rejecte
 
 Subscription models use the assistant's own sign-in. OpenRouter models use your
 local key; subscription credentials never accompany an OpenRouter request.
-Watch paid usage in the OpenRouter dashboard.
+Watch paid usage in the OpenRouter dashboard. Switching models sends the
+available conversation history and tool results to the selected provider.
+Subscription helper fallback is off by default; enabling it explicitly also
+sends eligible title/summary requests to OpenRouter and charges that key.
 
 macOS and Linux are supported; check the [Linux desktop requirements](docs/setup.md#before-you-start).
 Windows sign-in relaunch and complete Claude desktop
 task sharing still need confirmation. Models marked Preview also have
 unfinished checks. See [compatibility](docs/compatibility.md).
 
-The macOS [Switch Codex helper](docs/operations.md#switch-codex) works around
-subscription usage limits. Archiving and automatic chat titles do not work
-while switched. Experimental [compaction](docs/operations.md#experimental-compaction)
+Archiving and automatic chat titles do not work while Codex uses its
+OpenRouter connection. Experimental [compaction](docs/operations.md#experimental-compaction)
 sends selected history to an external service and bills its key; confirm that
 sharing is permitted before enabling it. Logs exclude request content, keys
 and tokens; see [security](SECURITY.md).
@@ -95,7 +146,8 @@ and tokens; see [security](SECURITY.md).
 ## Help
 
 If a model is missing, quit and reopen the assistant first. For other symptoms,
-use [troubleshooting](docs/troubleshooting.md) or contact Software Combined IT.
+use [troubleshooting](docs/troubleshooting.md) or open a project support issue. Software Combined IT support is for staff;
+external users have no guaranteed response or service level.
 Include what you tried and the error message. For diagnostics, use the redacted
 support bundle described in that guide, never raw state, logs or credentials.
 

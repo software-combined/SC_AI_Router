@@ -1,6 +1,6 @@
 {
   "name": "scg-prototypes",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Publish frontend prototypes to the SCG prototype channel and return shareable URLs.",
   "author": {
     "name": "Software Combined"

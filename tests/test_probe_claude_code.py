@@ -1,7 +1,6 @@
 """Offline checks for the bounded Claude Code multi-read probe gate."""
 import importlib.util
 import argparse
-import hashlib
 import json
 import tempfile
 import unittest
@@ -168,9 +167,9 @@ class MultiReadGateTest(unittest.TestCase):
                     2, ['MARKER-1', 'MARKER-2'], report,
                     'deepseek/deepseek-v4.1-flash'))
 
-    def test_hashed_alias_resolves_to_served_upstream_identity(self):
+    def test_truthful_id_resolves_to_served_upstream_identity(self):
         slug = 'deepseek/deepseek-v4.1-flash'
-        alias = 'claude/scg/' + hashlib.sha256(slug.encode()).hexdigest()
+        alias = slug
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
             (home / 'current').write_text('1')
@@ -186,7 +185,7 @@ class MultiReadGateTest(unittest.TestCase):
 
     def test_candidate_alias_uses_its_explicit_source_registry(self):
         slug = 'z-ai/glm-5.3-flash'
-        alias = 'claude/scg/' + hashlib.sha256(slug.encode()).hexdigest()
+        alias = slug
         rows = [{'slug': slug, 'upstream_id': 'synthetic/served'}]
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)

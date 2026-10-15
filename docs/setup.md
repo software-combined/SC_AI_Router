@@ -10,6 +10,11 @@ assistant settings and adds a background service and automatic update jobs.
   Codex or Claude Code in the terminal.
 - Have an OpenRouter key for models billed to OpenRouter. Enter it only in the
   setup window; a coding agent must never handle it.
+- Optional: an AWS Bedrock API key enables the Bedrock models. Create it in
+  the AWS console for one region, enable the models you want in that
+  region, and enter the key only in the setup window when the router asks
+  for AWS Bedrock. Set `bedrock_region` in the router state file to that
+  region (default `us-east-1`) and restart the router after changing it.
 - On macOS and Linux, the setup script needs any `python3`, plus `curl`,
   `tar` and either `shasum` or `sha256sum`. It supplies its own pinned
   Python runtime. Windows needs no Python.
@@ -80,7 +85,7 @@ models need to appear in its picker.
 
 ## Install from source
 
-This alternative requires repository access and Python 3.14. The install command
+This alternative requires Git and Python 3.14. The install command
 changes your local assistant settings and registers the service and update jobs.
 Run from the cloned repository:
 
