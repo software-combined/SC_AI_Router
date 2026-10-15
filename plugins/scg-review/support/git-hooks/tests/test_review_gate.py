@@ -153,6 +153,29 @@ class ReviewGateTest(unittest.TestCase):
         self.assertEqual(state["runner"], "local-cli")
         self.assertEqual(state["agent"], "main-agent")
 
+    def test_models_reads_local_choices_and_refuses_missing_or_invalid_preferences(self) -> None:
+        self.assertNotEqual(self.helper("models", "--client", "codex").returncode, 0)
+        path = self.home / ".config/scg-agent-git-hooks/config.json"
+        config = json.loads(path.read_text())
+        choices = {role: ["local/custom-model@unavailable", "vendor/other-model@high"]
+                   for role in ("simplification", "correctness", "quality", "adversarial")}
+        other = {role: ["another-provider/reviewer@high"] for role in choices}
+        config["review_models"] = {"codex": choices, "claude-code": other}
+        path.write_text(json.dumps(config))
+        result = self.helper("models", "--client", "codex")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), choices)
+        self.assertEqual(json.loads(self.helper("models", "--client", "claude-code").stdout), other)
+        self.assertNotEqual(self.helper("models", "--client", "unconfigured").returncode, 0)
+        for invalid in ({}, {**choices, "extra": ["model@high"]},
+                        *({**choices, "quality": value} for value in
+                          ([], "model@high", [None], ["model"], ["model@"], ["model@high ::x"]))):
+            with self.subTest(invalid=invalid):
+                config["review_models"]["codex"] = invalid
+                path.write_text(json.dumps(config))
+                self.assertNotEqual(self.helper("models", "--client", "codex").returncode, 0)
+        self.assertEqual(json.loads(self.helper("models", "--client", "claude-code").stdout), other)
+
     def test_old_surface_state_does_not_satisfy_gate(self) -> None:
         root = self.state_dir()
         root.mkdir(parents=True)

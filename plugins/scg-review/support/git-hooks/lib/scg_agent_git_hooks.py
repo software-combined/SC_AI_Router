@@ -100,6 +100,25 @@ def required_lanes(config: dict[str, Any]) -> list[str]:
     return normalized
 
 
+def review_models(config: dict[str, Any], client: str) -> dict[str, list[str]]:
+    """Return the machine owner's ordered model@effort choices, without defaults."""
+    profiles = config.get("review_models")
+    choices = profiles.get(client) if isinstance(profiles, dict) else None
+    roles = {"simplification", *required_lanes(config)}
+    if not isinstance(choices, dict) or set(choices) != roles:
+        fail(f"Set review_models.{client} in the local hook config for simplification and every required lane.")
+    for role, candidates in choices.items():
+        if not isinstance(candidates, list) or not candidates:
+            fail(f"review_models.{role} must be a non-empty ordered list of model@effort values.")
+        for candidate in candidates:
+            if not isinstance(candidate, str):
+                fail(f"review_models.{role} entries must be model@effort strings.")
+            model, separator, effort = candidate.rpartition("@")
+            if not model or not separator or not effort or "::" in candidate or any(c.isspace() for c in candidate):
+                fail(f"review_models.{role} entries must be model@effort without whitespace or ::.")
+    return choices
+
+
 def parse_passes(values: list[str] | None, lanes: list[str]) -> dict[str, str]:
     parsed: dict[str, str] = {}
     for raw in values or []:
@@ -408,6 +427,10 @@ def main() -> None:
 
     sc = sub.add_parser("scan", help="Verify the pinned gitleaks binary and scan the staged tree")
     sc.set_defaults(func=scan)
+
+    models = sub.add_parser("models", help="Show the owner's ordered reviewer model preferences")
+    models.add_argument("--client", required=True, help="Client profile, such as codex or claude-code")
+    models.set_defaults(func=lambda args: print(json.dumps(review_models(load_config(), args.client), indent=2)))
 
     st = sub.add_parser("status")
     st.set_defaults(func=status)

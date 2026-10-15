@@ -1,5 +1,20 @@
 # Changelog
 
+## scg-review 0.6.0 and scg-subagents 0.6.0 (2026-10-15)
+
+- Make pre-commit review model agnostic. Each machine owner sets ordered
+  `review_models` preferences in their local Git hook configuration, with no
+  shared model, provider or effort defaults. Client profiles keep Codex and
+  Claude Code choices separate; read them with `scg-review-state models --client <client>`.
+- Preserve simplification, independent lanes, the pinned secret scan, required
+  checks, bounded fallbacks, identity records and exact-tree approval. Existing
+  adapters need the documented refresh; owners supply their own model choices.
+
+## scg-ponytail 0.1.3 (2026-10-15)
+
+- Make Dietrich Gebert's Ponytail attribution visible in the skill and the
+  repository's third-party notices. Preserve the original MIT licence.
+
 ## Public source metadata (2026-10-15)
 
 - Point plugin repository links to the clean public source. Versions: scg-documentation 0.1.4, scg-finance 0.1.3, scg-ponytail 0.1.2, scg-prototypes 0.1.4, scg-review 0.5.2, scg-subagents 0.5.22.

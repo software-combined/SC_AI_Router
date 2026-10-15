@@ -35,6 +35,11 @@ installing or updating `scg-review`. Client inventories resolve the installed
 skill path, so a cache version is never part of the instructions. Plugin caches
 are delivery copies; the authored skill lives in this repository.
 
+SCG Review is model agnostic. Each user sets preferred reviewer models and
+fallbacks in their local Git hook configuration; see
+[reviewer preferences](../plugins/scg-review/references/setup.md#reviewer-preferences).
+The shared skill keeps the same review and secret-scanning gates.
+
 Installing the router later moves that Codex registration to the router's own
 copy. A plugin you turned off in Codex or Claude Code stays off.
 
