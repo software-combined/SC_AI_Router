@@ -13,6 +13,7 @@ from unittest import mock
 
 from tests.test_windows_backend import _backend, _install, _query, _state_file, _verbs, backend, service
 from tests.test_windows_task_state import _CurrentInstallerFixture
+from tests.windows_native_fixture import NativeChild, cleanup, write_launcher
 
 
 class OwnershipTests(unittest.TestCase):
@@ -69,24 +70,6 @@ class ExplicitStopTests(_CurrentInstallerFixture, unittest.TestCase):
                     self.assertFalse(tasks[other]['enabled'])
 
 
-def _cleanup(obj, names):
-    # Independent cleanup must also work when the implementation under test fails.
-    script = r'''
-$ErrorActionPreference = 'Stop'
-$r = [Console]::In.ReadToEnd() | ConvertFrom-Json
-$s = New-Object -ComObject Schedule.Service; $s.Connect()
-foreach ($name in $r.names) {
-    foreach ($i in $s.GetRunningTasks(1)) { if ($i.Path -eq ('\' + $name)) { $i.Stop() } }
-    try { $s.GetFolder('\').DeleteTask($name, 0) } catch {
-        if ($_.Exception.GetBaseException().HResult -ne -2147024894) { throw }
-    }
-}
-'''
-    obj._call(['powershell', '-NoProfile', '-NonInteractive', '-Command', script],
-              input=json.dumps({'names': names}), text=True, capture_output=True,
-              timeout=20, check=True)
-
-
 @unittest.skipUnless(sys.platform == 'win32', 'requires the real Windows Task Scheduler')
 class NativeTaskTests(unittest.TestCase):
     def test_real_ownership_instances_and_parent_survival(self):
@@ -97,15 +80,9 @@ class NativeTaskTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='router é & [] $ ') as tmp:
             home = Path(tmp)
             _state_file(home)
-            gate = home / 'gate'
-            gate.touch()
+            children = []
+            gate, heartbeat = write_launcher(home, 'router_launch.py', 40)
             service.install_task_launcher(home, Path(__file__).resolve().parents[1])
-            (home / 'router_launch.py').write_text(
-                'import time\nfrom pathlib import Path\n'
-                'home = Path(__file__).parent\nend = time.monotonic() + 40\n'
-                'while (home / "gate").exists() and time.monotonic() < end:\n'
-                '    (home / "alive").write_text(str(time.monotonic()))\n'
-                '    time.sleep(0.1)\n', encoding='utf-8')
             arguments = backend._arguments(home, 'router_launch.py', backend.ROUTER_LOG)
             xml = backend.render_router_xml(sys.executable, home, sid).replace(
                 '<Settings>', '<Settings><Hidden>true</Hidden>')
@@ -116,7 +93,7 @@ class NativeTaskTests(unittest.TestCase):
                 deadline = time.monotonic() + 15
                 while time.monotonic() < deadline:
                     result = call()
-                    if result and result['instances'] and (home / 'alive').exists():
+                    if result and result['instances'] and heartbeat.exists():
                         return result
                     time.sleep(0.2)
                 self.fail('disposable task did not start')
@@ -165,15 +142,27 @@ class NativeTaskTests(unittest.TestCase):
                 call('disable')  # An explicit stop cancels pending recovery.
                 self.assertFalse(call()['pending'])
                 call('run')
-                # An erased definition cannot prove that its process exited.
-                before = (home / 'alive').read_text()
-                call('delete')
-                time.sleep(0.3)
-                self.assertNotEqual((home / 'alive').read_text(), before)
-                for operation in ('query', 'register'):
-                    with self.assertRaises(SystemExit):
-                        call(operation)
+                # Start this phase with a fresh, bounded child, not an aging heartbeat.
+                call('stop')
+                with mock.patch.object(backend, 'ROUTER_TASK', base):
+                    self.assertTrue(obj._wait_stopped(base, 10, home))
+                    heartbeat.unlink(missing_ok=True)
+                    call('run')
+                    wait_running()
+                    child = NativeChild.capture(heartbeat)
+                    children.append(child)
+                    child.assert_alive('before-delete')
+                    call('delete')
+                    child.assert_alive('before-metadata-check')
+                    # Deletion need not retain Scheduler metadata. Missing data cannot prove exit.
+                    with self.assertRaisesRegex(SystemExit, 'exit is unverified|cannot verify Windows task') as refused:
+                        obj._wait_stopped(base, 0, home)
+                    reason = 'missing' if 'disappeared' in str(refused.exception) else 'unverified'
+                    print('Windows fixture metadata refusal: ' + reason, flush=True)
+                    child.assert_alive('after-metadata-refusal')
                 gate.unlink()
+                self.assertTrue(child.wait_exit(15), 'the deleted task child did not exit')
+                print('Windows fixture deleted child: exited=True', flush=True)
                 deadline = time.monotonic() + 15
                 while time.monotonic() < deadline:
                     try:
@@ -201,7 +190,7 @@ $null = $s.GetFolder('\').RegisterTaskDefinition($r.name, $d, 4, $r.sid, $null, 
                         call(operation)
             finally:
                 gate.unlink(missing_ok=True)
-                _cleanup(obj, [name])
+                cleanup(obj._call, [name], children)
 
     def test_native_migration_keeps_parent_until_exit_and_preserves_disabled_schedule(self):
         obj = backend.Backend(service, subprocess.run)
@@ -215,13 +204,7 @@ $null = $s.GetFolder('\').RegisterTaskDefinition($r.name, $d, 4, $r.sid, $null, 
             home = Path(tmp)
             _state_file(home)
             for script in ('router_launch.py', 'update_launch.py', 'express_launch.py'):
-                (home / script).write_text(
-                    'import time\nfrom pathlib import Path\nhome = Path(__file__).parent\n'
-                    'name = Path(__file__).stem\nend = time.monotonic() + 180\n'
-                    'while (home / (name + ".gate")).exists() and time.monotonic() < end:\n'
-                    '    (home / (name + ".alive")).write_text(str(time.monotonic()))\n'
-                    '    time.sleep(0.1)\n', encoding='utf-8')
-                (home / (Path(script).stem + '.gate')).touch()
+                write_launcher(home, script, 180)
             service.install_task_launcher(home, Path(__file__).resolve().parents[1])
             def task(name, operation='query', **kwargs):
                 return obj._task_state(name, home, operation, **kwargs)
@@ -285,4 +268,4 @@ $null = $s.GetFolder('\').RegisterTaskDefinition($r.name, $d, 4, $r.sid, $null, 
                 obj._run = subprocess.run
                 for gate in home.glob('*.gate'):
                     gate.unlink(missing_ok=True)
-                _cleanup(obj, names + [name + '-' + sid for name in names])
+                cleanup(obj._call, names + [name + '-' + sid for name in names])
