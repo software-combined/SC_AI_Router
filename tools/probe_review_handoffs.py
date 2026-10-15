@@ -14,7 +14,7 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from ai_router import catalogue, provider_defs, subscription_discovery, transport
+from ai_router import provider_defs, subscription_discovery, transport
 from tools import probe_agent_handoffs as handoffs
 
 PARENT, CHILD, EFFORT = 'gpt-6.1-sol', 'openai/gpt-6.1-sol', 'high'

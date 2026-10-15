@@ -18,11 +18,10 @@ from unittest.mock import Mock, patch
 
 from ai_router.transport import Prepared
 from ai_router import provider_defs
-from tests._platform import unix_only
 from tools import probe_agent_handoffs as handoffs
-from tools.probe_desktop_handoff import (CHILD, NATIVE_INPUT, PARENT, ROOT, CaseBudget, DesktopProbe, LegacyProbe,
+from tools.probe_desktop_handoff import (CHILD, NATIVE_INPUT, PARENT, CaseBudget, DesktopProbe, LegacyProbe,
                                          installed_rows)
-from tools.probe_handoff_matrix import MatrixProbe, RouterRows
+from tools.probe_handoff_matrix import RouterRows
 from tools.probe_review_handoffs import MAX_CALLS, MAX_INPUT, MAX_OUTPUT
 
 PLANTED = 'PLANTED private text 7f3a'

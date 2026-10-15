@@ -13,7 +13,6 @@ import json
 import logging
 from pathlib import Path
 import re
-import subprocess
 import sys
 import threading
 import time
