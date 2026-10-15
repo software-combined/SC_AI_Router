@@ -84,6 +84,7 @@ class ClientTests(unittest.TestCase):
     def test_server_fetches_key_permissions_without_refreshing_candidate_rows(self):
         from ai_router import availability, compaction_summary, router, runtime
         server = Mock()
+        server.state = {}
         with patch.object(router, 'Router', return_value=server), \
                 patch.object(runtime, 'load_state', return_value={}), \
                 patch.object(runtime, 'configure_logging'), \
@@ -93,9 +94,10 @@ class ClientTests(unittest.TestCase):
             probe.serve(Path('/tmp/probe'))
             self.assertIs(compaction_summary._fetch_summary.args[0], summary)
             self.assertIs(compaction_summary._fetch_summary.func.__self__, transport.post_with_phases)
-        refresh.assert_called_once_with(
-            provider_defs.region_host(provider_defs.DEFAULT_EXTERNAL, 'global'),
-            server.credentials.key_for.return_value, Path('/tmp/probe'))
+        # Every keyed provider refreshes with its own region value.
+        calls = {(c.args[0], c.args[4]) for c in refresh.call_args_list}
+        self.assertEqual(calls, {('openrouter', 'global'),
+                                 ('bedrock', 'us-east-1')})
         server.serve_forever.assert_called_once()
         server.server_close.assert_called_once()
 
@@ -115,6 +117,17 @@ class ClientTests(unittest.TestCase):
             with patch.object(probe.subprocess, 'run', return_value=SimpleNamespace(
                     returncode=1, stdout=done.stdout)):
                 self.assertFalse(probe.codex(row, Path('/tmp/probe'), Path('/tmp/catalog')))
+
+    def test_bedrock_codex_leg_skips_compaction_without_summary_rows(self):
+        from ai_router import registry as _registry
+        row = _registry.by_slug('bedrock/openai.gpt-oss-120b')
+        done = SimpleNamespace(returncode=0,
+                               stdout='{"desktop_runtime_tool_round_trip": "passed"}')
+        with patch.object(probe.subprocess, 'run', return_value=done) as run:
+            self.assertTrue(probe.codex(row, Path('/tmp/probe'), Path('/tmp/catalog')))
+        cmd = run.call_args.args[0]
+        self.assertNotIn('--compact', cmd)
+        self.assertNotIn('--image', cmd)
 
     def test_both_routes_require_client_and_correlated_router_proof(self):
         row = replace(self.row, upstream_id='different/upstream')

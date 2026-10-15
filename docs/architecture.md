@@ -370,7 +370,17 @@ is in [runtime files](runtime-files.md#codex-usage-limit-record).
    parameterized by one `ProviderDef`, never by a provider-name branch. A
    new external provider is a table entry plus registry rows; a provider
    with a different wire format is a new adapter class, never a branch in
-   the request path. `image_provider.py` owns the native Images wire format;
+   the request path.
+   AWS Bedrock is the second external provider. Its Mantle endpoint reuses
+   the native Responses and Messages wire formats, so it adds no adapter
+   class: `provider_defs.BEDROCK` owns the regional host builder, the
+   `/v1` and `/anthropic` prefixes and the Bedrock API key location. A
+   registry row may narrow its provider's protocols with `protocols`;
+   `registry.row_serves` is the one rule routing, pickers, candidate
+   evidence and the route matrix read. Availability keeps one snapshot
+   per external provider (its own key, region and file), and pickers read
+   the combined set while routing gates each provider on its own
+   snapshot. Bedrock has no summary rows, so its compaction fails closed. `image_provider.py` owns the native Images wire format;
    `protocols/images.py` selects the originating chat's connection;
    `media_origin.py` retains bounded, content-free turn bindings after chat
    preparation. Standalone calls without provenance keep their profile contract.

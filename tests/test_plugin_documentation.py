@@ -17,7 +17,7 @@ class DocumentationPluginTest(unittest.TestCase):
         self.assertEqual((ROOT / entries["scg-documentation"]["source"]["path"]).resolve(), PLUGIN)
         manifest = json.loads((PLUGIN / ".codex-plugin/plugin.json").read_text())
         self.assertEqual(manifest["name"], "scg-documentation")
-        self.assertEqual(manifest["repository"], "https://github.com/software-combined/SC_AI_Router_Public")
+        self.assertEqual(manifest["repository"], "https://github.com/software-combined/SC_AI_Router")
         self.assertRegex(manifest["version"], r"^\d+\.\d+\.\d+(?:\+[A-Za-z0-9.-]+)?$")
 
     def test_claude_manifest_matches_codex_name_and_version(self):

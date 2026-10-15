@@ -42,7 +42,7 @@ ENTRY_POLICY = {'installation': 'AVAILABLE', 'authentication': 'ON_INSTALL'}
 # lowercased. Only a Codex registration from one of these is ours to replace.
 OLD_CODEX_SOURCE = re.compile(
     r'(https://github\.com/|git@github\.com:)software-combined/'
-    r'(sc_ai_router|sc_ai_router_public|sc_unlimited_ai|sc_openrouter_adapter|sc_agent_plugins)(\.git)?/?')
+    r'(sc_ai_router|sc_unlimited_ai|sc_openrouter_adapter|sc_agent_plugins)(\.git)?/?')
 
 
 def shared_base(home=None):

@@ -2,8 +2,8 @@
 
 Protects the title contract: desktop titles come from helper turns on a
 subscription slug, so an exhausted allowance must either keep the existing
-503 (flag explicitly false) or be answered by the registry's OpenRouter
-twin (flag on or missing), and nothing else may be redirected.
+503 (flag absent or false) or be answered by the registry's OpenRouter
+twin (flag explicitly on), and nothing else may be redirected.
 """
 import dataclasses
 import json
@@ -85,7 +85,7 @@ class HelperTurnTests(unittest.TestCase):
         tools = [{'type': 'function', 'name': 'read_file'}]
         self.assertIsNotNone(
             subscription_fallback.plan(**dict(base, payload={'model': HELPER, 'tools': tools})))
-        # A missing flag means on; only an explicit false opts out.
+        # A missing flag keeps paid fallback off.
         self.assertIsNone(subscription_fallback.plan(**dict(base, state={})))
         twinless = subscription_fallback.plan(
             **dict(base, payload={'model': 'gpt-5.5'}))
@@ -135,9 +135,12 @@ class RefusedHelperTurnTests(unittest.TestCase):
 
     def _snapshot(self, models):
         from ai_router import availability
-        snap, availability._SNAPSHOT = availability._SNAPSHOT, {
-            'key': 'k', 'region': 'global', 'models': frozenset(models), 'fetched_at': 0}
-        self.addCleanup(setattr, availability, '_SNAPSHOT', snap)
+        saved = dict(availability._SNAPSHOTS)
+        availability._SNAPSHOTS['openrouter'] = {
+            'provider': 'openrouter', 'key': 'k', 'region': 'global',
+            'models': frozenset(models), 'fetched_at': 0}
+        self.addCleanup(availability._SNAPSHOTS.update, saved)
+        self.addCleanup(availability._SNAPSHOTS.clear)
 
     def test_missing_flag_keeps_the_subscription_refusal(self):
         recorded = install_fake(self, self._refusal())

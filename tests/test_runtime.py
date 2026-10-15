@@ -71,6 +71,20 @@ class LoadStateTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {'OPENROUTER_API_KEY': 'sk-or'}):
             self.assertEqual(load_state(Path(path))['token'], TOKEN)
 
+    def test_load_state_bedrock_region(self):
+        base = {'port': 0, 'token': TOKEN, 'openai_models': []}
+        with mock.patch.dict(os.environ, {'OPENROUTER_API_KEY': 'sk-or'}):
+            # Absent key keeps working; a well-formed region is accepted.
+            self.assertEqual(load_state(Path(self._write(base)))['token'], TOKEN)
+            good = load_state(Path(self._write(
+                {**base, 'bedrock_region': 'ap-southeast-2'})))
+            self.assertEqual(good['bedrock_region'], 'ap-southeast-2')
+        for bad in ('AP-SOUTHEAST-2', 'not a region', 7):
+            with self.subTest(bad=bad):
+                with self.assertRaises(SystemExit) as ctx:
+                    load_state(Path(self._write({**base, 'bedrock_region': bad})))
+                self.assertIn('bedrock_region', str(ctx.exception))
+
     def test_load_state_reports_missing_keys(self):
         path = self._write({'port': 1})
         with self.assertRaises(SystemExit) as ctx:

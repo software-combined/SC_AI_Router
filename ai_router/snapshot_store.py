@@ -1,26 +1,32 @@
 """Persisted availability snapshots (Plan 145 leaf).
 
-One owner for the `models-availability.json` document: read, write and
-clear. Validation lives here so every reader shares one shape check.
-Pure file handling; network and in-memory state stay in availability.py.
+One owner per provider document: the default external provider keeps
+`models-availability.json`; every other provider gets
+`models-availability-<provider>.json` beside it. Read, write and clear
+share one shape check. Pure file handling; network and in-memory state
+stay in availability.py.
 """
 import json
 import time
 from pathlib import Path
 
+from . import provider_defs
 from .atomic_write import replace_json
 
 SNAPSHOT_NAME = 'models-availability.json'
 
 
-def path(home):
-    return Path(home) / SNAPSHOT_NAME
+def path(home, provider_id=None):
+    provider_id = provider_id or provider_defs.DEFAULT_EXTERNAL
+    if provider_id == provider_defs.DEFAULT_EXTERNAL:
+        return Path(home) / SNAPSHOT_NAME
+    return Path(home) / f'models-availability-{provider_id}.json'
 
 
-def read(home):
+def read(home, provider_id=None):
     """Persisted snapshot dict, or None when absent or malformed."""
     try:
-        doc = json.loads(path(home).read_text())
+        doc = json.loads(path(home, provider_id).read_text())
     except (OSError, ValueError):
         return None
     if (not isinstance(doc, dict) or not isinstance(doc.get('key'), str)
@@ -37,10 +43,10 @@ def read(home):
             'models': ids, 'fetched_at': float(doc['fetched_at'])}
 
 
-def write(home, fingerprint, region, ids):
-    """Persist one snapshot; False when the home is unwritable."""
+def write(home, provider_id, fingerprint, region, ids):
+    """Persist one provider snapshot; False when the home is unwritable."""
     try:
-        replace_json(path(home),
+        replace_json(path(home, provider_id),
                      {'key': fingerprint, 'region': region,
                       'models': sorted(ids), 'fetched_at': time.time()})
     except OSError:
@@ -48,10 +54,10 @@ def write(home, fingerprint, region, ids):
     return True
 
 
-def clear(home):
-    """Drop the persisted snapshot; missing files count as cleared."""
+def clear(home, provider_id=None):
+    """Drop one provider's persisted snapshot; missing files count as cleared."""
     try:
-        path(home).unlink()
+        path(home, provider_id).unlink()
     except FileNotFoundError:
         return True
     except OSError:

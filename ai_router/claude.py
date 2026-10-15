@@ -19,7 +19,7 @@ from . import claude_compat, messages_events, outbound, provider_defs, request_c
 from .errors import ClaudeSubscriptionRequired, PreparationError, UnknownModel
 from . import registry
 from .clients import registry as client_table
-from .registry import by_slug, upstream_id_for
+from .registry import by_slug, row_serves, upstream_id_for
 
 # POST-only Messages paths; a future GET-only route (like /v1/models) must
 # not silently become POST-routable.
@@ -35,7 +35,7 @@ def claude_alias(slug):
 def row_alias(entry):
     """Discovery id for one registry row; None when it must not list."""
     defn = provider_defs.get(entry.provider) if entry is not None else None
-    if defn is None or not defn.serves(provider_defs.MESSAGES):
+    if defn is None or not row_serves(entry, provider_defs.MESSAGES):
         return None
     slug = entry.slug
     bare = slug.removeprefix('~')
@@ -61,14 +61,13 @@ def models_listing(allowed=None):
     """Anthropic-style {data: [{id, display_name, anthropic_family_tier}]}.
 
     Verified rows first A-Z by display name, then preview rows A-Z.
-    External rows outside the key-filtered snapshot hide, matching the
-    picker, the prompt and request routing; subscription rows list on.
+    External rows outside the combined key-filtered set hide, matching
+    the picker, the prompt and request routing; subscription rows list on.
     A portco allowlist (Plan 068) hides external rows it does not name, so
     a managed install without a policy announces nothing external.
     """
     from . import availability as _availability
-    snap = _availability.current()
-    avail = None if snap is None else (snap.get('models') or frozenset())
+    avail = _availability.combined_ids()
     allowset = None if allowed is None else frozenset(allowed)
     defn = client_table.get('claude')
     ordered = sorted(registry.MODELS, key=lambda m: (m.tier != 'verified',
@@ -121,8 +120,12 @@ class ExternalMessagesProvider:
     def __init__(self, defn, region='global'):
         self.defn = defn
         self.name = defn.id
-        self.region = region if provider_defs.valid_region(region) else 'global'
-        self.host = provider_defs.region_host(defn.id, self.region) or defn.host
+        if defn.regional:
+            self.region = (region if provider_defs.valid_bedrock_region(region)
+                           else 'us-east-1')
+        else:
+            self.region = region if provider_defs.valid_region(region) else 'global'
+        self.host = provider_defs.host_for(defn.id, self.region)
         self.kind = defn.kind
 
     def prepare(self, model, path, payload, raw_body, headers, credentials, decoded_len=None,
@@ -141,11 +144,20 @@ class ExternalMessagesProvider:
         # leaves decoded because these fresh headers omit Content-Encoding.
         if projected is not payload or transport.encoded(headers):
             body = json.dumps(projected).encode()
+        if self.defn.regional:
+            # Bedrock Mantle Messages: the API key travels as x-api-key
+            # with the Anthropic version header (AWS Messages guide).
+            headers = {'x-api-key': credentials.key_for(self.defn.id),
+                       'anthropic-version': '2023-06-01',
+                       'Content-Type': 'application/json',
+                       'Accept-Encoding': 'identity'}
+            headers.update(dict(self.defn.request_headers))
+        else:
+            headers = {'Authorization': 'Bearer ' + credentials.key_for(self.defn.id),
+                       'Content-Type': 'application/json',
+                       'Accept-Encoding': 'identity'}
         return transport.Prepared(
-            self.host, self.defn.path_for(provider_defs.MESSAGES, path),
-            {'Authorization': 'Bearer ' + credentials.key_for(self.defn.id),
-             'Content-Type': 'application/json',
-             'Accept-Encoding': 'identity'},
+            self.host, self.defn.path_for(provider_defs.MESSAGES, path), headers,
             body, set(), self.name, context=context, decoded_body_bytes=len(body))
 
     def adapt(self, response, tool_names, notes=None):
@@ -188,7 +200,8 @@ class ClaudeSubscriptionProvider:
 
 
 def select(model, path, openai_mode='subscription', anthropic_mode=None,
-           region='global', allowed=None, catalogue=None):
+           region='global', bedrock_region='us-east-1',
+           allowed=None, catalogue=None):
     rows = request_context.capture() if catalogue is None else catalogue
     slug = resolve(model, rows)
     if isinstance(model, str) and model.startswith(CLAUDE_ALIAS_PREFIX):
@@ -196,7 +209,7 @@ def select(model, path, openai_mode='subscription', anthropic_mode=None,
     entry = rows.get(slug) if isinstance(model, str) else None
     defn = provider_defs.get(entry.provider) if entry is not None else None
     if defn is not None and defn.kind == provider_defs.EXTERNAL:
-        if not defn.serves(provider_defs.MESSAGES):
+        if not row_serves(entry, provider_defs.MESSAGES):
             raise PreparationError(
                 f'{defn.label} models are available to Codex only: '
                 'this model does not serve the Anthropic Messages API')
@@ -208,9 +221,10 @@ def select(model, path, openai_mode='subscription', anthropic_mode=None,
         # Key-filtered availability gates routing like the picker: with no
         # successful snapshot the key shows no approved external models.
         from . import availability as _availability
-        if not _availability.permitted(slug):
+        if not _availability.permitted(slug, provider_id=defn.id):
             raise UnknownModel(slug, ())
-        return ExternalMessagesProvider(defn, region)
+        return ExternalMessagesProvider(
+            defn, bedrock_region if defn.regional else region)
     # Independent subscription choice; missing mode reproduces the legacy
     # behavior of following openai_mode. Never widened by migration.
     if (anthropic_mode if anthropic_mode is not None else openai_mode) == 'none':

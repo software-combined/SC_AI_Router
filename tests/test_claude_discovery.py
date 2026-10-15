@@ -10,7 +10,7 @@ from ai_router.errors import UnknownModel
 
 class DesktopDiscoveryTests(unittest.TestCase):
     def test_discovery_keeps_vendor_identity_even_when_a_client_filters_it(self):
-        with mock.patch.object(availability, 'current', return_value=None):
+        with mock.patch.object(availability, 'combined_ids', return_value=None):
             rows = claude.models_listing()['data']
         expected = {m.slug: m.display_name for m in registry.MODELS
                     if m.listed and m.provider == 'openrouter'}

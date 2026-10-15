@@ -1,6 +1,6 @@
 # Compatibility
 
-The 1.0.20 publication candidate removes the private Claude first-party flag
+The 1.1.0 publication candidate removes the private Claude first-party flag
 and disguised model aliases. The older client measurements below remain
 historical evidence. No live or paid client checks were run for this candidate;
 its offline verification does not establish client/provider approval.
@@ -50,6 +50,18 @@ twelve-attempt cap, with 512 KiB input, 65,536 output tokens and a 750-second
 subprocess deadline. Claude also used its USD 0.25 client budget.
 The unchanged subscription routes reuse the 13 October evidence on these
 same clients. Publication and installed picker delivery remain separate gates.
+
+## AWS Bedrock rows, 13 October 2026 AEDT (offline candidate, live proof pending)
+
+Two Bedrock Mantle rows ship as unlisted preview: `bedrock/anthropic.claude-sonnet-5`
+(Messages) and `bedrock/openai.gpt-oss-120b` (Responses), per the AWS
+Messages and Responses guides and the Mantle model-list shape. Simulated-
+upstream route proofs pass in the offline suite. No Bedrock API key was
+available in this environment, so no real Codex or Claude Code probe ran:
+both rows stay `preview` and unlisted until the bounded candidate probe
+passes for each row's declared protocol. Do not read this section as live
+Bedrock acceptance.
+
 
 ## Muse Wonder onboarding, 13 October 2026 AEDT
 

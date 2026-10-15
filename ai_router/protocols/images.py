@@ -67,4 +67,6 @@ def chat_provider(model, state, mode, rows):
     if getattr(row, 'media_kind', None):
         raise PreparationError('chat_model must be a conversation model, not a media model')
     return providers.select(model, '/responses', state.get('openai_models', []), mode,
-        region=state.get('openrouter_region', 'global'), allowed=state.get('allowed_models'), catalogue=rows)
+        region=state.get('openrouter_region', 'global'),
+        bedrock_region=state.get('bedrock_region', 'us-east-1'),
+        allowed=state.get('allowed_models'), catalogue=rows)

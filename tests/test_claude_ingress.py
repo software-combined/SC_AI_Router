@@ -18,6 +18,7 @@ from tests.harness import (
     start_server as _start_server,
     test_state as _test_state,
 )
+from ai_router import availability as _availability
 from ai_router import claude as claude_mod
 from ai_router.registry import MODELS
 
@@ -33,6 +34,14 @@ def _messages(model='z-ai/glm-5.3-flash'):
 
 class ClaudeIngressTests(unittest.TestCase):
     def _server(self, **overrides):
+        # Listing tests read the live availability gate; isolate it so a
+        # snapshot left by another test cannot hide every row here.
+        self.enterContext(mock.patch.object(
+            _availability, 'combined_ids', return_value=None))
+        self.enterContext(mock.patch.object(
+            _availability, '_SNAPSHOTS', {}))
+        self.enterContext(mock.patch.object(
+            _availability, '_HAD_SNAPSHOT', set()))
         state = _test_state(_auth_file(self))
         state.update(overrides)
         server = _start_server(state)
@@ -146,8 +155,9 @@ class ClaudeIngressTests(unittest.TestCase):
         body = json.loads(response.read())
         ids = [row['id'] for row in body['data']]
         self.assertEqual(len(ids), len(set(ids)))
+        from ai_router import registry as _registry
         want = {claude_mod.claude_alias(m.slug) for m in MODELS
-                if m.provider == 'openrouter' and m.listed}
+                if _registry.row_serves(m, 'messages') and m.listed}
         self.assertEqual(set(ids), want)
         for row in body['data']:
             self.assertEqual(set(row), {'id', 'display_name'} |

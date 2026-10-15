@@ -3,7 +3,7 @@
   "version": "0.1.2",
   "description": "Choose the simplest complete, correct solution for coding tasks.",
   "author": {"name": "Software Combined"},
-  "repository": "https://github.com/software-combined/SC_AI_Router_Public",
+  "repository": "https://github.com/software-combined/SC_AI_Router",
   "license": "Apache-2.0 AND MIT",
   "skills": "./skills/",
   "interface": {

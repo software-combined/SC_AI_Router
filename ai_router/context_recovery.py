@@ -20,7 +20,7 @@ RECOVERY_GUIDANCE = (
     'evidence that no assignment was supplied. Before asking what to work on '
     'or ending the task, recover this agent\'s assignment, subsequent steering, '
     'constraints and progress using its available checkpoint and read-only '
-    'history tools. Use the previous-window id in the context_window message; '
+    'history tools. Use the previous-window id in the context_window message. '
     'The history and checkpoint tools are loaded on demand: search the tool '
     'list for `history` or `notes` first and call the exact names it returns; '
     'do not call `read_item`, `list_items` or `search_contents` from memory. '

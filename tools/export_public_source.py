@@ -1,8 +1,8 @@
 """Export the reviewed index's current files without private Git history.
 
-Stage intended files first. This command copies working bytes for those paths;
+Stage intended files first. This command verifies working bytes against the index;
 it creates no commit, remote, tag or publication. Scan the resulting snapshot
-and archive before an owner authorizes a new public repository.
+and archive before publishing source or rewriting shared history.
 """
 import argparse
 import gzip
@@ -28,18 +28,22 @@ def export(root, output):
     entries = {}
     for record in filter(None, index):
         header, name = record.split('\t', 1)
-        mode, _, stage = header.split()
+        mode, oid, stage = header.split()
         if stage != '0' or mode not in ('100644', '100755'):
             raise SystemExit('source index must contain resolved regular files: ' + name)
-        entries[name] = int(mode, 8) & 0o777
+        entries[name] = (int(mode, 8) & 0o777, oid)
     payloads, modes = {}, {}
-    for name, mode in sorted(entries.items()):
+    for name, (mode, oid) in sorted(entries.items()):
         path = root / name
         if PRIVATE_PARTS.intersection(Path(name).parts):
             raise SystemExit('private path in source index: ' + name)
         if path.is_symlink() or not path.is_file():
             raise SystemExit('source member is missing or is a symlink: ' + name)
-        payloads[name] = path.read_bytes()
+        data = path.read_bytes()
+        blob = b'blob ' + str(len(data)).encode() + b'\0' + data
+        if hashlib.sha1(blob).hexdigest() != oid:
+            raise SystemExit('source bytes differ from the reviewed index: ' + name)
+        payloads[name] = data
         modes[name] = mode
     output.mkdir(parents=True)
     snapshot = output / 'source'

@@ -146,7 +146,7 @@ class AvailabilityTests(unittest.TestCase):
         response.status = 200
         response.read.return_value = b'{"data": []}'
         fetch = mock.Mock(return_value=response)
-        availability.fetch(provider_defs.OPENROUTER.host, 'synthetic-key', fetch)
+        availability.fetch('openrouter', provider_defs.OPENROUTER.host, 'synthetic-key', fetch)
         query = parse_qs(urlsplit(fetch.call_args.args[0].full_url).query)
         self.assertEqual(query['output_modalities'], ['text,image,video'])
 

@@ -164,8 +164,11 @@ def relay_stream(handler, provider, response, prepared, metrics, started,
     messages_external = (wire.protocol == provider_defs.MESSAGES
                          and provider.defn.kind == provider_defs.EXTERNAL
                          and wire.operation == '/v1/messages')
-    normalized = ((messages_external or provider.defn.dialect == provider_defs.DIALECT_OPENROUTER
-                  and wire.protocol == provider_defs.RESPONSES
+    # External Responses upstreams share the retryable stream lifecycle:
+    # their failure frames can still be replaced by one retry before any
+    # output commits. Subscription Responses streams stay native.
+    normalized = ((messages_external or (getattr(provider.defn, 'kind', None) == provider_defs.EXTERNAL
+                  and wire.protocol == provider_defs.RESPONSES)
                    ) and wire.kind == 'sse' and not raw_encoded)
     record.normalized = normalized
     messages_json = (wire.protocol == provider_defs.MESSAGES

@@ -19,7 +19,7 @@ import time
 import urllib.request
 from pathlib import Path
 
-from . import candidate_evidence, provider_defs
+from . import candidate_evidence, provider_defs, registry
 from .clients.registry import CLIENTS
 from .registry import by_slug
 
@@ -201,7 +201,7 @@ def main(argv=None):
     if not (probe and confirm):
         entry = by_slug(slug)
         routes = [c.protocol for c in CLIENTS
-                  if entry and provider_defs.get(entry.provider).serves(c.protocol)]
+                  if entry and registry.row_serves(entry, c.protocol)]
         print(json.dumps({'slug': slug, 'legs': legs, 'billed': False,
                           'routes': routes,
                           'note': 'rerun with --probe --confirm for bounded real-client checks'}))

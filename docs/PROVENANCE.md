@@ -9,7 +9,7 @@ The adapted MIT-licensed opencodex compaction material remains attributed in
 
 ## Router instructions and fixtures
 
-For the 1.0.23 publication candidate, both router instruction assets were
+For the publication cleanup, both router instruction assets were
 written independently from the router's functional requirements and tool
 contracts. The prior desktop-derived prompt was removed, rather than edited
 or paraphrased. Captured replay fixtures retain protocol structure and
@@ -27,5 +27,7 @@ End-user releases include runtime code, documented operator helpers and
 licence notices. Development diagnostics, capture utilities and publishing
 scripts are excluded. Public source exports must use a reviewed snapshot
 without the private repository's object database or internal working notes.
-See [publication procedure](publication.md). Existing shared history and
-already published downloads are outside this candidate's cleanup.
+See [publication procedure](publication.md). Publication also rewrites known
+affected historical content and withdraws affected earlier downloads, with
+verified private backups. Old clones, pull-request refs and cached views can
+retain earlier content; rewriting published Git history does not erase them.

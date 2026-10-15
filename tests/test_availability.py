@@ -1,4 +1,4 @@
-"""Key-filtered model availability behind `/models/user` (Plan 145).
+"""Key-filtered model availability per provider (Plan 145).
 
 Proves: the visibility rule (approved roster intersect key snapshot
 intersect local policy intersect client rules); snapshot scoping per
@@ -46,8 +46,8 @@ def _ok(*slugs):
 
 class AvailabilityUnitTests(unittest.TestCase):
     def setUp(self):
-        self._snap = availability._SNAPSHOT
-        self.addCleanup(setattr, availability, '_SNAPSHOT', self._snap)
+        self.enterContext(mock.patch.object(availability, '_SNAPSHOTS', {}))
+        self.enterContext(mock.patch.object(availability, '_HAD_SNAPSHOT', set()))
 
     def test_validate_accepts_id_list(self):
         ids = availability.validate({'data': [{'id': 'a/b'}, {'id': 'c/d'}]})
@@ -60,49 +60,51 @@ class AvailabilityUnitTests(unittest.TestCase):
                 availability.validate(bad)
 
     def test_refresh_scopes_snapshot_to_key_and_region(self):
+        # Live ids map to registry slugs; an unknown id adds no row.
+        real = 'z-ai/glm-5.3'
         with tempfile.TemporaryDirectory() as tmp:
-            snap = availability.refresh('openrouter.ai', 'key-one', tmp,
-                                        'global', _ok('a/b'))
+            snap = availability.refresh('openrouter', 'openrouter.ai', 'key-one', tmp,
+                                        'global', _ok(real, 'a/b'))
             self.assertEqual(snap['key'], availability.key_fingerprint('key-one'))
             self.assertEqual(snap['region'], 'global')
-            self.assertEqual(snap['models'], frozenset({'a/b'}))
+            self.assertEqual(snap['models'], frozenset({real}))
             doc = json.loads((Path(tmp) / 'models-availability.json').read_text())
             self.assertEqual(doc['region'], 'global')
-            self.assertEqual(doc['models'], ['a/b'])
+            self.assertEqual(doc['models'], [real])
 
     def test_transient_failure_keeps_last_good(self):
         def down(req, timeout=None):
             raise OSError('down')
         with tempfile.TemporaryDirectory() as tmp:
-            availability.refresh('openrouter.ai', 'k', tmp, 'global', _ok('a/b'))
-            kept = availability.refresh('openrouter.ai', 'k', tmp, 'global', down)
-            self.assertEqual(kept['models'], frozenset({'a/b'}))
+            availability.refresh('openrouter', 'openrouter.ai', 'k', tmp, 'global', _ok('z-ai/glm-5.3'))
+            kept = availability.refresh('openrouter', 'openrouter.ai', 'k', tmp, 'global', down)
+            self.assertEqual(kept['models'], frozenset({'z-ai/glm-5.3'}))
 
     def test_auth_rejection_clears_snapshot(self):
         def denied(req, timeout=None):
             raise urllib.error.HTTPError(req.full_url, 401, 'no', {}, None)
         with tempfile.TemporaryDirectory() as tmp:
-            availability.refresh('openrouter.ai', 'k', tmp, 'global', _ok('a/b'))
+            availability.refresh('openrouter', 'openrouter.ai', 'k', tmp, 'global', _ok('a/b'))
             self.assertIsNone(availability.refresh(
-                'openrouter.ai', 'k', tmp, 'global', denied))
+                'openrouter', 'openrouter.ai', 'k', tmp, 'global', denied))
             self.assertIsNone(availability.current())
             self.assertFalse((Path(tmp) / 'models-availability.json').exists())
 
     def test_malformed_payload_keeps_last_good(self):
         with tempfile.TemporaryDirectory() as tmp:
-            availability.refresh('openrouter.ai', 'k', tmp, 'global', _ok('a/b'))
+            availability.refresh('openrouter', 'openrouter.ai', 'k', tmp, 'global', _ok('z-ai/glm-5.3'))
             kept = availability.refresh(
-                'openrouter.ai', 'k', tmp, 'global',
+                'openrouter', 'openrouter.ai', 'k', tmp, 'global',
                 lambda req, timeout=None: _Resp(200, b'not json'))
-            self.assertEqual(kept['models'], frozenset({'a/b'}))
+            self.assertEqual(kept['models'], frozenset({'z-ai/glm-5.3'}))
 
     def test_transient_failure_after_rotation_drops_old_snapshot(self):
         def down(req, timeout=None):
             raise OSError('down')
         with tempfile.TemporaryDirectory() as tmp:
-            availability.refresh('openrouter.ai', 'old-key', tmp, 'global',
+            availability.refresh('openrouter', 'openrouter.ai', 'old-key', tmp, 'global',
                                  _ok('a/b'))
-            kept = availability.refresh('openrouter.ai', 'new-key', tmp,
+            kept = availability.refresh('openrouter', 'openrouter.ai', 'new-key', tmp,
                                         'global', down)
             self.assertIsNone(kept)
             self.assertIsNone(availability.current())
@@ -111,34 +113,44 @@ class AvailabilityUnitTests(unittest.TestCase):
         def down(req, timeout=None):
             raise OSError('down')
         with tempfile.TemporaryDirectory() as tmp:
-            availability.refresh('openrouter.ai', 'k', tmp, 'global', _ok('a/b'))
-            kept = availability.refresh('openrouter.ai', 'k', tmp, 'global', down)
-            self.assertEqual(kept['models'], frozenset({'a/b'}))
+            availability.refresh('openrouter', 'openrouter.ai', 'k', tmp, 'global', _ok('z-ai/glm-5.3'))
+            kept = availability.refresh('openrouter', 'openrouter.ai', 'k', tmp, 'global', down)
+            self.assertEqual(kept['models'], frozenset({'z-ai/glm-5.3'}))
+
+    def test_effective_ids_agree_with_combined_after_rejection(self):
+        # After an auth rejection both picker readers must hide the rows:
+        # an empty set, never None ("no gate").
+        availability._SNAPSHOTS.clear()
+        availability._HAD_SNAPSHOT.add('openrouter')
+        self.assertEqual(availability.combined_ids(), frozenset())
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(
+                availability.effective_ids(tmp, 'k', 'global'), frozenset())
 
     def test_claude_listing_hides_rows_outside_the_snapshot(self):
         from ai_router import claude as _claude
-        availability._SNAPSHOT = {'key': 'k', 'region': 'global',
-                                  'models': frozenset({'z-ai/glm-5.3'}),
-                                  'fetched_at': 0}
+        availability._SNAPSHOTS['openrouter'] = {
+            'provider': 'openrouter', 'key': 'k', 'region': 'global',
+            'models': frozenset({'z-ai/glm-5.3'}), 'fetched_at': 0}
         ids = {row['id'] for row in _claude.models_listing()['data']}
         self.assertIn(_claude.claude_alias('z-ai/glm-5.3'), ids)
         self.assertNotIn(_claude.claude_alias('moonshotai/kimi-k3'), ids)
 
     def test_claude_listing_without_snapshot_lists_all(self):
         from ai_router import claude as _claude
-        availability._SNAPSHOT = None
+        availability._SNAPSHOTS.clear()
         full = {row['id'] for row in _claude.models_listing()['data']}
         self.assertIn(_claude.claude_alias('moonshotai/kimi-k3'), full)
 
     def test_restore_serves_same_key_and_region_only(self):
         with tempfile.TemporaryDirectory() as tmp:
-            availability.refresh('openrouter.ai', 'k', tmp, 'us', _ok('a/b'))
-            availability._SNAPSHOT = None
-            self.assertIsNotNone(availability.restore(tmp, 'k', 'us'))
-            availability._SNAPSHOT = None
-            self.assertIsNone(availability.restore(tmp, 'other-key', 'us'))
-            availability._SNAPSHOT = None
-            self.assertIsNone(availability.restore(tmp, 'k', 'eu'))
+            availability.refresh('openrouter', 'openrouter.ai', 'k', tmp, 'us', _ok('a/b'))
+            availability._SNAPSHOTS.clear()
+            self.assertIsNotNone(availability.restore(tmp, 'openrouter', 'k', 'us'))
+            availability._SNAPSHOTS.clear()
+            self.assertIsNone(availability.restore(tmp, 'openrouter', 'other-key', 'us'))
+            availability._SNAPSHOTS.clear()
+            self.assertIsNone(availability.restore(tmp, 'openrouter', 'k', 'eu'))
 
 class RegionProfileTests(unittest.TestCase):
     def test_known_regions_resolve(self):
@@ -172,9 +184,8 @@ class RegionProfileTests(unittest.TestCase):
 
 class VisibilityIntegrationTests(unittest.TestCase):
     def setUp(self):
-        self._snap = availability._SNAPSHOT
-        self.addCleanup(setattr, availability, '_SNAPSHOT', self._snap)
-        availability._SNAPSHOT = None
+        self.enterContext(mock.patch.object(availability, '_SNAPSHOTS', {}))
+        self.enterContext(mock.patch.object(availability, '_HAD_SNAPSHOT', set()))
 
     def test_catalogue_merge_hides_rows_outside_the_snapshot(self):
         roster = [m.slug for m in MODELS if provider_defs.is_external(m.provider)]
@@ -200,7 +211,7 @@ class VisibilityIntegrationTests(unittest.TestCase):
             with mock.patch.object(availability, 'current_key',
                                    return_value='k'), mock.patch.object(
                     availability, 'current_region', return_value='global'):
-                availability.refresh('openrouter.ai', 'k', tmp, 'global',
+                availability.refresh('openrouter', 'openrouter.ai', 'k', tmp, 'global',
                                      _ok(*subset))
                 rows = model_prompt.visible_models(tmp)
         merged = catalogue.merge({'models': []}, available=subset)
@@ -220,7 +231,7 @@ class VisibilityIntegrationTests(unittest.TestCase):
             self.assertIn(target, before)
             kept = {m.slug for m in MODELS
                     if m.provider == 'openrouter' and m.listed} - {target}
-            availability.refresh('openrouter.ai', 'k', tmp, 'global',
+            availability.refresh('openrouter', 'openrouter.ai', 'k', tmp, 'global',
                                  _ok(*kept))
             after = {m['slug'] for m in json.loads(path.read_text())['models']}
             self.assertNotIn(target, after)
@@ -233,7 +244,7 @@ class VisibilityIntegrationTests(unittest.TestCase):
             path = Path(tmp) / 'mixed-models.json'
             catalogue.merge_file(path, available=None)
             self.assertIsNone(availability.refresh(
-                'openrouter.ai', 'k', tmp, 'global', denied))
+                'openrouter', 'openrouter.ai', 'k', tmp, 'global', denied))
             slugs = {m['slug'] for m in json.loads(path.read_text())['models']}
             self.assertFalse(external_slugs() & slugs)
 
@@ -244,11 +255,11 @@ class VisibilityIntegrationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'mixed-models.json'
             catalogue.merge_file(path, available=None)
-            availability.refresh('openrouter.ai', 'old-key', tmp, 'global',
+            availability.refresh('openrouter', 'openrouter.ai', 'old-key', tmp, 'global',
                                  _ok(*roster))
             down = lambda req, timeout=None: (_ for _ in ()).throw(
                 OSError('transient'))
-            availability.refresh('openrouter.ai', 'new-key', tmp, 'global',
+            availability.refresh('openrouter', 'openrouter.ai', 'new-key', tmp, 'global',
                                  down)
             slugs = {m['slug'] for m in json.loads(path.read_text())['models']}
             self.assertFalse(external_slugs() & slugs)
@@ -265,7 +276,7 @@ class VisibilityIntegrationTests(unittest.TestCase):
             os.chmod(Path(tmp) / 'model-policy.json', 0o600)
             path = Path(tmp) / 'mixed-models.json'
             catalogue.merge_file(path, available=None)
-            availability.refresh('openrouter.ai', 'k', tmp, 'global',
+            availability.refresh('openrouter', 'openrouter.ai', 'k', tmp, 'global',
                                  _ok(*roster))
             slugs = {m['slug'] for m in json.loads(path.read_text())['models']}
             self.assertTrue(set(gated) <= slugs)
@@ -274,16 +285,16 @@ class VisibilityIntegrationTests(unittest.TestCase):
     def test_request_selection_refuses_unavailable_row(self):
         from ai_router.errors import UnknownModel
         target = 'moonshotai/kimi-k3'
-        availability._SNAPSHOT = {'key': 'k', 'region': 'global',
-                                  'models': frozenset({'z-ai/glm-5.3'}),
-                                  'fetched_at': 0}
+        availability._SNAPSHOTS['openrouter'] = {
+            'provider': 'openrouter', 'key': 'k', 'region': 'global',
+            'models': frozenset({'z-ai/glm-5.3'}), 'fetched_at': 0}
         with self.assertRaises(UnknownModel):
             providers.select(target, '/responses')
         with self.assertRaises(UnknownModel):
             claude.select('claude/' + target, '/v1/messages')
 
     def test_request_selection_passes_before_first_snapshot(self):
-        availability._SNAPSHOT = None
+        availability._SNAPSHOTS.clear()
         provider = providers.select('moonshotai/kimi-k3', '/responses')
         self.assertEqual(provider.name, 'openrouter')
         self.assertEqual(provider.host, 'openrouter.ai')

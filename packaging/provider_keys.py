@@ -27,6 +27,10 @@ def external_defs():
     return _defs.external_defs()
 
 
+def required_defs():
+    return _defs.required_external_defs()
+
+
 def default_id():
     return _defs.DEFAULT_EXTERNAL
 
@@ -126,7 +130,7 @@ def ensure(home, state, env, protect):
     the operator finishes. `key_state` stays the stricter reading for
     `--status`.
     """
-    pending = [defn for defn in external_defs()
+    pending = [defn for defn in required_defs()
                if not supplied(home, state, env, defn)]
     if not pending:
         return
@@ -184,7 +188,7 @@ def unhandled(home, state, private):
     never refuses; the window claims it.
     """
     missing = []
-    for defn in external_defs():
+    for defn in required_defs():
         _, usable = key_state(home, state, {}, defn, private,
                               client_env=os.environ)
         if usable:

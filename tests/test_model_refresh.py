@@ -70,7 +70,10 @@ class ModelRefreshTests(unittest.TestCase):
             self.assertIn('qwen/qwen-1', capabilities.REASONING_LEVELS)
             # Dynamic consumers see the swap: the listing gains the new slug
             # and drops removed ones.
-            ids = {row['id'] for row in claude.models_listing()['data']}
+            from ai_router import availability as _availability
+            from unittest import mock as _mock
+            with _mock.patch.object(_availability, 'combined_ids', return_value=None):
+                ids = {row['id'] for row in claude.models_listing()['data']}
             self.assertIn(claude.claude_alias('qwen/qwen-1'), ids)
             self.assertNotIn(old_alias, ids)
             cache = json.loads((Path(tmp) / 'models-cache.json').read_text())

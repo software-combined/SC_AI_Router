@@ -96,6 +96,17 @@ class PopupStyleTests(unittest.TestCase):
             with self.subTest(word):
                 self.assertNotIn(word, text)
 
+    def test_bedrock_dialog_names_its_own_key(self):
+        for platform_name, tool_path in (('darwin', '/usr/bin/osascript'),
+                                         ('linux', '/usr/bin/zenity'),
+                                         ('win32', 'C:/powershell.exe')):
+            with self.subTest(platform_name):
+                blob = ' '.join(key_dialog.argv(
+                    tool_path, platform_name, provider_id='bedrock'))
+                self.assertIn('aws bedrock key', blob.lower())
+                self.assertIn(key_dialog.TITLE, blob)
+                self.assertIn('saved as you paste it', blob.lower())
+
     def test_plain_language_prompts(self):
         text = _popup_text()
         self.assertIn('openrouter key', text)

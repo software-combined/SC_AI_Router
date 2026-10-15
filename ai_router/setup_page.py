@@ -56,9 +56,12 @@ def form(nonce, provider_id=None, error=None):
     """Key form for one provider; the label and placeholder come from its def."""
     defn = provider_defs.get(provider_id) or provider_defs.OPENROUTER
     label = defn.label
+    checked = (' It is checked before it is saved.'
+               if defn.key_info_shape != 'none' else
+               ' It is saved as you paste it; the first request checks it.')
     complaint = f'<p class="e"><strong>Error:</strong> {html.escape(error)}</p>' if error else ''
-    return _page(f'Connect {label}', complaint + f'''<p>Paste an {label} key. It is validated
-before anything is stored, and kept in an owner-only file the router reads at request time.</p>
+    return _page(f'Connect {label}', complaint + f'''<p>Paste an {label} key.{checked}
+It is kept in a file only you can read, and the router reads it when a request needs it.</p>
 <form method="post" action="./{html.escape(nonce, quote=True)}">
 <label class="f" for="key">{label} key</label>
 <input id="key" type="password" name="key" autocomplete="off" placeholder="{html.escape(defn.key.example, quote=True)}">
@@ -88,7 +91,7 @@ def remaining(limit, usage):
 
 
 def done(label, limit, usage, mode, starter, clients='codex'):
-    return _page('Connected', f'''<p>Your key is validated and stored.</p>
+    return _page('Connected', f'''<p>Your key is saved on this computer.</p>
 <dl><dt>Key</dt><dd>{html.escape(str(label))}</dd>
 <dt>Remaining credit</dt><dd>{html.escape(remaining(limit, usage))}</dd>
 <dt>Mode</dt><dd>{html.escape(mode)}</dd>
