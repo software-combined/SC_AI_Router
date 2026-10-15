@@ -79,6 +79,12 @@ jobs:
       - name: Native installer tests
         shell: bash
         run: python -m unittest $(python tools/ci_scope.py --installer-tests)
+      - name: Native packaging contracts (PowerShell)
+        shell: pwsh
+        run: python -m unittest tests.test_native_stage tests.test_native_packages tests.test_native_setup tests.test_native_readiness
+      - name: Native ACL contract (PowerShell)
+        shell: pwsh
+        run: python -m unittest tests.test_windows_acl_native
 
   installer-python39:
     name: Installer (Python 3.9)

@@ -149,6 +149,33 @@ class WinAclCheckTests(unittest.TestCase):
         self.assertEqual(options['creationflags'], getattr(winacl.subprocess, 'CREATE_NO_WINDOW', 0))
         self.assertGreater(options['timeout'], 0)
 
+    def test_acl_child_removes_powershell7_module_path_without_changing_parent(self):
+        def powershell(command, **options):
+            environment = options.get('env', os.environ)
+            inherited = any(key.upper() == 'PSMODULEPATH' for key in environment)
+            # Windows PowerShell cannot load Get-Acl from PowerShell 7 modules.
+            if json.loads(options['input'])['path'] is not None and inherited:
+                return SimpleNamespace(returncode=1, stdout='', stderr='module load failed')
+            return _structured(_acl())(command)
+
+        for spelling in ('PSModulePath', 'PSMODULEPATH', 'psmodulepath', None):
+            environment = {'SystemRoot': r'C:\Windows', 'PATH': 'system-tools',
+                           'KEEP_SENTINEL': 'preserve-this-value'}
+            if spelling:
+                environment[spelling] = r'C:\Program Files\PowerShell\7\Modules'
+            with self.subTest(spelling=spelling), \
+                    mock.patch.dict(os.environ, environment, clear=True), \
+                    mock.patch.object(winacl.subprocess, 'run', side_effect=powershell) as run:
+                before = dict(os.environ)
+                self.assertEqual(winacl.current_sid(), SID)
+                winacl.check(r'C:\synthetic\owned', fresh=True)
+                self.assertEqual(dict(os.environ), before)
+                expected = {key: value for key, value in before.items()
+                            if key.upper() != 'PSMODULEPATH'}
+                self.assertEqual(run.call_count, 2)
+                for call in run.call_args_list:
+                    self.assertEqual(dict(call.kwargs.get('env', os.environ)), expected)
+
 
 class WinProtectTests(unittest.TestCase):
     def test_protect_restricts_parent_first_then_verifies(self):

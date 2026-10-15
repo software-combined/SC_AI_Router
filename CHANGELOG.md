@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.2.6
+
+- Keep Windows permission checks working when setup starts from PowerShell 7.
+  Use Windows PowerShell's own module paths without changing the parent environment.
+
 ## 1.2.5
 
 - Restore stopped or missing services from native Set up or repair, preserving
