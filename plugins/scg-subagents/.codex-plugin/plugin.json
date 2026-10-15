@@ -1,6 +1,6 @@
 {
   "name": "scg-subagents",
-  "version": "0.5.22",
+  "version": "0.6.0",
   "description": "Subagent coordination, model selection, router-model workers and evidence refresh.",
   "author": {
     "name": "Software Combined"

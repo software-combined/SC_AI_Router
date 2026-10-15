@@ -24,6 +24,41 @@ Git for Windows runs the Bash hook shims, which read that value from
 `config.json`. Run `bin/scg-review-state` in Git Bash on Windows; it uses the
 same interpreter for `approve`, `status` and `scan`.
 
+## Reviewer preferences
+
+Each user sets `review_models` in their local hook `config.json`, with separate
+`codex` and `claude-code` profiles. Each pass has
+an ordered list of callable `model@effort` choices; the first available suitable
+entry is preferred, and later entries are permitted fallbacks. Use
+`model@unavailable` when that model has no effort setting. For example, replace
+these illustrative identifiers with models available in your client:
+
+```json
+"review_models": {
+  "codex": {
+    "simplification": ["your-codex-model@high"],
+    "correctness": ["your-codex-model@high", "your-fallback@unavailable"],
+    "quality": ["your-codex-model@high"],
+    "adversarial": ["your-codex-model@high"]
+  },
+  "claude-code": {
+    "simplification": ["your-claude-model@high"],
+    "correctness": ["your-claude-model@high"],
+    "quality": ["your-claude-model@high"],
+    "adversarial": ["your-claude-model@high"]
+  }
+}
+```
+
+Preserve the scanner pin, interpreter, required lanes and receipt lifetime.
+Run `~/.config/scg-agent-git-hooks/bin/scg-review-state models --client codex`
+(or `--client claude-code`) to read back the choices. The skill requires this
+before dispatch. A missing client profile never falls back to another client's
+choices. The hook does not call a
+provider or certify a model's capability; it records the completed lane choices.
+Older receipts remain usable. An old adapter without `models` needs the refresh
+below before using this release. No plugin update selects models for the owner.
+
 ## Gitleaks scanner
 
 The configured Gitleaks scanner is a pinned native executable: an absolute
@@ -133,7 +168,7 @@ is the evidence that the refresh is complete; the installer's exact-match
 refusal for every other difference stays in place.
 
 After local setup passes, verify provider access through the required review
-calls. A missing preferred model can use a permitted fallback; no eligible model
+calls. An unavailable selected model can use a permitted fallback; no eligible model
 for a required pass remains a blocker. New plugin versions take effect in a
 new Codex task. Existing standalone skills or hard-coded AGENTS.md references
 can still select an older copy; use the plugin's bundled skills explicitly

@@ -70,12 +70,15 @@ then optimise cost among qualifying models. The cheapest general-purpose row is
 not the default for high-consequence security work. This does not change the
 installed pre-commit review policy.
 
-**One effort per model:** use the single prescribed level in the catalogue table,
+**One effort per model for general tasks:** use the single prescribed level in the catalogue table,
 normally the highest supported plain reasoning level. Do not lower effort to
 save cost; choose a cheaper capable model instead, unless the user overrides it.
 Astra and GPT-5.6 Sol use `max`: the catalogue's `ultra` adds automatic
 delegation, so it is outside this bounded-child policy. Never invent
 unsupported `max`.
+
+Pre-commit reviews use their separate model-agnostic review policy, including
+configured supported effort; these general task choices do not constrain them.
 
 **Muse policy:** standard 1.3 uses `max`. Treat its `xhigh` evidence as a similar
 practical tier, per user preference, while preserving the separate measurements.
