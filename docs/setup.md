@@ -40,6 +40,9 @@ The SCG Router app saves setup in your user account. After setup, you can
 delete the download or eject the disk image. Reopen SCG Router to check setup,
 repair it, connect another assistant, replace your key, renew download sign-in
 or remove the router. Reopening preserves the existing channel and settings.
+With the same or an older download, **Set up or repair** restores the service
+using its installed release. **Connect another assistant** adds your selection
+while preserving existing connections.
 
 The default channel is `stable`. Use `--channel=beta` on macOS/Linux or
 `-Channel beta` in PowerShell only when you intend to follow pre-releases.

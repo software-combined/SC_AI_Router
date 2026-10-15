@@ -7,7 +7,13 @@ transitional owners name the plan that will move them.
 Native packaging lives under `packaging/native/`; it wraps the canonical
 installer without adding inference rules. `native_payload` retains disposable
 downloads. `native_setup` owns the graphical flow and uses the existing client,
-service and key-window owners. `install_delivery` repairs bundled plugin delivery
+service and key-window owners. Repair uses the canonical `--setup` path;
+explicit assistant additions use the existing client-selection path.
+`dialog_tool` is a Python 3.9 leaf shared by installer and runtime dialogs.
+It validates retained setup paths before selecting the Linux wrapper.
+`native_dialog` distinguishes cancellation from failed presentation so renewal
+notices remain pending until a window appears.
+`install_delivery` repairs bundled plugin delivery
 on both full and same-version installs.
 `client_choice` resolves explicit additions, receipt-owned attachments and saved
 choices. It persists Claude choices in `anthropic_mode`; the runtime keeps its
@@ -26,7 +32,7 @@ download grants. It cannot change model routing or provider credentials.
 
 ```
 provider_defs (one definition per upstream, imports nothing) + errors,
-redaction, sse, tool_merge, image_items, turn_budget, atomic_write, state,
+redaction, sse, tool_merge, image_items, turn_budget, atomic_write, dialog_tool, state,
 events, history_items (leaves: no module-level local imports; events' one
 call-time state lookup is the only exception)
   ^

@@ -1,5 +1,7 @@
 """Native setup dialogs, sharing the router's title, icon and two actions."""
 import importlib.util
+import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -33,6 +35,29 @@ def message(text):
 
 def confirm(text):
     return platform.confirm(text, sys.platform)
+
+
+def confirm_result(text, home=None, run=subprocess.run):
+    """True means Continue, False means Cancel, None means no presentation."""
+    tool = dialog.tool(home=home)
+    if not tool or (sys.platform.startswith('linux') and not (
+            os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY'))):
+        return None
+    try:
+        result = platform._dialog(text, sys.platform, True, run, tool, detailed=True)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    stdout, stderr = result.stdout or '', result.stderr or ''
+    if sys.platform == 'darwin':
+        if result.returncode == 0 and 'button returned:Continue' in stdout:
+            return True
+        if result.returncode == 1 and re.search(r'\(-128\)\s*$', stderr):
+            return False
+    elif result.returncode == 0:
+        return True
+    elif result.returncode == 1 and not stderr.strip():
+        return False
+    return None
 
 
 class Progress:

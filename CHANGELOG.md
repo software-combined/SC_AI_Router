@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 1.2.5
+
+- Restore stopped or missing services from native Set up or repair, preserving
+  installed releases and saved settings when the download is older.
+- Keep Linux dialogs available after deleting the download. Leave renewal
+  notices pending after display or launch failures, and isolate bundled dialog
+  libraries from service processes.
 - Isolate Windows tasks by account. Migrate only owned legacy tasks after the
   replacement serves, preserve disabled schedules and retain active updater
   parents until exit. Resume interrupted migration through the normal installer.
