@@ -51,10 +51,6 @@ SCENARIOS = (
     ('tool-search+betas-suppressed',
      {'ENABLE_TOOL_SEARCH': 'true',
       'CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS': '1'}),
-    ('assume-first-party', {'_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL': '1'}),
-    ('assume-first-party+tool-search',
-     {'_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL': '1',
-      'ENABLE_TOOL_SEARCH': 'true'}),
 )
 
 

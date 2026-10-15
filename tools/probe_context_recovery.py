@@ -11,7 +11,6 @@ import json
 import os
 from pathlib import Path
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -133,6 +132,8 @@ class Scenario:
 
 
 def run(args):
+    if args.live:
+        raise SystemExit("Live context probes are retired; use the offline synthetic scenario.")
     from ai_router.router import Router
     scenario = Scenario(args)
     with tempfile.TemporaryDirectory(prefix='context-recovery-') as temp:
@@ -149,9 +150,7 @@ def run(args):
             home = Path.home() / '.codex/mixed-model-router'
             live_state = json.loads((home / 'mixed-router-state.json').read_text())
             credentials = Credentials(live_state, home)
-            auth = root / 'auth.json'
-            auth.touch(mode=0o600)
-            shutil.copyfile(Path.home() / '.codex/auth.json', auth)
+            raise SystemExit('Live context probes are retired; run the offline synthetic scenario.')
         transport = SimpleNamespace(client=SimpleNamespace(
             HTTPSConnection=scenario.connect, HTTPException=http.client.HTTPException))
         with mock.patch.dict(os.environ, {'ROUTER_HOME': str(root / 'router')}), \

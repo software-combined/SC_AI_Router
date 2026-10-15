@@ -1,6 +1,6 @@
 {
   "name": "scg-finance",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Finance-director grade analysis grounded in the organisation's accounting data, whatever system it lives in.",
   "author": {
     "name": "Software Combined"
@@ -15,5 +15,5 @@
     "capabilities": [],
     "defaultPrompt": "Use the finance-analyst skill for this finance question."
   },
-  "repository": "https://github.com/software-combined/SC_AI_Router"
+  "repository": "https://github.com/software-combined/SC_AI_Router_Public"
 }

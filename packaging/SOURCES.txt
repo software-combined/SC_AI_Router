@@ -1,2 +1,2 @@
-Canonical source: software-combined/SC_AI_Router
+Canonical source: software-combined/SC_AI_Router_Public
 Deployed state: ~/.codex/mixed-model-router (ROUTER_HOME)

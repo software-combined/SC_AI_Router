@@ -59,9 +59,9 @@ class CatalogueFlagTests(unittest.TestCase):
         self.assertNotIn('base_instructions', entry)
         template = entry['model_messages']['instructions_template']
         self.assertNotIn(SUBAGENT_MODEL_PLACEHOLDER, template)
-        self.assertIn('## Subagent model overrides', template)
+        self.assertIn('Available IDs on this install:', template)
         self.assertTrue(template.startswith(
-            'You are Codex, a coding agent running the selected routed model.'))
+            'You are an assistant running the selected routed model through SC AI Router.'))
         merged = merge({'models': []})
         for item in merged['models']:
             self.assertNotIn('base_instructions', item)

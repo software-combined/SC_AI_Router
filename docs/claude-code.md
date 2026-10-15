@@ -32,7 +32,7 @@ python3.14 packaging/install.py --clients claude --desktop  # terminal and app
 ```
 
 Then quit and restart Claude Code. That is the whole setup: the installer
-writes the four settings it owns in `~/.claude/settings.json`, keeps your
+writes the three public settings it owns in `~/.claude/settings.json`, keeps your
 existing subscription sign-in, and records what it changed so the same
 installer can undo it. Attaching is additive, so nothing you did not ask for
 is removed, and cancelling a question changes nothing. The one thing it will
@@ -47,13 +47,10 @@ own `ToolSearch` tool, and sends the model only the tools a search released.
 That is what keeps a session attached to a dozen connector servers inside a
 model's context window instead of sending every schema on every turn.
 
-It is off for any base URL that is not Anthropic's own host unless asked for,
-so the installer sets `ENABLE_TOOL_SEARCH=true` and
-`_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1` alongside the base URL and the
-listing flag. Measured on Claude Code `2.1.223` with 700 synthetic MCP tools,
-the first request of a session carries 727 tool definitions and 271 KB
-without it, and 11 definitions and 100 KB with it; the deferred tools arrive
-as the model asks for them.
+The installer sets the public `ENABLE_TOOL_SEARCH=true` setting alongside
+the base URL and discovery flag. It does not set the private first-party
+base-URL override. Deferred loading without that override needs renewed
+client verification; the earlier measurements below describe older builds.
 
 Two things defeat it, and neither is something the installer can fix quietly:
 
@@ -125,27 +122,26 @@ listing from its local registry without needing any credential.
 
 ## Choosing a model
 
-Pick the model in `/model`, or set `ANTHROPIC_MODEL` to its listing id. What
-you see looks like `Z.ai: GLM 5.3 Flash · OpenRouter` for a routed model and
-`Claude Sonnet 5` for a subscription one: the vendor and the billing label are
-the row's real identity, and the id underneath mirrors the Codex registry
-(`claude/scg/...` route IDs and the bare `anthropic/...` Claude IDs). Copy the
-id from discovery rather than typing one; older `claude/<vendor>/<name>` aliases
-still work in saved sessions and commands. The router resolves the id back to
-the registry row before routing, so billing follows the row, and a registry
-slug routes directly too. Reasoning is governed by each call's `max_tokens`
-and `thinking` fields, which travel untouched. Start a fresh session when
-switching providers.
+Select a Claude model in `/model`. Discovery reports real upstream IDs and
+vendor/billing labels. Only Claude models carry `anthropic_family_tier`.
+Non-Claude rows may be hidden or rejected by the stock client; Anthropic does
+not support them through Claude Code. Use Codex or another compatible API
+client for those separately billed routes.
+
+Older `claude/scg/...` and `claude/<vendor>/<name>` aliases are retired and
+refused locally. Choose the truthful ID in a fresh session. Native Claude
+requests still forward the signed-in client's own authentication unchanged.
 
 ## Attachment contract
 
-The installer owns exactly four `env` keys in `~/.claude/settings.json`
-(`ANTHROPIC_BASE_URL`, `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY`,
-`ENABLE_TOOL_SEARCH` and `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL`) and
-restores the previous values on detach. A hand-edited value for any of the
-four refuses the attach rather than being overwritten, and so does
-`CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS`, which is refused rather than owned:
-it forces deferred tool loading off and no value overrides it.
+The installer owns `ANTHROPIC_BASE_URL`,
+`CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY` and `ENABLE_TOOL_SEARCH`.
+It records previous values and restores them on detach. A conflicting
+hand-managed setting refuses attachment. A legacy first-party override is
+removed only when an existing receipt proves that the installer added it;
+otherwise attachment refuses and asks the operator to review it.
+`CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS` also refuses attachment because it
+forces deferred loading off.
 `ANTHROPIC_AUTH_TOKEN` and
 `ANTHROPIC_API_KEY` must stay unset: either one overrides the subscription
 bearer, so subscription requests would stop reaching Anthropic with the
@@ -187,7 +183,7 @@ hand-edited conflict instead of overwriting it.
   thinking is dropped from the stream, because Claude Code throws away the
   whole answer when one follows it. The subscription route keeps both shapes
   byte-identical.
-  `GET /v1/models` answers `{data: [{id, display_name, anthropic_family_tier}]}` from
+  `GET /v1/models` answers rows with `id`, `display_name`, and a Claude-only family tier from
   the local registry without touching the network; unknown paths answer
   404.
 - Subscription requests forward the client's `Authorization` or
@@ -435,11 +431,10 @@ Linux still require native app acceptance.
 Pointing the third-party profile at the loopback router lists every
 approved Messages-compatible registry row. The app filters non-Anthropic
 vendor words from IDs even when a valid `anthropic_family_tier` is present.
-The router therefore gives non-Anthropic entries stable route IDs derived
-from the registry slug, retaining the actual name in `display_name`.
-The projected tier remains `sonnet` for those rows, and each Anthropic row
-keeps its own tier. These are client discovery fields, not upstream model
-identities or capability claims. No stored registry field is added. Attach with
+The publication candidate reports truthful vendor IDs and does not assign a
+Claude family tier to another vendor. This removes the old picker workaround.
+Some desktop versions will hide non-Claude rows; earlier compatibility
+measurements do not verify this candidate. Attach with
 `packaging/install.py --desktop` (refuses when `claude_mode` is `none`);
 service-only install and uninstall detach again. The first-party
 profile's credentials are never touched, so native sign-in survives, and

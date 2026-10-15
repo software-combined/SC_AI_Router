@@ -86,7 +86,7 @@ class HelperTurnTests(unittest.TestCase):
         self.assertIsNotNone(
             subscription_fallback.plan(**dict(base, payload={'model': HELPER, 'tools': tools})))
         # A missing flag means on; only an explicit false opts out.
-        self.assertIsNotNone(subscription_fallback.plan(**dict(base, state={})))
+        self.assertIsNone(subscription_fallback.plan(**dict(base, state={})))
         twinless = subscription_fallback.plan(
             **dict(base, payload={'model': 'gpt-5.5'}))
         self.assertIsNotNone(twinless)
@@ -139,13 +139,13 @@ class RefusedHelperTurnTests(unittest.TestCase):
             'key': 'k', 'region': 'global', 'models': frozenset(models), 'fetched_at': 0}
         self.addCleanup(setattr, availability, '_SNAPSHOT', snap)
 
-    def test_missing_flag_answers_the_helper_turn_from_the_twin_row(self):
+    def test_missing_flag_keeps_the_subscription_refusal(self):
         recorded = install_fake(self, self._refusal())
         server = self._server()
         response = self._turn(server, HEADERS)
-        self.assertEqual(response.status, 200)
-        self.assertEqual(json.loads(response.read())['model'], 'openai/gpt-6-luna')
-        self.assertEqual([call[0] for call in recorded], ['chatgpt.com', 'openrouter.ai'])
+        self.assertEqual(response.status, 503)
+        self.assertEqual(json.loads(response.read())['error']['code'], 'UPSTREAM_RATE_LIMITED')
+        self.assertEqual([call[0] for call in recorded], ['chatgpt.com'])
 
     def test_explicit_opt_out_keeps_the_existing_503(self):
         recorded = install_fake(self, self._refusal())

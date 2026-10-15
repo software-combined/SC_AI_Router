@@ -3,18 +3,15 @@
 The client owns saved history and executes retrieval. This pure projection
 keeps no conversation cache and never invents or elevates an assignment.
 """
+import hashlib
 import re
 
 from .history_portability import marker_texts
 
 _UUID = r'[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}'
 _PREVIOUS = re.compile(r'^Previous context window id: ' + _UUID + r'$', re.M)
-_LEGACY_PARAGRAPH = (
-    'When you run out of context, the tool automatically compacts the conversation. '
-    'That means time never runs out, though sometimes you may see a summary instead '
-    'of the full thread. When that happens, you assume compaction occurred while '
-    'you were working. Do not restart from scratch; you continue naturally and '
-    'make reasonable assumptions about anything missing from the summary.')
+# Recognize an old installed paragraph without redistributing its prose.
+_LEGACY_PARAGRAPH_SHA256 = '90b7f5a98850fe383af1f6e8e5298ef477ad7423cb42f9636adfe679b111f9a8'
 RECOVERY_GUIDANCE = (
     '<context_recovery>\n'
     'A Previous context window id means this is an ongoing task after a '
@@ -44,11 +41,13 @@ def refresh_model_messages(messages, instructions):
         return messages
     paragraphs = template.split('\n\n')
     replacement = next((p for p in instructions.split('\n\n')
-                        if p.startswith('Context transitions have two forms:')), None)
-    if _LEGACY_PARAGRAPH not in paragraphs or replacement is None:
+                        if p.startswith('Context recovery:')), None)
+    matches = [hashlib.sha256(p.encode()).hexdigest() == _LEGACY_PARAGRAPH_SHA256
+               for p in paragraphs]
+    if not any(matches) or replacement is None:
         return messages
     return {**messages, 'instructions_template': '\n\n'.join(
-        replacement if p == _LEGACY_PARAGRAPH else p for p in paragraphs)}
+        replacement if match else p for p, match in zip(paragraphs, matches))}
 
 
 def _reset_marker(item):

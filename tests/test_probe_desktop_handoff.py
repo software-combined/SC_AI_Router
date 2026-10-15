@@ -115,39 +115,14 @@ class DesktopProfileTests(unittest.TestCase):
         self.assertIs(subprocess.run, real_run)
         return seen, copies
 
-    @unix_only
-    def test_desktop_client_keeps_codex_setup_and_runs_in_this_tree(self):
-        with tempfile.TemporaryDirectory() as temp:
-            home, live = Path(temp), Path(temp) / '.codex'
-            (live / 'skills/demo').mkdir(parents=True)
-            (live / 'skills/demo/SKILL.md').write_text('synthetic skill')
-            (live / 'plugins/cache').mkdir(parents=True)
-            (live / 'plugins/cache/escape').symlink_to(live / 'skills')  # An absolute link back into the live home.
-            (live / 'config.toml').write_text(LIVE_CONFIG)
-            (live / 'auth.json').write_text('{"tokens": {}}')
-            seen, copies = self.launch(DesktopProbe, home)
-            stripped, _ = self.launch(MatrixProbe, home)
-            self.assertTrue((live / 'plugins/cache/escape').is_symlink())  # The live home is untouched.
-        keys = {seen['command'][index + 1].split('=', 1)[0] for index, word in enumerate(seen['command']) if word == '-c'}
-        self.assertEqual(keys, {'model_provider', 'model_catalog_json', 'approval_policy', 'sandbox_mode', 'openai_base_url'})
-        self.assertEqual((seen['cwd'], seen['rpc']['thread/start']['cwd']), (str(ROOT), str(ROOT)))
-        self.assertFalse({'baseInstructions', 'developerInstructions'} & set(seen['rpc']['thread/start']))
-        self.assertEqual(seen['turn']['effort'], 'max')
-        self.assertEqual(sorted(seen['catalog']), sorted(row['slug'] for row in ROWS))
-        self.assertEqual(seen['config'], {'model': 'gpt-6.1-sol', 'model_reasoning_effort': 'max',
-            'features': {'memories': True, 'context_management': {'experimental_mode': True}},
-            'marketplaces': {'scg-agent-plugins': {'source_type': 'local', 'source': '/synthetic/marketplace'}},
-            'plugins': {'scg-review@scg-agent-plugins': {'enabled': True}}})
-        self.assertEqual(seen['auth_mode'], 0o600)
-        self.assertTrue(seen['skill'])
-        self.assertFalse(seen['escape'])
-        self.assertEqual([command[:2] for command in copies], [['cp', '-cR'], ['cp', '-cR']])
-        # The stripped matrix profile is unchanged by the hook.
-        self.assertEqual(stripped['cwd'], stripped['home'])
-        self.assertIn('baseInstructions', stripped['rpc']['thread/start'])
-        self.assertIsNone(stripped['config'])
-        self.assertIn('project_doc_max_bytes=0', stripped['command'])
-        self.assertEqual(sorted(stripped['catalog']), sorted((PARENT, CHILD)))
+    def test_native_desktop_probe_refuses_before_copying_or_launching(self):
+        args = SimpleNamespace(live=True)
+        with patch.object(handoffs, 'AppServer') as client, \
+                patch.object(handoffs.subprocess, 'run') as launch:
+            with self.assertRaisesRegex(SystemExit, 'retired'):
+                handoffs.run(args, probe_type=DesktopProbe)
+            client.assert_not_called()
+            launch.assert_not_called()
 
     def test_prompts_name_no_tool_namespace_or_fork_option(self):
         text = ' '.join(DesktopProbe(False, MAX_CALLS, True).live_prompts)

@@ -124,18 +124,7 @@ class MatrixProbe(handoffs.Probe):
             **{role + '_requests': 0 for role in self.routes})
         self.facts.update(assigned_markers=[], peer_shapes=[], child_reply_shapes=[], terminals=[], parent_tool_methods=[])
         if self.live:
-            version = subprocess.run([self.codex, '--version'], check=True,
-                                     capture_output=True, text=True, timeout=10).stdout
-            self.version = re.search(r'\d+(?:\.\d+)+', version).group()
-            auth = json.loads((Path.home() / '.codex/auth.json').read_text())['tokens']
-            self.auth_headers = headers = {'Authorization': 'Bearer ' + auth['access_token']}
-            if auth.get('account_id'):
-                headers['ChatGPT-Account-Id'] = auth['account_id']
-            rows = subscription_discovery.fetch_native(headers, self.version)
-            self.catalogue_rows = {r['slug']: {**catalogue.subscription_stub(r['slug']), **r} for r in rows}
-            self.catalogue_rows[self.external] = catalogue.external_entry(by_slug(self.external))
-            if self.native not in self.catalogue_rows:
-                raise ValueError('matrix native model is not advertised')
+            raise SystemExit('Native live matrix probes are retired; run the offline synthetic matrix.')
         else:
             native = {**catalogue.subscription_stub(self.native),
                 'supported_reasoning_levels': [{'effort': 'high', 'description': 'Synthetic fixture'}]}

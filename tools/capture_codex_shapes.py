@@ -263,10 +263,29 @@ def sanitise(payload, work=None):
                 return json.dumps(scrubbed, separators=(',', ':'))
         return value
 
+    def instruction_text(text):
+        fingerprint = '<instructions sha256=' + hashlib.sha256(text.encode()).hexdigest() + '>'
+        stripped = text.lstrip()
+        if stripped.startswith('<model_switch>'):
+            # Keep the wire boundary observable without retaining client prose.
+            closing = '\n</model_switch>' if stripped.rstrip().endswith('</model_switch>') else ''
+            return text[:len(text) - len(stripped)] + '<model_switch>\n' + fingerprint + closing
+        return fingerprint
+
     cleaned = clean(payload)
     if isinstance(cleaned.get('instructions'), str):
         digest = hashlib.sha256(cleaned['instructions'].encode()).hexdigest()
         cleaned['instructions'] = f'<instructions sha256={digest}>'
+    for item in cleaned.get('input') or []:
+        if not isinstance(item, dict) or item.get('role') not in ('developer', 'system'):
+            continue
+        content = item.get('content')
+        if isinstance(content, str):
+            item['content'] = instruction_text(content)
+        elif isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict) and isinstance(block.get('text'), str):
+                    block['text'] = instruction_text(block['text'])
     return cleaned
 
 

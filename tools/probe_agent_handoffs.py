@@ -9,7 +9,6 @@ import logging
 import os
 from pathlib import Path
 import queue
-import shutil
 import secrets
 import subprocess
 import sys
@@ -219,6 +218,8 @@ class Probe:
 
 
 def run(args, probe_type=Probe):
+    if args.live:
+        raise SystemExit("Native live handoff probes are retired; use the offline synthetic probe.")
     if args.live and not 1 <= args.max_live_calls <= 24:
         raise ValueError('--live requires --max-live-calls between 1 and 24')
     if args.live_children and not args.live:
@@ -328,9 +329,7 @@ def run(args, probe_type=Probe):
         catalog = root / 'catalog.json'
         catalog.write_text(json.dumps({'models': list({m['slug']: m for m in (*(rows.values() if cwd != temp else ()), parent, child, native)}.values())}))
         if args.live:
-            auth = root / 'auth.json'
-            auth.touch(mode=0o600)
-            shutil.copyfile(Path.home() / '.codex/auth.json', auth)
+            raise SystemExit('Native live handoff probes are retired; run the offline synthetic probe.')
         provider = 'openai' if args.live else 'probe'
         config = {'model_provider': provider, 'model_catalog_json': str(catalog), 'approval_policy': 'never',
             'sandbox_mode': 'read-only'} | ({} if cwd != temp else {'project_doc_max_bytes': 0,

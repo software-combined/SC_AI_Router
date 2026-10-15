@@ -1,20 +1,8 @@
-"""Bounded handoff cases on Codex's real client path, built on MatrixProbe.
+"""Offline handoff case definitions and bounded diagnostic regressions.
 
-desktop (this script, --live): Codex keeps its own instructions, tools, skills
-and plugins. A disposable CODEX_HOME is seeded from the live one (auth copied
-owner-only by run(), skills and plugins cloned, config trimmed) and the session
-runs in this worktree so its AGENTS.md loads. gpt-6.1-sol at max assigns, then
-follows up with, one OpenRouter child on openai/gpt-6.1-sol at high. --installed
-targets the running router and attributes its sends from its log afterwards;
-otherwise this tree's router runs in process.
-
-legacy-native (U2, via probe_handoff_matrix.py --live --case legacy-native): one
-resumed thread on the in-process router. Turn 1 hides the external key from the
-native readable gate, as a pre-upgrade router would, so the native child gets a
-ciphertext brief; turn 2 follows that child up and spawns an external child.
-
-Each case: at most 12 upstream sends, 4,096 output tokens per external request,
-300 seconds, 512 KiB native and 128 KiB external input. Records are content-free.
+Native live entry points are retired and refused before profile loading or
+credential handling. Historical case definitions below describe earlier
+measurements, not a supported live workflow. Use the offline unit suite.
 """
 import argparse
 import contextlib

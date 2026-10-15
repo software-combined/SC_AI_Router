@@ -89,8 +89,7 @@ def _expected_model(home, model, rows=None):
         slug = row.get('slug')
         if not isinstance(slug, str):
             continue
-        ids = {slug, slug.removeprefix('~'),
-               'claude/scg/' + hashlib.sha256(slug.encode()).hexdigest()}
+        ids = {slug, slug.removeprefix('~')}
         if model in ids:
             return row.get('upstream_id') or slug
     return model
@@ -117,8 +116,7 @@ def probe(home, model, deferred=False, read_count=1, effort=None,
         prompt, allowed = (PROMPT if read_count == 1 else MULTI_PROMPT), ['Read']
         if deferred:
             # The exact env the installer writes for an attached terminal.
-            env.update({'ENABLE_TOOL_SEARCH': 'true',
-                        '_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL': '1'})
+            env.update({'ENABLE_TOOL_SEARCH': 'true'})
             servers = {STUB_SERVER: {
                 'command': sys.executable,
                 'args': [str(STUB_MCP), '--tools', str(STUB_TOOLS)]}}

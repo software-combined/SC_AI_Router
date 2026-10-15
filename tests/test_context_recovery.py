@@ -1,7 +1,9 @@
 """A client window reset must not look like a new, unassigned task."""
 import copy
+import hashlib
 import json
 import unittest
+from unittest import mock
 from compression import zstd
 from types import SimpleNamespace
 
@@ -20,18 +22,16 @@ def window(previous=True, role='developer'):
 
 class ContextRecoveryTests(unittest.TestCase):
     def test_upgrade_refreshes_only_the_legacy_router_paragraph(self):
-        legacy = ('When you run out of context, the tool automatically compacts the conversation. '
-                  'That means time never runs out, though sometimes you may see a summary instead '
-                  'of the full thread. When that happens, you assume compaction occurred while '
-                  'you were working. Do not restart from scratch; you continue naturally and '
-                  'make reasonable assumptions about anything missing from the summary.')
+        legacy = 'Synthetic legacy instruction paragraph for migration coverage.'
         messages = {'instructions_template': 'Custom prefix\n\n' + legacy + '\n\nCustom suffix',
                     'token_budget': {'enabled': False}}
         row = {**catalogue.subscription_stub('gpt-6-luna'), 'model_messages': messages}
         original = copy.deepcopy(row)
-        merged = catalogue.merge({'models': [row]}, roster=('gpt-6-luna',))
+        with mock.patch.object(context_recovery, '_LEGACY_PARAGRAPH_SHA256',
+                               hashlib.sha256(legacy.encode()).hexdigest()):
+            merged = catalogue.merge({'models': [row]}, roster=('gpt-6-luna',))
         updated = merged['models'][0]['model_messages']
-        self.assertIn('Before requesting a new window, save the assignment',
+        self.assertIn('Context recovery: Before leaving a context window, record the task',
                       updated['instructions_template'])
         self.assertNotIn(legacy, updated['instructions_template'])
         self.assertTrue(updated['instructions_template'].startswith('Custom prefix\n\n'))
@@ -39,6 +39,15 @@ class ContextRecoveryTests(unittest.TestCase):
         self.assertEqual(updated['token_budget'], {'enabled': False})
         self.assertEqual(row, original)
         self.assertEqual(catalogue.merge(merged, roster=('gpt-6-luna',)), merged)
+
+    def test_nearby_custom_paragraph_is_preserved_by_fingerprint_migration(self):
+        known = 'Synthetic legacy paragraph.'
+        messages = {'instructions_template': known + ' Keep this custom addition.'}
+        with mock.patch.object(context_recovery, '_LEGACY_PARAGRAPH_SHA256',
+                               hashlib.sha256(known.encode()).hexdigest()):
+            result = context_recovery.refresh_model_messages(
+                messages, 'Context recovery: Synthetic replacement.')
+        self.assertIs(result, messages)
 
     def prepare(self, model, items, path='/responses', compressed=False):
         payload = {'model': model, 'input': items}

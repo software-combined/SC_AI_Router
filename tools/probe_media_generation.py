@@ -11,7 +11,6 @@ import hashlib
 import importlib.util
 import json
 import os
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -37,6 +36,8 @@ _spec.loader.exec_module(_client_config)
 
 
 def probe(model, live=False, variant='default', live_chat=False, output=None):
+    if variant == 'subscription' and (live or live_chat):
+        raise SystemExit('Native live media probes are retired; use the signed-in client directly.')
     row = registry.by_slug(model)
     if row is None or row.media_kind not in ('image', 'video'):
         raise ValueError('choose a registered media model')
@@ -199,9 +200,8 @@ def probe(model, live=False, variant='default', live_chat=False, output=None):
             threading.Thread(target=router.serve_forever, daemon=True).start()
             client_home = root / 'codex'
             client_home.mkdir(mode=0o700)
-            if native:
-                auth = Path(os.environ.get('CODEX_HOME', Path.home() / '.codex')) / 'auth.json'
-                shutil.copy2(auth, client_home / 'auth.json')
+            if native and live:
+                raise SystemExit('Native live media probes are retired; use the signed-in client directly.')
             state['port'] = router.server_port
             (client_home / 'config.toml').write_text(_client_config.build(
                 router_home, state, state['openai_mode'], True, 'default' if native else variant))

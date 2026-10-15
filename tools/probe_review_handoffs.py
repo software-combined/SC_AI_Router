@@ -6,8 +6,6 @@ To verify an installed release, run its copy of this script. No live config edit
 import argparse
 import json
 from pathlib import Path
-import re
-import subprocess
 import sys
 import threading
 import time
@@ -70,25 +68,7 @@ class ReviewProbe(handoffs.Probe):
 
     def __init__(self, *args):
         super().__init__(*args)
-        version = subprocess.run([handoffs.codex_bin(), '--version'], check=True,
-                                 capture_output=True, text=True, timeout=10).stdout
-        version = re.search(r'\d+(?:\.\d+)+(?:[-+][\w.-]+)?', version).group()
-        review = (ROOT / 'plugins/scg-review/skills/pre-commit-review/SKILL.md').read_text()
-        guide = (ROOT / 'plugins/scg-subagents/skills/optimal-subagents/references/tool-guide.md').read_text()
-        self.instructions = ('This is a synthetic delivery check. Apply only the model selection '
-            'and handoff guidance below; do not run review steps, approve or commit.\n'
-            + review.split('## Models and runtimes\n', 1)[1].split('## Step 1:', 1)[0] + '\n' + guide)
-        auth = json.loads((Path.home() / '.codex/auth.json').read_text())['tokens']
-        headers = {'Authorization': 'Bearer ' + auth['access_token']}
-        if auth.get('account_id'):
-            headers['ChatGPT-Account-Id'] = auth['account_id']
-        rows = subscription_discovery.fetch_native(headers, version)
-        self.catalogue_rows = {r['slug']: {**catalogue.subscription_stub(r['slug']), **r} for r in rows}
-        if PARENT not in self.catalogue_rows:
-            raise ValueError('review probe parent not advertised')
-        self.facts.update(client_version=version, parent_model=PARENT, parent_effort=EFFORT,
-                          child_model=CHILD, child_effort=EFFORT, selections=[], served=[])
-        self.scope_ready = False
+        raise SystemExit('Native live review probes are retired; run tests.test_review_handoff_probe.')
 
     def forward(self, body, headers, path='/responses'):
         if body.get('model') not in (PARENT, CHILD) or path.endswith('/compact'):

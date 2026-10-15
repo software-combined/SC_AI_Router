@@ -150,8 +150,8 @@ class ClaudeIngressTests(unittest.TestCase):
                 if m.provider == 'openrouter' and m.listed}
         self.assertEqual(set(ids), want)
         for row in body['data']:
-            self.assertEqual(set(row),
-                             {'id', 'display_name', 'anthropic_family_tier'})
+            self.assertEqual(set(row), {'id', 'display_name'} |
+                             ({'anthropic_family_tier'} if claude_mod.family_tier(row['id']) else set()))
         listed = {row['id']: row['display_name'] for row in body['data']}
         self.assertEqual(
             listed[claude_mod.claude_alias('z-ai/glm-5.3-flash')], 'Z.ai: GLM 5.3 Flash \u00b7 OpenRouter')
@@ -182,13 +182,12 @@ class ClaudeIngressTests(unittest.TestCase):
             self.assertEqual(recorded[0][0], 'openrouter.ai')
 
     def test_models_listing_projects_desktop_family_tier(self):
-        # Desktop 1.49585.0 drops rows whose id looks non-Anthropic unless
-        # the row declares a valid anthropic_family_tier. Anthropic rows
-        # keep their own tier word; every other row stands in for sonnet.
+        # Only real Claude models receive family metadata.
         server = self._server()
         response = _get(server.server_port, '/test-token/v1/models')
         body = json.loads(response.read())
-        tiers = {row['id']: row['anthropic_family_tier'] for row in body['data']}
+        tiers = {row['id']: row['anthropic_family_tier'] for row in body['data']
+                 if 'anthropic_family_tier' in row}
         self.assertTrue(tiers)
         self.assertTrue(all(t in claude_mod.FAMILY_TIERS for t in tiers.values()))
         self.assertEqual(tiers['anthropic/claude-sonnet-5.5'], 'sonnet')
@@ -197,7 +196,7 @@ class ClaudeIngressTests(unittest.TestCase):
         self.assertEqual(tiers['anthropic/claude-fable-5.1'], 'fable')
         for row_id, tier in tiers.items():
             if not row_id.startswith('anthropic/claude-'):
-                self.assertEqual(tier, 'sonnet')
+                self.fail('Another vendor was assigned a Claude family tier')
 
     def test_models_listing_orders_verified_then_preview_az(self):
         # Reorder-only: verified A-Z, then preview A-Z; ids and labels untouched.
@@ -233,7 +232,7 @@ class ClaudeIngressTests(unittest.TestCase):
         recorded = install_fake(self, lambda: FakeUpstream(
             200, b'{"id":"msg_3","type":"message","content":[]}', []))
         server = self._server()
-        for alias, slug in (('claude/z-ai/glm-5.3-flash', 'z-ai/glm-5.3-flash'),
+        for alias, slug in (('z-ai/glm-5.3-flash', 'z-ai/glm-5.3-flash'),
                             ('anthropic/claude-sonnet-5.5',
                              'anthropic/claude-sonnet-5.5')):
             with self.subTest(alias=alias):
@@ -302,7 +301,7 @@ class ClaudeIngressTests(unittest.TestCase):
         self.assertEqual(recorded[0][3].decode(), raw)
 
 
-    def test_aliased_model_is_rewritten_from_the_parsed_payload(self):
+    def test_truthful_model_preserves_the_parsed_payload(self):
         # Alias rewrite reads the already-parsed payload, never raw_body:
         # a direct slug stays byte-identical while the alias row carries
         # the registry slug.
@@ -321,21 +320,21 @@ class ClaudeIngressTests(unittest.TestCase):
 
         recorded.clear()
         response = _post(server.server_port, '/test-token/v1/messages',
-                         _messages('claude/z-ai/glm-5.3-flash'),
+                         _messages('z-ai/glm-5.3-flash'),
                          {'Authorization': 'Bearer test-key-bearer'})
         self.assertEqual(response.status, 200)
         host, _, _, body, _ = recorded[0]
         self.assertEqual(host, 'openrouter.ai')
         self.assertEqual(json.loads(body)['model'], 'z-ai/glm-5.3-flash')
 
-    def test_aliased_zstd_body_is_rewritten_to_plain_json(self):
+    def test_truthful_zstd_body_is_rewritten_to_plain_json(self):
         # Previously the alias path decoded raw_body and forwarded the still-
         # compressed bytes under a JSON content type; now the parsed payload
         # is re-serialized to plain JSON.
         recorded = install_fake(self, lambda: FakeUpstream(
             200, b'{"id":"msg_6","type":"message","content":[]}', []))
         server = self._server()
-        payload = _messages('claude/z-ai/glm-5.3-flash')
+        payload = _messages('z-ai/glm-5.3-flash')
         conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
         conn.request('POST', '/test-token/v1/messages',
                      body=zstd.compress(json.dumps(payload).encode()),
@@ -363,16 +362,14 @@ class ClaudeIngressTests(unittest.TestCase):
                          _messages(), {'Authorization': 'Bearer test-key-bearer'})
         self.assertEqual(response.status, 404)
 
-    def test_unknown_claude_prefixed_id_passes_through_to_subscription(self):
+    def test_retired_claude_prefixed_id_is_refused_before_upstream(self):
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
         server = self._server()
         response = _post(server.server_port, '/test-token/v1/messages',
                          _messages('claude/bogus'),
                          {'Authorization': 'Bearer subscription-secret'})
-        self.assertEqual(response.status, 200)
-        host, _, _, body, _ = recorded[0]
-        self.assertEqual(host, 'api.anthropic.com')
-        self.assertEqual(json.loads(body)['model'], 'claude/bogus')
+        self.assertEqual(response.status, 400)
+        self.assertEqual(recorded, [])
 
     def test_missing_model_is_400_and_never_reaches_upstream(self):
         recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))

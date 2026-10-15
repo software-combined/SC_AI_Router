@@ -15,7 +15,6 @@ Parameters:
     Description: Feed hostname; must match the certificate.
   HostedZoneId:
     Type: String
-    Default: Z0272966357LH6IEJY0NV
     Description: Public hosted zone for softwarecombined.com.
   BucketName:
     Type: String
@@ -29,10 +28,9 @@ Parameters:
     Description: GitHub repository whose tag builds may assume the publisher role.
   ImmutableSubjectPrefix:
     Type: String
-    Default: software-combined@200868195/SC_AI_Router@1360169840
     Description: >-
       Repository IDs GitHub emits in an immutable OIDC subject (owner@id/repo@id),
-      kept beside the classic form so either claim can assume the role.
+      passed by the deployer beside the classic form so either claim can assume the role.
   SigningSeedArn:
     Type: String
     Description: >-

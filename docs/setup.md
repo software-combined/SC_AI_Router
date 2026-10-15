@@ -80,13 +80,13 @@ models need to appear in its picker.
 
 ## Install from source
 
-This alternative requires repository access and Python 3.14. The install command
+This alternative requires Git and Python 3.14. The install command
 changes your local assistant settings and registers the service and update jobs.
 Run from the cloned repository:
 
 ```sh
-git clone https://github.com/software-combined/SC_AI_Router.git
-cd SC_AI_Router
+git clone https://github.com/software-combined/SC_AI_Router_Public.git
+cd SC_AI_Router_Public
 python3.14 packaging/release.py --out dist --url-base "file://$PWD/dist"
 python3.14 packaging/install.py --feed "file://$PWD/dist/latest.json"
 ```

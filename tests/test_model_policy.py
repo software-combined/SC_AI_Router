@@ -256,15 +256,15 @@ class ModelPolicyTests(unittest.TestCase):
         provider = responses.POLICY.select_provider(
             'gpt-6-astra', '/responses', state, 'subscription')
         self.assertIsInstance(provider, providers.SubscriptionProvider)
-        # Unknown Claude ids stay subscription passthrough (unalias leaves
-        # them untouched); a known alias for a disallowed slug rejects.
+        # Unknown native Claude IDs retain passthrough; a disallowed external
+        # model is rejected by its truthful registry ID.
         provider = messages.POLICY.select_provider(
-            'claude/moonshotai/kimi-k3-x', '/v1/messages', state,
+            'claude-future-native', '/v1/messages', state,
             'subscription')
         self.assertEqual(provider.name, 'anthropic')
         with self.assertRaisesRegex(ValueError, 'not in the configured catalog'):
             messages.POLICY.select_provider(
-                'claude/meta/muse-spark-1.3', '/v1/messages', state,
+                'meta/muse-spark-1.3', '/v1/messages', state,
                 'subscription')
 
     def test_allowed_flag_round_trips_through_cli(self):
