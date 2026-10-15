@@ -11,6 +11,9 @@ license: MIT
 
 # Ponytail
 
+Adapted from [Dietrich Gebert's Ponytail](https://github.com/DietrichGebert/ponytail),
+version 4.10.0. The original copyright and [MIT licence](LICENSE) are retained.
+
 This skill ships with the SCG router; see [automatic updates](../../references/updates.md).
 There is no per-plugin updater or schedule to configure. Respect explicit
 read-only scope.

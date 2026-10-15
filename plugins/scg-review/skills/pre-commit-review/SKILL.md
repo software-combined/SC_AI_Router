@@ -46,13 +46,13 @@ fall back to older Ponytail guidance.
 
 ## Models and runtimes
 
-Read the bundled [reviewer routing policy](../../references/reviews.md) before every review. It sets the model and fixed effort for each pass, any authorised fallbacks, and escalation. It is an unchanged copy of the canonical optimal-subagents policy. Exact user or project model/effort requirements take precedence over it.
+Read the bundled [reviewer routing policy](../../references/reviews.md) before every review. It defines model-agnostic selection, bounded availability fallbacks and escalation. It is an unchanged copy of the canonical optimal-subagents policy. Exact user or project model/effort requirements take precedence over it.
 
-- **Codex:** prefer `openai/gpt-6.1-sol` at `high` (GPT-6.1 Sol through OpenRouter) for every pass. Apply the bundled policy's ordered fallbacks automatically, checking effective access and supported effort before dispatch. Use the bundled [code-simplifier](../code-simplifier/SKILL.md) for Pass 1 and the active subagent tools for the three lanes.
-- **Claude Code:** use the installed adapter agents `code-simplifier`, `review-correctness`, `review-quality` and `review-adversarial`, with the Claude models configured in them. Do not route these passes to router models. This plugin does not install those agents.
+- **Codex:** use the machine owner's configured reviewer choices under the bundled policy. Use the bundled [code-simplifier](../code-simplifier/SKILL.md) for Pass 1 and the active subagent tools for the three lanes.
+- **Claude Code:** use the installed adapter agents `code-simplifier`, `review-correctness`, `review-quality` and `review-adversarial`. Their configured models and effort must match the owner's selected hook preferences. This plugin does not install those agents.
 - **Other runtimes:** use only a verified installed adapter that implements this procedure.
 
-When a policy has a listed eligible fallback and the preferred model is unavailable, use that fallback and record the substitution. Fallbacks are enabled for every pass unless the current user explicitly forbids substitution or an applicable instruction requires an exact route. Follow the policy's two-fallback dispatch limit and shared-failure rules. A required pass is `❌ Block` when no permitted model can complete it. Never switch runtimes, accounts or data constraints, or weaken a gate, to get around a requirement. Confirm access through actual review calls: an accepted dispatch is not a completed review. See [provider access and identity rules](../../references/reviewer-models.md).
+When the selected model is unavailable, use an eligible fallback and record the substitution. Fallbacks are enabled unless the current user forbids substitution or an applicable instruction requires an exact model, provider or effort. Follow the policy's two-fallback dispatch limit and shared-failure rules. A required pass is `❌ Block` when no permitted model can complete it. Never switch runtimes, accounts or data constraints, or weaken a gate, to get around a requirement. Confirm access through actual review calls: an accepted dispatch is not a completed review. See [provider access and identity rules](../../references/reviewer-models.md).
 
 Record each pass's requested and returned model and effort in your notes. Missing served identity is `unverified`; a known mismatch invalidates that pass. Fallbacks never remove staged-tree coverage, lane independence or the need for a genuine review.
 For Codex, keep the exact child/parent IDs and assignment window, then read
@@ -65,41 +65,24 @@ Use the **elevated-risk profile** when the staged change, or a directly relevant
 ### Codex: select the model and handoff
 
 Use the active tool schema. With `multi_agent_v1`, pass `fork_context=false`,
-explicit model/effort and the brief in `message`; there is no `task_name`
-or `fork_turns`. Keep the returned `agent_id`. The example below is for V2
-only, when that schema is actually offered.
+the selected model, supported effort and the brief in `message`; there is no
+`task_name` or `fork_turns`. Keep the returned `agent_id`.
 
-For Pass 1 and each review lane, select the first eligible route from the policy.
-Call `spawn_agent` directly from the tool set chosen below, with explicit model
-and effort and `fork_turns="none"`. A preferred correctness-lane dispatch is:
-
-```json
-{
-  "task_name": "review_correctness",
-  "fork_turns": "none",
-  "model": "openai/gpt-6.1-sol",
-  "reasoning_effort": "high",
-  "message": "GPT-6.1 Sol High: pre-commit review, correctness lane. Replace this message with the complete Step 7 brief, including the worktree, reviewed tree, staged files and context."
-}
-```
-
-Set model and effort to the selected route for each pass, including fallbacks.
-Pass 1 receives the code-simplifier assignment; the lanes receive Step 7's brief.
-A model label in the message does not select the model. Do not omit tool arguments
-or rely on installation-wide subagent defaults.
+With V2, call `spawn_agent` with a task name, the selected model, supported
+`reasoning_effort`, `fork_turns="none"` and the complete brief in `message`.
+Omit effort only when the selected model does not support it and no exact
+effort requirement applies. Record
+`unavailable`. Pass 1 receives the code-simplifier assignment; the lanes receive
+Step 7's brief. A model label in the message does not select the model. Resolve
+the configured reviewer before dispatch rather than relying on implicit defaults.
 
 If `collaboration_plaintext` handoff tools are offered, use them for every
 subagent assignment, message and follow-up, whatever the recipient. Otherwise
-use the `collaboration` tools. Pass model and reasoning_effort explicitly;
-external children need `fork_turns="none"`. The native subscription id
-`gpt-6.1-sol` is a different route from `openai/gpt-6.1-sol` and is an
-authorized fallback in the policy.
+use the `collaboration` tools. Pass the selected model and supported effort
+explicitly; external children need `fork_turns="none"`.
 
-A handoff refusal is not model or provider unavailability and does not justify
-asking to replace the required OpenRouter reviewer with a native model. The
-router ends the parent turn before the bad call executes and cannot invent a
-recoverable tool result. Report the exact delivery blocker as `❌ Block` and
-preserve the work.
+A handoff refusal is a delivery failure, not model or provider unavailability.
+Report the exact delivery blocker as `❌ Block` and preserve the work.
 
 ## Step 1: Setup check
 
@@ -107,7 +90,14 @@ Find the repo root and branch, and read the root and nested `AGENTS.md` files th
 
 ```bash
 python3 <plugin-root>/scripts/setup.py check --repo <absolute-repo-path>
+~/.config/scg-agent-git-hooks/bin/scg-review-state models --client codex
 ```
+
+Use `--client claude-code` in Claude Code; other adapters use their own profile.
+Read the returned ordered preferences for simplification and each lane. Missing
+or invalid preferences are `❌ Block` before model dispatch; the shared skill
+supplies no model defaults. The [setup guide](../../references/setup.md#reviewer-preferences)
+describes the owner's local configuration. Do not rewrite it during review.
 
 On native Windows, use Git Bash for this guide's Bash commands. In PowerShell,
 run setup with an absolute interpreter, for example the router's runtime:
@@ -191,7 +181,7 @@ You are read-only: do not edit, stage, commit, push, delegate or change any syst
 Reply in the lane report format from the lane guide, then stop.
 ```
 
-`git show :path` covers only the listed staged files, and context is a named path list. Do not reconstruct trees, extract the repository to `/tmp`, inspect unlisted files, or continue after the Markdown report. A failed report is not unavailability: do not rerun the same model with the same brief. Make one focused correction, then use the next listed fallback if the policy has one.
+`git show :path` covers only the listed staged files, and context is a named path list. Do not reconstruct trees, extract the repository to `/tmp`, inspect unlisted files, or continue after the Markdown report. A failed report is not unavailability: do not rerun the same model with the same brief. Make one focused correction, then use an eligible fallback within the policy's dispatch limit.
 
 If delivery goes wrong:
 
@@ -257,7 +247,7 @@ Then record the approval under `~/.cache/scg-agent-git-hooks/reviews/`:
 ```
 
 - `✅ All Clear` maps to `--decision ALL_CLEAR` and `📝 Proceed With Notes` maps to `--decision PROCEED_WITH_NOTES`. Never record approval for `❌ Block`.
-- Each `--pass` value is `<requested-model>@<requested-variant-or-unavailable>::<returned-model-or-unverified>@<returned-variant-or-unverified-or-unavailable>`. For example, `--pass quality=openai/gpt-6.1-sol@high::openai/gpt-6.1-sol@high`, or `--pass quality=openai/gpt-6.1-sol@high::unverified@unverified` when the runtime does not echo its serving identity. A returned side of `unverified` is expected in that case and never blocks approval.
+- Each `--pass` value is `<requested-model>@<requested-variant-or-unavailable>::<returned-model-or-unverified>@<returned-variant-or-unverified-or-unavailable>`. Use the actual callable identifier and supported effort, or `unavailable` when effort is unsupported. When the runtime does not echo its serving identity, record `unverified@unverified` on the returned side; that absence never blocks approval.
 - Never invent a value, and never record approval without a genuine three-lane review having run. Self-attesting the review is a bypass of the gate, not a review.
 
 Commit with `<type>: <short summary>`, where type is `feat`, `fix`, `refactor`, `test`, `chore` or `docs`, matching the shared commit-msg hook.
