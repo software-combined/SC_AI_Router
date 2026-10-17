@@ -2,7 +2,7 @@
  "scenario": "s01_plain",
  "targets": [
   "subscription:gpt-6-astra",
-  "external:deepseek/deepseek-v4.1-flash",
+  "external:deepseek/deepseek-v4.1-flash-1017",
   "external:meta/muse-spark-1.3-contributor",
   "external:xiaomi/mimo-v2.6-pro",
   "external:x-ai/grok-4.7",

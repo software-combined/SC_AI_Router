@@ -110,7 +110,7 @@ class ToolAdapterTests(unittest.TestCase):
         # 2026-09-10: deepseek-v4.1-flash streams aborted with OpenRouter's
         # 'Server tool request failed' while Codex's web_search server tool
         # rode along; the registry row carries no web-search capability.
-        payload = {'model': 'deepseek/deepseek-v4.1-flash', 'tools': [
+        payload = {'model': 'deepseek/deepseek-v4.1-flash-1017', 'tools': [
             {'type': 'web_search', 'external_web_access': False},
             {'type': 'function', 'name': 'exec', 'parameters': {'type': 'object'}}]}
         payload = prepare_tools(payload)[0]

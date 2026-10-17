@@ -21,7 +21,7 @@ from tests.harness import (
 )
 
 TOKEN = 'test-token'
-PAYLOAD = {'model': 'deepseek/deepseek-v4.1-flash', 'input': []}
+PAYLOAD = {'model': 'deepseek/deepseek-v4.1-flash-1017', 'input': []}
 JSON_HEADERS = {'Content-Type': 'application/json'}
 
 

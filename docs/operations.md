@@ -903,7 +903,7 @@ first, or refuses when the block was edited. The choice persists in router
 state and survives scheduled updates.
 
 The attachment also manages Codex settings beyond the connection lines. A
-fresh install seeds `model = "deepseek/deepseek-v4.1-flash"` and
+fresh install seeds `model = "deepseek/deepseek-v4.1-flash-1017"` and
 `model_reasoning_effort = "max"` inside the managed block; Codex writes the
 owner's later pick into those same lines, and an update carries it forward
 instead of resetting it. In the config's `[desktop]` table it sets

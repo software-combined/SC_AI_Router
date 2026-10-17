@@ -82,11 +82,9 @@ CASES = {
 
 
 class RuleTests(unittest.TestCase):
-    def test_only_the_measured_row_has_the_extra_observed_shapes(self):
-        measured = registry.by_slug('deepseek/deepseek-v4.1-flash')
-        self.assertEqual(set(measured.observed_item_types), registry.OBSERVABLE_ITEM_TYPES)
-        self.assertEqual([row.slug for row in registry.MODELS if row.observed_item_types],
-                         [measured.slug])
+    def test_explicit_measurements_enable_only_the_given_shapes(self):
+        measured = replace(registry.by_slug('deepseek/deepseek-v4.1-flash-1017'),
+                           observed_item_types=tuple(sorted(registry.OBSERVABLE_ITEM_TYPES)))
         body = _body(*({'type': kind} for kind in measured.observed_item_types))
         found = wire_shape.violations(EXTERNAL, body, measured.observed_item_types)
         self.assertNotIn('item.unverified_type', found['warnings'])
@@ -103,7 +101,8 @@ class RuleTests(unittest.TestCase):
                 registry.load(json.dumps([{**row, 'observed_item_types': bad}]))
 
     def test_feed_retargeting_cannot_inherit_the_original_measurement(self):
-        measured = registry.by_slug('deepseek/deepseek-v4.1-flash')
+        measured = replace(registry.by_slug('deepseek/deepseek-v4.1-flash-1017'),
+                           observed_item_types=('compaction',))
         for changes in ({'upstream_id': 'deepseek/deepseek-v4-pro-0813'},
                         {'provider': 'openai'}):
             with self.subTest(changes=changes):

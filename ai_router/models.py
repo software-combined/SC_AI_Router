@@ -14,7 +14,7 @@ import json
 import sys
 import urllib.request
 from pathlib import Path
-from . import candidate_evidence, provider_defs
+from . import candidate_evidence, catalogue, provider_defs
 from .apply_catalogue import write_guarded
 from .capabilities import CANONICAL_ORDER
 from .model_metadata import project_modalities, qualify_name
@@ -222,7 +222,8 @@ def cmd_check(path, live_by_id, provider_id=provider_defs.DEFAULT_EXTERNAL):
     if len(set(priorities)) != len(priorities):
         problems.append('duplicate priority')
     pairs = [(row.get('provider') or provider_defs.DEFAULT_EXTERNAL,
-              upstream_id_for(row)) for row in rows]
+              upstream_id_for(row)) for row in rows
+             if row.get('listed', True) or row.get('slug') not in catalogue.RETIRED_SLUGS]
     if len(set(pairs)) != len(pairs):
         problems.append('duplicate provider upstream_id')
     if valid:
@@ -230,7 +231,7 @@ def cmd_check(path, live_by_id, provider_id=provider_defs.DEFAULT_EXTERNAL):
         if ordered != sorted(ordered):
             problems.append('priorities not in picker order')
     if live_by_id is not None:
-        owned = [row['slug'] for row in rows
+        owned = [upstream_id_for(row) for row in rows
                  if (row.get('provider') or provider_defs.DEFAULT_EXTERNAL) == provider_id
                  and not row.get('media_kind')]
         missing = [slug for slug in owned if slug not in live_by_id]

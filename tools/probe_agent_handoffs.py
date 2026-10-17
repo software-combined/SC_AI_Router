@@ -26,7 +26,7 @@ from ai_router.registry import by_slug
 from tools.appserver_probe import AppServer, AGENT_HANDOFFS, codex_bin, failure_shape, request_failure_shape, scrub_env
 
 PARENT = 'gpt-6-astra'
-CHILD = 'deepseek/deepseek-v4.1-flash'
+CHILD = 'deepseek/deepseek-v4.1-flash-1017'
 MARKERS = ('SYNTH_066_INITIAL', 'SYNTH_066_FOLLOWUP', 'SYNTH_066_MESSAGE')
 ALL_MARKERS = (*MARKERS, 'SYNTH_NATIVE_CONTROL')
 

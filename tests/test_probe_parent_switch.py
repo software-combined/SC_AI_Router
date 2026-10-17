@@ -19,7 +19,7 @@ from tools import probe_parent_switch as probe_mod
 from tools.probe_agent_handoffs import message, sse
 
 MARKER = probe_mod.MARKER
-GLM, LUNA, DEEPSEEK = 'z-ai/glm-5.3-flash', 'gpt-6-luna', 'deepseek/deepseek-v4.1-flash'
+GLM, LUNA, DEEPSEEK = 'z-ai/glm-5.3-flash', 'gpt-6-luna', 'deepseek/deepseek-v4.1-flash-1017'
 CHILD_HEADERS = {'x-codex-parent-thread-id': 'synthetic-parent'}
 ENCRYPTED = {'type': 'encrypted_content', 'encrypted_content': 'SYNTH_CIPHER'}
 

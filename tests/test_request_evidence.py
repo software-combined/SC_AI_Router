@@ -16,7 +16,7 @@ from tests.harness import auth_file, post, start_server, test_state
 from tests.test_messages_stream_contract import ending, frame, message
 
 CANARY = 'PRIVATE PROMPT TOOL HEADER AND ERROR CONTENT'
-EXTERNAL = 'deepseek/deepseek-v4.1-flash'
+EXTERNAL = 'deepseek/deepseek-v4.1-flash-1017'
 
 
 def event(kind, **fields):

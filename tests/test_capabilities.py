@@ -23,8 +23,8 @@ class CapabilityTests(unittest.TestCase):
         self.assertEqual(reasoning_levels('x-ai/grok-4.7'), ['low', 'medium', 'high', 'xhigh'])
         self.assertEqual(reasoning_levels('deepseek/deepseek-v4-pro-0813'),
                          ['low', 'high', 'max'])
-        self.assertEqual(reasoning_levels('deepseek/deepseek-v4.1-flash'),
-                         ['low', 'high', 'max'])
+        self.assertEqual(reasoning_levels('deepseek/deepseek-v4.1-flash-1017'),
+                         ['none', 'low', 'high', 'max'])
         for slug in ('xiaomi/mimo-v2.6-flash', 'xiaomi/mimo-v2.6-pro'):
             self.assertEqual(reasoning_levels(slug),
                              ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'])

@@ -27,7 +27,7 @@ DISABLE = Path(__file__).resolve().parents[1] / 'tools' / 'disable.py'
 STATE = {'port': 4321, 'token': 'tok'}
 URL = 'http://127.0.0.1:4321/tok/backend-api/codex'
 BEGIN, END = '# BEGIN local mixed model picker\n', '# END local mixed model picker\n'
-SEEDED = 'model = "deepseek/deepseek-v4.1-flash"\nmodel_reasoning_effort = "max"\n'
+SEEDED = 'model = "deepseek/deepseek-v4.1-flash-1017"\nmodel_reasoning_effort = "max"\n'
 # The managed approvals reviewer the default block carries (develop #347).
 REVIEWER = 'approvals_reviewer = "user"\n'
 PROVIDER = {'name': 'SC router', 'base_url': URL, 'wire_api': 'responses'}
@@ -171,7 +171,7 @@ class SwitchFlowTests(unittest.TestCase):
                     self.assertIn(_entry(home)['inserted_block'], switched)
                     # The owner's model pick rides through the switch and the update.
                     self.assertEqual(tomllib.loads(switched)['model'],
-                                     'deepseek/deepseek-v4.1-flash')
+                                     'deepseek/deepseek-v4.1-flash-1017')
             # The hand-edit rule holds for a switched variant too.
             edited = config.read_text().replace('openai_base_url', 'openai_base_url_edited')
             config.write_text(edited)

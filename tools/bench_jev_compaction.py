@@ -127,7 +127,7 @@ def measure(path, live=False, timeout=5.0, window_items=WINDOW_ITEMS):
         home = Path(tmp)
         (home / 'jev-compaction').write_text('on\n')
         try:
-            result = jev_compaction.summary('deepseek/deepseek-v4.1-flash',
+            result = jev_compaction.summary('deepseek/deepseek-v4.1-flash-1017',
                                             key() if live else 'x', items,
                                             provider_defs.OPENROUTER, home=home,
                                             ask=asker)

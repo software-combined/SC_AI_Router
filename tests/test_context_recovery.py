@@ -62,7 +62,7 @@ class ContextRecoveryTests(unittest.TestCase):
         return prepared, raw
 
     def test_reset_with_only_setup_keeps_history_recovery_visible_on_both_routes(self):
-        for model in ('gpt-6-luna', 'deepseek/deepseek-v4.1-flash'):
+        for model in ('gpt-6-luna', 'deepseek/deepseek-v4.1-flash-1017'):
             with self.subTest(model=model):
                 items = [window(), {'type': 'message', 'role': 'user',
                                     'content': 'Repository setup only. No assignment here.'}]

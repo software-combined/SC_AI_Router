@@ -129,7 +129,7 @@ class LegacyCaseTests(unittest.TestCase):
                        'x-codex-turn-metadata': json.dumps({'agent_name': agent})}
             self.assertEqual(probe.role(headers), role)
         self.assertEqual(probe.routes, {'parent': (probe.parent, 'high'), 'child': (probe.parent, 'low'),
-                                        'external': ('deepseek/deepseek-v4.1-flash', 'low')})
+                                        'external': ('deepseek/deepseek-v4.1-flash-1017', 'low')})
 
     def test_external_key_is_hidden_from_the_router_gate_only_during_parent_turn_one(self):
         probe = self.legacy()

@@ -1390,5 +1390,126 @@
       "result": "pass"
     }
   ]
+},
+{
+  "kind": "model_routes_v1",
+  "observed_at": "2026-10-17T10:36:08.923287+00:00",
+  "model": "deepseek/deepseek-v4.1-flash-1017",
+  "provider": "openrouter",
+  "capability_fingerprint": "a830585e3fe0eed7abcf72d77c6debca2d70879c921f249d2a01090d5da4357e",
+  "runtime_fingerprint": "8f8b8f38fab470f0dacf7fcadba0326eb1084f64c5ae762a75add98f65a9830a",
+  "router_version": "1.2.8",
+  "router_revision": "04bfcddfc8b31c6ca6cbbb3abca0aec5fe8bbcdd",
+  "routes": [
+    {
+      "protocol": "responses",
+      "client": "codex",
+      "client_version": "0.163.0-alpha.10.2",
+      "requested_effort": "low",
+      "served_models": [
+        {
+          "value": "deepseek/deepseek-v4.1-flash-1017",
+          "source": "response.created.response.model"
+        },
+        {
+          "value": "deepseek/deepseek-v4.1-flash-1017",
+          "source": "response.in_progress.response.model"
+        },
+        {
+          "value": "deepseek/deepseek-v4.1-flash-1017",
+          "source": "response.completed.response.model"
+        },
+        {
+          "value": "deepseek/deepseek-v4.1-flash-1017",
+          "source": "response.created.response.model"
+        },
+        {
+          "value": "deepseek/deepseek-v4.1-flash-1017",
+          "source": "response.in_progress.response.model"
+        },
+        {
+          "value": "deepseek/deepseek-v4.1-flash-1017",
+          "source": "response.completed.response.model"
+        },
+        {
+          "value": "deepseek/deepseek-v4.1-flash-1017",
+          "source": "response.created.response.model"
+        },
+        {
+          "value": "deepseek/deepseek-v4.1-flash-1017",
+          "source": "response.in_progress.response.model"
+        },
+        {
+          "value": "deepseek/deepseek-v4.1-flash-1017",
+          "source": "response.completed.response.model"
+        }
+      ],
+      "served_efforts": [
+        {
+          "value": "low",
+          "source": "response.created.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.in_progress.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.completed.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.created.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.in_progress.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.completed.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.created.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.in_progress.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.completed.response.reasoning.effort"
+        }
+      ],
+      "calls": 4,
+      "conformance": "pass",
+      "result": "pass"
+    },
+    {
+      "protocol": "messages",
+      "client": "claude",
+      "client_version": "2.1.283",
+      "requested_effort": "low",
+      "served_models": [
+        {
+          "value": "deepseek/deepseek-v4.1-flash-1017",
+          "source": "message_start.message.model"
+        },
+        {
+          "value": "deepseek/deepseek-v4.1-flash-1017",
+          "source": "message_start.message.model"
+        },
+        {
+          "value": "deepseek/deepseek-v4.1-flash-1017",
+          "source": "message_start.message.model"
+        }
+      ],
+      "served_efforts": [],
+      "calls": 3,
+      "conformance": "pass",
+      "result": "pass"
+    }
+  ]
 }
 ]

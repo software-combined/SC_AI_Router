@@ -137,11 +137,11 @@ class MissingSummaryRowTests(unittest.TestCase):
         lookup = mock.Mock(side_effect=AssertionError('live lookup'))
         entries = compaction_summary.summary_entries(
             providers.provider_defs.OPENROUTER.id, catalogue=rows,
-            allowed={'deepseek/deepseek-v4.1-flash'},
-            availability_snapshot={'models': {'deepseek/deepseek-v4.1-flash'}},
+            allowed={'deepseek/deepseek-v4.1-flash-1017'},
+            availability_snapshot={'models': {'deepseek/deepseek-v4.1-flash-1017'}},
             lookup=lookup)
         self.assertEqual([entry.slug for entry in entries],
-                         ['deepseek/deepseek-v4.1-flash'])
+                         ['deepseek/deepseek-v4.1-flash-1017'])
         lookup.assert_not_called()
 
 

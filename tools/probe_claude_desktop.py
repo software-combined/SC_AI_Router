@@ -13,7 +13,7 @@ from ai_router import claude
 
 lock = threading.Lock()
 remaining = 4
-allowed = 'deepseek/deepseek-v4.1-flash'
+allowed = 'deepseek/deepseek-v4.1-flash-1017'
 
 
 class Handler(BaseHTTPRequestHandler):

@@ -132,7 +132,7 @@ class LegacyProbe(CaseProbe):
     markers = LEGACY_MARKERS
     expected_replies = set(LEGACY_MARKERS)
     agents = {'/root/legacy_native': 'child', '/root/legacy_external': 'external'}
-    external = 'deepseek/deepseek-v4.1-flash'
+    external = 'deepseek/deepseek-v4.1-flash-1017'
 
     @property
     def routes(self):

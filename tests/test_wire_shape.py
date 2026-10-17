@@ -130,7 +130,7 @@ class RefusalLogTests(unittest.TestCase):
         self.addCleanup(server.server_close)
         self.addCleanup(server.shutdown)
         payload = {
-            'model': 'deepseek/deepseek-v4.1-flash',
+            'model': 'deepseek/deepseek-v4.1-flash-1017',
             'input': [
                 {'type': 'message', 'role': 'user',
                  'content': [{'type': 'input_text', 'text': CANARY}]},

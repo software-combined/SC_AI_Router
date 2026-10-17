@@ -22,7 +22,7 @@ from ai_router.registry import by_slug
 from tools.appserver_probe import codex_bin
 from tools.probe_context_budget import Client, Reply, MODEL, contract_failure, message
 
-EXTERNAL = 'deepseek/deepseek-v4.1-flash'
+EXTERNAL = 'deepseek/deepseek-v4.1-flash-1017'
 NATIVE = 'gpt-6-astra'
 MARKER = 'HISTORY_SWITCH_MARKER_837'
 

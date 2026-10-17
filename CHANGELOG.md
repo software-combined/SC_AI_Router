@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 1.2.8
+
+- Saved sessions using the previous DeepSeek Flash ID continue on Flash 1017.
+  The previous ID stays hidden from both model pickers.
+
+- Replace DeepSeek V4.1 Flash with the pinned 1017 snapshot, including the
+  fresh-install default and compaction helper. Retire the previous picker entry.
+
+## 1.2.7
+
 - Include the sanitized local review exporter in installed plugin bundles.
   Verify that it runs using only files included in the router release.
 

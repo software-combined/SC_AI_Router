@@ -20,7 +20,7 @@ from tests.harness import stub_credentials
 from tests.test_agent_handoff_providers import Response
 from tests.test_agent_handoffs import CIPHERTEXT, KEY, NO_KEY, native_tools
 
-PARENT, CHILD = 'gpt-6-astra', 'deepseek/deepseek-v4.1-flash'
+PARENT, CHILD = 'gpt-6-astra', 'deepseek/deepseek-v4.1-flash-1017'
 HANDOFFS = sorted(handoffs.HANDOFF_TOOLS)
 ALIAS = 'collaboration_plaintext'
 

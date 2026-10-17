@@ -22,8 +22,12 @@
    {
     "content": [
      {
-      "text": "[earlier conversation was compacted; the summary is stored in a format this model cannot read]",
+      "text": "What is in this synthetic image?",
       "type": "input_text"
+     },
+     {
+      "image_url": "data:image/png;base64,iVBORw0KGgo=",
+      "type": "input_image"
      }
     ],
     "role": "user",
@@ -32,7 +36,17 @@
    {
     "content": [
      {
-      "text": "Continue from the summary.",
+      "text": "A synthetic diagram with two boxes.",
+      "type": "output_text"
+     }
+    ],
+    "role": "assistant",
+    "type": "message"
+   },
+   {
+    "content": [
+     {
+      "text": "Describe it again.",
       "type": "input_text"
      }
     ],
@@ -42,9 +56,9 @@
   ],
   "instructions": "You are the synthetic coding agent for the replay goldens.",
   "max_output_tokens": 64000,
-  "model": "deepseek/deepseek-v4.1-flash",
+  "model": "deepseek/deepseek-v4.1-flash-1017",
   "parallel_tool_calls": true,
-  "prompt_cache_key": "replay-s06",
+  "prompt_cache_key": "replay-s11",
   "reasoning": {
    "effort": "low",
    "summary": "auto"

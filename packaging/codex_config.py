@@ -26,7 +26,7 @@ EFFORT_ORDER = ('none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max',
                 'ultra', 'persistent')
 
 # The model a fresh install starts on, install-once for the same reason.
-DEFAULT_MODEL = 'deepseek/deepseek-v4.1-flash'
+DEFAULT_MODEL = 'deepseek/deepseek-v4.1-flash-1017'
 DEFAULT_MODEL_EFFORT = 'max'
 # Root keys Codex writes for the owner's pick, in the shape the client uses.
 PICK_KEYS = ('model', 'model_reasoning_effort')

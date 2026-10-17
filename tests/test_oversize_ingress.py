@@ -29,7 +29,7 @@ from tests.harness import (
 )
 
 TOKEN = 'test-token'
-MODEL = 'deepseek/deepseek-v4.1-flash'
+MODEL = 'deepseek/deepseek-v4.1-flash-1017'
 
 
 def _search_payload(description):

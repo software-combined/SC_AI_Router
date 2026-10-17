@@ -1,7 +1,7 @@
 {
  "scenario": "s02_sub_to_ext",
  "targets": [
-  "external:deepseek/deepseek-v4.1-flash",
+  "external:deepseek/deepseek-v4.1-flash-1017",
   "external:meta/muse-spark-1.3-contributor",
   "external:xiaomi/mimo-v2.6-pro"
  ],

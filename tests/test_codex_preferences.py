@@ -31,7 +31,7 @@ _spec.loader.exec_module(codex_config)
 BLOCK = ('# BEGIN local mixed model picker\n'
          'model_catalog_json = "/tmp/x/mixed-models.json"\n'
          '# END local mixed model picker\n')
-SEEDED = 'model = "deepseek/deepseek-v4.1-flash"'
+SEEDED = 'model = "deepseek/deepseek-v4.1-flash-1017"'
 SEEDED_EFFORT = 'model_reasoning_effort = "max"'
 MANAGED_EFFORTS = ('enabled-reasoning-efforts = '
                    '["low", "medium", "high", "xhigh", "max", "persistent"]')

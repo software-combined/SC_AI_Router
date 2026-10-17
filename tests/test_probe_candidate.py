@@ -79,7 +79,7 @@ class BudgetTests(unittest.TestCase):
 
 class ClientTests(unittest.TestCase):
     def setUp(self):
-        self.row = registry.by_slug('deepseek/deepseek-v4.1-flash')
+        self.row = registry.by_slug('deepseek/deepseek-v4.1-flash-1017')
 
     def test_server_fetches_key_permissions_without_refreshing_candidate_rows(self):
         from ai_router import availability, compaction_summary, router, runtime

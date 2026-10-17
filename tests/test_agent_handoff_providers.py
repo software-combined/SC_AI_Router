@@ -166,14 +166,14 @@ class ProviderTests(unittest.TestCase):
         history = [{'type': 'function_call', 'namespace': 'collaboration',
                     'name': 'spawn_agent', 'call_id': 'call_spawn',
                     'arguments': json.dumps({'task_name': 'child',
-                        'model': 'deepseek/deepseek-v4.1-flash'})},
+                        'model': 'deepseek/deepseek-v4.1-flash-1017'})},
                    {'type': 'function_call_output', 'call_id': 'call_spawn',
                     'output': 'synthetic spawned'}]
         for name in ('spawn_agent', 'followup_task', 'send_message'):
             prepared, _, _ = self.prepare(provider, native_tools(name), deepcopy(history))
             wire = next(w for (_, w), info in prepared.tool_names.items()
                         if info['namespace'] == 'collaboration')
-            args = {'task_name': 'child', 'model': 'deepseek/deepseek-v4.1-flash',
+            args = {'task_name': 'child', 'model': 'deepseek/deepseek-v4.1-flash-1017',
                     'target': '/root/child', 'message': 'SYNTH_SECRET_BRIEF'}
             for native in (False, True):
                 call = {'type': 'function_call', 'name': name if native else wire,

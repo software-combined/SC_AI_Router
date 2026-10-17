@@ -190,11 +190,12 @@
     "tier": "verified"
   },
   {
-    "slug": "deepseek/deepseek-v4.1-flash",
+    "slug": "deepseek/deepseek-v4.1-flash-1017",
     "provider": "openrouter",
-    "display_name": "DeepSeek: V4.1 Flash · OpenRouter",
+    "display_name": "DeepSeek: V4.1 Flash 1017 · OpenRouter",
     "vendor": "DeepSeek",
     "reasoning": [
+      "none",
       "low",
       "high",
       "max"
@@ -211,18 +212,44 @@
     "drop_images": false,
     "context_window": 1048576,
     "priority": 106,
-    "observed_item_types": [
-      "custom_tool_call",
-      "custom_tool_call_output",
-      "compaction",
-      "additional_tools"
-    ],
-    "max_output_tokens": 384000,
+    "max_output_tokens": 393216,
     "reasoning_summary": "none",
     "apply_patch": "freeform",
     "experimental_tools": [],
     "web_search": false,
     "tier": "verified"
+  },
+  {
+    "slug": "deepseek/deepseek-v4.1-flash",
+    "provider": "openrouter",
+    "display_name": "DeepSeek: V4.1 Flash compatibility 1017 · OpenRouter",
+    "vendor": "DeepSeek",
+    "reasoning": [
+      "none",
+      "low",
+      "high",
+      "max"
+    ],
+    "default_reasoning": "low",
+    "modalities": [
+      "text",
+      "image"
+    ],
+    "excluded_efforts": [],
+    "schema_mode": "native",
+    "history_mode": "native",
+    "max_tools": null,
+    "drop_images": false,
+    "context_window": 1048576,
+    "priority": 107,
+    "max_output_tokens": 393216,
+    "reasoning_summary": "none",
+    "apply_patch": "freeform",
+    "experimental_tools": [],
+    "web_search": false,
+    "tier": "verified",
+    "listed": false,
+    "upstream_id": "deepseek/deepseek-v4.1-flash-1017"
   },
   {
     "slug": "google/gemini-3.1-pro-preview",
@@ -246,7 +273,7 @@
     "max_tools": null,
     "drop_images": false,
     "context_window": 1048576,
-    "priority": 107,
+    "priority": 108,
     "max_output_tokens": 65536,
     "reasoning_summary": "none",
     "apply_patch": "freeform",
@@ -276,7 +303,7 @@
     "max_tools": null,
     "drop_images": false,
     "context_window": 1048576,
-    "priority": 108,
+    "priority": 109,
     "max_output_tokens": 65536,
     "reasoning_summary": "none",
     "apply_patch": "freeform",
@@ -314,7 +341,7 @@
     "web_search": true,
     "tier": "verified",
     "listed": true,
-    "priority": 109
+    "priority": 110
   },
   {
     "slug": "google/veo-3.1-fast",
@@ -335,7 +362,7 @@
     "max_tools": null,
     "drop_images": false,
     "context_window": 0,
-    "priority": 110,
+    "priority": 111,
     "max_output_tokens": 32768,
     "reasoning_summary": "none",
     "apply_patch": "none",
@@ -364,7 +391,7 @@
     "max_tools": null,
     "drop_images": false,
     "context_window": 0,
-    "priority": 111,
+    "priority": 112,
     "max_output_tokens": 32768,
     "reasoning_summary": "none",
     "apply_patch": "none",
@@ -400,7 +427,7 @@
     "max_tools": null,
     "drop_images": false,
     "context_window": 1048576,
-    "priority": 112,
+    "priority": 113,
     "max_output_tokens": 943718,
     "reasoning_summary": "none",
     "apply_patch": "none",
@@ -433,7 +460,7 @@
     "max_tools": null,
     "drop_images": false,
     "context_window": 1048576,
-    "priority": 113,
+    "priority": 114,
     "max_output_tokens": 943718,
     "reasoning_summary": "none",
     "apply_patch": "none",
@@ -474,7 +501,7 @@
     "web_search": true,
     "tier": "verified",
     "listed": true,
-    "priority": 114
+    "priority": 115
   },
   {
     "slug": "moonshotai/kimi-k3",
@@ -497,7 +524,7 @@
     "max_tools": null,
     "drop_images": false,
     "context_window": 1048576,
-    "priority": 115,
+    "priority": 116,
     "max_output_tokens": 943718,
     "reasoning_summary": "none",
     "apply_patch": "freeform",
@@ -528,7 +555,7 @@
     "max_tools": null,
     "drop_images": false,
     "context_window": 1050000,
-    "priority": 116,
+    "priority": 117,
     "max_output_tokens": 128000,
     "reasoning_summary": "none",
     "apply_patch": "freeform",
@@ -568,7 +595,7 @@
     "web_search": true,
     "tier": "verified",
     "listed": true,
-    "priority": 117
+    "priority": 118
   },
   {
     "slug": "openai/gpt-6.1-sol",
@@ -601,7 +628,7 @@
     "web_search": true,
     "tier": "verified",
     "listed": true,
-    "priority": 118
+    "priority": 119
   },
   {
     "slug": "openai/gpt-image-2",
@@ -622,7 +649,7 @@
     "max_tools": null,
     "drop_images": false,
     "context_window": 0,
-    "priority": 119,
+    "priority": 120,
     "max_output_tokens": 32768,
     "reasoning_summary": "none",
     "apply_patch": "none",
@@ -651,7 +678,7 @@
     "max_tools": null,
     "drop_images": false,
     "context_window": 0,
-    "priority": 120,
+    "priority": 121,
     "max_output_tokens": 32768,
     "reasoning_summary": "none",
     "apply_patch": "none",
@@ -680,7 +707,7 @@
     "max_tools": null,
     "drop_images": false,
     "context_window": 0,
-    "priority": 121,
+    "priority": 122,
     "max_output_tokens": 32768,
     "reasoning_summary": "none",
     "apply_patch": "none",
@@ -718,7 +745,7 @@
     "default_reasoning": "low",
     "context_window": 131072,
     "max_output_tokens": 32768,
-    "priority": 122,
+    "priority": 123,
     "protocols": [
       "responses"
     ]
@@ -746,7 +773,7 @@
     "max_tools": null,
     "drop_images": false,
     "context_window": 1000000,
-    "priority": 123,
+    "priority": 124,
     "max_output_tokens": 131072,
     "reasoning_summary": "none",
     "apply_patch": "none",
@@ -776,7 +803,7 @@
     "max_tools": 350,
     "drop_images": true,
     "context_window": 500000,
-    "priority": 124,
+    "priority": 125,
     "max_output_tokens": 450000,
     "reasoning_summary": "none",
     "apply_patch": "none",
@@ -809,7 +836,7 @@
     "max_tools": null,
     "drop_images": false,
     "context_window": 1048576,
-    "priority": 125,
+    "priority": 126,
     "max_output_tokens": 131072,
     "reasoning_summary": "none",
     "apply_patch": "none",
@@ -843,7 +870,7 @@
     "drop_images": false,
     "context_window": 1048576,
     "auto_compact_token_limit": 400000,
-    "priority": 126,
+    "priority": 127,
     "max_output_tokens": 131072,
     "reasoning_summary": "none",
     "apply_patch": "none",
@@ -872,7 +899,7 @@
     "max_tools": 128,
     "drop_images": false,
     "context_window": 1310720,
-    "priority": 127,
+    "priority": 128,
     "max_output_tokens": 131072,
     "reasoning_summary": "none",
     "apply_patch": "freeform",
@@ -900,7 +927,7 @@
     "max_tools": 128,
     "drop_images": false,
     "context_window": 1310720,
-    "priority": 128,
+    "priority": 129,
     "max_output_tokens": 943718,
     "reasoning_summary": "none",
     "apply_patch": "freeform",
