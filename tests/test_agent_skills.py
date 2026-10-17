@@ -76,11 +76,11 @@ class AgentSkillsTest(unittest.TestCase):
                 self.assertIn(rel + '/.codex-plugin/plugin.json', bundled)
                 self.assertIn(rel + '/.claude-plugin/plugin.json', bundled)
                 self.assertTrue([n for n in bundled if n.startswith(rel + '/skills/')])
-                # The git updater is withheld; everything else a shipped skill
-                # reads, links or runs must travel with it.
+                # Ship setup and export tools, without the retired git updater.
                 self.assertEqual(
                     sorted(n for n in bundled if n.startswith(rel + '/scripts/')),
-                    [rel + '/scripts/setup.py'] if (plugin / 'scripts/setup.py').is_file() else [])
+                    sorted(rel + '/scripts/' + name for name in ('setup.py', 'export_review.py')
+                           if (plugin / 'scripts' / name).is_file()))
 
     def test_every_bundled_skill_link_resolves_inside_the_bundle(self):
         bundled = set(release.bundle_files(ROOT))
