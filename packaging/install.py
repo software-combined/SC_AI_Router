@@ -403,8 +403,7 @@ def _do_install(args, _fetch=fetch, _run=None):
         # passes --clients. The merge is idempotent for unchanged values.
         _claude_config.refresh_snapshot(
             home, state, _codex_config,
-            lambda: _claude_config.release_listing(
-                current_release_dir(home), python, run))
+            lambda: _operator.listing(state))
         if setup_url is not None and os.environ.get('ROUTER_NO_KEY_WINDOW') != '1':
             _open_key_window(python, home, setup_url, clients)
         print(f'installed {current}; health ok; key window ready')
@@ -484,8 +483,7 @@ def _do_install(args, _fetch=fetch, _run=None):
 def attach_claude(home, state, settings_path=None, env=None, listing=None,
                   python=None):
     if listing is None:
-        listing = _claude_config.release_listing(
-            current_release_dir(home), python or find_python(None), run)
+        listing = _operator.listing(state)
     return _claude_config.attach(home, state, _codex_config,
                                  settings_path_override=settings_path, env=env,
                                  listing=listing)

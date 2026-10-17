@@ -231,11 +231,9 @@ class InstallKeyWindowTests(unittest.TestCase):
             install_mod._codex_config.write_client_receipt(home, 'claude', {
                 'config_path': str(Path(env['HOME']) / '.claude/settings.json'),
                 'inserted_block': '{}', 'claude_mode': 'subscription'})
-            original = install_mod._claude_config.release_listing
-            self.addCleanup(setattr, install_mod._claude_config,
-                            'release_listing', original)
-            install_mod._claude_config.release_listing = (
-                lambda release, python, runner: {'data': [{'id': 'served-model'}]})
+            original = install_mod._operator.listing
+            self.addCleanup(setattr, install_mod._operator, 'listing', original)
+            install_mod._operator.listing = lambda state: {'data': [{'id': 'served-model'}]}
             with mock.patch.dict(os.environ, dict(env, ROUTER_NO_KEY_WINDOW='1'),
                                  clear=True):
                 self.assertEqual(install_mod.do_install(

@@ -87,29 +87,32 @@ class ClaudeMergeTests(unittest.TestCase):
             claude_config.release_listing(release, python, probe('{"data": []}')),
             {'data': []})
 
-    def test_attach_threads_the_resolved_interpreter_into_the_snapshot(self):
-        # do_install resolves the 3.14 interpreter; the snapshot fetch must use
-        # that same interpreter instead of re-discovering one.
+    def test_attach_records_the_live_filtered_list_without_an_interpreter(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             (home / 'releases' / '1.0.0' / 'packaging').mkdir(parents=True)
             (home / 'current').write_text('1.0.0\n')
             path = Path(tmp) / 'settings.json'
             path.write_text(json.dumps({}))
-            seen = {}
+            seen = []
             original = install_mod.run
             self.addCleanup(setattr, install_mod, 'run', original)
+            original_listing = install_mod._operator.listing
+            self.addCleanup(setattr, install_mod._operator, 'listing', original_listing)
 
             def fake_run(cmd, **kwargs):
-                seen['cmd'] = list(cmd)
-                return subprocess.CompletedProcess(
-                    cmd, 0, '{"data": [{"id": "served-model"}]}', '')
+                raise AssertionError('The snapshot must use the served list.')
+
+            def served(state):
+                seen.append(state)
+                return {'data': [{'id': 'served-model'}]}
 
             install_mod.run = fake_run
+            install_mod._operator.listing = served
             install_mod.attach_claude(home, _state(), settings_path=path,
                                       python='/opt/custom/python3.14')
             entry = install_mod._codex_config.read_receipt(home)['clients']['claude']
-        self.assertEqual(seen['cmd'][:2], ['/opt/custom/python3.14', '-m'])
+        self.assertEqual(seen, [_state()])
         self.assertEqual([row['id'] for row in entry['listing']['models']],
                          ['served-model'])
 
