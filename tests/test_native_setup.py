@@ -50,6 +50,26 @@ def resources(root, version='1.2.0', channel='stable'):
 
 
 class NativePayloadTests(unittest.TestCase):
+    def test_setup_readiness_ignores_legacy_download_signin_state(self):
+        setup = module('native_setup')
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = resources(root / 'download')
+            home = root / 'home'
+            home.mkdir()
+            (home / 'download-auth.json').write_text('{old or corrupt auth')
+            readiness = mock.Mock()
+            readiness.check.return_value = {'ready': True, 'clients': {}}
+            def load(name):
+                self.assertEqual(name, 'native_readiness')
+                return readiness
+            run = mock.Mock(return_value=SimpleNamespace(returncode=0, stdout='{"serving":true}'))
+            with mock.patch.object(setup, 'load', side_effect=load):
+                facts = setup.status(source, home, run)
+            self.assertTrue(facts['onboarding']['ready'])
+            self.assertEqual(facts['downloads'], {'access_ready': True, 'public': True})
+            self.assertEqual((home / 'download-auth.json').read_text(), '{old or corrupt auth')
+
     def test_desktop_only_guides_missing_plugin_setup_tools_before_installing(self):
         setup = module('native_setup')
         dialog = mock.Mock()

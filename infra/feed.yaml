@@ -48,11 +48,6 @@ Parameters:
     Default: ''
     Description: Staff-access HTTP API hostname, without scheme or path.
     AllowedPattern: '^$|[a-z0-9]+\.execute-api\.[a-z0-9-]+\.amazonaws\.com$'
-  PrivateUpdates:
-    Type: String
-    Default: 'false'
-    AllowedValues: ['false', 'true']
-    Description: Close legacy public downloads only after beta, stable and recovery proof.
 Rules:
   DownloadAccessPair:
     Assertions:
@@ -60,13 +55,9 @@ Rules:
           - !And [!Equals [!Ref DownloadKeyGroupId, ''], !Equals [!Ref DownloadApiHost, '']]
           - !And [!Not [!Equals [!Ref DownloadKeyGroupId, '']], !Not [!Equals [!Ref DownloadApiHost, '']]]
         AssertDescription: Supply both staff-access outputs, or neither.
-      - Assert: !Or
-          - !Equals [!Ref PrivateUpdates, 'false']
-          - !Not [!Equals [!Ref DownloadKeyGroupId, '']]
-        AssertDescription: Private updates require staff-access configuration.
+
 Conditions:
   StaffAccess: !Not [!Equals [!Ref DownloadKeyGroupId, '']]
-  ProtectUpdates: !Equals [!Ref PrivateUpdates, 'true']
 Resources:
   FeedBucket:
     Type: AWS::S3::Bucket
@@ -155,7 +146,6 @@ Resources:
           ViewerProtocolPolicy: redirect-to-https
           CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
           Compress: true
-          TrustedKeyGroups: !If [ProtectUpdates, [!Ref DownloadKeyGroupId], !Ref AWS::NoValue]
         CacheBehaviors:
           - !If
             - StaffAccess
@@ -174,7 +164,6 @@ Resources:
             FunctionAssociations:
               - EventType: viewer-request
                 FunctionARN: !GetAtt InstallPageRouting.FunctionARN
-            TrustedKeyGroups: !If [StaffAccess, [!Ref DownloadKeyGroupId], !Ref AWS::NoValue]
           - PathPattern: /install/*
             TargetOriginId: feed-bucket
             ViewerProtocolPolicy: https-only
@@ -190,7 +179,6 @@ Resources:
             FunctionAssociations:
               - EventType: viewer-request
                 FunctionARN: !GetAtt InstallPageRouting.FunctionARN
-            TrustedKeyGroups: !If [StaffAccess, [!Ref DownloadKeyGroupId], !Ref AWS::NoValue]
 
   InstallPageRouting:
     Type: AWS::CloudFront::Function
@@ -198,19 +186,14 @@ Resources:
       Name: !Sub '${AWS::StackName}-install-page'
       AutoPublish: true
       FunctionConfig:
-        Comment: Public sign-in settings and a permanent installer page.
+        Comment: Permanent public installer page.
         Runtime: cloudfront-js-2.0
-      FunctionCode: !Sub
-        - |
-          function handler(event) {
-            var request = event.request;
-            if (!${StaffDownloads} && (request.uri.indexOf('/installers/') === 0 || /^\/install\/.*\.json$/.test(request.uri))) {
-              return {statusCode: 403, statusDescription: 'Forbidden', headers: {'cache-control': {value: 'no-store'}}};
-            }
-            if (request.uri === '/install/') request.uri = '/install/index.html';
-            return request;
-          }
-        - StaffDownloads: !If [StaffAccess, 'true', 'false']
+      FunctionCode: |
+        function handler(event) {
+          var request = event.request;
+          if (request.uri === '/install/') request.uri = '/install/index.html';
+          return request;
+        }
 
   InstallPageHeaders:
     Type: AWS::CloudFront::ResponseHeadersPolicy
@@ -225,7 +208,7 @@ Resources:
             Override: true
             ContentSecurityPolicy: >-
               default-src 'none'; script-src 'self'; style-src 'self';
-              img-src 'self'; connect-src 'self' https://login.microsoftonline.com;
+              img-src 'self'; connect-src 'self';
               base-uri 'none'; form-action 'none'; frame-ancestors 'none'
 
   FeedDns:

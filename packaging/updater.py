@@ -27,7 +27,6 @@ _spec = importlib.util.spec_from_file_location(
 _svc = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_svc)
 _models = _svc.load('router_control_models', Path(__file__).with_name('control_models.py'))
-_enrolment = _svc.load('router_download_enrolment', Path(__file__).with_name('download_enrolment.py'))
 
 MAX_VERSION_FAILURES = 3
 ANNOUNCE_TIMEOUT_S = 5
@@ -373,7 +372,6 @@ def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
     except SystemExit as exc:
         raise UpdateError('feed_serial', str(exc) or 'feed document refused')
     if not args.feed:
-        _enrolment.accept(home, latest.get('download_auth'))
         _models.accept(home, latest)
         _models.refresh(home, _fetch)
     bundle_url = _svc.sibling_bundle(feed, latest.get('url', ''))

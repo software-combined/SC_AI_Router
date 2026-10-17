@@ -7,7 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from tests.test_download_auth import CONFIG, load
+from tests.test_download_auth import load
 
 publish = load('native_publish_under_test', 'tools/publish_native_installers.py')
 
@@ -23,7 +23,7 @@ def artifacts(directory):
             'artifact_sha256': hashlib.sha256(body).hexdigest()}))
 
 
-def distribution(protected=True):
+def distribution(protected=False):
     group = {'Enabled': protected, 'Items': ['reviewed-key-group'] if protected else []}
     return json.dumps({'DistributionConfig': {
         'Aliases': {'Items': ['dist.softwarecombined.com']},
@@ -49,13 +49,13 @@ class NativePublishTests(unittest.TestCase):
         self.assertIn('cloudfront:GetDistributionConfig', grant)
         self.assertIn('Resource: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}', grant)
 
-    def test_legacy_update_access_stays_open_until_explicit_cutover(self):
+    def test_download_access_is_public_and_origin_storage_stays_private(self):
         text = (publish.ROOT / 'infra/feed.yaml').read_text()
-        default = text.split('        DefaultCacheBehavior:', 1)[1].split('        CacheBehaviors:', 1)[0]
-        self.assertNotIn('FunctionAssociations', default)
-        self.assertIn('TrustedKeyGroups: !If [ProtectUpdates,', default)
-        self.assertIn("ProtectUpdates: !Equals [!Ref PrivateUpdates, 'true']", text)
-        self.assertIn("PrivateUpdates:\n    Type: String\n    Default: 'false'", text)
+        self.assertNotIn('TrustedKeyGroups:', text)
+        for guard in ('BlockPublicAcls: true', 'BlockPublicPolicy: true',
+                      'IgnorePublicAcls: true', 'RestrictPublicBuckets: true',
+                      'OriginAccessControlId:', 'NativeBuildsNeverThroughCloudFront'):
+            self.assertIn(guard, text)
 
     def test_missing_platform_and_tampered_bytes_block_publication(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -71,18 +71,16 @@ class NativePublishTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'five packages'):
                 publish.packages(root, 'beta')
 
-    def test_public_edge_blocks_before_any_upload(self):
+    def test_private_edge_blocks_public_release_before_any_upload(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             artifacts(root)
-            config = root / 'config'
-            config.write_text(json.dumps(CONFIG))
-            args = SimpleNamespace(pilot_macos_arm64=False, artifacts=root, channel='beta', download_config=config,
+            args = SimpleNamespace(pilot_macos_arm64=False, artifacts=root, channel='beta',
                                    dry_run=False, sign=root / 'absent-secret',
                                    bucket='test-bucket', distribution_id='test-distribution')
-            with mock.patch.object(publish.publisher, '_aws', return_value=distribution(False)), \
+            with mock.patch.object(publish.publisher, '_aws', return_value=distribution(True)), \
                     mock.patch.object(publish.publisher, 'publish_bundle') as upload:
-                with self.assertRaisesRegex(ValueError, 'protection'):
+                with self.assertRaisesRegex(ValueError, 'sign-in requirement'):
                     publish.publish(args)
                 upload.assert_not_called()
 
@@ -90,12 +88,10 @@ class NativePublishTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             artifacts(root)
-            config = root / 'config'
-            config.write_text(json.dumps(CONFIG))
             seed, public = publish.verify.generate_keypair()
             secret = root / 'ephemeral-test-key'
             secret.write_text(seed)
-            args = SimpleNamespace(pilot_macos_arm64=False, artifacts=root, channel='beta', download_config=config,
+            args = SimpleNamespace(pilot_macos_arm64=False, artifacts=root, channel='beta',
                                    dry_run=False, sign=secret, bucket='test-bucket',
                                    distribution_id='test-distribution')
             writes, contents = [], {}

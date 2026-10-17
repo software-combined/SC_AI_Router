@@ -1,4 +1,4 @@
-"""Publish five verified native packages, then switch the staff download page."""
+"""Publish five verified native packages, then switch the public download page."""
 import argparse
 import hashlib
 import importlib.util
@@ -22,7 +22,6 @@ def load(name, path):
 
 publisher = load('native_feed_publisher', ROOT / 'tools/publish_feed.py')
 verify = load('native_feed_signatures', ROOT / 'packaging/feed_verify.py')
-auth = load('native_publish_auth', ROOT / 'packaging/download_auth.py')
 
 
 def packages(directory, channel):
@@ -60,22 +59,21 @@ def packages(directory, channel):
     return {'version': version, 'channel': channel, 'packages': rows}
 
 
-def protected_distribution(distribution, config):
-    """Never expose a native installer through an unprotected distribution."""
+def public_distribution(distribution):
+    """Require the approved public software distribution before advertising it."""
     doc = json.loads(publisher._aws(['cloudfront', 'get-distribution-config',
                                    '--id', distribution, '--output', 'json']))['DistributionConfig']
     if ORIGIN.split('//')[1] not in doc.get('Aliases', {}).get('Items', []):
         raise ValueError('distribution does not serve the expected download origin')
     behaviors = {row['PathPattern']: row for row in doc.get('CacheBehaviors', {}).get('Items', [])}
     for path in ('/installers/*', '/install/*.json'):
+        if path not in behaviors:
+            raise ValueError('public download behavior is missing')
         trust = behaviors.get(path, {}).get('TrustedKeyGroups', {})
-        if trust.get('Enabled') is not True or not trust.get('Items'):
-            raise ValueError('staff download protection is not active')
-    exchange = behaviors.get('/download-access', {})
-    origins = {row['Id']: row['DomainName'] for row in doc.get('Origins', {}).get('Items', [])}
-    from urllib.parse import urlsplit
-    if origins.get(exchange.get('TargetOriginId')) != urlsplit(config['exchange_url']).hostname:
-        raise ValueError('download sign-in proxy does not match the approved settings')
+        if trust.get('Enabled') or trust.get('Items'):
+            raise ValueError('download sign-in requirement is still active')
+    if doc.get('DefaultCacheBehavior', {}).get('TrustedKeyGroups', {}).get('Enabled'):
+        raise ValueError('update sign-in requirement is still active')
 
 
 def publish(args):
@@ -88,16 +86,14 @@ def publish(args):
         manifest['packages'] = [row for row in manifest['packages'] if row['target'] == 'darwin/arm64']
     with tempfile.TemporaryDirectory() as temporary:
         stage = Path(temporary)
-        (stage / auth.CONFIG_FILE).write_bytes(Path(args.download_config).read_bytes())
-        config = auth.configure(stage)
         version = manifest['version']
         prefix = 'installers/' + version + '/'
         checksums = ''.join(row['sha256'] + '  ' + row['name'] + '\n' for row in manifest['packages']).encode()
         if args.dry_run:
             print(json.dumps({'version': version, 'channel': args.channel,
-                              'packages': len(manifest['packages']), 'staff_protection_required': True}))
+                              'packages': len(manifest['packages']), 'public_downloads': True}))
             return 0
-        protected_distribution(args.distribution_id, config)
+        public_distribution(args.distribution_id)
         seed = Path(args.sign).read_text().strip()
         signature = verify.sign_hex(seed, checksums)
         if not verify.verify_hex(verify.FEED_PUBLIC_KEY, checksums, signature):
@@ -111,7 +107,7 @@ def publish(args):
             body = stage / name
             publisher.publish_bundle(args.bucket, prefix + name, body,
                                      hashlib.sha256(body.read_bytes()).hexdigest(), 'text/plain')
-        # Public files contain only UI and public application registration facts.
+        # The public page performs no account or credential exchange.
         page = ROOT / 'packaging/download-page'
         for path in sorted(page.iterdir()):
             content_type = {'.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript'}[path.suffix]
@@ -119,7 +115,6 @@ def publish(args):
                             '--cache-control', 'no-cache', '--content-type', content_type])
         publisher._aws(['s3', 'cp', str(ROOT / 'packaging/assets/router-icon.png'),
                         's3://' + args.bucket + '/install/router-icon.png', '--content-type', 'image/png'])
-        publisher.publish_document(args.bucket, 'install/config-public', stage / auth.CONFIG_FILE, 'no-store')
         target = stage / 'downloads.json'
         target.write_text(json.dumps(manifest, indent=2) + '\n')
         publisher.publish_document(args.bucket, 'install/' + args.channel + '.json', target, 'no-store')
@@ -132,7 +127,6 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--artifacts', required=True)
     parser.add_argument('--channel', choices=('stable', 'beta'), required=True)
-    parser.add_argument('--download-config', required=True)
     parser.add_argument('--bucket', required=True)
     parser.add_argument('--distribution-id', required=True)
     parser.add_argument('--sign', required=True)

@@ -22,11 +22,12 @@ lifecycle before client attachment, with prior state restored on reload failure.
 
 `native_controller` retains verified installer code under an independent version
 pointer. `update_launch` selects that controller across runtime rollback.
-`download_auth`, `download_oauth` and `download_session` own Microsoft access;
-`feed` attaches its cookies only to the download origin. `control_models` checks
+`feed` downloads public software without credentials. Legacy `download_auth`,
+`download_oauth` and `download_session` helpers are retained for compatibility,
+but the installer and updater no longer require them. `control_models` checks
 model bytes against a signed feed's checksum. The inference process only reads
 the resulting model cache. `infra/downloads` owns token verification and short
-download grants. It cannot change model routing or provider credentials.
+download grants for legacy consumers. It cannot change model routing or provider credentials.
 
 ## Domains and direction
 

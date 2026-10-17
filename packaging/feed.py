@@ -1,6 +1,6 @@
-"""Update origin, channel resolution and staff-authenticated download transport.
+"""Update origin, channel resolution and public download transport.
 
-Unenrolled legacy installations retain public access during migration.
+Release signatures and checksums protect downloads, without account sign-in.
 An explicit `--feed` pin or a `feed` file is the manual path. Python 3.9+.
 Loaded via the installer's file-based import pattern, never
 `import packaging.feed`.
@@ -27,24 +27,16 @@ FEED_URL = FEED_ORIGIN + '/stable/latest.json'
 
 
 def configure_home(home):
-    """Scope credentials to the installer home, never to an inference request."""
+    """Retain the older installer call contract; downloads use no credentials."""
     global _home
     _home = Path(home)
 
 
 def _request(url, headers=None):
-    headers = dict(headers or {})
-    if _home is not None and (_home / _auth.CONFIG_FILE).exists():
-        if not trusted_origin(url) or url.startswith('file://'):
-            raise SignInRequired('configuration_invalid')
-        headers['Cookie'] = _auth.ensure_access(_home)
-    return urllib.request.Request(url, headers=headers)
+    return urllib.request.Request(url, headers=dict(headers or {}))
 
 
 def _denied(exc):
-    if exc.code in (401, 403) and _home is not None:
-        exc.close()
-        raise SignInRequired() from None
     raise exc
 
 

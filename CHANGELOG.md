@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 1.2.9
+
+- Restore public Router installers, updates and model catalogues without Microsoft
+  download sign-in. Existing sign-in settings no longer block the corrected
+  updater or setup readiness. Publish public setup scripts for in-place recovery,
+  preserve model keys and settings, and retain signed feeds and checksum checks.
+- Remove stale generated download sign-in settings when reusing a build folder.
+
 ## 1.2.8
 
 - Saved sessions using the previous DeepSeek Flash ID continue on Flash 1017.

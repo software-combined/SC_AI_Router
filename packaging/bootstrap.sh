@@ -10,6 +10,10 @@ set -eu
 FEED_ORIGIN="${FEED_ORIGIN:-https://dist.softwarecombined.com}"
 CHANNEL="stable"
 HOME_DIR="${ROUTER_HOME:-$HOME/.codex/mixed-model-router}"
+if [ -f "$HOME_DIR/channel" ]; then
+  saved_channel="$(cat "$HOME_DIR/channel")"
+  case "$saved_channel" in stable|beta) CHANNEL="$saved_channel" ;; esac
+fi
 CHOOSE=""
 for arg in "$@"; do
   case "$arg" in

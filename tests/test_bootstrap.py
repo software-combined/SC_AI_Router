@@ -149,7 +149,7 @@ class BootstrapTests(unittest.TestCase):
                 'sha256': sha or hashlib.sha256(
                     (serve / 'mirror.bin').read_bytes()).hexdigest(),
                 'exec': 'python/bin/python3.14'}}}))
-        argv = ['sh', str(_ROOT / 'packaging' / 'bootstrap.sh'), '--channel=' + channel]
+        argv = ['sh', str(_ROOT / 'packaging' / 'bootstrap.sh')] + (['--channel=' + channel] if channel else [])
         if choose:
             argv.append('--choose-clients')
         proc = subprocess.run(argv, env=self._env(tmp, 'full', serve=serve, path=path),
