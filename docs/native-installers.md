@@ -20,8 +20,9 @@ It changes the channel's download list last. It refuses a distribution without
 public access for both installer files and download lists.
 
 The permanent download address is `https://dist.softwarecombined.com/install/`.
-The page detects the operating system and shows every processor alternative.
-Stable is the default; beta has a separate labelled choice. Installer lists,
+The page uses Apple, Microsoft and Linux logos with clear platform labels.
+Each platform shows its published processor alternatives or a labelled setup script.
+The page offers stable downloads only. Installer lists,
 packages, update feeds, bundles, runtimes and model catalogues are public.
 Microsoft download sign-in is not required. Model-provider credentials remain
 separate and are never published with software.
@@ -39,11 +40,19 @@ Stale generated `dist/download-auth.json` is removed when building a release;
 installed users' authentication files are preserved and ignored by public transport.
 
 Keep `NATIVE_INSTALLERS_ACCEPTED` unset until the native acceptance matrix passes.
-`NATIVE_INSTALLERS_PILOT=true` can advertise the Mac arm64 beta package while the
-other native packages remain in private build storage. This does not suppress
-ordinary beta update-feed publication. Full native publication requires the
+After Mac verification, `NATIVE_INSTALLERS_MACOS_ARM64_ONLY=true` can publish
+the Mac arm64 stable package while the other native packages remain private.
+This platform-specific publication does not assert acceptance of the other
+platforms or the complete matrix. Beta update feeds remain separate from the
+stable-only download page. Full native publication requires the
 existing five-platform checks and Windows runtime licence evidence in
 [runtime licences](runtime-licenses.md).
+Use a new release version when adding native platforms to a published version.
+Its signed checksum inventory is immutable.
+
+The download page follows Softcom Hub's light canvas, SC Pink, near-black text
+and Space Grotesk/Inter font stacks. The corporate icon is the existing bundled
+asset. Device-policy help sits below the main download area.
 
 Every ordinary release also publishes public `bootstrap.sh` and `bootstrap.ps1`
 setup scripts under `/install/` at the download origin. An installation whose old updater cannot
@@ -67,6 +76,8 @@ Set up or repair uses the existing installer repair path. A same-version or
 older download restores the installed service without replacing its release,
 key, channel, custom feed or client settings. Unreadable client receipts remain
 intact during service repair; adding an assistant still requires readable receipts.
+Repair reuses a usable saved key. Choose **Replace model key** to open the key
+window when you want to change it.
 
 Claude desktop can connect without a terminal client. Automatic SC tool delivery
 also needs the Claude Code setup tools from the desktop app's Install page.

@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+## 1.2.11
+
+- Offer stable downloads only, with a simpler page aligned to Softcom Hub.
+  Mac arm64 publication can proceed after its verification while other native
+  packages remain private pending their own acceptance.
+- Include the catalogue diagnostic helper in installed release bundles.
+- Record Claude's served model list during setup and repair, so key and company
+  filtering do not cause a false listing warning.
+- Native setup and repair reuse a usable saved key instead of asking for it again.
+  The separate Replace model key action still opens the secure key window.
+
+## 1.2.10
+
+- Check the installed model catalogue against the same company policy and
+  key availability used to create it. A healthy filtered catalogue no longer
+  asks the user to reinstall; real catalogue differences still report a warning.
+
 ## 1.2.9
 
 - Restore public Router installers, updates and model catalogues without Microsoft

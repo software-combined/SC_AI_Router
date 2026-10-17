@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="en">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="referrer" content="no-referrer">
@@ -7,42 +8,45 @@
 <link rel="icon" href="router-icon.png">
 <link rel="stylesheet" href="style.css">
 <script src="downloads.js" defer></script>
+</head>
 <body>
-<header><img src="router-icon.png" alt="" width="48" height="48"><span>Software Combined</span></header>
-<main>
+<a class="skip" href="#main">Skip to downloads</a>
+<header><div class="brand"><img src="router-icon.png" alt="" width="36" height="36"><span>Software Combined</span></div><span class="header-label">SCG Router</span></header>
+<main id="main">
+<div class="hero">
+<section class="intro" aria-labelledby="title">
 <p class="eyebrow">SCG ROUTER</p>
-<h1>Your assistants.<br>One simple setup.</h1>
-<p class="intro">Connect Codex and Claude to your approved models. Download once. SCG Router handles routine updates.</p>
-<section aria-labelledby="download-title">
+<h1 id="title">Your models.<br>Your workspace.</h1>
+<p class="lead">Use more models in Codex and Claude.<br>One simple setup. Automatic updates.</p>
+<p class="intro-note">Keep the tools you know.<br>Choose the model that fits the task.</p>
+</section>
+<section class="download" aria-labelledby="download-title">
+<p class="eyebrow">DESKTOP APP</p>
 <h2 id="download-title">Download SCG Router</h2>
-<p>Downloads and automatic updates are public. No Microsoft account is needed.</p>
-<p id="status" role="status" aria-live="polite">Checking available downloads…</p>
-<p>For an existing installation needing repair, use the current setup script:
-<a href="/install/bootstrap.ps1">Windows</a> · <a href="/install/bootstrap.sh">macOS or Linux</a>.
-Run it for your existing installation to preserve your model key and settings.</p>
-<label for="channel">Release</label>
-<select id="channel"><option value="stable">Stable — recommended</option><option value="beta">Beta — early access</option></select>
+<p class="subtle">The latest stable release, ready for everyday use.</p>
+<p id="status" class="status" role="status" aria-live="polite">Checking available downloads…</p>
 <div id="downloads" hidden>
-<p id="recommendation"></p>
 <div id="packages"></div>
-<p><a id="checksums">Package checksums</a> · <a id="signature">Checksum signature</a></p>
+<p id="recommendation" class="version"></p>
+<p class="verification"><a id="checksums">Checksums</a><span aria-hidden="true"> · </span><a id="signature">Signature</a></p>
 </div>
+<p class="download-note">No download account needed.<br>Your model key is saved on your computer.</p>
 </section>
-<section aria-labelledby="setup-title">
-<h2 id="setup-title">Three steps, then you are ready</h2>
-<ol><li>Open your download and choose the assistants you use.</li>
-<li>Enter your personal model key from IT in the secure setup window.</li>
-<li>Reopen your assistant. Send a greeting and check an enabled SC tool.</li></ol>
-<p>Keep the <strong>SCG Router</strong> app for status, repair, key replacement and removal. You can delete the download after setup.</p>
+</div>
+<section class="steps" aria-labelledby="setup-title">
+<div class="section-title"><h2 id="setup-title">A few steps. Then you’re ready.</h2><p class="subtle">No Python or Git to install.</p></div>
+<ol>
+<li><span class="step-number" aria-hidden="true">01</span><div><h3>Open the installer</h3><p>Choose the assistants you use.</p></div></li>
+<li><span class="step-number" aria-hidden="true">02</span><div><h3>Add your model key</h3><p>Use the secure setup window. An existing setup keeps its saved key.</p></div></li>
+<li><span class="step-number" aria-hidden="true">03</span><div><h3>Start a new chat</h3><p>Reopen your assistant, send a greeting and try an enabled SC tool.</p></div></li>
+</ol>
 </section>
-<details><summary>Opening an unsigned package</summary>
-<p>These packages do not have a paid publisher certificate. Download only from this page. Follow your organisation’s device policy.</p>
-<p><strong>macOS:</strong> Open the DMG, then open Install SCG Router. If macOS blocks it, open System Settings → Privacy &amp; Security and allow the app.</p>
-<p><strong>Windows:</strong> Open SCG Router Setup.exe. Windows may show an unknown-publisher warning. Contact IT if your device blocks it.</p>
-<p><strong>Ubuntu:</strong> In Files, open Properties for the AppImage and allow execution. Then open it. No separate FUSE installation is needed.</p>
-</details>
-<p class="help">An existing setup keeps its release channel, key, settings and disabled plugins. Need help? Contact Software Combined IT.</p>
+<div class="support">
+<details><summary>Already have SCG Router?</summary><p>Open the SCG Router app and choose <strong>Set up or repair</strong>. Your key, settings and tools stay in place. You can delete the download after setup.</p></details>
+<details><summary>Other setup options</summary><p>For a platform without a listed installer, or an older installation needing repair, use the current setup script: <a href="/install/bootstrap.ps1" download>Windows</a> or <a href="/install/bootstrap.sh" download>macOS and Linux</a>.</p><p>These scripts use the stable release for a new installation. An existing installation keeps its chosen update channel.</p></details>
+<details><summary>If your device blocks the installer</summary><p>The installer is unsigned. Download it only from this page and follow your organisation’s device policy.</p><p>On a Mac, open the DMG and then <strong>Install SCG Router</strong>. If macOS blocks it, use System Settings → Privacy &amp; Security to approve the app. Contact IT if your device does not allow this.</p><p>On Windows, open the installer. Contact IT if an unknown-publisher warning or device policy blocks it. Do not turn off device protection.</p></details>
+</div>
 </main>
-<footer>Software Combined Group · SCG Router downloads</footer>
+<footer><span>Software Combined Group</span><span>Need a hand? Contact Software Combined IT.</span><a href="https://github.com/software-combined/SC_AI_Router">View source</a></footer>
 </body>
 </html>

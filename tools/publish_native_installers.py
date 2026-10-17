@@ -77,12 +77,13 @@ def public_distribution(distribution):
 
 
 def publish(args):
+    if args.channel != 'stable':
+        raise ValueError('public native downloads use the stable channel only')
     directory = Path(args.artifacts)
     manifest = packages(directory, args.channel)
-    if args.pilot_macos_arm64:
-        if args.channel != 'beta':
-            raise ValueError('the Mac pilot is beta only')
-        manifest['pilot'] = True
+    # ponytail: published scope needs a new version; checksum inventories are immutable.
+    if args.macos_arm64_only:
+        manifest['scope'] = 'macos-arm64'
         manifest['packages'] = [row for row in manifest['packages'] if row['target'] == 'darwin/arm64']
     with tempfile.TemporaryDirectory() as temporary:
         stage = Path(temporary)
@@ -110,7 +111,8 @@ def publish(args):
         # The public page performs no account or credential exchange.
         page = ROOT / 'packaging/download-page'
         for path in sorted(page.iterdir()):
-            content_type = {'.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript'}[path.suffix]
+            content_type = {'.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript',
+                            '.svg': 'image/svg+xml'}[path.suffix]
             publisher._aws(['s3', 'cp', str(path), 's3://' + args.bucket + '/install/' + path.name,
                             '--cache-control', 'no-cache', '--content-type', content_type])
         publisher._aws(['s3', 'cp', str(ROOT / 'packaging/assets/router-icon.png'),
@@ -126,12 +128,12 @@ def publish(args):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--artifacts', required=True)
-    parser.add_argument('--channel', choices=('stable', 'beta'), required=True)
+    parser.add_argument('--channel', choices=('stable',), required=True)
     parser.add_argument('--bucket', required=True)
     parser.add_argument('--distribution-id', required=True)
     parser.add_argument('--sign', required=True)
     parser.add_argument('--dry-run', action='store_true')
-    parser.add_argument('--pilot-macos-arm64', action='store_true')
+    parser.add_argument('--macos-arm64-only', action='store_true')
     return publish(parser.parse_args(argv))
 
 

@@ -141,7 +141,7 @@ def _catalogue_counts(home):
 
 
 def _catalogue_row(home, interpreter):
-    """One read-only `ai_router.catalogue --check` run over the installed file."""
+    """Check the installed catalogue with its policy and key visibility gates."""
     path = home / 'mixed-models.json'
     counts = _catalogue_counts(home)
     if not path.is_file() or not counts['rows']:
@@ -153,7 +153,8 @@ def _catalogue_row(home, interpreter):
                     'install Python 3.14 and run --doctor again')
     release = _svc.current_release_dir(home)
     try:
-        result = run([interpreter, '-m', 'ai_router.catalogue', '--check', str(path)],
+        result = run([interpreter, str(Path(__file__).with_name('catalogue_check.py')),
+                      str(home), str(release or Path(__file__).resolve().parents[1])],
                      cwd=str(release) if release is not None else None,
                      capture_output=True, text=True)
     except OSError:
@@ -166,7 +167,7 @@ def _catalogue_row(home, interpreter):
         return _row('catalogue', WARN, '%d rows; %s' % (counts['rows'], detail),
                     're-run the installer to refresh the picker catalogue')
     return _row('catalogue', OK,
-                '%d rows; ai_router.catalogue --check passed' % counts['rows'])
+                '%d rows; installed catalogue check passed' % counts['rows'])
 
 
 def _claude_drift(home, state):

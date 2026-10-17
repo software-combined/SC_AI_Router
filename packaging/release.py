@@ -69,7 +69,7 @@ PACKAGING_FILES = (
     'packaging/client_choice.py',
     'packaging/client_dialog.py',
     'packaging/diagnostics.py', 'packaging/provider_keys.py',
-    'packaging/operator_surface.py',
+    'packaging/operator_surface.py', 'packaging/catalogue_check.py',
     'packaging/runtime.lock', 'packaging/runtime_lock.py', 'packaging/runtime-notices.json',
     'packaging/runtime-components.json', 'packaging/RUNTIME-NOTICES.txt',
     'packaging/platforms/__init__.py',

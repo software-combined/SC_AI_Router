@@ -25,7 +25,7 @@ env:
   # Empty fails closed rather than shipping unsigned.
   FEED_SIGNING_SEED_ARN: ${{ vars.FEED_SIGNING_SEED_ARN }}
   NATIVE_INSTALLERS_ACCEPTED: ${{ vars.NATIVE_INSTALLERS_ACCEPTED }}
-  NATIVE_INSTALLERS_PILOT: ${{ vars.NATIVE_INSTALLERS_PILOT }}
+  NATIVE_INSTALLERS_MACOS_ARM64_ONLY: ${{ vars.NATIVE_INSTALLERS_MACOS_ARM64_ONLY }}
 
 jobs:
   release:
@@ -190,10 +190,10 @@ jobs:
           python tools/publish_feed.py --dist dist --channel "$CHANNEL" \
             --bucket "$FEED_BUCKET" --distribution-id "$FEED_DISTRIBUTION_ID" \
             --sign "$SEED_FILE"
-          if [ "$NATIVE_INSTALLERS_ACCEPTED" = 'true' ] || { [ "$CHANNEL" = beta ] && [ "$NATIVE_INSTALLERS_PILOT" = 'true' ]; }; then
+          if [ "$CHANNEL" = stable ] && { [ "$NATIVE_INSTALLERS_ACCEPTED" = 'true' ] || [ "$NATIVE_INSTALLERS_MACOS_ARM64_ONLY" = 'true' ]; }; then
             NATIVE_OPTIONS=()
             if [ "$NATIVE_INSTALLERS_ACCEPTED" != 'true' ]; then
-              NATIVE_OPTIONS=(--pilot-macos-arm64)
+              NATIVE_OPTIONS=(--macos-arm64-only)
             fi
             python tools/publish_native_installers.py --artifacts native-artifacts --channel "$CHANNEL" \
               --bucket "$FEED_BUCKET" \
@@ -205,6 +205,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # A publish-job rerun can advertise the same verified Mac package
+          # after device acceptance. Keep the existing release and its assets.
+          if gh release view "$GITHUB_REF_NAME" --json tagName >/dev/null 2>&1; then
+            echo "Release already exists; verified feed publication is complete."
+            exit 0
+          fi
           if [ "$CHANNEL" = stable ]; then
             cp dist/release-latest.json dist/latest.json
             gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/latest.json dist/feed-latest.json.sig --verify-tag --title "$GITHUB_REF_NAME" --generate-notes --latest

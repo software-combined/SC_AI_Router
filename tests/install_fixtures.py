@@ -54,6 +54,8 @@ def install_mod_factory():
     # Nor build or remove the real Switch Codex app: its location was named
     # before any test moved HOME. tests/test_codex_switch_app.py drives it.
     module._client_choice._app.sync = lambda *args, **kwargs: None
+    # The served model list is a loopback boundary; unit fixtures stay offline.
+    module._operator.listing = lambda state: None
     return module
 
 
