@@ -159,12 +159,16 @@ def main(argv=None):
     parser.add_argument('--tag', help='Validated release tag, including optional -beta and -express.')
     parser.add_argument('--url-base')
     parser.add_argument('--download-config', type=Path,
-                        help='public staff sign-in configuration for this release')
+                        help='public staff sign-in configuration for native packages')
+    parser.add_argument('--enrol-downloads', action='store_true',
+                        help='explicitly require sign-in for existing update clients')
     parser.add_argument('--gen-key', metavar='OUT',
                         help='write a fresh 32-byte hex release signing seed (owner-only file) and exit')
     parser.add_argument('--sign', metavar='SEEDFILE',
                         help='retired: signing moved to tools/publish_feed.py --sign, which signs the served bytes')
     args = parser.parse_args(argv)
+    if args.enrol_downloads and not args.download_config:
+        parser.error('--enrol-downloads requires --download-config')
     if args.gen_key:
         out = Path(args.gen_key)
         try:
@@ -233,7 +237,12 @@ def main(argv=None):
         auth_spec.loader.exec_module(auth)
         with tempfile.TemporaryDirectory() as temporary:
             (Path(temporary) / auth.CONFIG_FILE).write_bytes(args.download_config.read_bytes())
-            latest['download_auth'] = auth.configure(temporary)
+            config = auth.configure(temporary)
+        (out_dir / auth.CONFIG_FILE).write_text(json.dumps(config, indent=2) + '\n')
+        # Older controllers treat this field as mandatory sign-in immediately.
+        # Native package configuration alone must never enrol those clients.
+        if args.enrol_downloads:
+            latest['download_auth'] = config
     (out_dir / 'latest.json').write_text(json.dumps(latest, indent=2) + '\n')
     # The bootstrap resolves its runtime from this table, never from a
     # hardcoded filename: pins land only through reviewed lock changes.

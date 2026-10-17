@@ -38,8 +38,12 @@ The page's `/download-access` route forwards authorisation to the API without
 caching. Its browser response uses host-only HttpOnly cookies.
 
 Set repository variable `DOWNLOAD_AUTH_CONFIG` to the public `ClientConfiguration`
-JSON output. The release places it in signed feed metadata and native packages.
-It contains application identifiers and endpoints, not credentials.
+JSON output. The release retains the validated settings in `dist/download-auth.json`
+for native packages. It contains application identifiers and endpoints, not credentials.
+This setting does not enrol existing update clients. Only an explicitly approved
+`DOWNLOAD_AUTH_ENROLMENT=true` adds `download_auth` to signed update metadata.
+The build rejects other nonempty values except `false`, and enrolment without
+configuration. Local release builds use `--enrol-downloads` for the same gate.
 After the acceptance matrix passes, set `NATIVE_INSTALLERS_ACCEPTED=true` to
 enable private native publication during the normal release workflow.
 Keep that variable unset while packages are still under test. A private first
@@ -59,10 +63,13 @@ package checksums remain immutable.
 
 ## Migration and recovery
 
-1. Release sign-in support to beta while legacy downloads stay public.
-2. Prove member and approved-guest sign-in, refresh, update and rollback recovery.
-3. Release the same support to stable and repeat those checks.
-4. Set `PrivateUpdates=true` only after those results are reviewed.
+1. Release sign-in support with `DOWNLOAD_AUTH_ENROLMENT` unset or `false`.
+2. Verify the approved staff and portfolio-guest audience has the `Download` role.
+   Prove their native sign-in, refresh, update and rollback recovery.
+3. After explicit migration approval, set `DOWNLOAD_AUTH_ENROLMENT=true` and
+   publish beta. This requires sign-in immediately, even with `PrivateUpdates=false`.
+4. Prove enrolled beta clients can update, then release to stable and repeat.
+5. Set `PrivateUpdates=true` only after those results are reviewed.
 
 The last step protects feeds, signatures, bundles, runtimes and model downloads.
 A missed migration uses the same native installer to upgrade in place.
@@ -70,6 +77,10 @@ The independent controller and download session survive selecting an older
 runtime release. Expired access keeps the running router and last good model
 cache. A renewal dialog stays pending if it cannot appear, including a failed
 launch or timeout. Cancel suppresses it for one day; Continue opens sign-in.
+Removing enrolment from a later feed does not clear an existing requirement.
+An enrolled client without access can stop before reading that feed. Restore
+its approved Microsoft role and verify sign-in; do not delete access state or
+use a different endpoint to work around a denial.
 Linux dialogs use the retained setup wrapper after the download is deleted,
 with system Zenity as a fallback. The wrapper scopes GTK dependencies to its
 dialog child, so service processes do not inherit bundled library overrides.

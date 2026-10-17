@@ -39,6 +39,8 @@ def main(argv=None):
     parser.add_argument('--download-config', type=Path)
     args = parser.parse_args(argv)
     latest = json.loads((args.dist / 'latest.json').read_text())
+    if not args.download_config and (args.dist / 'download-auth.json').is_file():
+        args.download_config = args.dist / 'download-auth.json'
     system, cpu = args.target.split('/')
     lock = json.loads((ROOT / 'packaging/runtime.lock').read_text())
     entries = [row for row in lock['targets'] if (row['os'], row['cpu']) == (system, cpu)]

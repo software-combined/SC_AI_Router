@@ -83,12 +83,18 @@ jobs:
       - name: Build bundle
         env:
           DOWNLOAD_AUTH_CONFIG: ${{ vars.DOWNLOAD_AUTH_CONFIG }}
+          DOWNLOAD_AUTH_ENROLMENT: ${{ vars.DOWNLOAD_AUTH_ENROLMENT }}
         run: |
           EXTRA=()
+          case "$DOWNLOAD_AUTH_ENROLMENT" in
+            true) EXTRA+=(--enrol-downloads) ;;
+            ''|false) ;;
+            *) echo "DOWNLOAD_AUTH_ENROLMENT must be true, false or unset"; exit 1 ;;
+          esac
           if [ -n "$DOWNLOAD_AUTH_CONFIG" ]; then
             mkdir -p dist
             python -c 'import json,os;from pathlib import Path;Path("dist/download-auth.json").write_text(json.dumps(json.loads(os.environ["DOWNLOAD_AUTH_CONFIG"])))'
-            EXTRA=(--download-config dist/download-auth.json)
+            EXTRA+=(--download-config dist/download-auth.json)
           fi
           python packaging/release.py --out dist --build "$GITHUB_RUN_NUMBER" --sha "$GITHUB_SHA" --tag "$GITHUB_REF_NAME" \
             --url-base "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME" "${EXTRA[@]}"

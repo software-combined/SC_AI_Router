@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Require explicit approval to enrol existing update clients into Microsoft
+  download sign-in. Native package sign-in settings alone no longer trigger
+  enrolment. Existing access requirements and server checks remain enforced.
+
 ## 1.2.8
 
 - Saved sessions using the previous DeepSeek Flash ID continue on Flash 1017.
