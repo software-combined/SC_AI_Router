@@ -1,5 +1,12 @@
 # Changelog
 
+## scg-review 0.6.1 (2026-10-17)
+
+- Export a sanitized review record for the current committed tree, including
+  lane identities and repository-scoped verification links. Reject dirty,
+  missing, expired, blocked or mismatched evidence. The local review gate
+  retains its existing authority; an export creates no new approval.
+
 ## scg-review 0.6.0 and scg-subagents 0.6.0 (2026-10-15)
 
 - Make pre-commit review model agnostic. Each machine owner sets ordered
