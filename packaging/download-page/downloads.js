@@ -37,6 +37,7 @@
       if (!rows.length) {
         const link = document.createElement('a'); link.className = 'package script';
         link.href = prefix === 'windows/' ? '/install/bootstrap.ps1' : '/install/bootstrap.sh';
+        link.download = '';
         link.textContent = 'Setup script'; link.setAttribute('aria-label', 'Download setup script for ' + title);
         links.push(link);
       }
