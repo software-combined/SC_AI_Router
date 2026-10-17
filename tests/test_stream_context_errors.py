@@ -9,7 +9,7 @@ from tests.fakes import FakeUpstream, install_fake
 from tests.harness import post, start_server, test_state
 
 MESSAGE = 'The prompt is too long: 4290688, model maximum context length: 1048571'
-MODEL = 'deepseek/deepseek-v4.1-flash'
+MODEL = 'deepseek/deepseek-v4.1-flash-1017'
 
 
 class StreamContextTests(unittest.TestCase):

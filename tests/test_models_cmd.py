@@ -72,7 +72,7 @@ class DeriveTests(unittest.TestCase):
             {'name': 'DeepSeek: DeepSeek V4 Pro 0813'})
         self.assertEqual((vendor, label), ('DeepSeek', 'DeepSeek: V4 Pro 0813'))
         vendor, label = qualify_name(
-            'deepseek/deepseek-v4.1-flash',
+            'deepseek/deepseek-v4.1-flash-1017',
             {'name': 'DeepSeek: DeepSeek V4.1 Flash'})
         self.assertEqual((vendor, label), ('DeepSeek', 'DeepSeek: V4.1 Flash'))
         vendor, label = qualify_name(

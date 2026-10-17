@@ -55,6 +55,10 @@ You should see the model in the picker and receive a reply. Installation alone
 does not confirm that the assistant works. See [setup options](docs/setup.md)
 for prerequisites, changing assistants and installation from source.
 
+Native DMG, EXE and AppImage builds and a staff download page are prepared.
+The [release checklist](docs/native-installers.md) records what must pass before
+the permanent download link replaces the setup-script route.
+
 ## Switch to OpenRouter and back
 
 Changing the model and changing the assistant's connection are separate steps.

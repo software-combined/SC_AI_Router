@@ -12,7 +12,7 @@ from .registry import upstream_id_for
 
 SUMMARY_OUTPUT_TOKENS, SUMMARY_RETRY_OUTPUT_TOKENS = 4000, 8000
 SUMMARY_MODEL_SLUGS = ('xiaomi/mimo-v2.6-flash',
-                       'deepseek/deepseek-v4.1-flash')
+                       'deepseek/deepseek-v4.1-flash-1017')
 SUMMARY_ATTEMPT_DEADLINE_S = 45
 SUMMARY_TOTAL_DEADLINE_S = 75
 

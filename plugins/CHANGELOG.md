@@ -1,5 +1,12 @@
 # Changelog
 
+## scg-review 0.6.1 (2026-10-17)
+
+- Export a sanitized review record for the current committed tree, including
+  lane identities and repository-scoped verification links. Reject dirty,
+  missing, expired, blocked or mismatched evidence. The local review gate
+  retains its existing authority; an export creates no new approval.
+
 ## scg-review 0.6.0 and scg-subagents 0.6.0 (2026-10-15)
 
 - Make pre-commit review model agnostic. Each machine owner sets ordered
@@ -12,8 +19,8 @@
 
 ## scg-ponytail 0.1.3 (2026-10-15)
 
-- Make Dietrich Gebert's Ponytail attribution visible in the skill. Preserve
-  the original MIT licence.
+- Make Dietrich Gebert's Ponytail attribution visible in the skill and the
+  repository's third-party notices. Preserve the original MIT licence.
 
 ## Public source metadata (2026-10-15)
 

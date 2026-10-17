@@ -96,7 +96,7 @@ class NativeCatalogueWireTests(unittest.TestCase):
         self.assertEqual(sent.get('status'), 200)
         rows = {row['slug']: row for row in sent['payload']['models']}
         self.assertIn('gpt-new', rows)
-        self.assertIn('deepseek/deepseek-v4.1-flash', rows)
+        self.assertIn('deepseek/deepseek-v4.1-flash-1017', rows)
         self.assertNotIn('gpt-static', rows)
         self.assertEqual(rows['gpt-old']['upgrade'], upgrade)
         self.assertEqual(rows['gpt-hidden']['visibility'], 'hide')

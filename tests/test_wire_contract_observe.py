@@ -15,7 +15,7 @@ from tests.fakes import FakeUpstream, install_fake
 from tests.harness import auth_file, post, start_server, test_state
 
 CANARY = 'SYNTH-CANARY-181-obs-4b8e'
-EXTERNAL = 'deepseek/deepseek-v4.1-flash'
+EXTERNAL = 'deepseek/deepseek-v4.1-flash-1017'
 SUBSCRIPTION = 'gpt-6-astra'
 
 
@@ -84,7 +84,8 @@ class ObserveTests(unittest.TestCase):
         self.assertEqual(events, [{'provider': 'openrouter', 'model': EXTERNAL,
                                    'path': '/responses',
                                    'violations': {'pair.family_mismatch': 1},
-                                   'warnings': {}, 'unknown_top_level': []}])
+                                   'warnings': {'item.unverified_type': 1},
+                                   'unknown_top_level': []}])
         self.assertNotIn(CANARY, json.dumps(events))
         # Observe only: the pair went upstream exactly as prepared.
         self.assertEqual([item['type'] for item in json.loads(sent[0])['input'][1:]],

@@ -11,7 +11,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from tests.install_fixtures import _craft_bundle, _ok_run, _patch_attrs, _static_fetch, install_mod
+from tests.install_fixtures import _craft_bundle, _ok_run, _patch_attrs, install_mod
+from tests.fakes import signed_static_fetch
 from tests._platform import unix_only
 
 
@@ -43,11 +44,13 @@ class SystemdTests(unittest.TestCase):
 
     def install(self, version):
         blob, latest = _craft_bundle(version)
+        fetch, _, public = signed_static_fetch(latest, blob)
         self.home.mkdir(parents=True, exist_ok=True)
         args = install_mod.build_parser().parse_args(
             ['--home', str(self.home), '--python', sys.executable])
-        with contextlib.redirect_stdout(io.StringIO()):
-            return install_mod.do_install(args, _fetch=_static_fetch(latest, blob))
+        with contextlib.redirect_stdout(io.StringIO()), \
+                mock.patch.object(install_mod._updater, '_FEED_VERIFY_KEY', public):
+            return install_mod.do_install(args, _fetch=fetch)
 
     def test_fresh_install_and_legacy_symlink_upgrade(self):
         self.install('0.6.2.0')
@@ -160,7 +163,6 @@ class SystemdTests(unittest.TestCase):
         latest = dict(latest, sha256=hashlib.sha256(blob).hexdigest())
         (self.home / 'update-etag').write_text('old')
         args = install_mod.build_parser().parse_args(['--home', str(self.home)])
-        from tests.fakes import signed_static_fetch
         fetch, _seed, _pub = signed_static_fetch(latest, blob)
         updater_mod = install_mod._updater
         old_key = updater_mod._FEED_VERIFY_KEY

@@ -2,7 +2,9 @@
  "contract": {
   "unknown_top_level": [],
   "violations": {},
-  "warnings": {}
+  "warnings": {
+   "item.unverified_type": 1
+  }
  },
  "wire": {
   "include": [
@@ -144,7 +146,7 @@
   ],
   "instructions": "You are the synthetic coding agent for the replay goldens.",
   "max_output_tokens": 64000,
-  "model": "deepseek/deepseek-v4.1-flash",
+  "model": "deepseek/deepseek-v4.1-flash-1017",
   "parallel_tool_calls": true,
   "prompt_cache_key": "replay-s08",
   "reasoning": {

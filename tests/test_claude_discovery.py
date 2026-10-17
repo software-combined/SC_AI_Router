@@ -24,11 +24,11 @@ class DesktopDiscoveryTests(unittest.TestCase):
                 self.assertEqual(row['display_name'], expected[slug])
 
     def test_truthful_tracking_id_still_resolves_to_its_registered_provider(self):
-        entry = replace(registry.by_slug('deepseek/deepseek-v4.1-flash'),
-                        slug='~deepseek/deepseek-v4.1-flash')
+        entry = replace(registry.by_slug('deepseek/deepseek-v4.1-flash-1017'),
+                        slug='~deepseek/deepseek-v4.1-flash-1017')
         rows = {entry.slug: entry}
         identifier = claude.row_alias(entry)
-        self.assertEqual(identifier, 'deepseek/deepseek-v4.1-flash')
+        self.assertEqual(identifier, 'deepseek/deepseek-v4.1-flash-1017')
         self.assertEqual(claude.resolve(identifier, rows), entry.slug)
         with mock.patch.object(availability, 'permitted', return_value=True):
             provider = claude.select(identifier, '/v1/messages',
@@ -36,7 +36,7 @@ class DesktopDiscoveryTests(unittest.TestCase):
         self.assertEqual(provider.name, entry.provider)
 
     def test_discovered_and_saved_aliases_keep_the_same_billing_and_body(self):
-        slug = 'deepseek/deepseek-v4.1-flash'
+        slug = 'deepseek/deepseek-v4.1-flash-1017'
         payload = {'model': slug, 'max_tokens': 64,
                    'messages': [{'role': 'user', 'content': 'synthetic probe'}]}
         credentials = mock.Mock()
@@ -57,7 +57,7 @@ class DesktopDiscoveryTests(unittest.TestCase):
                     claude.select(model, '/v1/messages', allowed=[])
 
     def test_unknown_router_alias_cannot_fall_through_to_subscription(self):
-        for model in ('claude/scg/' + '0' * 64, 'claude/deepseek/deepseek-v4.1-flash'):
+        for model in ('claude/scg/' + '0' * 64, 'claude/deepseek/deepseek-v4.1-flash-1017'):
             with self.subTest(model=model), self.assertRaises(UnknownModel):
                 claude.select(model, '/v1/messages')
 

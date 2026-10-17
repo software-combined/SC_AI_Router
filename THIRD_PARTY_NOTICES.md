@@ -35,6 +35,13 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+## Ponytail
+
+`plugins/scg-ponytail/skills/ponytail/` adapts Ponytail 4.10.0 by
+[Dietrich Gebert](https://github.com/DietrichGebert/ponytail). It remains under
+MIT, with the original copyright and full permission notice preserved in
+[its licence](plugins/scg-ponytail/skills/ponytail/LICENSE).
+
 ## Client wire formats
 
 The router speaks the wire formats of Codex, Claude Code and OpenRouter.

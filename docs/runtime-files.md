@@ -33,6 +33,7 @@ are never copied between machines.
 `ai_router/candidate_evidence.py`,
 `ai_router/setup.py`, `ai_router/setup_page.py`, `ai_router/key_store.py`,
 `ai_router/key_dialog.py`, `ai_router/key_prompt.py`, `ai_router/runtime.py`,
+`ai_router/dialog_tool.py`,
 `ai_router/catalogue.py`, `ai_router/local_services.py`,
 `ai_router/live_refresh.py`, `ai_router/models.py`,
 `ai_router/apply_catalogue.py`, `ai_router/activation.py`,

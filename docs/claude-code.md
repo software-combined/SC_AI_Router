@@ -39,6 +39,18 @@ is removed, and cancelling a question changes nothing. The one thing it will
 not do is overwrite a setting you edited by hand: it refuses and tells you to
 fix that value first.
 
+When `CLAUDE_CONFIG_DIR` is set, setup uses that folder's `settings.json`.
+Keep the same folder for updates and `--setup` repair. To change folders,
+detach the existing Claude attachment first, then attach the new folder.
+The installer keeps the original restore record until detach completes.
+
+Claude's subscription choice is independent of Codex's `--openai-mode`.
+`--claude-mode` and `--anthropic-mode` name the same Claude choice; conflicting
+values are refused. A saved `none` requires an explicit
+`--claude-mode subscription` before connecting Claude Code. A changed mode
+reloads the current router and checks its health before confirming connection.
+Updates preserve `none` for already connected Claude clients.
+
 ### Deferred tool loading
 
 Claude Code can hold MCP tool definitions back and load them only when they

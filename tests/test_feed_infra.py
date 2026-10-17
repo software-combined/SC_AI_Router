@@ -37,9 +37,9 @@ def _inline_code():
 
 
 class PublicFeedTemplateTests(unittest.TestCase):
-    def test_no_edge_gate_or_token_store(self):
+    def test_legacy_updates_have_no_token_store_and_stay_public_by_default(self):
         text = _template()
-        for needle in ('FunctionAssociations', 'GateFunction', 'TokenStore',
+        for needle in ('GateFunction', 'TokenStore',
                        'KeyValueStore', 'X-SCG-Feed-Token', 'current-token',
                        'ssm:GetParameter', 'kms:Decrypt'):
             with self.subTest(needle=needle):

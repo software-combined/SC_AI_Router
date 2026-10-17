@@ -22,7 +22,7 @@
    {
     "content": [
      {
-      "text": "Add a greeting to the synthetic app.",
+      "text": "List the files in the synthetic project.",
       "type": "input_text"
      }
     ],
@@ -30,19 +30,30 @@
     "type": "message"
    },
    {
+    "arguments": "{\"cmd\": \"ls\"}",
+    "call_id": "call_s01_ls",
+    "name": "exec_command",
+    "type": "function_call"
+   },
+   {
+    "call_id": "call_s01_ls",
+    "output": "README.md\nsrc",
+    "type": "function_call_output"
+   },
+   {
     "content": [
      {
-      "text": "Another language model started to solve this problem and produced a summary of its thinking process.\n\nSynthetic summary: the user asked for a greeting in hello.txt; it was added and the tests pass.",
-      "type": "input_text"
+      "text": "The project holds README.md and src.",
+      "type": "output_text"
      }
     ],
-    "role": "user",
+    "role": "assistant",
     "type": "message"
    },
    {
     "content": [
      {
-      "text": "What did we change?",
+      "text": "Summarise README.md.",
       "type": "input_text"
      }
     ],
@@ -52,9 +63,9 @@
   ],
   "instructions": "You are the synthetic coding agent for the replay goldens.",
   "max_output_tokens": 64000,
-  "model": "deepseek/deepseek-v4.1-flash",
+  "model": "deepseek/deepseek-v4.1-flash-1017",
   "parallel_tool_calls": true,
-  "prompt_cache_key": "replay-s05",
+  "prompt_cache_key": "replay-s01",
   "reasoning": {
    "effort": "low",
    "summary": "auto"

@@ -13,7 +13,7 @@ from ai_router import router, sse
 from tests.fakes import FakeUpstream, install_fake
 from tests.harness import post, start_server, test_state
 
-MODEL = 'deepseek/deepseek-v4.1-flash'
+MODEL = 'deepseek/deepseek-v4.1-flash-1017'
 SUCCESS = {'type': 'response.completed', 'response': {
     'id': 'resp_1', 'model': MODEL, 'output': [],
     'usage': {'input_tokens': 1, 'output_tokens': 1}}}

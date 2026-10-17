@@ -177,3 +177,6 @@ until the owner has migrated those references.
 The hook checks receipt scope, age and required lane labels. It does not run
 the scan/review itself or cryptographically prove reviewer identity. The skill
 requires genuine reviews and scanning before approval; never invent receipts.
+
+After committing, use [the review export](export.md) to share sanitized,
+commit-bound evidence with the PR. Exporting never creates an approval.

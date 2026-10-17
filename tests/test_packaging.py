@@ -14,6 +14,7 @@ EXPLICIT_FILES = (
     'packaging/VERSION', 'packaging/install.py', 'packaging/bundle.py',
     'packaging/updater.py', 'packaging/router_launch.py',
     'packaging/service.py', 'packaging/feed.py', 'packaging/runtime.lock',
+    'packaging/platforms/windows_tasks.py',
     'packaging/assets/router-icon.png',
     'packaging/install.sh', 'packaging/install.ps1',
 )

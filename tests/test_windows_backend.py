@@ -1,8 +1,9 @@
 """Plan 116 Stage 3: Windows Task Scheduler backend, proven offline against a
-fake schtasks. Pins real-machine facts (Windows 11, 2026-09-10): a repeating
+fake structured Task Scheduler API. Pins real-machine facts: a repeating
 trigger needs a StartBoundary, an unscoped logon trigger needs elevation,
 deleting a task leaves its instance running, console tasks show a window."""
 import importlib.util
+import json
 import subprocess
 import sys
 import tempfile
@@ -36,51 +37,70 @@ def _load_service():
 
 service = _load_service()
 PY = 'C:\\Python314\\python.exe'
-USER = 'CORP\\cyril'
+USER = 'S-1-5-21-1-2-3-1001'
 
 
 def _query(status):
-    return ('TaskName: \\CodexMixedModelRouter\nStatus: %s\n' % status)
+    return dict(kind='present', state=status, enabled=status != 1, pending=False,
+                instances=['instance'] if status == 4 else [])
 
 
-QUERY_READY = _query('Ready')
-QUERY_RUNNING = _query('Running')
-QUERY_DISABLED = _query('Disabled')
-QUERY_LOCALISED = 'Taaknaam: \\CodexMixedModelRouter\nStatus: Wordt uitgevoerd\n'
+QUERY_READY = _query(3)
+QUERY_RUNNING = _query(4)
+QUERY_DISABLED = _query(1)
 
 
 def _fake_run(state=None, calls=None, fail=(), end_fails=False):
-    """schtasks/whoami stand-in; state['query'] is the /query readback."""
+    """The external JSON boundary; all process and registration state is local."""
     state = state if state is not None else {}
     state.setdefault('query', QUERY_READY)
-    ok = lambda: SimpleNamespace(returncode=0, stdout='SUCCESS', stderr='')  # noqa: E731
+    state.setdefault('missing', set())
 
     def run(cmd, **kwargs):
-        (calls if calls is not None else []).append(list(cmd))
-        if cmd[:1] == ['whoami']:
-            return SimpleNamespace(returncode=0, stdout=USER + '\n', stderr='')
-        if cmd[:2] == ['schtasks', '/create']:
-            xml_path = Path(cmd[cmd.index('/xml') + 1])
-            state['xml_' + cmd[cmd.index('/tn') + 1]] = xml_path.read_text(
-                encoding='utf-16')
-            return ok()
-        if cmd[:2] == ['schtasks', '/query']:
-            if cmd[cmd.index('/tn') + 1] in fail:
-                return SimpleNamespace(returncode=1, stdout='', stderr='not found')
-            return SimpleNamespace(returncode=0, stdout=state['query'], stderr='')
-        if cmd[:2] == ['schtasks', '/run']:
-            if state['query'] != QUERY_DISABLED:  # /run cannot start a disabled task
-                state['query'] = QUERY_RUNNING
-            return ok()
-        if cmd[:2] == ['schtasks', '/end']:
-            if end_fails:
-                return SimpleNamespace(returncode=1, stdout='', stderr='nope')
-            if not state.get('stuck'):
-                state['query'] = QUERY_READY
-            return ok()
-        if cmd[:2] == ['schtasks', '/delete']:
-            return ok()
-        raise AssertionError('unexpected command: %r' % (cmd,))
+        request = json.loads(kwargs['input'])
+        if 'path' in request:
+            return SimpleNamespace(returncode=0, stdout=json.dumps({'user': USER}))
+        (calls if calls is not None else []).append(request)
+        raw, operation = request['name'], request['operation']
+        suffix = '-' + request['sid']
+        legacy = not raw.endswith(suffix)
+        name = raw if legacy else raw[:-len(suffix)]
+        store = state.setdefault('legacy', {}) if legacy else state
+        failed_once = state.get('fail_once') in ((raw, operation), (name, operation))
+        if failed_once:
+            state.pop('fail_once')
+        if (name in fail or failed_once or operation == state.get('fail_operation')
+                or (operation == 'stop' and end_fails)):
+            return SimpleNamespace(returncode=1, stdout='', stderr='denied')
+        key = 'query' if name == backend.ROUTER_TASK and not legacy else name
+        default = {'kind': 'missing'} if legacy else QUERY_READY
+        doc = ({'kind': 'missing'} if not legacy and name in state['missing']
+               else dict(store.get(key, default)))
+        if doc['kind'] in ('foreign', 'denied'):
+            return SimpleNamespace(returncode=0, stdout=json.dumps(doc), stderr='')
+        created = doc['kind'] == 'missing'
+        if operation == 'register':
+            store['xml_' + name] = request['xml']
+            state['missing'].discard(name)
+            doc = _query(1) if created else doc
+            doc['pending'] = request.get('pending', True) if created else doc['pending']
+        if doc['kind'] == 'present':
+            if operation in ('handover', 'enable', 'disable', 'complete'):
+                doc['pending'] = operation == 'handover'
+            if operation in ('enable', 'disable', 'run', 'handover'):
+                doc['enabled'] = operation not in ('disable', 'handover') and not state.get('policy_disabled', False)
+            if operation == 'run' and doc['enabled']:
+                doc['instances'] = ['instance']
+                doc['state'] = 4
+            if operation == 'stop' and not state.get('stuck'):
+                doc['instances'] = []
+            queued = doc['state'] == 2 and operation != 'stop'
+            running = doc['state'] == 4 and doc['instances']
+            doc['state'] = 4 if running else (2 if queued else (3 if doc['enabled'] else 1))
+            if operation == 'delete':
+                doc = {'kind': 'missing'}
+        store[key] = doc
+        return SimpleNamespace(returncode=0, stdout=json.dumps(doc), stderr='')
     return run
 
 
@@ -91,12 +111,13 @@ def _backend(state=None, calls=None, fail=(), end_fails=False):
 
 
 def _verbs(calls):
-    return [c[1] for c in calls if c[:1] == ['schtasks']]
+    return [c['operation'] for c in calls]
 
 
 def _install(obj, home):
     home.mkdir(parents=True, exist_ok=True)  # the installer creates it first
-    obj.install(PY, home, {}, ROOT, None)
+    with mock.patch.object(service, 'wait_version', return_value=True):
+        obj.install(PY, home, {}, ROOT, None)
 
 
 def _state_file(home):
@@ -107,7 +128,7 @@ def _state_file(home):
 _ROUTER_FRAGMENTS = ('<LogonType>InteractiveToken</LogonType>',
                      '<RunLevel>LeastPrivilege</RunLevel>',
                      # Scoped to the installing user: unscoped needs elevation.
-                     '<LogonTrigger><UserId>CORP\\cyril</UserId>',
+                     '<LogonTrigger><UserId>' + USER + '</UserId>',
                      '<Interval>PT1M</Interval>',
                      '<StartBoundary>',
                      '<MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>',
@@ -219,7 +240,8 @@ class InstallTests(unittest.TestCase):
     def test_fresh_install_writes_launcher_registers_runs_and_verifies(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
-            state, calls = {}, []
+            state, calls = {'missing': {backend.ROUTER_TASK, backend.UPDATE_TASK,
+                                       backend.EXPRESS_TASK}}, []
             with mock.patch.object(backend, '_post_shutdown') as shutdown:
                 _install(_backend(state, calls), home)
             # This fixture has no state file, so there is nothing to address a
@@ -229,15 +251,16 @@ class InstallTests(unittest.TestCase):
             self.assertEqual((home / 'task_launch.py').read_text(encoding='utf-8'),
                              (ROOT / 'packaging' / 'task_launch.py'
                               ).read_text(encoding='utf-8'))
-            self.assertIn('<UserId>CORP\\cyril</UserId>', state['xml_CodexMixedModelRouter'])
+            self.assertIn('<UserId>' + USER + '</UserId>', state['xml_CodexMixedModelRouter'])
             self.assertIn('xml_CodexMixedModelRouterUpdate', state)
-            for verb in ('/create', '/run', '/query'):
+            self.assertTrue(state[backend.UPDATE_TASK]['enabled'])
+            for verb in ('register', 'run', 'query'):
                 self.assertIn(verb, _verbs(calls))
-            self.assertNotIn('/end', _verbs(calls))
-            created = [c for c in calls if c[:2] == ['schtasks', '/create']]
+            self.assertNotIn('stop', _verbs(calls))
+            created = [c for c in calls if c['operation'] == 'register']
             self.assertEqual(len(created), 2)
-            self.assertTrue(all(c[c.index('/xml') + 1].startswith(str(home))
-                                for c in created))
+            self.assertTrue(all(c['sid'] == USER for c in created))
+            self.assertTrue(all(str(home) in c['arguments'] for c in created))
 
     def test_upgrade_drains_the_running_router_before_running_the_task(self):
         # IgnoreNew makes /run a no-op while the old release is serving, so
@@ -249,36 +272,34 @@ class InstallTests(unittest.TestCase):
 
             def shutdown(router_state):
                 self.assertEqual(router_state['token'], 't')
-                state['query'] = QUERY_READY
+                state['query']['instances'] = []
                 return True
             with mock.patch.object(backend, '_post_shutdown', side_effect=shutdown) as posted:
                 _install(_backend(state, calls), home)
             posted.assert_called_once()
             verbs = _verbs(calls)
-            self.assertNotIn('/end', verbs)
-            self.assertLess(verbs.index('/create'), verbs.index('/run'))
+            self.assertNotIn('stop', verbs)
+            self.assertLess(verbs.index('register'), verbs.index('run'))
             self.assertEqual(state['query'], QUERY_RUNNING)
 
-    def test_drain_is_posted_even_when_the_status_readback_is_localised(self):
-        # A non-English Status line reads as "not running"; the drain must
-        # not depend on it or the old release keeps serving after /run.
+    def test_drain_is_posted_even_when_the_task_is_ready(self):
         with tempfile.TemporaryDirectory() as tmp:
             _state_file(tmp)
-            with mock.patch.object(backend, '_post_shutdown', return_value=True) as posted:
-                _backend({'query': QUERY_LOCALISED}).restart(Path(tmp))
+            with mock.patch.object(backend, '_post_shutdown', return_value=True) as posted, \
+                    mock.patch.object(service, 'wait_version', return_value=True):
+                _backend({'query': QUERY_READY}).restart(Path(tmp))
             posted.assert_called_once()
 
-    def test_localised_status_falls_back_to_the_health_probe(self):
-        # Non-English Status must not read a serving router as stopped.
+    def test_task_state_is_independent_of_http_health(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
             _state_file(home)
-            obj = _backend({'query': QUERY_LOCALISED})
+            obj = _backend({'query': QUERY_RUNNING})
             with mock.patch.object(service, 'health',
                                    return_value={'status': 'ok'}):
                 self.assertTrue(obj._running('CodexMixedModelRouter', home))
             with mock.patch.object(service, 'health', return_value=None):
-                self.assertFalse(obj._running('CodexMixedModelRouter', home))
+                self.assertTrue(obj._running('CodexMixedModelRouter', home))
 
     def test_explicit_creation_flags_survive_the_windowless_default(self):
         seen = []
@@ -306,13 +327,15 @@ class InstallTests(unittest.TestCase):
 
     def test_hung_router_is_ended_only_after_the_drain_deadline(self):
         with tempfile.TemporaryDirectory() as tmp:
+            _state_file(tmp)
             state, calls = {'query': QUERY_RUNNING}, []
             with mock.patch.object(backend, '_post_shutdown', return_value=False), \
+                    mock.patch.object(service, 'wait_version', return_value=True), \
                     mock.patch.object(backend, 'DRAIN_TIMEOUT_S', 0):
                 _backend(state, calls).restart(Path(tmp))
             verbs = _verbs(calls)
-            self.assertIn('/end', verbs)
-            self.assertLess(verbs.index('/end'), verbs.index('/run'))
+            self.assertIn('stop', verbs)
+            self.assertLess(verbs.index('stop'), verbs.index('run'))
 
     def test_install_reports_unregistered_task_by_name(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -322,61 +345,17 @@ class InstallTests(unittest.TestCase):
     def test_install_refuses_policy_disabled_task(self):
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaisesRegex(SystemExit, 'disabled by policy'):
-                _install(_backend({'query': QUERY_DISABLED}), Path(tmp) / 'home')
-
-    def test_registration_failure_names_the_task(self):
-        def run(cmd, **kwargs):
-            if cmd[:2] == ['schtasks', '/create']:
-                return SimpleNamespace(returncode=1, stdout='', stderr='Access is denied.')
-            return SimpleNamespace(returncode=0, stdout=USER, stderr='')
-        with tempfile.TemporaryDirectory() as tmp:
-            with self.assertRaisesRegex(SystemExit, 'CodexMixedModelRouter'):
-                _install(backend.Backend(service, run), Path(tmp) / 'home')
-
-    def test_registration_recovers_from_a_cross_principal_denied_create(self):
-        # A task first registered under a different principal (e.g. a local
-        # account) is "Access is denied" to `/create /f` from this token. The
-        # backend must delete the stale task, then re-create so it lands under
-        # the current principal. First /create per task is denied, the delete
-        # clears it, the retry succeeds.
-        calls, denied = [], set()
-
-        def run(cmd, **kwargs):
-            calls.append(list(cmd))
-            if cmd[:1] == ['whoami']:
-                return SimpleNamespace(returncode=0, stdout=USER + '\n', stderr='')
-            if cmd[:2] == ['schtasks', '/create']:
-                name = cmd[cmd.index('/tn') + 1]
-                if name not in denied:
-                    denied.add(name)
-                    return SimpleNamespace(returncode=1, stdout='',
-                                           stderr='ERROR: Access is denied.')
-                xml_path = Path(cmd[cmd.index('/xml') + 1])
-                xml_path.read_text(encoding='utf-16')
-                return SimpleNamespace(returncode=0, stdout='SUCCESS', stderr='')
-            if cmd[:2] == ['schtasks', '/query']:
-                return SimpleNamespace(returncode=0, stdout=QUERY_READY, stderr='')
-            return SimpleNamespace(returncode=0, stdout='SUCCESS', stderr='')
-
-        with tempfile.TemporaryDirectory() as tmp:
-            _install(backend.Backend(service, run), Path(tmp) / 'home')
-        # The router task was denied once, deleted, then created again.
-        def _for(name):
-            return [c[:2] for c in calls if c[:1] == ['schtasks']
-                    and '/tn' in c and c[c.index('/tn') + 1] == name]
-        router = _for('CodexMixedModelRouter')
-        self.assertIn(['schtasks', '/delete'], router)
-        creates = [c for c in router if c == ['schtasks', '/create']]
-        self.assertEqual(len(creates), 2, 'denied create is retried once')
+                _install(_backend({'query': QUERY_DISABLED, 'policy_disabled': True}), Path(tmp) / 'home')
 
     def test_every_console_child_is_spawned_windowless(self):
         seen = []
+        fake = _fake_run()
 
         def run(cmd, **kwargs):
             seen.append(kwargs.get('creationflags'))
-            out = USER if cmd[:1] == ['whoami'] else QUERY_READY
-            return SimpleNamespace(returncode=0, stdout=out, stderr='')
-        with tempfile.TemporaryDirectory() as tmp:
+            return fake(cmd, **kwargs)
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(service, 'wait_version', return_value=True):
             backend.Backend(service, run).install(PY, Path(tmp), {}, ROOT, None)
         self.assertTrue(seen)
         self.assertTrue(all(flag == backend._NO_WINDOW['creationflags'] for flag in seen))
@@ -386,37 +365,36 @@ class ControlTests(unittest.TestCase):
     def test_stop_ends_the_router_task(self):
         calls = []
         _backend({}, calls).stop('/home/x')
-        self.assertIn(['schtasks', '/end', '/tn', 'CodexMixedModelRouter'], calls)
+        self.assertEqual([c['name'] for c in calls if c['operation'] == 'stop'],
+                         [backend.ROUTER_TASK + '-' + USER])
 
     def test_stop_tolerates_only_a_task_that_was_never_registered(self):
-        # /end is always attempted; a failed /end is forgiven solely when
-        # the task does not exist (a failed first install never registered
-        # it), so the real failure message is not masked.
         calls = []
-        _backend({}, calls, fail=('CodexMixedModelRouter',), end_fails=True).stop('/home/x')
-        self.assertIn('/end', _verbs(calls))
-        with self.assertRaisesRegex(SystemExit, 'failed to stop CodexMixedModelRouter'):
+        _backend({'missing': {backend.ROUTER_TASK}}, calls, end_fails=True).stop('/home/x')
+        self.assertNotIn('stop', _verbs(calls))
+        with self.assertRaisesRegex(SystemExit, 'CodexMixedModelRouter'):
             _backend({'query': QUERY_RUNNING}, end_fails=True).stop('/home/x')
 
-    def test_restart_without_state_still_runs_and_verifies(self):
+    def test_restart_without_state_refuses_before_quiescing(self):
         with tempfile.TemporaryDirectory() as tmp:
             calls = []
-            _backend({}, calls).restart(Path(tmp) / 'nostate')
-            for verb in ('/run', '/query'):
-                self.assertIn(verb, _verbs(calls))
+            with self.assertRaises(OSError):
+                _backend({}, calls).restart(Path(tmp) / 'nostate')
+            self.assertEqual(calls, [])
 
     def test_uninstall_ends_each_task_before_deleting_it(self):
         # /delete leaves a running instance alive: end first, or the old
         # router keeps serving until sign-out.
         calls = []
         _backend({}, calls).uninstall('/home/x')
-        ended = [c[3] for c in calls if c[:3] == ['schtasks', '/end', '/tn']]
-        deleted = [c[3] for c in calls if c[:3] == ['schtasks', '/delete', '/tn']]
-        self.assertEqual(deleted, [backend.ROUTER_TASK, backend.UPDATE_TASK, backend.EXPRESS_TASK])
-        self.assertEqual(ended, deleted)
+        deleted = [c['name'] for c in calls if c['operation'] == 'delete']
+        self.assertEqual(deleted, [name + '-' + USER for name in
+                                  (backend.ROUTER_TASK, backend.UPDATE_TASK, backend.EXPRESS_TASK)])
         for task in deleted:
-            self.assertLess(calls.index(['schtasks', '/end', '/tn', task]),
-                            calls.index(['schtasks', '/delete', '/tn', task, '/f']))
+            operations = [c['operation'] for c in calls if c['name'] == task]
+            self.assertLess(operations.index('disable'), operations.index('delete'))
+            if task != backend.ROUTER_TASK + '-' + USER:
+                self.assertLess(operations.index('stop'), operations.index('delete'))
 
     def test_uninstall_drains_a_serving_router_first(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -424,7 +402,7 @@ class ControlTests(unittest.TestCase):
             state = {'query': QUERY_RUNNING}
 
             def shutdown(router_state):
-                state['query'] = QUERY_READY
+                state['query']['instances'] = []
                 return True
             with mock.patch.object(backend, '_post_shutdown', side_effect=shutdown) as posted:
                 _backend(state).uninstall(Path(tmp))
@@ -435,14 +413,14 @@ class ControlTests(unittest.TestCase):
         # wait expires, and only then is the instance ended and deleted.
         with tempfile.TemporaryDirectory() as tmp:
             _state_file(tmp)
-            state, calls = {'query': QUERY_RUNNING, 'stuck': True}, []
+            state, calls = {'query': QUERY_RUNNING}, []
             with mock.patch.object(backend, '_post_shutdown', return_value=False) as posted, \
                     mock.patch.object(backend, 'UNINSTALL_DRAIN_S', 0):
                 _backend(state, calls).uninstall(Path(tmp))
             posted.assert_called_once()
             verbs = _verbs(calls)
-            self.assertLess(verbs.index('/query'), verbs.index('/end'))
-            self.assertLess(verbs.index('/end'), verbs.index('/delete'))
+            self.assertLess(verbs.index('query'), verbs.index('stop'))
+            self.assertLess(verbs.index('stop'), verbs.index('delete'))
 
 
 if __name__ == '__main__':

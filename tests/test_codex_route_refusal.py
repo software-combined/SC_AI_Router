@@ -93,7 +93,7 @@ class SwitchedRouteTests(unittest.TestCase):
 
     def test_routed_models_are_forwarded_without_the_route_header(self):
         status, _, _, recorded = self._send(
-            {'model': 'deepseek/deepseek-v4.1-flash', 'input': []},
+            {'model': 'deepseek/deepseek-v4.1-flash-1017', 'input': []},
             {'X-SCG-Codex-Route': 'routed'})
         self.assertEqual(status, 200)
         self.assertEqual([call[0] for call in recorded], ['openrouter.ai'])
@@ -112,12 +112,12 @@ class SwitchedRouteTests(unittest.TestCase):
         # GPT-5.6 Terra has no OpenRouter row any more, so nothing is named.
         self.assertEqual(self._refusal({'model': 'gpt-5.6-terra', 'input': []},
                                        openai_models=['gpt-6-astra', 'gpt-5.6-terra']), generic)
-        self.assertEqual(self._refusal(turn, allowed_models=['deepseek/deepseek-v4.1-flash']),
+        self.assertEqual(self._refusal(turn, allowed_models=['deepseek/deepseek-v4.1-flash-1017']),
                          generic)
         unlisted = dataclasses.replace(by_slug(TWIN), listed=False)
         with mock.patch.dict('ai_router.registry.BY_SLUG', {TWIN: unlisted}):
             self.assertEqual(self._refusal(turn), generic)
-        self._snapshot({'deepseek/deepseek-v4.1-flash'})
+        self._snapshot({'deepseek/deepseek-v4.1-flash-1017'})
         self.assertEqual(self._refusal(turn), generic)
 
     def test_helper_turns_are_refused_even_with_the_twin_fallback_on(self):

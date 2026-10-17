@@ -237,7 +237,7 @@ def saved_profile(home, receipts):
     return path.parents[1] if path.is_absolute() and path.parent.name == 'configLibrary' else None
 
 
-def attach(home, state, receipts, data_dir_override=None, env=None, *, python=None):
+def attach(home, state, receipts, data_dir_override=None, env=None, *, python=None, refresh=False):
     """Attach the desktop gateway without touching first-party state.
 
     Merges only the four owned entry values and sets the third-party
@@ -246,9 +246,6 @@ def attach(home, state, receipts, data_dir_override=None, env=None, *, python=No
     with a redacted message. Records the attachment in the versioned
     receipt. Returns the applied entry path written.
     """
-    if state.get('claude_mode', 'subscription') == 'none':
-        raise SystemExit('claude_mode is none: re-run with --claude-mode subscription '
-                         'to attach the Claude desktop gateway')
     data_dir = (Path(data_dir_override) if data_dir_override is not None
                 else user_data_dir(env))
     existing = receipts.read_receipt(home).get('clients', {}).get(CLIENT_KEY)
@@ -267,6 +264,9 @@ def attach(home, state, receipts, data_dir_override=None, env=None, *, python=No
     cfg, cfg_path = read_desktop_config(data_dir)
     previous_mode = cfg.get('deploymentMode')
     owned = _owned_snapshot(home, data_dir, state, receipts)
+    if state.get('claude_mode', 'subscription') == 'none' and not (refresh and owned is not None):
+        raise SystemExit('claude_mode is none: re-run with --claude-mode subscription '
+                         'to attach the Claude desktop gateway')
     if previous_mode not in (None, '3p') and not (previous_mode == '1p' and owned is not None):
         raise SystemExit(
             'Claude desktop deploymentMode is managed outside this installer; '

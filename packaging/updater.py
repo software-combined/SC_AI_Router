@@ -26,6 +26,8 @@ _spec = importlib.util.spec_from_file_location(
     Path(__file__).resolve().parent / 'service.py')
 _svc = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_svc)
+_models = _svc.load('router_control_models', Path(__file__).with_name('control_models.py'))
+_enrolment = _svc.load('router_download_enrolment', Path(__file__).with_name('download_enrolment.py'))
 
 MAX_VERSION_FAILURES = 3
 ANNOUNCE_TIMEOUT_S = 5
@@ -47,7 +49,7 @@ ERROR_CODES = (
     'feed_unreachable', 'feed_invalid', 'feed_serial', 'feed_untrusted',
     'feed_signature',
     'bundle_checksum', 'bundle_invalid', 'installer_timeout',
-    'installer_failed', 'update_failed',
+    'installer_failed', 'update_failed', 'download_signin_required',
 )
 _KEEP = object()
 
@@ -342,6 +344,7 @@ def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
     # keeps its one-argument shape.
     injected = _fetch
     _fetch = injected or _svc.fetch
+    _models.refresh(home, _fetch)
     read_feed = _read_feed or (lambda url, etag: _svc.fetch_feed(url, etag, injected))
     etag_path = home / 'update-etag'
     etag = etag_path.read_text().strip() if etag_path.exists() else None
@@ -369,6 +372,10 @@ def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
         _svc.check_serial(home, latest, pinned=bool(args.feed))
     except SystemExit as exc:
         raise UpdateError('feed_serial', str(exc) or 'feed document refused')
+    if not args.feed:
+        _enrolment.accept(home, latest.get('download_auth'))
+        _models.accept(home, latest)
+        _models.refresh(home, _fetch)
     bundle_url = _svc.sibling_bundle(feed, latest.get('url', ''))
     if not _svc.trusted_origin(bundle_url):
         raise UpdateError('feed_untrusted',
@@ -416,7 +423,7 @@ def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
         # Scheduled and manual update checks never pop the first-run key
         # window; the next request opens it through the request path. The
         # nonce is still minted so a keyless service can boot.
-        cmd = [sys.executable, str(installer), '--home', str(home)]
+        cmd = [sys.executable, str(installer), '--home', str(home), '--python', sys.executable]
         if args.feed:
             cmd += ['--feed', feed]
         try:
@@ -476,6 +483,7 @@ def do_update(args, _fetch=None, _read_feed=None, _sleep=None, _announce=None):
     """
     import random
     home = Path(args.home).expanduser()
+    _svc._feed.configure_home(home)
     sleep = _sleep or time.sleep
     sleep(random.uniform(0, 10 if getattr(args, 'express_only', False) else 120))
     try:
@@ -490,6 +498,10 @@ def do_update(args, _fetch=None, _read_feed=None, _sleep=None, _announce=None):
     except UpdateError as exc:
         _record_pass(home, error=exc.error_code)
         raise
+    except _svc._feed.SignInRequired:
+        _record_pass(home, error='download_signin_required')
+        _svc.load('router_download_notice', Path(__file__).with_name('download_notice.py')).show(home)
+        raise SystemExit('Sign in through SCG Router to download updates.') from None
     except OSError:
         _record_pass(home, error='feed_unreachable')
         raise
@@ -508,6 +520,7 @@ def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None):
     document; the applying verb is `do_update`.
     """
     home = Path(args.home).expanduser()
+    _svc._feed.configure_home(home)
     feed = args.feed or _svc.channel_feed(home)
     injected = _fetch
     read_feed = _read_feed or (lambda url, etag: _svc.fetch_feed(url, etag, injected))

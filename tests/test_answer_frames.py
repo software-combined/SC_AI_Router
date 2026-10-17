@@ -79,7 +79,7 @@ class ReasoningBytesTests(unittest.TestCase):
     which cap was sent or that the bytes were reasoning.
     """
 
-    MODEL = 'deepseek/deepseek-v4.1-flash'
+    MODEL = 'deepseek/deepseek-v4.1-flash-1017'
 
     def test_reasoning_then_cap_limited_incomplete_is_read_from_the_log(self):
         reasoning = _frame({'type': 'response.output_item.added',

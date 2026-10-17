@@ -17,6 +17,13 @@ from tests.test_install_lifecycle import _run_install
 
 class DesktopSetupTests(unittest.TestCase):
     def setUp(self):
+        fake_home = self.enterContext(tempfile.TemporaryDirectory())
+        self.enterContext(mock.patch.dict(os.environ,
+                          {'HOME': fake_home, 'USERPROFILE': fake_home}))
+        self.enterContext(mock.patch.object(install_mod._svc, 'wait_version', return_value=True))
+        self.enterContext(mock.patch.object(install_mod._svc, 'channel_feed',
+                                           return_value='file:///latest.json'))
+        self.enterContext(mock.patch.object(install_mod, 'platform_backend'))
         self.real_install_launcher = install_mod._desktop_config._install_switch_launcher
         launcher = mock.patch.object(install_mod._desktop_config, '_install_switch_launcher')
         self.launcher = launcher.start()
@@ -213,7 +220,8 @@ class DesktopSetupTests(unittest.TestCase):
             (home / 'mixed-router-state.json').write_text('{"port":1,"token":"test-token"}')
             args = install_mod.build_parser().parse_args(['--home', str(home), '--desktop'])
             output = io.StringIO()
-            with mock.patch.dict(os.environ, {'HOME': str(root), 'CLAUDE_USER_DATA_DIR': str(profile)}), \
+            with mock.patch.dict(os.environ, {'HOME': str(root), 'USERPROFILE': str(root),
+                                             'CLAUDE_USER_DATA_DIR': str(profile)}), \
                     mock.patch('sys.platform', 'darwin'), \
                     mock.patch.object(install_mod, 'find_python', return_value='/python3.14'), \
                     mock.patch.object(install_mod._desktop_config, '_install_switch_launcher',

@@ -1,8 +1,7 @@
-"""Public update feed: origin, channel resolution, and fetch.
+"""Update origin, channel resolution and staff-authenticated download transport.
 
-Every install updates from the public feed at dist.softwarecombined.com:
-no token, no account, no repository access. An explicit `--feed` pin or a
-`feed` file is the manual path. Runs on Python 3.9+ like the installer.
+Unenrolled legacy installations retain public access during migration.
+An explicit `--feed` pin or a `feed` file is the manual path. Python 3.9+.
 Loaded via the installer's file-based import pattern, never
 `import packaging.feed`.
 """
@@ -16,9 +15,37 @@ _spec = _ilu.spec_from_file_location(
     Path(__file__).resolve().parent / 'feed_verify.py')
 _feed_verify = _ilu.module_from_spec(_spec)
 _spec.loader.exec_module(_feed_verify)
+_auth_spec = _ilu.spec_from_file_location(
+    'router_feed_download_auth', Path(__file__).with_name('download_auth.py'))
+_auth = _ilu.module_from_spec(_auth_spec)
+_auth_spec.loader.exec_module(_auth)
+SignInRequired = _auth.SignInRequired
+_home = None
 
 FEED_ORIGIN = 'https://dist.softwarecombined.com'
 FEED_URL = FEED_ORIGIN + '/stable/latest.json'
+
+
+def configure_home(home):
+    """Scope credentials to the installer home, never to an inference request."""
+    global _home
+    _home = Path(home)
+
+
+def _request(url, headers=None):
+    headers = dict(headers or {})
+    if _home is not None and (_home / _auth.CONFIG_FILE).exists():
+        if not trusted_origin(url) or url.startswith('file://'):
+            raise SignInRequired('configuration_invalid')
+        headers['Cookie'] = _auth.ensure_access(_home)
+    return urllib.request.Request(url, headers=headers)
+
+
+def _denied(exc):
+    if exc.code in (401, 403) and _home is not None:
+        exc.close()
+        raise SignInRequired() from None
+    raise exc
 
 
 def _safe_url(url):
@@ -81,7 +108,7 @@ def opener():
 def _get(url, headers, etag):
     """One GET; keeps the caller's ETag when the response carries none."""
     with opener().open(
-            urllib.request.Request(url, headers=headers), timeout=30) as response:
+            _request(url, headers), timeout=30) as response:
         return (response.status, response.read(),
                 response.headers.get('ETag', etag))
 
@@ -98,7 +125,7 @@ def live_feed(url, etag, fetch):
     except urllib.error.HTTPError as exc:
         if exc.code == 304:
             return 304, b'', etag
-        raise
+        _denied(exc)
 
 
 def live_signature(url, fetch):
@@ -140,8 +167,11 @@ def fetch(url):
         return Path(url[len('file://'):]).read_bytes()
     if not trusted_origin(url):
         raise SystemExit('refusing untrusted feed URL: %s' % _safe_url(url))
-    with opener().open(urllib.request.Request(url), timeout=30) as response:
-        return response.read()
+    try:
+        with opener().open(_request(url), timeout=30) as response:
+            return response.read()
+    except urllib.error.HTTPError as exc:
+        _denied(exc)
 
 
 def feed_read(fetcher, url):

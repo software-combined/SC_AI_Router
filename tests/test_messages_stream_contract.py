@@ -177,7 +177,7 @@ class MessagesStreamContractTests(unittest.TestCase):
 
     def test_routed_messages_failures_keep_bounded_sends_and_one_logged_verdict(self):
         for model, expected_host in (('claude-sonnet-5', provider_defs.ANTHROPIC.host),
-                                     ('deepseek/deepseek-v4.1-flash', provider_defs.OPENROUTER.host)):
+                                     ('deepseek/deepseek-v4.1-flash-1017', provider_defs.OPENROUTER.host)):
             with self.subTest(model=model):
                 wire = START + frame('error', error={'type': 'overloaded_error'})
                 sends = install_fake(self, lambda: FakeUpstream(

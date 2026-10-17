@@ -45,7 +45,7 @@ class ExternalHandoffSchemaTests(unittest.TestCase):
 
     def test_all_locations_offer_readable_messages_unless_the_install_is_subscription_only(self):
         for location in LOCATIONS:
-            for model in ('openai/gpt-6.1-sol', 'deepseek/deepseek-v4.1-flash'):
+            for model in ('openai/gpt-6.1-sol', 'deepseek/deepseek-v4.1-flash-1017'):
                 with self.subTest(location=location, model=model):
                     payload = payload_for(location)
                     original = deepcopy(payload)

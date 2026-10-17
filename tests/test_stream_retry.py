@@ -47,7 +47,7 @@ class UpstreamTerminalRetryTests(_ServerFixture):
     the relay can absorb that failure itself; after any payload it must not.
     """
 
-    MODEL = 'deepseek/deepseek-v4.1-flash'
+    MODEL = 'deepseek/deepseek-v4.1-flash-1017'
 
     def _failed(self, code='overloaded'):
         return sse.frame(json.dumps({'type': 'response.failed', 'response': {

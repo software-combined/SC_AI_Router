@@ -10,12 +10,11 @@ The copy and the icon follow the popup style rule in `AGENTS.md` section 4a,
 shared with the update notice.
 """
 import json
-import shutil
 import subprocess
 import sys
 from pathlib import Path
 
-from . import provider_defs
+from . import dialog_tool, provider_defs
 
 TITLE = 'SCG Router'
 ICON = Path(__file__).resolve().parents[1] / 'packaging' / 'assets' / 'router-icon.png'
@@ -65,17 +64,7 @@ def questions(which='codex'):
 
 def tool(platform_name=None, which=None):
     """Path to this platform's dialog tool, or None when there is no GUI."""
-    if platform_name is None:
-        platform_name = sys.platform
-    if which is None:
-        which = shutil.which
-    if platform_name == 'darwin':
-        return which('osascript')
-    if platform_name == 'win32':
-        return which('powershell') or which('powershell.exe')
-    if platform_name.startswith('linux'):
-        return which('zenity')
-    return None
+    return dialog_tool.tool(platform_name, which)
 
 
 def _quote(text):

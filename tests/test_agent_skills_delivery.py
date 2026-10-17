@@ -251,7 +251,7 @@ class DeliveryTest(unittest.TestCase):
         for name, sep, path, extra in (
                 ('nt', ';', r'C:\Windows\System32;C:\Windows', [home_bin, str(build)]),
                 ('posix', ':', LAUNCHD_PATH, [home_bin, '/opt/homebrew/bin', '/usr/local/bin'])):
-            with self.subTest(os_name=name), patch.object(skills.os, 'pathsep', sep), \
+            with self.subTest(os_name=name), patch.object(skills.os, 'pathsep', sep), patch('sys.platform', 'linux'), \
                     patch.dict(os.environ, {'PATH': path, 'LOCALAPPDATA': str(local)}):
                 self.assertEqual(skills.client_path(os_name=name), sep.join([path, *extra]))
 

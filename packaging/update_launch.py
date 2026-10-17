@@ -20,6 +20,16 @@ try:
 except (OSError, ValueError):
     raise SystemExit('router pointer file missing: reinstall the router')
 installer = home / 'releases' / name / 'packaging' / 'install.py'
+# Native setup retains the updater separately from the serving release.
+# Restoring older router code must not remove private download access.
+try:
+    control = (home / 'control-version').read_text().strip()
+    if control and all(part.isdigit() for part in control.split('.')):
+        candidate = home / 'control' / control / 'packaging' / 'install.py'
+        if candidate.is_file():
+            installer = candidate
+except OSError:
+    pass
 if not installer.is_file():
     raise SystemExit('router release missing: reinstall the router')
 # The home launcher outlives the release that installed it: an explicit
@@ -36,7 +46,7 @@ verb = '--update' if "'--update'" in installer_text else '--check-update'
 try:
     import importlib.util as _ilu
     _rotate_spec = _ilu.spec_from_file_location(
-        'router_service_rotate', home / 'releases' / name / 'packaging' / 'service.py')
+        'router_service_rotate', installer.with_name('service.py'))
     _rotate_mod = _ilu.module_from_spec(_rotate_spec)
     _rotate_spec.loader.exec_module(_rotate_mod)
     _rotate_mod.rotate_log(home / 'logs' / 'update.log')

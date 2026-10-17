@@ -19,7 +19,7 @@ from tests.fakes import FakeUpstream, install_fake
 from tests.harness import post as _post
 from tests.test_stream_retry import _ServerFixture
 
-MODELS = ('xiaomi/mimo-v2.6-pro', 'deepseek/deepseek-v4.1-flash')
+MODELS = ('xiaomi/mimo-v2.6-pro', 'deepseek/deepseek-v4.1-flash-1017')
 TOOLS = [{'type': 'function', 'name': f'inert_{n}', 'description': 'd' * 1500,
           'parameters': {'type': 'object', 'properties': {}}} for n in range(53)]
 INSTRUCTIONS = 'synthetic instructions ' * 200

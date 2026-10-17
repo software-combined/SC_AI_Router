@@ -260,7 +260,7 @@ class ReplayHandlerTests(unittest.TestCase):
         body = json.dumps({'error': {'code': 'array_above_max_length', 'param': 'input[0].content',
                                     'message': 'invalid PRIVATE-CANARY'}}).encode()
         install_fake(self, lambda: FakeUpstream(400, body, []))
-        for model in ('gpt-6-astra', 'deepseek/deepseek-v4.1-flash'):
+        for model in ('gpt-6-astra', 'deepseek/deepseek-v4.1-flash-1017'):
             with mock.patch('ai_router.router.log_event') as log:
                 response = post(self.server.server_port, '/test-token/responses',
                                 {'model': model, 'input': [], 'stream': True})

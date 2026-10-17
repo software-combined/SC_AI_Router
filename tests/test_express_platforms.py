@@ -10,7 +10,7 @@ from unittest import mock
 from tests._platform import unix_only
 from tests.fakes import LaunchdDomain
 from tests.install_fixtures import install_mod
-from tests.test_windows_backend import _backend, _install, backend as windows
+from tests.test_windows_backend import USER, _backend, _install, backend as windows, QUERY_READY
 
 ROOT = Path(__file__).resolve().parents[1]
 darwin = install_mod._svc.load('express_test_darwin', ROOT / 'packaging/platforms/darwin.py')
@@ -95,11 +95,13 @@ class ExpressPlatforms(unittest.TestCase):
                          '<LogonType>InteractiveToken', '<RunLevel>LeastPrivilege',
                          '<ExecutionTimeLimit>PT30M', '<StartBoundary>'):
             self.assertIn(fragment, urgent)
-        self.assertEqual(len([c for c in self.calls if c[:2] == ['schtasks', '/create']]), 3)
-        state['query'] = 'Status: Ready\n'  # Simulate the task's completed drain.
+        self.assertEqual(len([c for c in self.calls if c['operation'] == 'register']), 3)
+        state['query'] = QUERY_READY  # Simulate the task's completed drain.
         _backend(state, self.calls).uninstall(self.home)
-        self.assertIn(['schtasks', '/delete', '/tn', windows.EXPRESS_TASK, '/f'], self.calls)
+        self.assertIn(windows.EXPRESS_TASK + '-' + USER,
+                      [c['name'] for c in self.calls if c['operation'] == 'delete'])
 
     def test_windows_uninstall_also_accepts_an_install_without_express(self):
-        _backend(calls=self.calls, fail=(windows.EXPRESS_TASK,)).uninstall(self.home)
-        self.assertNotIn(['schtasks', '/delete', '/tn', windows.EXPRESS_TASK, '/f'], self.calls)
+        _backend({'missing': {windows.EXPRESS_TASK}}, calls=self.calls).uninstall(self.home)
+        self.assertNotIn(windows.EXPRESS_TASK + '-' + USER,
+                         [c['name'] for c in self.calls if c['operation'] == 'delete'])

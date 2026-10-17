@@ -24,7 +24,7 @@ class HistoryPortabilityTests(unittest.TestCase):
         def test_native_declared_pair_survives_with_discovery_intact(self):
             # The regression that matters most: the plain pair and the discovery
             # pair pass through untouched in native mode, deterministically.
-            payload = self._history_payload('deepseek/deepseek-v4.1-flash')
+            payload = self._history_payload('deepseek/deepseek-v4.1-flash-1017')
             payload = prepare_tools(payload)[0]
             kinds = [(i.get('type'), i.get('name')) for i in payload['input']]
             self.assertEqual(kinds, [('function_call', SEARCH_NAME),
@@ -32,7 +32,7 @@ class HistoryPortabilityTests(unittest.TestCase):
                                      ('function_call', 'exec'),
                                      ('function_call_output', 'exec')])
             self.assertEqual(payload['input'][2]['arguments'], '{"value":"probe"}')
-            rerun = self._history_payload('deepseek/deepseek-v4.1-flash')
+            rerun = self._history_payload('deepseek/deepseek-v4.1-flash-1017')
             rerun = prepare_tools(rerun)[0]
             self.assertEqual(json.dumps(payload['input'], sort_keys=True),
                              json.dumps(rerun['input'], sort_keys=True))
@@ -53,7 +53,7 @@ class HistoryPortabilityTests(unittest.TestCase):
             self.assertEqual((back.get('namespace'), back.get('name')), ('probe', 'echo'))
             marker = {'type': 'message', 'role': 'developer', 'content': [
                 {'type': 'input_text', 'text': '<model_switch> hop'}]}
-            by_marker = self._history_payload('deepseek/deepseek-v4.1-flash')
+            by_marker = self._history_payload('deepseek/deepseek-v4.1-flash-1017')
             by_marker['input'].append(marker)
             by_marker = prepare_tools(by_marker)[0]
             self.assertEqual(json.dumps(by_marker['input'][:3], sort_keys=True),
@@ -61,9 +61,9 @@ class HistoryPortabilityTests(unittest.TestCase):
             self.assertEqual(by_marker['input'][-1], marker)
             # Mirror: the marker at index 0 means nothing is foreign, so the
             # payload is byte-identical to the native run.
-            native = self._history_payload('deepseek/deepseek-v4.1-flash')
+            native = self._history_payload('deepseek/deepseek-v4.1-flash-1017')
             native = prepare_tools(native)[0]
-            leading = self._history_payload('deepseek/deepseek-v4.1-flash')
+            leading = self._history_payload('deepseek/deepseek-v4.1-flash-1017')
             leading['input'].insert(0, marker)
             leading = prepare_tools(leading)[0]
             self.assertEqual(json.dumps(leading['input'][1:], sort_keys=True),
@@ -101,7 +101,7 @@ class HistoryPortabilityTests(unittest.TestCase):
             # The marker is the client's developer message; user text is data.
             marker = {'type': 'message', 'role': 'user', 'content': [
                 {'type': 'input_text', 'text': '<model_switch> typed by a person'}]}
-            payload = self._history_payload('deepseek/deepseek-v4.1-flash')
+            payload = self._history_payload('deepseek/deepseek-v4.1-flash-1017')
             payload['input'].insert(0, marker)
             payload = prepare_tools(payload)[0]
             self.assertEqual([(item.get('type'), item.get('name')) for item in payload['input']],
@@ -124,7 +124,7 @@ class HistoryPortabilityTests(unittest.TestCase):
             marker = {'type': 'message', 'role': 'developer', 'content': [
                 {'type': 'input_text', 'text': '<model_switch> hop'}]}
             for model, with_marker in (('meta/muse-spark-1.3-contributor', False),
-                                       ('deepseek/deepseek-v4.1-flash', True)):
+                                       ('deepseek/deepseek-v4.1-flash-1017', True)):
                 with self.subTest(model=model, marker=with_marker):
                     payload = self._history_payload(model)
                     payload['input'].insert(0, self._reasoning_item())
@@ -133,14 +133,14 @@ class HistoryPortabilityTests(unittest.TestCase):
                     payload = prepare_tools(payload)[0]
                     self.assertEqual(
                         [item for item in payload['input'] if item.get('type') == 'reasoning'], [])
-            after = self._history_payload('deepseek/deepseek-v4.1-flash')
+            after = self._history_payload('deepseek/deepseek-v4.1-flash-1017')
             after['input'].insert(0, marker)
             after['input'].insert(1, self._reasoning_item())
             after = prepare_tools(after)[0]
             self.assertEqual(
                 [item.get('id') for item in after['input'] if item.get('type') == 'reasoning'],
                 ['rs_tmp_probe'])
-            native = self._history_payload('deepseek/deepseek-v4.1-flash')
+            native = self._history_payload('deepseek/deepseek-v4.1-flash-1017')
             native['input'].insert(0, self._reasoning_item())
             native = prepare_tools(native)[0]
             self.assertEqual(
@@ -162,7 +162,7 @@ class HistoryPortabilityTests(unittest.TestCase):
 
             portable = wire('meta/muse-spark-1.3-contributor')
             self.assertEqual([i for i in portable['input'] if i.get('type') == 'reasoning'], [])
-            native = wire('deepseek/deepseek-v4.1-flash')
+            native = wire('deepseek/deepseek-v4.1-flash-1017')
             self.assertEqual(len([i for i in native['input'] if i.get('type') == 'reasoning']), 1)
 
         def test_portable_turn_replays_a_readable_reasoning_summary(self):
@@ -188,7 +188,7 @@ class HistoryPortabilityTests(unittest.TestCase):
             # refused the turn ("incomplete parallel tool-call group").
             marker = {'type': 'message', 'role': 'developer', 'content': [
                 {'type': 'input_text', 'text': '<model_switch> hop'}]}
-            payload = self._history_payload('deepseek/deepseek-v4.1-flash')
+            payload = self._history_payload('deepseek/deepseek-v4.1-flash-1017')
             payload['input'] = [
                 {'type': 'function_call', 'name': 'exec', 'call_id': 'c0',
                  'arguments': '{"value":"a"}'},
@@ -221,7 +221,7 @@ class HistoryPortabilityTests(unittest.TestCase):
             # astride the search pair keeps the note deferred too.
             marker = {'type': 'message', 'role': 'developer', 'content': [
                 {'type': 'input_text', 'text': '<model_switch> hop'}]}
-            payload = self._history_payload('deepseek/deepseek-v4.1-flash')
+            payload = self._history_payload('deepseek/deepseek-v4.1-flash-1017')
             payload['input'] = [
                 {'type': 'apply_patch_call', 'call_id': 'a1',
                  'status': 'completed',
@@ -256,7 +256,7 @@ class HistoryPortabilityTests(unittest.TestCase):
             # marker is dropped, the current model's own reasoning after it
             # reaches the wire (blob stripped, text kept). Proven to fail on
             # 48c00a0, where both items were dropped.
-            payload = {'model': 'deepseek/deepseek-v4.1-flash',
+            payload = {'model': 'deepseek/deepseek-v4.1-flash-1017',
                        'tools': [{'type': 'function', 'name': 'exec',
                                   'parameters': {'type': 'object'}}],
                        'input': [dict(self._reasoning_item(), id='rs_foreign'),
@@ -273,7 +273,7 @@ class HistoryPortabilityTests(unittest.TestCase):
                              [{'type': 'reasoning_text', 'text': 'prior model thinking'}])
 
         def test_double_switch_uses_the_last_marker(self):
-            payload = self._history_payload('deepseek/deepseek-v4.1-flash')
+            payload = self._history_payload('deepseek/deepseek-v4.1-flash-1017')
             payload['input'] = [dict(self._reasoning_item(), id='rs_first'),
                                 self._marker('<model_switch> one'),
                                 dict(self._reasoning_item(), id='rs_second'),
@@ -299,7 +299,7 @@ class HistoryPortabilityTests(unittest.TestCase):
             # call keeps its output and nothing is rewritten.
             search_output = {'type': 'tool_search_output', 'call_id': 's9',
                              'execution': 'client', 'status': 'completed', 'tools': []}
-            payload = self._history_payload('deepseek/deepseek-v4.1-flash')
+            payload = self._history_payload('deepseek/deepseek-v4.1-flash-1017')
             payload['input'] = [
                 {'type': 'function_call', 'name': 'exec', 'call_id': 'c0',
                  'arguments': '{"value":"a"}'},
@@ -318,7 +318,7 @@ class HistoryPortabilityTests(unittest.TestCase):
             # Known limit, pinned: a reasoning item between the group's first
             # call and the marker lands on the native side with its blob
             # stripped at the wire (see test_items_after_the_last_marker).
-            payload2 = self._history_payload('deepseek/deepseek-v4.1-flash')
+            payload2 = self._history_payload('deepseek/deepseek-v4.1-flash-1017')
             payload2['input'] = [
                 {'type': 'function_call', 'name': 'exec', 'call_id': 'c0',
                  'arguments': '{"value":"a"}'},
@@ -334,7 +334,7 @@ class HistoryPortabilityTests(unittest.TestCase):
             # The straddle variant with the discovery call issued before the
             # parallel call: the boundary moves back past both calls, so the
             # discovery output on the native side keeps its mate.
-            payload = self._history_payload('deepseek/deepseek-v4.1-flash')
+            payload = self._history_payload('deepseek/deepseek-v4.1-flash-1017')
             payload['input'] = [
                 {'type': 'tool_search_call', 'call_id': 's1', 'execution': 'client',
                  'arguments': {'query': 'echo'}},

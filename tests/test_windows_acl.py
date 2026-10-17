@@ -1,9 +1,4 @@
-"""Plan 116 Stage 2: Windows key ACL hardening, proven offline.
-
-Write-side protect_file restricts parent-first then verifies; read-side
-winacl.check refuses widened ACLs mirroring the POSIX gate. Fake icacls
-and whoami only; no Windows machine, no real ACL, no secrets.
-"""
+"""Windows key ACL contracts with synthetic structured API responses."""
 import importlib.util
 import json
 import os
@@ -60,109 +55,126 @@ def _ok_acl(user='CORP\\cyril'):
     return SimpleNamespace(returncode=0, stdout=user + '\n', stderr='')
 
 
-OWNER_ONLY = ('C:\\keys\\openrouter.key\n'
-              '   CORP\\cyril:(F)\n'
-              'Successfully processed 1 files; Failed processing 0 files\n')
-WIDENED = ('C:\\keys\\openrouter.key\n'
-           '   BUILTIN\\Users:(R)\n'
-           '   CORP\\cyril:(F)\n'
-           'Successfully processed 1 files; Failed processing 0 files\n')
+SID = 'S-1-5-21-1-2-3-1001'
+
+
+def _rule(sid=SID, kind=0, mask=2032127, flags=0):
+    return {'sid': sid, 'type': kind, 'mask': mask, 'flags': flags}
+
+
+def _acl(rules=None, **extra):
+    return dict(user=SID, owner=SID, dacl=True,
+                rules=[_rule()] if rules is None else rules, **extra)
+
+
+def _structured(doc, calls=None):
+    def run(cmd, **kwargs):
+        if calls is not None:
+            calls.append((list(cmd), kwargs))
+        if cmd[0] == 'whoami':
+            return _ok_acl()  # Legacy scheduler identity is outside this slice.
+        if cmd[0] == 'icacls' and '/grant:r' in cmd:
+            return SimpleNamespace(returncode=0, stdout='', stderr='')
+        return SimpleNamespace(returncode=0, stdout=json.dumps(doc), stderr='')
+    return run
 
 
 class WinAclCheckTests(unittest.TestCase):
     def setUp(self):
         winacl.reset()  # verdicts are cached per file across calls
 
-    def _counting(self, responses):
-        calls = []
-        inner = _ok(responses)
-
-        def run(cmd, **kwargs):
-            calls.append(list(cmd))
-            return inner(cmd, **kwargs)
-        return run, calls
-
     def test_the_verdict_is_cached_for_a_short_interval(self):
-        run, calls = self._counting(
-            [(['icacls'], SimpleNamespace(returncode=0, stdout=OWNER_ONLY, stderr='')),
-             (['whoami'], _ok_acl())])
+        calls = []
+        run = _structured(_acl(), calls)
         winacl.check('C:\\keys\\openrouter.key', run=run, _now=100.0)
         winacl.check('C:\\keys\\openrouter.key', run=run, _now=100.0 + 5)
-        self.assertEqual(len(calls), 2, 'one icacls plus one whoami, then cached')
+        self.assertEqual(len(calls), 1, 'one structured query, then cached')
         winacl.check('C:\\keys\\openrouter.key', run=run,
                      _now=100.0 + winacl.VERDICT_TTL_S + 1)
-        self.assertEqual(len(calls), 4, 'the cache expires and re-checks')
+        self.assertEqual(len(calls), 2, 'the cache expires and re-checks')
 
     def test_a_cached_refusal_is_raised_without_respawning(self):
-        run, calls = self._counting(
-            [(['icacls'], SimpleNamespace(returncode=0, stdout=WIDENED, stderr='')),
-             (['whoami'], _ok_acl())])
+        calls = []
+        run = _structured(_acl([_rule('S-1-1-0')]), calls)
         with self.assertRaisesRegex(SystemExit, 'readable by'):
             winacl.check('C:\\keys\\openrouter.key', run=run, _now=200.0)
         with self.assertRaisesRegex(SystemExit, 'readable by'):
             winacl.check('C:\\keys\\openrouter.key', run=run, _now=200.0 + 1)
-        self.assertEqual(len(calls), 2, 'the refusal is cached too')
+        self.assertEqual(len(calls), 1, 'the refusal is cached too')
 
-    def test_owner_only_acl_passes(self):
-        run = _ok([(['icacls'], SimpleNamespace(returncode=0, stdout=OWNER_ONLY, stderr='')),
-                   (['whoami'], _ok_acl())])
-        winacl.check('C:\\keys\\openrouter.key', run=run)
+    def test_sids_allow_equivalent_english_and_french_system_rules(self):
+        for label, owner in (('NT AUTHORITY\\SYSTEM', SID), ('AUTORITE NT\\Système', SID),
+                             ('SYSTEM', 'S-1-5-18'), ('Administrateurs', 'S-1-5-32-544')):
+            rules = [_rule(), dict(_rule('S-1-5-18'), name=label),
+                     _rule('S-1-5-32-544'), _rule('S-1-3-4'), _rule('S-1-1-0', kind=1)]
+            winacl.check('C:\\keys\\openrouter.key', run=_structured(dict(_acl(rules), owner=owner)))
 
-    def test_widened_acl_is_refused(self):
-        run = _ok([(['icacls'], SimpleNamespace(returncode=0, stdout=WIDENED, stderr='')),
-                   (['whoami'], _ok_acl())])
-        with self.assertRaisesRegex(SystemExit, 'readable by'):
-            winacl.check('C:\\keys\\openrouter.key', run=run)
+    def test_broad_or_foreign_grants_and_foreign_owner_are_refused(self):
+        for sid in ('S-1-1-0', 'S-1-5-11', 'S-1-5-32-545', 'S-1-5-21-4-5-6-1001'):
+            with self.subTest(sid=sid), self.assertRaisesRegex(SystemExit, 'readable by'):
+                winacl.check('key', run=_structured(_acl([_rule(), _rule(sid)])))
+        doc = _acl([_rule('S-1-3-4')])
+        doc['owner'] = 'S-1-5-21-4-5-6-1001'
+        with self.assertRaisesRegex(SystemExit, 'owner'):
+            winacl.check('key', run=_structured(doc))
 
-    def test_same_line_ace_granting_non_owner_is_refused(self):
-        # Real icacls prints the first ACE on the filename line itself; a
-        # path-prefix skip would discard it and pass vacuously.
-        same_line = ('C:\\keys\\openrouter.key BUILTIN\\Users:(R)\n'
-                     '   CORP\\cyril:(F)\n'
-                     'Successfully processed 1 files; Failed processing 0 files\n')
-        run = _ok([(['icacls'], SimpleNamespace(returncode=0, stdout=same_line, stderr='')),
-                   (['whoami'], _ok_acl())])
-        with self.assertRaisesRegex(SystemExit, 'readable by'):
-            winacl.check('C:\\keys\\openrouter.key', run=run)
+    def test_malformed_null_and_unknown_rules_fail_closed(self):
+        invalid = [None, {}, dict(_acl(), dacl=False), dict(_acl(), rules=[]),
+                   dict(_acl(), owner='CORP\\cyril'), dict(_acl(), user=''),
+                   dict(_acl(), rules=[_rule(kind=9)]), dict(_acl(), rules=[_rule(mask='F')]),
+                   dict(_acl(), rules=[_rule(flags=64)]), dict(_acl(), rules=[_rule(mask=True)]),
+                   dict(_acl(), rules=[_rule(mask=512)]), dict(_acl(), user=SID.replace('-1-', '-01-', 1))]
+        for doc in invalid:
+            with self.subTest(doc=doc), self.assertRaisesRegex(SystemExit, 'cannot verify'):
+                winacl.check('key', run=_structured(doc))
 
-    def test_same_name_cross_domain_ace_is_refused(self):
-        # A bare-name suffix rule would accept OTHERDOMAIN\\cyril for a
-        # CORP\\cyril owner; only the full whoami identity passes.
-        cross = ('C:\\keys\\openrouter.key\n'
-                 '   OTHERDOMAIN\\cyril:(F)\n'
-                 '   CORP\\cyril:(F)\n'
-                 'Successfully processed 1 files; Failed processing 0 files\n')
-        run = _ok([(['icacls'], SimpleNamespace(returncode=0, stdout=cross, stderr='')),
-                   (['whoami'], _ok_acl())])
-        with self.assertRaisesRegex(SystemExit, 'readable by'):
-            winacl.check('C:\\keys\\openrouter.key', run=run)
+    def test_empty_or_failed_query_is_refused(self):
+        for rc in (0, 1):
+            run = lambda *a, **kw: SimpleNamespace(returncode=rc, stdout='', stderr='')
+            with self.subTest(rc=rc), self.assertRaisesRegex(SystemExit, 'cannot verify'):
+                winacl.check('key', run=run)
 
-    def test_os_aces_pass_but_broad_groups_are_refused(self):
-        # Default profiles/temp dirs inherit OS ACEs; like root with POSIX
-        # 0600, SYSTEM/Administrators can read everything already, and OWNER
-        # RIGHTS (S-1-3-4) grants only the object's current owner, so none
-        # of them is exposure. Broad pseudo-groups still refuse.
-        owned = ('C:\\keys\\openrouter.key NT AUTHORITY\\SYSTEM:(F)\n'
-                 '   BUILTIN\\Administrators:(F)\n'
-                 '   OWNER RIGHTS:(F)\n'
-                 '   CORP\\cyril:(F)\n'
-                 'Successfully processed 1 files; Failed processing 0 files\n')
-        run = _ok([(['icacls'], SimpleNamespace(returncode=0, stdout=owned, stderr='')),
-                   (['whoami'], _ok_acl())])
-        winacl.check('C:\\keys\\openrouter.key', run=run)
-        wide = ('C:\\keys\\openrouter.key\n'
-                '   NT AUTHORITY\\Authenticated Users:(R)\n'
-                '   CORP\\cyril:(F)\n'
-                'Successfully processed 1 files; Failed processing 0 files\n')
-        run = _ok([(['icacls'], SimpleNamespace(returncode=0, stdout=wide, stderr='')),
-                   (['whoami'], _ok_acl())])
-        with self.assertRaisesRegex(SystemExit, 'readable by'):
-            winacl.check('C:\\keys\\openrouter.key', run=run)
+    def test_unreadable_or_timed_out_query_is_refused(self):
+        for error in (OSError('unavailable'), winacl.subprocess.TimeoutExpired('powershell', 15)):
+            with self.subTest(error=error), self.assertRaisesRegex(SystemExit, 'cannot verify'):
+                winacl.check('key', run=mock.Mock(side_effect=error))
 
-    def test_icacls_failure_is_refused(self):
-        run = _ok([(['icacls'], SimpleNamespace(returncode=1, stdout='', stderr='Access denied'))])
-        with self.assertRaisesRegex(SystemExit, 'cannot verify'):
-            winacl.check('C:\\keys\\openrouter.key', run=run)
+    def test_path_is_json_data_and_default_runner_is_windowless(self):
+        path = "C:\\keys\\é [$value]'; (test) &.key"
+        with mock.patch.object(winacl.subprocess, 'run', return_value=_structured(_acl())(['powershell'])) as run:
+            winacl.check(path)
+        command, options = run.call_args.args[0], run.call_args.kwargs
+        self.assertNotIn(path, ' '.join(command))
+        self.assertEqual(json.loads(options['input']), {'path': path})
+        self.assertEqual(options['creationflags'], getattr(winacl.subprocess, 'CREATE_NO_WINDOW', 0))
+        self.assertGreater(options['timeout'], 0)
+
+    def test_acl_child_removes_powershell7_module_path_without_changing_parent(self):
+        def powershell(command, **options):
+            environment = options.get('env', os.environ)
+            inherited = any(key.upper() == 'PSMODULEPATH' for key in environment)
+            # Windows PowerShell cannot load Get-Acl from PowerShell 7 modules.
+            if json.loads(options['input'])['path'] is not None and inherited:
+                return SimpleNamespace(returncode=1, stdout='', stderr='module load failed')
+            return _structured(_acl())(command)
+
+        for spelling in ('PSModulePath', 'PSMODULEPATH', 'psmodulepath', None):
+            environment = {'SystemRoot': r'C:\Windows', 'PATH': 'system-tools',
+                           'KEEP_SENTINEL': 'preserve-this-value'}
+            if spelling:
+                environment[spelling] = r'C:\Program Files\PowerShell\7\Modules'
+            with self.subTest(spelling=spelling), \
+                    mock.patch.dict(os.environ, environment, clear=True), \
+                    mock.patch.object(winacl.subprocess, 'run', side_effect=powershell) as run:
+                before = dict(os.environ)
+                self.assertEqual(winacl.current_sid(), SID)
+                winacl.check(r'C:\synthetic\owned', fresh=True)
+                self.assertEqual(dict(os.environ), before)
+                expected = {key: value for key, value in before.items()
+                            if key.upper() != 'PSMODULEPATH'}
+                self.assertEqual(run.call_count, 2)
+                for call in run.call_args_list:
+                    self.assertEqual(dict(call.kwargs.get('env', os.environ)), expected)
 
 
 class WinProtectTests(unittest.TestCase):
@@ -171,62 +183,49 @@ class WinProtectTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / 'sub' / 'openrouter.key'
 
-            def fake_run(cmd, **kwargs):
-                order.append(list(cmd))
-                if cmd[:1] == ['icacls'] and len(cmd) > 2 and cmd[2].startswith('/inheritance'):
-                    return SimpleNamespace(returncode=0, stdout='', stderr='')
-                if cmd[:1] == ['icacls']:
-                    queried = cmd[1]
-                    return SimpleNamespace(
-                        returncode=0,
-                        stdout='%s\n   CORP\\cyril:(F)\n'
-                               'Successfully processed 1 files; Failed processing 0 files\n'
-                               % queried,
-                        stderr='')
-                if cmd[:1] == ['whoami']:
-                    return _ok_acl()
-                raise AssertionError('unexpected command: %r' % (cmd,))
-
-            backend.protect_file(target, run=fake_run)
-            grants = [c for c in order if c[:1] == ['icacls'] and '/grant:r' in c]
+            backend.protect_file(target, run=_structured(_acl(), order))
+            grants = [c for c, _ in order if c[:1] == ['icacls'] and '/grant:r' in c]
             self.assertEqual(len(grants), 2)
             # Parent restricted before the file grant: never widen-then-narrow.
             self.assertIn('sub', grants[0][1])
             self.assertTrue(target.exists())
 
-    def test_grants_name_the_resolved_user_never_a_literal(self):
+    def test_grants_use_the_current_sid_without_username_fallback(self):
         seen = []
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / 'openrouter.key'
 
-            def fake_run(cmd, **kwargs):
-                seen.append(list(cmd))
-                if cmd[:1] == ['icacls'] and '/grant:r' in cmd:
-                    return SimpleNamespace(returncode=0, stdout='', stderr='')
-                if cmd[:1] == ['icacls']:
-                    return SimpleNamespace(
-                        returncode=0,
-                        stdout='%s\n   testuser:(F)\nSuccessfully processed 1 files\n' % cmd[1],
-                        stderr='')
-                if cmd[:1] == ['whoami']:
-                    return SimpleNamespace(returncode=0, stdout='testuser\n', stderr='')
-                raise AssertionError('unexpected command: %r' % (cmd,))
-
             with mock.patch.dict(os.environ, {'USERNAME': 'testuser'}):
-                backend.protect_file(target, run=fake_run)
-            grants = [c for c in seen if '/grant:r' in c]
+                backend.protect_file(target, run=_structured(_acl(), seen))
+            grants = [c for c, _ in seen if '/grant:r' in c]
             self.assertEqual(len(grants), 2)
             # Parent: inheritable owner-only grant, so files the router
             # writes beside the key later are born owner-only. File: plain.
             self.assertEqual(grants[0][grants[0].index('/grant:r') + 1],
-                             'testuser:(OI)(CI)F')
+                             '*' + SID + ':(OI)(CI)F')
             self.assertEqual(grants[1][grants[1].index('/grant:r') + 1],
-                             'testuser:F')
+                             '*' + SID + ':F')
+            refused = []
+            with mock.patch.dict(os.environ, {'USERNAME': 'testuser'}), \
+                    self.assertRaisesRegex(SystemExit, 'cannot verify'):
+                backend.protect_file(target, run=_structured({'user': ''}, refused))
+            self.assertFalse(any(command[0] == 'icacls' for command, _ in refused))
+
+    def test_protect_rechecks_a_cached_pass_after_granting(self):
+        doc = _acl()
+        run = _structured(doc)
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / 'key'
+            backend._winacl.check(target, run=run)
+            doc['rules'].append(_rule('S-1-1-0'))
+            with self.assertRaisesRegex(SystemExit, 'readable by'):
+                backend.protect_file(target, run=run)
 
     def test_protect_failure_leaves_no_silent_exposure(self):
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / 'openrouter.key'
             run = _ok([(['icacls'], SimpleNamespace(returncode=1, stdout='', stderr='denied')),
+                       (['powershell'], _structured(_acl())(['powershell'])),
                        (['whoami'], _ok_acl())])
             with self.assertRaisesRegex(SystemExit, 'cannot restrict|cannot protect'):
                 backend.protect_file(target, run=run)
@@ -237,13 +236,9 @@ class WinBackendShapeTests(unittest.TestCase):
     # tests/test_windows_backend.py with the Stage 3 implementation; only
     # the failure-path pins that have no counterpart there stay here.
     def test_uninstall_failure_names_the_surviving_task(self):
-        def fake_run(cmd, **kwargs):
-            if 'CodexMixedModelRouterUpdate' in cmd:
-                return SimpleNamespace(returncode=1, stdout='', stderr='not found')
-            return SimpleNamespace(returncode=0, stdout='', stderr='')
-
+        from tests.test_windows_backend import _fake_run
         with self.assertRaisesRegex(SystemExit, 'CodexMixedModelRouterUpdate'):
-            backend.Backend(service, fake_run).uninstall('/home/x')
+            backend.Backend(service, _fake_run(fail=(backend.UPDATE_TASK,))).uninstall('/home/x')
 
     def test_failed_state_protection_keeps_a_pre_existing_token(self):
         # Gap 0 (PR 55 review): a failed state-file ACL check unlinks only
@@ -304,26 +299,16 @@ class WinBackendShapeTests(unittest.TestCase):
         # the directory, verified, nothing created inside it.
         seen = []
         with tempfile.TemporaryDirectory() as tmp:
-            def fake_run(cmd, **kwargs):
-                seen.append(list(cmd))
-                if cmd[:1] == ['icacls'] and '/grant:r' in cmd:
-                    return SimpleNamespace(returncode=0, stdout='', stderr='')
-                if cmd[:1] == ['icacls']:
-                    return SimpleNamespace(
-                        returncode=0,
-                        stdout='%s CORP\\cyril:(OI)(CI)(F)\nSuccessfully processed 1 files\n' % cmd[1],
-                        stderr='')
-                return _ok_acl()
-            backend.protect_file(tmp, run=fake_run)
-        grants = [c for c in seen if '/grant:r' in c]
+            backend.protect_file(tmp, run=_structured(_acl(), seen))
+        grants = [c for c, _ in seen if '/grant:r' in c]
         self.assertEqual([(c[1], c[c.index('/grant:r') + 1]) for c in grants],
-                         [(tmp, 'CORP\\cyril:(OI)(CI)F')])
-        self.assertEqual(len(seen), 4)  # whoami, grant, verify (icacls + whoami)
+                         [(tmp, '*' + SID + ':(OI)(CI)F')])
+        self.assertEqual(len(seen), 3)  # SID query, grant, structured verification
 
     def test_install_hardens_the_home_before_minting_the_state_file(self):
-        # The state file carries the loopback token: it must be born inside
-        # an already-restricted home, then verified, before the backend runs.
+        # Protect the home before creating the token, then verify it before service startup.
         from tests.install_fixtures import _craft_bundle, _ok_run, _patch_attrs, install_mod
+        from tests.fakes import signed_static_fetch
         blob, latest = _craft_bundle('1.0.0')
         events = []
 
@@ -347,19 +332,19 @@ class WinBackendShapeTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
-            fetch = lambda url: blob if url.endswith('.tar.gz') else json.dumps(latest).encode()  # noqa: E731
+            fetch, _, public = signed_static_fetch(latest, blob)
             _patch_attrs(self, run=_ok_run, wait_version=lambda s, v: {'version': v},
                          self_test=lambda *a: None, write_catalogue=lambda *a: None)
             args = install_mod.build_parser().parse_args(
                 ['--home', str(home), '--client', 'none'])
             with mock.patch.object(install_mod, 'platform_backend', return_value=StubBackend()), \
+                    mock.patch.object(install_mod._updater, '_FEED_VERIFY_KEY', public), \
                     mock.patch.object(install_mod, 'find_python', return_value=sys.executable), \
                     mock.patch.dict(os.environ, {'OPENROUTER_API_KEY': 'env-key-for-test', 'ROUTER_NO_KEY_WINDOW': '1'}):
                 self.assertEqual(install_mod.do_install(args, _fetch=fetch), 0)
         self.assertEqual(events, [('protect', 'home', False),
                                   ('protect', 'mixed-router-state.json', None),
                                   ('install',)])
-
 
 
 if __name__ == '__main__':

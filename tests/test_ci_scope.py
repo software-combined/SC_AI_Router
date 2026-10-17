@@ -42,6 +42,7 @@ class InstallerScopeTests(unittest.TestCase):
                      'config/installer-python-surface.txt',
                      'tests/test_install_config.py', 'tests/test_windows_acl.py',
                      'tests/_platform.py',
+                     'tests/windows_native_fixture.py',
                      'ai_router/key_dialog.py', 'ai_router/key_prompt.py',
                      'tools/check_installer_python39.py'):
             with self.subTest(path=path):

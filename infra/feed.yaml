@@ -38,6 +38,35 @@ Parameters:
       (Plan 145), passed at deploy time. No default (Plan 160), because the
       ARN carries the account id.
     AllowedPattern: '^arn:aws[A-Za-z-]*:secretsmanager:[a-z0-9-]+:\d{12}:secret:.+$'
+  DownloadKeyGroupId:
+    Type: String
+    Default: ''
+    Description: Reviewed staff-access key group; empty preserves the legacy feed.
+    AllowedPattern: '^$|[a-zA-Z0-9-]+$'
+  DownloadApiHost:
+    Type: String
+    Default: ''
+    Description: Staff-access HTTP API hostname, without scheme or path.
+    AllowedPattern: '^$|[a-z0-9]+\.execute-api\.[a-z0-9-]+\.amazonaws\.com$'
+  PrivateUpdates:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['false', 'true']
+    Description: Close legacy public downloads only after beta, stable and recovery proof.
+Rules:
+  DownloadAccessPair:
+    Assertions:
+      - Assert: !Or
+          - !And [!Equals [!Ref DownloadKeyGroupId, ''], !Equals [!Ref DownloadApiHost, '']]
+          - !And [!Not [!Equals [!Ref DownloadKeyGroupId, '']], !Not [!Equals [!Ref DownloadApiHost, '']]]
+        AssertDescription: Supply both staff-access outputs, or neither.
+      - Assert: !Or
+          - !Equals [!Ref PrivateUpdates, 'false']
+          - !Not [!Equals [!Ref DownloadKeyGroupId, '']]
+        AssertDescription: Private updates require staff-access configuration.
+Conditions:
+  StaffAccess: !Not [!Equals [!Ref DownloadKeyGroupId, '']]
+  ProtectUpdates: !Equals [!Ref PrivateUpdates, 'true']
 Resources:
   FeedBucket:
     Type: AWS::S3::Bucket
@@ -68,6 +97,12 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
+          - Sid: NativeBuildsNeverThroughCloudFront
+            Effect: Deny
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub ${FeedBucket.Arn}/native-builds/*
           - Sid: ReadOnlyThroughThisDistribution
             Effect: Allow
             Principal:
@@ -107,11 +142,91 @@ Resources:
             OriginAccessControlId: !GetAtt FeedOriginAccessControl.Id
             S3OriginConfig:
               OriginAccessIdentity: ''
+          - !If
+            - StaffAccess
+            - Id: download-api
+              DomainName: !Ref DownloadApiHost
+              CustomOriginConfig:
+                OriginProtocolPolicy: https-only
+                OriginSSLProtocols: [TLSv1.2]
+            - !Ref AWS::NoValue
         DefaultCacheBehavior:
           TargetOriginId: feed-bucket
           ViewerProtocolPolicy: redirect-to-https
           CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
           Compress: true
+          TrustedKeyGroups: !If [ProtectUpdates, [!Ref DownloadKeyGroupId], !Ref AWS::NoValue]
+        CacheBehaviors:
+          - !If
+            - StaffAccess
+            - PathPattern: /download-access
+              TargetOriginId: download-api
+              ViewerProtocolPolicy: https-only
+              AllowedMethods: [GET, HEAD, OPTIONS, PUT, PATCH, POST, DELETE]
+              CachedMethods: [GET, HEAD]
+              CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+              OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+            - !Ref AWS::NoValue
+          - PathPattern: /install/*.json
+            TargetOriginId: feed-bucket
+            ViewerProtocolPolicy: https-only
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+            FunctionAssociations:
+              - EventType: viewer-request
+                FunctionARN: !GetAtt InstallPageRouting.FunctionARN
+            TrustedKeyGroups: !If [StaffAccess, [!Ref DownloadKeyGroupId], !Ref AWS::NoValue]
+          - PathPattern: /install/*
+            TargetOriginId: feed-bucket
+            ViewerProtocolPolicy: https-only
+            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+            ResponseHeadersPolicyId: !Ref InstallPageHeaders
+            FunctionAssociations:
+              - EventType: viewer-request
+                FunctionARN: !GetAtt InstallPageRouting.FunctionARN
+          - PathPattern: /installers/*
+            TargetOriginId: feed-bucket
+            ViewerProtocolPolicy: https-only
+            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+            FunctionAssociations:
+              - EventType: viewer-request
+                FunctionARN: !GetAtt InstallPageRouting.FunctionARN
+            TrustedKeyGroups: !If [StaffAccess, [!Ref DownloadKeyGroupId], !Ref AWS::NoValue]
+
+  InstallPageRouting:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: !Sub '${AWS::StackName}-install-page'
+      AutoPublish: true
+      FunctionConfig:
+        Comment: Public sign-in settings and a permanent installer page.
+        Runtime: cloudfront-js-2.0
+      FunctionCode: !Sub
+        - |
+          function handler(event) {
+            var request = event.request;
+            if (!${StaffDownloads} && (request.uri.indexOf('/installers/') === 0 || /^\/install\/.*\.json$/.test(request.uri))) {
+              return {statusCode: 403, statusDescription: 'Forbidden', headers: {'cache-control': {value: 'no-store'}}};
+            }
+            if (request.uri === '/install/') request.uri = '/install/index.html';
+            return request;
+          }
+        - StaffDownloads: !If [StaffAccess, 'true', 'false']
+
+  InstallPageHeaders:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub '${AWS::StackName}-install-page'
+        SecurityHeadersConfig:
+          ContentTypeOptions: {Override: true}
+          FrameOptions: {FrameOption: DENY, Override: true}
+          ReferrerPolicy: {ReferrerPolicy: no-referrer, Override: true}
+          ContentSecurityPolicy:
+            Override: true
+            ContentSecurityPolicy: >-
+              default-src 'none'; script-src 'self'; style-src 'self';
+              img-src 'self'; connect-src 'self' https://login.microsoftonline.com;
+              base-uri 'none'; form-action 'none'; frame-ancestors 'none'
 
   FeedDns:
     Type: AWS::Route53::RecordSetGroup
@@ -166,6 +281,9 @@ Resources:
                 Action: s3:PutObject
                 Resource:
                   - !Sub ${FeedBucket.Arn}/bundles/*
+                  - !Sub ${FeedBucket.Arn}/installers/*
+                  - !Sub ${FeedBucket.Arn}/install/*
+                  - !Sub ${FeedBucket.Arn}/native-builds/*
                   - !Sub ${FeedBucket.Arn}/stable/latest.json
                   - !Sub ${FeedBucket.Arn}/stable/latest.json.sig
                   - !Sub ${FeedBucket.Arn}/stable/models.json
@@ -197,7 +315,9 @@ Resources:
                 Action: s3:ListBucket
                 Resource: !GetAtt FeedBucket.Arn
               - Effect: Allow
-                Action: cloudfront:CreateInvalidation
+                Action:
+                  - cloudfront:CreateInvalidation
+                  - cloudfront:GetDistributionConfig
                 Resource: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}
               - Effect: Allow
                 Action: cloudformation:DescribeStacks

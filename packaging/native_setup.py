@@ -1,0 +1,263 @@
+"""Graphical setup and maintenance, running entirely on the bundled Python."""
+import argparse
+import json
+import os
+import subprocess
+import sys
+import time
+import webbrowser
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from native_payload import install_arguments, load, metadata, retained
+
+ACTIONS = (('resume', 'Set up or repair'), ('status', 'Check setup'),
+           ('add', 'Connect another assistant'), ('key', 'Replace model key'),
+           ('signin', 'Sign in for downloads'), ('remove', 'Remove router'))
+ASSISTANT_DOWNLOADS = {'codex': 'https://chatgpt.com/download/',
+                       'claude': 'https://claude.com/download'}
+
+
+def read_json(path):
+    try:
+        doc = json.loads(Path(path).read_text())
+    except FileNotFoundError:
+        return {}
+    if not isinstance(doc, dict):
+        raise ValueError('The saved setup cannot be read. Contact Software Combined IT.')
+    return doc
+
+
+def environment(resources):
+    """Find the packaged wrapper; it scopes GTK dependencies to its child."""
+    env = dict(os.environ)
+    gui = Path(resources) / 'gui'
+    if gui.is_dir():
+        env['PATH'] = str(gui / 'bin') + os.pathsep + env.get('PATH', '')
+    return env
+
+
+def run_installer(resources, home, flags=(), run=subprocess.run):
+    state = read_json(Path(home) / 'mixed-router-state.json')
+    repair = '--setup' in flags
+    args = install_arguments(resources, home, state, key=repair)
+    # Flags from the graphical chooser replace, rather than combine with,
+    # the previous selection. No unattended fallback can attach Codex.
+    if '--clients' in flags:
+        if '--choose-clients' in args:
+            args.remove('--choose-clients')
+        if '--clients' in args:
+            index = args.index('--clients')
+            del args[index:index + 2]
+    args += [flag for flag in flags if flag != '--setup']
+    if not repair:
+        attached = load('codex_config').read_receipt(home).get('clients', {})
+        if '--desktop' not in args and 'claude-desktop' in attached:
+            args.append('--desktop')
+    env = environment(resources)
+    env.update(ROUTER_NO_KEY_WINDOW='1', ROUTER_NO_CLIENT_CHOOSER='1')
+    return run(args, capture_output=True, text=True, timeout=900, env=env)
+
+
+def status(resources, home, run=subprocess.run):
+    doc = metadata(resources)
+    python = Path(resources) / 'runtime' / doc['runtime_exec']
+    source = Path(resources) / 'router'
+    result = run([str(python), str(source / 'packaging/install.py'),
+                  '--status', '--json', '--home', str(home)], capture_output=True,
+                 text=True, timeout=30, env=environment(resources))
+    if result.returncode:
+        raise ValueError('The router status could not be checked.')
+    facts = json.loads(result.stdout)
+    progress = read_json(Path(home) / 'setup-progress.json')
+    facts['onboarding'] = load('native_readiness').check(home, source, facts, progress, run)
+    facts['downloads'] = load('download_auth').status(home)
+    if not facts['downloads']['access_ready']:
+        facts['onboarding']['ready'] = False
+    return facts
+
+
+def _select(dialog):
+    picked = dialog.dialog.ask()
+    if picked is None or picked is dialog.dialog.CANCELLED:
+        return None
+    clients, desktop = dialog.dialog.plan(*picked)
+    flags = ['--clients', clients]
+    if desktop:
+        flags.append('--desktop')
+    return flags
+
+
+def _missing_assistant(flags, dialog):
+    skills = load('agent_skills')
+    import shutil
+    selected = flags[flags.index('--clients') + 1]
+    clients = ['codex', 'claude'] if selected == 'both' else [selected]
+    if '--desktop' in flags and 'claude' not in clients:
+        clients.append('claude')
+    for client in clients:
+        if client == 'none' or shutil.which(client, path=skills.client_path()):
+            continue
+        label = 'Codex' if client == 'codex' else 'Claude Code'
+        if client == 'claude' and '--desktop' in flags:
+            label = 'Claude Code setup tools from Claude desktop’s Install page'
+        if dialog.confirm('Install or open %s and sign in first.\n\n'
+                          'Continue opens its download page. Open SCG Router again when it is ready.' % label):
+            webbrowser.open(ASSISTANT_DOWNLOADS[client])
+        return True
+    return False
+
+
+def _key(resources, home, replace=False, run=subprocess.run):
+    state = read_json(Path(home) / 'mixed-router-state.json')
+    if replace:
+        result = run_installer(resources, home, ['--setup'])
+        if result.returncode:
+            raise ValueError('The key window could not be prepared. Try setup again.')
+        state = read_json(Path(home) / 'mixed-router-state.json')
+    setup = state.get('setup', {})
+    if not setup.get('nonce') or setup.get('expires', 0) <= time.time():
+        return
+    doc = metadata(resources)
+    python = Path(resources) / 'runtime' / doc['runtime_exec']
+    url = 'http://127.0.0.1:%s/%s/setup/%s' % (state['port'], state['token'], setup['nonce'])
+    current = (Path(home) / 'current').read_text().strip()
+    release = Path(home) / 'releases' / current
+    result = run([str(python), '-m', 'ai_router.key_prompt', '--stdin',
+                  '--clients', state.get('clients', 'codex')], input=url + '\n',
+                 capture_output=True, text=True, timeout=900, cwd=release,
+                 env=dict(environment(resources), ROUTER_HOME=str(home)))
+    if result.returncode not in (0, 2):
+        raise ValueError('The key window could not finish. Open SCG Router to try again.')
+
+
+def _check(resources, home, dialog):
+    facts = status(resources, home)
+    pending = facts['onboarding']['clients']
+    if not facts.get('serving'):
+        dialog.message('SCG Router needs repair. Open it again and choose Set up or repair.')
+        return
+    if not facts['downloads']['access_ready']:
+        dialog.message('Setup is saved. Sign in for downloads through SCG Router '
+                       'to finish. If sign-in is unavailable, contact Software Combined IT.')
+        return
+    if 'claude-desktop' in pending and _missing_assistant(
+            ['--clients', 'none', '--desktop'], dialog):
+        return
+    if not pending or any(not row['plugins_available'] for row in pending.values()):
+        dialog.message('Your assistant tools still need setup. Open SCG Router and choose Set up or repair.')
+        return
+    progress = read_json(Path(home) / 'setup-progress.json')
+    for client, checks in pending.items():
+        if checks['fresh_session_confirmed'] and checks['reply_seen']:
+            continue
+        label = {'codex': 'Codex', 'claude': 'Claude Code',
+                 'claude-desktop': 'Claude desktop'}[client]
+        if not dialog.confirm(
+                'To finish setup for %s:\n\nQuit and reopen it, then start a new chat. '
+                'Choose an OpenRouter model and send a greeting. Use an enabled SC tool, '
+                'such as SC documentation.\n\n'
+                'Choose Continue only after you receive a reply and the SC tool works.' % label):
+            return
+        if not load('native_readiness').successful_reply(home, progress['started'], client):
+            dialog.message('A successful reply has not reached SCG Router yet. '
+                           'Check your selected model, then open SCG Router and choose Check setup.')
+            return
+        confirmed = progress.setdefault('confirmed_clients', [])
+        if client not in confirmed:
+            confirmed.append(client)
+        load('atomic_write').replace_json(Path(home) / 'setup-progress.json', progress)
+    facts = status(resources, home)
+    dialog.message('Ready. Your assistants are connected and updates are automatic.'
+                   if facts['onboarding']['ready'] else
+                   'Setup is saved. Open SCG Router and choose Check setup to finish.')
+
+
+def onboard(resources, home, action=None):
+    dialog = load('native_dialog')
+    existing = (home / 'current').is_file()
+    action = action or (dialog.choose('What would you like to do?', ACTIONS) if existing else 'resume')
+    if action is None:
+        return 0
+    if action == 'signin':
+        load('download_auth').signin(home)
+        dialog.message('You are signed in for SCG Router downloads.')
+        return 0
+    if action == 'status':
+        _check(resources, home, dialog)
+        return 0
+    if action == 'key':
+        _key(resources, home, replace=True)
+        return 0
+    doc = metadata(resources)
+    if action == 'remove':
+        if not dialog.confirm('Remove SCG Router and restore your assistant settings? '
+                              'Your key and saved setup files will remain on this computer.'):
+            return 0
+        python = resources / 'runtime' / doc['runtime_exec']
+        result = subprocess.run([str(python), str(resources / 'router/packaging/install.py'),
+                                 '--home', str(home), '--uninstall'], capture_output=True,
+                                timeout=300, env=environment(resources))
+        dialog.message('SCG Router was removed.' if not result.returncode else
+                       'SCG Router could not be removed safely. Contact Software Combined IT.')
+        return result.returncode
+    flags = _select(dialog) if not existing or action == 'add' else ['--setup']
+    if flags is None or ('--clients' in flags and _missing_assistant(flags, dialog)):
+        return 0
+    with dialog.Progress() as progress:
+        permanent = retained(resources, home)
+        config = read_json(permanent / 'download-auth.json')
+        if config:
+            load('download_enrolment').accept(home, config)
+        python = permanent / 'runtime' / doc['runtime_exec']
+        load('native_shortcuts').install(home, permanent, python)
+        if not (home / 'channel').exists():
+            load('atomic_write').replace_text(
+                home / 'channel', ('stable' if existing else doc['channel']) + '\n')
+        result = run_installer(permanent, home, flags)
+    if result.returncode:
+        dialog.message('Setup could not finish. '
+                       'Open SCG Router to try again, or contact Software Combined IT.')
+        return 1
+    source = permanent / 'router'
+    load('native_controller').install(home, source)
+    python = permanent / 'runtime' / doc['runtime_exec']
+    load('native_shortcuts').install(home, permanent, python)
+    atomic = load('atomic_write')
+    atomic.replace_json(home / 'setup-progress.json',
+                        {'version': doc['version'], 'started': time.time(), 'confirmed_clients': []})
+    if progress.cancelled:
+        return 0
+    auth = load('download_auth')
+    if (home / 'download-auth.json').is_file() and not auth.status(home)['access_ready']:
+        if not dialog.confirm('Continue opens Microsoft sign-in for SCG Router downloads. '
+                              'Use your work account. Your saved setup will remain if you cancel.'):
+            return 0
+        auth.ensure_access(home, interactive=True)
+    _key(permanent, home)
+    _check(permanent, home, dialog)
+    return 0
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--resources', type=Path, required=True)
+    parser.add_argument('--home', type=Path, default=Path.home() / '.codex/mixed-model-router')
+    parser.add_argument('--status', action='store_true')
+    args = parser.parse_args(argv)
+    resources = args.resources.resolve()
+    try:
+        metadata(resources)
+        os.environ.update(environment(resources))
+        if args.status:
+            print(json.dumps(status(resources, args.home)))
+            return 0
+        return onboard(resources, args.home)
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
+        load('native_dialog').message('Setup needs attention. Open SCG Router to try again, '
+                                      'or contact Software Combined IT.')
+        return 1
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

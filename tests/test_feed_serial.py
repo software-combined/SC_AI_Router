@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest import mock
 from tests._platform import unix_only
 from tests.fakes import static_fetch as _static_fetch
+from tests.fakes import signed_static_fetch
 from tests.install_fixtures import _craft_bundle, _ok_run, _patch_attrs, install_mod
 from tests.test_release import _release_mod
 
@@ -20,6 +21,14 @@ def _unpinned_args(home, *extra):
     """Args with no --feed, so the channel-resolved release feed is used."""
     return install_mod.build_parser().parse_args(
         ['--home', str(home), *extra])
+
+
+def _signed_fetch(test, latest, blob):
+    fetch, _, public = signed_static_fetch(latest, blob)
+    updater = install_mod._updater
+    test.addCleanup(setattr, updater, '_FEED_VERIFY_KEY', updater._FEED_VERIFY_KEY)
+    updater._FEED_VERIFY_KEY = public
+    return fetch
 
 
 def _home_with_serial(tmp, text='9\n'):
@@ -70,12 +79,12 @@ class FeedSerialTests(unittest.TestCase):
             with mock.patch.dict(os.environ, env):
                 self.assertEqual(
                     install_mod.do_install(_unpinned_args(home),
-                                           _fetch=_static_fetch(latest, blob),
+                                           _fetch=_signed_fetch(self, latest, blob),
                                            _run=_ok_run), 0)
             self.assertEqual((home / 'feed-serial').read_text(), '9\n')
             stale = {**latest, 'version': '9.9.9', 'serial': 7}
             with mock.patch.dict(os.environ, env), self.assertRaises(SystemExit):
-                install_mod.do_install(_unpinned_args(home), _fetch=_static_fetch(stale, blob),
+                install_mod.do_install(_unpinned_args(home), _fetch=_signed_fetch(self, stale, blob),
                                        _run=_ok_run)
 
     def test_a_pinned_feed_never_advances_the_release_serial(self):
@@ -122,7 +131,7 @@ class FeedSerialTests(unittest.TestCase):
             # The unattended channel keeps full replay protection.
             with mock.patch.dict(os.environ, env), self.assertRaises(SystemExit) as ctx:
                 install_mod.do_install(_unpinned_args(home),
-                                       _fetch=_static_fetch(latest, blob), _run=_ok_run)
+                                       _fetch=_signed_fetch(self, latest, blob), _run=_ok_run)
             self.assertIn('stale feed serial', str(ctx.exception.code))
 
     def test_version_pin_bypasses_serial_gate(self):

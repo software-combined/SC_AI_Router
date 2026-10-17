@@ -27,7 +27,7 @@ DISABLE = Path(__file__).resolve().parents[1] / 'tools' / 'disable.py'
 STATE = {'port': 4321, 'token': 'tok'}
 URL = 'http://127.0.0.1:4321/tok/backend-api/codex'
 BEGIN, END = '# BEGIN local mixed model picker\n', '# END local mixed model picker\n'
-SEEDED = 'model = "deepseek/deepseek-v4.1-flash"\nmodel_reasoning_effort = "max"\n'
+SEEDED = 'model = "deepseek/deepseek-v4.1-flash-1017"\nmodel_reasoning_effort = "max"\n'
 # The managed approvals reviewer the default block carries (develop #347).
 REVIEWER = 'approvals_reviewer = "user"\n'
 PROVIDER = {'name': 'SC router', 'base_url': URL, 'wire_api': 'responses'}
@@ -171,7 +171,7 @@ class SwitchFlowTests(unittest.TestCase):
                     self.assertIn(_entry(home)['inserted_block'], switched)
                     # The owner's model pick rides through the switch and the update.
                     self.assertEqual(tomllib.loads(switched)['model'],
-                                     'deepseek/deepseek-v4.1-flash')
+                                     'deepseek/deepseek-v4.1-flash-1017')
             # The hand-edit rule holds for a switched variant too.
             edited = config.read_text().replace('openai_base_url', 'openai_base_url_edited')
             config.write_text(edited)
@@ -258,13 +258,16 @@ class SwitchedRefusalTests(unittest.TestCase):
             self.assertFalse([cmd for cmd in calls if 'disable.py' in ' '.join(cmd)
                               or 'bootout' in cmd or 'kill' in cmd], calls)
             self.assertEqual(install_mod.current_version(home), '1.0.1')
+            # No additions must retain the switched config and restore receipt.
+            _install(self, tmp, home, '1.0.2', '--clients', 'none')
+            self.assertEqual((config.read_text(), _receipt(home)), (switched, receipt))
             # Service-only reaches the real remover, which refuses the detach.
-            blob, latest = _craft_bundle('1.0.2')
+            blob, latest = _craft_bundle('1.0.3')
             _patch_attrs(self, run=_real_remover, self_test=lambda *args: None,
                          write_catalogue=_fake_write_catalogue,
                          wait_version=lambda *args, **kwargs: True)
             args = install_mod.build_parser().parse_args(
-                ['--feed', 'file:///latest.json', '--home', str(home), '--clients', 'none'])
+                ['--feed', 'file:///latest.json', '--home', str(home), '--client', 'none'])
             out = io.StringIO()
             with mock.patch.dict(os.environ, dict(fakehome, OPENROUTER_API_KEY='k',
                                                   ROUTER_NO_KEY_WINDOW='1')):

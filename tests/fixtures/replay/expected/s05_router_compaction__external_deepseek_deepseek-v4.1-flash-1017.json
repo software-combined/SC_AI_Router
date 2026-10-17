@@ -22,7 +22,7 @@
    {
     "content": [
      {
-      "text": "Delegate the synthetic review.",
+      "text": "Add a greeting to the synthetic app.",
       "type": "input_text"
      }
     ],
@@ -30,42 +30,19 @@
     "type": "message"
    },
    {
-    "arguments": "{}",
-    "call_id": "call_standalone_2",
-    "name": "delivered_message",
-    "type": "function_call"
-   },
-   {
-    "call_id": "call_standalone_2",
-    "output": "Agent message from /root/reviewer to /root:\nSynthetic review done.\nEncrypted content was withheld from this external model. The readable text may be incomplete; request a plain-text resend before acting on it.",
-    "type": "function_call_output"
-   },
-   {
-    "arguments": "{}",
-    "call_id": "call_standalone_3",
-    "name": "create_thread",
-    "type": "function_call"
-   },
-   {
-    "call_id": "call_standalone_3",
-    "output": "<codex_delegation>\n  <source_thread_id>00000000-0000-4000-8000-000000000001</source_thread_id>\n  <input>Synthetic follow-up task.</input>\n</codex_delegation>",
-    "type": "function_call_output"
-   },
-   {
-    "arguments": "{}",
-    "call_id": "call_standalone_4",
-    "name": "delivered_message",
-    "type": "function_call"
-   },
-   {
-    "call_id": "call_standalone_4",
-    "output": "Agent message from /root/tester to /root:\nSynthetic tests pass.",
-    "type": "function_call_output"
+    "content": [
+     {
+      "text": "Another language model started to solve this problem and produced a summary of its thinking process.\n\nSynthetic summary: the user asked for a greeting in hello.txt; it was added and the tests pass.",
+      "type": "input_text"
+     }
+    ],
+    "role": "user",
+    "type": "message"
    },
    {
     "content": [
      {
-      "text": "Summarise the results.",
+      "text": "What did we change?",
       "type": "input_text"
      }
     ],
@@ -75,9 +52,9 @@
   ],
   "instructions": "You are the synthetic coding agent for the replay goldens.",
   "max_output_tokens": 64000,
-  "model": "deepseek/deepseek-v4.1-flash",
+  "model": "deepseek/deepseek-v4.1-flash-1017",
   "parallel_tool_calls": true,
-  "prompt_cache_key": "replay-s07",
+  "prompt_cache_key": "replay-s05",
   "reasoning": {
    "effort": "low",
    "summary": "auto"

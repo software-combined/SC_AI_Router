@@ -31,7 +31,7 @@ class HandoffRecoveryTests(unittest.TestCase):
                         'text/event-stream' if stream else 'application/json')
         sends = install_fake(self, lambda: FakeUpstream(200, raw, [('Content-Type', content_type)]))
         tools = native_tools(*handoffs.HANDOFF_TOOLS)
-        history = [spawn_history('plain', 'deepseek/deepseek-v4.1-flash')]
+        history = [spawn_history('plain', 'deepseek/deepseek-v4.1-flash-1017')]
         payload = {'model': 'gpt-6-luna', 'stream': stream, 'input': history}
         if lite:
             payload['input'] = [{'type': 'additional_tools', 'role': 'developer',
@@ -51,7 +51,7 @@ class HandoffRecoveryTests(unittest.TestCase):
     def call(self, name, **changes):
         return encrypted_call(name=name, namespace='collaboration_plaintext', arguments=json.dumps({
             'task_name': 'plain', 'target': '/root/plain',
-            'model': 'deepseek/deepseek-v4.1-flash', 'message': 'PRIVATE_BRIEF'}), **changes)
+            'model': 'deepseek/deepseek-v4.1-flash-1017', 'message': 'PRIVATE_BRIEF'}), **changes)
 
     def test_every_handoff_to_an_external_child_is_delivered_readable(self):
         for name in sorted(handoffs.HANDOFF_TOOLS):

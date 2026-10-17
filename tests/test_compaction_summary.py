@@ -176,7 +176,7 @@ class SummarizerRetryTests(SummaryAvailabilityTest):
         self.assertEqual([call['body']['model'] for call in calls],
                          ['xiaomi/mimo-v2.6-flash',
                           'xiaomi/mimo-v2.6-flash',
-                          'deepseek/deepseek-v4.1-flash'])
+                          'deepseek/deepseek-v4.1-flash-1017'])
         self.assertEqual([call['body']['max_output_tokens'] for call in calls],
                          [4000, 8000, 4000])
         complete = next(call.kwargs for call in logged.call_args_list
@@ -193,7 +193,7 @@ class SummarizerRetryTests(SummaryAvailabilityTest):
         self.assertEqual([call['body']['model'] for call in calls],
                          ['xiaomi/mimo-v2.6-flash',
                           'xiaomi/mimo-v2.6-flash',
-                          'deepseek/deepseek-v4.1-flash'])
+                          'deepseek/deepseek-v4.1-flash-1017'])
         self.assertEqual([call['body']['max_output_tokens'] for call in calls],
                          [4000, 8000, 4000])
         self.assertEqual(len(calls), len(closed))
@@ -347,7 +347,7 @@ class NetworkDeadlineTests(SummaryAvailabilityTest):
             status = 200
 
             def read(self):
-                return json.dumps({'model': 'deepseek/deepseek-v4.1-flash',
+                return json.dumps({'model': 'deepseek/deepseek-v4.1-flash-1017',
                                    'output': [{'type': 'message', 'content': [
                                        {'type': 'output_text',
                                         'text': 'complete'}]}]}).encode()
