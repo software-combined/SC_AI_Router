@@ -17,59 +17,48 @@ Each artifact receipt names its target, exact router bundle, runtime and package
 checksum. Publication requires all five targets from one exact bundle.
 The publisher uploads immutable packages and signed `SHA256SUMS` first.
 It changes the channel's download list last. It refuses a distribution without
-staff protection on both installer files and download lists.
+public access for both installer files and download lists.
 
 The permanent download address is `https://dist.softwarecombined.com/install/`.
 The page detects the operating system and shows every processor alternative.
-Stable is the default; beta has a separate labelled choice. The page and public
-application settings stay readable before sign-in. Download lists and packages
-require an approved Microsoft account.
+Stable is the default; beta has a separate labelled choice. Installer lists,
+packages, update feeds, bundles, runtimes and model catalogues are public.
+Microsoft download sign-in is not required. Model-provider credentials remain
+separate and are never published with software.
 
-## Configure staff access
+## Publication and recovery
 
-Follow [the access deployment guide](../infra/downloads/README.md). Configure the
-exact Microsoft resource tenant, API, public client and assigned `Download` role.
-Approved guests need that same explicit assignment. No email-domain shortcut
-grants access. Keep signing material in AWS Key Management Service.
+The publisher checks that the download origin has no signed-cookie requirement.
+The S3 origin remains private behind CloudFront origin access control, and the
+`native-builds/` prefix remains unavailable through CloudFront. Package checksums,
+signed feeds, runtime pins and replay protection remain enforced.
 
-Set the existing feed stack's `DownloadKeyGroupId` and `DownloadApiHost` from the
-reviewed access deployment. Leave `PrivateUpdates=false` during migration.
-The page's `/download-access` route forwards authorisation to the API without
-caching. Its browser response uses host-only HttpOnly cookies.
+Release builds no longer consume `DOWNLOAD_AUTH_CONFIG` or
+`DOWNLOAD_AUTH_ENROLMENT`. Legacy release CLI sign-in options fail explicitly.
+Stale generated `dist/download-auth.json` is removed when building a release;
+installed users' authentication files are preserved and ignored by public transport.
 
-Set repository variable `DOWNLOAD_AUTH_CONFIG` to the public `ClientConfiguration`
-JSON output. The release places it in signed feed metadata and native packages.
-It contains application identifiers and endpoints, not credentials.
-After the acceptance matrix passes, set `NATIVE_INSTALLERS_ACCEPTED=true` to
-enable private native publication during the normal release workflow.
-Keep that variable unset while packages are still under test. A private first
-pilot can use `NATIVE_INSTALLERS_PILOT=true` for beta only, after build checks
-pass and the API role is assigned only to the named pilot account. This publishes
-only macOS arm64 and leaves both routine update feeds unchanged. The other
-packages remain private build artifacts. Windows
-distribution also requires the runtime licence evidence in
-[runtime licences](runtime-licenses.md). Paid publisher certificates are separate.
+Keep `NATIVE_INSTALLERS_ACCEPTED` unset until the native acceptance matrix passes.
+`NATIVE_INSTALLERS_PILOT=true` can advertise the Mac arm64 beta package while the
+other native packages remain in private build storage. This does not suppress
+ordinary beta update-feed publication. Full native publication requires the
+existing five-platform checks and Windows runtime licence evidence in
+[runtime licences](runtime-licenses.md).
 
-Native build artifacts stay in the feed bucket's `native-builds/` prefix.
-CloudFront cannot read that prefix, even with a staff download cookie.
-The public repository's Actions artifacts carry only the source bundle.
-The publisher copies accepted packages into the protected installer prefix.
-Full publication uses a new release version after acceptance. An existing pilot's
-package checksums remain immutable.
+Every ordinary release also publishes public `bootstrap.sh` and `bootstrap.ps1`
+setup scripts under `/install/` at the download origin. An installation whose old updater cannot
+get past Microsoft sign-in must run the current public setup script once. It uses
+new installer code, so legacy download settings do not block it; successful delivery
+also replaces the independent update controller. The existing channel is preserved
+unless the operator explicitly requests another. Model keys and client settings are
+preserved. Users with working scheduled updates receive the release normally.
 
-## Migration and recovery
+Normal update jobs run independently from the serving Router process. An offline
+computer or disabled update job cannot fetch a release until it runs again.
+Publishing a new feed alone cannot repair an old controller that rejects downloads
+before making its first network request. Do not claim automatic recovery on such
+hosts without proving their update path works.
 
-1. Release sign-in support to beta while legacy downloads stay public.
-2. Prove member and approved-guest sign-in, refresh, update and rollback recovery.
-3. Release the same support to stable and repeat those checks.
-4. Set `PrivateUpdates=true` only after those results are reviewed.
-
-The last step protects feeds, signatures, bundles, runtimes and model downloads.
-A missed migration uses the same native installer to upgrade in place.
-The independent controller and download session survive selecting an older
-runtime release. Expired access keeps the running router and last good model
-cache. A renewal dialog stays pending if it cannot appear, including a failed
-launch or timeout. Cancel suppresses it for one day; Continue opens sign-in.
 Linux dialogs use the retained setup wrapper after the download is deleted,
 with system Zenity as a fallback. The wrapper scopes GTK dependencies to its
 dialog child, so service processes do not inherit bundled library overrides.
@@ -98,11 +87,11 @@ separate from native-package acceptance.
 | Existing user | Upgrade and same-version repair preserve key, channel, custom feed, instructions, policy and disabled plugins. |
 | Assistant attachment | Verify desktop-only setup and attaching another assistant without detaching the first. |
 | Ready state | Observe a new routed reply, enabled SC tools and explicit fresh-session confirmation. |
-| Cancellation | Cancel before attachment, during setup and during sign-in; reopening must resume safely. |
-| Recovery | Interrupt setup, run scheduled updates, restore an older runtime and renew access. |
+| Cancellation | Cancel before attachment, during setup; reopening must resume safely. |
+| Recovery | Interrupt setup, run scheduled updates, restore an older runtime and verify public update recovery. |
 | Removal | Restore the prior assistant configuration and stop the owned services. |
 | Linux | Run with FUSE and without FUSE on both supported Ubuntu releases and processors. |
-| Access | Allow an assigned staff member and guest; deny an unassigned or wrong-tenant account. |
+| Access | Allow downloads without an account; reject tampered metadata, bundles and off-origin redirects. |
 
 The first local proof built and mounted an unsigned macOS arm64 DMG. Its bundled
 Python reported 3.14.7 and its local feed matched the bundled archive. A clean

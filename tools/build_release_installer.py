@@ -39,6 +39,8 @@ def main(argv=None):
     parser.add_argument('--download-config', type=Path)
     args = parser.parse_args(argv)
     latest = json.loads((args.dist / 'latest.json').read_text())
+    if args.download_config:
+        parser.error('Router downloads are public; --download-config is retired')
     system, cpu = args.target.split('/')
     lock = json.loads((ROOT / 'packaging/runtime.lock').read_text())
     entries = [row for row in lock['targets'] if (row['os'], row['cpu']) == (system, cpu)]
@@ -46,9 +48,6 @@ def main(argv=None):
         raise ValueError('unsupported native build target')
     with tempfile.TemporaryDirectory() as temporary:
         folder = Path(temporary)
-        if not args.download_config and latest.get('download_auth'):
-            args.download_config = folder / 'download-auth.json'
-            args.download_config.write_text(json.dumps(latest['download_auth']))
         runtime = download(entries[0], folder / 'runtime.tar.gz')
         bundle = args.dist / ('ai-router-' + latest['version'] + '.tar.gz')
         with bundle.open('rb') as stream:
@@ -57,8 +56,6 @@ def main(argv=None):
         command = [sys.executable, str(ROOT / 'tools/build_native_installer.py'),
                    '--bundle', str(bundle), '--runtime', str(runtime), '--target', args.target,
                    '--channel', latest['channel'], '--out', str(args.out)]
-        if args.download_config:
-            command += ['--download-config', str(args.download_config)]
         if system == 'windows':
             compiler = Path(os.environ.get('ProgramFiles(x86)', 'C:/Program Files (x86)')) / 'Inno Setup 6/ISCC.exe'
             command += ['--windows-iscc', str(compiler)]

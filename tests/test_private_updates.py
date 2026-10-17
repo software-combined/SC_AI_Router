@@ -28,16 +28,16 @@ class PrivateTransportTests(unittest.TestCase):
                 self.assertFalse(notice.show(root / 'home', now=100000))
             self.assertFalse((root / 'home/download-notice.json').exists())
 
-    def test_only_the_download_origin_receives_staff_cookies(self):
+    def test_public_downloads_send_no_staff_credentials(self):
         with tempfile.TemporaryDirectory() as temporary, mock.patch.object(feed, '_home', Path(temporary)):
             (Path(temporary) / 'download-auth.json').write_text('{}')
             with mock.patch.object(feed._auth, 'ensure_access', return_value='CloudFront-Policy=private'):
                 req = feed._request(feed.FEED_ORIGIN + '/stable/latest.json')
-                self.assertEqual(req.get_header('Cookie'), 'CloudFront-Policy=private')
+                self.assertIsNone(req.get_header('Cookie'))
                 for url in ('https://other.example/file', 'http://dist.softwarecombined.com/file',
-                            'file:///local/file'):
-                    with self.subTest(url=url), self.assertRaises(feed.SignInRequired):
-                        feed._request(url)
+                            'https://dist.softwarecombined.com.attacker.invalid/file'):
+                    with self.subTest(url=url), self.assertRaises(SystemExit):
+                        feed.fetch(url)
                 with self.assertRaises(SystemExit):
                     feed._PinnedRedirects().redirect_request(
                         req, None, 302, 'redirect', {}, 'https://other.example/file')
@@ -60,6 +60,21 @@ class PrivateTransportTests(unittest.TestCase):
 
 
 class ControlledModelTests(unittest.TestCase):
+    def test_verified_models_refresh_without_a_download_account(self):
+        import hashlib
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            body = b'[]'
+            self.assertTrue(models.accept(home, {
+                'models_url': feed.FEED_ORIGIN + '/stable/models.json',
+                'models_sha256': hashlib.sha256(body).hexdigest()}))
+            run = mock.Mock(return_value=SimpleNamespace(returncode=0))
+            self.assertTrue(models.refresh(home, lambda _: body, run=run, now=4000))
+            self.assertEqual((home / 'models-cache.json').read_bytes(), body)
+            self.assertFalse((home / 'download-auth.json').exists())
+            run.assert_called_once()
+
     def test_tampered_model_download_keeps_the_last_good_cache(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)

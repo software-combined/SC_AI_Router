@@ -21,7 +21,7 @@ except (OSError, ValueError):
     raise SystemExit('router pointer file missing: reinstall the router')
 installer = home / 'releases' / name / 'packaging' / 'install.py'
 # Native setup retains the updater separately from the serving release.
-# Restoring older router code must not remove private download access.
+# Restoring older router code must not undo updater recovery fixes.
 try:
     control = (home / 'control-version').read_text().strip()
     if control and all(part.isdigit() for part in control.split('.')):

@@ -1,4 +1,4 @@
-"""Authenticated model downloads belong to the updater, outside inference.
+"""Verified model downloads belong to the updater, outside inference.
 
 Only a checksum from an accepted signed feed can replace the local cache.
 The serving router reads that cache without acquiring Microsoft credentials.
@@ -38,8 +38,6 @@ def accept(home, document):
 
 def refresh(home, fetch, run=subprocess.run, now=None):
     home = Path(home)
-    if not (home / 'download-auth.json').is_file():
-        return False
     now = time.time() if now is None else now
     try:
         checked = float((home / 'controlled-models-check').read_text())
@@ -66,7 +64,6 @@ def refresh(home, fetch, run=subprocess.run, now=None):
             return False
     except (OSError, UnicodeError, subprocess.SubprocessError):
         # A model object cannot strand a newer release that repairs its source.
-        # SignInRequired remains typed and reaches the updater's renewal path.
         return False
     atomic = _atomic()
     atomic.replace_text(home / 'models-cache.json', body.decode('utf-8'))

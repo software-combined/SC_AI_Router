@@ -159,12 +159,16 @@ def main(argv=None):
     parser.add_argument('--tag', help='Validated release tag, including optional -beta and -express.')
     parser.add_argument('--url-base')
     parser.add_argument('--download-config', type=Path,
-                        help='public staff sign-in configuration for this release')
+                        help=argparse.SUPPRESS)
+    parser.add_argument('--enrol-downloads', action='store_true',
+                        help=argparse.SUPPRESS)
     parser.add_argument('--gen-key', metavar='OUT',
                         help='write a fresh 32-byte hex release signing seed (owner-only file) and exit')
     parser.add_argument('--sign', metavar='SEEDFILE',
                         help='retired: signing moved to tools/publish_feed.py --sign, which signs the served bytes')
     args = parser.parse_args(argv)
+    if args.enrol_downloads or args.download_config:
+        parser.error('Router downloads are public; download sign-in options are retired')
     if args.gen_key:
         out = Path(args.gen_key)
         try:
@@ -225,15 +229,8 @@ def main(argv=None):
               'models_url': f'https://dist.softwarecombined.com/{channel}/models.json',
               'models_sha256': hashlib.sha256(payloads['ai_router/models.json']).hexdigest(),
               'published': datetime.now(timezone.utc).isoformat(timespec='seconds')}
-    if args.download_config:
-        import tempfile
-        auth_spec = importlib.util.spec_from_file_location(
-            'router_release_auth', root / 'packaging/download_auth.py')
-        auth = importlib.util.module_from_spec(auth_spec)
-        auth_spec.loader.exec_module(auth)
-        with tempfile.TemporaryDirectory() as temporary:
-            (Path(temporary) / auth.CONFIG_FILE).write_bytes(args.download_config.read_bytes())
-            latest['download_auth'] = auth.configure(temporary)
+    # Clean only this generated build artifact, never an installed user's state.
+    (out_dir / 'download-auth.json').unlink(missing_ok=True)
     (out_dir / 'latest.json').write_text(json.dumps(latest, indent=2) + '\n')
     # The bootstrap resolves its runtime from this table, never from a
     # hardcoded filename: pins land only through reviewed lock changes.

@@ -104,11 +104,13 @@ class FeedTests(unittest.TestCase):
         """
         home = self._home()
         (home / 'mixed-router-state.json').write_text(json.dumps({'port': 1, 'token': 'x'}))
+        (home / 'download-auth.json').write_text('{legacy blocked settings')
         (home / 'releases' / '1.0.0' / 'packaging').mkdir(parents=True)
         (home / 'releases' / '1.0.0' / 'packaging' / 'VERSION').write_text('1.0.0\n')
         (home / 'current').write_text('1.0.0\n')
         latest = {'version': '2.0.0', 'url': ORIGIN + '/bundles/2.0.0.tar.gz',
-                  'sha256': hashlib.sha256(b'blob').hexdigest(), 'serial': 1}
+                  'sha256': hashlib.sha256(b'blob').hexdigest(), 'serial': 1,
+                  'download_auth': {'legacy': 'ignored'}}
         seen = []
         import importlib.util as _ilu
         _spec = _ilu.spec_from_file_location(
@@ -155,6 +157,9 @@ class FeedTests(unittest.TestCase):
                           ORIGIN + '/bundles/2.0.0.tar.gz'])
         for _url, header_names in seen:
             self.assertNotIn('x-scg-feed-token', header_names)
+            self.assertNotIn('cookie', header_names)
+            self.assertNotIn('authorization', header_names)
+        self.assertEqual((home / 'download-auth.json').read_text(), '{legacy blocked settings')
 
 
 class LiveHomeGuardTests(unittest.TestCase):
