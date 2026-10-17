@@ -217,6 +217,10 @@ def main(argv=None):
     _spec.loader.exec_module(_fv)
     (dist / FEED_SIG_DOCUMENT).write_text(_fv.sign_hex(seed, feed_bytes) + '\n')
     outcome = publish_bundle(args.bucket, BUNDLE_PREFIX + bundle, path, latest['sha256'])
+    for name in ('bootstrap.sh', 'bootstrap.ps1'):
+        source = Path(__file__).resolve().parents[1] / 'packaging' / name
+        _aws(['s3', 'cp', str(source), f's3://{args.bucket}/install/{name}',
+              '--cache-control', 'no-cache', '--content-type', 'text/plain'])
     publish_document(args.bucket, f'{args.channel}/latest.json',
                      dist / FEED_DOCUMENT, FEED_CACHE_CONTROL)
     publish_signature(args.bucket, f'{args.channel}/latest.json.sig',

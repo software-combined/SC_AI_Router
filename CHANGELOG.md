@@ -2,9 +2,13 @@
 
 ## Unreleased
 
-- Require explicit approval to enrol existing update clients into Microsoft
-  download sign-in. Native package sign-in settings alone no longer trigger
-  enrolment. Existing access requirements and server checks remain enforced.
+## 1.2.9
+
+- Restore public Router installers, updates and model catalogues without Microsoft
+  download sign-in. Existing sign-in settings no longer block the corrected
+  updater or setup readiness. Publish public setup scripts for in-place recovery,
+  preserve model keys and settings, and retain signed feeds and checksum checks.
+- Remove stale generated download sign-in settings when reusing a build folder.
 
 ## 1.2.8
 

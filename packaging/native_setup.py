@@ -13,7 +13,7 @@ from native_payload import install_arguments, load, metadata, retained
 
 ACTIONS = (('resume', 'Set up or repair'), ('status', 'Check setup'),
            ('add', 'Connect another assistant'), ('key', 'Replace model key'),
-           ('signin', 'Sign in for downloads'), ('remove', 'Remove router'))
+           ('remove', 'Remove router'))
 ASSISTANT_DOWNLOADS = {'codex': 'https://chatgpt.com/download/',
                        'claude': 'https://claude.com/download'}
 
@@ -71,9 +71,7 @@ def status(resources, home, run=subprocess.run):
     facts = json.loads(result.stdout)
     progress = read_json(Path(home) / 'setup-progress.json')
     facts['onboarding'] = load('native_readiness').check(home, source, facts, progress, run)
-    facts['downloads'] = load('download_auth').status(home)
-    if not facts['downloads']['access_ready']:
-        facts['onboarding']['ready'] = False
+    facts['downloads'] = {'access_ready': True, 'public': True}
     return facts
 
 
@@ -137,10 +135,6 @@ def _check(resources, home, dialog):
     if not facts.get('serving'):
         dialog.message('SCG Router needs repair. Open it again and choose Set up or repair.')
         return
-    if not facts['downloads']['access_ready']:
-        dialog.message('Setup is saved. Sign in for downloads through SCG Router '
-                       'to finish. If sign-in is unavailable, contact Software Combined IT.')
-        return
     if 'claude-desktop' in pending and _missing_assistant(
             ['--clients', 'none', '--desktop'], dialog):
         return
@@ -180,8 +174,7 @@ def onboard(resources, home, action=None):
     if action is None:
         return 0
     if action == 'signin':
-        load('download_auth').signin(home)
-        dialog.message('You are signed in for SCG Router downloads.')
+        dialog.message('SCG Router downloads are public. No download sign-in is needed.')
         return 0
     if action == 'status':
         _check(resources, home, dialog)
@@ -206,9 +199,6 @@ def onboard(resources, home, action=None):
         return 0
     with dialog.Progress() as progress:
         permanent = retained(resources, home)
-        config = read_json(permanent / 'download-auth.json')
-        if config:
-            load('download_enrolment').accept(home, config)
         python = permanent / 'runtime' / doc['runtime_exec']
         load('native_shortcuts').install(home, permanent, python)
         if not (home / 'channel').exists():
@@ -228,12 +218,6 @@ def onboard(resources, home, action=None):
                         {'version': doc['version'], 'started': time.time(), 'confirmed_clients': []})
     if progress.cancelled:
         return 0
-    auth = load('download_auth')
-    if (home / 'download-auth.json').is_file() and not auth.status(home)['access_ready']:
-        if not dialog.confirm('Continue opens Microsoft sign-in for SCG Router downloads. '
-                              'Use your work account. Your saved setup will remain if you cancel.'):
-            return 0
-        auth.ensure_access(home, interactive=True)
     _key(permanent, home)
     _check(permanent, home, dialog)
     return 0

@@ -7,6 +7,14 @@
 #   .\bootstrap.ps1 [-Channel beta] [-ChooseClients]
 param([string]$Channel = 'stable', [switch]$ChooseClients)
 $ErrorActionPreference = 'Stop'
+$homeDir = if ($env:ROUTER_HOME) { $env:ROUTER_HOME } else { Join-Path $HOME '.codex\mixed-model-router' }
+if (-not $PSBoundParameters.ContainsKey('Channel') -and -not $env:CHANNEL) {
+  $savedChannelPath = Join-Path $homeDir 'channel'
+  if (Test-Path $savedChannelPath) {
+    $savedChannel = (Get-Content -Raw $savedChannelPath).Trim()
+    if ($savedChannel -in @('stable', 'beta')) { $Channel = $savedChannel }
+  }
+}
 if ($env:CHANNEL) { $Channel = $env:CHANNEL }
 $Channel = $Channel.ToLowerInvariant()
 if ($Channel -notin @('stable', 'beta')) {
@@ -14,7 +22,6 @@ if ($Channel -notin @('stable', 'beta')) {
   exit 2
 }
 $feedOrigin = if ($env:FEED_ORIGIN) { $env:FEED_ORIGIN } else { 'https://dist.softwarecombined.com' }
-$homeDir = if ($env:ROUTER_HOME) { $env:ROUTER_HOME } else { Join-Path $HOME '.codex\mixed-model-router' }
 New-Item -ItemType Directory -Force -Path $homeDir | Out-Null
 Invoke-RestMethod -Uri "$feedOrigin/runtimes.json" -OutFile (Join-Path $homeDir 'runtimes.json')
 $rt = (Get-Content (Join-Path $homeDir 'runtimes.json') | ConvertFrom-Json).targets.'windows/x86_64'

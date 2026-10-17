@@ -27,15 +27,15 @@ class NativeReleaseWorkflowTests(unittest.TestCase):
         self.assertIn('/native-builds/', native)
         self.assertIn('role-session-name: router-native-build', native)
 
-    def test_private_pilot_does_not_switch_routine_update_feeds(self):
+    def test_native_pilot_does_not_suppress_normal_update_publication(self):
         text = WORKFLOW.read_text()
-        feed = text.split('if [ "$PILOT_ONLY" != true ]; then', 1)[1].split('          fi', 1)[0]
-        self.assertIn('tools/publish_feed.py', feed)
+        self.assertNotIn('PILOT_ONLY', text)
+        publish = text.split('      - name: Publish to the update feed', 1)[1]
+        self.assertIn('python tools/publish_feed.py', publish)
+        self.assertNotIn('--download-config', publish)
         release = text.split('      - name: Create release', 1)[1]
-        pilot = release.split('if [ "$PILOT_ONLY" = true ]; then', 1)[1].split('          fi', 1)[0]
-        self.assertIn('--prerelease', pilot)
-        self.assertIn('exit 0', pilot)
-        self.assertNotIn('dist/', pilot)
+        self.assertIn('dist/*.tar.gz', release)
+        self.assertIn('--prerelease', release)
 
 
 if __name__ == '__main__':

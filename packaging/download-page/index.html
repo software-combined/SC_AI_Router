@@ -6,7 +6,6 @@
 <title>SCG Router — Software Combined</title>
 <link rel="icon" href="router-icon.png">
 <link rel="stylesheet" href="style.css">
-<script src="signin.js" defer></script>
 <script src="downloads.js" defer></script>
 <body>
 <header><img src="router-icon.png" alt="" width="48" height="48"><span>Software Combined</span></header>
@@ -16,9 +15,11 @@
 <p class="intro">Connect Codex and Claude to your approved models. Download once. SCG Router handles routine updates.</p>
 <section aria-labelledby="download-title">
 <h2 id="download-title">Download SCG Router</h2>
-<p>Use your Software Combined work account, or an approved portfolio guest account.</p>
-<button id="signin" type="button">Sign in with Microsoft</button>
-<p id="status" role="status" aria-live="polite">Checking download access…</p>
+<p>Downloads and automatic updates are public. No Microsoft account is needed.</p>
+<p id="status" role="status" aria-live="polite">Checking available downloads…</p>
+<p>For an existing installation needing repair, use the current setup script:
+<a href="/install/bootstrap.ps1">Windows</a> · <a href="/install/bootstrap.sh">macOS or Linux</a>.
+Run it for your existing installation to preserve your model key and settings.</p>
 <label for="channel">Release</label>
 <select id="channel"><option value="stable">Stable — recommended</option><option value="beta">Beta — early access</option></select>
 <div id="downloads" hidden>
@@ -42,6 +43,6 @@
 </details>
 <p class="help">An existing setup keeps its release channel, key, settings and disabled plugins. Need help? Contact Software Combined IT.</p>
 </main>
-<footer>Software Combined Group · Staff downloads</footer>
+<footer>Software Combined Group · SCG Router downloads</footer>
 </body>
 </html>
