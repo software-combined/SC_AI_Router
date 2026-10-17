@@ -1,8 +1,11 @@
 """The doctor checks the installed projection, including its visibility gates."""
 import json
+import importlib.util
+import io
 import os
 import subprocess
 import sys
+import tarfile
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,7 +13,7 @@ from unittest import mock
 
 from ai_router import availability, catalogue, snapshot_store
 from tests._platform import requires_posix_perms
-from tests.install_fixtures import install_mod
+from tests.install_fixtures import install_mod, real_bundle
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -33,12 +36,26 @@ class CatalogueDoctorTests(unittest.TestCase):
         catalogue.merge_file(self.home / 'mixed-models.json',
                              available={self.visible})
 
-    def check(self):
-        operator = install_mod._operator
-        with (mock.patch.object(operator._svc, 'current_release_dir', return_value=ROOT),
+    def check(self, operator=None, release=ROOT):
+        operator = operator or install_mod._operator
+        with (mock.patch.object(operator._svc, 'current_release_dir', return_value=release),
               mock.patch.object(operator, 'run', subprocess.run),
               mock.patch.dict(os.environ, {'OPENROUTER_API_KEY': self.key})):
             return operator._catalogue_row(self.home, sys.executable)
+
+    def test_extracted_release_can_check_the_filtered_catalogue(self):
+        bundle = self.home / 'bundle'
+        bundle.mkdir()
+        _, _, blob, _ = real_bundle(bundle)
+        extracted = bundle / 'extracted'
+        with tarfile.open(fileobj=io.BytesIO(blob), mode='r:gz') as archive:
+            archive.extractall(extracted, filter='data')
+        spec = importlib.util.spec_from_file_location(
+            'packaged_operator', extracted / 'packaging/operator_surface.py')
+        operator = importlib.util.module_from_spec(spec)
+        with mock.patch.object(sys, 'path', list(sys.path)):
+            spec.loader.exec_module(operator)
+            self.assertEqual(self.check(operator, extracted)['status'], 'OK')
 
     def test_key_filtered_catalogue_is_healthy_and_check_writes_nothing(self):
         before = {p.name: p.read_bytes() for p in self.home.iterdir() if p.is_file()}

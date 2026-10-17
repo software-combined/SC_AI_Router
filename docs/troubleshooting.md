@@ -17,6 +17,8 @@ update recency) and prints a `Fix:` line for every WARN or FAIL.
 The catalogue check uses your company policy and the models available to your
 key. Models hidden by either filter do not require a repair. A catalogue warning
 means the saved rows differ from that installed projection.
+Setup and repair record Claude's current served model list, including those
+filters, for the separate listing check.
 
 ## Windows: use the installed setup tools
 

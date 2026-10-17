@@ -11,15 +11,17 @@ const manifest = () => ({version: '1.2.3.4', channel: 'stable', packages:
 
 function browser(fetch) {
   const elements = new Map();
-  function element(id) {
-    if (!elements.has(id)) elements.set(id, {value: 'stable', hidden: false,
+  const create = () => ({value: 'stable', hidden: false,
       listeners: {}, addEventListener(name, callback) {this.listeners[name] = callback;},
+      setAttribute(name, value) {this[name] = value;},
       replaceChildren(...children) {this.children = children;}});
+  function element(id) {
+    if (!elements.has(id)) elements.set(id, create());
     return elements.get(id);
   }
   const context = vm.createContext({URL, fetch, location: {origin},
     navigator: {platform: 'Linux x86_64'},
-    document: {getElementById: element, createElement: () => ({})}});
+    document: {getElementById: element, createElement: create}});
   return {context, element};
 }
 function execute(browser, name) {vm.runInContext(fs.readFileSync(path.join(root, name), 'utf8'), browser.context);}
@@ -40,41 +42,51 @@ const settled = () => new Promise(resolve => setImmediate(resolve));
   for (const wrongOrigin of [false, true]) {
     const data = manifest();
     if (wrongOrigin) data.packages[0].url = 'https://other.example/private.exe';
-    const app = browser(async () => ({ok: true, status: 200, json: async () => data}));
+    const app = browser(async (url, options) => {
+      assert.equal(url, 'stable.json');
+      assert.equal(options.credentials, 'omit');
+      return {ok: true, status: 200, json: async () => data};
+    });
     execute(app, 'downloads.js');
     await settled();
     if (wrongOrigin) {
       assert.match(app.element('status').textContent, /needs attention/);
       assert.equal(app.element('packages').children, undefined);
     } else {
-      assert.equal(app.element('packages').children.length, 5);
-      assert.equal(app.element('packages').children[0].textContent, 'Ubuntu · arm64');
+      const tiles = app.element('packages').children;
+      assert.equal(tiles.length, 3);
+      assert.deepEqual(Array.from(tiles, tile => tile.children[0].src), ['apple.svg', 'microsoft.svg', 'linux.svg']);
+      assert.equal(tiles.flatMap(tile => tile.children.slice(2)).length, 5);
+      assert.equal(tiles[2].children[2]['aria-label'], 'Download for Ubuntu · arm64');
       assert.equal(app.element('downloads').hidden, false);
     }
   }
-  let available = true;
-  const changing = browser(async () => ({ok: available, status: available ? 200 : 404, json: async () => manifest()}));
-  execute(changing, 'downloads.js');
+  const unavailable = browser(async () => ({ok: false, status: 404}));
+  execute(unavailable, 'downloads.js');
   await settled();
-  assert.equal(changing.element('downloads').hidden, false);
-  available = false;
-  changing.element('channel').value = 'beta';
-  changing.element('channel').listeners.change();
-  await settled();
-  assert.equal(changing.element('downloads').hidden, true, 'a failed channel switch must hide the previous downloads');
+  assert.equal(unavailable.element('downloads').hidden, true);
+  assert.match(unavailable.element('status').textContent, /stable installer is being prepared/);
   for (const target of ['darwin/arm64', 'windows/x86_64']) {
     const data = manifest();
-    data.pilot = true; data.channel = 'beta';
+    data.scope = 'macos-arm64';
     data.packages = data.packages.filter(item => item.target === target);
-    const pilot = browser(async () => ({ok: true, status: 200, json: async () => data}));
-    pilot.element('channel').value = 'beta';
-    execute(pilot, 'downloads.js');
+    const scoped = browser(async () => ({ok: true, status: 200, json: async () => data}));
+    execute(scoped, 'downloads.js');
     await settled();
     if (target === 'darwin/arm64') {
-      assert.equal(pilot.element('packages').children.length, 1);
-      assert.match(pilot.element('status').textContent, /Mac pilot/);
-    } else assert.match(pilot.element('status').textContent, /needs attention/);
+      const tiles = scoped.element('packages').children;
+      assert.equal(tiles.length, 3);
+      assert.match(tiles[0].children[2].href, /\/installers\//);
+      assert.equal(tiles[1].children[2].href, '/install/bootstrap.ps1');
+      assert.equal(tiles[2].children[2].href, '/install/bootstrap.sh');
+      assert.match(scoped.element('recommendation').textContent, /Stable/);
+    } else assert.match(scoped.element('status').textContent, /needs attention/);
   }
+  const beta = manifest(); beta.channel = 'beta';
+  const rejected = browser(async () => ({ok: true, json: async () => beta}));
+  execute(rejected, 'downloads.js'); await settled();
+  assert.equal(rejected.element('downloads').hidden, true);
+  assert.match(rejected.element('status').textContent, /needs attention/);
   const redacted = browser(async () => {throw Error('synthetic private token');});
   execute(redacted, 'downloads.js');
   await settled();
@@ -82,6 +94,7 @@ const settled = () => new Promise(resolve => setImmediate(resolve));
   assert.match(redacted.element('status').textContent, /Downloads need attention/);
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
   assert.doesNotMatch(html, /signin.js|id="signin"|Sign in with Microsoft/);
+  assert.doesNotMatch(html, /id="channel"|Beta —|early access/);
   assert.match(html, /bootstrap.ps1/);
   assert.match(html, /bootstrap.sh/);
   process.stdout.write('Browser contracts passed\n');

@@ -18,7 +18,7 @@ def artifacts(directory):
         body = ('native package ' + target).encode()
         (directory / name).write_bytes(body)
         (directory / (name + '.json')).write_text(json.dumps({
-            'artifact': name, 'target': target, 'version': '1.2.3.4', 'channel': 'beta',
+            'artifact': name, 'target': target, 'version': '1.2.3.4', 'channel': 'stable',
             'native_signature': 'unsigned', 'sha256': 'a' * 64,
             'artifact_sha256': hashlib.sha256(body).hexdigest()}))
 
@@ -61,21 +61,27 @@ class NativePublishTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             artifacts(root)
-            result = publish.packages(root, 'beta')
+            result = publish.packages(root, 'stable')
             self.assertEqual({row['target'] for row in result['packages']}, publish.TARGETS)
             first = root / result['packages'][0]['name']
             first.write_bytes(b'changed')
             with self.assertRaisesRegex(ValueError, 'checksum'):
-                publish.packages(root, 'beta')
+                publish.packages(root, 'stable')
             first.with_suffix(first.suffix + '.json').unlink()
             with self.assertRaisesRegex(ValueError, 'five packages'):
-                publish.packages(root, 'beta')
+                publish.packages(root, 'stable')
+
+    def test_beta_cannot_be_published_as_a_public_native_download(self):
+        with mock.patch.object(publish.publisher, 'publish_bundle') as upload:
+            with self.assertRaisesRegex(ValueError, 'stable channel only'):
+                publish.publish(SimpleNamespace(channel='beta'))
+            upload.assert_not_called()
 
     def test_private_edge_blocks_public_release_before_any_upload(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             artifacts(root)
-            args = SimpleNamespace(pilot_macos_arm64=False, artifacts=root, channel='beta',
+            args = SimpleNamespace(macos_arm64_only=False, artifacts=root, channel='stable',
                                    dry_run=False, sign=root / 'absent-secret',
                                    bucket='test-bucket', distribution_id='test-distribution')
             with mock.patch.object(publish.publisher, '_aws', return_value=distribution(True)), \
@@ -91,7 +97,7 @@ class NativePublishTests(unittest.TestCase):
             seed, public = publish.verify.generate_keypair()
             secret = root / 'ephemeral-test-key'
             secret.write_text(seed)
-            args = SimpleNamespace(pilot_macos_arm64=False, artifacts=root, channel='beta',
+            args = SimpleNamespace(macos_arm64_only=False, artifacts=root, channel='stable',
                                    dry_run=False, sign=secret, bucket='test-bucket',
                                    distribution_id='test-distribution')
             writes, contents = [], {}
@@ -104,24 +110,25 @@ class NativePublishTests(unittest.TestCase):
                     mock.patch.object(publish.publisher, 'invalidate'), \
                     mock.patch.object(publish.verify, 'FEED_PUBLIC_KEY', public):
                 self.assertEqual(publish.publish(args), 0)
-            self.assertEqual(writes[-1], 'install/beta.json')
+            self.assertEqual(writes[-1], 'install/stable.json')
             base = 'installers/1.2.3.4/'
             self.assertEqual(len([name for name in writes if name.endswith('.dmg')]), 5)
             self.assertTrue(publish.verify.verify_hex(public, contents[base + 'SHA256SUMS'],
                                                      contents[base + 'SHA256SUMS.sig'].decode().strip()))
             writes.clear()
-            args.pilot_macos_arm64 = True
+            args.macos_arm64_only = True
             with mock.patch.object(publish.publisher, '_aws', return_value=distribution()), \
                     mock.patch.object(publish.publisher, 'publish_bundle', side_effect=upload), \
                     mock.patch.object(publish.publisher, 'publish_document', side_effect=upload), \
                     mock.patch.object(publish.publisher, 'invalidate'), \
                     mock.patch.object(publish.verify, 'FEED_PUBLIC_KEY', public):
                 self.assertEqual(publish.publish(args), 0)
-            advertised = json.loads(contents['install/beta.json'])
-            self.assertTrue(advertised['pilot'])
+            advertised = json.loads(contents['install/stable.json'])
+            self.assertEqual(advertised['scope'], 'macos-arm64')
+            self.assertEqual(advertised['channel'], 'stable')
             self.assertEqual([row['target'] for row in advertised['packages']], ['darwin/arm64'])
             self.assertEqual(len([name for name in writes if name.endswith('.dmg')]), 1)
-            self.assertEqual(writes[-1], 'install/beta.json')
+            self.assertEqual(writes[-1], 'install/stable.json')
 
 
 if __name__ == '__main__':

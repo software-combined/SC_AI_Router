@@ -108,6 +108,10 @@ def _missing_assistant(flags, dialog):
 
 def _key(resources, home, replace=False, run=subprocess.run):
     state = read_json(Path(home) / 'mixed-router-state.json')
+    if not replace:
+        diagnostics = load('diagnostics')
+        if not diagnostics._provider_defs().unhandled(Path(home), state, diagnostics._key_private):
+            return
     if replace:
         result = run_installer(resources, home, ['--setup'])
         if result.returncode:

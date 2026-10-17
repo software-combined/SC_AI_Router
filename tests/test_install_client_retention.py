@@ -38,7 +38,7 @@ class ClientRetentionTests(unittest.TestCase):
                              'USERPROFILE': str(Path(tmp) / 'fakehome'),
                              'CLAUDE_CONFIG_DIR': str(Path(tmp) / 'claude'),
                              'ROUTER_NO_KEY_WINDOW': '1', 'OPENROUTER_API_KEY': 'test-key'}), \
-                mock.patch.object(install_mod._claude_config, 'release_listing',
+                mock.patch.object(install_mod._operator, 'listing',
                                   return_value={'data': [{'id': 'synthetic-update'}]}):
             rc, out = fixture._check(home, blob, latest, [], run=run)
             self.assertIn('agent skills:', out)
@@ -189,7 +189,7 @@ class CurrentModeTests(unittest.TestCase):
         self.codex = Path.home() / '.codex/config.toml'
         self.codex_before = self.codex.read_bytes()
         self.enterContext(mock.patch.object(install_mod, 'find_python', return_value='/test/python'))
-        self.enterContext(mock.patch.object(install_mod._claude_config, 'release_listing', return_value=None))
+        self.enterContext(mock.patch.object(install_mod._operator, 'listing', return_value=None))
         self.backend = mock.Mock()
         self.enterContext(mock.patch.object(install_mod, 'platform_backend', return_value=self.backend))
 
