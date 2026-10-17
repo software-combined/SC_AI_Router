@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add shared desktop controls, safe router restart and owned sign-in startup.
+  Keep the menu separate from routing and retain a full control window without a tray host.
+
 - Add explicit desktop connection destinations while retaining existing switch
   shortcuts. Claude transitions now serialize with installation and updates.
 

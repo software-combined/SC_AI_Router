@@ -552,6 +552,7 @@ def do_uninstall(args):
         # Service-only installation: no client settings were ever touched,
         # so there is no receipt and no restore to run.
         backend.uninstall(home)
+        _delivery._load('desktop_startup').remove(home)
         print(f'uninstalled services; {home} left in place for the operator to delete')
         return 0
     if release is not None:
@@ -571,6 +572,7 @@ def do_uninstall(args):
             _codex_config.drop_client(home, 'codex')
     detach_claude(home)
     backend.uninstall(home)
+    _delivery._load('desktop_startup').remove(home)
     print(f'uninstalled services; {home} left in place for the operator to delete')
     return 0
 
@@ -581,6 +583,10 @@ def do_preflight(args):
 
 def do_status(args):
     _sync_seams(); return _diag.do_status(args)
+
+
+def do_restart(args):
+    _sync_seams(); return _delivery._load('desktop_service').restart(args, _svc, platform_backend())
 
 
 def build_parser():
@@ -602,6 +608,7 @@ def build_parser():
     parser.add_argument('--doctor', action='store_true', help='Read-only health report with one Fix line per failing row.')
     parser.add_argument('--support', action='store_true', help='Write a redacted support bundle and print its path.')
     parser.add_argument('--uninstall', action='store_true')
+    parser.add_argument('--restart', action='store_true', help='Restart SCG Router after running replies finish.')
     parser.add_argument('--preflight', action='store_true',
                         help='Report missing install prerequisites and exit.')
     parser.add_argument('--status', action='store_true',
@@ -643,6 +650,7 @@ def main(argv=None):
     action = (do_status if args.status else
               do_preflight if args.preflight else
               do_uninstall if args.uninstall else
+              do_restart if args.restart else
               do_doctor if args.doctor else
               do_support if args.support else
               do_rollback_list if list_rollback else

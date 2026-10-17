@@ -217,6 +217,7 @@ def onboard(resources, home, action=None):
     load('native_controller').install(home, source)
     python = permanent / 'runtime' / doc['runtime_exec']
     load('native_shortcuts').install(home, permanent, python)
+    load('desktop_menu').start(home, permanent)
     atomic = load('atomic_write')
     atomic.replace_json(home / 'setup-progress.json',
                         {'version': doc['version'], 'started': time.time(), 'confirmed_clients': []})
@@ -232,6 +233,7 @@ def main(argv=None):
     parser.add_argument('--resources', type=Path, required=True)
     parser.add_argument('--home', type=Path, default=Path.home() / '.codex/mixed-model-router')
     parser.add_argument('--status', action='store_true')
+    parser.add_argument('--action', choices=[key for key, _ in ACTIONS])
     args = parser.parse_args(argv)
     resources = args.resources.resolve()
     try:
@@ -240,8 +242,10 @@ def main(argv=None):
         if args.status:
             print(json.dumps(status(resources, args.home)))
             return 0
-        return onboard(resources, args.home)
+        return onboard(resources, args.home, args.action)
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
+        if args.status:
+            return 1
         load('native_dialog').message('Setup needs attention. Open SCG Router to try again, '
                                       'or contact Software Combined IT.')
         return 1

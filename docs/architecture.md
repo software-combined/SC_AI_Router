@@ -700,6 +700,16 @@ failed build prints one line and never fails an install.
 
 ## Distribution (outside the request path)
 
+`desktop_control.py` owns the redacted desktop status and fixed action IDs.
+It calls the existing client switchers, setup, support and update owners.
+`desktop_service.py` uses the platform service lifecycle for bounded restart.
+`desktop_model.py` gives native shells and the fallback window identical actions.
+`desktop_menu.py` runs one shell per installation and graphical session.
+It serializes actions in a worker, while native menus stay responsive.
+`desktop_startup.py` owns per-user startup entries and the persistent preference.
+`desktop_launch.py` follows retained setup resources, independently of inference rollback.
+Closing the shell never stops routing. Polling is silent and makes no model calls.
+
 `infra/` owns the update feed as code (repository-only templates, deployed from a checkout): the certificate stack, the private
 bucket, the CloudFront distribution, the DNS alias, and the tag-only
 publisher role. `tools/publish_feed.py` owns
