@@ -1,8 +1,10 @@
 """The PR export preserves review scope and excludes private receipt fields."""
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -64,6 +66,24 @@ class ReviewExportTest(unittest.TestCase):
         self.assertEqual(data["verification_urls"], ["https://github.com/example/project/actions/runs/123"])
         for private in [self.temp.name, "PRIVATE-FREE-TEXT", "PRIVATE-HOST", "repo_root", "repo_id"]:
             self.assertNotIn(private, result.stdout)
+
+    def test_router_bundle_can_execute_the_review_export(self):
+        spec = importlib.util.spec_from_file_location("release", ROOT / "packaging/release.py")
+        release = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(release)
+        bundle = Path(self.temp.name) / "bundle"
+        for name in release.plugin_files(ROOT):
+            if not name.startswith("plugins/scg-review/"):
+                continue
+            target = bundle / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(ROOT / name, target)
+        exporter = bundle / EXPORT.relative_to(ROOT)
+        result = subprocess.run([sys.executable, str(exporter), "--verification-url",
+                                 "https://github.com/example/project/actions/runs/123"],
+                                cwd=self.repo, env=self.env, text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["tree"], self.state["tree"])
 
     def test_invalid_receipt_cannot_be_published(self):
         for field, value in [("tree", "0" * 40), ("branch", "other"),

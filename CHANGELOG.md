@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Include the sanitized local review exporter in installed plugin bundles.
+  Verify that it runs using only files included in the router release.
+
 ## 1.2.6
 
 - Keep Windows permission checks working when setup starts from PowerShell 7.

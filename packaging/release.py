@@ -126,9 +126,9 @@ def plugin_files(root):
             if not path.is_file() or '__pycache__' in path.parts or rel.endswith('.pyc'):
                 continue
             # A shipped skill reads, links and runs more than skills/: the
-            # review gate reads references/ and runs scripts/setup.py. Only the
+            # review gate reads references/ and runs setup and review export. The
             # git updater is withheld, because the router is the channel now.
-            if rel.startswith(prefix + 'scripts/') and path.name != 'setup.py':
+            if rel.startswith(prefix + 'scripts/') and path.name not in ('setup.py', 'export_review.py'):
                 continue
             wanted.append(rel)
     return sorted(wanted)
