@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.2.10
+
+- Check the installed model catalogue against the same company policy and
+  key availability used to create it. A healthy filtered catalogue no longer
+  asks the user to reinstall; real catalogue differences still report a warning.
+
 ## 1.2.9
 
 - Restore public Router installers, updates and model catalogues without Microsoft

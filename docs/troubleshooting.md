@@ -14,6 +14,10 @@ Start with `--doctor`: it reports one row per component (runtime, install,
 service, each provider's key, the picker catalogue, the scheduled command and
 update recency) and prints a `Fix:` line for every WARN or FAIL.
 
+The catalogue check uses your company policy and the models available to your
+key. Models hidden by either filter do not require a repair. A catalogue warning
+means the saved rows differ from that installed projection.
+
 ## Windows: use the installed setup tools
 
 On Microsoft Windows 11 x64, run the supplied `bootstrap.ps1` before these steps.
