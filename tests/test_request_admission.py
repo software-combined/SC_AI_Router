@@ -27,7 +27,7 @@ SUB_AUTH = {'Authorization': 'Bearer subscription-secret', 'ChatGPT-Account-Id':
 # route: (path, model, upstream host, client headers)
 ROUTES = {
     'native responses': ('/test-token/responses', 'gpt-6-astra', 'chatgpt.com', SUB_AUTH),
-    'external responses': ('/test-token/responses', 'deepseek/deepseek-v4.1-flash',
+    'external responses': ('/test-token/responses', 'deepseek/deepseek-v4.1-flash-1017',
                            'openrouter.ai', {}),
     'native messages': ('/test-token/v1/messages', 'claude-opus-4-6', 'api.anthropic.com',
                         {'Authorization': 'Bearer subscription-secret'}),

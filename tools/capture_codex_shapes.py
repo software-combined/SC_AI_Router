@@ -51,7 +51,7 @@ from tools.probe_context_budget import MODEL, Client, Reply, message
 
 CAPTURED = Path(__file__).resolve().parents[1] / 'tests' / 'fixtures' / 'replay' / 'captured'
 CODEX_BIN = codex_bin()
-EXTERNAL = 'deepseek/deepseek-v4.1-flash'
+EXTERNAL = 'deepseek/deepseek-v4.1-flash-1017'
 NATIVE = 'gpt-6-astra'
 DESCRIPTION_CHARS = 80
 PREFIX_CHARS = 24

@@ -19,8 +19,8 @@ def run_of(cell, result='pass', codex='26.917.62051', claude='2.1.223',
            date='2026-09-24 12:58 AEST'):
     return {'cell': cell, 'date_aest': date, 'router_version': '0.6.122.118',
             'codex_version': codex, 'claude_code_version': claude,
-            'rows': ['deepseek/deepseek-v4.1-flash', 'gpt-6-luna'],
-            'requested_effort': 'low', 'served': ['deepseek/deepseek-v4.1-flash', None],
+            'rows': ['deepseek/deepseek-v4.1-flash-1017', 'gpt-6-luna'],
+            'requested_effort': 'low', 'served': ['deepseek/deepseek-v4.1-flash-1017', None],
             'calls': 4, 'result': result, 'notes': ''}
 
 

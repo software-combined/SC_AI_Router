@@ -2,7 +2,7 @@
  "scenario": "s08_lite",
  "targets": [
   "subscription:gpt-6-astra",
-  "external:deepseek/deepseek-v4.1-flash",
+  "external:deepseek/deepseek-v4.1-flash-1017",
   "external:z-ai/glm-5.3-flash"
  ],
  "payload": {

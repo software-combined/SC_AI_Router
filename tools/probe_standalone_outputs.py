@@ -1,7 +1,7 @@
 """Prepare-level and optional live proof for delivered tool history.
 
 Offline default prepares one --shape against the local source (--model,
-default deepseek/deepseek-v4.1-flash) and asserts the OpenRouter body:
+default deepseek/deepseek-v4.1-flash-1017) and asserts the OpenRouter body:
 - standalone (default): a captured no-call_id app-injected item must arrive
   as a matched call+output pair carrying the marker;
 - custom_pair: an undeclared custom tool call and its output, with no tools
@@ -25,7 +25,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ai_router import providers
 
-MODEL = 'deepseek/deepseek-v4.1-flash'
+MODEL = 'deepseek/deepseek-v4.1-flash-1017'
 MARKER = 'SYNTH_STANDALONE_MARKER_719'
 OPAQUE_MARKER = 'SYNTH_OPAQUE_REPLY_MARKER_719'
 CIPHER_MARKER = 'SYNTH_WITHHELD_CIPHER_719'

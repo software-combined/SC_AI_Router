@@ -22,7 +22,7 @@ from tools import probe_wire_shapes as probe
 
 KEY = 'sk-or-v1-test-key'
 CONTENT = 'SYNTH-CONTENT-CANARY-wire-shapes-7d41'
-MIMO, MUSE, DEEPSEEK = 'xiaomi/mimo-v2.6-flash', 'meta/muse-spark-1.3', 'deepseek/deepseek-v4.1-flash'
+MIMO, MUSE, DEEPSEEK = 'xiaomi/mimo-v2.6-flash', 'meta/muse-spark-1.3', 'deepseek/deepseek-v4.1-flash-1017'
 # shape: (input item types, declared tool types, the item type holding the marker)
 EXPECTED = {
     'custom_declared': (['message', 'custom_tool_call', 'custom_tool_call_output'], ['custom'],
@@ -97,8 +97,8 @@ class OfflineRunTests(unittest.TestCase):
         unverified = {'item.unverified_type': 2}
         self.assertEqual(lines[(MIMO, 'apply_patch')]['warnings'], unverified)
         self.assertEqual(lines[(MIMO, 'reasoning')]['warnings'], {})
-        # DeepSeek alone took custom items as sent (17 Sep), never apply_patch ones.
-        self.assertEqual(lines[(DEEPSEEK, 'custom_undeclared')]['warnings'], {})
+        # The new snapshot does not inherit the previous row's wire observations.
+        self.assertEqual(lines[(DEEPSEEK, 'custom_undeclared')]['warnings'], unverified)
         self.assertEqual(lines[(DEEPSEEK, 'apply_patch')]['warnings'], unverified)
 
     def test_only_openrouter_registry_rows_are_accepted(self):

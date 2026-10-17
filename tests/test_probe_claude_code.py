@@ -43,11 +43,11 @@ class MultiReadGateTest(unittest.TestCase):
 
     def test_sequential_reads_pass(self):
         report = _stream([
-            {'type': 'assistant', 'message': {'model': 'deepseek/deepseek-v4.1-flash',
+            {'type': 'assistant', 'message': {'model': 'deepseek/deepseek-v4.1-flash-1017',
                                              'content': [_read('probe-1.txt')]}},
             {'type': 'user', 'message': {'content': [
                 _result('probe-1.txt')]}},
-            {'type': 'assistant', 'message': {'model': 'deepseek/deepseek-v4.1-flash',
+            {'type': 'assistant', 'message': {'model': 'deepseek/deepseek-v4.1-flash-1017',
                                              'content': [_read('probe-2.txt')]}},
             {'type': 'user', 'message': {'content': [
                 _result('probe-2.txt')]}},
@@ -57,15 +57,15 @@ class MultiReadGateTest(unittest.TestCase):
         self.assertTrue(report['tool_result_ids_match'])
         self.assertTrue(probe._accepted(
             2, ['MARKER-1', 'MARKER-2'], report,
-            'deepseek/deepseek-v4.1-flash'))
+            'deepseek/deepseek-v4.1-flash-1017'))
 
     def test_reversed_reads_fail_the_order_gate(self):
         report = _stream([
-            {'type': 'assistant', 'message': {'model': 'deepseek/deepseek-v4.1-flash',
+            {'type': 'assistant', 'message': {'model': 'deepseek/deepseek-v4.1-flash-1017',
                                              'content': [_read('probe-2.txt')]}},
             {'type': 'user', 'message': {'content': [
                 _result('probe-2.txt')]}},
-            {'type': 'assistant', 'message': {'model': 'deepseek/deepseek-v4.1-flash',
+            {'type': 'assistant', 'message': {'model': 'deepseek/deepseek-v4.1-flash-1017',
                                              'content': [_read('probe-1.txt')]}},
             {'type': 'user', 'message': {'content': [
                 _result('probe-1.txt')]}},
@@ -74,7 +74,7 @@ class MultiReadGateTest(unittest.TestCase):
         self.assertTrue(report['sequential_reads'])
         self.assertFalse(probe._accepted(
             2, ['MARKER-1', 'MARKER-2'], report,
-            'deepseek/deepseek-v4.1-flash'))
+            'deepseek/deepseek-v4.1-flash-1017'))
 
     def test_parallel_reads_fail(self):
         report = _stream([
@@ -87,7 +87,7 @@ class MultiReadGateTest(unittest.TestCase):
         self.assertFalse(report['sequential_reads'])
         self.assertFalse(probe._accepted(
             2, ['MARKER-1', 'MARKER-2'], report,
-            'deepseek/deepseek-v4.1-flash'))
+            'deepseek/deepseek-v4.1-flash-1017'))
 
     def test_error_result_fails_even_with_both_markers(self):
         report = _stream([
@@ -103,7 +103,7 @@ class MultiReadGateTest(unittest.TestCase):
         self.assertTrue(report['sequential_reads'])
         self.assertFalse(probe._accepted(
             2, ['MARKER-1', 'MARKER-2'], report,
-            'deepseek/deepseek-v4.1-flash'))
+            'deepseek/deepseek-v4.1-flash-1017'))
 
     def test_extra_reads_fail_the_call_cap(self):
         report = _stream([
@@ -119,7 +119,7 @@ class MultiReadGateTest(unittest.TestCase):
                       read_paths=['probe-1.txt', 'probe-2.txt', 'probe-1.txt'])
         self.assertFalse(probe._accepted(
             2, ['MARKER-1', 'MARKER-2'], report,
-            'deepseek/deepseek-v4.1-flash'))
+            'deepseek/deepseek-v4.1-flash-1017'))
 
     def test_served_model_mismatch_fails_and_is_labelled(self):
         report = _stream([
@@ -133,11 +133,11 @@ class MultiReadGateTest(unittest.TestCase):
                 _result('probe-2.txt')]}},
             {'type': 'result', 'result': 'MARKER-1 MARKER-2', 'is_error': False},
         ])
-        self.assertEqual(probe._identity('deepseek/deepseek-v4.1-flash', report),
+        self.assertEqual(probe._identity('deepseek/deepseek-v4.1-flash-1017', report),
                          'mismatched')
         self.assertFalse(probe._accepted(
             2, ['MARKER-1', 'MARKER-2'], report,
-            'deepseek/deepseek-v4.1-flash'))
+            'deepseek/deepseek-v4.1-flash-1017'))
 
     def test_mismatched_duplicate_missing_or_swapped_result_ids_fail(self):
         cases = (
@@ -165,10 +165,10 @@ class MultiReadGateTest(unittest.TestCase):
                 self.assertFalse(report['tool_result_ids_match'])
                 self.assertFalse(probe._accepted(
                     2, ['MARKER-1', 'MARKER-2'], report,
-                    'deepseek/deepseek-v4.1-flash'))
+                    'deepseek/deepseek-v4.1-flash-1017'))
 
     def test_truthful_id_resolves_to_served_upstream_identity(self):
-        slug = 'deepseek/deepseek-v4.1-flash'
+        slug = 'deepseek/deepseek-v4.1-flash-1017'
         alias = slug
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)

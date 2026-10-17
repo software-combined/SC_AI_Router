@@ -9,7 +9,7 @@ from tests.fakes import FakeUpstream, install_fake
 from tests.harness import auth_file, post, start_server, test_state
 from tests.test_messages_stream_contract import START, ending, frame
 
-MODEL = 'deepseek/deepseek-v4.1-flash'
+MODEL = 'deepseek/deepseek-v4.1-flash-1017'
 CLIENT = {'name': 'Read', 'input_schema': {'type': 'object', 'properties': {}}}
 OVERLOAD = frame('error', error={'type': 'overloaded_error', 'message': 'synthetic'})
 DONE = START + ending('end_turn')

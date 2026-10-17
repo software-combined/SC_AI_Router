@@ -2,7 +2,7 @@
  "scenario": "s05_router_compaction",
  "targets": [
   "subscription:gpt-6-astra",
-  "external:deepseek/deepseek-v4.1-flash"
+  "external:deepseek/deepseek-v4.1-flash-1017"
  ],
  "payload": {
   "instructions": "You are the synthetic coding agent for the replay goldens.",

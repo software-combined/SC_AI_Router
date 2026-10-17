@@ -59,8 +59,8 @@ EFFORT = 'low'
 # before its first switch. A subscription child's reply is expected to carry
 # an encrypted block; a run without one records "shape not produced".
 CELLS = {
-    'C3': (('z-ai/glm-5.3-flash', 'gpt-6-luna'), 'deepseek/deepseek-v4.1-flash', False),
-    'C5': (('deepseek/deepseek-v4.1-flash', 'gpt-6-luna'), 'gpt-6-luna', True),
+    'C3': (('z-ai/glm-5.3-flash', 'gpt-6-luna'), 'deepseek/deepseek-v4.1-flash-1017', False),
+    'C5': (('deepseek/deepseek-v4.1-flash-1017', 'gpt-6-luna'), 'gpt-6-luna', True),
 }
 STOPPED = 'probe stopped after a refused or failed call'
 BUDGET = 'live token budget reached'

@@ -134,8 +134,8 @@ class RoutingTests(unittest.TestCase):
                 'namespace': 'codex_app',
                 'output': '<codex_delegation>SYNTH_HANDOFF_MARKER_719</codex_delegation>'}
         data = json.loads(_prepared(
-            'deepseek/deepseek-v4.1-flash', '/responses',
-            {'model': 'deepseek/deepseek-v4.1-flash', 'input': [item]}).body)['input']
+            'deepseek/deepseek-v4.1-flash-1017', '/responses',
+            {'model': 'deepseek/deepseek-v4.1-flash-1017', 'input': [item]}).body)['input']
         self.assertEqual(len(data), 2)
         call, result = data
         self.assertEqual(call['type'], 'function_call')

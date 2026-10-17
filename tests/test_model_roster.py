@@ -15,11 +15,12 @@ RETIRED_LATEST = ('~anthropic/claude-sonnet-latest', '~anthropic/claude-fable-la
                   '~google/gemini-flash-latest', '~google/gemini-pro-latest',
                   '~x-ai/grok-latest')
 
-PINNED_DEEPSEEK = (('deepseek/deepseek-v4-pro-0813', 1048576, 384000, ('text',)),
-                   ('deepseek/deepseek-v4.1-flash', 1048576, 384000,
-                    ('text', 'image')))
+PINNED_DEEPSEEK = (('deepseek/deepseek-v4-pro-0813', 1048576, 384000, ('text',),
+                    ('low', 'high', 'max')),
+                   ('deepseek/deepseek-v4.1-flash-1017', 1048576, 393216,
+                    ('text', 'image'), ('none', 'low', 'high', 'max')))
 RETIRED_DEEPSEEK = ('deepseek/deepseek-v4-pro', 'deepseek/deepseek-v4-flash',
-                    'deepseek/deepseek-v4-flash-0731',
+                    'deepseek/deepseek-v4-flash-0731', 'deepseek/deepseek-v4.1-flash',
                     '~deepseek/deepseek-v4-flash-latest',
                     'deepseek/deepseek-v4-flash-vision-exp')
 
@@ -66,19 +67,22 @@ class ModelRosterTests(unittest.TestCase):
                 self.assertIn(slug, merged)
 
     def test_pinned_deepseek_metadata_and_verified_status(self):
-        for slug, context, output, modalities in PINNED_DEEPSEEK:
+        for slug, context, output, modalities, reasoning in PINNED_DEEPSEEK:
             model = by_slug(slug)
             with self.subTest(slug=slug):
                 self.assertIsNotNone(model)
-                self.assertEqual(model.reasoning, ('low', 'high', 'max'))
+                self.assertEqual(model.reasoning, reasoning)
                 self.assertEqual(model.context_window, context)
                 self.assertEqual(model.max_output_tokens, output)
                 self.assertEqual(model.modalities, modalities)
                 self.assertEqual(model.tier, 'verified')
-        # DeepSeek keeps two pinned rows; the alias and Vision rows are retired.
+        # Old snapshots leave the picker; saved Flash sessions keep a hidden route.
         for slug in RETIRED_DEEPSEEK:
             with self.subTest(slug=slug):
-                self.assertIsNone(by_slug(slug))
+                if slug == 'deepseek/deepseek-v4.1-flash':
+                    self.assertFalse(by_slug(slug).listed)
+                else:
+                    self.assertIsNone(by_slug(slug))
                 self.assertIn(slug, RETIRED_SLUGS)
 
     def test_retired_deepseek_snapshots_drop_from_merged_catalogue(self):
@@ -87,7 +91,7 @@ class ModelRosterTests(unittest.TestCase):
         slugs = {m['slug'] for m in merged['models']}
         for slug in RETIRED_DEEPSEEK:
             self.assertNotIn(slug, slugs)
-        self.assertIn('deepseek/deepseek-v4.1-flash', slugs)
+        self.assertIn('deepseek/deepseek-v4.1-flash-1017', slugs)
 
     def test_superseded_pinned_grok_id_retires_on_upgrade(self):
         # A machine whose catalogue still carries the superseded pin must

@@ -2,7 +2,7 @@
  "scenario": "s12_portable_row",
  "targets": [
   "external:meta/muse-spark-1.3-contributor",
-  "external:deepseek/deepseek-v4.1-flash"
+  "external:deepseek/deepseek-v4.1-flash-1017"
  ],
  "payload": {
   "instructions": "You are the synthetic coding agent for the replay goldens.",

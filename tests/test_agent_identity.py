@@ -17,7 +17,7 @@ from tests.test_request_evidence import setup, done
 CHILD = '01a11428-40c9-7730-9d3d-8f1717622c04'
 OTHER = '01a11428-4166-7140-8b03-4f784b1bcd1e'
 PARENT = '01a11351-9d60-7133-b848-8b3232e8667b'
-MODEL = 'deepseek/deepseek-v4.1-flash'
+MODEL = 'deepseek/deepseek-v4.1-flash-1017'
 CANARY = 'PRIVATE HEADER TOOL CONTENT'
 START = datetime(2026, 10, 7, 0, tzinfo=timezone.utc)
 END = datetime(2026, 10, 7, 1, tzinfo=timezone.utc)

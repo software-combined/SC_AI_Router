@@ -58,7 +58,7 @@ class ModelRefreshTests(unittest.TestCase):
         self.addCleanup(setattr, capabilities, 'REASONING_LEVELS', self._levels)
 
     def test_valid_payload_swaps_atomically_and_rebuilds_derived(self):
-        old_alias = claude.claude_alias('deepseek/deepseek-v4.1-flash')
+        old_alias = claude.claude_alias('deepseek/deepseek-v4.1-flash-1017')
         body = json.dumps([_row(), _row('qwen/qwen-1')]).encode()
         with tempfile.TemporaryDirectory() as tmp:
             models, etag = model_refresh.poll_once('https://m.invalid/models', tmp, None,

@@ -2,7 +2,7 @@
  "scenario": "s11_images_text_only",
  "targets": [
   "external:x-ai/grok-4.7",
-  "external:deepseek/deepseek-v4.1-flash"
+  "external:deepseek/deepseek-v4.1-flash-1017"
  ],
  "payload": {
   "instructions": "You are the synthetic coding agent for the replay goldens.",

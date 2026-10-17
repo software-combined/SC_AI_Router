@@ -77,6 +77,9 @@ def _pin_release(row, bundled_by_slug):
     pinned = bundled_by_slug.get(row.slug)
     if pinned is None:
         return row
+    if row.slug in catalogue.RETIRED_SLUGS:
+        # Saved-session compatibility targets must not revert to an old cache.
+        return pinned
     same_target = ((row.provider, registry.upstream_id_for(row)) ==
                    (pinned.provider, registry.upstream_id_for(pinned)))
     return replace(row, reasoning=pinned.reasoning,

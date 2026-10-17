@@ -21,7 +21,7 @@ from tests.test_availability import _ok
 from tests.test_model_prompt import _write_policy
 
 KEY = 'k'
-FLASH, TWIN, QWEN = ('deepseek/deepseek-v4.1-flash', 'openai/gpt-6-astra',
+FLASH, TWIN, QWEN = ('deepseek/deepseek-v4.1-flash-1017', 'openai/gpt-6-astra',
                      'qwen/qwen3.8-max-0902')
 
 

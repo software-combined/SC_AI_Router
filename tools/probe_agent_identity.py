@@ -15,7 +15,7 @@ from ai_router.registry import by_slug
 from ai_router.request_evidence import thread_id as uuid_value
 from tools import probe_agent_handoffs as handoffs
 
-MODEL = 'deepseek/deepseek-v4.1-flash'
+MODEL = 'deepseek/deepseek-v4.1-flash-1017'
 CALLS = ('call_identity_a', 'call_identity_b')
 
 

@@ -21,7 +21,7 @@ from tests.test_agent_handoffs import native_tools
 from tests.test_replay_golden import EXPECTED, FIXTURES, golden_name
 
 NATIVE = 'subscription:gpt-6-astra'
-EXTERNAL = 'external:deepseek/deepseek-v4.1-flash'
+EXTERNAL = 'external:deepseek/deepseek-v4.1-flash-1017'
 HELPER = 'gpt-5.6-luna'
 HELPER_HEADERS = {'x-codex-turn-metadata': json.dumps({'thread_source': 'thread_title'})}
 

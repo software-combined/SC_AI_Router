@@ -1,5 +1,54 @@
 # Compatibility
 
+## DeepSeek Flash 1017 and release checks, 17 October 2026 AEDT
+
+The pinned `deepseek/deepseek-v4.1-flash-1017` replaces the earlier Flash ID.
+OpenRouter advertises a 1,048,576-token context, 393,216-token output limit,
+text and image input, and None, Low, High and Max reasoning. Low stays the default.
+The new row does not inherit the earlier snapshot's recorded wire observations.
+The previous ID remains hidden as a compatibility route to the new snapshot,
+so saved model selections and sessions continue after an update. Older model
+caches cannot restore that route's previous target or picker visibility.
+
+Real checks used Codex desktop `26.1013.31256`, bundled CLI
+`0.163.0-alpha.10.2`, and Claude Code `2.1.283`. Every task used synthetic data.
+
+| Client / route | Requested model / effort | Physical sends | Verified result |
+| --- | --- | --- | --- |
+| Codex / OpenRouter | `deepseek/deepseek-v4.1-flash-1017` / low | 4 | Streamed tool, image and compaction passed |
+| Claude Code / OpenRouter | `deepseek/deepseek-v4.1-flash-1017` / low | 3 | Two sequential Reads and paired results passed |
+| Codex / ChatGPT subscription | `gpt-6-luna` / low | 2 | Dynamic tool round trip passed |
+| Claude Code / subscription | `sonnet` / low | 2 | Read and returned marker passed; CLI reported `claude-sonnet-5` |
+
+A separate four-send Codex check passed freeform `apply_patch` on a scratch file.
+Both external routes reported the exact snapshot. Codex reported Low effort;
+Claude did not expose served effort. The native Codex check did not retain
+served identity. These are client or provider reports, not independent attestation.
+The acceptance ledger binds the external route proof to the capability and runtime
+fingerprints. Those checks used a twelve-attempt cap, 512 KiB input,
+65,536 output tokens and a 750-second deadline. Claude also used a USD 0.25 cap.
+An intermediate Codex recheck failed after three sends without retained diagnostics.
+The final check above retained diagnostics and passed every leg on the final runtime.
+The old saved ID also completed real tool round trips: two Codex sends and three
+Claude sends, both reporting the new snapshot. An initial Claude old-ID check
+failed after three sends; the diagnostic recheck passed with a 2,048-token cap.
+Each subscription route allowed three sends. Claude output was capped at 2,048
+tokens; the native Codex endpoint does not accept an output-token parameter.
+The first native attempts stopped before inference because the test configuration
+was invalid and the saved Claude session had expired. The corrected checks above
+used the existing subscriptions after normal sign-in renewal.
+
+The retained macOS repair entry point also passed with the service initially
+stopped. Its installer, payload, client-selection and launchd files matched the
+candidate. Repair restored version `1.2.6.175`; a bounded request completed and
+returned its synthetic marker. Two single-request attempts were made, capped at
+256 and 2,048 output tokens. The latter included extra prose around the marker.
+The test restored all three service jobs to stopped and preserved the captured
+settings, key, channel, release pointer and attachment state. This exercised the
+function called by the permanent menu; menu presentation reuses the prior pilot
+evidence. It does not establish fresh-session readiness for detached clients.
+Windows and Linux graphical packages remain private pending their native matrix.
+
 ## Portability client checks, 15 October 2026 AEDT
 
 Four real client legs passed between 23:23:26 and 23:23:43 AEDT on commit
