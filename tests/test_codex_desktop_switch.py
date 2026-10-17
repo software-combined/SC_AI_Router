@@ -270,7 +270,7 @@ class SwitchFlowTests(unittest.TestCase):
             self.assertTrue(held)
             with self.assertRaisesRegex(switcher.SwitchError, 'updating'):
                 self.run_switch(self.fake())
-        with mock.patch.object(switcher.sys, 'platform', 'linux'):
+        with mock.patch.object(switcher.sys, 'platform', 'freebsd'):
             with self.assertRaisesRegex(switcher.SwitchError, 'on Mac'):
                 self.run_switch(self.fake())
 

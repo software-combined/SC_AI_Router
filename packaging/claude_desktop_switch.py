@@ -134,35 +134,43 @@ def _reopened(message, platform_ops, run):
 
 
 def switch(home, *, run=subprocess.run, policy_check=None, action='switch',
-           sync=None, platform_ops=None, profile_env=None):
+           sync=None, platform_ops=None, profile_env=None, target=None):
     """Open Claude normally, or share saved tasks before switching profiles."""
+    if target not in (None, '1p', '3p'):
+        raise ValueError('Unknown Claude destination.')
     if action not in ('start', 'switch'):
         raise SwitchError('Unknown Claude action.')
     if _service.fcntl is None and _service.msvcrt is None:
         raise SwitchError('Claude could not be opened safely. Try again.')
     # The copy lock ends before mode publication. Hold this lock across the
     # whole transition so another launcher cannot copy using a stale mode.
-    with _service.install_lock(home, '.claude-profile-switch.lock') as acquired:
-        if not acquired:
-            raise SwitchError('Claude is already opening or switching. Try again shortly.')
-        return _run_action(home, run=run, policy_check=policy_check, action=action,
-                           sync=sync, platform_ops=platform_ops, profile_env=profile_env)
+    with _service.install_lock(home) as installation:
+        if not installation:
+            raise SwitchError('SCG Router is already updating or switching. Try again shortly.')
+        with _service.install_lock(home, '.claude-profile-switch.lock') as acquired:
+            if not acquired:
+                raise SwitchError('Claude is already opening or switching. Try again shortly.')
+            return _run_action(home, run=run, policy_check=policy_check, action=action,
+                               sync=sync, platform_ops=platform_ops, profile_env=profile_env,
+                               target=target)
 
 
-def _run_action(home, *, run, policy_check, action, sync, platform_ops, profile_env):
+def _run_action(home, *, run, policy_check, action, sync, platform_ops, profile_env, target=None):
     platform_ops = _platform if platform_ops is None else platform_ops
     config, before = attached_profile(home)
     if policy_check is None:
         policy_check = lambda: platform_ops.policy_disabled(
             sys.platform, run=run, profile=config.parent)
     current_mode = before['deploymentMode']
+    if action == 'switch' and target == current_mode:
+        return current_mode
     if action == 'start':
         try:
             _open(platform_ops, run)
         except (OSError, subprocess.SubprocessError) as exc:
             raise SwitchError('Claude could not open. Open Claude to continue.') from exc
         return current_mode
-    mode = '1p' if current_mode == '3p' else '3p'
+    mode = target or ('1p' if current_mode == '3p' else '3p')
     try:
         context = _sync_context(home, config.parent, profile_env)
         if policy_check() is not False:
@@ -289,9 +297,10 @@ def main(argv=None):
         'ROUTER_HOME', str(Path.home() / '.codex' / 'mixed-model-router')))
     parser.add_argument('--action', choices=('start', 'switch'),
                         default='switch')
+    parser.add_argument('--to', choices=('1p', '3p'))
     args = parser.parse_args(argv)
     try:
-        switch(Path(args.home).expanduser(), action=args.action)
+        switch(Path(args.home).expanduser(), action=args.action, target=args.to)
         return 0
     except Exception as exc:
         message = str(exc) if isinstance(exc, SwitchError) else 'Claude could not be opened safely. Try again.'

@@ -1,4 +1,4 @@
-"""Switch the ChatGPT app (Codex) to OpenRouter models and back, on a Mac.
+"""Switch the ChatGPT app (Codex) to OpenRouter models and back.
 
 Codex desktop 26.917.51856 and later disables Send for every model once the
 ChatGPT allowance runs out, but only while its provider needs OpenAI sign-in.
@@ -80,11 +80,13 @@ class SwitchError(Exception):
     """A message safe to show: no paths, settings, addresses or keys."""
 
 
-def switch(home, *, run=subprocess.run, platform_ops=None, prove=None, ready=None):
+def switch(home, *, run=subprocess.run, platform_ops=None, prove=None, ready=None, target=None):
     """Move Codex to the other variant; returns it, or None when cancelled."""
+    if target not in (None, SWITCHED, SWITCHED_BACK):
+        raise ValueError('Unknown Codex destination.')
     home, record = Path(home), {'to': None}
     try:
-        if sys.platform != 'darwin':
+        if sys.platform not in ('darwin', 'win32', 'linux'):
             raise SwitchError(MAC_ONLY)
         # The installer's lock: an update rewrites the same config and receipt.
         with _service.install_lock(home) as held:
@@ -92,7 +94,7 @@ def switch(home, *, run=subprocess.run, platform_ops=None, prove=None, ready=Non
                 raise SwitchError(BUSY)
             target = _switch(home, run, _platform if platform_ops is None else platform_ops,
                              _proof.prove if prove is None else prove,
-                             _route_ready if ready is None else ready, record)
+                             _route_ready if ready is None else ready, record, target)
     except Exception as exc:
         _log(home, record, str(exc) if isinstance(exc, SwitchError) else FAILED)
         raise
@@ -100,7 +102,7 @@ def switch(home, *, run=subprocess.run, platform_ops=None, prove=None, ready=Non
     return target
 
 
-def _switch(home, run, ops, prove, ready, record):
+def _switch(home, run, ops, prove, ready, record, target=None):
     root = _app_root(ops, run)
     _recover(home, prove, root)
     try:
@@ -112,7 +114,9 @@ def _switch(home, run, ops, prove, ready, record):
         raise SwitchError(_blocks.EDITED) from exc
     if current is None:
         raise SwitchError(_blocks.NOT_CONNECTED)
-    target = record['to'] = SWITCHED_BACK if current == SWITCHED else SWITCHED
+    if target and ((current == SWITCHED) == (target == SWITCHED)):
+        return target
+    target = record['to'] = target or (SWITCHED_BACK if current == SWITCHED else SWITCHED)
     if target == SWITCHED:
         if entry.get('openai_mode') == 'none':
             raise SwitchError(NOTHING_TO_SWITCH)
@@ -121,14 +125,14 @@ def _switch(home, run, ops, prove, ready, record):
         if root is None or _proof.codex_bin(os.environ, root) is None:
             raise SwitchError(NO_APP)
     try:
-        if not ops.confirm(PROMPTS[target] if root else QUIT_FIRST, 'darwin', run=run):
+        if not ops.confirm(PROMPTS[target] if root else QUIT_FIRST, sys.platform, run=run):
             return None
     except (OSError, subprocess.SubprocessError) as exc:
         raise SwitchError(FAILED) from exc
     closed = None  # the way back may go on with no app it can quit or reopen
     if root is not None:
         try:
-            closed = ops.request_stop('darwin', run=run, app=CODEX)
+            closed = ops.request_stop(sys.platform, run=run, app=CODEX)
         except (OSError, subprocess.SubprocessError) as exc:
             if target == SWITCHED:
                 raise SwitchError(FAILED) from exc
@@ -162,7 +166,7 @@ def _switch(home, run, ops, prove, ready, record):
 def _app_root(ops, run):
     """The ChatGPT app's bundle when exactly one is found, else None."""
     try:
-        return ops.app_identity('darwin', run=run, app=CODEX)['root']
+        return ops.app_identity(sys.platform, run=run, app=CODEX)['root']
     except Exception:
         return None
 
@@ -239,13 +243,13 @@ def _notice(ops, run, message):
     """One closing message; a dialog that cannot show changes nothing."""
     print(message)
     try:
-        ops.show_message(message, 'darwin', run=run)
+        ops.show_message(message, sys.platform, run=run)
     except (OSError, subprocess.SubprocessError):
         pass
 
 
 def _open(ops, run):
-    answer = ops.open_app('darwin', run=run, app=CODEX)
+    answer = ops.open_app(sys.platform, run=run, app=CODEX)
     if getattr(answer, 'returncode', 0) != 0:
         raise OSError('the app did not open')
 
@@ -289,9 +293,10 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--home', default=os.environ.get(
         'ROUTER_HOME', str(Path.home() / '.codex' / 'mixed-model-router')))
+    parser.add_argument('--to', choices=(SWITCHED, SWITCHED_BACK))
     args = parser.parse_args(argv)
     try:
-        switch(Path(args.home).expanduser())
+        switch(Path(args.home).expanduser(), target=args.to)
         return 0
     except Exception as exc:
         message = str(exc) if isinstance(exc, SwitchError) else FAILED

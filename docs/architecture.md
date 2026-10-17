@@ -31,6 +31,13 @@ download grants for legacy consumers. It cannot change model routing or provider
 
 ## Domains and direction
 
+Desktop connection commands accept explicit destinations. The switch owner
+rechecks the current selection while holding the installation lock, followed
+by the client transition and profile locks. Repeated destination selections
+do nothing. Existing shortcuts retain their toggle behaviour. Platform identity
+and lifecycle helpers serve both clients; the configuration proof uses the
+CLI bundled with the verified desktop app.
+
 ```
 provider_defs (one definition per upstream, imports nothing) + errors,
 redaction, sse, tool_merge, image_items, turn_budget, atomic_write, dialog_tool, state,

@@ -62,6 +62,7 @@ load packaging/service.py
 load packaging/systemd.py
 load packaging/updater.py
 load packaging/platforms/__init__.py
+load packaging/desktop_windows.py
 load packaging/platforms/darwin.py
 load packaging/platforms/linux.py
 load packaging/platforms/windows.py

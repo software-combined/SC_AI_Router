@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add explicit desktop connection destinations while retaining existing switch
+  shortcuts. Claude transitions now serialize with installation and updates.
+
 ## 1.2.11
 
 - Offer stable downloads only, with a simpler page aligned to Softcom Hub.

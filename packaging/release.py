@@ -54,6 +54,7 @@ PACKAGING_FILES = (
     'packaging/claude_desktop_policy.py',
     'packaging/claude_desktop_platform.py',
     'packaging/desktop_linux.py',
+    'packaging/desktop_windows.py',
     'packaging/claude_desktop_switch.py',
     'packaging/claude_profile_rules.py',
     'packaging/claude_profile_identity.py',
