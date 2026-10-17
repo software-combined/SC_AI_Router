@@ -35,11 +35,11 @@ class ReleaseShellTests(unittest.TestCase):
                 work = Path(tmp)
                 # Build the real bundle; gh is the sole external boundary.
                 (work / 'packaging').symlink_to(ROOT / 'packaging', target_is_directory=True)
-                bin_dir = work / 'bin'
-                bin_dir.mkdir()
+                bin_dir = work / 'bin'; bin_dir.mkdir()
                 (bin_dir / 'python').symlink_to(sys.executable)
                 gh = bin_dir / 'gh'
                 gh.write_text(f'#!{sys.executable}\nimport json,sys\n'
+                              'if sys.argv[1:3] == ["release", "view"]: sys.exit(1)\n'
                               'open("gh-args.json", "w").write(json.dumps(sys.argv[1:]))\n')
                 gh.chmod(0o700)
                 tag = f'v{base}{suffix}'
