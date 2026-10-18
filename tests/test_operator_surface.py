@@ -281,11 +281,10 @@ class OperatorSurfaceTests(unittest.TestCase):
         (home / 'update-etag').write_text('etag-A\n')
         args = self._args(home, '--check-update', '--feed', FEED)
         buf = io.StringIO()
-        with contextlib.redirect_stdout(buf):
-            rc = install_mod.do_check_update(
+        with contextlib.redirect_stdout(buf), self.assertRaisesRegex(SystemExit, 'cached'):
+            install_mod.do_check_update(
                 args, _read_feed=lambda feed, etag: (304, b'', 'etag-B'))
-        self.assertEqual(rc, 0)
-        self.assertIn('up to date', buf.getvalue())
+        self.assertNotIn('up to date', buf.getvalue())
         self.assertEqual((home / 'update-etag').read_text(), 'etag-A\n')
 
     def test_update_applies_and_records_the_pass_in_state(self):

@@ -50,6 +50,11 @@ model bytes against a signed feed's checksum. The inference process only reads
 the resulting model cache. `infra/downloads` owns token verification and short
 download grants for legacy consumers. It cannot change model routing or provider credentials.
 
+`update_status` owns verified channel facts, cache identity and repair summaries.
+Only a verified release for the same channel and source can support a cached
+current-version response. Diagnostics and controls read those facts without
+changing state. A successful feed check cannot clear an incomplete installation.
+
 ## Domains and direction
 
 Desktop connection commands accept explicit destinations. The switch owner

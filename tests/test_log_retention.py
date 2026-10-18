@@ -98,13 +98,13 @@ class RetentionTriggerTests(unittest.TestCase):
             stale = _aged(home / 'logs' / 'support-20260101T000000Z.json')
             args = install_mod.build_parser().parse_args(
                 ['--feed', 'file:///latest.json', '--home', str(home)])
-            with redirect_stdout(io.StringIO()):
-                rc = install_mod.do_update(
+            # A legacy unbound 304 is refused, and failed passes still age logs.
+            with redirect_stdout(io.StringIO()), self.assertRaisesRegex(SystemExit, 'cached'):
+                install_mod.do_update(
                     args, _fetch=lambda url: b'',
                     _read_feed=lambda feed, etag: (304, b'', 'etag'),
                     _sleep=lambda seconds: None,
                     _announce=lambda _home, _state: None)
-            self.assertEqual(rc, 0)
             self.assertFalse(stale.exists(), 'a scheduled pass ages logs out')
 
 

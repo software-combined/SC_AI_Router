@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Show the latest verified channel version and last successful update check.
+  Keep failed and parked updates visible after cached responses, channel changes
+  and runtime rollback. Report component repair separately from routing health.
+
 - Preserve Codex line endings, preference comments and unrelated formatting
   during repair and removal. Provide a read-only ownership report with specific
   conflict reasons and no configuration contents.

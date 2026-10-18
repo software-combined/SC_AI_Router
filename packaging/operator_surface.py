@@ -31,14 +31,9 @@ _atomic = _svc.load('router_atomic_write',
                     Path(__file__).resolve().parent / 'atomic_write.py')
 
 OK, WARN, FAIL = 'OK', 'WARN', 'FAIL'
-_MAX_FAILURES = _updater.MAX_VERSION_FAILURES
 # The activation receipt's client names are a closed set; a hand-edited or
 # corrupted key must never ride into the support bundle as free text.
 _BUNDLE_CLIENTS = ('codex', 'claude', 'claude-desktop')
-# The bundle may carry timestamps and versions, so their shape is checked
-# before anything from the state document reaches it.
-_STAMP = re.compile(r'[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z')
-_VERSION = re.compile(r'[0-9A-Za-z._+-]{1,32}')
 # Listing ids come from the registry or the loopback answer; anything else
 # is not printable in a doctor row (Plan 148 review).
 _ID_SHAPE = re.compile(r'[A-Za-z0-9._/~+-]{1,128}')
@@ -74,8 +69,7 @@ def bind(**overrides):
         globals()[name if name != 'diag' else '_diag'] = value
 
 
-def _utc_stamp():
-    return time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+_utc_stamp = _updater._status.utc_now
 
 
 def _age_hours(stamp):
@@ -272,27 +266,13 @@ def _doctor_rows(args, home, state):
                      sched_detail,
                      None if sched_status == 'current' else
                      're-run the installer to re-render the scheduled command'))
-    summary = _diag._update_summary(state)
-    parked = sorted(v for v, count in summary['failures'].items()
-                    if count >= _MAX_FAILURES)
-    if summary['last_error']:
-        rows.append(_row('update', WARN, 'last pass failed: ' + summary['last_error'],
-                         'read logs/update.log; the updater parks a version '
-                         'after three failed attempts'))
-    elif parked:
-        rows.append(_row('update', WARN,
-                         'parked: ' + ', '.join(
-                             '%s x%d' % (v, summary['failures'][v]) for v in parked),
-                         'run the installer by hand to retry the parked version'))
-    elif summary['last_check_at']:
-        age = _age_hours(summary['last_check_at'])
-        rows.append(_row('update', WARN if age is None or age > 12 else OK,
-                         'last check ' + summary['last_check_at']
-                         + ('' if age is None else ' (%.0f h ago)' % age),
-                         'the timer runs every 4 hours; re-run the installer '
-                         'if it is missing'))
-    else:
-        rows.append(_row('update', OK, 'no scheduled pass recorded yet'))
+    summary = _diag._update_summary(state, version, _svc.channel_feed(home),
+                                   _updater._status.channel(home))
+    age = _age_hours(summary['last_check_at']) if summary['last_check_at'] else None
+    warning = bool(summary['required_action']) or bool(summary['last_check_at']
+                  and (age is None or age > 8.25))
+    rows.append(_row('update', WARN if warning else OK, _diag._update_line(summary),
+                     'run the current public setup to update or repair' if warning else None))
     return rows
 
 
@@ -330,11 +310,7 @@ def _support_document(doc, now=None):
     clients = _mapping(doc.get('clients'))
     catalogue = _mapping(doc.get('catalogue'))
 
-    def _stamp(value):
-        return value if isinstance(value, str) and _STAMP.fullmatch(value) else None
-
-    def _version(value):
-        return value if isinstance(value, str) and _VERSION.fullmatch(value) else None
+    _stamp, _version = _updater._status.stamp, _updater._status.version
 
     def _enum(value, allowed):
         return value if value in allowed else None
@@ -346,6 +322,7 @@ def _support_document(doc, now=None):
         'install': {
             'installed': bool(doc.get('installed')),
             'version': _version(doc.get('version')),
+            'running_version': _version(doc.get('running_version')),
             'channel': _enum(doc.get('channel'), ('stable', 'beta'))},
         'service': {'serving': (doc.get('serving')
                                 if isinstance(doc.get('serving'), bool) else None)},
@@ -359,6 +336,12 @@ def _support_document(doc, now=None):
                     if name in _BUNDLE_CLIENTS},
         'update': {
             'last_check_at': _stamp(update.get('last_check_at')),
+            'last_successful_check_at': _stamp(update.get('last_successful_check_at')),
+            'latest_known_version': _version(update.get('latest_known_version')),
+            'latest_known_channel': _enum(update.get('latest_known_channel'), ('stable', 'beta')),
+            'required_action': _enum(update.get('required_action'), ('repair', 'update')),
+            'installation_repair_required': update.get('installation_repair_required') is True,
+            'component_repairs': _updater._status.components(update),
             'last_applied_version': _version(update.get('last_applied_version')),
             'last_error': error if error in _updater.ERROR_CODES else None,
             'failed_versions': len(_mapping(update.get('failures')))},

@@ -68,6 +68,18 @@ class StatusTests(unittest.TestCase):
         self.assertNotIn('test-token', blob)
         self.assertNotIn('sk-test', blob)
 
+    def test_running_health_is_separate_from_the_installed_version_match(self):
+        home = self._home()
+        _patch_attrs(self, health=lambda state, timeout=20: {'status': 'ok', 'version': '0.9.9'})
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            install_mod.do_status(self._args(home))
+        doc = json.loads(output.getvalue())
+        self.assertEqual(doc['version'], '1.0.0')
+        self.assertEqual(doc['running_version'], '0.9.9')
+        self.assertTrue(doc['routing_healthy'])
+        self.assertFalse(doc['serving'])  # Existing readiness interface still checks the pointer.
+
     @requires_posix_perms
     def test_group_readable_key_is_present_but_not_usable(self):
         home = self._home()

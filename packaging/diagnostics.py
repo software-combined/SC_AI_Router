@@ -124,6 +124,8 @@ def _status_document(home):
     version = current_version(home)
     installed = version != '0.0.0'
     serving = None
+    running = None
+    routing = None
     if (installed and isinstance(state, dict) and isinstance(state.get('port'), int)
             and isinstance(state.get('token'), str)):
         try:
@@ -132,6 +134,8 @@ def _status_document(home):
             body = None
         serving = bool(body and body.get('status') == 'ok'
                        and body.get('version') == version)
+        running = _updater._status.version(body.get('version')) if body else None
+        routing = bool(body and body.get('status') == 'ok')
     keys = _provider_defs()
     defs = keys.external_defs()
     per_provider = {defn.id: keys.key_state(home, state, os.environ, defn, _key_private)
@@ -156,6 +160,8 @@ def _status_document(home):
     clients = {name: _client(entry) for name, entry in receipt_clients.items()}
     feed = _svc.channel_feed(home)
     doc = {'installed': installed, 'version': version if installed else None,
+           'running_version': running,
+           'routing_healthy': routing,
            'serving': serving, 'key_present': present, 'key_usable': usable,
            'feed': _svc.feed_source(feed),
            'channel': ((home / 'channel').read_text().strip()
@@ -168,7 +174,7 @@ def _status_document(home):
                                 and isinstance(state['setup'].get('expires'), (int, float))
                                 and state['setup']['expires'] > time.time()),
            'clients': clients,
-           'update': _update_summary(state)}
+           'update': _update_summary(state, version, feed, _updater._status.channel(home))}
     return doc
 
 
@@ -180,6 +186,7 @@ def do_status(args):
         print(json.dumps(doc, indent=2, sort_keys=True))
     else:
         print('version: %s' % (doc['version'] or 'not installed'))
+        print('running version: %s' % (doc['running_version'] or 'unknown'))
         print('service: %s' % ({True: 'serving', False: 'not serving',
                                 None: 'unknown'}[doc['serving']]))
         print('key: %s' % ('usable' if doc['key_usable']
@@ -189,25 +196,8 @@ def do_status(args):
         print('clients: %s' % (', '.join(sorted(doc['clients'])) or 'none'))
         print('update: %s' % _update_line(doc['update']))
     return 0
-def _update_summary(state):
-    """Update recency, last error code and per-version failure counts."""
-    doc = state if isinstance(state, dict) else {}
-    failures = doc.get('update_failures')
-    seen = ({str(k): v for k, v in failures.items()
-             if isinstance(v, int) and v > 0}
-            if isinstance(failures, dict) else {})
-
-    def _text(key):
-        value = doc.get(key)
-        return value if isinstance(value, str) else None
-
-    error = _text('last_error')
-    return {'last_check_at': _text('last_check_at'),
-            'last_applied_version': _text('last_applied_version'),
-            # Only a code from the closed set is ever printed or bundled; a
-            # hand-edited state file must not put free text on stdout.
-            'last_error': error if error in _updater.ERROR_CODES else None,
-            'failures': seen}
+def _update_summary(state, current=None, feed=None, channel=None):
+    return _updater._status.summary(state, current, feed, channel)
 
 
 def _update_line(summary):
@@ -215,10 +205,14 @@ def _update_line(summary):
                     if count >= _MAX_FAILURES)
     parts = ['checked ' + summary['last_check_at'] if summary['last_check_at']
              else 'no scheduled pass recorded']
+    parts.append('latest known ' + (summary['latest_known_version'] or 'unknown'))
+    parts.append('last successful check ' + (summary['last_successful_check_at'] or 'unknown'))
     if summary['last_applied_version']:
         parts.append('applied ' + summary['last_applied_version'])
     if summary['last_error']:
         parts.append('last error ' + summary['last_error'])
+    if summary['required_action']:
+        parts.append('run setup to ' + summary['required_action'])
     if parked:
         parts.append('parked ' + ', '.join(
             '%s x%d' % (v, summary['failures'][v]) for v in parked))
