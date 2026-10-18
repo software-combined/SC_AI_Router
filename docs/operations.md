@@ -15,8 +15,9 @@ workflow then validates the exact version, builds the bundle, publishes the
 release to the public feed and creates the GitHub Release with
 `latest.json` as a public mirror for humans. The semantic version remains in
 the public tag, bundle and feed, where the updater uses it for ordering.
-Every router on the stable channel installs a stable release within about four
-hours. Never push to `main` directly for a release; a direct push runs
+Healthy current updaters check their saved channel every four hours. Old installs
+blocked by download sign-in need the [current public setup once](recovery.md); publication alone
+does not recover them. Never push to `main` directly for a release; a direct push runs
 checks but publishes nothing.
 
 Develop PRs and branch pushes run fast static checks. The full offline suite,
@@ -104,8 +105,9 @@ defaults. Existing stack updates retain their parameter values unless the
 deployer explicitly overrides them. Publication retains this repository and
 publisher identity; public forks receive no publishing grants or copied
 repository variables. The role may read any object in the feed bucket and
-write only what a release publishes: `bundles/*` and, per channel,
-`latest.json`, `latest.json.sig` and `models.json`. It can also list the
+write only release objects: `bundles/*`, `native-builds/*`, `installers/*`,
+`install/*` and each channel's `latest.json`, `latest.json.sig` and `models.json`.
+Native first-install publication remains acceptance-gated. The role can also list the
 bucket, invalidate the feed, read the stack outputs and read the signing
 seed. An explicit deny refuses a delete or any change to the bucket's own
 configuration, so a later widening of the allow cannot reach them. The
@@ -429,6 +431,14 @@ tag and watch a new beta on the new `development` commit first. Once the `Check`
 run for the push to `main` passes on the merge commit, tag that merge commit
 `v<VERSION>` for stable.
 
+The stable publisher refreshes the public setup and repair page independently
+of native-installer acceptance. It publishes the stable feed before shared setup
+scripts. Beta releases leave those shared files in place. Keep native acceptance
+flags unchanged until their desktop evidence is complete. After publication,
+verify anonymous downloads through [the repair page](https://dist.softwarecombined.com/install/)
+and both channel feeds. Distribute the notice in [recovery](recovery.md) only
+after those checks. Older blocked updaters still need that one external action.
+
 ## How to roll back
 
 Revert through `development` to `main` and tag (the next release supersedes
@@ -458,9 +468,27 @@ it; the next unpinned update records the channel's own serial. Installs from
 
 From the source checkout or installed release directory, run
 `python3.14 packaging/install.py --uninstall`. This stops and removes the
-service, update schedule and client configuration. For a bootstrap installation,
+service and update schedule after restoring all verified client settings.
+Every assistant is checked before any detach. Changed connection values or
+damaged ownership records refuse with a conflict and keep the service running.
+If a later write fails, the result names completed and remaining attachments.
+Retry removal; it accepts an already completed restore without repeating it.
+Unrelated settings and their formatting remain in place. An empty assistant
+JSON file is retained when its ownership was not recorded.
+For a bootstrap installation,
 use the [pinned interpreter](setup.md#what-the-installer-does) if Python 3.14
 is not available on the system.
+
+Before repair or removal, the current setup source can produce a redacted
+ownership report:
+
+```sh
+python3.14 tools/classify_attachments.py --home ~/.codex/mixed-model-router
+```
+
+Share only its JSON result. It contains assistant names, ownership classifications
+and specific conflict reasons. It reads the same evidence as repair and removal;
+it changes no settings and makes no model or download requests.
 
 The state directory, key file and loopback token remain in place for you to
 delete separately. Uninstall does not remove them.

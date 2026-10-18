@@ -127,10 +127,11 @@ def reconcile(home, latest, feed_url, fetch=None):
         previous = current(home)
         doc = metadata(previous)
         if doc.get('menu_sha256') and load('bundle').newer(doc['version'], row['version']):
-            return True
+            return False  # Preserve newer controls and any unresolved delivery warning.
         record = json.loads((home / 'desktop-delivery.json').read_text())
         if (doc.get('menu_sha256') and doc['sha256'] == row['bundle_sha256']
-                and isinstance(record, dict) and record.get('sha256') == row['sha256']):
+                and isinstance(record, dict) and record.get('status') == 'ready'
+                and record.get('sha256') == row['sha256']):
             return True
     except (OSError, ValueError, KeyError):
         pass
@@ -163,9 +164,49 @@ def reconcile(home, latest, feed_url, fetch=None):
 def deliver(home, latest, feed_url, fetch=None):
     """A menu delivery failure never rolls back a healthy inference service."""
     try:
-        return reconcile(home, latest, feed_url, fetch)
+        delivered = reconcile(home, latest, feed_url, fetch)
+        if delivered:
+            _record(home, 'ready')
+        return delivered
     except (Exception, SystemExit):
         load('atomic_write').replace_json(Path(home) / 'desktop-delivery.json',
                                          dict(status='failed'))
+        _record(home, 'failed')
         print('SCG Router menu update needs repair. Check setup for routing status.')
         return False
+
+
+def confirm_controls(home, resources):
+    """Native setup calls this after installing shortcuts from verified Resources."""
+    home, resources = Path(home), Path(resources)
+    with load('service').install_lock(home) as held:
+        if not held or current(home).resolve() != resources.resolve():
+            return False
+        doc = metadata(resources)
+        if (not doc.get('menu_sha256') or load('bundle').newer(
+                load('service').current_version(home), doc['version'])):
+            return False
+        load('atomic_write').replace_json(home / 'desktop-delivery.json',
+                                          dict(status='ready', version=doc['version']))
+        _record(home, 'ready', complete=True)
+        return True
+
+
+def _record(home, outcome, complete=False):
+    try:
+        service = load('service')
+        state = service._state.read(service._state.path(Path(home)))
+        if isinstance(state, dict):
+            components = state.get('component_repairs')
+            if not isinstance(components, dict):
+                components = state['component_repairs'] = {}
+            components['controls'] = outcome
+            status = load('update_status')
+            if (complete and components.get('assistants') == 'ready'
+                    and all(value == 'ready' for value in status.components(state).values())
+                    and state.get('last_applied_version') == service.current_version(Path(home))):
+                error = '' if state.get('last_error') in ('installer_failed', 'installer_timeout') else None
+                status.record(state, error=error, repaired=True)
+            service._write_state(Path(home), state)
+    except (OSError, ValueError, TypeError):
+        pass  # A notice cannot fail a completed routing update.

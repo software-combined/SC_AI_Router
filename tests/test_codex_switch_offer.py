@@ -224,7 +224,7 @@ class UpdaterPassTests(unittest.TestCase):
         with contextlib.ExitStack() as stack:
             stack.enter_context(mock.patch.object(
                 updater, '_apply_update', apply or mock.Mock(return_value=0)))
-            self.offer = stack.enter_context(mock.patch.object(updater, '_offer_codex_switch'))
+            self.offer = stack.enter_context(mock.patch.object(updater, '_offer_notices'))
             if held is not None:
                 lock = mock.MagicMock()
                 lock.return_value.__enter__.return_value = held
@@ -247,12 +247,13 @@ class UpdaterPassTests(unittest.TestCase):
         for failure in (OSError('missing'), SystemExit('edited'), RuntimeError('boom')):
             with self.subTest(failure=type(failure).__name__), \
                     mock.patch.object(updater._svc, 'load', side_effect=failure):
-                self.assertIsNone(updater._offer_codex_switch(self.home))
+                self.assertIsNone(updater._offer_notices(self.home))
         module = SimpleNamespace(offer=mock.Mock(side_effect=RuntimeError('boom')))
         with mock.patch.object(updater._svc, 'load', return_value=module) as load:
-            self.assertIsNone(updater._offer_codex_switch(self.home))
-        self.assertEqual(Path(load.call_args.args[1]).name, 'codex_switch_offer.py')
-        module.offer.assert_called_once_with(self.home)
+            self.assertIsNone(updater._offer_notices(self.home))
+        self.assertEqual([Path(call.args[1]).name for call in load.call_args_list],
+                         ['codex_switch_offer.py', 'update_warning.py'])
+        self.assertEqual(module.offer.call_args_list, [mock.call(self.home), mock.call(self.home)])
 
 
 if __name__ == '__main__':

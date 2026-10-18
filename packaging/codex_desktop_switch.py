@@ -186,9 +186,8 @@ def _apply(home, entry, target, prove, root):
     """Write `target` with a pending marker, prove it, and undo it on any failure."""
     marker = home / MARKER
     try:
-        # Saved as config.toml holds it now, the latest model pick included,
-        # so an undo puts back exactly what was there.
-        entry = dict(entry, inserted_block=_blocks.managed_block(entry))
+        # Carry the current pick without claiming added user settings.
+        entry = _blocks.rollback_entry(entry)
         before = _files(home, entry)
         _atomic.replace_json(marker, {'to': target, 'entry': entry})
     except SystemExit as exc:

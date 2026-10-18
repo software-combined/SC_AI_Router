@@ -7,27 +7,61 @@ transitional owners name the plan that will move them.
 Native packaging lives under `packaging/native/`; it wraps the canonical
 installer without adding inference rules. `native_payload` retains disposable
 downloads. `native_setup` owns the graphical flow and uses the existing client,
-service and key-window owners. Repair uses the canonical `--setup` path;
+service and key-window owners. Repair uses the canonical `--repair` path;
 explicit assistant additions use the existing client-selection path.
+`repair_ui` owns explicit maintenance's graceful assistant-close prompt.
+Scheduled updates never call it. Public bootstrap scripts retain the saved
+channel and working runtime; repair never starts key setup.
 `dialog_tool` is a Python 3.9 leaf shared by installer and runtime dialogs.
 It validates retained setup paths before selecting the Linux wrapper.
 `native_dialog` distinguishes cancellation from failed presentation so renewal
 notices remain pending until a window appears.
-`install_delivery` repairs bundled plugin delivery
-on both full and same-version installs.
+`install_delivery` verifies and retains maintenance code before assistant
+discovery. Attachment conflicts cannot block its controller, stable launchers
+or Linux scheduler repair. Plugin and native controls delivery remain separate
+from routing health, on both full and same-version installs.
 `client_choice` resolves explicit additions, receipt-owned attachments and saved
 choices. It persists Claude choices in `anthropic_mode`; the runtime keeps its
 existing policy reader. Same-version mode changes use the service repair
 lifecycle before client attachment, with prior state restored on reload failure.
 
+`codex_owned` compares the live marked region with the saved attachment using
+standard-library TOML. It preserves added single-line root settings and comments
+outside the replacement block. Unknown structures and changed connection values
+refuse before a write. Its bounded managed-Python verifier keeps Python 3.9
+entrypoints importable without another TOML dependency. Removal uses the same
+proof and atomic writer, preserving dotfile links and detecting concurrent edits.
+Preference and reviewer edits use the same lossless line helpers, including
+client-written line endings and inline comments.
+
+`client_removal` checks all connected assistants before detaching any. Its
+JSON edits use `owned_json` to preserve unrelated bytes and reject duplicate
+keys. Receipts retain original values and the written connection values.
+Legacy Claude receipts use the saved Router state for those connection values.
+Completed restores remain complete after an I/O failure; remaining receipts
+keep the service running for a safe retry. Atomic writes compare saved content
+again after preparing the temporary file.
+
 `native_controller` retains verified installer code under an independent version
 pointer. `update_launch` selects that controller across runtime rollback.
+Linux reloads and reads back the effective stable updater command before
+pruning. Loaded jobs and a running legacy updater retain their release files.
 `feed` downloads public software without credentials. Legacy `download_auth`,
 `download_oauth` and `download_session` helpers are retained for compatibility,
 but the installer and updater no longer require them. `control_models` checks
 model bytes against a signed feed's checksum. The inference process only reads
 the resulting model cache. `infra/downloads` owns token verification and short
 download grants for legacy consumers. It cannot change model routing or provider credentials.
+
+`update_status` owns verified channel facts, cache identity and repair summaries.
+Only a verified release for the same channel and source can support a cached
+current-version response. Diagnostics and controls read those facts without
+changing state. A successful feed check cannot clear an incomplete installation.
+`update_warning` offers a detached repair dialog after an applying check or when
+controls open. Its separate receipt records presentation time only; it cannot
+clear verified facts or interfere with installation. Missing dialogs leave
+the warning pending. Controls bind manual-check results to installed version,
+channel and source before displaying them.
 
 ## Domains and direction
 

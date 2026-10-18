@@ -18,6 +18,9 @@ _spec = _ilu.spec_from_file_location(
     Path(__file__).resolve().parents[1] / 'ai_router' / 'atomic_write.py')
 atomic_write = _ilu.module_from_spec(_spec)
 _spec.loader.exec_module(atomic_write)
+_spec = _ilu.spec_from_file_location('router_claude_removal', Path(__file__).with_name('client_removal.py'))
+_removal = _ilu.module_from_spec(_spec)
+_spec.loader.exec_module(_removal)
 
 BASE_URL_KEY = 'ANTHROPIC_BASE_URL'
 DISCOVERY_KEY = 'CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY'
@@ -30,6 +33,7 @@ FIRST_PARTY_KEY = '_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL'
 # can override it, so an attach refuses while it is set anywhere in reach.
 DISABLE_KEY = 'CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS'
 OWNED_KEYS = (BASE_URL_KEY, DISCOVERY_KEY, TOOL_SEARCH_KEY)
+LEGACY_KEYS = (BASE_URL_KEY, DISCOVERY_KEY, FIRST_PARTY_KEY)
 
 
 def settings_path(env=None):
@@ -237,7 +241,7 @@ def attach(home, state, receipts, settings_path_override=None, env=None,
                      != os.path.normcase(str(path))):
         raise SystemExit('Claude settings path changed; detach the existing Claude '
                          'attachment first, then connect the new profile.')
-    snapshot = (receipts.parse_snapshot(existing['inserted_block'])
+    snapshot = (_removal.saved_values(existing, OWNED_KEYS, LEGACY_KEYS)
                 if isinstance(existing, dict) and owned_path
                 and 'inserted_block' in existing else None)
     doc, changed, previous = merge_env(home, state, path, env, snapshot)
@@ -246,9 +250,10 @@ def attach(home, state, receipts, settings_path_override=None, env=None,
             previous[BASE_URL_KEY] == desired_env(home, state)[BASE_URL_KEY]):
         # Re-attach with identical values: keep the original pre-attach
         # snapshot so a later detach restores it instead of our own URL.
-        previous = snapshot
+        previous = dict(previous, **snapshot)
     entry = {'config_path': str(path),
              'inserted_block': json.dumps(previous, sort_keys=True),
+             'written': desired_env(home, state),
              'claude_mode': state.get('claude_mode', 'subscription')}
     snapshot = _listing_snapshot(listing)
     if snapshot is not None:
@@ -263,20 +268,12 @@ def attach(home, state, receipts, settings_path_override=None, env=None,
 
 
 def detach(home, receipts, settings_path_override=None, env=None):
-    """Restore Claude settings to pre-attach values; forget the attachment."""
-    receipt = receipts.read_receipt(home)
-    entry = receipt.get('clients', {}).get('claude', {})
-    if settings_path_override is None and env is None and not entry:
-        return  # never attached: never touch hand-managed settings
-    if settings_path_override is not None:
-        path = Path(settings_path_override)
-    elif isinstance(entry, dict) and entry.get('config_path'):
-        path = Path(entry['config_path'])
-    else:
-        path = settings_path(env)
-    previous = receipts.parse_snapshot(entry.get('inserted_block', '{}'))
-    restore_settings(path, previous)
-    receipts.drop_client(home, 'claude')
+    """Only restore receipt-proven keys; path overrides grant no ownership."""
+    del settings_path_override, env
+    try:
+        _removal.detach_json(home, 'claude', receipts)
+    except _removal._json.Conflict as exc:
+        raise SystemExit('Claude Code removal conflict: ' + str(exc)) from None
 
 
 def refresh_snapshot(home, state, receipts, listing_source):

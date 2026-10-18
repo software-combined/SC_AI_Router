@@ -7,7 +7,7 @@ import tomllib
 import unittest
 from unittest.mock import patch
 
-from ai_router import agent_handoffs
+from ai_router import agent_handoffs, atomic_write
 from tests.test_agent_handoffs import native_tools
 from tests.test_codex_preferences import codex_config
 from tests.test_lite_handoffs import lite
@@ -79,8 +79,7 @@ class InstallerSelectionTests(unittest.TestCase):
                     config.write_text(text)
                     expected = tomllib.loads(text).get('agents', {})
                     previous = None
-                    writer = type('Writer', (), {'replace_text': staticmethod(lambda p, t: Path(p).write_text(t))})
-                    with patch.object(codex_config, '_atomic_write', writer):
+                    with patch.object(codex_config, '_atomic_write', atomic_write):
                         for version in ('1.0.0', '1.0.1'):
                             block = codex_config.build_block(Path(tmp) / version,
                                 {'port': 1234, 'token': 'synthetic'}, mode, static_catalogue=True)

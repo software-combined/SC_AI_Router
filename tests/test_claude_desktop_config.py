@@ -113,7 +113,7 @@ class DesktopMergeTests(unittest.TestCase):
                 desktop_config.attach(home, _state(), install_mod._codex_config,
                                       data_dir_override=Path(tmp) / 'empty')
 
-    def test_detach_restores_hand_kept_value(self):
+    def test_detach_refuses_a_changed_connection(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             home.mkdir()
@@ -123,11 +123,10 @@ class DesktopMergeTests(unittest.TestCase):
             doc = json.loads(path.read_text())
             doc['inferenceProvider'] = 'hand-edited'
             path.write_text(json.dumps(doc))
-            desktop_config.detach(home, install_mod._codex_config, data_dir_override=data_dir)
-            # Detach restores the attach-time value, not the hand edit:
-            # the receipt owns the prior state, concurrent edits are
-            # refused at attach time by merge_entry.
-            self.assertNotIn('hand-edited', path.read_text())
+            before = path.read_bytes()
+            with self.assertRaisesRegex(SystemExit, 'connection_changed'):
+                desktop_config.detach(home, install_mod._codex_config, data_dir_override=data_dir)
+            self.assertEqual(path.read_bytes(), before)
 
     def test_attach_and_detach_round_trip(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -145,9 +144,8 @@ class DesktopMergeTests(unittest.TestCase):
             self.assertIn('claude-desktop', receipt['clients'])
             desktop_config.detach(home, install_mod._codex_config, data_dir_override=data_dir)
             self.assertEqual(_entry(data_dir), {})
-            # Attach created the desktop config; detach removes it instead
-            # of leaving an empty object the app never had.
-            self.assertFalse((data_dir / 'claude_desktop_config.json').exists())
+            # The old receipt proves the mode value, not ownership of the file.
+            self.assertEqual(json.loads((data_dir / 'claude_desktop_config.json').read_text()), {})
             # Last attachment out removes the receipt itself.
             self.assertFalse((home / 'activation.json').exists())
 

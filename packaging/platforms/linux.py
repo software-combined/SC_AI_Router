@@ -30,6 +30,9 @@ class Backend:
     def install(self, python, home, state, release_dir, previous):
         self._manager(home).install(python, release_dir)
 
+    def repair_updates(self, python, home):
+        self._manager(home).install(python, None, updates_only=True)
+
     def restart(self, home):
         self._manager(home).restart()
 
@@ -51,7 +54,7 @@ class Backend:
         return True
 
     def pinned_release(self, home):
-        return None  # No cached in-memory command on systemd; prune freely.
+        return self._manager(home).pinned_releases()
 
     def protect_secret(self, path):
         del path  # POSIX mode bits (0600) already own this.

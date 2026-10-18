@@ -54,6 +54,23 @@ class HookTests(unittest.TestCase):
         self.assertEqual(json.loads(self.settings.read_text())['hooks']['SessionStart'],
                          [self.user_hook, original])
 
+    def test_detach_preserves_exact_user_bytes_and_missing_settings_can_retry(self):
+        hook.install(self.home, '/python', self.env)
+        entry = json.loads((self.home / hook.RECEIPT).read_text())['entry']
+        before = ('{\r\n "hooks" : {"SessionStart": [' + json.dumps(entry)
+                  + ', { "keep" : [1,  2] }]}, "other" : "\\u00e9"\r\n}\r\n')
+        self.settings.write_bytes(before.encode())
+        receipt = self.home / hook.RECEIPT
+        receipt.write_bytes(receipt.read_bytes().replace(b'\n', b'\r\n'))
+        hook.uninstall(self.home)
+        self.assertEqual(self.settings.read_bytes(),
+                         b'{\r\n "hooks" : {"SessionStart": [{ "keep" : [1,  2] }]}, "other" : "\\u00e9"\r\n}\r\n')
+        hook.install(self.home, '/python', self.env)
+        self.settings.unlink()
+        hook.uninstall(self.home)
+        self.assertFalse(self.settings.exists())
+        self.assertFalse((self.home / hook.RECEIPT).exists())
+
     def test_native_callback_waits_for_publication_but_stops_on_identity_change(self):
         guard = {'account': 'a', 'organization_cookie': 'one'}
         env = {'CLAUDE_CODE_ENTRYPOINT': 'claude-desktop'}

@@ -41,19 +41,20 @@ App = collections.namedtuple('App', 'bundle_id writers')
 CLAUDE = App(BUNDLE_ID, ('claude', 'claude-desktop', 'claude.exe'))
 
 
-def dialog_script(message, confirm=False):
+def dialog_script(message, confirm=False, labels=('Continue', 'Cancel')):
     quote = lambda value: json.dumps(str(value), ensure_ascii=False)
-    buttons = '{"Cancel", "Continue"}' if confirm else '{"Cancel"}'
-    return ('display dialog %s with title %s buttons %s default button "Cancel" '
-            'cancel button "Cancel" with icon (POSIX file %s)'
-            % (quote(message), quote(TITLE), buttons, quote(ICON)))
+    buttons = '{%s, %s}' % (quote(labels[1]), quote(labels[0])) if confirm else '{"Cancel"}'
+    safe = quote(labels[1]) if confirm else '"Cancel"'
+    return ('display dialog %s with title %s buttons %s default button %s '
+            'cancel button %s with icon (POSIX file %s)'
+            % (quote(message), quote(TITLE), buttons, safe, safe, quote(ICON)))
 
 
 def _ps(value):
     return "'" + str(value).replace("'", "''") + "'"
 
 
-def _windows_dialog(message, confirm):
+def _windows_dialog(message, confirm, labels=('Continue', 'Cancel')):
     # Match client_dialog's bitmap icon and layout containers; constrain text width.
     return (
         "$ErrorActionPreference='Stop';Add-Type -AssemblyName System.Windows.Forms,System.Drawing;"
@@ -67,37 +68,38 @@ def _windows_dialog(message, confirm):
         "$l.MaximumSize=New-Object System.Drawing.Size(440,0);$l.AutoSize=$true;"
         "$r=New-Object System.Windows.Forms.FlowLayoutPanel;$r.AutoSize=$true;"
         "$r.FlowDirection='LeftToRight';$r.WrapContents=$false;"
-        "%s$c=New-Object System.Windows.Forms.Button;$c.Text='Cancel';"
+        "%s$c=New-Object System.Windows.Forms.Button;$c.Text=%s;"
         "$c.AutoSize=$true;$c.DialogResult='Cancel';$r.Controls.Add($c);"
         "$f.CancelButton=$c;$p.Controls.Add($l);$p.Controls.Add($r);$f.Controls.Add($p);"
         "if($f.ShowDialog() -eq 'OK'){exit 0}else{exit 1}"
         % (_ps(ICON), _ps(message), (
-            "$b=New-Object System.Windows.Forms.Button;$b.Text='Continue';"
+            "$b=New-Object System.Windows.Forms.Button;$b.Text=%s;"
             "$b.AutoSize=$true;$b.DialogResult='OK';$r.Controls.Add($b);"
-        ) if confirm else ''))
+        ) % _ps(labels[0]) if confirm else '', _ps(labels[1] if confirm else 'Cancel')))
 
 
 def _run(command, run, timeout=5):
     return run(command, capture_output=True, text=True, timeout=timeout)
 
 
-def _dialog(message, platform_name, confirm, run, tool_path=None, detailed=False):
+def _dialog(message, platform_name, confirm, run, tool_path=None, detailed=False,
+            labels=('Continue', 'Cancel')):
     if platform_name == 'darwin':
-        argv = [tool_path or '/usr/bin/osascript', '-e', dialog_script(message, confirm)]
+        argv = [tool_path or '/usr/bin/osascript', '-e', dialog_script(message, confirm, labels)]
     elif platform_name == 'win32':
-        argv = [tool_path or 'powershell', '-NoProfile', '-Command', _windows_dialog(message, confirm)]
+        argv = [tool_path or 'powershell', '-NoProfile', '-Command', _windows_dialog(message, confirm, labels)]
     else:
         argv = [tool_path or _dialogs.tool(platform_name) or 'zenity',
                 '--title', TITLE, '--window-icon', str(ICON),
                 '--question' if confirm else '--info', '--text', str(message),
-                '--ok-label', 'Continue' if confirm else 'Cancel']
+                '--ok-label', labels[0] if confirm else 'Cancel']
         if confirm:
-            argv += ['--cancel-label', 'Cancel']
+            argv += ['--cancel-label', labels[1]]
     answer = _run(argv, run, 120)
     if detailed:
         return answer
     return answer.returncode == 0 and (platform_name != 'darwin' or not confirm
-                                      or 'button returned:Continue' in answer.stdout)
+                                      or 'button returned:' + labels[0] in answer.stdout)
 
 
 def confirm(message, platform_name, run=subprocess.run):

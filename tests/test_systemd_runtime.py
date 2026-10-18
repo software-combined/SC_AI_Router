@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest import mock
 
 from tests._platform import unix_only
-from tests.install_fixtures import _install_mod
+from tests.install_fixtures import _install_mod, systemd_show
 from tests.test_release import _release_mod
 
 
@@ -99,6 +99,9 @@ class SystemdRuntimeTests(unittest.TestCase):
     def run_command(self, cmd, **kwargs):
         self.commands.append(cmd)
         if cmd[0] == 'systemctl':
+            answer = systemd_show(cmd)
+            if answer is not None:
+                return answer
             if cmd[2] == 'restart':
                 self.stop()
                 self.process = subprocess.Popen([sys.executable, str(self.home / 'router_launch.py')],

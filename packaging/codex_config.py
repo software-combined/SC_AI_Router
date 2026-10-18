@@ -9,6 +9,11 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import importlib.util
+
+_spec = importlib.util.spec_from_file_location('router_codex_owned', Path(__file__).with_name('codex_owned.py'))
+_owned = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_owned)
 
 BEGIN = '# BEGIN local mixed model picker'
 END = '# END local mixed model picker'
@@ -41,7 +46,7 @@ def _replace_text(path, text):
     """Atomic sibling write through the injected helper."""
     if _atomic_write is None:  # pragma: no cover - install.py always injects
         raise RuntimeError('atomic writer not injected; load via install.py')
-    _atomic_write.replace_text(path, text)
+    _atomic_write.replace_text(Path(path).resolve(), text, newline='')
 
 
 def build_block(home, state, mode, static_catalogue=False):
@@ -67,7 +72,7 @@ def build_block(home, state, mode, static_catalogue=False):
 def _read_text(path):
     """Config text, or '' when the file is missing."""
     path = Path(path)
-    return path.read_text() if path.exists() else ''
+    return _owned.read(path) if path.exists() else ''
 
 
 def _insert_root_lines(block, extra):
@@ -90,6 +95,10 @@ def managed_efforts(existing=None):
 
 def _desktop_table(lines):
     """(header index, end index, ambiguous) for the [desktop] table."""
+    root_end = next((i for i, line in enumerate(lines)
+                     if line.strip().startswith('[')), len(lines))
+    if any(_key(line).split('.', 1)[0].strip().strip('\"\'') == 'desktop' for line in lines[:root_end] if '=' in line):
+        return None, None, True
     heads = [index for index, line in enumerate(lines)
              if line.split('#', 1)[0].strip().replace(' ', '') == DESKTOP_TABLE]
     if len(heads) > 1:
@@ -136,16 +145,12 @@ def _render(key, value):
     return key + ' = ' + json.dumps(value)
 
 
-def desktop_preferences(text, previous=None):
-    """(text, record) with the managed desktop preferences applied.
-
-    The record holds the values written and the values they replaced (None
-    when a key was absent; a `previous` record carried from an earlier
-    attach wins). A table or value this module cannot rewrite safely
-    refuses the edit with (text, {}): a second definition, or a value
-    misread out of a multi-line literal, would leave the config unreadable.
+def desktop_preferences(text, previous=None, evidence=None):
+    """Apply preferences only to an unambiguous normal desktop table.
+    The record retains prior values; an earlier attach's record wins.
+    Unsupported forms stay unchanged, so no duplicate definition is added.
     """
-    lines = text.splitlines()
+    lines = text.splitlines(keepends=True)
     header, end, ambiguous = _desktop_table(lines)
     found = {} if header is None else {
         key: _key_line(lines, header, end, key) for key in (QUEUE_KEY, EFFORTS_KEY)}
@@ -156,18 +161,20 @@ def desktop_preferences(text, previous=None):
     written = {QUEUE_KEY: QUEUE_VALUE,
                EFFORTS_KEY: managed_efforts(current.get(EFFORTS_KEY))}
     record = {'written': written,
-              'previous': previous or {key: current.get(key) for key in written}}
+              'previous': previous or {key: current.get(key) for key in written},
+              'created': (evidence or {}).get('created', header is None),
+              'inserted_newline': (evidence or {}).get('inserted_newline')}
     if header is None:
-        lines.append(DESKTOP_TABLE)
+        _owned.insert_lines(lines, len(lines), [DESKTOP_TABLE], record)
         end = len(lines)
     for key, value in written.items():
         index = found.get(key)
         if index is None:
-            lines.insert(end, _render(key, value))
+            _owned.insert_lines(lines, end, [_render(key, value)], record)
             end += 1
-        else:
-            lines[index] = _render(key, value)
-    return '\n'.join(lines) + '\n', record
+        elif current[key] != value:
+            lines[index] = _owned.render_line(lines[index], _render(key, value))
+    return ''.join(lines), record
 
 
 def restore_desktop(text, record):
@@ -180,7 +187,7 @@ def restore_desktop(text, record):
     previous = (record or {}).get('previous') or {}
     if not written:
         return text
-    lines = text.splitlines()
+    lines = text.splitlines(keepends=True)
     header, end, ambiguous = _desktop_table(lines)
     if header is None or ambiguous:
         return text
@@ -199,10 +206,10 @@ def restore_desktop(text, record):
             del lines[index]
             end -= 1
         else:
-            lines[index] = _render(key, previous[key])
-    if not any('=' in line for line in lines[header + 1:end]):
+            lines[index] = _owned.render_line(lines[index], _render(key, previous[key]))
+    if record.get('created') is True and not any('=' in line for line in lines[header + 1:end]):
         del lines[header]
-    return '\n'.join(lines) + '\n' if text.endswith('\n') else '\n'.join(lines)
+    return _owned.restore_final_newline(''.join(lines), record)
 
 
 def restore_reviewer(text, record):
@@ -212,7 +219,7 @@ def restore_reviewer(text, record):
     (appending would nest them under a trailing table): one per key, the
     latest recorded, never over a key already at root.
     """
-    lines = text.splitlines()
+    lines = text.splitlines(keepends=True)
     at = next((index for index, line in enumerate(lines)
                if line.strip().startswith('[')), len(lines))
     present = {_key(line) for line in lines[:at] if '=' in line}
@@ -220,9 +227,8 @@ def restore_reviewer(text, record):
     removed = [line for key, line in latest.items() if key not in present]
     if not removed:
         return text
-    lines[at:at] = removed
-    joined = '\n'.join(lines)
-    return joined + '\n' if text.endswith('\n') or not text else joined
+    _owned.insert_lines(lines, at, removed)
+    return ''.join(lines)
 
 
 def seed_picker_selection(config_path, previous_block, block):
@@ -243,12 +249,6 @@ def seed_picker_selection(config_path, previous_block, block):
                                               DEFAULT_MODEL_EFFORT)])
 
 
-def _without_picks(block):
-    """Block lines minus the owner's model pick, which Codex rewrites."""
-    return [line for line in block.splitlines()
-            if line.split('=', 1)[0].strip() not in ('model', 'model_reasoning_effort')]
-
-
 def _picks(text):
     """The model lines in one region, one per key: {key: line}.
 
@@ -265,43 +265,44 @@ def _picks(text):
 
 
 def live_block(text, recorded):
-    """The managed block as this config now holds it.
+    """A semantically owned live region, or the old refusal sentinel."""
+    if not recorded:
+        return recorded
+    try:
+        return _owned.region(text, recorded)
+    except SystemExit:
+        return recorded
 
-    Codex rewrites the owner's model pick inside the block, so the copy in
-    the receipt goes stale; that live region is the one an update replaces
-    and a detach removes. Only that drift is accepted: any other change
-    keeps the recorded block, so the hand-edit refusal still stands.
-    """
-    if recorded and recorded in text:
-        return recorded
-    if text.count(BEGIN) != 1 or text.count(END) != 1:
-        return recorded
-    live = text[text.index(BEGIN):text.index(END) + len(END) + 1]
-    if _without_picks(live) != _without_picks(recorded or ''):
-        return recorded
-    return live
+
+def removal_plan(config_path, entry):
+    """Pure preflight, shared by the remover and all-client uninstall."""
+    before = _read_text(config_path)
+    previous = _owned.restore_evidence(entry, (QUEUE_KEY, EFFORTS_KEY))
+    after = _owned.replace(before, entry.get('inserted_block'), '', removing=True, restored=previous)
+    if BEGIN not in before and END not in before:
+        return before, after  # A completed restore is verified, never replayed.
+    after = restore_desktop(after, entry.get('desktop'))
+    after = restore_reviewer(after, entry.get('reviewer'))
+    _owned.inspect(after)
+    return before, after
 
 
 def attach_config(config_path, block, previous=None):
-    """Insert the managed block and apply the managed desktop preferences.
-
-    `previous` is the codex attachment in the receipt; its desktop record
-    keeps the owner's original values across updates. Returns (block,
-    before, desktop, reviewer) for the receipt, where reviewer holds every
-    owner root line an attach has removed, carried across updates.
-    """
+    """Apply the block and preferences; return their original restore records."""
+    _owned.restore_evidence({} if previous is None else previous, (QUEUE_KEY, EFFORTS_KEY))
     recorded = (previous or {}).get('inserted_block')
     previous_block = live_block(_read_text(config_path), recorded)
     block = preserve_picker_selection(config_path, previous_block, block)
     block = seed_picker_selection(config_path, previous_block, block)
-    before, removed = replace_config_block(config_path, block, previous_block)
+    before, removed = replace_config_block(config_path, block, previous_block, recorded)
     current = _read_text(config_path)
-    carried = ((previous or {}).get('desktop') or {}).get('previous')
-    updated, desktop = desktop_preferences(current, carried)
+    carried = (previous or {}).get('desktop') or {}
+    updated, desktop = desktop_preferences(current, carried.get('previous'), carried)
     if desktop and updated != current:
-        _replace_text(config_path, updated)
+        _owned.write(config_path, current, updated, _atomic_write.replace_text)
     elif not desktop:
-        print('Codex [desktop] preferences skipped: table ambiguous or repeated')
+        print('Codex desktop preferences left unchanged: unsupported or ambiguous settings')
+    desktop = desktop or (previous or {}).get('desktop') or {}
     kept = (((previous or {}).get('reviewer')) or {}).get('removed') or []
     reviewer = {'removed': kept + removed} if removed else (previous or {}).get('reviewer')
     return block, before, desktop, reviewer
@@ -352,18 +353,18 @@ def preserve_picker_selection(config_path, previous_block, block):
     return _insert_root_lines(block, list(picks.values()))
 
 
-def replace_config_block(config_path, block, previous_block=None):
+def replace_config_block(config_path, block, previous_block=None, recorded_block=None):
     """Insert or replace the marked block; refuse hand-edited markers.
 
     Returns (before, removed): the prior config text and the owner root
     lines dropped for uniqueness, so the receipt can restore them on detach.
     """
     config_path = Path(config_path)
-    before = config_path.read_text() if config_path.exists() else ''
+    before = _read_text(config_path)
     if previous_block and previous_block in before:
         if before.count(previous_block) != 1:
             raise SystemExit('config block was edited by hand; run tools/disable.py first')
-        after = before.replace(previous_block, block, 1)
+        after = _owned.replace(before, recorded_block or previous_block, block)
     elif BEGIN in before or END in before:
         raise SystemExit('config block was edited by hand; run tools/disable.py first')
     else:
@@ -387,7 +388,11 @@ def replace_config_block(config_path, block, previous_block=None):
     home = config_path.parent
     if not config_path.exists():
         home.mkdir(parents=True, exist_ok=True)
-    _replace_text(config_path, after)
+    if config_path.exists():
+        _owned.write(config_path, before, after, _atomic_write.replace_text)
+    else:
+        _owned.inspect(after)
+        _replace_text(config_path, after)
     try:
         os.chmod(config_path, 0o600)
     except OSError:
@@ -400,12 +405,7 @@ RECEIPT_NAME = 'activation.json'
 
 
 def read_receipt(home):
-    """Versioned activation record: {version, clients: {name: attachment}}.
-
-    Legacy flat receipts (config path plus block, no version) import as the
-    `codex` attachment without losing restore information; nothing is
-    rewritten on read.
-    """
+    """Read clients, importing legacy flat Codex receipts without a write."""
     receipt_path = receipt_path_for(home)
     if not receipt_path.exists():
         return {}
@@ -479,23 +479,19 @@ def codex_attachment(home):
     return read_receipt(home).get('clients', {}).get('codex', {})
 
 
-def drop_client(home, client):
-    """Forget one attachment; returns True when anything was removed.
-
-    Removes the receipt file itself when no attachments remain, so a
-    fully detached home reads the same as a never-attached one.
-    """
+def drop_client(home, client, expected=None):
+    """Forget a proven attachment; refuse concurrent receipt changes."""
+    receipt_path = receipt_path_for(home)
+    before = _owned.read(receipt_path) if receipt_path.exists() else None
     doc = read_receipt(home)
     clients = doc.get('clients', {})
     if client not in clients:
         return False
+    if expected is not None and clients[client] != expected:
+        raise SystemExit('Attachment receipt changed concurrently; retry removal.')
     del clients[client]
-    receipt_path = receipt_path_for(home)
     if clients:
-        _replace_text(receipt_path, json.dumps(doc, indent=2) + '\n')
+        _atomic_write.replace_text(receipt_path.resolve(), json.dumps(doc, indent=2) + '\n', expected=before)
     else:
-        try:
-            receipt_path.unlink()
-        except OSError:
-            pass
+        _atomic_write.remove(receipt_path, expected=before)
     return True

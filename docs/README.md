@@ -6,6 +6,7 @@ models and billing. These pages go deeper.
 | Page | Use it for |
 |---|---|
 | [Setup](setup.md) | Staff setup, assistant choices, prerequisites and installation from source |
+| [Repair older installations](recovery.md) | Public repair without uninstalling, saved choices and the maintainer notice |
 | [Native installers](native-installers.md) | DMG, EXE and AppImage builds, staff downloads, migration and acceptance |
 | [Desktop menu and tray](desktop-menu.md) | Connection switching, management, sign-in startup and Linux fallback controls |
 | [Agent plugins](agent-plugins.md) | The bundled tools, standalone setup and their release rules |

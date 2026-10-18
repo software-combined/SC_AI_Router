@@ -63,13 +63,20 @@ The download page follows Softcom Hub's light canvas, SC Pink, near-black text
 and Space Grotesk/Inter font stacks. The corporate icon is the existing bundled
 asset. Device-policy help sits below the main download area.
 
-Every ordinary release also publishes public `bootstrap.sh` and `bootstrap.ps1`
-setup scripts under `/install/` at the download origin. An installation whose old updater cannot
+Every stable release publishes the public page and `bootstrap.sh` / `bootstrap.ps1`
+under `/install/`, even when native packages have not passed their acceptance gates.
+Publication switches the stable feed first, so its installer supports the setup
+scripts it receives. Beta-only releases update the beta feed without replacing
+shared setup assets. An installation whose old updater cannot
 get past Microsoft sign-in must run the current public setup script once. It uses
 new installer code, so legacy download settings do not block it; successful delivery
 also replaces the independent update controller. The existing channel is preserved
 unless the operator explicitly requests another. Model keys and client settings are
 preserved. Users with working scheduled updates receive the release normally.
+
+The page advertises native packages only when their version matches the current
+stable feed. A stale list after deferred or interrupted publication keeps the
+current setup scripts visible instead.
 
 Normal update jobs run independently from the serving Router process. An offline
 computer or disabled update job cannot fetch a release until it runs again.
@@ -81,12 +88,15 @@ Linux dialogs use the retained setup wrapper after the download is deleted,
 with system Zenity as a fallback. The wrapper scopes GTK dependencies to its
 dialog child, so service processes do not inherit bundled library overrides.
 
-Set up or repair uses the existing installer repair path. A same-version or
-older download restores the installed service without replacing its release,
-key, channel, custom feed or client settings. Unreadable client receipts remain
-intact during service repair; adding an assistant still requires readable receipts.
-Repair reuses a usable saved key. Choose **Replace model key** to open the key
-window when you want to change it.
+**Update or repair** uses the newest verified maintenance controller and the
+public release for the saved channel. The explicit `--repair` path preserves
+keys, subscription sign-ins, connected assistants and disabled tools. It uses
+the existing graceful assistant-close flow before changing connections. Automatic
+updates never force an assistant closed. A one-shot public repair does not
+replace a saved custom feed. Controller and stable-launcher delivery can finish
+even when an assistant receipt needs attention. Connection conflicts retain
+their own warning. Choose **Replace model key** to open the existing `--setup`
+key window when you want to change a key.
 
 Claude desktop can connect without a terminal client. Automatic SC tool delivery
 also needs the Claude Code setup tools from the desktop app's Install page.

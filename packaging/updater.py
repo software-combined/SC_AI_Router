@@ -28,6 +28,7 @@ _svc = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_svc)
 _models = _svc.load('router_control_models', Path(__file__).with_name('control_models.py'))
 _resources = _svc.load('router_native_resources', Path(__file__).with_name('native_resources.py'))
+_status = _svc.load('router_update_status', Path(__file__).with_name('update_status.py'))
 
 MAX_VERSION_FAILURES = 3
 ANNOUNCE_TIMEOUT_S = 5
@@ -45,12 +46,7 @@ def _required_sha256(latest):
 
 # Closed set of `last_error` codes (Plan 147): the doctor and the support
 # bundle read only these names; the updater's free text never travels.
-ERROR_CODES = (
-    'feed_unreachable', 'feed_invalid', 'feed_serial', 'feed_untrusted',
-    'feed_signature',
-    'bundle_checksum', 'bundle_invalid', 'installer_timeout',
-    'installer_failed', 'update_failed', 'download_signin_required',
-)
+ERROR_CODES = _status.ERROR_CODES
 _KEEP = object()
 
 
@@ -64,11 +60,7 @@ class UpdateError(SystemExit):
         self.error_code = code
 
 
-def _utc_now():
-    return time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
-
-
-def _record_pass(home, error=_KEEP, applied=None):
+def _record_pass(home, error=_KEEP, applied=None, latest=None, feed=None, etag=None, channel=None):
     """Record one update pass in the shared state document, ageing logs too.
 
     `error` is a code from ERROR_CODES, or '' to clear the previous one;
@@ -82,14 +74,10 @@ def _record_pass(home, error=_KEEP, applied=None):
         return
     if not isinstance(state, dict):
         return
-    state['last_check_at'] = _utc_now()
-    if error is not _KEEP:
-        if error:
-            state['last_error'] = error
-        else:
-            state.pop('last_error', None)
-    if applied:
-        state['last_applied_version'] = applied
+    if latest is not None:
+        _status.verified(state, latest, feed, channel or _status.channel(home), etag)
+    _status.record(state, error=None if error is _KEEP else error,
+                   applied=applied, repaired=bool(applied and error == ''))
     try:
         _svc._write_state(home, state)
     except OSError:
@@ -158,18 +146,13 @@ def _announce_new_models(home, state, _urlopen=None):
         pass  # a dialog or loopback failure must not disturb the update
 
 
-def _offer_codex_switch(home):
-    """Offer Switch Codex, or the way back, once per ChatGPT usage-limit episode.
-
-    Runs after every pass, the minute Express job included, because the
-    allowance can run out between regular checks. An offer never blocks,
-    delays or fails an update, so every error stops here.
-    """
-    try:
-        _svc.load('router_codex_switch_offer',
-                  Path(__file__).resolve().parent / 'codex_switch_offer.py').offer(home)
-    except (Exception, SystemExit):
-        pass
+def _offer_notices(home):
+    """Independent best-effort offers after the final update result is recorded."""
+    for name in ('codex_switch_offer', 'update_warning'):
+        try:
+            _svc.load('router_' + name, Path(__file__).with_name(name + '.py')).offer(home)
+        except (Exception, SystemExit):
+            pass
 
 
 # Installer-owned seams; rebound via bind() after file-based load.
@@ -209,6 +192,13 @@ def record_update_failure(home, version):
     state, failures = _read_failures(home)
     if state is None:
         return 0
+    verified = state.get('latest_verified', {})
+    contexts = state.setdefault('update_failure_context', {})
+    if isinstance(verified, dict) and verified.get('version') == version and isinstance(contexts, dict):
+        context = {key: verified.get(key) for key in ('channel', 'source')}
+        if version in contexts and contexts[version] != context:
+            failures.pop(version, None)
+        contexts[version] = context
     failures[version] = failures.get(version, 0) + 1
     state['update_failures'] = failures
     _svc._write_state(home, state)
@@ -319,7 +309,7 @@ def _verified_feed(feed, body, _fetch):
         raise UpdateError('feed_signature', str(exc) or 'feed signature rejected')
 
 
-def _up_to_date(home, announce, etag_path=None, etag=None):
+def _up_to_date(home, announce, etag_path=None, etag=None, feed=None):
     """Report a check that installs nothing, then offer any new models.
 
     Plan 135: refresh-added rows ride an ordinary check; express never does.
@@ -327,7 +317,10 @@ def _up_to_date(home, announce, etag_path=None, etag=None):
     if etag_path is not None and etag:
         etag_path.write_text(etag + '\n')
     _record_pass(home, error='')
-    print(f"up to date {_svc.current_version(home)}")
+    facts = _status.summary(_svc._state.read(_svc._state.path(home)),
+                            _svc.current_version(home), feed, _status.channel(home))
+    prefix = {'repair': 'update needs repair; current ', 'update': 'update available; current '}
+    print(prefix.get(facts['required_action'], 'up to date ') + _svc.current_version(home))
     try:
         state = json.loads((home / 'mixed-router-state.json').read_text())
         (announce or _announce_new_models)(home, state)
@@ -347,17 +340,30 @@ def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
     _models.refresh(home, _fetch)
     read_feed = _read_feed or (lambda url, etag: _svc.fetch_feed(url, etag, injected))
     etag_path = home / 'update-etag'
-    etag = etag_path.read_text().strip() if etag_path.exists() else None
+    stored_tag = etag_path.read_text().strip() if etag_path.exists() else None
+    current, channel = _svc.current_version(home), _status.channel(home)
+    etag = _status.cache_tag(_svc._state.read(_svc._state.path(home)),
+                            current, feed, channel, stored_tag)
+    conditional = etag
     try:
         status, body, etag = _read_feed_pass(feed, etag, read_feed, sleep)
-        if status == 304 and not express_only and not _resources.ready(home):
+        fresh = _status.cache_tag(_svc._state.read(_svc._state.path(home)),
+                                  _svc.current_version(home), feed, _status.channel(home), conditional)
+        if status == 304 and (not conditional or fresh != conditional or channel != _status.channel(home)
+                or not args.feed and feed != _svc.channel_feed(home)
+                or not express_only and not _resources.ready(home)):
             status, body, etag = _read_feed_pass(feed, None, read_feed, sleep)
+            if status == 304:
+                raise UpdateError('feed_invalid', 'cached response has no verified current release')
+    except UpdateError:
+        raise
     except SystemExit as exc:
         raise UpdateError('feed_untrusted', str(exc) or 'feed redirected off the trusted update origin')
     if status == 304:
         if express_only:
             return 0
-        _up_to_date(home, _announce)
+        _record_pass(home, latest={'version': current}, feed=feed, etag=conditional, channel=channel)
+        _up_to_date(home, _announce, feed=feed)
         return 0
     try:
         latest = _verified_feed(feed, body, _fetch)
@@ -365,8 +371,8 @@ def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
         raise
     except ValueError:
         raise UpdateError('feed_invalid', 'feed document is not JSON')
-    if not isinstance(latest, dict):
-        raise UpdateError('feed_invalid', 'feed document is not an object')
+    if not isinstance(latest, dict) or not _status.version(latest.get('version')):
+        raise UpdateError('feed_invalid', 'feed document has no valid version')
     _persist_models_url(home, latest)
     if express_only and latest.get('express') is not True:
         return 0  # Leave ETag/serial untouched so the regular job still sees it.
@@ -384,14 +390,17 @@ def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
     if not newer(latest['version'], _svc.current_version(home)):
         if express_only:
             return 0  # The pointer may be mid-install; do not mask a later rollback.
+        _record_pass(home, latest=latest, feed=feed, etag=etag, channel=channel)
         with _svc.install_lock(home) as held:
             if not held:
                 print('deferred: another router operation is in progress')
                 return 0
             _resources.deliver(home, latest, feed, injected)
-        _up_to_date(home, _announce, etag_path, etag)
+        _up_to_date(home, _announce, etag_path, etag, feed)
         return 0
-    failed = update_failures(home).get(latest['version'], 0)
+    _record_pass(home, latest=latest, feed=feed, etag=etag, channel=channel)
+    failed = _status.failures(_svc._state.read(_svc._state.path(home)),
+                             feed, _status.channel(home)).get(latest['version'], 0)
     if express_only and failed:
         return 0  # Retry failures on the regular cadence, not every minute.
     if failed >= MAX_VERSION_FAILURES:
@@ -492,31 +501,29 @@ def do_update(args, _fetch=None, _read_feed=None, _sleep=None, _announce=None):
     _svc._feed.configure_home(home)
     sleep = _sleep or time.sleep
     sleep(random.uniform(0, 10 if getattr(args, 'express_only', False) else 120))
-    try:
-        # Serialize normal/Express parents without holding the child's install lock.
-        with _svc.install_lock(home, 'update.lock') as held:
-            if not held:
-                return 0
-            try:
-                return _apply_update(args, home, sleep, _fetch, _read_feed, _announce)
-            finally:
-                _offer_codex_switch(home)
-    except UpdateError as exc:
-        _record_pass(home, error=exc.error_code)
-        raise
-    except _svc._feed.SignInRequired:
-        _record_pass(home, error='download_signin_required')
-        _svc.load('router_download_notice', Path(__file__).with_name('download_notice.py')).show(home)
-        raise SystemExit('Sign in through SCG Router to download updates.') from None
-    except OSError:
-        _record_pass(home, error='feed_unreachable')
-        raise
-    except ValueError:
-        _record_pass(home, error='feed_invalid')
-        raise
-    except Exception:
-        _record_pass(home, error='update_failed')
-        raise
+    with _svc.install_lock(home, 'update.lock') as held:
+        if not held:
+            return 0
+        try:
+            return _apply_update(args, home, sleep, _fetch, _read_feed, _announce)
+        except UpdateError as exc:
+            _record_pass(home, error=exc.error_code)
+            raise
+        except _svc._feed.SignInRequired:
+            _record_pass(home, error='download_signin_required')
+            _svc.load('router_download_notice', Path(__file__).with_name('download_notice.py')).show(home)
+            raise SystemExit('Sign in through SCG Router to download updates.') from None
+        except OSError:
+            _record_pass(home, error='feed_unreachable')
+            raise
+        except ValueError:
+            _record_pass(home, error='feed_invalid')
+            raise
+        except Exception:
+            _record_pass(home, error='update_failed')
+            raise
+        finally:
+            _offer_notices(home)
 
 
 def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None):
@@ -534,30 +541,40 @@ def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None):
         status, body, _ = _read_feed_pass(feed, None, read_feed, _sleep or time.sleep)
     except OSError as exc:
         raise SystemExit(f'update check failed: {type(exc).__name__}')
-    latest = None
-    if status != 304:
-        try:
-            latest = _verified_feed(feed, body, _fetch or _svc.fetch)
-        except UpdateError as exc:
-            raise SystemExit(f'update check failed: feed signature {exc}')
-        except ValueError:
-            raise SystemExit('update check failed: feed document is not JSON')
-        if not isinstance(latest, dict) or not isinstance(latest.get('version'), str):
-            raise SystemExit('update check failed: feed document has no version')
-        try:
-            _svc.check_serial(home, latest, pinned=bool(args.feed))
-        except SystemExit as exc:
-            raise SystemExit(str(exc) or 'update check failed: feed document refused')
+    if status == 304:
+        raise SystemExit('update check failed: cached response has no verified release')
+    try:
+        latest = _verified_feed(feed, body, _fetch or _svc.fetch)
+    except UpdateError as exc:
+        raise SystemExit(f'update check failed: feed signature {exc}')
+    except ValueError:
+        raise SystemExit('update check failed: feed document is not JSON')
+    if not isinstance(latest, dict) or not _status.version(latest.get('version')):
+        raise SystemExit('update check failed: feed document has no version')
+    try:
+        _svc.check_serial(home, latest, pinned=bool(args.feed))
+    except SystemExit as exc:
+        raise SystemExit(str(exc) or 'update check failed: feed document refused')
+    if not _svc.trusted_origin(_svc.sibling_bundle(feed, latest.get('url', ''))):
+        raise SystemExit('update check failed: untrusted bundle origin')
     current = _svc.current_version(home)
     available = (latest['version']
-                 if latest is not None and newer(latest['version'], current) else None)
+                 if newer(latest['version'], current) else None)
     channel = ((home / 'channel').read_text().strip()
                if (home / 'channel').exists() else 'stable')
+    state = dict(_svc._state.read(_svc._state.path(home)) or {})
+    _status.verified(state, latest, feed, channel, None)
+    facts = _status.summary(state, current, feed, channel)
     if args.json:
         print(json.dumps({'installed': current, 'available': available,
-                          'channel': channel}, sort_keys=True))
+                          'channel': channel, 'latest': latest['version'],
+                          'checked': True, 'source': facts['source'],
+                          'checked_at': state['last_successful_check_at'],
+                          'required_action': facts['required_action']}, sort_keys=True))
     elif available:
         print(f'current {current}; available {available}')
+    elif facts['required_action']:
+        print(f'current {current}; update needs repair')
     else:
         print(f'up to date {current}')
     return 0

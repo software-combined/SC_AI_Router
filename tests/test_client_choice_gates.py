@@ -177,7 +177,7 @@ class ChooserGateTests(unittest.TestCase):
                     self.assertEqual(tuple(path.read_bytes() for path in paths), before)
             self.assertEqual(code, 0)
             self.assertEqual(asked.call_count, 2)
-            backend.assert_not_called()
+            self.assertEqual(backend.return_value.method_calls, [])
             self.assertNotIn('connected', out)
             self.assertEqual(tuple(path.read_bytes() for path in paths), before)
 

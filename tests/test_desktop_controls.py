@@ -29,17 +29,19 @@ class DesktopControlsTests(unittest.TestCase):
         control = module('desktop_control')
         installer = mock.Mock()
         installer._diag._status_document.return_value = dict(
-            serving=False, version='1.3.0.7', clients={'codex': {'config_path': '/private'}},
+            serving=False, routing_healthy=True, version='1.3.0.7',
+            running_version='1.3.0.6', clients={'codex': {'config_path': '/private'}},
             token='private-token', key='private-key', feed='/private')
         config = mock.Mock(SWITCHED='switched')
         config.current.return_value = 'switched'
         config._codex.codex_attachment.return_value = {'openai_mode': 'subscription'}
-        modules = dict(install=installer, codex_switch_config=config,
+        modules = dict(install=installer, codex_switch_config=config, update_status=module('update_status'),
                        desktop_startup=SimpleNamespace(enabled=lambda home: False))
         with mock.patch.object(control, 'load', side_effect=modules.__getitem__):
             facts = control.snapshot(Path('/unused'))
         self.assertEqual(facts['clients'][0]['selected'], 'openrouter')
-        self.assertEqual(facts['status'], 'Router is not running')
+        self.assertEqual(facts['status'], 'Running')
+        self.assertEqual(facts['running_version'], '1.3.0.6')
         self.assertNotIn('private', json.dumps(facts))
         self.assertNotIn('reply_seen', facts)
 

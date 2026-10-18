@@ -30,11 +30,12 @@ PACKAGING_FILES = (
     'packaging/router_launch.py', 'packaging/service.py',
     'packaging/feed.py', 'packaging/feed_verify.py',
     'packaging/atomic_write.py',
+    'packaging/owned_json.py', 'packaging/client_removal.py',
     'packaging/notice.py', 'packaging/notice_text.py',
     # Plan 179: the router carries the agent skills, so a machine needs no
     # git account and no marketplace command to receive them.
     'packaging/agent_skills.py',
-    'packaging/install_delivery.py', 'packaging/native_payload.py',
+    'packaging/install_delivery.py', 'packaging/repair_ui.py', 'packaging/native_payload.py',
     'packaging/native_controller.py', 'packaging/native_setup.py',
     'packaging/native_launch.py', 'packaging/native_dialog.py',
     'packaging/native_shortcuts.py', 'packaging/native_readiness.py',
@@ -49,7 +50,8 @@ PACKAGING_FILES = (
     'packaging/assets/router-icon.png',
     'packaging/systemd.py', 'packaging/update_launch.py',
     'packaging/task_launch.py',
-    'packaging/updater.py', 'packaging/codex_config.py',
+    'packaging/updater.py', 'packaging/update_status.py', 'packaging/update_warning.py',
+    'packaging/codex_config.py', 'packaging/codex_owned.py',
     'packaging/codex_switch_config.py', 'packaging/codex_switch_offer.py',
     'packaging/codex_desktop_switch.py', 'packaging/codex_config_proof.py',
     'packaging/codex_switch_app.py', 'packaging/codex_switch_launch.py',
@@ -91,7 +93,7 @@ PACKAGING_FILES = (
 
 # Installed operator helpers only. Development probes, capture utilities and
 # publication tools belong to a source checkout, never an end-user release.
-OPERATOR_TOOLS = ('disable.py', 'global_instructions.py', 'provision_key.py')
+OPERATOR_TOOLS = ('disable.py', 'global_instructions.py', 'provision_key.py', 'classify_attachments.py')
 
 
 def bundle_files(root):

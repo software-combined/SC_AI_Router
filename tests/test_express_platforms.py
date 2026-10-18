@@ -9,7 +9,7 @@ from unittest import mock
 
 from tests._platform import unix_only
 from tests.fakes import LaunchdDomain
-from tests.install_fixtures import install_mod
+from tests.install_fixtures import install_mod, systemd_show
 from tests.test_windows_backend import USER, _backend, _install, backend as windows, QUERY_READY
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -62,7 +62,7 @@ class ExpressPlatforms(unittest.TestCase):
     def test_linux_enables_both_timers_without_stopping_its_installer(self):
         def run(cmd, **kwargs):
             self.calls.append(cmd)
-            return mock.Mock(returncode=0, stdout='', stderr='')
+            return systemd_show(cmd) or mock.Mock(returncode=0, stdout='', stderr='')
 
         with mock.patch.dict(os.environ, {'XDG_CONFIG_HOME': str(self.home / 'config'),
                                           'ROUTER_UPDATE_SERVICE': '1'}):

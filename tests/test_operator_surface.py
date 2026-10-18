@@ -18,7 +18,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests._platform import assert_owner_only, requires_posix_perms
-from tests.install_fixtures import _craft_bundle, _ok_run, _patch_attrs, install_mod
+from tests.install_fixtures import _craft_bundle, _ok_run, _patch_attrs, install_mod, systemd_show
 
 ROOT = Path(__file__).resolve().parents[1]
 FEED = 'file:///latest.json'
@@ -281,11 +281,10 @@ class OperatorSurfaceTests(unittest.TestCase):
         (home / 'update-etag').write_text('etag-A\n')
         args = self._args(home, '--check-update', '--feed', FEED)
         buf = io.StringIO()
-        with contextlib.redirect_stdout(buf):
-            rc = install_mod.do_check_update(
+        with contextlib.redirect_stdout(buf), self.assertRaisesRegex(SystemExit, 'cached'):
+            install_mod.do_check_update(
                 args, _read_feed=lambda feed, etag: (304, b'', 'etag-B'))
-        self.assertEqual(rc, 0)
-        self.assertIn('up to date', buf.getvalue())
+        self.assertNotIn('up to date', buf.getvalue())
         self.assertEqual((home / 'update-etag').read_text(), 'etag-A\n')
 
     def test_update_applies_and_records_the_pass_in_state(self):
@@ -376,9 +375,10 @@ class OperatorSurfaceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             home.mkdir()
+            install_mod.install_launcher(home, ROOT)
 
             def fake_run(cmd, **kwargs):
-                return SimpleNamespace(returncode=0, stdout='', stderr='')
+                return systemd_show(cmd) or SimpleNamespace(returncode=0, stdout='', stderr='')
 
             with mock.patch.dict(os.environ,
                                  {'XDG_CONFIG_HOME': str(Path(tmp) / 'config')}):
@@ -386,12 +386,11 @@ class OperatorSurfaceTests(unittest.TestCase):
                 manager.install(sys.executable, ROOT)
             unit = (Path(tmp) / 'config' / 'systemd' / 'user' /
                     'codex-mixed-model-router-update.service').read_text()
-            self.assertIn('--update', unit)
+            self.assertIn(install_mod._linux.quote(home.resolve() / 'update_launch.py', True), unit)
+            self.assertNotIn('/releases/', unit)
             self.assertNotIn('--check-update', unit)
-            install_mod.install_launcher(home, ROOT)
             launcher = (home / 'update_launch.py').read_text()
             self.assertIn("'--update'", launcher)
-            # The fallback verb keeps a rolled-back pre-147 release updating.
             self.assertIn("verb = '--update' if", launcher)
 
     def test_support_bundle_carries_no_path_url_or_free_text(self):

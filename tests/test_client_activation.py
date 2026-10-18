@@ -106,8 +106,9 @@ class ClientActivationTests(unittest.TestCase):
             _patch_attrs(self, run=lambda cmd, **kw: SimpleNamespace(
                 returncode=1, stdout='boom\n', stderr=''))
             args = install_mod.build_parser().parse_args(['--home', str(home)])
-            with mock.patch.dict(os.environ, {'HOME': str(Path(tmp) / 'fakehome')}):
-                with self.assertRaisesRegex(SystemExit, 'configuration restore failed'):
+            with mock.patch.object(install_mod, 'find_python', return_value=sys.executable), \
+                    mock.patch.dict(os.environ, {'HOME': str(Path(tmp) / 'fakehome')}):
+                with self.assertRaisesRegex(SystemExit, 'services left running'):
                     install_mod.do_uninstall(args)
 
     def test_success_text_alone_cannot_pass_a_failing_remover(self):
@@ -119,14 +120,10 @@ class ClientActivationTests(unittest.TestCase):
             _patch_attrs(self, run=lambda cmd, **kw: SimpleNamespace(
                 returncode=1, stdout='OpenAI direct routing restored.\n', stderr=''))
             args = install_mod.build_parser().parse_args(['--home', str(home)])
-            with mock.patch.dict(os.environ, {'HOME': str(Path(tmp) / 'fakehome')}):
-                with self.assertRaisesRegex(SystemExit, 'configuration restore failed'):
+            with mock.patch.object(install_mod, 'find_python', return_value=sys.executable), \
+                    mock.patch.dict(os.environ, {'HOME': str(Path(tmp) / 'fakehome')}):
+                with self.assertRaisesRegex(SystemExit, 'services left running'):
                     install_mod.do_uninstall(args)
-
-    def test_disable_reports_machine_result_not_substring(self):
-        # Covered directly by test_success_text_alone_cannot_pass_a_failing_remover;
-        # kept as a named pointer to the verdict contract.
-        self.assertTrue(callable(install_mod.do_uninstall))
 
 
 class ReceiptVersionTests(unittest.TestCase):
@@ -207,7 +204,7 @@ class ServiceOnlyTests(unittest.TestCase):
                 # restore path, not a re-implementation in the test.
                 env = dict(kwargs.get('env') or {})
                 proc = subprocess.run(
-                    cmd, capture_output=True, text=True, env=env,
+                    [sys.executable, *cmd[1:]], capture_output=True, text=True, env=env,
                     cwd=str(Path(cmd[1]).parent))
                 return SimpleNamespace(returncode=proc.returncode,
                                        stdout=proc.stdout, stderr=proc.stderr)
@@ -363,7 +360,7 @@ class ServiceOnlyTests(unittest.TestCase):
             config, _, _, _ = _install(self, tmp, home, '1.0.0')
             config.write_text(config.read_text().replace(
                 'openai_base_url', 'openai_base_url_edited'))
-            with self.assertRaisesRegex(SystemExit, 'refusing the client change'):
+            with self.assertRaisesRegex(SystemExit, 'No assistants were detached'):
                 self._install_service_only(self, tmp, home, '1.0.1')
 
     def test_unsupported_client_fails_before_mutation(self):

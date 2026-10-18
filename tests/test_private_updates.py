@@ -50,7 +50,7 @@ class PrivateTransportTests(unittest.TestCase):
             args = install_mod.build_parser().parse_args(['--home', str(home)])
             def denied(*args):
                 raise feed.SignInRequired()
-            with mock.patch.object(install_mod._updater, '_offer_codex_switch'), \
+            with mock.patch.object(install_mod._updater, '_offer_notices'), \
                     mock.patch.object(install_mod._updater._svc, 'load'), \
                     self.assertRaisesRegex(SystemExit, 'Sign in'):
                 install_mod.do_update(args, _read_feed=denied, _sleep=lambda *_: None)

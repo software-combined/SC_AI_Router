@@ -205,12 +205,14 @@ def _release_key(name):
 
 def prune_releases(home, *keep):
     """Keep current plus two prior verified releases for rollback depth."""
+    retained = {version for item in keep
+                for version in (item if isinstance(item, (tuple, list, set)) else (item,))}
     names = [p.name for p in (home / 'releases').glob('*') if p.is_dir()
              and not p.name.endswith('.partial')]
     versions = sorted((n for n in names if _release_key(n) is not None),
                       key=_release_key, reverse=True)
     for stale in versions[3:]:
-        if stale not in keep:
+        if stale not in retained:
             shutil.rmtree(home / 'releases' / stale, ignore_errors=True)
 
 

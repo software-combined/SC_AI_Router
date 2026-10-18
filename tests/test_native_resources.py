@@ -77,6 +77,21 @@ class NativeResourcesTests(unittest.TestCase):
             fetch.assert_not_called()
             self.assertFalse((home / 'setup-current').exists())
 
+    def test_an_older_channel_skips_delivery_without_inventing_a_controls_failure(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            owner, home, latest, data = self.fixture(Path(temporary))
+            (home / 'current').write_text('9.9.10')
+            state = home / 'mixed-router-state.json'
+            for outcome in ('ready', 'failed'):
+                state.write_text(json.dumps(dict(component_repairs={'controls': outcome})))
+                before = state.read_bytes()
+                fetch = mock.Mock(return_value=data)
+                self.assertFalse(owner.deliver(home, latest,
+                    'https://dist.softwarecombined.com/stable/latest.json', fetch))
+                fetch.assert_not_called()
+                self.assertEqual(state.read_bytes(), before)
+                self.assertFalse((home / 'desktop-delivery.json').exists())
+
     def test_failed_shortcut_update_restores_previous_pointer(self):
         with tempfile.TemporaryDirectory() as temporary:
             owner, home, latest, data = self.fixture(Path(temporary))
@@ -128,3 +143,87 @@ class NativeResourcesTests(unittest.TestCase):
             self.assertEqual(helper.read_bytes(), b'damaged helper')
             self.assertNotEqual(owner.current(home), previous)
             self.assertTrue(owner.ready(home))
+
+    def test_newer_retained_resources_never_clear_an_unverified_controls_failure(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            owner, home, latest, data = self.fixture(root)
+            source = root / 'Resources'
+            doc = json.loads((source / 'installer.json').read_text())
+            doc['version'] = '2.0.0'
+            (source / 'installer.json').write_text(json.dumps(doc))
+            feed = source / 'payload/latest.json'
+            feed.write_text(json.dumps(dict(json.loads(feed.read_text()), version='2.0.0')))
+            previous = owner.retained(source, home)
+            (home / 'setup-current').write_text(previous.name)
+            (home / 'desktop-delivery.json').write_text('{"status":"failed"}')
+            state = home / 'mixed-router-state.json'
+            state.write_text('{"component_repairs":{"controls":"failed"}}')
+            before = state.read_bytes()
+            fetch = mock.Mock(return_value=data)
+            self.assertFalse(owner.deliver(home, latest,
+                'https://dist.softwarecombined.com/stable/latest.json', fetch))
+            self.assertEqual(state.read_bytes(), before)
+            fetch.assert_not_called()
+            self.assertFalse(owner.ready(home))
+            self.assertFalse(owner.confirm_controls(home, source))
+            self.assertEqual(state.read_bytes(), before)
+            self.assertTrue(owner.confirm_controls(home, previous))
+            self.assertTrue(owner.ready(home))
+            self.assertEqual(json.loads(state.read_text())['component_repairs']['controls'], 'ready')
+
+    def test_failed_delivery_receipt_retries_shortcuts_even_when_archive_hash_matches(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            owner, home, latest, data = self.fixture(Path(temporary))
+            original = owner.load
+            shortcuts = mock.Mock()
+            shortcuts.install.side_effect = lambda home, permanent, python: (
+                home / 'setup-current').write_text(permanent.name)
+            fetch = mock.Mock(return_value=data)
+            with mock.patch.object(owner, 'load', side_effect=lambda name:
+                    shortcuts if name == 'native_shortcuts' else original(name)):
+                self.assertTrue(owner.deliver(home, latest, 'file:///latest.json', fetch))
+                receipt = home / 'desktop-delivery.json'
+                receipt.write_text(json.dumps(dict(json.loads(receipt.read_text()), status='failed')))
+                self.assertTrue(owner.deliver(home, latest, 'file:///latest.json', fetch))
+            self.assertEqual(fetch.call_count, 2)
+            self.assertEqual(shortcuts.install.call_count, 2)
+            self.assertTrue(owner.ready(home))
+
+    def test_controls_confirmation_preserves_an_independent_or_unapplied_install_warning(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            owner, home, latest, _ = self.fixture(root)
+            previous = owner.retained(root / 'Resources', home)
+            (home / 'setup-current').write_text(previous.name)
+            for assistants, applied in (('failed', latest['version']), ('unknown', latest['version']),
+                                        ('ready', '0.0.0')):
+                state = dict(component_repairs={'assistants': assistants, 'controls': 'failed'},
+                             last_applied_version=applied, last_error='installer_failed',
+                             installation_repair_required=True)
+                path = home / 'mixed-router-state.json'
+                path.write_text(json.dumps(state))
+                self.assertTrue(owner.confirm_controls(home, previous))
+                after = json.loads(path.read_text())
+                self.assertEqual(after['component_repairs']['controls'], 'ready')
+                self.assertEqual(after['component_repairs']['assistants'], assistants)
+                self.assertTrue(after['installation_repair_required'])
+                self.assertEqual(after['last_error'], 'installer_failed')
+
+    def test_older_resources_cannot_confirm_newer_core_or_clear_repair_warnings(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            owner, home, _, _ = self.fixture(root)
+            previous = owner.retained(root / 'Resources', home)
+            (home / 'setup-current').write_text(previous.name)
+            (home / 'releases/2.0.0').mkdir()
+            (home / 'current').write_text('2.0.0')
+            state = home / 'mixed-router-state.json'
+            state.write_text(json.dumps(dict(last_applied_version='2.0.0',
+                component_repairs={'assistants': 'ready', 'controls': 'failed'},
+                last_error='installer_failed', installation_repair_required=True)))
+            before = state.read_bytes()
+            self.assertFalse(owner.confirm_controls(home, previous))
+            self.assertFalse(owner.ready(home))
+            self.assertEqual(state.read_bytes(), before)
+            self.assertFalse((home / 'desktop-delivery.json').exists())

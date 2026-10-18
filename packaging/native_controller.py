@@ -29,6 +29,19 @@ def installer(home):
     return path if path.is_file() else None
 
 
+def launcher_source(home, source):
+    """A runtime install cannot downgrade a newer retained update launcher."""
+    selected = installer(home)
+    if selected:
+        try:
+            if _version(selected.parent.parent.name) >= _version(
+                    (Path(source) / 'packaging/VERSION').read_text().strip()):
+                return selected.parent.parent
+        except (OSError, ValueError):
+            return selected.parent.parent  # Unknown source identity cannot downgrade verified maintenance.
+    return Path(source)
+
+
 def install(home, source):
     """Install a verified, non-downgrading controller; never import its code."""
     home, source = Path(home), Path(source).resolve()

@@ -9,6 +9,7 @@ feed it no longer understands. This file resolves `current` at exec time,
 exactly like router_launch.py. Not imported; executed with the router home
 as its own location.
 """
+import os
 import runpy
 import sys
 from pathlib import Path
@@ -16,7 +17,8 @@ from pathlib import Path
 home = Path(__file__).resolve().parent
 express = Path(__file__).name == 'express_launch.py'
 try:
-    name = (home / 'current').read_text(encoding='utf-8').strip().split('/')[-1]
+    pointer = home / 'current'
+    name = pointer.resolve().name if pointer.is_symlink() else pointer.read_text(encoding='utf-8').strip().split('/')[-1]
 except (OSError, ValueError):
     raise SystemExit('router pointer file missing: reinstall the router')
 installer = home / 'releases' / name / 'packaging' / 'install.py'
@@ -32,6 +34,10 @@ except OSError:
     pass
 if not installer.is_file():
     raise SystemExit('router release missing: reinstall the router')
+# Reloading a scheduler replaces its command while this process can still use
+# the old release. Pruning must retain that origin until this pass exits.
+os.environ['ROUTER_UPDATE_ORIGIN'] = ('control' if installer.parent.parent.parent == home / 'control'
+                                      else name)
 # The home launcher outlives the release that installed it: an explicit
 # rollback points `current` at an older installer, and only 0.6.37+ takes
 # --update. Ask the resolved release which applying verb it advertises so a

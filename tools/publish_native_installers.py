@@ -108,15 +108,7 @@ def publish(args):
             body = stage / name
             publisher.publish_bundle(args.bucket, prefix + name, body,
                                      hashlib.sha256(body.read_bytes()).hexdigest(), 'text/plain')
-        # The public page performs no account or credential exchange.
-        page = ROOT / 'packaging/download-page'
-        for path in sorted(page.iterdir()):
-            content_type = {'.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript',
-                            '.svg': 'image/svg+xml'}[path.suffix]
-            publisher._aws(['s3', 'cp', str(path), 's3://' + args.bucket + '/install/' + path.name,
-                            '--cache-control', 'no-cache', '--content-type', content_type])
-        publisher._aws(['s3', 'cp', str(ROOT / 'packaging/assets/router-icon.png'),
-                        's3://' + args.bucket + '/install/router-icon.png', '--content-type', 'image/png'])
+        publisher.publish_setup_page(args.bucket)
         target = stage / 'downloads.json'
         target.write_text(json.dumps(manifest, indent=2) + '\n')
         publisher.publish_document(args.bucket, 'install/' + args.channel + '.json', target, 'no-store')

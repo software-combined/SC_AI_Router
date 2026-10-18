@@ -10,6 +10,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 
 from tests.install_fixtures import _craft_bundle, _patch_attrs, install_mod
 from tests.test_release import release_mod
@@ -74,6 +75,13 @@ class ExpressUpdates(unittest.TestCase):
         finally:
             updater_mod._FEED_VERIFY_KEY = old_key
 
+    def cache_current(self):
+        (self.home / 'releases' / '1.0.0').mkdir(parents=True)
+        state = dict(port=1, token='test')
+        install_mod._updater._status.verified(state, {'version': '1.0.0'},
+            install_mod.channel_feed(self.home), 'stable', 'previous')
+        (self.home / 'mixed-router-state.json').write_text(json.dumps(state))
+
     def test_model_download_failure_keeps_cache_and_still_applies_a_signed_update(self):
         (self.home / 'download-auth.json').write_text('{}')
         (self.home / 'models-cache.json').write_text('last good models')
@@ -94,8 +102,9 @@ class ExpressUpdates(unittest.TestCase):
         def announce(_home, state):
             offered.append(state)
 
-        self.assertEqual(self.run_update(express=False, status=304,
-                                         announce=announce), 0)
+        self.cache_current()
+        with mock.patch.object(install_mod._updater._resources, 'ready', return_value=True):
+            self.assertEqual(self.run_update(express=False, status=304, announce=announce), 0)
         self.assertEqual([state['port'] for state in offered], [1])
         self.assertEqual(self.run_update(express=True, status=304,
                                          announce=announce), 0)
@@ -128,6 +137,7 @@ class ExpressUpdates(unittest.TestCase):
                 self.assertLessEqual(self.sleeps[-1], 10)
 
     def test_unchanged_and_mid_install_pointer_do_not_hide_a_rollback(self):
+        self.cache_current()
         before = (self.home / 'mixed-router-state.json').read_bytes()
         self.run_update(status=304)
         (self.home / 'releases' / '9.9.9').mkdir(parents=True)

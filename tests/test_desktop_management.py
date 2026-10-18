@@ -65,7 +65,9 @@ class DesktopManagementTests(unittest.TestCase):
             source, home = resources(root / 'Resources'), root / 'home'
             home.mkdir()
             dialog = mock.Mock()
-            with mock.patch.object(setup, 'load', return_value=dialog), \
+            controller = SimpleNamespace(launcher_source=lambda home, source: source)
+            with mock.patch.object(setup, 'load', side_effect=lambda name:
+                    controller if name == 'native_controller' else dialog), \
                     mock.patch.object(setup.subprocess, 'run', return_value=SimpleNamespace(
                         returncode=0, stdout=b'deferred: another router operation is in progress\n')):
                 self.assertNotEqual(setup.onboard(source, home, 'remove'), 0)
@@ -131,8 +133,10 @@ class DesktopManagementTests(unittest.TestCase):
     def test_menu_delivery_failure_is_distinct_from_running_router_health(self):
         control = module('desktop_control')
         installer = mock.Mock()
-        installer._diag._status_document.return_value = dict(serving=True, version='1.3.0.9', clients={})
-        modules = dict(install=installer, desktop_startup=SimpleNamespace(enabled=lambda _: True))
+        installer._diag._status_document.return_value = dict(
+            serving=True, routing_healthy=True, version='1.3.0.9', clients={})
+        modules = dict(install=installer, update_status=module('update_status'),
+                       desktop_startup=SimpleNamespace(enabled=lambda _: True))
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
             (home / 'desktop-delivery.json').write_text('{"status":"failed","private":"secret"}')

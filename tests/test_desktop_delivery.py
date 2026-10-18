@@ -16,7 +16,9 @@ class DesktopDeliveryTests(unittest.TestCase):
     def fixture(self, root):
         resources, home, latest, data = resource_fixtures.NativeResourcesTests().fixture(root)
         latest.update(url='file:///core.tar.gz', min_python='3.14', serial=1)
-        (home / 'mixed-router-state.json').write_text('{"clients":"none"}')
+        state = {'clients': 'none'}
+        module('update_status').verified(state, latest, 'file:///latest.json', 'stable', 'cached')
+        (home / 'mixed-router-state.json').write_text(json.dumps(state))
         (home / 'update-etag').write_text('cached\n')
         return resources, home, latest, data
 
@@ -31,7 +33,7 @@ class DesktopDeliveryTests(unittest.TestCase):
         args = SimpleNamespace(home=str(home), feed='file:///latest.json', express_only=False)
         fetch = mock.Mock(return_value=data)
         with mock.patch.object(owner._models, 'refresh'), self.shortcuts(owner._resources), \
-                mock.patch.object(owner, '_offer_codex_switch'), contextlib.redirect_stdout(io.StringIO()):
+                mock.patch.object(owner, '_offer_notices'), contextlib.redirect_stdout(io.StringIO()):
             rc = owner.do_update(args, _fetch=fetch, _read_feed=reader,
                                  _sleep=lambda _: None, _announce=lambda *_: None)
         self.assertEqual(rc, 0)
@@ -113,7 +115,7 @@ class DesktopDeliveryTests(unittest.TestCase):
             older['native_resources'][owner.target()].update(version='1.2.11', bundle_sha256='b' * 64)
             fetch = mock.Mock(return_value=data)
             with self.shortcuts(owner):
-                self.assertTrue(owner.deliver(home, older, 'file:///latest.json', fetch))
+                self.assertFalse(owner.deliver(home, older, 'file:///latest.json', fetch))
             fetch.assert_not_called()
             self.assertEqual((home / 'setup-current').read_bytes(), pointer)
             self.assertEqual((home / 'desktop-delivery.json').read_bytes(), record)

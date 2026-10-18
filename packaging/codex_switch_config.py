@@ -122,11 +122,22 @@ def managed_block(entry):
     A block edited by hand, missing or doubled refuses, as `switch` does.
     """
     config_path = Path(entry['config_path'])
-    text = config_path.read_text() if config_path.exists() else ''
+    text = _codex._read_text(config_path)
     live = _codex.live_block(text, entry['inserted_block'])
     if text.count(live) != 1:
         raise SystemExit(EDITED)
     return live
+
+
+def rollback_entry(entry):
+    """Retain the receipt's ownership and only the person's current picker lines."""
+    live = managed_block(entry)
+    block = ''.join(line for line in entry['inserted_block'].splitlines(keepends=True)
+                    if _codex._key(line) not in _codex.PICK_KEYS)
+    picks = _codex._picks(live)
+    if picks:
+        block = _codex._insert_root_lines(block, list(picks.values()))
+    return dict(entry, inserted_block=block)
 
 
 def switch(home, variant):
@@ -153,15 +164,16 @@ def switch(home, variant):
     block = build(home, state, entry.get('openai_mode'), False, variant)
     block = _codex.preserve_picker_selection(config_path, live, block)
     block = _codex.seed_picker_selection(config_path, live, block)
-    original, removed = _codex.replace_config_block(config_path, block, live)
+    original, removed = _codex.replace_config_block(config_path, block, live, entry['inserted_block'])
     record = dict(entry, inserted_block=block, variant=variant)
     if removed:  # owner root lines, kept with earlier ones as attach_config does
         kept = (entry.get('reviewer') or {}).get('removed') or []
         record['reviewer'] = {'removed': kept + removed}
+    applied = _codex._read_text(config_path)
     try:
         _codex.write_client_receipt(home, 'codex', record)
     except BaseException:
-        _atomic.replace_text(config_path, original)
+        _codex._owned.write(config_path, applied, original, _atomic.replace_text)
         raise
 
 
@@ -174,7 +186,7 @@ def restore(home, previous, variant):
     switch builds; anything else is a hand edit and refuses, as `switch` does.
     """
     config_path = Path(previous['config_path'])
-    text = config_path.read_text() if config_path.exists() else ''
+    text = _codex._read_text(config_path)
     state = json.loads((Path(home) / 'mixed-router-state.json').read_text())
     for block in (previous['inserted_block'],
                   _codex.codex_attachment(home).get('inserted_block'),
@@ -190,10 +202,11 @@ def restore(home, previous, variant):
     moved = [line for line in ((_codex.codex_attachment(home).get('reviewer') or {})
                                .get('removed') or []) if line not in kept]
     if live != previous['inserted_block']:
-        _, removed = _codex.replace_config_block(config_path, previous['inserted_block'], live)
+        _, removed = _codex.replace_config_block(config_path, previous['inserted_block'], live, block)
         if removed:
             previous = dict(previous, reviewer={'removed': kept + removed})
     if moved:
-        text = config_path.read_text()
-        _atomic.replace_text(config_path, _codex.restore_reviewer(text, {'removed': moved}))
+        text = _codex._read_text(config_path)
+        restored = _codex.restore_reviewer(text, {'removed': moved})
+        _codex._owned.write(config_path, text, restored, _atomic.replace_text)
     _codex.write_client_receipt(home, 'codex', previous)

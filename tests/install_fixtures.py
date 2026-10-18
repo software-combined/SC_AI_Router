@@ -10,6 +10,7 @@ import importlib.util
 import io
 import json
 import os
+import shlex
 import tarfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -51,6 +52,8 @@ def install_mod_factory():
     # exercise the chooser replace these seams with their own fake dialog.
     module._client_choice._dialog.tool = lambda *args, **kwargs: None
     module._client_choice._dialog.ask = _unexpected_dialog
+    module._delivery.close_assistants = _unexpected_dialog
+    module._updater._offer_notices = lambda *_: None
     # Nor build or remove the real Switch Codex app: its location was named
     # before any test moved HOME. tests/test_codex_switch_app.py drives it.
     module._client_choice._app.sync = lambda *args, **kwargs: None
@@ -86,6 +89,9 @@ def ok_run(cmd, **kwargs):
     if '-c' in cmd:
         return SimpleNamespace(returncode=0, stdout='3 14\n/opt/homebrew/bin/python3.14\n',
                                stderr='')
+    answer = systemd_show(cmd)
+    if answer is not None:
+        return answer
     # launchctl goes through the stateful domain model: a fake that answered
     # `print` with rc 0 for a booted-out label is what let the bootout/bootstrap
     # defect reach a release.
@@ -93,6 +99,19 @@ def ok_run(cmd, **kwargs):
     if answer is not None:
         return answer
     return SimpleNamespace(returncode=0, stdout='', stderr='')
+
+
+def systemd_show(cmd):
+    """The loaded-command boundary; drift tests replace this with a stale reply."""
+    if cmd[:3] != ['systemctl', '--user', 'show']:
+        return None
+    config = Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config')
+    unit = config / 'systemd/user' / cmd[3]
+    lines = unit.read_text().splitlines() if unit.exists() else []
+    command = next((line.partition('=')[2] for line in lines if line.startswith('ExecStart=')), '')
+    argv = [value.replace('%%', '%').replace('$$', '$') for value in shlex.split(command)]
+    output = '{ path=%s ; argv[]=%s ; }' % (argv[0], ' '.join(argv)) if argv else ''
+    return SimpleNamespace(returncode=0, stdout=output, stderr='')
 
 
 def craft_bundle(version):
@@ -156,7 +175,26 @@ _run_install = run_install
 
 
 __all__ = ['static_fetch', 'real_bundle', 'install_mod_factory',
-           'install_mod', 'tarball', 'ok_run', 'craft_bundle',
+           'install_mod', 'tarball', 'ok_run', 'systemd_show', 'craft_bundle',
            'patch_attrs', 'run_install', '_real_bundle', '_install_mod',
            '_tarball', '_ok_run', '_craft_bundle', '_patch_attrs',
            '_run_install', '_SEAMS']
+
+
+def uninstall_home(tmp):
+    """Staged home with one installed release, pointer current, and plists."""
+    home = Path(tmp) / 'home'
+    rel = home / 'releases' / '1.0.0'
+    (rel / 'tools').mkdir(parents=True)
+    (rel / 'tools' / 'disable.py').write_text('# stub\n')
+    (home / 'current').write_text('1.0.0\n')
+    config = Path(tmp) / 'fakehome/.codex/config.toml'
+    config.parent.mkdir(parents=True)
+    block = install_mod._codex_config.build_block(
+        home, {'port': 4321, 'token': 'synthetic'}, 'subscription')
+    config.write_text(block)
+    (home / 'activation.json').write_text(json.dumps(
+        {'config_path': str(config), 'inserted_block': block}))
+    agents = Path(tmp) / 'fakehome' / 'Library' / 'LaunchAgents'
+    agents.mkdir(parents=True)
+    return home, agents

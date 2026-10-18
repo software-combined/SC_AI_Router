@@ -292,31 +292,6 @@ class InstallTests(unittest.TestCase):
             self.assertEqual(sum(1 for cmd in calls if 'bootstrap' in cmd), n_bootstraps)
 
 
-    def test_update_uses_etag_and_treats_304_as_current(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            home = Path(tmp) / 'home'
-            home.mkdir()
-            (home / 'update-etag').write_text('old-etag\n')
-            seen = []
-
-            def fake_read(feed, etag):
-                seen.append((feed, etag))
-                return 304, b'', 'old-etag'
-
-            def boom(url):
-                raise AssertionError('tarball must not download on 304')
-
-            args = install_mod.build_parser().parse_args(
-                ['--feed', 'file:///latest.json', '--home', str(home)])
-            buf = io.StringIO()
-            with contextlib.redirect_stdout(buf):
-                rc = install_mod.do_update(
-                    args, _fetch=boom, _read_feed=fake_read, _sleep=lambda s: None)
-            self.assertEqual(rc, 0)
-            self.assertIn('up to date', buf.getvalue())
-            self.assertEqual(seen, [('file:///latest.json', 'old-etag'), ('file:///latest.json', None)])
-            self.assertEqual((home / 'update-etag').read_text(), 'old-etag\n')
-
     def test_channel_beta_uses_origin_without_api_call(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
@@ -340,7 +315,7 @@ class InstallTests(unittest.TestCase):
             args = install_mod.build_parser().parse_args(
                 ['--feed', 'file:///latest.json', '--home', str(home)])
             buf = io.StringIO()
-            with contextlib.redirect_stdout(buf):
+            with contextlib.redirect_stdout(buf), self.assertRaisesRegex(SystemExit, 'cached'):
                 install_mod.do_update(
                     args,
                     _read_feed=lambda feed, etag: (304, b'', None),
@@ -369,7 +344,7 @@ class InstallTests(unittest.TestCase):
             blob, latest = _craft_bundle('9.9.9')
 
             def fake_read(feed, etag):
-                self.assertEqual(etag, 'etag-A')
+                self.assertIsNone(etag)  # The legacy ETag has no verified binding.
                 return 200, json.dumps(latest).encode(), 'etag-B'
 
             _patch_attrs(self, run=lambda cmd, **kw: _ok_run(cmd, **kw))

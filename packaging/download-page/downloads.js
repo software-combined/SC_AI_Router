@@ -6,14 +6,16 @@
     'windows/x86_64': 'Windows · x64', 'linux/x86_64': 'Ubuntu · x64', 'linux/arm64': 'Ubuntu · arm64'};
   const systems = [['darwin/', 'macOS', 'apple'], ['windows/', 'Windows', 'microsoft'], ['linux/', 'Linux', 'linux']];
   async function load() {
-    document.getElementById('downloads').hidden = true;
     const response = await fetch('stable.json', {cache: 'no-store', credentials: 'omit', redirect: 'error'});
-    if (!response.ok) throw problem('The stable installer is being prepared. Use the other setup options below, or contact Software Combined IT.');
+    if (!response.ok) throw problem('Use the setup and repair scripts below. Desktop installers are being prepared.');
     const doc = await response.json();
     const macOnly = doc.scope === 'macos-arm64';
     const expected = macOnly ? 1 : 5;
     if (!/^\d+(?:\.\d+){2,3}$/.test(doc.version) || doc.channel !== 'stable' ||
         (doc.scope !== undefined && !macOnly) || !Array.isArray(doc.packages) || doc.packages.length !== expected) throw problem('The download list needs attention. Contact Software Combined IT.');
+    const current = await fetch('/stable/latest.json', {cache: 'no-store', credentials: 'omit', redirect: 'error'});
+    const latest = current.ok ? await current.json() : null;
+    if (!latest || latest.version !== doc.version || latest.channel !== 'stable') throw problem('Use the setup and repair scripts below. Desktop installers for the current release are being prepared.');
     const packages = document.getElementById('packages');
     const checked = doc.packages.map(item => {
       const url = new URL(item.url, location.origin);
@@ -49,10 +51,11 @@
     }
     document.getElementById('recommendation').textContent = `Version ${doc.version} · Stable${macOnly ? ' · Apple silicon' : ''}`;
     document.getElementById('downloads').hidden = false;
+    document.getElementById('verification').hidden = false;
     status.textContent = '';
   }
   function failure(error) {
-    status.textContent = error.publicMessage || 'Downloads need attention. Use the other setup options below, or contact Software Combined IT.';
+    status.textContent = error.publicMessage || 'Use the setup and repair scripts below, or contact Software Combined IT.';
   }
   load().catch(failure);
 })();

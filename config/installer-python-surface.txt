@@ -15,6 +15,7 @@
 # tests/test_packaging.py::test_installer_surface_parses_as_python39.
 load packaging/install.py
 load packaging/install_delivery.py
+load packaging/repair_ui.py
 load packaging/download_auth.py
 load packaging/download_oauth.py
 load packaging/download_session.py
@@ -30,6 +31,8 @@ load packaging/native_setup.py
 load packaging/native_shortcuts.py
 load packaging/native_readiness.py
 load packaging/atomic_write.py
+load packaging/owned_json.py
+load packaging/client_removal.py
 load packaging/bundle.py
 load packaging/claude_config.py
 load packaging/client_choice.py
@@ -48,6 +51,7 @@ load packaging/claude_profile_sync.py
 load packaging/claude_profile_ledger.py
 load packaging/claude_profile_hook.py
 load packaging/codex_config.py
+load packaging/codex_owned.py
 load packaging/codex_switch_config.py
 load packaging/codex_desktop_switch.py
 load packaging/codex_config_proof.py
@@ -63,6 +67,8 @@ load packaging/provider_keys.py
 load packaging/service.py
 load packaging/systemd.py
 load packaging/updater.py
+load packaging/update_status.py
+load packaging/update_warning.py
 load packaging/platforms/__init__.py
 load packaging/desktop_windows.py
 load packaging/desktop_control.py
@@ -91,4 +97,5 @@ parse packaging/task_launch.py
 parse packaging/update_launch.py
 parse packaging/native_launch.py
 parse tools/disable.py
+parse tools/classify_attachments.py
 parse tools/global_instructions.py

@@ -29,13 +29,36 @@ from pathlib import Path
 # Errors Windows raises for a destination that is momentarily unavailable:
 # ERROR_ACCESS_DENIED (5) and ERROR_SHARING_VIOLATION (32).
 _WINDOWS_TRANSIENT_REPLACE = frozenset((5, 32))
+_ANY = object()
 
 
 class StaleTmp(OSError):
     """A deterministic temp file was left behind and could not be cleared."""
 
 
-def _replace(tmp, path):
+class ConcurrentChange(OSError):
+    """The saved file no longer matches the caller's preflight."""
+
+
+def check_unchanged(path, expected):
+    if expected is _ANY:
+        return
+    try:
+        with Path(path).open(newline='') as stream:
+            actual = stream.read()
+    except FileNotFoundError:
+        actual = None
+    if actual != expected:
+        raise ConcurrentChange('Settings changed concurrently; retry the operation.')
+
+
+def remove(path, *, expected):
+    """Remove a receipt only after its current bytes match the saved evidence."""
+    check_unchanged(path, expected)
+    Path(path).unlink(missing_ok=True)
+
+
+def _replace(tmp, path, expected=_ANY):
     """os.replace, made robust against Windows read-only and lock races.
 
     POSIX takes the first os.replace and returns. Windows clears a read-only
@@ -43,10 +66,12 @@ def _replace(tmp, path):
     the caller the original OSError.
     """
     if os.name != 'nt':
+        check_unchanged(path, expected)
         os.replace(tmp, path)
         return
     deadline = time.monotonic() + 1.0
     while True:
+        check_unchanged(path, expected)
         try:
             os.replace(tmp, path)
             return
@@ -84,7 +109,7 @@ def _open_tmp(path, tmp_name, stale_tmp):
     raise StaleTmp(str(tmp))  # unreachable; keeps the contract explicit
 
 
-def replace_text(path, text, mode=0o600, tmp_name=None, stale_tmp='reuse', *, newline=None):
+def replace_text(path, text, mode=0o600, tmp_name=None, stale_tmp='reuse', *, newline=None, expected=_ANY):
     """Atomically replace text; newline='' preserves saved line endings."""
     path = Path(path)
     fd, tmp = _open_tmp(path, tmp_name, stale_tmp)
@@ -97,7 +122,7 @@ def replace_text(path, text, mode=0o600, tmp_name=None, stale_tmp='reuse', *, ne
         stream = None
         if mode is not None:
             os.chmod(tmp, mode)
-        _replace(tmp, path)
+        _replace(tmp, path, expected)
     except BaseException:
         # Close the descriptor before unlinking: Windows refuses to remove a
         # file that still has an open handle, which would strand the temp.
@@ -118,7 +143,7 @@ def replace_text(path, text, mode=0o600, tmp_name=None, stale_tmp='reuse', *, ne
         raise
 
 
-def replace_json(path, doc, mode=0o600, tmp_name=None, stale_tmp='reuse'):
+def replace_json(path, doc, mode=0o600, tmp_name=None, stale_tmp='reuse', *, expected=_ANY):
     """Atomically replace path with one JSON document plus a newline."""
     return replace_text(path, json.dumps(doc, indent=2) + '\n',
-                        mode=mode, tmp_name=tmp_name, stale_tmp=stale_tmp)
+                        mode=mode, tmp_name=tmp_name, stale_tmp=stale_tmp, expected=expected)

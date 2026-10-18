@@ -60,9 +60,9 @@ class NativePayloadTests(unittest.TestCase):
             (home / 'download-auth.json').write_text('{old or corrupt auth')
             readiness = mock.Mock()
             readiness.check.return_value = {'ready': True, 'clients': {}}
+            native_load = setup.load
             def load(name):
-                self.assertEqual(name, 'native_readiness')
-                return readiness
+                return readiness if name == 'native_readiness' else native_load(name)
             run = mock.Mock(return_value=SimpleNamespace(returncode=0, stdout='{"serving":true}'))
             with mock.patch.object(setup, 'load', side_effect=load):
                 facts = setup.status(source, home, run)
@@ -203,8 +203,8 @@ class IndependentControllerTests(unittest.TestCase):
 
 
 @unittest.skipIf(os.name == 'nt', 'This service-boundary fixture uses launchd.')
-class NativeRepairTests(unittest.TestCase):
-    def test_real_native_repair_restores_service_and_retains_saved_install(self):
+class NativeKeyRefreshTests(unittest.TestCase):
+    def test_explicit_key_refresh_restores_service_and_retains_saved_install(self):
         for missing, older, corrupt in ((False, False, False), (True, True, False),
                                         (False, True, True), (True, False, True)):
             with self.subTest(missing=missing, older=older, corrupt=corrupt), \
@@ -264,20 +264,12 @@ class NativeRepairTests(unittest.TestCase):
                     mock.patch.object(install_mod, 'do_install', side_effect=lambda args:
                         real_install(args, _fetch=_static_fetch(latest, blob), _run=service_run)):
                 return SimpleNamespace(returncode=install_mod.main(argv[2:]))
-        native_run, native_load = setup.run_installer, setup.load
-        dialog = mock.MagicMock()
-        dialog.Progress.return_value.__enter__.return_value.cancelled = True
-        def load(name):
-            return dialog if name == 'native_dialog' else (
-                mock.Mock() if name == 'native_shortcuts' else native_load(name))
         with mock.patch.dict(os.environ, {'HOME': str(user), 'USERPROFILE': str(user),
                              'PATH': '/usr/bin:/bin'}, clear=True), \
-                mock.patch.object(setup, 'load', side_effect=load), \
-                mock.patch.object(setup, 'run_installer', side_effect=lambda *args:
-                                  native_run(*args, run=invoke)), \
                 mock.patch.object(install_mod._svc.urllib.request, 'urlopen', side_effect=response), \
                 redirect_stdout(io.StringIO()):
-            self.assertEqual(setup.onboard(source, home, action='resume'), 0)
+            permanent = setup.retained(source, home)
+            self.assertEqual(setup.run_installer(permanent, home, ['--setup'], run=invoke).returncode, 0)
         self.assertTrue(health)
         self.assertTrue(plist.is_file())
         self.assertTrue(any(cmd[:2] == ['launchctl', 'bootstrap'] for cmd in commands))
@@ -289,7 +281,6 @@ class NativeRepairTests(unittest.TestCase):
         self.assertEqual({path.relative_to(release): path.read_bytes()
                           for path in release.rglob('*') if path.is_file()}, retained_files)
         self.assertEqual(client_config.read_bytes(), b'model = "owner-choice"\n')
-        dialog.dialog.ask.assert_not_called()
 
 
 if __name__ == '__main__':

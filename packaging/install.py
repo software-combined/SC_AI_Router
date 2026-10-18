@@ -164,7 +164,7 @@ def write_catalogue(home, release_dir, python):
 replace_config_block = _codex_config.replace_config_block
 
 
-def _restore_owned_config(home):
+def _restore_owned_config(home, python=None, expected=None, entry=None):
     """Detach an active client via the single owned remover path.
 
     Runs the matching tools/disable.py with ROUTER_RESTORE_ONLY=1: exact
@@ -172,8 +172,11 @@ def _restore_owned_config(home):
     machine result decides; success text alone never passes.
     """
     disable = Path(__file__).resolve().parents[1] / 'tools' / 'disable.py'
-    result = run([sys.executable, str(disable)], capture_output=True, text=True,
+    python = python or find_python()
+    if python is None: raise SystemExit('Python 3.14 is required to restore Codex settings safely.')
+    result = run([python, str(disable)], capture_output=True, text=True,
                  env={**os.environ, 'ROUTER_HOME': str(home),
+                      'ROUTER_EXPECTED_CONFIG_SHA256': expected or '',
                       'ROUTER_RESTORE_ONLY': '1'})
     print((result.stdout or '')[-2000:])
     if result.returncode != 0:
@@ -181,7 +184,7 @@ def _restore_owned_config(home):
         raise SystemExit('configuration restore failed; refusing the client change')
     # The remover restores files but keeps the receipt; a detached client
     # must not leave a claim to settings it no longer owns.
-    _codex_config.drop_client(home, 'codex')
+    _codex_config.drop_client(home, 'codex', expected=entry)
 
 
 def do_rollback(args):
@@ -276,11 +279,8 @@ def _open_key_window(python, home, setup_url, clients):
 
 def do_install(args, _fetch=fetch, _run=None):
     _svc._feed.configure_home(Path(args.home).expanduser())
-    delivery = {}
-    rc = _do_install(args, _fetch, _run, delivery)
-    if rc == 0 and not args.dry_run:
-        _delivery.finish(Path(args.home).expanduser(), run=run, native=delivery, fetch=None if _fetch is fetch else _fetch)
-    return rc
+    return _delivery.run_install(args, lambda delivery: _do_install(args, _fetch, _run, delivery),
+        run=lambda *a, **kw: run(*a, **kw), fetch=None if _fetch is fetch else _fetch)
 
 
 def _do_install(args, _fetch=fetch, _run=None, delivery=None):
@@ -301,16 +301,15 @@ def _do_install(args, _fetch=fetch, _run=None, delivery=None):
                       if PLATFORM == 'win32' else 'brew install python@3.14')
             print(f'No Python 3.14 found: {remedy}')
             raise SystemExit(2)
+    _codex_config._owned.PYTHON = python
+    if delivery is not None: delivery.update(python=python, backend=platform_backend())
     feed = args.feed or _svc.channel_feed(home)
     latest = _updater._verified_feed(feed, _svc.feed_read(_fetch, feed), _fetch)
     serial = check_serial(home, latest, pinned=bool(args.feed))
     if delivery is not None: delivery.update(latest=latest, feed=feed)
     current = current_version(home)
-    # --setup on a current install is a repair run: it restarts the current
-    # release with a fresh setup nonce and never re-extracts or downgrades
-    # anything, so it also works when the feed lags the installed version.
-    # Only a newer feed version takes the full install path.
-    repair = bool(args.setup) and not newer(latest['version'], current)
+    # Current-runtime repair keeps its code; verified maintenance can advance independently.
+    repair = bool(args.setup or args.repair) and not newer(latest['version'], current)
     if not newer(latest['version'], current) and not repair:
         if PLATFORM == 'win32' and not args.dry_run:
             platform_backend().recover_pending(python, home, current_release_dir(home), current)
@@ -355,6 +354,12 @@ def _do_install(args, _fetch=fetch, _run=None, delivery=None):
         if minted_state:
             (home / 'mixed-router-state.json').unlink(missing_ok=True)
         raise
+    if delivery is not None:
+        delivery['controller_source'] = _delivery.prepare(home, tarball, latest, manifest_doc, state, python, backend)
+        delivery['maintenance_done'] = True
+    if args.repair and not _delivery.close_assistants(home):
+        args.repair_cancelled = True
+        raise SystemExit('Repair cancelled; run setup again when your assistants are ready.')
     client, clients, claude_mode, mode = _resolve_clients_and_modes(args, home, state, repair=repair)
     # First-run window: the router boots keyless on a single-use link and
     # the operator pastes one key there instead of into the terminal. TTL
@@ -384,9 +389,7 @@ def _do_install(args, _fetch=fetch, _run=None, delivery=None):
         if exc.code != 3 or setup_url is None:
             raise
     if repair:
-        # --setup on a current install changes no code: restart the current
-        # release so the service reads the fresh setup nonce, then open the
-        # window. Never re-extract a release the running service is using.
+        # Restart retained code; --setup also asks it to read a fresh key-window link.
         try:
             backend.install(python, home, state, current_release_dir(home), None)
             healthy = wait_version(state, current)
@@ -397,10 +400,13 @@ def _do_install(args, _fetch=fetch, _run=None, delivery=None):
             print('the service did not come back with the fresh setup link; '
                   're-run the installer')
             return 1
-        # A receipt that predates the listing snapshot (or one whose fetch
-        # failed) can only be refreshed from here: a plain re-run returns
-        # "up to date" before the client stage, and the scheduled child never
-        # passes --clients. The merge is idempotent for unchanged values.
+        _delivery.normalize_pointer(home)
+        if args.repair:
+            return _client_choice.attach_current(args, home, codex=_codex_config,
+                desktop=_desktop_config, claude=attach_claude, write_state=_write_state,
+                python=python, resolve=_resolve_clients_and_modes,
+                ensure_state=ensure_state, ready=_current_ready)
+        # Explicit key refresh also upgrades a legacy Claude listing snapshot.
         _claude_config.refresh_snapshot(
             home, state, _codex_config,
             lambda: _operator.listing(state))
@@ -439,12 +445,9 @@ def _do_install(args, _fetch=fetch, _run=None, delivery=None):
                                                _desktop_config, saved, python)
         else:
             if args.client == 'none':
-                if previous_receipt.get('inserted_block'):
-                    # Never silently detach an active Codex configuration:
-                    # restore the exact owned settings first, or refuse when
-                    # the block was edited.
-                    _restore_owned_config(home)
-                detach_claude(home)
+                _delivery._load('client_removal').remove_all(home, _codex_config,
+                    lambda expected, entry: _restore_owned_config(home, python, expected, entry))
+                _delivery._load('claude_profile_hook').uninstall(home)
         prune_releases(home, latest['version'], previous,
                        backend.pinned_release(home))
         if not args.feed:
@@ -541,36 +544,31 @@ def do_uninstall(args):
         configured = config_path.read_text()
     except OSError:
         configured = ''
-    attached = _codex_config.codex_attachment(home)
+    try:
+        attached = _codex_config.codex_attachment(home)
+    except (OSError, ValueError):
+        raise SystemExit('Removal conflict: damaged receipt. No assistants were detached.') from None
     if (attached == {}
             and (_codex_config.BEGIN in configured or _codex_config.END in configured)):
         raise SystemExit('managed Codex block present without a receipt; run tools/disable.py first')
     _client_choice.refuse_switched(home)  # also before anything changes: switch back first
-    release = current_release_dir(home)
-    detach_claude(home)  # sweep first: each surface no-ops without its claim
-    if release is not None and attached == {} and not _codex_config.read_receipt(home).get('clients', {}):
-        # Service-only installation: no client settings were ever touched,
-        # so there is no receipt and no restore to run.
-        backend.uninstall(home)
-        _delivery._load('desktop_startup').remove(home)
-        print(f'uninstalled services; {home} left in place for the operator to delete')
-        return 0
-    if release is not None:
-        # Use this installer's matching remover even after rolling back old code.
-        disable = Path(__file__).resolve().parents[1] / 'tools' / 'disable.py'
-        if disable.exists():
-            result = run([sys.executable, str(disable)], capture_output=True, text=True,
-                              env={**os.environ, 'ROUTER_HOME': str(home),
-                                   'ROUTER_RESTORE_ONLY': '1'})
-            print((result.stdout or '')[-2000:])
-            if result.returncode != 0:
-                print((result.stderr or '')[-2000:])
-                raise SystemExit('configuration restore failed; '
-                                 'services left running for manual review')
-            # As on a client switch: a stale receipt makes the next install
-            # refuse a block it finds missing rather than changed.
-            _codex_config.drop_client(home, 'codex')
-    detach_claude(home)
+    python = find_python(args.python) if attached else None
+    if attached and python is None:
+        raise SystemExit('Python 3.14 is required to restore Codex settings safely.')
+    _codex_config._owned.PYTHON = python
+    removal = _delivery._load('client_removal')
+    try:
+        removal.remove_all(home, _codex_config,
+            lambda expected, entry: _restore_owned_config(home, python, expected, entry))
+    except (OSError, ValueError) as exc:
+        raise SystemExit('Removal conflict: damaged receipt. Services left running.') from exc
+    try:
+        _delivery._load('claude_profile_hook').uninstall(home)
+    except (OSError, ValueError, SystemExit):
+        raise SystemExit('Assistants detached; control cleanup failed. '
+                         'Services left running; retry removal.') from None
+    if _codex_config.read_receipt(home).get('clients'):
+        raise SystemExit('Attachments remain; services left running. Retry removal.')
     backend.uninstall(home)
     _delivery._load('desktop_startup').remove(home)
     print(f'uninstalled services; {home} left in place for the operator to delete')
@@ -618,6 +616,8 @@ def build_parser():
     parser.add_argument('--static-catalogue', action='store_true', help='Use the static catalogue fallback.')
     parser.add_argument('--setup', action='store_true',
                         help='First-run key window: mint a setup link and open it even when a key exists.')
+    parser.add_argument('--repair', action='store_true',
+                        help='Update or repair existing setup, preserving working keys and saved choices.')
     parser.add_argument('--choose-clients', action='store_true', help='Ask which assistant and surface this computer uses.')
     parser.add_argument('--openai-mode', default=None)
     parser.add_argument('--anthropic-mode', default=None,

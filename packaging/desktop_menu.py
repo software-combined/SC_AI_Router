@@ -33,19 +33,23 @@ def _control(home, resources, action=None):
 def fallback(home, resources):
     """The same action IDs, including profile choices, when no tray host is available."""
     model, control = load('desktop_model'), load('desktop_control')
-    available = None
+    checked_update = None
     while True:
         try:
             facts = control.snapshot(home)
         except (Exception, SystemExit):
             facts = dict(status='Status unknown', clients=[], version='Unknown')
-        rows = model.menu(facts, available=available)['menu']
+        rows = model.menu(facts, checked_update=checked_update)['menu']
         options = model.actions(rows)
-        action = load('native_dialog').choose('SCG Router controls', options)
+        details = [row['label'] for row in rows
+                   if row['label'] and not row['children'] and not row['action']]
+        details += [child['label'] for row in rows if row['label'] == 'Updates'
+                    for child in row['children'] if not child['action']]
+        action = load('native_dialog').choose('\n'.join(details), options)
         if action is None or action == 'menu.quit':
             return dict(outcome='done')
         result = _control(home, resources, action)
-        available = result.get('available', available)
+        checked_update = result.get('checked_update', checked_update)
 
 
 def _events(stream, events):
@@ -98,7 +102,7 @@ def run_menu(home, resources, *, autostart=False):
             return 1
         threading.Thread(target=_events, args=(shell.stdout, events), daemon=True).start()
         facts = dict(status='Checking setup…', version='Unknown', clients=[])
-        available, busy, job, next_check, fallback_shown = None, None, None, 0, False
+        checked_update, busy, job, next_check, fallback_shown = None, None, None, 0, False
         last_doc, reload_menu, needs_fallback = None, False, False
         with ThreadPoolExecutor(max_workers=1) as worker:
             try:
@@ -107,7 +111,7 @@ def run_menu(home, resources, *, autostart=False):
                         try:
                             answer = job.result()
                             if busy:
-                                available = answer.get('available', available)
+                                checked_update = answer.get('checked_update', checked_update)
                             else:
                                 facts = answer
                         except (Exception, SystemExit):
@@ -119,7 +123,7 @@ def run_menu(home, resources, *, autostart=False):
                         needs_fallback, fallback_shown = False, True
                         job = worker.submit(fallback, home, resources)
                         busy = 'Control window open…'
-                    doc = json.dumps(model.menu(facts, busy=busy, available=available))
+                    doc = json.dumps(model.menu(facts, busy=busy, checked_update=checked_update))
                     if doc != last_doc:
                         shell.stdin.write(doc + '\n')
                         shell.stdin.flush()
@@ -183,6 +187,10 @@ def main(argv=None):
     if args.autostart and not load('desktop_startup').enabled(args.home):
         return 0
     os.environ.update(load('native_setup').environment(args.resources))
+    try:
+        load('update_warning').offer(args.home)
+    except (Exception, SystemExit):
+        pass
     rc = run_menu(args.home, args.resources, autostart=args.autostart)
     if rc == 75:
         command = [sys.executable, str(args.home / 'desktop_launch.py')]
