@@ -66,10 +66,10 @@ class UpdateStatusTests(unittest.TestCase):
         status.record(state, 'installer_failed', applied='1.3.2.185', now=NOW)
         status.record(state, 'feed_unreachable', now=NOW)
         status.record(state, '', now=NOW)
-        self.assertEqual(status.summary(state, '1.3.2.185', FEED, 'beta')['required_action'], 'repair')
+        self.assertEqual(status.summary(state, '1.3.2.185', FEED, 'beta', now=status.seconds(NOW))['required_action'], 'repair')
         self.assertIsNone(status.cache_tag(state, '1.3.2.185', FEED, 'beta', 'etag'))
         status.record(state, '', applied='1.3.2.185', repaired=True, now=NOW)
-        self.assertIsNone(status.summary(state, '1.3.2.185', FEED, 'beta')['required_action'])
+        self.assertIsNone(status.summary(state, '1.3.2.185', FEED, 'beta', now=status.seconds(NOW))['required_action'])
         self.assertEqual(status.cache_tag(state, '1.3.2.185', FEED, 'beta', 'etag'), 'etag')
 
     def test_known_newer_metadata_still_offers_update_after_a_pointer_rollback(self):

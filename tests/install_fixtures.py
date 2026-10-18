@@ -53,6 +53,7 @@ def install_mod_factory():
     module._client_choice._dialog.tool = lambda *args, **kwargs: None
     module._client_choice._dialog.ask = _unexpected_dialog
     module._delivery.close_assistants = _unexpected_dialog
+    module._updater._offer_notices = lambda *_: None
     # Nor build or remove the real Switch Codex app: its location was named
     # before any test moved HOME. tests/test_codex_switch_app.py drives it.
     module._client_choice._app.sync = lambda *args, **kwargs: None
@@ -178,3 +179,22 @@ __all__ = ['static_fetch', 'real_bundle', 'install_mod_factory',
            'patch_attrs', 'run_install', '_real_bundle', '_install_mod',
            '_tarball', '_ok_run', '_craft_bundle', '_patch_attrs',
            '_run_install', '_SEAMS']
+
+
+def uninstall_home(tmp):
+    """Staged home with one installed release, pointer current, and plists."""
+    home = Path(tmp) / 'home'
+    rel = home / 'releases' / '1.0.0'
+    (rel / 'tools').mkdir(parents=True)
+    (rel / 'tools' / 'disable.py').write_text('# stub\n')
+    (home / 'current').write_text('1.0.0\n')
+    config = Path(tmp) / 'fakehome/.codex/config.toml'
+    config.parent.mkdir(parents=True)
+    block = install_mod._codex_config.build_block(
+        home, {'port': 4321, 'token': 'synthetic'}, 'subscription')
+    config.write_text(block)
+    (home / 'activation.json').write_text(json.dumps(
+        {'config_path': str(config), 'inserted_block': block}))
+    agents = Path(tmp) / 'fakehome' / 'Library' / 'LaunchAgents'
+    agents.mkdir(parents=True)
+    return home, agents

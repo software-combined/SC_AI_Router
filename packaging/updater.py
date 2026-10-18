@@ -146,18 +146,13 @@ def _announce_new_models(home, state, _urlopen=None):
         pass  # a dialog or loopback failure must not disturb the update
 
 
-def _offer_codex_switch(home):
-    """Offer Switch Codex, or the way back, once per ChatGPT usage-limit episode.
-
-    Runs after every pass, the minute Express job included, because the
-    allowance can run out between regular checks. An offer never blocks,
-    delays or fails an update, so every error stops here.
-    """
-    try:
-        _svc.load('router_codex_switch_offer',
-                  Path(__file__).resolve().parent / 'codex_switch_offer.py').offer(home)
-    except (Exception, SystemExit):
-        pass
+def _offer_notices(home):
+    """Independent best-effort offers after the final update result is recorded."""
+    for name in ('codex_switch_offer', 'update_warning'):
+        try:
+            _svc.load('router_' + name, Path(__file__).with_name(name + '.py')).offer(home)
+        except (Exception, SystemExit):
+            pass
 
 
 # Installer-owned seams; rebound via bind() after file-based load.
@@ -506,31 +501,29 @@ def do_update(args, _fetch=None, _read_feed=None, _sleep=None, _announce=None):
     _svc._feed.configure_home(home)
     sleep = _sleep or time.sleep
     sleep(random.uniform(0, 10 if getattr(args, 'express_only', False) else 120))
-    try:
-        # Serialize normal/Express parents without holding the child's install lock.
-        with _svc.install_lock(home, 'update.lock') as held:
-            if not held:
-                return 0
-            try:
-                return _apply_update(args, home, sleep, _fetch, _read_feed, _announce)
-            finally:
-                _offer_codex_switch(home)
-    except UpdateError as exc:
-        _record_pass(home, error=exc.error_code)
-        raise
-    except _svc._feed.SignInRequired:
-        _record_pass(home, error='download_signin_required')
-        _svc.load('router_download_notice', Path(__file__).with_name('download_notice.py')).show(home)
-        raise SystemExit('Sign in through SCG Router to download updates.') from None
-    except OSError:
-        _record_pass(home, error='feed_unreachable')
-        raise
-    except ValueError:
-        _record_pass(home, error='feed_invalid')
-        raise
-    except Exception:
-        _record_pass(home, error='update_failed')
-        raise
+    with _svc.install_lock(home, 'update.lock') as held:
+        if not held:
+            return 0
+        try:
+            return _apply_update(args, home, sleep, _fetch, _read_feed, _announce)
+        except UpdateError as exc:
+            _record_pass(home, error=exc.error_code)
+            raise
+        except _svc._feed.SignInRequired:
+            _record_pass(home, error='download_signin_required')
+            _svc.load('router_download_notice', Path(__file__).with_name('download_notice.py')).show(home)
+            raise SystemExit('Sign in through SCG Router to download updates.') from None
+        except OSError:
+            _record_pass(home, error='feed_unreachable')
+            raise
+        except ValueError:
+            _record_pass(home, error='feed_invalid')
+            raise
+        except Exception:
+            _record_pass(home, error='update_failed')
+            raise
+        finally:
+            _offer_notices(home)
 
 
 def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None):
@@ -575,7 +568,9 @@ def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None):
     if args.json:
         print(json.dumps({'installed': current, 'available': available,
                           'channel': channel, 'latest': latest['version'],
-                          'checked': True, 'required_action': facts['required_action']}, sort_keys=True))
+                          'checked': True, 'source': facts['source'],
+                          'checked_at': state['last_successful_check_at'],
+                          'required_action': facts['required_action']}, sort_keys=True))
     elif available:
         print(f'current {current}; available {available}')
     elif facts['required_action']:

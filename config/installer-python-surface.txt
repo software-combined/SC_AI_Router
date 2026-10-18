@@ -68,6 +68,7 @@ load packaging/service.py
 load packaging/systemd.py
 load packaging/updater.py
 load packaging/update_status.py
+load packaging/update_warning.py
 load packaging/platforms/__init__.py
 load packaging/desktop_windows.py
 load packaging/desktop_control.py

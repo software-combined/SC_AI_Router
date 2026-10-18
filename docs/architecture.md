@@ -57,6 +57,11 @@ download grants for legacy consumers. It cannot change model routing or provider
 Only a verified release for the same channel and source can support a cached
 current-version response. Diagnostics and controls read those facts without
 changing state. A successful feed check cannot clear an incomplete installation.
+`update_warning` offers a detached repair dialog after an applying check or when
+controls open. Its separate receipt records presentation time only; it cannot
+clear verified facts or interfere with installation. Missing dialogs leave
+the warning pending. Controls bind manual-check results to installed version,
+channel and source before displaying them.
 
 ## Domains and direction
 

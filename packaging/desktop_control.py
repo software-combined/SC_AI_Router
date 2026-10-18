@@ -54,8 +54,20 @@ def snapshot(home):
                             selected=selected, choices=[dict(id=key, label=label,
                             enabled=key != 'subscription' or subscription)
                             for key, label in DESTINATIONS[client]]))
-    status = ('Running' if raw.get('serving') is True else
-              'Router is not running' if raw.get('serving') is False else 'Status unknown')
+    health = raw.get('routing_healthy')
+    status = ('Running' if health is True else
+              'Router is not running' if health is False else 'Status unknown')
+    updates = raw.get('update', {})
+    updates = updates if isinstance(updates, dict) else {}
+    owner = load('update_status')
+    update = dict(latest_known_version=version(updates.get('latest_known_version')),
+        source=updates.get('source') if isinstance(updates.get('source'), str)
+        and re.fullmatch(r'[0-9a-f]{64}', updates['source']) else None,
+        channel='beta' if raw.get('channel') == 'beta' else 'stable',
+        last_successful_check=owner.display_time(updates.get('last_successful_check_at')),
+        last_successful_check_at=owner.stamp(updates.get('last_successful_check_at')),
+        required_action=updates.get('required_action') if updates.get('required_action') in ('update', 'repair') else None,
+        component_repairs=owner.components({'component_repairs': updates.get('component_repairs')}))
     delivery = 'unknown'
     try:
         value = json.loads((home / 'desktop-delivery.json').read_text()).get('status')
@@ -64,6 +76,7 @@ def snapshot(home):
     except (OSError, ValueError, AttributeError):
         pass
     return dict(schema=1, status=status, version=version(raw.get('version')),
+                running_version=version(raw.get('running_version')), update=update,
                 clients=clients, autostart=load('desktop_startup').enabled(home), menu_delivery=delivery)
 
 
@@ -131,11 +144,19 @@ def execute(home, resources, action, run=subprocess.run):
     if result.returncode:
         raise RuntimeError('Router action failed')
     if action == 'updates.check':
-        available = json.loads(result.stdout).get('available')
+        checked = json.loads(result.stdout)
+        available = checked.get('available')
         available = available if version(available) != 'Unknown' else None
-        dialog.message('Version %s is available. Choose Install update in the menu.' % available
-                       if available else 'SCG Router is up to date.')
-        return dict(outcome='done', available=available)
+        needs_repair = checked.get('required_action') == 'repair'
+        dialog.message('Updates need repair. Choose Update or repair in SCG Router.' if needs_repair
+            else 'Version %s is available. Choose Install update in the menu.' % available
+            if available else 'SCG Router is up to date.')
+        status = load('update_status')
+        checked_at = status.stamp(checked.get('checked_at')) or status.utc_now()
+        return dict(outcome='done', available=None if needs_repair else available,
+                    checked_update=dict(installed=checked.get('installed'), latest=checked.get('latest'),
+                        source=checked.get('source'), channel=checked.get('channel'),
+                        checked_at=checked_at, at=status.display_time(checked_at)))
     if action == 'help.support':
         path = Path(result.stdout.strip())
         if (not path.is_absolute() or path.is_symlink() or not path.is_file()
@@ -166,7 +187,7 @@ def main(argv=None):
     except (Exception, SystemExit) as exc:
         if args.action:
             safe = str(exc) if type(exc).__name__ == 'SwitchError' else (
-                'SCG Router could not finish. Choose Set up or repair, then try again.')
+                'SCG Router could not finish. Choose Update or repair, then try again.')
             try:
                 load('native_dialog').message(safe)
             except Exception:

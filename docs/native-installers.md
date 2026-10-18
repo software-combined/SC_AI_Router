@@ -81,12 +81,15 @@ Linux dialogs use the retained setup wrapper after the download is deleted,
 with system Zenity as a fallback. The wrapper scopes GTK dependencies to its
 dialog child, so service processes do not inherit bundled library overrides.
 
-Set up or repair uses the existing installer repair path. A same-version or
-older download restores the installed service without replacing its release,
-key, channel, custom feed or client settings. Unreadable client receipts remain
-intact during service repair; adding an assistant still requires readable receipts.
-Repair reuses a usable saved key. Choose **Replace model key** to open the key
-window when you want to change it.
+**Update or repair** uses the newest verified maintenance controller and the
+public release for the saved channel. The explicit `--repair` path preserves
+keys, subscription sign-ins, connected assistants and disabled tools. It uses
+the existing graceful assistant-close flow before changing connections. Automatic
+updates never force an assistant closed. A one-shot public repair does not
+replace a saved custom feed. Controller and stable-launcher delivery can finish
+even when an assistant receipt needs attention. Connection conflicts retain
+their own warning. Choose **Replace model key** to open the existing `--setup`
+key window when you want to change a key.
 
 Claude desktop can connect without a terminal client. Automatic SC tool delivery
 also needs the Claude Code setup tools from the desktop app's Install page.

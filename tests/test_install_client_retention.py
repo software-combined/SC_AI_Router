@@ -128,27 +128,6 @@ class ClientRetentionTests(unittest.TestCase):
             install_mod._resolve_clients_and_modes(args, home, state)
             self.assertNotIn('anthropic_mode', state)  # Old default is not a Claude choice.
 
-    def test_corrupt_receipt_allows_only_current_service_repair(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            home = Path(tmp) / 'router'
-            _, _, user, _ = _full_install(self, tmp, home, '1.0.0', ['--clients', 'both'])
-            paths = (home / 'activation.json', user / '.codex/config.toml',
-                     Path(tmp) / 'claude/settings.json')
-            paths[0].write_text('{broken json')
-            before = [path.read_bytes() for path in paths]
-            self.assertEqual(_full_install(self, tmp, home, '1.0.0', ['--setup'])[0], 0)
-            self.assertEqual([path.read_bytes() for path in paths], before)
-            for version, args in (('1.0.0', ['--clients', 'claude']),
-                                  ('1.0.0', ['--setup', '--clients', 'claude']),
-                                  ('1.0.0', ['--setup', '--openai-mode', 'none']),
-                                  ('1.0.1', ['--setup'])):
-                with self.subTest(version=version, args=args):
-                    state = (home / 'mixed-router-state.json').read_bytes()
-                    with self.assertRaisesRegex(SystemExit, 'receipts are unreadable'):
-                        _full_install(self, tmp, home, version, args)
-                    self.assertEqual([path.read_bytes() for path in paths], before)
-                    self.assertEqual((home / 'mixed-router-state.json').read_bytes(), state)
-                    self.assertEqual(install_mod.current_version(home), '1.0.0')
 
     def test_codex_mode_change_preserves_retained_claude_effective_mode(self):
         cases = (('subscription', None, 'none', 'subscription'),

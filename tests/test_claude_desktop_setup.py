@@ -64,7 +64,9 @@ class DesktopSetupTests(unittest.TestCase):
                                  {'deploymentMode': '1p', 'keep': 'original'})
                 self.assertEqual((home / 'activation.json').read_bytes(), before)
             desktop.detach(home, receipts)
-            self.assertEqual(json.loads(config.read_text()), {'keep': 'original'})
+            # A subscription choice made after attachment belongs to the user.
+            self.assertEqual(json.loads(config.read_text()),
+                             {'deploymentMode': '1p', 'keep': 'original'})
 
     def test_receipt_for_another_entry_does_not_claim_subscription_mode(self):
         with tempfile.TemporaryDirectory() as tmp:

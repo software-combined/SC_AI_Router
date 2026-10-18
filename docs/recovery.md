@@ -20,6 +20,17 @@ After repair, check the running version and send a short reply through your
 assistant. Confirm a later scheduled check succeeds during your signed-in
 session. A successful installation alone does not prove either result.
 
+Router controls show the running version, latest verified version for your
+channel and last successful check. Update, assistant-connection and controls
+warnings stay separate from routing health. A failed update remains visible
+even if Router can still answer requests.
+
+**Repair now / Later** appears after a blocked update, two consecutive failures
+or two missed four-hour intervals plus 15 minutes. A displayed prompt appears
+at most once in 24 hours. Choose **Later** to finish active work. If no desktop
+dialog is available, the warning stays pending for the next opening of controls.
+Automatic checks keep their existing schedule and never force an assistant closed.
+
 If Router reports an assistant connection conflict, retain the installation.
 Setup still delivers verified maintenance tools where possible. It preserves
 settings whose ownership it cannot prove. A maintainer can request the

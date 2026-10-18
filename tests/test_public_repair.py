@@ -14,6 +14,7 @@ from tests import test_systemd as fixtures
 from tests._platform import unix_only
 from tests.install_fixtures import _craft_bundle, _static_fetch, install_mod
 from tests.test_native_setup import module, resources
+from tests.test_client_choice import _full_install
 
 
 @unix_only
@@ -225,3 +226,42 @@ class RepairCloseTests(unittest.TestCase):
         self.assertFalse(owner.close_assistants(Path('/synthetic/home')))
         self.assertEqual(dialog.confirm_result.call_count, 2)
         platform.request_stop.assert_not_called()
+
+
+class CorruptReceiptRepairTests(unittest.TestCase):
+    def test_corrupt_receipt_allows_only_current_service_repair(self):
+        backend = mock.Mock()
+        backend.pinned_release.return_value = None
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(install_mod, 'platform_backend', return_value=backend):
+            home = Path(tmp) / 'router'
+            _, _, user, _ = _full_install(self, tmp, home, '1.0.0', ['--clients', 'both'])
+            paths = (home / 'activation.json', user / '.codex/config.toml',
+                     Path(tmp) / 'claude/settings.json')
+            paths[0].write_text('{broken json')
+            before = [path.read_bytes() for path in paths]
+            self.assertEqual(_full_install(self, tmp, home, '1.0.0', ['--setup'])[0], 0)
+            self.assertEqual([path.read_bytes() for path in paths], before)
+            for version, args in (('1.0.0', ['--clients', 'claude']),
+                                  ('1.0.0', ['--setup', '--clients', 'claude']),
+                                  ('1.0.0', ['--setup', '--openai-mode', 'none']),
+                                  ('1.0.1', ['--setup'])):
+                with self.subTest(version=version, args=args):
+                    state = json.loads((home / 'mixed-router-state.json').read_text())
+                    with self.assertRaisesRegex(SystemExit, 'receipts are unreadable'):
+                        _full_install(self, tmp, home, version, args)
+                    self.assertEqual([path.read_bytes() for path in paths], before)
+                    after = json.loads((home / 'mixed-router-state.json').read_text())
+                    # Independent maintenance/status delivery may finish before
+                    # the receipt conflict; all other saved state stays intact.
+                    facts = {'latest_verified', 'last_successful_check_at', 'last_check_at',
+                             'last_error', 'update_failure_streak', 'component_repairs',
+                             'installation_repair_required'}
+                    self.assertEqual({key: value for key, value in after.items() if key not in facts},
+                                     {key: value for key, value in state.items() if key not in facts})
+                    if '--setup' in args:
+                        self.assertEqual(after.get('last_error'), 'installer_failed')
+                        self.assertTrue(after.get('installation_repair_required'))
+                    else:
+                        self.assertEqual(after, state)
+                    self.assertEqual(install_mod.current_version(home), '1.0.0')

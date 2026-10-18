@@ -10,12 +10,13 @@ import unittest
 from unittest import mock
 
 from tests._platform import unix_only
-from tests.install_fixtures import install_mod
+from tests.install_fixtures import install_mod_factory
 from tests.test_native_setup import module
 
 
 class RemovalRecoveryTests(unittest.TestCase):
     def setUp(self):
+        self.install = install_mod_factory()
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name).resolve()
@@ -25,31 +26,31 @@ class RemovalRecoveryTests(unittest.TestCase):
         (self.home / 'releases/1.2.6.174/packaging/VERSION').write_text('1.2.6.174')
         (self.home / 'current').write_text('1.2.6.174')
         self.config, self.settings = self.root / 'config.toml', self.root / 'settings.json'
-        self.owner = install_mod._codex_config
+        self.owner = self.install._codex_config
         self.state = {'port': 1234, 'token': 'synthetic-test', 'claude_mode': 'subscription'}
         (self.home / 'mixed-router-state.json').write_text(json.dumps(self.state))
         self.config.write_text('person_setting = true\n' + self.owner.build_block(self.home, self.state, 'subscription'))
         self.owner.write_client_receipt(self.home, 'codex', dict(config_path=str(self.config),
             inserted_block=self.owner.build_block(self.home, self.state, 'subscription')))
         self.settings.write_text('{ "tools" : {"disabled":true}, "env": {} }\n')
-        install_mod._claude_config.attach(self.home, self.state, self.owner,
+        self.install._claude_config.attach(self.home, self.state, self.owner,
                                           settings_path_override=self.settings)
         self.backend = mock.Mock()
-        self.args = install_mod.build_parser().parse_args(['--home', str(self.home), '--python', sys.executable])
-        for patcher in (mock.patch.object(install_mod, 'platform_backend', return_value=self.backend),
-                mock.patch.object(install_mod, 'find_python', return_value=sys.executable),
+        self.args = self.install.build_parser().parse_args(['--home', str(self.home), '--python', sys.executable])
+        for patcher in (mock.patch.object(self.install, 'platform_backend', return_value=self.backend),
+                mock.patch.object(self.install, 'find_python', return_value=sys.executable),
                 mock.patch.dict(os.environ, HOME=str(self.root / 'user'))):
             patcher.start()
             self.addCleanup(patcher.stop)
-        load = install_mod._delivery._load
-        patcher = mock.patch.object(install_mod._delivery, '_load', side_effect=lambda name:
+        load = self.install._delivery._load
+        patcher = mock.patch.object(self.install._delivery, '_load', side_effect=lambda name:
             mock.Mock() if name in ('desktop_startup', 'claude_profile_hook') else load(name))
         patcher.start()
         self.addCleanup(patcher.stop)
 
     def remove(self):
         with contextlib.redirect_stdout(io.StringIO()):
-            return install_mod.do_uninstall(self.args)
+            return self.install.do_uninstall(self.args)
 
     def test_later_connection_conflict_prevents_every_detach(self):
         doc = self.owner.read_receipt(self.home)
@@ -78,13 +79,13 @@ class RemovalRecoveryTests(unittest.TestCase):
 
     def test_partial_io_failure_keeps_remaining_router_and_retry_finishes(self):
         removal = module('client_removal')
-        load = install_mod._delivery._load
+        load = self.install._delivery._load
         real = removal._atomic.replace_text
         def fail_cli(path, *args, **kwargs):
             if path == self.settings.resolve():
                 raise OSError('synthetic write failure')
             return real(path, *args, **kwargs)
-        with mock.patch.object(install_mod._delivery, '_load', side_effect=lambda name:
+        with mock.patch.object(self.install._delivery, '_load', side_effect=lambda name:
                 removal if name == 'client_removal' else load(name)), \
                 mock.patch.object(removal._atomic, 'replace_text', side_effect=fail_cli), \
                 self.assertRaisesRegex(SystemExit, 'Removed: Codex. Remaining: Claude Code'):
@@ -128,7 +129,7 @@ class RemovalRecoveryTests(unittest.TestCase):
         self.assertEqual(self.config.read_text(), changed)
 
     def test_legacy_claude_receipt_restores_only_proven_keys_and_migrates_new_key_evidence(self):
-        cli = install_mod._claude_config
+        cli = self.install._claude_config
         legacy_keys = (cli.BASE_URL_KEY, cli.DISCOVERY_KEY, cli.FIRST_PARTY_KEY)
         for repair in (False, True):
             with self.subTest(repair=repair):
@@ -161,15 +162,15 @@ class RemovalRecoveryTests(unittest.TestCase):
     def test_interrupted_desktop_restore_keeps_claim_and_retries_remaining_file(self):
         from tests.test_claude_desktop_config import _profile
         profile = _profile(self.root)
-        install_mod._desktop_config.attach(self.home, self.state, self.owner, data_dir_override=profile)
+        self.install._desktop_config.attach(self.home, self.state, self.owner, data_dir_override=profile)
         config = profile / 'claude_desktop_config.json'
-        removal, load = module('client_removal'), install_mod._delivery._load
+        removal, load = module('client_removal'), self.install._delivery._load
         real = removal._atomic.replace_text
         def fail_mode(path, *args, **kwargs):
             if path == config.resolve():
                 raise OSError('synthetic later write failure')
             return real(path, *args, **kwargs)
-        with mock.patch.object(install_mod._delivery, '_load', side_effect=lambda name:
+        with mock.patch.object(self.install._delivery, '_load', side_effect=lambda name:
                 removal if name == 'client_removal' else load(name)), \
                 mock.patch.object(removal._atomic, 'replace_text', side_effect=fail_mode), \
                 self.assertRaisesRegex(SystemExit, 'Remaining: Claude desktop'):
@@ -198,8 +199,8 @@ class RemovalRecoveryTests(unittest.TestCase):
                   + ', "hooks": {"SessionStart": [' + json.dumps(recorded['entry'])
                   + ', { "keep" : [1,  2] }]}\r\n}\r\n')
         self.settings.write_bytes(before.encode())
-        load = install_mod._delivery._load
-        with mock.patch.object(install_mod._delivery, '_load', side_effect=lambda name:
+        load = self.install._delivery._load
+        with mock.patch.object(self.install._delivery, '_load', side_effect=lambda name:
                 hook if name == 'claude_profile_hook' else load(name)):
             self.assertEqual(self.remove(), 0)
         self.assertEqual(self.settings.read_bytes(),
@@ -215,7 +216,7 @@ class RemovalRecoveryTests(unittest.TestCase):
             config, _, _, _ = _install(self, tmp, home, '1.0.0')
             settings = Path(tmp) / 'claude-settings.json'
             settings.write_text('{"env":{}}')
-            install_mod.attach_claude(home, json.loads(
+            self.install.attach_claude(home, json.loads(
                 (home / 'mixed-router-state.json').read_text()), settings_path=settings)
             doc = json.loads(settings.read_text())
             doc['env']['ANTHROPIC_BASE_URL'] = 'https://person.example'

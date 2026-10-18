@@ -2,6 +2,7 @@
 
 Python 3.9-safe. Read-only summaries never persist state or contact a service.
 """
+import calendar
 import hashlib
 import re
 import time
@@ -12,6 +13,7 @@ ERROR_CODES = (
     'installer_failed', 'update_failed', 'download_signin_required',
 )
 COMPONENTS = ('controller', 'updater_launcher', 'scheduler', 'assistants', 'controls', 'controls_launchers')
+MISSED_AFTER = 2 * 4 * 60 * 60 + 15 * 60
 
 
 def version(value):
@@ -24,6 +26,18 @@ def stamp(value):
 
 def utc_now():
     return time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+
+
+def seconds(value):
+    try:
+        return calendar.timegm(time.strptime(value, '%Y-%m-%dT%H:%M:%SZ')) if stamp(value) else None
+    except (ValueError, OverflowError):
+        return None
+
+
+def display_time(value):
+    moment = seconds(value)
+    return time.strftime('%d %b %Y %I:%M %p %Z', time.localtime(moment)) if moment is not None else 'Unknown'
 
 
 def channel(home):
@@ -117,7 +131,7 @@ def record(state, error=None, applied=None, repaired=False, now=None):
         state['last_applied_version'] = applied
 
 
-def summary(state, current=None, feed=None, channel=None):
+def summary(state, current=None, feed=None, channel=None, now=None):
     """Only allowlisted facts reach status, controls and support output."""
     doc = state if isinstance(state, dict) else {}
     failed = (failures(doc, feed, channel) if feed is not None else
@@ -127,12 +141,21 @@ def summary(state, current=None, feed=None, channel=None):
     error = error if error in ERROR_CODES else None
     repairs = components(doc)
     available = bool(known and version(current) and _parts(known['version']) > _parts(current))
+    last = seconds(doc.get('last_check_at'))
+    overdue = last is not None and (time.time() if now is None else now) - last >= MISSED_AFTER
+    parked = active_failures(failed, current)
+    repair = bool(error or install_pending(doc) or parked or 'failed' in repairs.values() or overdue)
+    streak = doc.get('update_failure_streak', 0)
+    blocked = (install_pending(doc) or 'failed' in repairs.values()
+               or any(count >= 3 for count in parked.values())
+               or error not in (None, 'feed_unreachable', 'update_failed'))
     return dict(last_check_at=stamp(doc.get('last_check_at')),
         last_successful_check_at=stamp(doc.get('last_successful_check_at')) if known else None,
         last_applied_version=version(doc.get('last_applied_version')), last_error=error,
         failures=failed, latest_known_version=known['version'] if known else None,
+        source=source(feed) if feed is not None else None,
         latest_known_channel=known['channel'] if known else None,
         installation_repair_required=install_pending(doc),
-        component_repairs=repairs, required_action='repair' if error or install_pending(doc)
-        or active_failures(failed, current)
-        or 'failed' in repairs.values() else 'update' if available else None)
+        component_repairs=repairs, missed_scheduled_checks=overdue,
+        offer_repair=bool(repair and (blocked or overdue or type(streak) is int and streak >= 2)),
+        required_action='repair' if repair else 'update' if available else None)

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Keep update failures visible in Router controls. Offer **Repair now / Later**
+  after a blocked update, two failures or two missed checks plus 15 minutes.
+  Limit displayed prompts to once daily and retain warnings without a desktop.
+
 - Repair existing installations through the public setup without replacing keys
   or saved choices. Keep platform repair links visible when native downloads
   are unavailable. Existing controls use the newest verified maintenance code.

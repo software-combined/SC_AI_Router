@@ -25,6 +25,7 @@ from tests.install_fixtures import (
     _patch_attrs,
     _static_fetch,
     install_mod,
+    uninstall_home as _uninstall_home,
 )
 from tests.fakes import launchd_in_sync
 from tests.test_install_config import _fake_write_catalogue
@@ -57,21 +58,6 @@ def _remanifest(blob, **fields):
             info.size = len(data)
             tar.addfile(info, io.BytesIO(data))
     return out.getvalue()
-
-
-def _uninstall_home(tmp):
-    """Staged home with one installed release, pointer current, and plists."""
-    home = Path(tmp) / 'home'
-    rel = home / 'releases' / '1.0.0'
-    (rel / 'tools').mkdir(parents=True)
-    (rel / 'tools' / 'disable.py').write_text('# stub\n')
-    (home / 'current').write_text('1.0.0\n')
-    (home / 'activation.json').write_text(json.dumps(
-        {'config_path': str(Path(tmp) / 'fakehome' / '.codex' / 'config.toml'),
-         'inserted_block': '# BEGIN local mixed model picker\n# END local mixed model picker\n'}))
-    agents = Path(tmp) / 'fakehome' / 'Library' / 'LaunchAgents'
-    agents.mkdir(parents=True)
-    return home, agents
 
 
 def _run_install(test, tmp, home, version, *extra_args, feed='file:///latest.json',

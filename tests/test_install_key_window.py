@@ -230,7 +230,8 @@ class InstallKeyWindowTests(unittest.TestCase):
                     _fetch=_static_fetch(latest, blob)), 0)
             install_mod._codex_config.write_client_receipt(home, 'claude', {
                 'config_path': str(Path(env['HOME']) / '.claude/settings.json'),
-                'inserted_block': '{}', 'claude_mode': 'subscription'})
+                'inserted_block': json.dumps(dict.fromkeys(install_mod._claude_config.LEGACY_KEYS)),
+                'claude_mode': 'subscription'})
             original = install_mod._operator.listing
             self.addCleanup(setattr, install_mod._operator, 'listing', original)
             install_mod._operator.listing = lambda state: {'data': [{'id': 'served-model'}]}

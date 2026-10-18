@@ -57,6 +57,11 @@ def _popup_text():
     text += [' '.join(offer.command(kind, '/icon.png')) for kind in offer.MESSAGES]
     text += [label for _key, label in dialog.ASSISTANTS]
     text += [label for _key, label in dialog.SURFACES]
+    spec = importlib.util.spec_from_file_location(
+        'router_warning_text', _ROOT / 'packaging' / 'update_warning.py')
+    warning = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(warning)
+    text.append(warning.message(dict(clients={'codex': {}, 'claude': {}}, update={})))
     for platform_name, tool_path in (('darwin', '/usr/bin/osascript'),
                                      ('linux', '/usr/bin/zenity'),
                                      ('win32', 'C:/powershell.exe')):
