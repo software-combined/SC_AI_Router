@@ -34,11 +34,15 @@ class Manager:
             raise SystemExit('Linux installation requires a running systemd user manager; '
                              'run this installer in the signed-in desktop user session.')
 
-    def install(self, python, release):
+    def install(self, python, release, *, updates_only=False):
+        del release  # Stable launchers resolve their release when they run.
         import shutil
         python = shutil.which(python) or python
         if not Path(python).is_absolute():
             raise SystemExit('systemd requires an absolute Python interpreter path')
+        launcher = self.home / 'update_launch.py'
+        if not launcher.is_file():
+            raise SystemExit('The stable update launcher is missing; run setup again.')
         # Stop the old timer and a legacy updater before replacing its definition.
         # A scheduled update must not stop its own service (and installer child).
         self.ctl('stop', TIMER, check=False)
@@ -47,18 +51,7 @@ class Manager:
             self.ctl('stop', UPDATE, check=False)
         env = quote('ROUTER_HOME=' + str(self.home))
         command = quote(python, True) + ' ' + quote(self.home / 'router_launch.py', True)
-        installer = release / 'packaging' / 'install.py'
-        # The unit may be rendered around a release older than this installer
-        # (the --setup repair path): ask that release which applying verb it
-        # advertises, exactly as the home launcher does, so a pre-147 release
-        # keeps updating instead of exiting 2 on every timer pass.
-        try:
-            installer_text = installer.read_text(encoding='utf-8')
-        except OSError:
-            installer_text = ''
-        verb = '--update' if "'--update'" in installer_text else '--check-update'
-        updater = (quote(python, True) + ' ' + quote(installer, True)
-                   + ' ' + verb + ' --home ' + quote(self.home, True))
+        updater = quote(python, True) + ' ' + quote(launcher, True)
         units = {
             SERVICE: ('[Unit]\nDescription=SC mixed model router\nAfter=network.target\n'
                       '[Service]\nExecStart=' + command + '\nEnvironment=' + env + '\n'
@@ -75,6 +68,8 @@ class Manager:
                     '[Timer]\nOnActiveSec=5min\nOnUnitInactiveSec=4h\n'
                     '[Install]\nWantedBy=timers.target\n'),
         }
+        if updates_only:
+            del units[SERVICE]
         express = (self.home / 'express_launch.py').is_file()
         if express:
             command = quote(python, True) + ' ' + quote(self.home / 'express_launch.py', True)
@@ -88,16 +83,50 @@ class Manager:
         for name, content in units.items():
             (self.units / name).write_text(content)
         self.ctl('daemon-reload')
-        self.ctl('enable', SERVICE, TIMER)
+        self.verify_updater(python, launcher)
+        self.ctl('enable', *((TIMER,) if updates_only else (SERVICE, TIMER)))
         if express:
             self.ctl('enable', EXPRESS_TIMER)
-        self.restart()
+        if not updates_only:
+            self.restart()
         # The installer calls start_updates() again once it finishes, but a
         # later failure (a refused settings merge, a client attach) used to
         # return before that call and leave the timer stopped: no scheduled
         # check ran again until the next reinstall. Start it here, where it
         # was stopped, so polling survives every later step.
         self.start_updates()
+
+    def verify_updater(self, python, launcher):
+        """Read systemd's loaded command, including overrides, after reload."""
+        expected = '{ path=%s ; argv[]=%s %s ;' % (python, python, launcher)
+        try:
+            result = self.ctl('show', UPDATE, '--property=ExecStart', '--value', check=False)
+            loaded = result.stdout.strip()
+            ready = not result.returncode and loaded.startswith(expected) and loaded.count('{ path=') == 1
+        except OSError:
+            ready = False
+        if not ready:
+            raise SystemExit('The Linux scheduled updater did not load the stable launcher; run setup again.')
+
+    def pinned_releases(self):
+        """A loaded job can still name a release after its unit file changes."""
+        versions = tuple(path.name for path in (self.home / 'releases').glob('*') if path.is_dir())
+        pinned = set()
+        if os.environ.get('ROUTER_UPDATE_SERVICE') == '1':
+            origin = os.environ.get('ROUTER_UPDATE_ORIGIN')
+            if origin not in (*versions, 'control'):
+                return versions  # A legacy running updater has no origin marker.
+            if origin != 'control':
+                pinned.add(origin)
+        for unit in (SERVICE, UPDATE, EXPRESS_UPDATE):
+            try:
+                result = self.ctl('show', unit, '--property=ExecStart', '--value', check=False)
+            except OSError:
+                return versions
+            if result.returncode:
+                return versions  # Unknown loaded state never authorises pruning.
+            pinned.update(version for version in versions if '/releases/' + version + '/' in result.stdout)
+        return tuple(pinned)
 
     def start_updates(self):
         if (self.units / EXPRESS_TIMER).is_file():

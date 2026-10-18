@@ -74,7 +74,8 @@ class SystemdTests(unittest.TestCase):
         self.assertIn('TimeoutStopSec=150', service)
         self.assertIn('WantedBy=default.target', service)
         update = (units / install_mod._linux.UPDATE).read_text()
-        self.assertIn(str(self.home / 'releases' / '0.6.6.0' / 'packaging' / 'install.py'), update)
+        self.assertIn(str(self.home / 'update_launch.py'), update)
+        self.assertNotIn('/releases/', update)
         self.assertNotIn('--feed', update)
         self.assertIn('ROUTER_UPDATE_SERVICE=1', update)
         # A detached restart dialog must outlive the oneshot unit.
@@ -128,20 +129,19 @@ class SystemdTests(unittest.TestCase):
             self.install('0.6.6.0')
         self.assertNotIn(['systemctl', '--user', 'stop', install_mod._linux.UPDATE], self.calls)
 
-    def test_update_unit_asks_the_release_it_names_for_its_verb(self):
-        # A --setup repair re-renders the unit around the release already
-        # current, which can predate --update; the unit must not strand it.
+    def test_legacy_repair_delegates_verb_selection_to_the_stable_launcher(self):
         units = self.root / 'config' / 'systemd' / 'user'
         legacy = self.home / 'releases' / '0.6.36' / 'packaging'
         legacy.mkdir(parents=True)
         (legacy / 'VERSION').write_text('0.6.36\n')
         (legacy / 'install.py').write_text(
             "parser.add_argument('--check-update', action='store_true')\n")
+        (self.home / 'update_launch.py').write_text('# stable launcher\n')
         manager = install_mod._linux.Manager(self.home, self.run_command)
         manager.install(sys.executable, self.home / 'releases' / '0.6.36')
         update = (units / install_mod._linux.UPDATE).read_text()
-        self.assertIn('--check-update --home', update)
-        self.assertNotIn('--update --home', update)
+        self.assertIn(str(self.home / 'update_launch.py'), update)
+        self.assertNotIn('--check-update', update)
         current = self.home / 'releases' / '0.6.37' / 'packaging'
         current.mkdir(parents=True)
         (current / 'VERSION').write_text('0.6.37\n')
@@ -149,8 +149,8 @@ class SystemdTests(unittest.TestCase):
             "parser.add_argument('--update', action='store_true')\n")
         manager.install(sys.executable, self.home / 'releases' / '0.6.37')
         update = (units / install_mod._linux.UPDATE).read_text()
-        self.assertIn('--update --home', update)
-        self.assertNotIn('--check-update --home', update)
+        self.assertIn(str(self.home / 'update_launch.py'), update)
+        self.assertNotIn('--update', update)
 
     def test_deferred_child_keeps_etag_and_does_not_report_success(self):
         self.install('0.6.2.0')

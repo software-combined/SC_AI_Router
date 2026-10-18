@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Repair Linux's scheduled updater independently of assistant settings. Retain
+  verified maintenance code across runtime rollback and keep releases used by
+  loaded jobs or the running updater.
+
 - Repair and remove Codex attachments after harmless client formatting changes.
   Preserve added user settings, comments and dotfile links, while refusing
   changed connection values and unsafe edits.

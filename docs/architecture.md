@@ -13,8 +13,10 @@ explicit assistant additions use the existing client-selection path.
 It validates retained setup paths before selecting the Linux wrapper.
 `native_dialog` distinguishes cancellation from failed presentation so renewal
 notices remain pending until a window appears.
-`install_delivery` repairs bundled plugin delivery
-on both full and same-version installs.
+`install_delivery` verifies and retains maintenance code before assistant
+discovery. Attachment conflicts cannot block its controller, stable launchers
+or Linux scheduler repair. Plugin and native controls delivery remain separate
+from routing health, on both full and same-version installs.
 `client_choice` resolves explicit additions, receipt-owned attachments and saved
 choices. It persists Claude choices in `anthropic_mode`; the runtime keeps its
 existing policy reader. Same-version mode changes use the service repair
@@ -29,6 +31,8 @@ proof and atomic writer, preserving dotfile links and detecting concurrent edits
 
 `native_controller` retains verified installer code under an independent version
 pointer. `update_launch` selects that controller across runtime rollback.
+Linux reloads and reads back the effective stable updater command before
+pruning. Loaded jobs and a running legacy updater retain their release files.
 `feed` downloads public software without credentials. Legacy `download_auth`,
 `download_oauth` and `download_session` helpers are retained for compatibility,
 but the installer and updater no longer require them. `control_models` checks

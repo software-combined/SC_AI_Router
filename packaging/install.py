@@ -278,11 +278,8 @@ def _open_key_window(python, home, setup_url, clients):
 
 def do_install(args, _fetch=fetch, _run=None):
     _svc._feed.configure_home(Path(args.home).expanduser())
-    delivery = {}
-    rc = _do_install(args, _fetch, _run, delivery)
-    if rc == 0 and not args.dry_run:
-        _delivery.finish(Path(args.home).expanduser(), run=run, native=delivery, fetch=None if _fetch is fetch else _fetch)
-    return rc
+    return _delivery.run_install(args, lambda delivery: _do_install(args, _fetch, _run, delivery),
+        run=lambda *a, **kw: run(*a, **kw), fetch=None if _fetch is fetch else _fetch)
 
 
 def _do_install(args, _fetch=fetch, _run=None, delivery=None):
@@ -304,14 +301,14 @@ def _do_install(args, _fetch=fetch, _run=None, delivery=None):
             print(f'No Python 3.14 found: {remedy}')
             raise SystemExit(2)
     _codex_config._owned.PYTHON = python
+    if delivery is not None: delivery.update(python=python, backend=platform_backend())
     feed = args.feed or _svc.channel_feed(home)
     latest = _updater._verified_feed(feed, _svc.feed_read(_fetch, feed), _fetch)
     serial = check_serial(home, latest, pinned=bool(args.feed))
     if delivery is not None: delivery.update(latest=latest, feed=feed)
     current = current_version(home)
-    # --setup on a current install is a repair run: it restarts the current
-    # release with a fresh setup nonce and never re-extracts or downgrades
-    # anything, so it also works when the feed lags the installed version.
+    # --setup repairs the current runtime without re-extracting or downgrading it.
+    # Maintenance can advance independently when this channel's feed lags.
     repair = bool(args.setup) and not newer(latest['version'], current)
     if not newer(latest['version'], current) and not repair:
         if PLATFORM == 'win32' and not args.dry_run:
@@ -357,6 +354,9 @@ def _do_install(args, _fetch=fetch, _run=None, delivery=None):
         if minted_state:
             (home / 'mixed-router-state.json').unlink(missing_ok=True)
         raise
+    if delivery is not None:
+        delivery['controller_source'] = _delivery.prepare(home, tarball, latest, manifest_doc, state, python, backend)
+        delivery['maintenance_done'] = True
     client, clients, claude_mode, mode = _resolve_clients_and_modes(args, home, state, repair=repair)
     # First-run window: the router boots keyless on a single-use link and
     # the operator pastes one key there instead of into the terminal. TTL

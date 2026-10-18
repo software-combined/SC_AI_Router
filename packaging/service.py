@@ -431,12 +431,9 @@ def _install_home_file(home, release_dir, name, target=None):
 
 
 def install_launcher(home, release_dir):
-    """Install both stable entry points beside the state directory.
-
-    Each resolves `current` at exec time, so the plists that name them stay
-    valid across every future update and prune.
-    """
+    """Keep runtime and non-downgrading updater entry points beside state."""
     _install_home_file(home, release_dir, 'router_launch.py')
+    release_dir = load('router_controller_launchers', Path(__file__).with_name('native_controller.py')).launcher_source(home, release_dir)
     _install_home_file(home, release_dir, 'update_launch.py')
     if "'--express-only'" in (release_dir / 'packaging' / 'update_launch.py').read_text():
         _install_home_file(home, release_dir, 'update_launch.py', 'express_launch.py')

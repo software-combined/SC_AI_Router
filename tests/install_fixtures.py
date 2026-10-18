@@ -10,6 +10,7 @@ import importlib.util
 import io
 import json
 import os
+import shlex
 import tarfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -86,6 +87,9 @@ def ok_run(cmd, **kwargs):
     if '-c' in cmd:
         return SimpleNamespace(returncode=0, stdout='3 14\n/opt/homebrew/bin/python3.14\n',
                                stderr='')
+    answer = systemd_show(cmd)
+    if answer is not None:
+        return answer
     # launchctl goes through the stateful domain model: a fake that answered
     # `print` with rc 0 for a booted-out label is what let the bootout/bootstrap
     # defect reach a release.
@@ -93,6 +97,19 @@ def ok_run(cmd, **kwargs):
     if answer is not None:
         return answer
     return SimpleNamespace(returncode=0, stdout='', stderr='')
+
+
+def systemd_show(cmd):
+    """The loaded-command boundary; drift tests replace this with a stale reply."""
+    if cmd[:3] != ['systemctl', '--user', 'show']:
+        return None
+    config = Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config')
+    unit = config / 'systemd/user' / cmd[3]
+    lines = unit.read_text().splitlines() if unit.exists() else []
+    command = next((line.partition('=')[2] for line in lines if line.startswith('ExecStart=')), '')
+    argv = [value.replace('%%', '%').replace('$$', '$') for value in shlex.split(command)]
+    output = '{ path=%s ; argv[]=%s ; }' % (argv[0], ' '.join(argv)) if argv else ''
+    return SimpleNamespace(returncode=0, stdout=output, stderr='')
 
 
 def craft_bundle(version):
@@ -156,7 +173,7 @@ _run_install = run_install
 
 
 __all__ = ['static_fetch', 'real_bundle', 'install_mod_factory',
-           'install_mod', 'tarball', 'ok_run', 'craft_bundle',
+           'install_mod', 'tarball', 'ok_run', 'systemd_show', 'craft_bundle',
            'patch_attrs', 'run_install', '_real_bundle', '_install_mod',
            '_tarball', '_ok_run', '_craft_bundle', '_patch_attrs',
            '_run_install', '_SEAMS']
