@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Build native menu helpers for macOS, Windows and Linux, with pinned Linux
+  dependencies and per-target Resources archives for update delivery.
+
 - Add shared desktop controls, safe router restart and owned sign-in startup.
   Keep the menu separate from routing and retain a full control window without a tray host.
 

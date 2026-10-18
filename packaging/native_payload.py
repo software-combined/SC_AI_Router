@@ -11,6 +11,7 @@ import platform
 import re
 import shutil
 import tempfile
+import uuid
 from pathlib import Path
 
 
@@ -52,10 +53,15 @@ def metadata(resources, expected_target=None):
     for name in ('install.py', 'native_setup.py'):
         if not (resources / 'router' / 'packaging' / name).is_file():
             raise ValueError('The installer is incomplete.')
+    if 'menu_sha256' in doc:
+        helper = resources / 'control' / ('scg-router-menu.exe' if doc['target'].startswith('windows/') else 'scg-router-menu')
+        if (not re.fullmatch('[0-9a-f]{64}', str(doc['menu_sha256'])) or not helper.is_file()
+                or hashlib.sha256(helper.read_bytes()).hexdigest() != doc['menu_sha256']):
+            raise ValueError('The menu files did not pass verification.')
     return doc
 
 
-def retained(resources, home, expected_target=None):
+def retained(resources, home, expected_target=None, *, repair=False):
     """Stage and atomically retain one immutable package; returns its path."""
     resources, home = Path(resources).resolve(), Path(home).expanduser()
     doc = metadata(resources, expected_target)
@@ -81,9 +87,15 @@ def retained(resources, home, expected_target=None):
     if destination.is_symlink():
         raise ValueError('The setup folder is not safe to use.')
     if destination.exists():
-        if metadata(destination, expected_target) != doc:
+        try:
+            matches = metadata(destination, expected_target) == doc
+        except (OSError, ValueError):
+            matches = False
+        if matches:
+            return destination
+        if not repair:
             raise ValueError('The installed setup files have changed.')
-        return destination
+        destination = base / (destination.name + '-repair-' + uuid.uuid4().hex[:12])
     with tempfile.TemporaryDirectory(dir=base) as temporary:
         staged = Path(temporary) / 'Resources'
         shutil.copytree(resources, staged)

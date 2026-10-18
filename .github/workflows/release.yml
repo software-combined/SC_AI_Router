@@ -121,8 +121,11 @@ jobs:
       - name: Linux graphical build dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y zenity libgdk-pixbuf2.0-bin
+      - name: Pinned Linux menu toolchain
+        if: runner.os == 'Linux'
+        run: rustup toolchain install 1.90.0 --profile minimal
       - name: Native packaging contracts
-        run: python -m unittest tests.test_native_stage tests.test_native_packages tests.test_native_setup tests.test_native_readiness
+        run: python -m unittest tests.test_native_stage tests.test_native_packages tests.test_native_setup tests.test_native_readiness tests.test_native_menu_build
       - name: Build native package
         run: python tools/build_release_installer.py --target ${{ matrix.target }}
       - name: Verify disk image

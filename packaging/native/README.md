@@ -6,6 +6,17 @@ the bundle checksum, and `packaging/runtime.lock` before it stages files.
 `--stage-only` writes `<out>/stage/Resources` and needs no platform packaging
 tool. It can run with synthetic archives for offline checks.
 
+Normal builds also compile a small menu helper: AppKit on macOS, Windows Forms
+on Windows, and `ksni 0.3.6` on Linux. Linux uses Rust 1.90.0 and committed
+`Cargo.lock` checksums. Python has no new runtime dependencies.
+The helper renders menus and emits action IDs. Shared Python owners perform actions.
+The Linux component check uses a private D-Bus session to test host loss and recovery.
+
+Each build exports the staged Resources tree as a separate archive and descriptor.
+Its descriptor binds the target, version, size and checksum to the exact core bundle.
+The embedded local feed remains core-only, avoiding an archive checksum cycle.
+`--stage-only` does not compile helpers or require native build tools.
+
 Native installers are **unsigned**. The build writes `native_signature:
 "unsigned"` in `installer.json` and an artifact receipt beside each output.
 The receipt records SHA-256 checksums for review. A checksum alone does not

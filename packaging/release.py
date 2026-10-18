@@ -107,7 +107,7 @@ def bundle_files(root):
         + sorted(p.relative_to(root).as_posix()
                  for folder in ('packaging/native', 'packaging/download-page')
                  for p in (root / folder).rglob('*')
-                 if p.is_file() and '__pycache__' not in p.parts and p.suffix != '.pyc')
+                 if p.is_file() and not {'__pycache__', 'target'}.intersection(p.parts) and p.suffix != '.pyc')
         + plugin_files(root)
         + list(PACKAGING_FILES)
     )
