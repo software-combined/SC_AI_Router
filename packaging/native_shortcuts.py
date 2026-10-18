@@ -33,6 +33,10 @@ def install(home, resources, python, run=subprocess.run):
         _windows(home, resources, python, run)
     else:
         _linux(home, resources, python, atomic)
+    helper = resources / 'control' / ('scg-router-menu.exe' if os.name == 'nt' else 'scg-router-menu')
+    if helper.is_file():
+        startup = load('desktop_startup')
+        startup.configure(home, resources, None)
 
 
 def _linux(home, resources, python, atomic):

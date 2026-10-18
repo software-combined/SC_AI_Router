@@ -1,5 +1,13 @@
 # Third-Party Notices
 
+The Linux desktop menu uses pinned `ksni 0.3.6` (Unlicense) and its locked Rust
+dependencies. Complete upstream licence texts and copyright notices ship in
+[the menu notices](packaging/native/menu/linux/NOTICES.txt).
+Regenerate them with `python3.14 tools/collect_native_licenses.py`.
+Rust 1.90.0 uses source revision `1159e78c4747b02ef996e55082b704c09b970588`.
+Its standard-library notices are retained under
+[`packaging/native/menu/linux/rust/`](packaging/native/menu/linux/rust/).
+
 This project is distributed under the [Apache License 2.0](LICENSE). It also
 contains material from the projects below, which remains under those
 projects' own terms. Nothing in this file grants rights under the Apache

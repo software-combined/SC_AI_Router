@@ -104,7 +104,8 @@ class DesktopPlatformTests(unittest.TestCase):
         browser = self.row(20, 1, '/apps/Google Chrome.app/Google Chrome')
         host = self.row(21, 20, self.identity['root'] + '/Contents/Helpers/chrome-native-host')
         harness = PlatformHarness('darwin', self.identity, [[browser, host]])
-        with mock.patch.object(platform, 'app_identity', return_value=self.identity):
+        with mock.patch.object(platform, 'app_identity', return_value=dict(
+                self.identity, desktop_id=platform.APP_DESKTOP_ID)):
             self.assertFalse(platform.is_running('darwin', run=harness))
         owned = dict(host, parent=10)
         answer, commands = self.stop('darwin', [[self.row(), owned],
@@ -207,7 +208,8 @@ class DesktopPlatformTests(unittest.TestCase):
     def test_missing_dialog_and_failed_open_propagate(self):
         with self.assertRaises(FileNotFoundError):
             platform.confirm('Open Claude?', 'linux', run=mock.Mock(side_effect=FileNotFoundError()))
-        with mock.patch.object(platform, 'app_identity', return_value=self.identity):
+        with mock.patch.object(platform, 'app_identity', return_value=dict(
+                self.identity, desktop_id=platform.APP_DESKTOP_ID)):
             for name in ('darwin', 'win32', 'linux'):
                 with self.assertRaises(platform.subprocess.CalledProcessError):
                     platform.open_app(name, run=lambda *a, **k: result(returncode=1))

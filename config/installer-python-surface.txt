@@ -22,6 +22,8 @@ load packaging/download_enrolment.py
 load packaging/download_notice.py
 load packaging/control_models.py
 load packaging/native_payload.py
+load packaging/native_resources.py
+load packaging/native/native_stage.py
 load packaging/native_controller.py
 load packaging/native_dialog.py
 load packaging/native_setup.py
@@ -62,6 +64,13 @@ load packaging/service.py
 load packaging/systemd.py
 load packaging/updater.py
 load packaging/platforms/__init__.py
+load packaging/desktop_windows.py
+load packaging/desktop_control.py
+load packaging/desktop_model.py
+load packaging/desktop_menu.py
+load packaging/desktop_service.py
+load packaging/desktop_startup.py
+parse packaging/desktop_launch.py
 load packaging/platforms/darwin.py
 load packaging/platforms/linux.py
 load packaging/platforms/windows.py

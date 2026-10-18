@@ -99,9 +99,7 @@ SUPPORTED_PLATFORMS = ('darwin', 'linux', 'win32')
 
 def require_supported_platform():
     if PLATFORM not in SUPPORTED_PLATFORMS:
-        raise SystemExit(
-            f'Platform {PLATFORM} is not supported by this installer yet; '
-            'no files were changed.')
+        raise SystemExit(f'Platform {PLATFORM} is not supported by this installer yet; no files were changed.')
 
 
 def platform_backend():
@@ -278,13 +276,14 @@ def _open_key_window(python, home, setup_url, clients):
 
 def do_install(args, _fetch=fetch, _run=None):
     _svc._feed.configure_home(Path(args.home).expanduser())
-    rc = _do_install(args, _fetch, _run)
+    delivery = {}
+    rc = _do_install(args, _fetch, _run, delivery)
     if rc == 0 and not args.dry_run:
-        _delivery.finish(Path(args.home).expanduser(), run=run)
+        _delivery.finish(Path(args.home).expanduser(), run=run, native=delivery, fetch=None if _fetch is fetch else _fetch)
     return rc
 
 
-def _do_install(args, _fetch=fetch, _run=None):
+def _do_install(args, _fetch=fetch, _run=None, delivery=None):
     _client_choice.validate(args)
     if _run is not None:
         _svc.run = _run
@@ -305,6 +304,7 @@ def _do_install(args, _fetch=fetch, _run=None):
     feed = args.feed or _svc.channel_feed(home)
     latest = _updater._verified_feed(feed, _svc.feed_read(_fetch, feed), _fetch)
     serial = check_serial(home, latest, pinned=bool(args.feed))
+    if delivery is not None: delivery.update(latest=latest, feed=feed)
     current = current_version(home)
     # --setup on a current install is a repair run: it restarts the current
     # release with a fresh setup nonce and never re-extracts or downgrades
@@ -552,6 +552,7 @@ def do_uninstall(args):
         # Service-only installation: no client settings were ever touched,
         # so there is no receipt and no restore to run.
         backend.uninstall(home)
+        _delivery._load('desktop_startup').remove(home)
         print(f'uninstalled services; {home} left in place for the operator to delete')
         return 0
     if release is not None:
@@ -571,6 +572,7 @@ def do_uninstall(args):
             _codex_config.drop_client(home, 'codex')
     detach_claude(home)
     backend.uninstall(home)
+    _delivery._load('desktop_startup').remove(home)
     print(f'uninstalled services; {home} left in place for the operator to delete')
     return 0
 
@@ -581,6 +583,10 @@ def do_preflight(args):
 
 def do_status(args):
     _sync_seams(); return _diag.do_status(args)
+
+
+def do_restart(args):
+    _sync_seams(); return _delivery._load('desktop_service').restart(args, _svc, platform_backend())
 
 
 def build_parser():
@@ -602,6 +608,7 @@ def build_parser():
     parser.add_argument('--doctor', action='store_true', help='Read-only health report with one Fix line per failing row.')
     parser.add_argument('--support', action='store_true', help='Write a redacted support bundle and print its path.')
     parser.add_argument('--uninstall', action='store_true')
+    parser.add_argument('--restart', action='store_true', help='Restart SCG Router after running replies finish.')
     parser.add_argument('--preflight', action='store_true',
                         help='Report missing install prerequisites and exit.')
     parser.add_argument('--status', action='store_true',
@@ -643,6 +650,7 @@ def main(argv=None):
     action = (do_status if args.status else
               do_preflight if args.preflight else
               do_uninstall if args.uninstall else
+              do_restart if args.restart else
               do_doctor if args.doctor else
               do_support if args.support else
               do_rollback_list if list_rollback else

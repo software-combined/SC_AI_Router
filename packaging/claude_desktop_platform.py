@@ -1,8 +1,8 @@
 """Native Claude identity, graceful lifecycle, dialogs and owned shortcuts.
 
-The macOS lifecycle helpers also serve Switch Codex: `app` names the bundle
-to find, quit and reopen, and defaults to Claude, the only app the Windows
-and Linux paths know. `install_mac_app` builds the owned launcher apps:
+The lifecycle helpers also serve Switch Codex: `app` names the app
+to find, quit and reopen, and defaults to Claude. Windows resolves installed
+packages and Linux resolves desktop entries. `install_mac_app` builds the owned launcher apps:
 Switch Claude, Open Claude and Switch Codex.
 """
 import collections
@@ -29,6 +29,7 @@ def _load(name, filename):
 _atomic = _load('router_claude_desktop_atomic', 'atomic_write.py')
 _policy = _load('router_claude_desktop_policy', 'claude_desktop_policy.py')
 _linux_identity = _load('router_claude_desktop_linux', 'desktop_linux.py')
+_windows_identity = _load('router_desktop_windows', 'desktop_windows.py')
 _dialogs = _load('router_client_dialog', 'client_dialog.py')
 TITLE = 'SCG Router'
 ICON = Path(__file__).parent / 'assets' / 'router-icon.png'
@@ -130,22 +131,8 @@ def app_identity(platform_name, run=subprocess.run, app=CLAUDE):
                 and getattr(app, 'writers', None) == ()):
             return _linux_identity.app_identity('codex')
         raise OSError('only a known desktop app can be checked')
-    if app != CLAUDE and platform_name != 'darwin':
-        raise OSError('only the Mac knows this app')
     if platform_name == 'win32':
-        return _json_command(
-            "$a=@(Get-StartApps | Where-Object {$_.Name -eq 'Claude'});"
-            "if($a.Count -ne 1 -or $a[0].AppID -notmatch '!'){throw 'identity'};"
-            "$family,$id=$a[0].AppID.Split('!');"
-            "$p=@(Get-AppxPackage | Where-Object {$_.PackageFamilyName -eq $family});"
-            "if($p.Count -ne 1){throw 'identity'};"
-            "$m=Get-AppxPackageManifest $p[0];"
-            "$e=@($m.Package.Applications.Application | Where-Object {$_.Id -eq $id});"
-            "if($e.Count -ne 1 -or -not $e[0].Executable){throw 'identity'};"
-            "$exe=Join-Path $p[0].InstallLocation $e[0].Executable;"
-            "if(-not (Test-Path -LiteralPath $exe -PathType Leaf)){throw 'identity'};"
-            "@{root=$p[0].InstallLocation;exe=$exe;app=$a[0].AppID;"
-            "user=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value} | ConvertTo-Json -Compress", run)
+        return _windows_identity.identity(app.bundle_id, lambda script: _json_command(script, run))
     if platform_name == 'darwin':
         # AppleScript's app-path lookup launches a closed Claude. Spotlight
         # resolves the bundle without undoing the stopped-app safety check.
@@ -218,8 +205,7 @@ def _writers(rows, identity, seen, platform_name, names=CLAUDE.writers):
         path = norm(row['exe'])
         # Browser-owned native messaging hosts outlive Claude. Actual app
         # descendants still enter and remain in seen through the walk below.
-        if path == exe or (platform_name != 'linux' and path.startswith(root)
-                           and path != browser_host):
+        if path == exe or (path.startswith(root) and path != browser_host):
             seen[pid] = row
     while True:
         children = {pid: row for pid, row in live.items()
@@ -249,7 +235,8 @@ def request_stop(platform_name, run=subprocess.run, timeout=65, app=CLAUDE):
     if platform_name == 'darwin':
         argv = ['/usr/bin/osascript', '-e', 'tell application id "%s" to quit' % app.bundle_id]
     elif platform_name == 'win32':
-        roots = [str(pid) for pid, row in seen.items() if row['exe'] == identity['exe']]
+        norm = lambda value: value.replace('\\', '/').casefold()
+        roots = [str(pid) for pid, row in seen.items() if norm(row['exe']) == norm(identity['exe'])]
         births = ';'.join('%s=%s' % (pid, _ps(seen[int(pid)]['born'])) for pid in roots)
         script = "$ErrorActionPreference='Stop';$births=@{%s};foreach($n in @(%s)){" % (births, ','.join(roots))
         script += '$c=Get-CimInstance -ClassName Win32_Process -Filter "ProcessId=$n";'
@@ -261,7 +248,8 @@ def request_stop(platform_name, run=subprocess.run, timeout=65, app=CLAUDE):
         script += "$p.CloseMainWindow() | Out-Null}"
         argv = ['powershell', '-NoProfile', '-Command', script]
     else:
-        if not confirm('Please quit Claude, then choose Continue.', platform_name, run):
+        name = 'Codex' if app.bundle_id == 'com.openai.codex' else 'Claude'
+        if not confirm('Please quit %s, then choose Continue.' % name, platform_name, run):
             return False
         argv = None
     try:
@@ -289,7 +277,7 @@ def open_app(platform_name, run=subprocess.run, app=CLAUDE):
         argv = ['powershell', '-NoProfile', '-Command',
                 "$ErrorActionPreference='Stop';Start-Process " + _ps('shell:AppsFolder:' + identity['app'])]
     else:
-        argv = ['gtk-launch', APP_DESKTOP_ID]
+        argv = ['gtk-launch', identity['desktop_id']]
     answer = _run(argv, run, 10)
     if answer.returncode:
         raise subprocess.CalledProcessError(answer.returncode, 'open Claude')

@@ -9,6 +9,7 @@ feed and its bundles are public: readers need no credential.
 """
 import argparse
 import hashlib
+import importlib.util
 import json
 import subprocess
 from pathlib import Path
@@ -189,6 +190,8 @@ def main(argv=None):
     parser.add_argument('--bucket', required=True,
                         help='feed bucket; no default, so a fork cannot publish to ours')
     parser.add_argument('--distribution-id', default='')
+    parser.add_argument('--native-resources', type=Path,
+                        help='validated native Resources archives from all five release runners')
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--sign', metavar='SEEDFILE',
                         help='sign the served feed bytes; publishing without it is refused')
@@ -197,6 +200,14 @@ def main(argv=None):
     latest = _load_latest(dist)
     bundle = bundle_name(latest)
     path = _check_bundle(dist, bundle, latest['sha256'])
+    native = {}
+    if args.native_resources is not None:
+        spec = importlib.util.spec_from_file_location(
+            'router_native_resources_publish', Path(__file__).with_name('native_resources_publish.py'))
+        resources = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(resources)
+        native = resources.records(args.native_resources, latest)
+        latest['native_resources'] = native
     if args.dry_run:
         return _describe(args, latest, bundle)
     feed_doc, release_doc = documents(latest, bundle)
@@ -217,6 +228,10 @@ def main(argv=None):
     _spec.loader.exec_module(_fv)
     (dist / FEED_SIG_DOCUMENT).write_text(_fv.sign_hex(seed, feed_bytes) + '\n')
     outcome = publish_bundle(args.bucket, BUNDLE_PREFIX + bundle, path, latest['sha256'])
+    for row in native.values():
+        name = row['url'].rsplit('/', 1)[1]
+        publish_bundle(args.bucket, BUNDLE_PREFIX + name,
+                       args.native_resources / name, row['sha256'])
     for name in ('bootstrap.sh', 'bootstrap.ps1'):
         source = Path(__file__).resolve().parents[1] / 'packaging' / name
         _aws(['s3', 'cp', str(source), f's3://{args.bucket}/install/{name}',

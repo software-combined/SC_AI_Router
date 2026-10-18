@@ -121,8 +121,11 @@ jobs:
       - name: Linux graphical build dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y zenity libgdk-pixbuf2.0-bin
+      - name: Pinned Linux menu toolchain
+        if: runner.os == 'Linux'
+        run: rustup toolchain install 1.90.0 --profile minimal
       - name: Native packaging contracts
-        run: python -m unittest tests.test_native_stage tests.test_native_packages tests.test_native_setup tests.test_native_readiness
+        run: python -m unittest tests.test_native_stage tests.test_native_packages tests.test_native_setup tests.test_native_readiness tests.test_native_menu_build
       - name: Build native package
         run: python tools/build_release_installer.py --target ${{ matrix.target }}
       - name: Verify disk image
@@ -189,7 +192,7 @@ jobs:
             --query SecretString --output text > "$SEED_FILE"
           python tools/publish_feed.py --dist dist --channel "$CHANNEL" \
             --bucket "$FEED_BUCKET" --distribution-id "$FEED_DISTRIBUTION_ID" \
-            --sign "$SEED_FILE"
+            --sign "$SEED_FILE" --native-resources native-artifacts
           if [ "$CHANNEL" = stable ] && { [ "$NATIVE_INSTALLERS_ACCEPTED" = 'true' ] || [ "$NATIVE_INSTALLERS_MACOS_ARM64_ONLY" = 'true' ]; }; then
             NATIVE_OPTIONS=()
             if [ "$NATIVE_INSTALLERS_ACCEPTED" != 'true' ]; then

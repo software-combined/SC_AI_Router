@@ -115,6 +115,15 @@ INSTALLER_TESTS = (
     'tests.test_client_dialog',
     'tests.test_native_setup',
     'tests.test_native_readiness',
+    'tests.test_native_resources',
+    'tests.test_native_resources_publish',
+    'tests.test_desktop_delivery',
+    'tests.test_desktop_controls',
+    'tests.test_desktop_targets',
+    'tests.test_desktop_management',
+    'tests.test_desktop_platform_contracts',
+    'tests.test_desktop_profile_transition',
+    'tests.test_native_menu_build',
     'tests.test_private_updates',
     'tests.test_linux_dialog_delivery',
     'tests.test_claude_desktop_policy',
@@ -172,9 +181,9 @@ INSTALLER_TESTS = (
 )
 
 
-# Switch Claude and task sharing are macOS-only in this beta and stay off on
-# Windows (docs/compatibility.md). Their suites rely on POSIX file semantics,
-# such as fsync on a read-only handle, so they run on the macOS job only.
+# Legacy fixtures encode Mac app paths and POSIX permissions. Keep them on the
+# Mac job; desktop_profile_transition and desktop_platform_contracts exercise
+# the shared transition, saved-work recovery and shutdown on native runners.
 MACOS_ONLY_TESTS = frozenset((
     'tests.test_claude_desktop_switch',
     'tests.test_claude_profile_account_scope',
