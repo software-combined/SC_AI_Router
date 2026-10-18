@@ -28,13 +28,16 @@ from pathlib import Path
 # (codex-cli 0.158) moved the CLI into codex-cli/bin, earlier builds keep it
 # one level up, and CODEX_BIN, when set, always wins.
 BUNDLED = ('Contents/Resources/codex-cli/bin/codex', 'Contents/Resources/codex')
+DESKTOP_BUNDLED = ('resources/codex-cli/bin/codex', 'resources/codex',
+                   'resources/codex-cli/bin/codex.exe', 'resources/codex.exe',
+                   'resources/codex-cli/vendor/x86_64-pc-windows-msvc/codex/codex.exe')
 
 
 def codex_bin(env, app_root):
     """CODEX_BIN, else the first bundled CLI in the app at `app_root`, else None."""
     if env.get('CODEX_BIN'):
         return env['CODEX_BIN']
-    paths = [Path(app_root) / rel for rel in BUNDLED] if app_root else []
+    paths = [Path(app_root) / rel for rel in BUNDLED + DESKTOP_BUNDLED] if app_root else []
     return next((str(path) for path in paths if path.is_file()), None)
 
 
@@ -52,7 +55,8 @@ def prove(app_root, codex_home=None, env=None, timeout=30):
     try:
         child = subprocess.Popen(
             [command, 'app-server'], stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, env=child_env)
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, env=child_env,
+            **({'creationflags': subprocess.CREATE_NO_WINDOW} if os.name == 'nt' else {}))
     except OSError:
         return False
     lines = queue.Queue()

@@ -102,7 +102,7 @@ class InstallerCiGateTests(unittest.TestCase):
 
     def test_required_gate_waits_for_all_scoped_jobs(self):
         self.assertIn(
-            'needs: [changes, installer-macos, installer-windows, installer-python39, plugin-schedulers, hook-adapter]',
+            'needs: [changes, installer-macos, installer-windows, installer-python39, desktop-menus, plugin-schedulers, hook-adapter]',
             self.CHECK)
         self.assertIn('if: ${{ !cancelled() && ' + NOT_A_TEXT_EDIT + ' }}', self.CHECK)
         self.assertIn(

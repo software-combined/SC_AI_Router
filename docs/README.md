@@ -7,6 +7,7 @@ models and billing. These pages go deeper.
 |---|---|
 | [Setup](setup.md) | Staff setup, assistant choices, prerequisites and installation from source |
 | [Native installers](native-installers.md) | DMG, EXE and AppImage builds, staff downloads, migration and acceptance |
+| [Desktop menu and tray](desktop-menu.md) | Connection switching, management, sign-in startup and Linux fallback controls |
 | [Agent plugins](agent-plugins.md) | The bundled tools, standalone setup and their release rules |
 | [Operations](operations.md) | Install, update, rollback, uninstall and the daily commands |
 | [Troubleshooting](troubleshooting.md) | Symptom-first remedies: updates, serving, keys, client quirks |
@@ -26,5 +27,5 @@ models and billing. These pages go deeper.
 | [Provenance](PROVENANCE.md) | Where the code came from |
 | [Publication](publication.md) | Integration scope, safeguards and owner decisions |
 | [Runtime licences](runtime-licenses.md) | Pinned archive and notice verification |
-| [Changelog archive](changelog-archive.md) | Every release before 1.0, unedited |
+| [Changelog archive](changelog-archive.md) | Releases before the current minor series, unedited |
 | [Agent install prompt](agent-install-prompt.md) | The prompt to hand a coding agent |

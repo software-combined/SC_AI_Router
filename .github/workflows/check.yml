@@ -81,7 +81,7 @@ jobs:
         run: python -m unittest $(python tools/ci_scope.py --installer-tests)
       - name: Native packaging contracts (PowerShell)
         shell: pwsh
-        run: python -m unittest tests.test_native_stage tests.test_native_packages tests.test_native_setup tests.test_native_readiness
+        run: python -m unittest tests.test_native_stage tests.test_native_packages tests.test_native_setup tests.test_native_readiness tests.test_native_menu_build
       - name: Native ACL contract (PowerShell)
         shell: pwsh
         run: python -m unittest tests.test_windows_acl_native
@@ -113,7 +113,7 @@ jobs:
     # Installer jobs may be skipped when scope finds no installer paths;
     # release-only prerequisites are skipped on development runs.
     # !cancelled() lets the failure guard run after a failed prerequisite.
-    needs: [changes, installer-macos, installer-windows, installer-python39, plugin-schedulers, hook-adapter]
+    needs: [changes, installer-macos, installer-windows, installer-python39, desktop-menus, plugin-schedulers, hook-adapter]
     if: ${{ !cancelled() && (github.event.action != 'edited' || github.event.changes.base) }}
     # Develop PRs and branch pushes keep the fast static checks. The full
     # offline suite is the release acceptance gate on PRs targeting main and
@@ -193,6 +193,32 @@ jobs:
         # CI. Behaviour and failure messages match the inline steps it
         # replaces.
         run: python tools/check_policy_scans.py
+
+  desktop-menus:
+    name: Desktop menu (${{ matrix.target }})
+    needs: changes
+    if: needs.changes.outputs.installer == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {target: darwin/arm64, runner: macos-15}
+          - {target: darwin/x86_64, runner: macos-15-intel}
+          - {target: windows/x86_64, runner: windows-2025}
+          - {target: linux/x86_64, runner: ubuntu-24.04}
+          - {target: linux/arm64, runner: ubuntu-24.04-arm}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Pinned Linux menu toolchain
+        if: runner.os == 'Linux'
+        run: rustup toolchain install 1.90.0 --profile minimal
+      - name: Compile native helper
+        run: python tools/check_native_menu_build.py --target ${{ matrix.target }}
 
   plugin-schedulers:
     name: Plugin schedulers

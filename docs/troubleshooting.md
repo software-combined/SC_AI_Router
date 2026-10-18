@@ -57,6 +57,11 @@ For a source installation, use its Python 3.14 interpreter and matching installe
 
 ## Codex Send button is greyed out or ChatGPT subscription access is unavailable
 
+From 1.3, open **SCG Router → Codex → OpenRouter only** and confirm the restart.
+Choose **ChatGPT + OpenRouter** to return. The [desktop menu](desktop-menu.md)
+preserves the saved-chat connections. The commands below remain recovery steps
+for installations without the menu and have their stated history limits.
+
 Affected Codex desktop versions disable **Send** when the ChatGPT allowance runs out,
 including when you select an OpenRouter model. The router cannot fix a disabled
 button by changing models alone. Change Codex's connection to OpenRouter.
@@ -124,6 +129,10 @@ are unavailable. On Mac, switch back with **Switch Codex** when you need to arch
 On Windows, keep the chat-resume limit above in mind when changing connections.
 
 ## Claude desktop: switch to OpenRouter and back
+
+From 1.3, use **SCG Router → Claude** to choose an explicit connection.
+The [desktop menu](desktop-menu.md) uses the same guarded switch owner described below.
+Native Windows and Linux desktop acceptance remains pending.
 
 Claude desktop uses separate subscription and OpenRouter profiles. Selecting a
 model inside one profile does not change the connection. The OpenRouter profile

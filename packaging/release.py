@@ -38,6 +38,10 @@ PACKAGING_FILES = (
     'packaging/native_controller.py', 'packaging/native_setup.py',
     'packaging/native_launch.py', 'packaging/native_dialog.py',
     'packaging/native_shortcuts.py', 'packaging/native_readiness.py',
+    'packaging/desktop_control.py', 'packaging/desktop_model.py',
+    'packaging/desktop_menu.py', 'packaging/desktop_launch.py',
+    'packaging/desktop_startup.py', 'packaging/desktop_service.py',
+    'packaging/native_resources.py',
     'packaging/download_auth.py', 'packaging/download_oauth.py',
     'packaging/download_session.py', 'packaging/download_enrolment.py',
     'packaging/control_models.py',
@@ -54,6 +58,7 @@ PACKAGING_FILES = (
     'packaging/claude_desktop_policy.py',
     'packaging/claude_desktop_platform.py',
     'packaging/desktop_linux.py',
+    'packaging/desktop_windows.py',
     'packaging/claude_desktop_switch.py',
     'packaging/claude_profile_rules.py',
     'packaging/claude_profile_identity.py',
@@ -103,7 +108,7 @@ def bundle_files(root):
         + sorted(p.relative_to(root).as_posix()
                  for folder in ('packaging/native', 'packaging/download-page')
                  for p in (root / folder).rglob('*')
-                 if p.is_file() and '__pycache__' not in p.parts and p.suffix != '.pyc')
+                 if p.is_file() and not {'__pycache__', 'target'}.intersection(p.parts) and p.suffix != '.pyc')
         + plugin_files(root)
         + list(PACKAGING_FILES)
     )

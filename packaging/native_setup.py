@@ -37,6 +37,13 @@ def environment(resources):
     return env
 
 
+def _succeeded(result):
+    output = getattr(result, 'stdout', '') or ''
+    if isinstance(output, bytes):
+        output = output.decode(errors='replace')
+    return result.returncode == 0 and not any(line.startswith('deferred:') for line in output.splitlines())
+
+
 def run_installer(resources, home, flags=(), run=subprocess.run):
     state = read_json(Path(home) / 'mixed-router-state.json')
     repair = '--setup' in flags
@@ -114,7 +121,7 @@ def _key(resources, home, replace=False, run=subprocess.run):
             return
     if replace:
         result = run_installer(resources, home, ['--setup'])
-        if result.returncode:
+        if not _succeeded(result):
             raise ValueError('The key window could not be prepared. Try setup again.')
         state = read_json(Path(home) / 'mixed-router-state.json')
     setup = state.get('setup', {})
@@ -195,9 +202,10 @@ def onboard(resources, home, action=None):
         result = subprocess.run([str(python), str(resources / 'router/packaging/install.py'),
                                  '--home', str(home), '--uninstall'], capture_output=True,
                                 timeout=300, env=environment(resources))
-        dialog.message('SCG Router was removed.' if not result.returncode else
+        removed = _succeeded(result)
+        dialog.message('SCG Router was removed.' if removed else
                        'SCG Router could not be removed safely. Contact Software Combined IT.')
-        return result.returncode
+        return 0 if removed else result.returncode or 1
     flags = _select(dialog) if not existing or action == 'add' else ['--setup']
     if flags is None or ('--clients' in flags and _missing_assistant(flags, dialog)):
         return 0
@@ -209,7 +217,7 @@ def onboard(resources, home, action=None):
             load('atomic_write').replace_text(
                 home / 'channel', ('stable' if existing else doc['channel']) + '\n')
         result = run_installer(permanent, home, flags)
-    if result.returncode:
+    if not _succeeded(result):
         dialog.message('Setup could not finish. '
                        'Open SCG Router to try again, or contact Software Combined IT.')
         return 1
@@ -217,6 +225,7 @@ def onboard(resources, home, action=None):
     load('native_controller').install(home, source)
     python = permanent / 'runtime' / doc['runtime_exec']
     load('native_shortcuts').install(home, permanent, python)
+    load('desktop_menu').start(home, permanent)
     atomic = load('atomic_write')
     atomic.replace_json(home / 'setup-progress.json',
                         {'version': doc['version'], 'started': time.time(), 'confirmed_clients': []})
@@ -232,6 +241,7 @@ def main(argv=None):
     parser.add_argument('--resources', type=Path, required=True)
     parser.add_argument('--home', type=Path, default=Path.home() / '.codex/mixed-model-router')
     parser.add_argument('--status', action='store_true')
+    parser.add_argument('--action', choices=[key for key, _ in ACTIONS])
     args = parser.parse_args(argv)
     resources = args.resources.resolve()
     try:
@@ -240,8 +250,10 @@ def main(argv=None):
         if args.status:
             print(json.dumps(status(resources, args.home)))
             return 0
-        return onboard(resources, args.home)
+        return onboard(resources, args.home, args.action)
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
+        if args.status:
+            return 1
         load('native_dialog').message('Setup needs attention. Open SCG Router to try again, '
                                       'or contact Software Combined IT.')
         return 1

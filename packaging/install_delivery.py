@@ -43,7 +43,7 @@ def _management(source, skills, state, attached, run):
                     clients=attached, run=run)
 
 
-def finish(home, run=subprocess.run):
+def finish(home, run=subprocess.run, native=None, fetch=None):
     """Delivery failures stay separate from router health and are retryable."""
     home = Path(home)
     try:
@@ -57,7 +57,16 @@ def finish(home, run=subprocess.run):
         print('agent skills: ' + skills.sync(state, source / 'plugins',
                                              clients=attached, run=run))
         _management(source, skills, state, attached, run)
+    except (OSError, ValueError, KeyError, subprocess.SubprocessError):
+        print('SCG setup tools need repair; open SCG Router to retry.')
+    try:
+        version = (home / 'current').read_text().strip()
+        if not version or Path(version).name != version or version in ('.', '..'):
+            raise ValueError('invalid release pointer')
+        source = home / 'releases' / version
         if (source / 'packaging/native_controller.py').is_file():
             _load('native_controller').install(home, source)
     except (OSError, ValueError, KeyError, subprocess.SubprocessError):
         print('SCG setup tools need repair; open SCG Router to retry.')
+    if native:
+        _load('native_resources').deliver(home, native['latest'], native['feed'], fetch)

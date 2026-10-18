@@ -269,7 +269,7 @@ class OperatorSurfaceTests(unittest.TestCase):
         with contextlib.redirect_stdout(buf):
             rc = install_mod.do_check_update(
                 args,
-                _read_feed=lambda feed, etag: (200, json.dumps(latest).encode(), 'new'),
+                _read_feed=lambda feed, etag: (200, json.dumps(latest).encode(), 'new') if etag is None else self.fail('manual checks must bypass cache'),
                 _fetch=lambda url: self.fail('a read-only check must not download'))
         self.assertEqual(rc, 0)
         self.assertEqual(json.loads(buf.getvalue())['available'], '9.9.9')

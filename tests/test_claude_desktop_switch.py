@@ -31,6 +31,7 @@ class SwitchTests(unittest.TestCase):
         self.home = self.root / 'router'
         self.home.mkdir()
         (self.home / '.claude-profile-switch.lock').touch(mode=0o600)
+        (self.home / 'install.lock').touch(mode=0o600)
         self.profile = _profile(self.root, {'keep': 'gateway setting'})
         self.state = _state()
         (self.home / 'mixed-router-state.json').write_text(json.dumps(self.state))

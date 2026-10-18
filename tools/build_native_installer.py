@@ -14,6 +14,8 @@ sys.path.insert(0, str(ROOT / 'packaging' / 'native'))
 import native_build  # noqa: E402
 import native_linux_gui  # noqa: E402
 import native_stage  # noqa: E402
+import native_menu_build  # noqa: E402
+import native_resources_archive  # noqa: E402
 
 
 def _parser():
@@ -105,7 +107,10 @@ def main(argv=None):
     with tempfile.TemporaryDirectory(prefix='.native-build-', dir=args.out) as tmp:
         resources = Path(tmp) / 'Resources'
         metadata = _stage(args, resources)
+        native_menu_build.build(resources, args.target)
+        metadata = json.loads((resources / 'installer.json').read_text())
         artifact = _package(args, resources, metadata)
+        native_resources_archive.export(resources, args.out, metadata)
     receipt = native_build.receipt(artifact, metadata)
     print(json.dumps({'artifact': str(artifact), 'receipt': str(receipt),
                       'sha256': native_stage.sha256_file(artifact),

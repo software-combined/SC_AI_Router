@@ -55,7 +55,7 @@ def flush(path, protect=False):
         if protect and (os.name == 'nt' or item == path):
             private(item)
         if item.is_file():
-            with item.open('rb') as stream:
+            with item.open('r+b' if os.name == 'nt' else 'rb') as stream:
                 os.fsync(stream.fileno())
     for item in reversed(paths):
         if item.is_dir():
