@@ -13,6 +13,15 @@ Linux bundles Zenity and GTK dependencies from Ubuntu 24.04, plus a pinned
 AppImage runtime with automatic extraction when FUSE is unavailable.
 See [builder details](../packaging/native/README.md).
 
+Each build also exports its existing staged `Resources` directory for installed hosts.
+The signed update document includes an optional `native_resources` map.
+Each target records its archive URL, checksum, size, version and matching core checksum.
+Updates download only the matching target. They retain resources immutably and
+change the setup pointer after validation. Failed menu delivery preserves the previous menu.
+Same-version installs and cached feed checks repair missing resources.
+Runtime rollback preserves a newer working menu and its independent update controller.
+These update resources do not change the first-install publication gates below.
+
 Each artifact receipt names its target, exact router bundle, runtime and package
 checksum. Publication requires all five targets from one exact bundle.
 The publisher uploads immutable packages and signed `SHA256SUMS` first.

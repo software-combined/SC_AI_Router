@@ -709,6 +709,12 @@ It serializes actions in a worker, while native menus stay responsive.
 `desktop_startup.py` owns per-user startup entries and the persistent preference.
 `desktop_launch.py` follows retained setup resources, independently of inference rollback.
 Closing the shell never stops routing. Polling is silent and makes no model calls.
+`native_resources.py` consumes only this target's signed Resources descriptor.
+It verifies archive size, checksum and matching core identity before retention.
+Installation owns its lock; failed menu delivery preserves the previous setup pointer.
+Same-version installs and cached update checks retry missing controls independently of service health.
+`native_resources_publish.py` validates all five archives before `publish_feed.py`
+uploads immutable resources and signs the channel document containing their map.
 
 `infra/` owns the update feed as code (repository-only templates, deployed from a checkout): the certificate stack, the private
 bucket, the CloudFront distribution, the DNS alias, and the tag-only

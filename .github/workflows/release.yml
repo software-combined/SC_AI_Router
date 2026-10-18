@@ -192,7 +192,7 @@ jobs:
             --query SecretString --output text > "$SEED_FILE"
           python tools/publish_feed.py --dist dist --channel "$CHANNEL" \
             --bucket "$FEED_BUCKET" --distribution-id "$FEED_DISTRIBUTION_ID" \
-            --sign "$SEED_FILE"
+            --sign "$SEED_FILE" --native-resources native-artifacts
           if [ "$CHANNEL" = stable ] && { [ "$NATIVE_INSTALLERS_ACCEPTED" = 'true' ] || [ "$NATIVE_INSTALLERS_MACOS_ARM64_ONLY" = 'true' ]; }; then
             NATIVE_OPTIONS=()
             if [ "$NATIVE_INSTALLERS_ACCEPTED" != 'true' ]; then

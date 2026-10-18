@@ -41,6 +41,7 @@ PACKAGING_FILES = (
     'packaging/desktop_control.py', 'packaging/desktop_model.py',
     'packaging/desktop_menu.py', 'packaging/desktop_launch.py',
     'packaging/desktop_startup.py', 'packaging/desktop_service.py',
+    'packaging/native_resources.py',
     'packaging/download_auth.py', 'packaging/download_oauth.py',
     'packaging/download_session.py', 'packaging/download_enrolment.py',
     'packaging/control_models.py',

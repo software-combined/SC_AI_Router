@@ -314,7 +314,7 @@ class InstallTests(unittest.TestCase):
                     args, _fetch=boom, _read_feed=fake_read, _sleep=lambda s: None)
             self.assertEqual(rc, 0)
             self.assertIn('up to date', buf.getvalue())
-            self.assertEqual(seen, [('file:///latest.json', 'old-etag')])
+            self.assertEqual(seen, [('file:///latest.json', 'old-etag'), ('file:///latest.json', None)])
             self.assertEqual((home / 'update-etag').read_text(), 'old-etag\n')
 
     def test_channel_beta_uses_origin_without_api_call(self):

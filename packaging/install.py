@@ -99,9 +99,7 @@ SUPPORTED_PLATFORMS = ('darwin', 'linux', 'win32')
 
 def require_supported_platform():
     if PLATFORM not in SUPPORTED_PLATFORMS:
-        raise SystemExit(
-            f'Platform {PLATFORM} is not supported by this installer yet; '
-            'no files were changed.')
+        raise SystemExit(f'Platform {PLATFORM} is not supported by this installer yet; no files were changed.')
 
 
 def platform_backend():
@@ -278,13 +276,14 @@ def _open_key_window(python, home, setup_url, clients):
 
 def do_install(args, _fetch=fetch, _run=None):
     _svc._feed.configure_home(Path(args.home).expanduser())
-    rc = _do_install(args, _fetch, _run)
+    delivery = {}
+    rc = _do_install(args, _fetch, _run, delivery)
     if rc == 0 and not args.dry_run:
-        _delivery.finish(Path(args.home).expanduser(), run=run)
+        _delivery.finish(Path(args.home).expanduser(), run=run, native=delivery, fetch=None if _fetch is fetch else _fetch)
     return rc
 
 
-def _do_install(args, _fetch=fetch, _run=None):
+def _do_install(args, _fetch=fetch, _run=None, delivery=None):
     _client_choice.validate(args)
     if _run is not None:
         _svc.run = _run
@@ -305,6 +304,7 @@ def _do_install(args, _fetch=fetch, _run=None):
     feed = args.feed or _svc.channel_feed(home)
     latest = _updater._verified_feed(feed, _svc.feed_read(_fetch, feed), _fetch)
     serial = check_serial(home, latest, pinned=bool(args.feed))
+    if delivery is not None: delivery.update(latest=latest, feed=feed)
     current = current_version(home)
     # --setup on a current install is a repair run: it restarts the current
     # release with a fresh setup nonce and never re-extracts or downgrades

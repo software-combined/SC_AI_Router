@@ -27,6 +27,7 @@ _spec = importlib.util.spec_from_file_location(
 _svc = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_svc)
 _models = _svc.load('router_control_models', Path(__file__).with_name('control_models.py'))
+_resources = _svc.load('router_native_resources', Path(__file__).with_name('native_resources.py'))
 
 MAX_VERSION_FAILURES = 3
 ANNOUNCE_TIMEOUT_S = 5
@@ -349,6 +350,8 @@ def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
     etag = etag_path.read_text().strip() if etag_path.exists() else None
     try:
         status, body, etag = _read_feed_pass(feed, etag, read_feed, sleep)
+        if status == 304 and not express_only and not _resources.ready(home):
+            status, body, etag = _read_feed_pass(feed, None, read_feed, sleep)
     except SystemExit as exc:
         raise UpdateError('feed_untrusted', str(exc) or 'feed redirected off the trusted update origin')
     if status == 304:
@@ -381,6 +384,11 @@ def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
     if not newer(latest['version'], _svc.current_version(home)):
         if express_only:
             return 0  # The pointer may be mid-install; do not mask a later rollback.
+        with _svc.install_lock(home) as held:
+            if not held:
+                print('deferred: another router operation is in progress')
+                return 0
+            _resources.deliver(home, latest, feed, injected)
         _up_to_date(home, _announce, etag_path, etag)
         return 0
     failed = update_failures(home).get(latest['version'], 0)
@@ -522,10 +530,8 @@ def do_check_update(args, _fetch=None, _read_feed=None, _sleep=None):
     feed = args.feed or _svc.channel_feed(home)
     injected = _fetch
     read_feed = _read_feed or (lambda url, etag: _svc.fetch_feed(url, etag, injected))
-    etag_path = home / 'update-etag'
-    etag = etag_path.read_text().strip() if etag_path.exists() else None
     try:
-        status, body, _ = _read_feed_pass(feed, etag, read_feed, _sleep or time.sleep)
+        status, body, _ = _read_feed_pass(feed, None, read_feed, _sleep or time.sleep)
     except OSError as exc:
         raise SystemExit(f'update check failed: {type(exc).__name__}')
     latest = None

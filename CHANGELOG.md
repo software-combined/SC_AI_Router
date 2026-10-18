@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Deliver matching native menu resources through signed updates. Repair missing
+  controls on same-version and cached checks while preserving the previous menu.
+
 - Build native menu helpers for macOS, Windows and Linux, with pinned Linux
   dependencies and per-target Resources archives for update delivery.
 
